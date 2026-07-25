@@ -1341,3 +1341,69 @@ The reviewer independently reran `dashboard-git-projection.test.ts` and
 validation. All passed. P4.3 is accepted; P4.4 is the sole next implementation package. P4.5, broad
 gates, PR delivery, merge, archive/release, and final browser/visual/multi-tab acceptance remain out of
 scope.
+
+### P4.4 Evidence Hygiene Split: 2026-07-25 Asia/Shanghai
+
+Checkpoint 5.4 bundles two unrelated remediation surfaces and MUST close only after each receives its own
+focused acceptance. They are intentionally sequenced, not jointly implemented:
+
+```text
+P4.4-A  real Hono Access Gate fixture -> checked Server transport-test lane
+P4.4-B  exception-aware changed-file header audit -> comment-only header corrections
+P4.5    focused P4 acceptance -> only after P4.4-A and P4.4-B are accepted
+```
+
+#### P4.4-A Typed Access Gate Fixture authorization
+
+`packages/server/src/access-gate.test.ts` currently fabricates a Hono Context through `as any` and an ESLint
+suppression. That suite reaches the middleware function, but it is not a checked public HTTP boundary and
+is excluded from every Server test typecheck lane. This is evidence-hygiene debt, not a newly discovered
+runtime Access Gate defect.
+
+Replace the fabrication with the real boundary:
+
+```text
+new Hono()
+  -> app.use('*', createAccessGateMiddleware(gate))
+  -> app.get('/api/protected', actual protected route)
+  -> app.request(Request with missing / valid Authorization)
+  -> actual Hono Context, middleware response, and route outcome
+```
+
+The fixture MUST prove these three green outcomes: missing credential receives `401`; the matching Bearer
+credential reaches the protected route; and an unconfigured gate passes through. Add the test file to
+`packages/server/tsconfig.transport-tests.json`, and run its declared checked lane. Do not suppress,
+assert-cast, or weaken public types; do not change `access-gate.ts`, Server registration, protected-path
+policy, WebSocket, PTY, CLI, or App behavior.
+
+The named mutation proof removes exactly the fixture's
+`app.use('*', createAccessGateMiddleware(gate))` registration. With the same missing-credential request,
+the protected route must return `200`, so the asserted `401` fails. This proves that the fixture crosses the
+real middleware registration; a direct handler call, mock `next`, fake button, or a test-only route guard
+does not count. Record the old `as any`/suppression honestly as a type-hygiene red observation, separate
+from the mutation proof.
+
+Required focused validation is limited to the Access Gate suite, its checked transport lane, scoped
+Prettier/Oxlint, `git diff --check`, and strict Change validation. The worker records exact red, mutation,
+and green commands/results in this file and leaves 5.4 unchecked for independent review. P4.4-B, P4.5,
+broad gates, PR delivery, merge, archive/release, and browser/visual/multi-tab/end-to-end walkthroughs
+remain out of scope.
+
+#### P4.4-B Header audit deferral
+
+The raw reviewed-range header audit reports eight paths because it assumes the first physical line must be
+`/**`. Two are legal pre-header directives and are not defects: `packages/cli/src/cli.ts` begins with its
+required shebang, and `packages/web/src/access-gate-resource-worker.ts` begins with its required Worker
+reference directive. P4.4-B must use an exception-aware audit and then correct only these six files:
+
+```text
+packages/cli/src/export.test.ts
+packages/cli/src/export.ts
+packages/core/src/hosted-app.test.ts
+packages/web/src/components/opsx/opsx-detail-layout.tsx
+packages/web/src/lib/use-root-action-state.test.ts
+packages/web/src/routes/schemas.tsx
+```
+
+This is a separate comment-only package. It must neither alter behavior nor be mixed with P4.4-A's Server
+fixture. Its own scoped typechecks and exception-aware audit are required before it can be accepted.
