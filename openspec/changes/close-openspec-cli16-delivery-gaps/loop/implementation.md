@@ -2037,3 +2037,28 @@ global Codex command root. No timeout, sleep, retry, generic reactive-kernel cha
 production branch, or manual downstream callback was added. Checkpoint 6.3b is accepted. The only next package is one
 complete corrected-head local gate replay for 6.3; PR update, manager walkthrough, merge, archive, and release remain
 open.
+
+#### P5.6 corrected-head gate interruption and 6.3c authorization: 2026-07-26 Asia/Shanghai
+
+Formatting (`10` changed files), lint (`994` files, zero warnings/errors), and all `15` workspace typechecks passed.
+The first complete unit replay reached Server and failed one `hosted-admission.test.ts` `afterEach` at the existing
+ten-second hook budget; the credential assertion itself did not fail. The exact file then passed `6/6` in `23.09s`.
+No reviewed commit changes that file, Access Gate admission, or Server close ownership.
+
+One bounded full-unit rerun was allowed to distinguish a repeatable blocker. Its Server package passed `74` files /
+`493` tests in `126.83s`, so the cleanup timeout is retained as non-repeated suite-pressure evidence. No timeout,
+retry, cleanup, or production Server change is authorized unless the same hook failure recurs after the next accepted
+correction.
+
+That rerun then reached Web and failed only
+`spec-list-navigation.test.tsx -> prepares and resolves exactly one owned:auth handoff through the real Router`.
+The Router location was already `/specs/owned/auth`; the real document request, subscription-cache prime, and view
+transition assertions passed, while the test immediately asserted the asynchronous `onResolved` capture and received
+`[]` instead of `['/specs/owned/auth']`. The exact two-case file subsequently passed `2/2` in `3.84s`. This is
+load-sensitive event-order evidence, not evidence that production navigation failed.
+
+Checkpoint 6.3c authorizes only the test owner to await the real `onResolved` event before asserting its captured
+path. It must keep the real Router, link interaction, document request, cache prime, transition, location, and handoff
+state; removing the actual subscription/callback must still fail. Production navigation, timeout widening, sleeps,
+retries, browser fixtures, and unrelated test cleanup are out of scope. Full gates remain stopped until 6.3c receives
+focused review.
