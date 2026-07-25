@@ -82,7 +82,7 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 - [x] 6.3e Bound only the Web unit Vitest project to `50%` of available workers after four default-worker aggregate runs timed out in changing owners while every exact file passed; require the standard package command to pass without timeout, retry, assertion, product, test, browser-worker, or serialization changes.
 - [x] 6.4 Removed existing generated Web outputs with the environment-compatible idempotent cleanup, then the focused static-provider tests and clean `pnpm --filter @openspecui/web build:ssg` completed with zero exit.
 - [x] 6.5 Audited the current publishable surface against the existing 6.x, Hosted, static References, Config, loading, and Summary-v2 changesets; every changed published package/behavior is covered and no duplicate changeset is required. App remains private.
-- [ ] 6.6 PR #207 head `5dfff29` passed Changeset Gate and CI Scope, then Fast Gate run `30168547796` rejected two real worktree child fixtures because the already resolved parent `webAssetsDir` was not handed to process/worker children. Browser shards were skipped behind Fast Gate. Accept 6.3d, replay 6.3 once, update the PR, and require fresh checks.
+- [x] 6.6 PR #207 head `7e0a71c` passed all six fresh checks in run `30173420428`: Changeset Gate, CI Scope, Fast Gate, Web Browser, xterm Browser, and aggregate Browser Gate. PR remains open and clean; no merge is implied.
 
 Current 6.3 gate state (2026-07-26): format, lint, all typechecks, pre-Web unit packages, CLI `68/68`,
 xterm component browser `60 passed / 1 skipped`, and Web component browser `12/12` pass. After 6.3e bounded only
@@ -91,6 +91,8 @@ with zero exit. No timeout, retry, assertion, browser-worker, or product behavio
 recorded in `implementation.md`; 6.6 now owns PR delivery and fresh remote checks.
 
 ### Manager-only final walkthrough ledger
+
+Execution steps and result fields are in `loop/manager-walkthrough.md`. The manager owns every checkbox below.
 
 - [ ] 6.7 Gated auto-launch: fragment credential binds to its launch backend, reaches health/RPC/WS, and is removed from visible URL/persisted tabs.
 - [ ] 6.8 Gate rejection: missing/invalid credential is visibly authentication-required, not offline/current/success; WS reconnect behaves equivalently.

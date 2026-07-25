@@ -2471,3 +2471,23 @@ current-head green evidence was already recorded before 6.3e, and 6.3e supplies 
 result without weakening a timeout or assertion. Checkpoints 6.3e and 6.3 are therefore complete. Checkpoint 6.6 is
 now the sole agent-owned delivery action: commit the bounded config/evidence patch, push PR #207, and require fresh
 remote checks. Manager-only walkthroughs 6.7-6.12 remain open and must not be inferred from automation.
+
+#### P5.6 fresh PR delivery accepted: 2026-07-26 Asia/Shanghai
+
+Commit `7e0a71c test(web): bound unit worker concurrency` was pushed to PR #207. Fresh PR Quality run
+`30173420428` completed successfully on exact head `7e0a71c323e6822a574e562904e79c4444f12121`:
+
+```text
+Changeset Gate                    PASS   8s
+CI Scope                          PASS  12s
+Fast Gate                         PASS   6m03s
+Browser Gate (@openspecui/web)    PASS   2m29s
+Browser Gate (xterm-input-panel)  PASS   3m59s
+Browser Gate aggregate            PASS   4s
+```
+
+GitHub reports PR #207 as `OPEN` with `mergeStateStatus: CLEAN`. This closes checkpoint 6.6 only. Automated browser
+shards remain component preparation evidence; they do not close the manager-owned 6.7-6.12 walkthroughs. No merge,
+archive, release, or changeversion action was performed. The executable manager ledger is physically separated in
+`loop/manager-walkthrough.md` so the already large implementation audit does not accumulate another orthogonal
+operational concern.
