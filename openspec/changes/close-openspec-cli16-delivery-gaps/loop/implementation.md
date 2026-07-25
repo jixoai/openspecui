@@ -1736,3 +1736,36 @@ The release-note audit reconfirmed exact coverage without adding a duplicate cha
 App remains private; the publishable CLI package is `openspecui` and is covered by the changesets that declare
 `openspecui: major`. This closes 6.3-6.5. Checkpoint 6.6 (fresh PR update/checks) is the only delivery action before
 the manager-only 6.7-6.12 walkthrough; no walkthrough, merge, archive, or release is implied by these local gates.
+
+#### P5.6 fresh PR clean-typecheck rejection: 2026-07-25 Asia/Shanghai
+
+PR #207 was fast-forwarded from stale `46599ae` to candidate `1e89435`. Fresh Changeset Gate and CI Scope passed,
+but Fast Gate failed before tests in the clean App typecheck. The Browser shard job was skipped behind Fast Gate;
+the aggregate Browser failure therefore does not assert a component-test failure.
+
+The clean runner reported unresolved source dependencies including `@openspecui/core/translator`,
+`@openspecui/core/notifications`, `@openspecui/core/spec-catalog`, `@openspecui/search`,
+`@openspecui/search/node`, and private translator packages, followed by derivative implicit-`any` and stale-shape
+errors. Current source inspection explains the environment split:
+
+```text
+root tsconfig.base.json paths -> complete workspace source map
+                 |
+                 v
+packages/app/tsconfig.json paths -> replaces, rather than extends, that map with a partial list
+                 |
+                 +-- local checkout: stale dist declarations hide missing aliases -> apparent pass
+                 +-- clean CI: no dist declarations -> exact module-resolution failure
+```
+
+This is not a request to build workspace dependencies before typecheck. The required boundary is a clean source
+typecheck: App may import the typed Server router, and that source graph must resolve from the shared workspace map
+without generated declarations. Checkpoint 6.3 is reopened because its local evidence was contaminated by stale
+artifacts. Checkpoint 6.4 remains valid, and 6.5 remains closed because the required correction is development/CI
+configuration with no published runtime behavior unless implementation proves otherwise.
+
+The correction package must reproduce `pnpm --filter @openspecui/app typecheck` in an isolated checkout with no
+workspace `dist`, preserve the App-only Web-source alias without copying a growing list of shared package aliases,
+show the old partial override makes the same fixture red, then replay affected formatting/lint/typecheck tests. No
+full workspace tests, browser fixture, PR update, manager walkthrough, merge, archive, or release is authorized
+before independent review accepts that fixed point.
