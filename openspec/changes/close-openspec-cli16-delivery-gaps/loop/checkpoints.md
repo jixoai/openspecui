@@ -73,7 +73,7 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 
 - [x] 6.1 Revalidated the alleged `refine-live-projection-experience` Server-emission failure against the current owner. It is stale rather than an open repair: Root Snapshot 3/3, real Git Router 7/7, and the Git checked lane pass; the evidence and current `95bc2b9` cache/invalidation path are recorded in that Change.
 - [x] 6.2 Confirmed `refine-live-projection-experience` P1-A candidate `d1740335` through independent focused tests, static contract review, mutation evidence, and fresh isolated Dashboard benchmarks. No external source fix was copied into this Change.
-- [ ] 6.3 After P1--P4 and 6.1--6.2 focused review acceptance, run once: `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, and `pnpm test:browser:ci`.
+- [ ] 6.3 After P1--P4 and 6.1--6.2 focused review acceptance, run once: `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, and `pnpm test:browser:ci`. _(First run stopped at deterministic formatting failures in the concurrent `i18n.zh.md` and `live-projection-work/spec.md` owner; no later gate ran.)_
 - [ ] 6.4 For static-impacting changes, clean stale artifacts, run focused static-provider tests, and run `pnpm --filter @openspecui/web build:ssg`.
 - [ ] 6.5 Add an accurate changeset for changed publishable behavior, or record the precise docs/CI-only exemption.
 - [ ] 6.6 Update the feature PR only after 6.3--6.5 are green; record fresh required PR checks. Old PR checks that predate the candidate do not count.

@@ -1670,3 +1670,26 @@ that evidence limitation does not contradict the accepted current candidate.
 
 This closes 6.2. P1-P4 and 6.1-6.2 are now focused-review complete, so 6.3-6.5 are the sole next local delivery
 package. PR update, manager walkthrough, merge, corrective-Change archive, and release remain unauthorized.
+
+#### P5.3 broad-gate first failure: 2026-07-25 Asia/Shanghai
+
+The independent verification worker ran the authorized package and stopped at its first command. Both the
+initial run and one exact rerun of `pnpm format:check` failed on only these concurrent owner files:
+
+```text
+i18n.zh.md
+openspec/specs/live-projection-work/spec.md
+```
+
+Neither file belongs to this corrective Change. The worker did not edit them and correctly did not run lint,
+typecheck, unit tests, browser fixtures, static cleanup/tests/build, diff check, or strict validation. The main
+reviewer waited and rechecked the two paths; they remained unformatted, so this is a deterministic external
+workspace blocker rather than a transient write collision. Checkpoints 6.3-6.5 remain open.
+
+The read-only release-note audit found no missing publishable package coverage: Summary v2 is covered by
+`refine-live-projection-experience-p1a.md`; accelerated live projections by
+`accelerate-live-projection-loading.md`; the 6.x Core/Server/Web/CLI line by `target-cli-16-line-6x.md`; Hosted
+Core/Server/CLI behavior by `target-cli-16-line-hosted-protocol.md`; static Core/Web References by
+`target-cli-16-line-static-refs.md`; and Config Web behavior by `config-ownership-sections.md`. The App package is
+private, though its hosted behavior is still named in the hosted-protocol note. No duplicate changeset is
+authorized. Resume 6.3 only after the concurrent owner has formatted or otherwise settled both blocking paths.
