@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Prove Owned SpecList rows cross real VTLink, detail preparation, and the Router.
  * 2. Prove Referenced rows preserve Store-qualified route, query, cache, and handoff identity.
- * 3. Stabilize only transport and native-transition runtime edges for a typed memory Router fixture.
+ * 3. Await the real Router resolution lifecycle while stabilizing only transport and native-transition runtime edges.
  *
  * Original request (2026-07-23): "List mutations and route changes preserve physical continuity through existing motion/View Transition patterns."
+ * Derived requirement (2026-07-26): full-suite scheduling must not race the asynchronous onResolved evidence.
  */
 import type { SubscriptionState } from '@/lib/use-subscription'
 import type {
@@ -244,7 +245,7 @@ describe('SpecList detail navigation', () => {
       ownedDocument
     )
     expect(runViewTransitionMock).toHaveBeenCalledOnce()
-    expect(resolvedPaths).toEqual(['/specs/owned/auth'])
+    await waitFor(() => expect(resolvedPaths).toEqual(['/specs/owned/auth']))
     expect(router.state.location.state).toMatchObject({
       __vtHandoff: {
         family: 'specs',
@@ -285,7 +286,7 @@ describe('SpecList detail navigation', () => {
       referencedDocument
     )
     expect(runViewTransitionMock).toHaveBeenCalledOnce()
-    expect(resolvedPaths).toEqual(['/specs/referenced/platform-a/auth'])
+    await waitFor(() => expect(resolvedPaths).toEqual(['/specs/referenced/platform-a/auth']))
     expect(router.state.location.state).toMatchObject({
       __vtHandoff: {
         family: 'specs',
