@@ -1564,3 +1564,46 @@ walkthrough, modify source merely to make a test pass, touch the loading Change,
 archive, or release. On the first failure, stop after recording the exact command, output, affected owner,
 and whether the failure arises in the concurrent user-owned tree; do not speculate or repair it. On green,
 record the exact command/result set and leave 5.5 unchecked for independent reviewer acceptance.
+
+#### P4.5 focused replay evidence: 2026-07-25 Asia/Shanghai
+
+This package changed no source, tests, contracts, checkpoints, or loading-Change artifacts. It replayed the
+already accepted P4 owner evidence in the authorized order and passed without runner divergence:
+
+```text
+pnpm --filter @openspecui/core exec vitest run src/hosted-contract.test.ts --no-file-parallelism
+  PASS: 1 file, 3 tests
+pnpm --filter @openspecui/core typecheck
+  PASS: core plus reactive-context, store-mutation, and hosted-contract checked lanes
+
+pnpm --filter @openspecui/app exec vitest run <four P4 App fixtures> --no-file-parallelism
+  PASS: 4 files, 39 tests
+pnpm --filter @openspecui/app typecheck:p4-tests
+  PASS: tsc -p tsconfig.p4-tests.json --noEmit
+
+pnpm --filter @openspecui/web exec vitest run <seven static/provider/route fixtures> --no-file-parallelism
+  PASS: 7 files, 41 tests
+pnpm --filter @openspecui/web typecheck
+  PASS: tsc --noEmit
+pnpm --filter @openspecui/web build:ssg
+  PASS: fresh client and server SSG output
+
+pnpm --filter @openspecui/server exec vitest run <five catalog/Git/Access Gate fixtures> --no-file-parallelism
+  PASS: 5 files, 26 tests
+pnpm --filter @openspecui/server typecheck
+  PASS: Server, search, Git, transport, and PTY checked lanes
+
+git diff --check
+  PASS
+pnpm exec openspec validate close-openspec-cli16-delivery-gaps --strict
+  PASS: Change is valid
+```
+
+The fresh SSG build retained three non-fatal pre-existing build warnings: the CSS optimizer does not
+recognize `::scroll-button(*)`; an ineffective dynamic import warning reports `src/lib/trpc.ts` has both
+dynamic and static consumers; and Vite reports plugin timing information. The command exited zero and this
+evidence-only package did not inspect, suppress, or repair those unrelated warning owners.
+
+This is focused automated preparation evidence only, not final browser, visual, multi-tab, or end-to-end
+acceptance. Checkpoint 5.5 remains unchecked pending independent review. P5, broad gates, PR delivery,
+merge, archive/release, and manager-owned walkthroughs remain out of scope.
