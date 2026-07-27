@@ -705,6 +705,43 @@ until all five packages receive focused review. No Agent-run fixture is final br
   validation, and diff checks are rerun after this evidence edit; another exact-head remote run remains required,
   and checkpoint 3.6 stays open.
 
+### P7 third remote CI correction (2026-07-28 Asia/Shanghai)
+
+- PR Quality run `30299650006` tested exact head `8bcfd2aad4a00177f21580b2f749d64817d40fba` twice. Attempt 1
+  passed Core but failed Server 541/542 because a newly created data-home Schema did not advance the Planning CLI
+  Schema projection. Attempt 2 passed Server 542/542 unchanged, proving nondeterministic watcher delivery rather
+  than a stable CLI or Schema parsing failure. The same rerun then failed App 204/205 because HostedShell observed
+  three health requests while one background refresh was suspended; the expected contract permits the initial
+  admission plus one replacement request.
+- The Schema failure occurs when Linux coalesces recursive creation below an initially absent official data-home
+  target to a strict ancestor event. A generic missing-directory timer remains rejected: it would restore the
+  fanout regression already exposed during the second correction. `ProjectWatcher` now has an explicit default-off
+  `watchAncestorsWhileMissing` subscription option. Only the data-home observer's three official targets opt in;
+  their callbacks verify target presence before invalidating a facet. Once a target exists, the subscription
+  returns to exact path/subtree matching, and deletion re-arms creation settlement. `WatcherPool` includes the
+  option in shared-subscription identity.
+- The deterministic Core red creates the full Schema target and injects the coalesced realpath-normalized ancestor
+  event. Before correction it timed out with zero callbacks. Green passed, then mutation removed only the ancestor
+  match and reproduced zero callbacks. The restored Core watcher/data-home lane passed 30/30, including direct
+  default-off, shared-subscription identity, and target-presence filtering assertions; the real Server Planning
+  CLI Schema integration passed 2/2.
+- The App failure exposed a second concurrency layer not covered by `285d440`: `healthProbes` joined only one
+  `tabId + generation`, while two overlapping explicit refresh calls allocated two generations before probing.
+  The production-owner red settles initial admission, suspends replacement health, starts two same-tab refreshes,
+  and failed deterministically at `expected 3 to be 2`. Explicit refreshes now join by the complete Hosted tab
+  identity before generation allocation and remain joined through Root refresh settlement. Removal or replacement
+  retires that join owner; distinct tabs and changed identities remain independent.
+- App green passed the complete Connection Observation owner plus HostedShell lane 29/29. Mutation bypassed only
+  the same-identity refresh join and reproduced `3 -> 2`; restoration returned the same test to green. This is
+  separate from generation-local disconnect confirmation and does not add a timer, optimistic Offline state, or a
+  second tab-local fact.
+- Final-tree `pnpm format:check` passed all changed files; `pnpm lint:ci` reported zero warnings/errors over 1,024
+  files; `pnpm typecheck` passed all 15 checked workspace packages. Serial `pnpm test:ci` passed Root 43/43,
+  Core 483/483, Server 542/542, App 206/206, Web 1,016/1,016, and CLI 68/68. The existing jsdom Canvas diagnostics
+  remained non-fatal. Component browser fixtures passed xterm 60/60 with one skipped and Web Storybook 12/12.
+  Strict Change validation and `git diff --check` are rerun after this evidence edit. A new exact-head remote run
+  remains required, checkpoint 3.6 stays open, and no Agent-run browser/visual/end-to-end acceptance is claimed.
+
 ## Loopback Triggers
 
 Return to `research-plan.md` and obtain an explicit owner decision before progressing when any of the following occurs:

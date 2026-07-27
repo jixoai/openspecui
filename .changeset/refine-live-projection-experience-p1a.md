@@ -21,3 +21,7 @@ Live Project Web now settles protected health admission before importing its
 ordinary transports, while clean static export resolves the hashed SSG server
 entry through Vite's manifest. Authentication rejection becomes an explicit
 terminal document instead of an indefinite loading/retry loop.
+
+Effective OpenSpec data-home observation now settles initially missing Store,
+Workset, and Schema targets from bounded ancestor creation events without
+introducing generic missing-path polling.

@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Prove multi-source health/Root collection, initial Pull, and generation-scoped health re-probe without timers or duplicate requests.
+ * 1. Prove multi-source health/Root collection, initial Pull, and same-identity refresh single-flight without timers or duplicate requests.
  * 2. Prove exact-tab generations retire late removed/replaced results.
  * 3. Preserve per-source authentication and event-driven disconnect states without cross-source fallback.
  * 4. Keep retained evidence and renderable health separate from replacement observation authority.
@@ -567,6 +567,46 @@ describe('connection observation owner', () => {
 
     replacementProbe.resolve(online(health(API_A, 'replacement-generation')))
     await refresh
+  })
+
+  it('joins overlapping explicit refreshes for the same tab identity', async () => {
+    const replacementProbe = deferred<HostedBackendProbeResult>()
+    let probeCount = 0
+    const refreshRootProjection = vi.fn(async () => {})
+    const owner = createConnectionObservationOwner({
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1
+          ? online(health(API_A, 'initial-generation'))
+          : replacementProbe.promise
+      },
+      fetchRootProjection: async () =>
+        rootProjection(readyRoot('project-a', probeCount), probeCount),
+      refreshRootProjection,
+      now: () => probeCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+    const initialGeneration = owner.getSnapshot().observations[0]?.generation
+
+    const firstRefresh = owner.refresh(['a'])
+    await vi.waitFor(() => expect(probeCount).toBe(2))
+    const replacementGeneration = owner.getSnapshot().observations[0]?.generation
+    const secondRefresh = owner.refresh(['a'])
+
+    expect(probeCount).toBe(2)
+    expect(replacementGeneration).not.toBe(initialGeneration)
+    expect(owner.getSnapshot().observations[0]?.generation).toBe(replacementGeneration)
+
+    replacementProbe.resolve(online(health(API_A, 'replacement-generation')))
+    await Promise.all([firstRefresh, secondRefresh])
+
+    expect(probeCount).toBe(2)
+    expect(refreshRootProjection).toHaveBeenCalledTimes(1)
+    expect(owner.getSnapshot().observations[0]?.generation).toBe(replacementGeneration)
   })
 
   it('keeps retained Root and Reference evidence stale until replacement data commits', async () => {

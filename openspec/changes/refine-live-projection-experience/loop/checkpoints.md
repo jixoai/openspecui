@@ -119,6 +119,14 @@ directory created below a previously missing inventory root never emitted. The C
 for progressive parent-inventory rebinding is recorded in `implementation.md`. Full local workspace tests,
 typecheck, and basic component browser fixtures now pass; another exact-head run remains required.
 
+PR Quality run `30299650006` on head `8bcfd2a` also does not satisfy 3.6. Its first attempt exposed a
+nondeterministic missing data-home Schema creation event in Server; its unchanged rerun passed Server and exposed
+two overlapping explicit App refresh generations through HostedShell. The bounded missing-target ancestor
+settlement and same-identity refresh single-flight corrections, including direct red/green/mutation evidence, are
+recorded in `implementation.md`. Final-tree format, lint, all 15 package typechecks, serial workspace unit tests,
+and component browser fixtures passed locally. Another exact-head remote run remains required; manager
+browser/visual acceptance is still a separate fact.
+
 ## 4. Merge Readiness
 
 - [ ] 4.1 Confirm all P1-P5 work is complete, all strict/OpenSpec validation is green, no loopback trigger remains unresolved, and implementation notes match the checked source.

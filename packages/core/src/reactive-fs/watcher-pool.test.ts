@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
- * 1. Verify path subscriptions share callbacks and release deterministically.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Verify path subscriptions share only equivalent callback and missing-path matching contracts.
  * 2. Verify multiple observation roots, including missing logical roots sharing an existing ancestor,
  *    coexist and use reference-counted leases.
  * 3. Verify runtime status reports the complete dynamic root set.
  *
  * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
+ * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
  */
 import { realpathSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
@@ -270,6 +271,21 @@ describe('WatcherPool', () => {
 
       release1()
       release2()
+    })
+
+    it('keeps ancestor-settlement subscriptions distinct from ordinary subscriptions', async () => {
+      const missingPath = join(tempDir, 'missing', 'schemas')
+      const releaseOrdinary = acquireWatcher(missingPath, vi.fn(), { recursive: true })
+      const releaseAncestor = acquireWatcher(missingPath, vi.fn(), {
+        recursive: true,
+        watchAncestorsWhileMissing: true,
+      })
+
+      expect(getActiveWatcherCount()).toBe(2)
+      releaseOrdinary()
+      expect(getActiveWatcherCount()).toBe(1)
+      releaseAncestor()
+      expect(getActiveWatcherCount()).toBe(0)
     })
 
     it('should not notify released callback', async () => {

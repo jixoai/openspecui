@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Own generation-deduplicated health and Root Context admission Pull/reconnect/disconnect re-probe for every retained backend tab identity.
+ * 1. Own same-identity refresh single-flight plus health and Root Context admission Pull/reconnect/disconnect re-probe for every retained backend tab.
  * 2. Retire late results when a locator is removed, replaced, or refreshed.
  * 3. Correlate mutation authority with the full tab identity and observation generation.
  * 4. Keep retained renderable health/Root evidence separate from the current attempt and authority.
@@ -216,6 +216,7 @@ export function createConnectionObservationOwner(
     string,
     { generation: number; promise: Promise<HostedBackendProbeResult> }
   >()
+  const explicitRefreshes = new Map<string, { tab: HostedShellTab; promise: Promise<void> }>()
   let nextGeneration = 0
   let nextTransportEpoch = 0
   let revision = 0
@@ -382,6 +383,7 @@ export function createConnectionObservationOwner(
   const retireProjectionTransport = (tabId: string): void => {
     retireRootPull(tabId)
     healthProbes.delete(tabId)
+    explicitRefreshes.delete(tabId)
     const existing = projectionTransports.get(tabId)
     if (!existing) return
     projectionTransports.delete(tabId)
@@ -541,6 +543,7 @@ export function createConnectionObservationOwner(
   async function observe(tabId: string, invalidateProjection: boolean): Promise<void> {
     const tab = retainedTabs.get(tabId)
     if (!tab) return
+    if (!invalidateProjection) explicitRefreshes.delete(tabId)
     const generation = ++nextGeneration
     const previous = observations.get(tabId)
     const attemptStartedAt = dependencies.now()
@@ -620,6 +623,22 @@ export function createConnectionObservationOwner(
     }
   }
 
+  const refreshTab = (tabId: string): Promise<void> => {
+    const tab = retainedTabs.get(tabId)
+    if (!tab) return Promise.resolve()
+    const existing = explicitRefreshes.get(tabId)
+    if (existing && isSameTab(existing.tab, tab)) return existing.promise
+
+    const promise = observe(tabId, true)
+    const refresh = { tab, promise }
+    explicitRefreshes.set(tabId, refresh)
+    const release = () => {
+      if (explicitRefreshes.get(tabId) === refresh) explicitRefreshes.delete(tabId)
+    }
+    void promise.then(release, release)
+    return promise
+  }
+
   return {
     getSnapshot: () => snapshot,
     subscribe(listener) {
@@ -657,7 +676,7 @@ export function createConnectionObservationOwner(
     async refresh(tabIds) {
       const targetSet = tabIds ? new Set(tabIds) : null
       const targets = [...retainedTabs.keys()].filter((tabId) => !targetSet || targetSet.has(tabId))
-      await Promise.all(targets.map((tabId) => observe(tabId, true)))
+      await Promise.all(targets.map(refreshTab))
     },
     isCurrentAuthority(authority) {
       const observation = observations.get(authority.tabId)
