@@ -88,6 +88,11 @@ line, and rejects older or forward CLI lines by default.
 - Expose identity-only runtime invalidation pushes and make Store clients pull
   fresh CLI projections explicitly instead of receiving Store data in push
   frames.
+- Generalize Root Context, Store, Environment Global, OPSX, and Spec projections
+  onto one lifecycle-only Push plus typed Pull contract. Retain settled CLI data
+  as display-only during replacement, keep failed Work dependencies live for
+  automatic recovery, and observe Environment Global config through the exact
+  CLI-resolved XDG config path rather than unrelated project/data-home facets.
 - Coalesce duplicate invalidation pushes to each facet's latest generation and
   prevent slower stale Store pulls from replacing newer CLI projections.
 - Remove Store polling from healthy subscriptions and retain one bounded

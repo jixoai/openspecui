@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Project CLI-owned environment-global config, data-scope provenance, and raw evidence.
  * 2. Own the JSON draft and preserve unknown fields through the typed global-config write.
  * 3. Compose the focused Profile/Update lifecycle without a second reactive projection.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Environment Global profile/drift must remain reactive and Update must use the Root action gate."
+ * Original request (2026-07-26): "缓存更新期间仍可读，但不能授权写入。"
  */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
@@ -76,6 +77,7 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
     data: environmentGlobalConfig,
     isLoading,
     error: subscriptionError,
+    authority,
     refresh,
     refreshPending,
   } = useEnvironmentGlobalConfigSubscription()
@@ -92,6 +94,7 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
     isLoading,
     subscriptionError,
     refreshPending,
+    authorityCurrent: authority.state === 'current',
     projectionHasCliError,
   })
   projectionStateRef.current = {
@@ -102,6 +105,7 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
     isLoading,
     subscriptionError,
     refreshPending,
+    authorityCurrent: authority.state === 'current',
     projectionHasCliError,
   }
   const projectionLocked =
@@ -109,6 +113,7 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
     projectionStateRef.current.isLoading ||
     projectionStateRef.current.subscriptionError !== null ||
     projectionStateRef.current.refreshPending ||
+    !projectionStateRef.current.authorityCurrent ||
     projectionStateRef.current.projectionHasCliError
 
   useEffect(() => {
@@ -134,6 +139,7 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
         state.isLoading ||
         state.subscriptionError !== null ||
         state.refreshPending ||
+        !state.authorityCurrent ||
         state.projectionHasCliError
       ) {
         throw new Error('Environment Global projection is stale or unavailable.')
@@ -164,6 +170,7 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
       state.isLoading ||
       state.subscriptionError !== null ||
       state.refreshPending ||
+      !state.authorityCurrent ||
       state.projectionHasCliError ||
       saveMutation.isPending
     ) {

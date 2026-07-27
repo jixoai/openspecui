@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove filesystem services read and mutate only the CLI-selected planning root.
  * 2. Prove failed Root Context resolution creates no root-dependent actions.
  * 3. Prove root identity transitions await child settlement before retiring services, leases, and previews.
@@ -10,6 +10,7 @@
  * Original request (2026-07-17): "A stream cancellation request is not child-process settlement."
  * Original request (2026-07-17): "Prove the transition was already blocked on A before disposal began."
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
 import {
   CliExecutor,
@@ -191,6 +192,7 @@ describe('PlanningRootServiceManager', () => {
       observationEnvironment,
       projectInvalidation,
       runtimeInvalidation,
+      storeObservation: { subscribe: () => () => {} },
       codeBinding: { bindingToken: 'code-binding' },
     })
     await manager.runOperation(async (services) => {
@@ -355,6 +357,7 @@ describe('PlanningRootServiceManager', () => {
       observationEnvironment: { acquireRoot: vi.fn(async () => async () => {}) },
       projectInvalidation: { acquireRoot: vi.fn(() => () => {}) },
       runtimeInvalidation,
+      storeObservation: { subscribe: () => () => {} },
       codeBinding: { bindingToken: 'code-binding' },
     })
 
@@ -421,6 +424,7 @@ describe('PlanningRootServiceManager', () => {
       observationEnvironment,
       projectInvalidation,
       runtimeInvalidation,
+      storeObservation: { subscribe: () => () => {} },
       codeBinding: { bindingToken: 'code-binding' },
     })
 
@@ -504,6 +508,7 @@ describe('PlanningRootServiceManager', () => {
       observationEnvironment,
       projectInvalidation,
       runtimeInvalidation,
+      storeObservation: { subscribe: () => () => {} },
       codeBinding: { bindingToken: 'code-binding' },
     })
 
@@ -591,6 +596,7 @@ describe('PlanningRootServiceManager', () => {
       observationEnvironment,
       projectInvalidation,
       runtimeInvalidation,
+      storeObservation: { subscribe: () => () => {} },
       codeBinding: { bindingToken: 'code-binding' },
     })
 
@@ -732,6 +738,7 @@ describe('PlanningRootServiceManager', () => {
       observationEnvironment,
       projectInvalidation,
       runtimeInvalidation,
+      storeObservation: { subscribe: () => () => {} },
       codeBinding: { bindingToken: 'code-binding' },
     })
 
@@ -879,6 +886,7 @@ describe('PlanningRootServiceManager', () => {
         observationEnvironment: { acquireRoot: async () => async () => {} },
         projectInvalidation: { acquireRoot: () => () => {} },
         runtimeInvalidation,
+        storeObservation: { subscribe: () => () => {} },
         codeBinding: { bindingToken: 'code-binding' },
       })
       const childReady = Promise.withResolvers<void>()
@@ -985,6 +993,7 @@ describe('PlanningRootServiceManager', () => {
         observationEnvironment,
         projectInvalidation,
         runtimeInvalidation,
+        storeObservation: { subscribe: () => () => {} },
         codeBinding: { bindingToken: 'code-binding' },
       })
       const childReady = Promise.withResolvers<void>()
@@ -1091,6 +1100,7 @@ describe('PlanningRootServiceManager', () => {
       observationEnvironment,
       projectInvalidation,
       runtimeInvalidation,
+      storeObservation: { subscribe: () => () => {} },
       codeBinding: { bindingToken: 'code-binding' },
     })
     const retirementWaitEntered = Promise.withResolvers<void>()
@@ -1225,6 +1235,7 @@ describe('PlanningRootServiceManager', () => {
       observationEnvironment: { acquireRoot: async () => async () => {} },
       projectInvalidation: { acquireRoot: () => () => {} },
       runtimeInvalidation: new RuntimeInvalidationIndex(),
+      storeObservation: { subscribe: () => () => {} },
       codeBinding: { bindingToken: 'code-binding' },
     })
     const stream = createControlledStreamHandle()
@@ -1307,6 +1318,7 @@ describe('PlanningRootServiceManager', () => {
       observationEnvironment,
       projectInvalidation,
       runtimeInvalidation,
+      storeObservation: { subscribe: () => () => {} },
       codeBinding: { bindingToken: 'code-binding' },
     })
     const preview = await manager.runOperation(({ filePreviewService }) =>
@@ -1440,6 +1452,7 @@ describe('PlanningRootServiceManager', () => {
       observationEnvironment,
       projectInvalidation,
       runtimeInvalidation,
+      storeObservation: { subscribe: () => () => {} },
       codeBinding: { bindingToken: 'code-binding' },
     })
 
@@ -1531,6 +1544,7 @@ describe('PlanningRootServiceManager', () => {
       observationEnvironment,
       projectInvalidation,
       runtimeInvalidation,
+      storeObservation: { subscribe: () => () => {} },
       codeBinding: { bindingToken: 'code-binding' },
     })
 

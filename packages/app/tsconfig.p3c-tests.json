@@ -8,6 +8,7 @@
     "src/components/store-mutation-lifecycle.test.tsx",
     "src/lib/store-action-correlation.test.ts",
     "src/lib/store-lifecycle-composer.test.ts",
+    "src/lib/use-store-data.test.tsx",
     "src/routes/connection-context.test.tsx",
     "../server/src/huggingface-transformers.d.ts"
   ],

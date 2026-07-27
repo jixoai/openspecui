@@ -1,10 +1,10 @@
 <!--
-Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
 1. Record the pre-apply review baseline and work-package ownership for delivery-gap closure.
 2. Define the evidence order that prevents recurrence of mock-only or terminal-only proof.
 3. Preserve external loading-change ownership and manager-only final walkthroughs.
 4. List the exact loopback conditions that require a new owner decision.
-5. Record accepted P4/P5 fixed points and clean-CI rejection evidence.
+5. Record accepted P4/P5 fixed points, P6 reactive-projection evidence, and clean-CI rejection evidence.
 
 Original request (2026-07-23): "走查任务直接到新的change中做。你目前的工作就是：review + interview + replan(write new openspec change)"
 Original request (2026-07-19): "不要在 6.11 这个任务上徘徊了。你得把它拆开成多个独立的小问题，然后把阻塞的问题发给我，我来决策推进。"
@@ -2491,3 +2491,540 @@ shards remain component preparation evidence; they do not close the manager-owne
 archive, release, or changeversion action was performed. The executable manager ledger is physically separated in
 `loop/manager-walkthrough.md` so the already large implementation audit does not accumulate another orthogonal
 operational concern.
+
+#### Manager 6.9 blocker: App-window credential convergence (2026-07-26 Asia/Shanghai)
+
+The manager's first A/B/C walkthrough exposed a route/window lifecycle defect before the Store targeting assertion:
+
+```text
+open B  -> A becomes authentication-required
+open C  -> B becomes authentication-required
+later   -> C becomes authentication-required at its background health refresh
+```
+
+A three-window transport diagnostic showed that backend credentials remained stable and every outer App document
+stayed mounted. Each window returned 200 only for the locator credential it had directly consumed and 401 for the
+other persisted tabs. The 15-second health refresh exposed the missing in-memory binding; it did not expire or
+rotate a credential.
+
+Two production boundaries were independently red before correction:
+
+1. `launch-relay.test.ts` modeled A, B, and C windows. A accumulated A/B/C, while B retained only B and C only C.
+2. `app-router.test.tsx` mounted the real Router on `/environment`; a later launch message left persisted connection
+   state `{}`, proving relay ownership ended with the Sessions route.
+
+The candidate correction moves launch/PWA relay ownership to `AppLaunchOwner` above every route, makes the shared
+connection store the sole HostedShell state owner, lets every live window absorb each new locator credential, and
+returns the leader's immutable in-memory credential snapshot in the source-directed ACK. Credentials remain absent
+from URL query, persisted shell state, localStorage, and logs. Mutation evidence replaced the ACK snapshot with an
+empty list and the A/B/C test failed because B lacked A; restoring the exact transition returned it to green.
+
+Focused candidate evidence:
+
+```text
+launch relay                         6/6 passed
+real App Router                      9/9 passed
+HostedShell + update components      9/9 passed
+App typecheck                        passed, including checked transport fixtures
+complete App unit package            29/29 files, 176/176 tests passed
+App production build                 passed
+scoped Oxlint                        0 warnings / 0 errors
+changed-file format + diff check     passed
+strict Change validation             passed
+```
+
+This is automated preparation and a manager-reported blocker correction, not completion of 6.9. The manager owns a
+fresh A/B/C walkthrough and must still accept envUri grouping, exact selected-B Store mutation ownership, and
+same-locator replacement behavior. No merge, archive, release, or browser-acceptance claim is made here.
+
+#### Manager 6.9 blocker: all-Store Doctor input and hidden backend selection (2026-07-26 Asia/Shanghai)
+
+The manager reached Store Inspector with A/B/C online but could not discover how to keep A connected while selecting
+B. The route consumed the global Hosted Shell `activeTabId`, yet Store Manager neither displayed nor controlled that
+state; only the Sessions iframe tabs exposed it. The first Inspector pull also failed before mutation admission:
+
+```text
+GET http://localhost:3112/trpc/stores.doctor?input=null
+400 BAD_REQUEST: Expected object, received null
+```
+
+The pinned OpenSpec CLI contract is `openspec store doctor [id] --json`: absent id inspects all registered Stores.
+The Server Router accepts optional input and an optional object member. Read-only probes against the running guarded
+B backend distinguished the transport shapes:
+
+```text
+/trpc/stores.doctor              -> 200
+/trpc/stores.doctor?input=%7B%7D -> 200
+/trpc/stores.doctor?input=null   -> 400
+```
+
+The App client now omits the tRPC input parameter when `storeId` is absent, while an explicitly supplied id is encoded
+by presence rather than truthiness. A focused regression failed on the former `input=null` URL and passes after the
+fix. Store Manager also exposes a backend selector backed directly by the existing global connection store; switching
+A/B updates `activeTabId` and retains both tab entries. It does not create another Store/environment selection owner.
+
+Focused automated preparation:
+
+```text
+backend-client + Store route tests   35/35 passed
+App typecheck                        passed, including checked Store fixtures
+```
+
+Checkpoint 6.9 remains open. The manager owns the real B `mutation-store` Unregister walkthrough and must confirm
+that lifecycle evidence names B's locator/environment. No final browser acceptance, commit, push, merge, archive, or
+release is claimed.
+
+#### P6 authorization: CLI-backed reactive projection upgrade (2026-07-26 Asia/Shanghai)
+
+The manager paused manual checkpoint 6.9 and explicitly authorized a comprehensive interface, kernel, and test
+upgrade before any walkthrough resumes. The triggering observation is broader than the `stores.doctor?input=null`
+transport defect: App Root/health freshness currently depends on a healthy-path 15-second timer, while Store
+Inventory/Doctor are one-shot HTTP Pulls whose terminal mutation refresh is local to the initiating component.
+
+The accepted architecture boundary is:
+
+```text
+files/directories/content structure = dynamic invalidation dependencies only
+OpenSpec CLI typed result            = sole projected and cached business truth
+Server Push                          = identity + invalidation/Work lifecycle
+client Pull                          = typed lifecycle + retained/current CLI snapshot
+```
+
+During a replacement CLI run, the last settled snapshot remains readable as `stale-display-only` while a separate
+`revalidating` state is visible. Success atomically replaces it. Failure retains it as `refresh-error` with the new
+attempt's exact evidence. No stale snapshot authorizes mutation. The healthy path has no periodic projection timer;
+watcher self-healing, missing paths, explicit refresh, reconnect, and the bounded Store observation fallback remain
+separate named mechanisms.
+
+P6 checkpoints 7.1--7.9 and `cli-backed-reactive-projection` now block manager checkpoints 6.7--6.12. No P6
+implementation or test item is complete merely because the prior Projection Work registry contains adjacent cache
+primitives. Final browser, visual, responsive, and multi-tab acceptance remains manager-owned.
+
+#### P6 Store observation precision: 2026-07-27 Asia/Shanghai
+
+The first P6 Reference-content implementation separated `doctor-root` and `spec-root` generations, but independent
+review found an older broad path still acquired a recursive `RuntimeRootInvalidationRegistry(['context'])` lease for
+every CLI-listed Store root. That lease invalidated Root Context on every Store event, including a referenced
+`openspec/specs/**` edit. It contradicted the source-derived trigger map because a Store Spec's bytes are neither
+Root Context selection input nor `store doctor` input for a non-Git Store.
+
+The correction removes the per-Store registry lease entirely. `StoreObservationService` now receives the single
+Server `RuntimeInvalidationController` and has only these effects:
+
+```text
+physical Store Spec change
+  -> `spec-root`
+  -> Planning Catalog / Document / Instructions / Apply selector Work
+  -> no `context` generation
+
+physical Store Doctor dependency change
+  -> `doctor-root`
+  -> selected/all Doctor selector Work
+  -> `context` generation
+```
+
+The Server no longer exposes or disposes a Store-root invalidation registry. Store list, registry mutation, and the
+bounded degraded fallback retain their independent `stores`/`context` invalidation behavior; this correction does
+not change their contracts. The Store-root `ReactiveObservationEnvironment` lease remains, so reactive file
+dependencies continue to have an active physical observation root.
+
+Focused evidence on this dirty candidate:
+
+```text
+Store observation / Doctor / Store Work / Reference integration / Root snapshot / lifecycle tests
+  7 files, 22 tests passed
+Server typecheck (production + checked search/git/transport/PTY lanes)
+  passed
+Changed Server source/test Prettier + Oxlint
+  passed (0 warnings / 0 errors)
+strict Change validation
+  passed
+```
+
+The tests prove that a non-Git Store Spec edit emits `spec-root` without changing the `context` generation; a real
+pinned OpenSpec 1.6 Reference Spec edit replaces Catalog/Instructions/Apply CLI truth without rerunning Doctor; and
+a Git Store working-tree edit emits `doctor-root` plus one `context` generation because Git dirtiness is an upstream
+Doctor fact. The same-root Catalog regression fixture now also returns a true owned-root `list --specs` result before
+its Reference result, so the strict owned-root provenance contract is exercised rather than bypassed by an old
+Store-only fixture. P6 7.4/7.6 remain open: this is one reviewed precision slice, not completion of the remaining
+dynamic trigger, public transport, and full-gate work. No browser, visual, responsive, or multi-tab acceptance is
+claimed.
+
+#### P6 Web authority-fixture migration: 2026-07-27 Asia/Shanghai
+
+`EnvironmentGlobalConfigSection` now correctly locks a cached runtime config whenever its CLI projection is not
+authoritative. The production hook has returned `authority` throughout P6; two older Web test fixtures still mocked
+the pre-P6 return shape and crashed while rendering instead of exercising the lock. The test migration supplies the
+real lifecycle states rather than weakening the component: current CLI data is `current`, cold data is `waiting`, a
+retained rebind is `waiting/rebind`, and a terminal subscription error is `failed` with its error evidence.
+
+The new retained-data test asserts that an otherwise readable config becomes editor-read-only and rejects its save
+shortcut during `waiting/rebind` even though `refreshPending` is false. This preserves the distinct facts required by
+the contract: cached data remains presentation data; only a committed replacement authorizes a write. It is a Web
+fixture correction plus focused authority coverage, not a completion claim for P6 7.2, 7.5, 7.8, or final owner
+walkthroughs.
+
+```text
+Web unit project                                  156 files, 997 tests passed
+Web production + P6 checked-fixture typecheck     passed
+git diff --check                                  passed
+```
+
+#### P6 Store locator first-render retirement: 2026-07-27 Asia/Shanghai
+
+`useStoreData` previously reset list/Doctor state from a passive effect after `apiBaseUrl` changed. That let the
+first render for backend B reuse settled A Store facts and A's `canMutate` authority until the effect retired them.
+This is a projection-provenance defect, not a loading-style issue: the selected backend can never display or act on
+another backend's Store result while B is unresolved.
+
+Each settled Store projection now carries the exact source locator. Rendering compares that source to the selected
+locator before exposing inventory, Inspector, loading state, error state, or mutation authority. Same-locator
+revalidation still retains data as display-only; a locator change is masked synchronously during render and its
+effect then starts B's lifecycle transport. An absent locator is intentionally not a match for an absent snapshot.
+
+The checked hook fixture records the exact first B render, rather than an effect-flushed later snapshot. Removing the
+source-locator comparison produced the intended red result: B rendered A's inventory and Doctor ids with
+`canMutate: true`. Restoring the comparison makes that render empty and non-authoritative.
+
+```text
+red: source comparison removed       1 focused failure: B received A data and canMutate=true
+green: Store hook                    3/3 passed
+App unit project                     30 files, 188 tests passed
+App production + checked fixtures    passed
+```
+
+The same review found that one aggregate `isLoading` flag incorrectly joined two independent CLI Work identities:
+Store list may settle while all-Store Doctor is still loading. `useStoreData` now exposes
+`isInventoryLoading` and `isInspectorLoading`, and the two routes consume only their own state. Inventory can render
+its current typed list without waiting for Doctor; Inspector remains in loading state rather than claiming a
+not-yet-pulled Doctor result is an empty Store set. Lifecycle notices, transport-current markers, and transport errors
+now carry the producing locator too, so B's first render cannot inherit A's updating/error presentation while the
+rebind effect establishes B subscriptions.
+
+```text
+Store hook focused (independent loading and locator retirement)  5/5 passed
+App unit project                                                  30 files, 190 tests passed
+App production + checked fixtures                                 passed
+Prettier / diff check                                             passed
+```
+
+The final Store-hook correction separates refresh errors by the same projection identity. A `store list` error cannot
+replace an otherwise current Doctor view, and a Doctor replacement failure cannot make Inventory report an unrelated
+failure. On a same-locator Doctor `revalidating -> transport failure` transition, Inspector keeps its last typed
+Doctor snapshot, renders the exact failure beside it, and keeps `canMutate` false. This is the required
+`refresh-error` presentation: retained data is readable but never silently relabelled current or writable.
+
+```text
+Store hook focused (including same-locator refresh-error)  6/6 passed
+App unit project                                             30 files, 191 tests passed
+App production + checked fixtures                            passed
+```
+
+This closes only the demonstrated App-side locator-retirement hole. It does not complete P6 7.5/7.6/7.8: Root,
+Store, and Environment still need the remaining cross-client/dynamic-dependency and full public-boundary evidence;
+manager-owned browser acceptance remains unchanged.
+
+#### P6 Environment Global physical config-path lease: 2026-07-27 Asia/Shanghai
+
+The first Environment Global fixture wrote a real file but then called `updateReactiveFileCache()` directly. That
+proves only the cache mutation helper, not the production `filesystem -> reactive dependency -> CLI Work` path. Once
+that helper was removed, the red fixture stayed at the initial `exists: false` snapshot after creating the CLI-resolved
+config file: `reactiveReadFile()` had registered a path subscription, but no runtime observation root owned the
+containing directory, so the subscription could not bind to a watcher.
+
+`EnvironmentGlobalProjectionService` now receives the Server-owned observation environment. Each typed
+`openspec config path` result is used only to acquire or replace a directory watcher lease before the reactive content
+read. The exact result path remains the public file fact and `config list --json` / `config list` remain the CLI-owned
+config, profile, and drift truth. A newer Work generation or a disposed Server retires a late lease; a path switch
+acquires the next lease before releasing the old one; Server teardown releases the final lease before the observation
+environment closes. This does not add polling, a secondary config parser, or a synthetic business cache.
+
+The new checked physical fixture exercises create, change, and remove without cache injection, then explicitly
+refreshes from path A to path B. A physical edit under retired A makes no extra CLI call, while an edit under B runs
+generation 3. Removing the `observeConfigPath` bridge restores the named red failure at the first file creation.
+
+```text
+red: no config-path observation lease            file creation leaves initial CLI Work at generation 1
+green: Environment Global projection fixture     4/4 passed
+Server typecheck                                 passed
+Router/startup/runtime focused lane              4 files, 104 tests passed
+```
+
+This is a reviewed dynamic-dependency repair within P6 7.4. It does not close 7.4, 7.5, 7.6, 7.8, or 7.9: the
+remaining official-source trigger inventory, cross-client public-boundary evidence, and aggregate gates remain open.
+No final browser acceptance is claimed.
+
+#### P6 Root Context physical dependency evidence: 2026-07-27 Asia/Shanghai
+
+`RootContextProjectionService` already reads the exact launch config, effective data-home registry, selected Store
+Git metadata, and direct Reference root inputs through `ReactiveContext`. Its older focused tests nevertheless called
+`updateReactiveFileCache()` immediately after every write, so they proved cache injection rather than the production
+physical path. The Server's launch/data-home/Store observation owners are the runtime leases; the projection itself
+must remain a CLI owner, not acquire a second broad Reference-root observer.
+
+The fixture now owns a real `ReactiveObservationEnvironment` root for its temporary runtime and removes every cache
+injection. Real writes prove the dependency chain below, including Reference A -> B replacement and retired-path
+silence:
+
+```text
+filesystem write
+  -> watcher event
+  -> reactiveReadFile/reactiveStat dependency
+  -> one Root Context Projection Work replacement
+  -> typed settled Root Context snapshot
+```
+
+As mutation resistance, temporarily removing the first fixture's exact watcher lease leaves the first real launch
+config write at generation `1`; the named assertion expects generation `2` and fails there. Restoring that lease
+returns the same physical fixture to green. This distinguishes the actual watcher-to-reactive handoff from a manual
+cache update or a downstream refresh call.
+
+```text
+red: exact fixture watcher lease removed       expected generation 2, received 1
+green: Root Context physical dependency         5/5 passed
+Server checked transport-test typecheck         passed
+```
+
+This corrects evidence quality inside P6 7.4 only. It does not claim that Root Context owns Store observation, does
+not add polling, and does not close 7.4, 7.5, 7.6, 7.8, or final manager browser acceptance.
+
+#### P6 generic projection contract and Work lifecycle: 2026-07-27 Asia/Shanghai
+
+P6 `7.2` and `7.3` are now independently complete. Core's browser-safe `CliProjectionState` is a discriminated
+five-state contract: no-data `loading`/`error` are distinct from data-present `ready`/`revalidating`/`refresh-error`.
+The latter two retain the last settled typed CLI snapshot as `stale-display-only`; only `ready/current` is
+authoritative. The accompanying Push notice exposes identity, Work generation, settled snapshot generation, state,
+and invalidation cause only, so a client must Pull typed replacement data rather than receive duplicated business
+payloads.
+
+The shared Server `ProjectionWorkRegistry` supplies immediate lifecycle reads, one active run per complete identity,
+atomic replacement, failure retention and recovery, bounded caching, and generation retirement. Its focused tests
+exercise the relevant counterexamples: a shared replacement joins instead of duplicating work, stale A remains
+readable while B runs or fails, a later physical change recovers an error, and retired A cannot publish into B.
+
+```text
+Projection Work registry fixture                 12/12 passed
+OPSX typed CLI projection fixture                1/1 passed
+Core typecheck (incl. checked CLI fixture)       passed
+Server checked transport-test typecheck          passed
+```
+
+This closes only the generic contract and kernel foundations. P6 `7.4` through `7.9` remain open for dynamic
+dependency coverage, Root/Environment and Store migration acceptance, remaining projection inventory, public
+multi-client/mutation proof aggregation, and focused/full gates.
+
+#### P6 Root, Environment, and Store lifecycle migrations: 2026-07-27 Asia/Shanghai
+
+P6 `7.5` and `7.6` are now independently complete. Root Context, Environment Global, and Store list/Doctor expose
+an immediate typed lifecycle Pull plus a data-free lifecycle subscription. App Root observation keeps one
+locator-scoped transport, Pulls after each wake, re-probes on reconnect, and retains display evidence while the
+replacement is not authoritative. Its former healthy 15-second refresh does not exist; focus, visibility, explicit
+refresh, reconnect, physical invalidation, and mutation settlement remain distinct triggers.
+
+Store projections are selector-exact CLI Work identities. A successful `store list` is the only source that
+reconciles registered Store observation roots; all-Store Doctor omits an absent selector, while a supplied Store id
+remains exact. Terminal mutation invalidation wakes all projection subscribers without turning the mutation ledger
+into Store inventory. The public transport fixture creates two real WebSocket clients, makes each Pull after its
+lifecycle wake, and records precisely one initial plus one post-mutation `store list` CLI execution.
+
+```text
+App Root lifecycle / no-healthy-timer fixture    16/16 passed
+Web Environment lifecycle Pull fixture           2/2 passed
+Server Store Work + public transport fixtures    10/10 passed
+App, Web, Server checked typecheck lanes         passed
+```
+
+These migrations do not close P6 `7.4` because dynamic source dependencies still require aggregate coverage. They
+also do not close `7.7` (remaining projection inventory), `7.8` (cross-surface evidence aggregation), or `7.9`
+(focused/full delivery gates), and make no manager browser-acceptance claim.
+
+#### P6 dynamic trigger reconciliation: 2026-07-27 Asia/Shanghai
+
+P6 `7.4` is complete. The production dependency map is now covered by real watcher-to-Work fixtures without
+publishing any parser-derived substitute for OpenSpec CLI truth.
+
+```text
+launch config / Store registry / Reference add-move-remove
+  -> Root Context Projection Work
+
+registered Store root / referenced Spec content
+  -> Doctor or selector-exact Catalog/Instructions/Apply Work
+
+CLI-resolved environment-global config path
+  -> Environment Global Work
+
+project Schema or XDG data-home Schema path
+  -> selector-exact Config / Template Work
+  -> `openspec schemas`, `schema which`, or `templates --json` replacement truth
+```
+
+`planning-cli-schema-observation.integration.test.ts` adds the last two production boundaries with the pinned
+OpenSpec 1.6 executable. A project-local `schema.yaml` update that adds an artifact/template re-runs the Config
+Bundle and Template Work through a physical watcher; their replacement values contain the new CLI description,
+artifact list, and template index. A separate fixture begins with no user Schema, observes the real
+`${XDG_DATA_HOME}/openspec` root through `OpenSpecDataHomeObserver`, and confirms that adding the user Schema moves
+the initially failing Template selector to `ready` through a new CLI execution. Each physical write is permitted to
+produce its own Work generation; the evidence requires a settled replacement and renewed typed CLI command, not an
+invented exact generation count.
+
+The existing Root Context, Store observation, Reference, and Environment Global physical fixtures cover the
+remaining launch-config, registry, Store/Reference, config-path, add/move/remove, and retirement entries in the
+official-source map. `ReactiveContext` records these paths only as invalidation dependencies; every cached Root,
+Store, Catalog, Config, or Template business value remains the typed CLI result retained by Projection Work.
+
+```text
+Server Schema physical fixture                  2/2 passed
+Server checked transport-test typecheck          passed
+```
+
+This closes only P6 `7.4`. It does not treat the two fixtures as aggregate public-boundary/mutation-resistance
+proof for P6 `7.8`, does not expand normal-path projection scope, and makes no browser acceptance claim.
+
+#### P6 remaining normal-path audit: 2026-07-27 Asia/Shanghai
+
+P6 `7.7` is complete. The audit traced every normal Project Web CLI consumer through its production owner:
+Root Context, Store list/Doctor, Planning CLI OPSX/Reference projections, and Environment Global all share the
+typed Pull plus lifecycle-only Push contract. Compatibility query endpoints resolve through those same Work owners
+and do not retain an independent result cache.
+
+Change/Archive data, Schema YAML/files, artifact output, Dashboard/Git/Search/tool state, and Server-local
+application surfaces have different physical facts and remain explicit non-CLI projections. The detailed owner map
+and timer classification are in `research-plan.md`. The audit also confirms that system heartbeat, degraded Store
+fallback, reactive-fs recovery, PTY title sampling, PWA checks, and Git progress clocks do not execute healthy-path
+OpenSpec CLI Work. No code changes were required because all normal CLI consumers were already on the P6 owner
+contract; converting file/native facts into a synthetic CLI cache would have been a regression.
+
+This closes only P6 `7.7`. P6 `7.8` still requires the aggregate public-boundary and exact-owner
+mutation-resistance matrix, and P6 `7.9` still requires focused and full local delivery gates. No manager browser
+acceptance is claimed.
+
+#### P6 aggregate public-boundary and mutation-resistance evidence: 2026-07-27 Asia/Shanghai
+
+P6 `7.8` is complete. The matrix deliberately separates a real pinned OpenSpec 1.6 content claim from a
+deterministic transport or UI-owner claim. No mock-backed timing fixture is reported as proof of upstream CLI
+semantics.
+
+| Required fact                                       | Exact production owner and checked evidence                                                                                                                                                                         | Red/green or mutation-resistance fixed point                                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cached data during revalidation and refresh failure | `ProjectionWorkRegistry`, `PlanningCliProjectionService`, `StoreProjectionService`, and Web `useCliProjectionLifecycle`; focused Server `33` tests, Web `12` tests                                                  | A retains `stale-display-only` while B runs or fails; removing the replacement/late-generation transition makes the named snapshot or terminal assertion fail. The App Store source-locator comparison was separately removed: B rendered A plus `canMutate: true`; restoring it made B empty/non-authoritative.                                        |
+| Initial failure has no invented data                | `PlanningCliProjectionService` plus browser-safe lifecycle decoder; focused Server and Web suites                                                                                                                   | The initial typed failure has `data: null` and Push remains data-free. The test fails if the owner publishes a fabricated snapshot instead of its terminal failure.                                                                                                                                                                                     |
+| Dynamic dependency add/move/remove                  | Root, Store, Planning CLI, and Environment Global observation owners; `planning-cli-reference-observation.integration.test.ts`, `planning-cli-schema-observation.integration.test.ts`, Root and Store focused tests | The two integration files run the pinned OpenSpec 1.6 executable after physical writes; the observed replacement must contain the new CLI truth. Removing the real watcher/observation lease leaves the named Work at its old generation. Root and Store tests also prove typed add/move/remove reconciliation and retired-path silence.                |
+| Mutation-triggered multi-client Pull                | `StoreMutationService` -> runtime invalidation -> `StoreProjectionService` -> public tRPC WebSocket; `store-mutation-ledger-transport.test.ts`                                                                      | Two actual WebSocket clients receive lifecycle wakes and Pull one shared replacement after terminal unregister. Removing the terminal invalidation leaves the expected second `store list` command and replacement notice absent. This fixture uses a deterministic executable to isolate transport timing; it makes no upstream Store-semantics claim. |
+| No stale mutation authority                         | App `useStoreData` and the real Store Manager route/form dispatcher; App `191` tests                                                                                                                                | A retained same-locator Store projection is readable but `canMutate` is false; a direct Form submit during `revalidating` is rejected at the dispatch owner. The locator-retirement red result above proves B cannot inherit A's authority on its first render.                                                                                         |
+| No healthy projection timer                         | App connection observation and Store Projection Work; App and Server focused suites                                                                                                                                 | The App test spies on the former 15-second Root/health path; the Store test subscribes List and Doctor and observes no freshness interval. Focus/visibility, reconnect, explicit refresh, physical invalidation, and degraded fallback remain distinct causes.                                                                                          |
+| Late A cannot publish into B                        | `ProjectionWorkRegistry`, Planning CLI selector service, Root regional subscription, and Web lifecycle adapter; focused Server/Web suites                                                                           | Delayed A success and failure are both released after B becomes current. The final data/terminal evidence names B only; bypassing the generation retirement lets the exact late-A assertion fail.                                                                                                                                                       |
+
+Focused commands and results:
+
+```text
+Server Work/Root/Router focused suite                 6 files, 33 tests passed
+Server real OpenSpec watcher/CLI integrations         2 files,  3 tests passed
+Server Store Work + public WS transport               2 files, 10 tests passed
+App unit package                                      30 files, 191 tests passed
+Web P6 lifecycle hooks                                4 files, 12 tests passed
+Core CLI projection/reactive observation              3 files, 30 tests passed
+
+Core checked typecheck (including CLI fixtures)       passed
+Server transport-fixture typecheck                    passed
+Web P6 fixture typecheck                              passed
+App production plus checked fixture typecheck         passed
+```
+
+The matrix is focused automated preparation only. It does not run the full delivery gates, does not claim a final
+browser/visual/multi-tab walkthrough, and does not close P6 `7.9`.
+
+#### P6 delivery gates and CLI type-graph repair: 2026-07-27 Asia/Shanghai
+
+P6 `7.9` is complete. Independent review found one actual package-boundary defect before the delivery gates:
+`@openspecui/cli` includes Server source in its TypeScript graph, and that source imports the public Core
+`hosted-contract` subpath. The CLI `tsconfig` mapped the Core root and existing public subpaths to source, but not
+that exported subpath. TypeScript therefore tried to resolve a not-yet-built Core declaration under `dist`, which
+made the workspace typecheck fail despite a valid source contract.
+
+The CLI project now maps `@openspecui/core/hosted-contract` directly to Core's typed source, matching the existing
+project-reference strategy. This is build-order correctness, not a declaration bypass or a duplicate contract.
+
+```text
+format:check                                      passed
+lint:ci                                           passed
+typecheck                                         15 workspaces passed
+test:ci                                           Core 52/477, Server 83/540, App 30/191, Web 156/997, CLI 13/68
+test:browser:ci                                   xterm 60 passed / 1 skipped; Web 12/12 passed
+Web static unit lane                              passed (156/997 Web tests under the package command)
+pnpm --filter @openspecui/web build:ssg           passed
+git diff --check                                  passed
+openspec validate close-openspec-cli16-delivery-gaps --strict
+                                                  passed
+```
+
+The known jsdom canvas diagnostic and Tailwind `scroll-button` optimization warning did not fail their commands.
+This delivery evidence is automated preparation only. P6 is now waiting exclusively on the manager-owned
+6.7--6.12 walkthrough ledger; it does not claim browser, visual, responsive, or multi-tab acceptance.
+
+#### P6 independent contract review and contract-boundary repair: 2026-07-27 Asia/Shanghai
+
+Before manager walkthrough, independent review reopened the preceding delivery claim. It found three production
+violations of the Change's central rule: Schema/Template re-parsed raw `stdout`, Catalog mixed the CLI list with
+filesystem metadata, and Environment Global published raw file bytes inside its CLI Work. The repair below
+supersedes the old delivery claim for those named owners; no full-gate or manager-acceptance claim is made here.
+
+1. **Schema/Template owner**: `OpenSpecCliContractExecutor.schemas`, `.schemaWhich`, and `.templates` now carry
+   command-specific Zod results. `OpsxKernel` consumes the typed `CliCommandResult.data` directly and keeps schema
+   YAML/template bytes in the existing file-native readers. The checked fixture spies on the legacy raw helpers and
+   makes the test fail if any of the three production readers bypasses the typed contract.
+2. **Catalog owner**: `readSpecCatalog` no longer accepts or invokes `OpenSpecAdapter.listSpecsWithMeta()`. Owned and
+   referenced membership, names, requirement counts, roots, and command evidence come from exact typed `list
+--specs --json` results; `buildSpecCatalog` uses id-derived names and `updatedAt: 0`. A legacy metadata reader that
+   throws is injected as a mutation counterexample and remains untouched while the CLI list settles.
+3. **Environment Global owner**: the CLI Work now retains only `configPath`, parsed `config list --json`, profile/
+   drift facts, and command evidence. `EnvironmentGlobalProjectionService` owns a second, bounded file-native Work
+   for `reactiveReadFile(configPath)`, with path-change retirement and raw-byte lifecycle Pull/Push endpoints. The Web
+   hook composes both current owners; stale CLI state cannot authorize an editable file snapshot. The added file owner
+   required the runtime registry budget to move from 8 to 9, still below the 32-entry snapshot bound.
+
+Focused evidence after the repair:
+
+```text
+Core typed Schema/Template + Kernel + Catalog lane       52 files / 479 tests passed
+Server Catalog/Projection/Router lane                    4 files / 114 tests passed
+Server pinned Schema/Catalog integration lane             2 files / 3 tests passed
+Server Environment Global file-owner lane                 1 file / 4 tests passed
+Web Environment Global hook/component/settings lane       3 files / 38 tests passed
+Core, Server, Web checked typechecks                      passed
+Markdown Prettier check + git diff --check                passed
+```
+
+The Environment Global fixture proves physical file create/change/remove updates the file Work while the CLI
+executor remains at the initial three commands; changing the CLI-selected path replaces the file owner and retires
+the old path. The old CLI Work has no `file` field at its public Pull boundary. These are focused automated
+preparation results only. P6 `7.9` remains open until the approved broad local gates; final browser/visual/responsive/
+multi-tab acceptance remains manager-owned.
+
+#### P6 post-repair local delivery gates: 2026-07-27 Asia/Shanghai
+
+Focused review accepted the three repaired owners. The first complete format gate then found two mechanical
+Prettier deviations in the new Kernel CLI-projection fixture and its checked test `tsconfig`; formatting those two
+files made the same full check pass without a semantic change. The Catalog mutation fixture also initially compared
+the whole `entries` array to one owned entry even though the correct Catalog additionally contains two Reference
+entries. It now asserts that the array contains the owned entry; the Store-qualified Reference assertions remain
+separate and passed.
+
+```text
+pnpm format:check                                  passed (149 changed files)
+pnpm lint:ci                                       passed (0 warnings / 0 errors)
+pnpm typecheck                                     passed (15 workspace projects)
+pnpm test:ci                                       passed
+  root 12/43; Core 52/479; Server 83/541; App 30/191; Web 156/997; CLI 13/68
+pnpm test:browser:ci                               passed
+  xterm 60 passed / 1 skipped; Web component fixtures 12/12
+clean Web SSG (`dist-ssg` and `.vite` removed)      passed
+git diff --check                                   passed
+openspec validate close-openspec-cli16-delivery-gaps --strict
+                                                    passed
+```
+
+The Web unit lane still emits jsdom's unsupported Canvas diagnostic; the clean SSG build still reports the existing
+Tailwind `scroll-button` optimizer warning and ineffective dynamic-import advisory. Each command exited zero with
+all named tests passing, so these are recorded as non-blocking diagnostics rather than hidden or relabeled as
+product success. This closes P6 `7.9` at the automated local-gate boundary only. The manager-owned final browser,
+visual, responsive, and multi-tab walkthrough remains open; no merge, archive, or release follows from this entry.

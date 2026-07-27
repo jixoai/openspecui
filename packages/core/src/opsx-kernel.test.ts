@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Prove path-backed OPSX projections react to planning-root changes.
  * 2. Prove non-canonical Change ids are rejected before projection streams start.
  * 3. Prove demand-driven Status does not require Apply/artifact warmup and retains CLI evidence.
+ * 4. Prove direct Projection Work readers preserve successful and failed real CLI process evidence.
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
@@ -188,6 +189,13 @@ if (args[0] === 'instructions' && args[1] === 'apply' && args.includes('--json')
 if (args[0] === 'status' && args.includes('--json')) {
   const changeIndex = args.indexOf('--change')
   const changeId = changeIndex >= 0 ? args[changeIndex + 1] : 'unknown-change'
+  if (changeId === 'cli-failure') {
+    console.log(JSON.stringify({
+      status: [{ severity: 'error', code: 'FIXTURE_FAILURE', message: 'Fixture status failed.' }],
+    }))
+    console.error('fixture status stderr')
+    process.exit(7)
+  }
   const changeDir = join(process.cwd(), 'openspec', 'changes', changeId)
   const done = isGlobPattern(outputPath)
     ? collectFiles(changeDir).some((path) => matchesGlob(path, outputPath))
@@ -358,6 +366,53 @@ process.exit(1)
 
     expect(kernel.getStatusList().map((status) => status.changeName)).toEqual(['demo-change'])
     expect(pendingWarmup).not.toHaveBeenCalled()
+  })
+
+  it('preserves real CLI success and failure evidence through direct Projection Work readers', async () => {
+    const { kernel } = await prepareKernel('result.md')
+
+    const config = await kernel.readConfigBundleProjection()
+    expect(config).toMatchObject({
+      value: { schemas: [{ name: 'schema-a' }] },
+      evidence: {
+        schemas: {
+          success: true,
+          stderr: '',
+          exitCode: 0,
+          payload: [{ name: 'schema-a', artifacts: [], source: 'user' }],
+          diagnostics: [],
+        },
+        schemaResolutions: {
+          'schema-a': { success: true, stderr: '', exitCode: 0, diagnostics: [] },
+        },
+      },
+    })
+
+    await expect(kernel.readStatusProjection('cli-failure')).rejects.toMatchObject({
+      name: 'CliProjectionCommandError',
+      message: 'fixture status stderr',
+      cliEvidence: {
+        success: false,
+        stderr: 'fixture status stderr\n',
+        exitCode: 7,
+        payload: {
+          status: [
+            {
+              severity: 'error',
+              code: 'FIXTURE_FAILURE',
+              message: 'Fixture status failed.',
+            },
+          ],
+        },
+        diagnostics: [
+          {
+            severity: 'error',
+            code: 'FIXTURE_FAILURE',
+            message: 'Fixture status failed.',
+          },
+        ],
+      },
+    })
   })
 
   it(

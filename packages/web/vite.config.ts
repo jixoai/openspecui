@@ -4,6 +4,7 @@
  * 2. Emit preview entrypoints and one stable Access Gate resource-worker entrypoint.
  *
  * Original request (2026-07-24): "完整审计 Project Web 的 HTTP/tRPC WS/PTY/raw resource 网络路径。"
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
@@ -28,6 +29,11 @@ export default defineConfig(({ isSsrBuild }) => {
     '@openspecui/core': resolve(__dirname, '../core/src'),
     '@openspecui/core/dashboard-display': resolve(__dirname, '../core/src/dashboard-display.ts'),
     '@openspecui/core/hosted-app': resolve(__dirname, '../core/src/hosted-app.ts'),
+    '@openspecui/core/hosted-contract': resolve(__dirname, '../core/src/hosted-contract.ts'),
+    '@openspecui/core/planning-cli-projection': resolve(
+      __dirname,
+      '../core/src/planning-cli-projection.ts'
+    ),
     '@openspecui/core/translation-language-pair': resolve(
       __dirname,
       '../core/src/translation-language-pair.ts'

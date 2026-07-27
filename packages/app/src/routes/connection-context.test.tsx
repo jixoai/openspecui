@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove real Inspector/Register/Remove lifecycle rendering through the production route, dispatcher, and providers.
  * 2. Prove exact selected-tab and generation retirement at the real Store action owner.
  * 3. Prove grouped projects and two-source Root/Reference provenance remain visible.
@@ -8,14 +8,20 @@
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * P3-D evidence (2026-07-25): render all Server-owned Store mutation lifecycle states through real form/dialog actions.
+ * Owner-reported acceptance gap (2026-07-26): Store Manager did not expose how to select B while retaining A.
+ * Original request (2026-07-26): "缓存现在正在被更新中。"
  */
 // @vitest-environment jsdom
 
-import type { RootContext, RootContextState } from '@openspecui/core'
 import {
   buildBackendHealthPayload,
   type HostedBackendHealthResponse,
 } from '@openspecui/core/hosted-app'
+import type {
+  HostedRootContext,
+  HostedRootContextProjectionState,
+  HostedRootContextState,
+} from '@openspecui/core/hosted-contract'
 import type { StoreMutationEnvelope } from '@openspecui/core/store-mutation-protocol'
 import type { StoreDoctorStore } from '@openspecui/core/store-types'
 import { RouterProvider } from '@tanstack/react-router'
@@ -23,6 +29,10 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAppRouter, type AppRouterContext } from '../app-router'
+import type {
+  CliProjectionSelector,
+  CliProjectionTransportCallbacks,
+} from '../lib/cli-projection-transport'
 import { bindLaunchCredential, clearLaunchCredential } from '../lib/launch-credential'
 import type { MutationLifecycleCallbacks } from '../lib/mutation-observation'
 import { getHostedShellStorageKey, type HostedShellState } from '../lib/shell-state'
@@ -55,6 +65,51 @@ const lifecycleTransport = vi.hoisted(() => {
 vi.mock('../lib/mutation-observation-transport', () => ({
   createTRPCMutationObservationTransportFactory: () => ({ connect: lifecycleTransport.connect }),
 }))
+
+const projectionTransport = vi.hoisted(() => {
+  const callbacksByKey = new Map<string, CliProjectionTransportCallbacks>()
+  const key = (apiBaseUrl: string, kind: CliProjectionSelector['kind']) => `${apiBaseUrl}:${kind}`
+  return {
+    connect(
+      apiBaseUrl: string,
+      selector: CliProjectionSelector,
+      callbacks: CliProjectionTransportCallbacks
+    ) {
+      const identity = key(apiBaseUrl, selector.kind)
+      callbacksByKey.set(identity, callbacks)
+      queueMicrotask(() => {
+        callbacks.onNotice({
+          identity,
+          workGeneration: 1,
+          snapshotGeneration: 1,
+          state: 'ready',
+          invalidationCause: 'initial',
+        })
+      })
+      return {
+        unsubscribe() {
+          if (callbacksByKey.get(identity) === callbacks) callbacksByKey.delete(identity)
+        },
+      }
+    },
+    callbacks(apiBaseUrl: string, kind: CliProjectionSelector['kind']) {
+      const callbacks = callbacksByKey.get(key(apiBaseUrl, kind))
+      if (!callbacks) throw new Error(`Missing projection callbacks for ${apiBaseUrl}:${kind}.`)
+      return callbacks
+    },
+    reset() {
+      callbacksByKey.clear()
+    },
+  }
+})
+
+vi.mock('../lib/cli-projection-transport', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../lib/cli-projection-transport')>()
+  return {
+    ...original,
+    createTRPCCliProjectionTransportFactory: () => ({ connect: projectionTransport.connect }),
+  }
+})
 
 const API_A = 'http://localhost:3100'
 const API_B = 'http://localhost:3200'
@@ -166,6 +221,45 @@ function readSubmittedMutation(body: BodyInit | null | undefined): SubmittedMuta
   return { requestId, kind }
 }
 
+function rootProjection(
+  rootContext: HostedRootContextState,
+  workGeneration: number,
+  identity = 'root-context:fixture'
+): HostedRootContextProjectionState {
+  if (rootContext.state === 'loading') {
+    return {
+      state: 'loading',
+      identity,
+      workGeneration,
+      invalidationCause: 'initial',
+      data: null,
+      freshness: null,
+      snapshotGeneration: null,
+      error: null,
+    }
+  }
+  const resolved =
+    rootContext.state === 'refreshing'
+      ? {
+          state: 'ready' as const,
+          data: rootContext.data,
+          attempt: null,
+          error: null,
+          observedAt: rootContext.observedAt,
+        }
+      : rootContext
+  return {
+    state: 'ready',
+    identity,
+    workGeneration,
+    invalidationCause: 'initial',
+    data: resolved,
+    freshness: 'current',
+    snapshotGeneration: workGeneration,
+    error: null,
+  }
+}
+
 function createBackendFetch(
   mutations: string[],
   options: {
@@ -173,9 +267,11 @@ function createBackendFetch(
     requests?: Array<{ url: string; authorization: string | null }>
     envUris?: ReadonlyMap<string, string>
     envUrisAfterInitial?: ReadonlyMap<string, string>
-    rootContexts?: ReadonlyMap<string, RootContextState>
-    rootContextsAfterInitial?: ReadonlyMap<string, RootContextState>
+    rootContexts?: ReadonlyMap<string, HostedRootContextState>
+    rootContextsAfterInitial?: ReadonlyMap<string, HostedRootContextState>
     stores?: StoreDoctorStore[]
+    storeProjectionState?: 'ready' | 'revalidating'
+    storeProjectionGate?: { kind: 'list' | 'doctor'; afterPull: number; wait: Promise<void> }
     storePulls?: string[]
     mutationRequests?: SubmittedMutation[]
     mutationRejection?: { status: number; statusText: string }
@@ -188,6 +284,7 @@ function createBackendFetch(
   ])
   const healthRequestCounts = new Map<string, number>()
   const rootRequestCounts = new Map<string, number>()
+  const storeRequestCounts = new Map<string, number>()
   return vi.fn(async (input, init) => {
     const url = String(input)
     const apiBaseUrl = url.startsWith(API_A) ? API_A : API_B
@@ -216,31 +313,62 @@ function createBackendFetch(
       }
       return Response.json(health.get(apiBaseUrl))
     }
-    if (url.includes('/trpc/rootContext.get')) {
+    if (url.includes('/trpc/rootContext.refreshProjection')) {
+      return Response.json({ result: { data: { state: 'revalidating' } } })
+    }
+    if (url.includes('/trpc/rootContext.readProjection')) {
       const rootRequestCount = (rootRequestCounts.get(apiBaseUrl) ?? 0) + 1
       rootRequestCounts.set(apiBaseUrl, rootRequestCount)
+      const rootContext =
+        (rootRequestCount > 1 ? options.rootContextsAfterInitial?.get(apiBaseUrl) : undefined) ??
+        options.rootContexts?.get(apiBaseUrl) ??
+        ({
+          state: 'loading',
+          data: null,
+          attempt: null,
+          error: null,
+          observedAt: 1,
+        } satisfies HostedRootContextState)
       return Response.json({
         result: {
-          data:
-            (rootRequestCount > 1
-              ? options.rootContextsAfterInitial?.get(apiBaseUrl)
-              : undefined) ??
-            options.rootContexts?.get(apiBaseUrl) ??
-            ({
-              state: 'loading',
-              data: null,
-              attempt: null,
-              error: null,
-              observedAt: 1,
-            } satisfies RootContextState),
+          data: rootProjection(rootContext, rootRequestCount, `${apiBaseUrl}:root-context`),
         },
       })
     }
-    if (url.includes('/trpc/stores.list') || url.includes('/trpc/stores.doctor')) {
-      options.storePulls?.push(`${apiBaseUrl}:${url.includes('stores.list') ? 'list' : 'doctor'}`)
+    if (
+      url.includes('/trpc/stores.readListProjection') ||
+      url.includes('/trpc/stores.readDoctorProjection')
+    ) {
+      const kind = url.includes('readListProjection') ? 'list' : 'doctor'
+      const projectionKind = kind === 'list' ? 'store-list' : 'store-doctor'
+      const state = options.storeProjectionState ?? 'ready'
+      const requestKey = `${apiBaseUrl}:${kind}`
+      const storeRequestCount = (storeRequestCounts.get(requestKey) ?? 0) + 1
+      storeRequestCounts.set(requestKey, storeRequestCount)
+      options.storePulls?.push(`${apiBaseUrl}:${kind}`)
+      if (
+        options.storeProjectionGate?.kind === kind &&
+        storeRequestCount > options.storeProjectionGate.afterPull
+      ) {
+        await options.storeProjectionGate.wait
+      }
       return Response.json({
-        result: { data: { available: true, stores: options.stores ?? [] } },
+        result: {
+          data: {
+            state,
+            identity: `${apiBaseUrl}:${projectionKind}`,
+            workGeneration: state === 'ready' ? 1 : 2,
+            invalidationCause: state === 'ready' ? 'initial' : 'dependency',
+            data: { available: true, stores: options.stores ?? [] },
+            freshness: state === 'ready' ? 'current' : 'stale-display-only',
+            snapshotGeneration: 1,
+            error: null,
+          },
+        },
       })
+    }
+    if (url.includes('/trpc/stores.refreshProjection')) {
+      return Response.json({ result: { data: { state: 'revalidating' } } })
     }
     if (url.includes('/trpc/stores.mutate')) {
       const mutation = readSubmittedMutation(init?.body)
@@ -269,8 +397,8 @@ function createBackendFetch(
 function createRootData(
   projectName: string,
   storeId: string,
-  references: RootContext['references']
-): RootContext {
+  references: HostedRootContext['references']
+): HostedRootContext {
   return {
     launchProject: { path: `/tmp/${projectName}` },
     planningRoot: {
@@ -341,6 +469,7 @@ const REMOVE_TERMINAL_STATES = [
 
 beforeEach(() => {
   lifecycleTransport.reset()
+  projectionTransport.reset()
   localStorage.clear()
   persistTwoBackends()
   bindLaunchCredential(API_A, 'credential-a')
@@ -356,6 +485,26 @@ afterEach(() => {
 })
 
 describe('App connection selection and observation routes', () => {
+  it('selects the Store Manager backend explicitly while retaining every connected tab', async () => {
+    vi.stubGlobal('fetch', createBackendFetch([]))
+    const rendered = await renderRoute('/environment/stores/inspector')
+
+    const selector = await screen.findByRole<HTMLSelectElement>('combobox', {
+      name: 'Store Manager backend',
+    })
+    expect(selector.value).toBe('tab-b')
+    expect([...selector.options].map((option) => option.value)).toEqual(['tab-a', 'tab-b'])
+
+    fireEvent.change(selector, { target: { value: 'tab-a' } })
+    await waitFor(() => expect(getConnectionsSnapshot().activeTabId).toBe('tab-a'))
+    expect(getConnectionsSnapshot().tabs).toHaveLength(2)
+
+    fireEvent.change(selector, { target: { value: 'tab-b' } })
+    await waitFor(() => expect(getConnectionsSnapshot().activeTabId).toBe('tab-b'))
+    expect(getConnectionsSnapshot().tabs).toHaveLength(2)
+    await unmount(rendered)
+  })
+
   it.each(REGISTER_LIFECYCLE_STATES)(
     'renders backend-owned Register $status lifecycle evidence through the real route dispatcher',
     async ({ status, label }) => {
@@ -381,7 +530,7 @@ describe('App connection selection and observation routes', () => {
           })
         })
 
-        expect(await screen.findByText(label)).toBeTruthy()
+        expect((await screen.findAllByText(label)).length).toBeGreaterThan(0)
       } finally {
         await unmount(rendered)
       }
@@ -419,7 +568,7 @@ describe('App connection selection and observation routes', () => {
           })
         })
 
-        expect(await screen.findByText(label)).toBeTruthy()
+        expect((await screen.findAllByText(label)).length).toBeGreaterThan(0)
         expect(screen.getByRole('form', { name: 'Remove Store files' })).toBeTruthy()
       } finally {
         await unmount(rendered)
@@ -527,6 +676,61 @@ describe('App connection selection and observation routes', () => {
     await unmount(rendered)
   })
 
+  it('rejects a real Store form dispatch while retained Doctor data is revalidating', async () => {
+    const mutations: string[] = []
+    vi.stubGlobal('fetch', createBackendFetch(mutations, { storeProjectionState: 'revalidating' }))
+    const rendered = await renderRoute('/environment/stores/inspector')
+
+    fireEvent.change(await screen.findByPlaceholderText('Path to Store root'), {
+      target: { value: '/tmp/stale-store' },
+    })
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('form', { name: 'Store setup or registration' }))
+    })
+
+    expect(
+      await screen.findByText('Store diagnostics are not current. Wait for refresh to settle.')
+    ).toBeTruthy()
+    expect(mutations).toEqual([])
+    await unmount(rendered)
+  })
+
+  it('revokes a real Store form dispatch as soon as the Doctor lifecycle becomes stale', async () => {
+    let releaseDoctorPull!: () => void
+    const doctorPull = new Promise<void>((resolve) => {
+      releaseDoctorPull = resolve
+    })
+    const mutations: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      createBackendFetch(mutations, {
+        storeProjectionGate: { kind: 'doctor', afterPull: 1, wait: doctorPull },
+      })
+    )
+    const rendered = await renderRoute('/environment/stores/inspector')
+
+    fireEvent.change(await screen.findByPlaceholderText('Path to Store root'), {
+      target: { value: '/tmp/stale-after-notice' },
+    })
+    await act(async () => {
+      projectionTransport.callbacks(API_B, 'store-doctor').onNotice({
+        identity: `${API_B}:store-doctor`,
+        workGeneration: 2,
+        snapshotGeneration: 1,
+        state: 'revalidating',
+        invalidationCause: 'dependency',
+      })
+    })
+    fireEvent.submit(screen.getByRole('form', { name: 'Store setup or registration' }))
+
+    expect(
+      await screen.findByText('Store diagnostics are not current. Wait for refresh to settle.')
+    ).toBeTruthy()
+    expect(mutations).toEqual([])
+    releaseDoctorPull()
+    await unmount(rendered)
+  })
+
   it('keeps a Register draft bound to B when another current tab becomes selected', async () => {
     const mutations: string[] = []
     vi.stubGlobal('fetch', createBackendFetch(mutations))
@@ -534,32 +738,21 @@ describe('App connection selection and observation routes', () => {
 
     const path = await screen.findByPlaceholderText('Path to Store root')
     fireEvent.change(path, { target: { value: '/tmp/store-b' } })
-    const submit = screen.getByRole<HTMLButtonElement>('button', { name: 'Register Store' })
-    const selectedA: HostedShellState = {
-      activeTabId: 'tab-a',
-      tabs: [
-        { id: 'tab-a', sessionId: 'session-a', apiBaseUrl: API_A, createdAt: 1 },
-        { id: 'tab-b', sessionId: 'session-b', apiBaseUrl: API_B, createdAt: 2 },
-      ],
-    }
-
-    localStorage.setItem(getHostedShellStorageKey(), JSON.stringify(selectedA))
-    await act(async () => {
-      window.dispatchEvent(
-        new StorageEvent('storage', {
-          key: getHostedShellStorageKey(),
-          newValue: JSON.stringify(selectedA),
-        })
-      )
+    const selector = screen.getByRole<HTMLSelectElement>('combobox', {
+      name: 'Store Manager backend',
     })
+    fireEvent.change(selector, { target: { value: 'tab-a' } })
 
     await waitFor(() => {
+      expect(getConnectionsSnapshot().activeTabId).toBe('tab-a')
       expect(screen.getByRole('status').textContent).toContain(
         'This draft belongs to a previous environment observation.'
       )
-      expect(submit.disabled).toBe(false)
+      expect(
+        screen.getByRole<HTMLButtonElement>('button', { name: 'Register Store' }).disabled
+      ).toBe(false)
     })
-    fireEvent.click(submit)
+    fireEvent.click(screen.getByRole('button', { name: 'Register Store' }))
 
     expect(mutations).toEqual([])
     await unmount(rendered)
@@ -586,7 +779,9 @@ describe('App connection selection and observation routes', () => {
     })
     await waitFor(() => {
       expect(
-        requests.filter((request) => request.url.includes(`${API_B}/trpc/rootContext.get`)).length
+        requests.filter((request) =>
+          request.url.includes(`${API_B}/trpc/rootContext.readProjection`)
+        ).length
       ).toBeGreaterThanOrEqual(2)
       expect(
         screen.getByText(
@@ -689,7 +884,7 @@ describe('App connection selection and observation routes', () => {
           [API_A, 'env:shared'],
           [API_B, 'env:shared'],
         ]),
-        rootContexts: new Map<string, RootContextState>([
+        rootContexts: new Map<string, HostedRootContextState>([
           [API_A, { state: 'ready', data: rootA, attempt: null, error: null, observedAt: 2 }],
           [
             API_B,
@@ -739,10 +934,10 @@ describe('App connection selection and observation routes', () => {
       createBackendFetch([], {
         envUris: new Map([[API_A, 'env:a']]),
         envUrisAfterInitial: new Map([[API_A, 'env:b']]),
-        rootContexts: new Map<string, RootContextState>([
+        rootContexts: new Map<string, HostedRootContextState>([
           [API_A, { state: 'ready', data: rootA, attempt: null, error: null, observedAt: 101 }],
         ]),
-        rootContextsAfterInitial: new Map<string, RootContextState>([
+        rootContextsAfterInitial: new Map<string, HostedRootContextState>([
           [
             API_A,
             {
@@ -796,7 +991,7 @@ describe('App connection selection and observation routes', () => {
     vi.stubGlobal(
       'fetch',
       createBackendFetch([], {
-        rootContexts: new Map<string, RootContextState>([
+        rootContexts: new Map<string, HostedRootContextState>([
           [API_B, { state: 'ready', data: rootB, attempt: null, error: null, observedAt: 2 }],
         ]),
         offlineAfterInitial: API_B,
@@ -828,13 +1023,16 @@ describe('App connection selection and observation routes', () => {
 
     await screen.findByText('project-a')
     await waitFor(() => {
-      expect(requests.filter((request) => request.url.includes('rootContext.get'))).toHaveLength(2)
+      expect(
+        requests.filter((request) => request.url.includes('rootContext.readProjection'))
+      ).toHaveLength(2)
     })
     expect(
       requests
         .filter(
           (request) =>
-            request.url.endsWith('/api/health') || request.url.includes('rootContext.get')
+            request.url.endsWith('/api/health') ||
+            request.url.includes('rootContext.readProjection')
         )
         .map((request) => ({
           backend: request.url.startsWith(API_A) ? 'A' : 'B',

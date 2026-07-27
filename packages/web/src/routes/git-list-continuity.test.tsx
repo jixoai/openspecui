@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Prove Git entry rows preserve entity identity across same-binding order mutations.
  * 2. Prove a binding rotation retires an earlier local transition before it can restore old rows.
  * 3. Prove local native-transition fallback commits the current entries without fake state.
@@ -7,6 +7,7 @@
  * 5. Exercise the real GitRoute + real GitEntryRow; stabilize only transport and native edges.
  *
  * Original request (2026-07-23): "List mutations and route changes preserve physical continuity through existing motion/View Transition patterns."
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
 import type { DashboardGitEntry, GitRepositoryScopes, RootContextState } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -15,12 +16,18 @@ import type { ReactNode } from 'react'
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  createRootProjectionFixture,
+  createRootProjectionNoticeFixture,
+  type RootProjectionFixtureCallbacks,
+} from '../test-fixtures/root-context-projection'
 import { GitRoute } from './git'
 
 const {
   scopesQueryMock,
   scopesSubscribeMock,
-  rootContextSubscribeMock,
+  rootContextReadProjectionMock,
+  rootContextSubscribeProjectionMock,
   overviewQueryMock,
   listEntriesQueryMock,
   staticModeMock,
@@ -29,7 +36,8 @@ const {
 } = vi.hoisted(() => ({
   scopesQueryMock: vi.fn(),
   scopesSubscribeMock: vi.fn(),
-  rootContextSubscribeMock: vi.fn(),
+  rootContextReadProjectionMock: vi.fn(),
+  rootContextSubscribeProjectionMock: vi.fn(),
   overviewQueryMock: vi.fn(),
   listEntriesQueryMock: vi.fn(),
   staticModeMock: vi.fn(() => false),
@@ -52,10 +60,7 @@ const {
       onStopped(): void
       onComplete(): void
     }
-    rootCallbacks?: {
-      onData(data: RootContextState): void
-      onError(error: Error): void
-    }
+    rootCallbacks?: RootProjectionFixtureCallbacks
   },
 }))
 
@@ -71,7 +76,8 @@ vi.mock('@/lib/trpc', () => ({
       removeDetachedWorktree: { mutate: vi.fn() },
     },
     rootContext: {
-      subscribe: { subscribe: rootContextSubscribeMock },
+      readProjection: { query: rootContextReadProjectionMock },
+      subscribeProjection: { subscribe: rootContextSubscribeProjectionMock },
     },
   },
 }))
@@ -295,14 +301,16 @@ describe('GitRoute entry-list reactive continuity', () => {
         return { unsubscribe: vi.fn() }
       }
     )
-    rootContextSubscribeMock.mockImplementation(
-      (
-        _input: undefined,
-        callbacks: { onData(data: RootContextState): void; onError(error: Error): void }
-      ) => {
+    rootContextReadProjectionMock.mockImplementation(async () => {
+      const current = subscriptionState.currentRoot
+      if (!current) throw new Error('Missing Root Context fixture state.')
+      return createRootProjectionFixture(current)
+    })
+    rootContextSubscribeProjectionMock.mockImplementation(
+      (_input: undefined, callbacks: RootProjectionFixtureCallbacks) => {
         subscriptionState.rootCallbacks = callbacks
         const current = subscriptionState.currentRoot
-        if (current) callbacks.onData(current)
+        if (current) callbacks.onData(createRootProjectionNoticeFixture(current))
         return { unsubscribe: vi.fn() }
       }
     )

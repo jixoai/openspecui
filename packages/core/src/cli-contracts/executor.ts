@@ -29,16 +29,22 @@ import {
   CliArchiveSchema,
   CliArtifactInstructionsSchema,
   CliChangeListSchema,
+  CliSchemasSchema,
+  CliSchemaWhichSchema,
   CliShowSpecSchema,
   CliSpecListSchema,
+  CliTemplatesSchema,
   CliValidateSchema,
   CliWorkflowStatusSchema,
   type CliApplyInstructions,
   type CliArchive,
   type CliArtifactInstructions,
   type CliChangeList,
+  type CliSchemas,
+  type CliSchemaWhich,
   type CliShowSpec,
   type CliSpecList,
+  type CliTemplates,
   type CliValidate,
   type CliWorkflowStatus,
 } from './workflow.js'
@@ -129,6 +135,23 @@ export class OpenSpecCliContractExecutor {
       this.withRoot(['show', specId, '--type', 'spec', '--json'], selector),
       CliShowSpecSchema
     )
+  }
+
+  /** List workflow schemas through the CLI JSON contract. */
+  async schemas(): Promise<CliCommandResult<CliSchemas>> {
+    return this.execute(['schemas', '--json'], CliSchemasSchema)
+  }
+
+  /** Resolve one workflow schema through the CLI JSON contract. */
+  async schemaWhich(name: string): Promise<CliCommandResult<CliSchemaWhich>> {
+    return this.execute(['schema', 'which', name, '--json'], CliSchemaWhichSchema)
+  }
+
+  /** List the resolved template index through the CLI JSON contract. */
+  async templates(schema?: string): Promise<CliCommandResult<CliTemplates>> {
+    const args = ['templates', '--json']
+    if (schema !== undefined) args.push('--schema', schema)
+    return this.execute(args, CliTemplatesSchema)
   }
 
   /** Read complete workflow Status evidence for one change. */

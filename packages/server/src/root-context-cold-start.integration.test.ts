@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (created 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Separate HTTP server readiness from pinned OpenSpec CLI root resolution.
- * 2. Exercise typed HTTP and WebSocket Root Context contracts from a cold fixture.
+ * 2. Exercise lifecycle-only WebSocket Push followed by typed HTTP Root Projection Pull.
  * 3. Preserve pinned CLI runner start/exit timing for timeout classification.
  *
  * Original request (2026-07-19): "设计并（必要时）实现一个 type-safe、可 checked 的
@@ -10,6 +10,7 @@
  */
 import {
   ConfigManager,
+  type CliProjectionStateName,
   type RootContextResolvedState,
   type RootContextState,
 } from '@openspecui/core'
@@ -217,11 +218,20 @@ describe('pinned OpenSpec 1.6 Root Context cold start', () => {
       wsClients.push(wsClient)
       const typedWsClient = createTRPCClient<AppRouter>({ links: [wsLink({ client: wsClient })] })
       const wsReady = createDeferred<RootContextResolvedState & { state: 'ready' }>()
-      const wsStates: RootContextState['state'][] = []
-      const subscription = typedWsClient.rootContext.subscribe.subscribe(undefined, {
-        onData(state: RootContextState) {
-          wsStates.push(state.state)
-          if (isReadyRootState(state)) wsReady.resolve(state)
+      const wsStates: CliProjectionStateName[] = []
+      const wsNotices: unknown[] = []
+      const subscription = typedWsClient.rootContext.subscribeProjection.subscribe(undefined, {
+        async onData(notice) {
+          wsNotices.push(notice)
+          wsStates.push(notice.state)
+          try {
+            const projection = await httpClient.rootContext.readProjection.query()
+            if (projection.state === 'ready' && isReadyRootState(projection.data)) {
+              wsReady.resolve(projection.data)
+            }
+          } catch (error) {
+            wsReady.reject(error)
+          }
         },
         onError: wsReady.reject,
       })
@@ -251,6 +261,7 @@ describe('pinned OpenSpec 1.6 Root Context cold start', () => {
         cli: { available: true, version: '1.6.0' },
       })
       expect(wsStates).toContain('ready')
+      expect(wsNotices.every((notice) => !Object.hasOwn(Object(notice), 'data'))).toBe(true)
 
       const traceContent = await readFile(tracePath, 'utf8')
       const traces = traceContent
@@ -270,12 +281,12 @@ describe('pinned OpenSpec 1.6 Root Context cold start', () => {
       expect(
         traces.some((trace) => trace.phase === 'start' && trace.args.includes('--version'))
       ).toBe(true)
-      expect(traces.some((trace) => trace.phase === 'start' && trace.args[0] === 'doctor')).toBe(
-        true
-      )
-      expect(traces.some((trace) => trace.phase === 'start' && trace.args[0] === 'context')).toBe(
-        true
-      )
+      expect(
+        traces.filter((trace) => trace.phase === 'start' && trace.args[0] === 'doctor')
+      ).toHaveLength(1)
+      expect(
+        traces.filter((trace) => trace.phase === 'start' && trace.args[0] === 'context')
+      ).toHaveLength(1)
       expect(httpQueryFinishedAt).toBeGreaterThanOrEqual(httpQueryStartedAt)
       expect(serverReadyAt).toBeLessThanOrEqual(httpQueryStartedAt)
     } finally {

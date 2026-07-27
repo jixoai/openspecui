@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify routed Config schema selection.
  * 2. Verify Project Binding, Active Root, and Environment Global ownership surfaces.
  * 3. Prove Active Root file presence is independent from empty content.
@@ -8,6 +8,7 @@
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-17): "An existing empty Active Root file remains editable."
  * Original request (2026-07-18): "Schema and Template mutations must use useRootActionState."
+ * Original request (2026-07-26): "缓存更新期间仍可读，但不能授权写入。"
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -160,7 +161,9 @@ describe('Config schema tabs', () => {
       data: null,
       isLoading: false,
       error: null,
+      authority: { state: 'waiting', reason: 'initial' },
       refresh: vi.fn(),
+      refreshPending: false,
     })
     window.history.replaceState(null, '', '/config?configTab=schema:opsx-collab-pr-loop')
     configBundleMock.mockReturnValue({
@@ -314,7 +317,9 @@ describe('Config schema tabs', () => {
       },
       isLoading: false,
       error: null,
+      authority: { state: 'current' },
       refresh: vi.fn(),
+      refreshPending: false,
     })
     window.history.replaceState(null, '', '/config?configTab=active-root')
     render(<Config />)

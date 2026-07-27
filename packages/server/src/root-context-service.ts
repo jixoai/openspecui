@@ -9,6 +9,7 @@
 import {
   ReactiveContext,
   reactiveReadFile,
+  reactiveStat,
   resolveRootContext,
   type RootContext,
   type RootContextCli,
@@ -16,13 +17,17 @@ import {
   type RootContextState,
 } from '@openspecui/core'
 import { observable } from '@trpc/server/observable'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 /** Server-side dependencies for one Root Context resolution attempt. */
 export interface RootContextServerSource {
   projectDir: string
   cliExecutor: RootContextCli
   now?: () => number
+}
+
+interface RootContextDependencySource {
+  projectDir: string
 }
 
 /** Serialized owner that transitions Planning-root resources before exposing Root Context truth. */
@@ -40,20 +45,75 @@ function currentAttempt(state: RootContextResolvedState): RootContext {
   return state.state === 'ready' ? state.data : state.attempt
 }
 
+const ROOT_HEALTH_PATHS = [
+  'openspec',
+  'openspec/specs',
+  'openspec/changes',
+  'openspec/changes/archive',
+] as const
+
+async function trackOpenSpecRootHealth(rootPath: string): Promise<void> {
+  await Promise.all([
+    reactiveStat(rootPath),
+    ...ROOT_HEALTH_PATHS.map((relativePath) => reactiveStat(join(rootPath, relativePath))),
+    reactiveReadFile(join(rootPath, 'openspec', 'config.yaml')),
+    reactiveReadFile(join(rootPath, 'openspec', 'config.yml')),
+    reactiveReadFile(join(rootPath, '.openspec-store', 'store.yaml')),
+  ])
+}
+
+async function trackStoreGitHealth(rootPath: string): Promise<void> {
+  const dotGitPath = join(rootPath, '.git')
+  const [dotGitContent] = await Promise.all([
+    reactiveReadFile(dotGitPath),
+    reactiveStat(dotGitPath),
+  ])
+  if (!dotGitContent) {
+    await reactiveReadFile(join(dotGitPath, 'config'))
+    return
+  }
+
+  const gitDirMatch = /^gitdir:\s*(.+)$/im.exec(dotGitContent)
+  if (!gitDirMatch?.[1]) return
+  const gitDir = resolve(rootPath, gitDirMatch[1].trim())
+  const commonDirContent = await reactiveReadFile(join(gitDir, 'commondir'))
+  const commonDir = commonDirContent ? resolve(gitDir, commonDirContent.trim()) : gitDir
+  await reactiveReadFile(join(commonDir, 'config'))
+}
+
+/** Bind fixed inputs before CLI execution so a concurrent physical change retires that result. */
+export async function trackRootContextStaticDependencies(input: {
+  launchProjectDir: string
+  dataScopePath: string
+}): Promise<void> {
+  await Promise.all([
+    reactiveReadFile(join(input.launchProjectDir, 'openspec', 'config.yaml')),
+    reactiveReadFile(join(input.launchProjectDir, 'openspec', 'config.yml')),
+    reactiveReadFile(join(input.dataScopePath, 'stores', 'registry.yaml')),
+  ])
+}
+
 /** Register reactive file dependencies that can change Root Context selection. */
 export async function trackRootContextDependencies(
-  source: RootContextServerSource,
+  source: RootContextDependencySource,
   state: RootContextResolvedState
 ): Promise<void> {
   const attempt = currentAttempt(state)
-  const paths = new Set([
-    join(source.projectDir, 'openspec', 'config.yaml'),
-    join(attempt.dataScope.path, 'stores', 'registry.yaml'),
+  await Promise.all([
+    trackRootContextStaticDependencies({
+      launchProjectDir: source.projectDir,
+      dataScopePath: attempt.dataScope.path,
+    }),
+    ...(attempt.planningRoot
+      ? [
+          trackOpenSpecRootHealth(attempt.planningRoot.path),
+          ...(attempt.storeId ? [trackStoreGitHealth(attempt.planningRoot.path)] : []),
+        ]
+      : []),
+    ...attempt.references.flatMap((reference) =>
+      reference.root ? [trackOpenSpecRootHealth(reference.root)] : []
+    ),
   ])
-  if (attempt.planningRoot) {
-    paths.add(join(attempt.planningRoot.path, 'openspec', 'config.yaml'))
-  }
-  await Promise.all([...paths].map((path) => reactiveReadFile(path)))
 }
 
 /** Resolve the query projection without creating long-lived reactive dependencies. */

@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Bind a consumed launch credential to exactly one normalized backend API locator.
  * 2. Keep credentials in process memory and out of URLs, persisted tabs, storage, and logs.
  * 3. Return credential-free stripping/configuration evidence to launch owners.
+ * 4. Expose a read-only transient snapshot for same-origin App-window convergence.
  *
  * Original request (2026-07-15): "我们可以在 cli 上新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): replace the global session credential with a per-locator registry.
@@ -11,6 +12,12 @@ import { normalizeHostedApiBaseUrl } from './shell-state'
 
 const CREDENTIAL_FRAGMENT_PARAM = 'credential'
 const credentialsByApiLocator = new Map<string, string>()
+
+/** One runtime-only credential binding exchanged transiently between same-origin App windows. */
+export interface LaunchCredentialBinding {
+  readonly apiBaseUrl: string
+  readonly credential: string
+}
 
 export type LaunchCredentialConsumeResult =
   | { status: 'absent'; sanitizedHash: string }
@@ -70,6 +77,14 @@ export function consumeLaunchCredential(options: {
 export function readLaunchCredential(apiBaseUrl: string): string | null {
   const normalizedApiBaseUrl = normalizeHostedApiBaseUrl(apiBaseUrl)
   return normalizedApiBaseUrl ? (credentialsByApiLocator.get(normalizedApiBaseUrl) ?? null) : null
+}
+
+/** Snapshot current runtime bindings without exposing mutable registry ownership to callers. */
+export function readLaunchCredentialSnapshot(): readonly LaunchCredentialBinding[] {
+  return Array.from(credentialsByApiLocator, ([apiBaseUrl, credential]) => ({
+    apiBaseUrl,
+    credential,
+  }))
 }
 
 /** Clear only the credential associated with the supplied backend locator. */

@@ -1,8 +1,9 @@
 /**
  * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Verify external data-home changes invalidate Store, Workset, schema, and Context facets.
+ * 1. Verify registry, Workset, and schema paths invalidate only their objective facets.
  * 2. Verify the observer owns and releases its data-home root lease.
  * 3. Verify observer teardown stops filesystem-driven invalidation.
+ * 4. Prove unrelated data-home content does not create broad projection invalidation.
  *
  * Original request (2026-07-15): "有效 OpenSpec data home 的变化要让所有端拉取最新投影。"
  */
@@ -11,13 +12,10 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir, waitFor } from './__tests__/test-utils.js'
-import {
-  OPEN_SPEC_DATA_HOME_INVALIDATION_FACETS,
-  OpenSpecDataHomeObserver,
-} from './open-spec-data-home-observer.js'
+import { OpenSpecDataHomeObserver } from './open-spec-data-home-observer.js'
 import { ReactiveObservationEnvironment } from './reactive-fs/observation-environment.js'
 import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
-import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
+import { RUNTIME_INVALIDATION_FACETS, RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
 const tempDirs: string[] = []
 
@@ -27,7 +25,7 @@ afterEach(async () => {
 })
 
 describe('OpenSpecDataHomeObserver', () => {
-  it('invalidates all data-home facets and releases observation on teardown', async () => {
+  it('invalidates only the data-home facet owned by each official path', async () => {
     const dataHome = await createTempDir()
     tempDirs.push(dataHome)
     const environment = new ReactiveObservationEnvironment()
@@ -38,10 +36,7 @@ describe('OpenSpecDataHomeObserver', () => {
       invalidation,
     })
     const listener = vi.fn()
-    const releaseListener = invalidation.subscribe(
-      OPEN_SPEC_DATA_HOME_INVALIDATION_FACETS,
-      listener
-    )
+    const releaseListener = invalidation.subscribe(RUNTIME_INVALIDATION_FACETS, listener)
 
     await observer.start()
     expect(observer.getState()).toBe('active')
@@ -49,20 +44,48 @@ describe('OpenSpecDataHomeObserver', () => {
       expect.objectContaining({ rootPath: realpathSync(dataHome), referenceCount: 1 }),
     ])
 
+    await writeFile(join(dataHome, 'unrelated.txt'), 'unrelated\n', 'utf8')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(listener).not.toHaveBeenCalled()
+
     await mkdir(join(dataHome, 'stores'), { recursive: true })
     await writeFile(join(dataHome, 'stores', 'registry.yaml'), 'version: 1\nstores: {}\n', 'utf8')
 
     await waitFor(() => listener.mock.calls.length > 0, { timeout: 2500, interval: 50 })
-    expect(listener).toHaveBeenLastCalledWith(
-      OPEN_SPEC_DATA_HOME_INVALIDATION_FACETS.map((facet) => ({ facet, generation: 1 }))
+    expect(listener).toHaveBeenLastCalledWith([
+      { facet: 'stores', generation: 1 },
+      { facet: 'context', generation: 1 },
+    ])
+
+    listener.mockClear()
+    await mkdir(join(dataHome, 'schemas', 'team'), { recursive: true })
+    await writeFile(join(dataHome, 'schemas', 'team', 'schema.yaml'), 'name: team\n', 'utf8')
+    await waitFor(() => listener.mock.calls.length > 0, { timeout: 2500, interval: 50 })
+    expect(listener).toHaveBeenLastCalledWith([
+      { facet: 'schemas', generation: 1 },
+      { facet: 'context', generation: 2 },
+    ])
+
+    listener.mockClear()
+    await mkdir(join(dataHome, 'worksets'), { recursive: true })
+    await writeFile(
+      join(dataHome, 'worksets', 'worksets.yaml'),
+      'version: 1\nworksets: {}\n',
+      'utf8'
     )
+    await waitFor(() => listener.mock.calls.length > 0, { timeout: 2500, interval: 50 })
+    expect(listener).toHaveBeenLastCalledWith([{ facet: 'worksets', generation: 1 }])
 
     await observer.dispose()
     expect(observer.getState()).toBe('disposed')
     expect(environment.getRoots()).toEqual([])
 
     listener.mockClear()
-    await writeFile(join(dataHome, 'worksets.yaml'), 'version: 1\nworksets: {}\n', 'utf8')
+    await writeFile(
+      join(dataHome, 'stores', 'registry.yaml'),
+      'version: 1\nstores: { shared: {} }\n',
+      'utf8'
+    )
     await new Promise((resolve) => setTimeout(resolve, 300))
     expect(listener).not.toHaveBeenCalled()
 

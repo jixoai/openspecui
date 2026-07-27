@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Prove Code/Planning Git route requests, controls, and navigation.
  * 2. Prove mounted repository rebinding retires stale Planning status and history.
  * 3. Prove every Git mutation retains the binding token captured by its render.
@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
 import type { GitRepositoryScopes, GitWorktreeSummary, RootContextState } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -15,12 +16,18 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  createRootProjectionFixture,
+  createRootProjectionNoticeFixture,
+  type RootProjectionFixtureCallbacks,
+} from '../test-fixtures/root-context-projection'
 import { GitRoute } from './git'
 
 const {
   scopesQueryMock,
   scopesSubscribeMock,
-  rootContextSubscribeMock,
+  rootContextReadProjectionMock,
+  rootContextSubscribeProjectionMock,
   overviewQueryMock,
   listEntriesQueryMock,
   switchWorktreeMock,
@@ -36,7 +43,8 @@ const {
 } = vi.hoisted(() => ({
   scopesQueryMock: vi.fn(),
   scopesSubscribeMock: vi.fn(),
-  rootContextSubscribeMock: vi.fn(),
+  rootContextReadProjectionMock: vi.fn(),
+  rootContextSubscribeProjectionMock: vi.fn(),
   overviewQueryMock: vi.fn(),
   listEntriesQueryMock: vi.fn(),
   switchWorktreeMock: vi.fn(),
@@ -65,10 +73,7 @@ const {
       onStopped(): void
       onComplete(): void
     }
-    rootCallbacks?: {
-      onData(data: RootContextState): void
-      onError(error: Error): void
-    }
+    rootCallbacks: RootProjectionFixtureCallbacks[]
   },
   handlerState: {} as {
     removeDetached?: (worktree: GitWorktreeSummary) => Promise<void> | void
@@ -101,8 +106,11 @@ vi.mock('@/lib/trpc', () => ({
       },
     },
     rootContext: {
-      subscribe: {
-        subscribe: rootContextSubscribeMock,
+      readProjection: {
+        query: rootContextReadProjectionMock,
+      },
+      subscribeProjection: {
+        subscribe: rootContextSubscribeProjectionMock,
       },
     },
   },
@@ -312,6 +320,11 @@ function createErrorRootState(planningRoot: string): RootContextState {
   }
 }
 
+function publishRootProjection(state: RootContextState): void {
+  const notice = createRootProjectionNoticeFixture(state)
+  for (const callbacks of subscriptionState.rootCallbacks) callbacks.onData(notice)
+}
+
 describe('GitRoute', () => {
   const overviewData = {
     defaultBranch: 'origin/main',
@@ -338,7 +351,7 @@ describe('GitRoute', () => {
     subscriptionState.currentScopes = createGitScopes()
     subscriptionState.currentRoot = createReadyRootState('/planning')
     subscriptionState.scopesCallbacks = undefined
-    subscriptionState.rootCallbacks = undefined
+    subscriptionState.rootCallbacks = []
     handlerState.removeDetached = undefined
     scopesQueryMock.mockResolvedValue(subscriptionState.currentScopes)
     scopesSubscribeMock.mockImplementation(
@@ -361,15 +374,23 @@ describe('GitRoute', () => {
         return { unsubscribe: vi.fn() }
       }
     )
-    rootContextSubscribeMock.mockImplementation(
-      (
-        _input: undefined,
-        callbacks: { onData(data: RootContextState): void; onError(error: Error): void }
-      ) => {
-        subscriptionState.rootCallbacks = callbacks
+    rootContextReadProjectionMock.mockImplementation(async () => {
+      const current = subscriptionState.currentRoot
+      if (!current) throw new Error('Missing Root Context fixture state.')
+      return createRootProjectionFixture(current)
+    })
+    rootContextSubscribeProjectionMock.mockImplementation(
+      (_input: undefined, callbacks: RootProjectionFixtureCallbacks) => {
+        subscriptionState.rootCallbacks.push(callbacks)
         const current = subscriptionState.currentRoot
-        if (current) callbacks.onData(current)
-        return { unsubscribe: vi.fn() }
+        if (current) callbacks.onData(createRootProjectionNoticeFixture(current))
+        return {
+          unsubscribe: vi.fn(() => {
+            subscriptionState.rootCallbacks = subscriptionState.rootCallbacks.filter(
+              (candidate) => candidate !== callbacks
+            )
+          }),
+        }
       }
     )
     overviewQueryMock.mockResolvedValue(overviewData)
@@ -797,10 +818,11 @@ describe('GitRoute', () => {
       subscriptionState.currentScopes = scopesB
       subscriptionState.currentRoot = rootB
       const scopesCallbacks = subscriptionState.scopesCallbacks
-      const rootCallbacks = subscriptionState.rootCallbacks
-      if (!scopesCallbacks || !rootCallbacks) throw new Error('Git subscriptions are unavailable.')
+      if (!scopesCallbacks || subscriptionState.rootCallbacks.length === 0) {
+        throw new Error('Git subscriptions are unavailable.')
+      }
       scopesCallbacks.onData(scopesB)
-      rootCallbacks.onData(rootB)
+      publishRootProjection(rootB)
     })
 
     await waitFor(() => {
@@ -822,10 +844,11 @@ describe('GitRoute', () => {
       subscriptionState.currentScopes = scopesAAgain
       subscriptionState.currentRoot = rootAAgain
       const scopesCallbacks = subscriptionState.scopesCallbacks
-      const rootCallbacks = subscriptionState.rootCallbacks
-      if (!scopesCallbacks || !rootCallbacks) throw new Error('Git subscriptions are unavailable.')
+      if (!scopesCallbacks || subscriptionState.rootCallbacks.length === 0) {
+        throw new Error('Git subscriptions are unavailable.')
+      }
       scopesCallbacks.onData(scopesAAgain)
-      rootCallbacks.onData(rootAAgain)
+      publishRootProjection(rootAAgain)
     })
 
     await waitFor(() => {
@@ -933,6 +956,12 @@ describe('GitRoute', () => {
       subscriptionState.currentRoot = root
 
       renderWithQueryClient(<GitRoute />)
+      await act(async () => {
+        if (subscriptionState.rootCallbacks.length === 0) {
+          throw new Error('Root Projection subscription is unavailable.')
+        }
+        publishRootProjection(root)
+      })
 
       await screen.findByText(message)
       await screen.findByText('main against origin/main')
@@ -976,10 +1005,13 @@ describe('GitRoute', () => {
     const rootB = createReadyRootState('/planning-b')
     await act(async () => {
       const scopesCallbacks = subscriptionState.scopesCallbacks
-      const rootCallbacks = subscriptionState.rootCallbacks
-      if (!scopesCallbacks || !rootCallbacks) throw new Error('Git subscriptions are unavailable.')
+      if (!scopesCallbacks || subscriptionState.rootCallbacks.length === 0) {
+        throw new Error('Git subscriptions are unavailable.')
+      }
+      subscriptionState.currentScopes = scopesB
+      subscriptionState.currentRoot = rootB
       scopesCallbacks.onData(scopesB)
-      rootCallbacks.onData(rootB)
+      publishRootProjection(rootB)
     })
     await staleRemove(detachedA)
 

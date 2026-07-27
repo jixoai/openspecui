@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove public tool subscriptions preserve launch-local skills and physically scoped commands.
  * 2. Prove fixed global CLI installation retires runner authority and invalidates Root Context before public terminal settlement.
  *
@@ -180,7 +180,6 @@ async function createRouterFixture(options: { createCodexPrompts?: boolean } = {
       await server.storeObservation.dispose()
       await server.dataHomeObserver.dispose()
       await server.toolCommandObservation.dispose()
-      server.storeInvalidation.dispose()
       server.projectInvalidation.dispose()
       await releaseLaunchObservation()
       await server.observationEnvironment.dispose()

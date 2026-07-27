@@ -1,21 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
- * 1. Build the project Spec Catalog from the active planning root and direct References.
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Build CLI-owned Spec membership from the active planning root and direct References.
  * 2. Read owned documents from planning-root services and referenced documents from CLI JSON.
  * 3. Preserve live referenced command provenance and evidence without synthesizing document fields.
- * 4. Reject Store/spec identities outside the current Root Context Reference index.
+ * 4. Reject mismatched Root/Store/spec provenance before publishing a Catalog or document.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  */
-import type {
-  CliCommandResult,
-  CliDoctorReferenceEntry,
-  CliExecutor,
-  CliShowSpec,
-  CliSpecList,
-  OpenSpecAdapter,
-  OpenSpecCliContractExecutor,
-  RootContext,
+import {
+  CliProjectionCommandError,
+  toCliProjectionCommandEvidence,
+  type CliCommandResult,
+  type CliDoctorReferenceEntry,
+  type CliExecutor,
+  type CliShowSpec,
+  type CliSpecList,
+  type OpenSpecCliContractExecutor,
+  type RootContext,
 } from '@openspecui/core'
 import {
   buildSpecCatalog,
@@ -31,7 +32,6 @@ import type { DocumentService } from './document-service.js'
 /** Planning-root and CLI dependencies required to build/read the shared Spec Catalog. */
 export interface SpecCatalogServiceSource {
   rootContext: RootContext
-  adapter: Pick<OpenSpecAdapter, 'listSpecsWithMeta'>
   documentService: Pick<DocumentService, 'readSpec' | 'readSpecRaw'>
   contracts: Pick<OpenSpecCliContractExecutor, 'listSpecs' | 'showSpec'>
 }
@@ -49,19 +49,36 @@ export class SpecCatalogIdentityNotFoundError extends Error {
   }
 }
 
-/** Build one collision-safe catalog from owned metadata and the direct CLI Reference index. */
+/** Build one collision-safe Catalog from exact typed CLI lists. */
 export async function readSpecCatalog(
   source: SpecCatalogServiceSource,
   options: ReadSpecCatalogOptions = {}
 ): Promise<SpecCatalog> {
-  const [owned, references] = await Promise.all([
-    source.adapter.listSpecsWithMeta(),
+  const rootSelector =
+    source.rootContext.storeId !== null ? { store: source.rootContext.storeId } : {}
+  const [ownedList, references] = await Promise.all([
+    source.contracts.listSpecs(rootSelector),
     Promise.all(
       source.rootContext.references.map((reference) => enumerateReference(source, reference))
     ),
   ])
+  const ownedError = ownedListContractError(source.rootContext, ownedList)
+  if (!ownedList.success || !ownedList.data || ownedError) {
+    throw new CliProjectionCommandError(
+      ownedError ||
+        ownedList.contractError ||
+        ownedList.stderr.trim() ||
+        'OpenSpec returned no owned Spec list.',
+      ownedError ? { ...ownedList, contractError: ownedError } : ownedList
+    )
+  }
   return buildSpecCatalog({
-    owned,
+    owned: ownedList.data.specs,
+    ownedProjection: {
+      provenance: 'live',
+      root: ownedList.data.root!,
+      evidence: commandEvidence(ownedList),
+    },
     referenced: references.flatMap((reference) =>
       reference.state === 'ready' ? [{ storeId: reference.storeId, specs: reference.specs }] : []
     ),
@@ -74,16 +91,31 @@ function commandEvidence<T>(
   result: CliCommandResult<T>,
   contractError?: string
 ): SpecCommandEvidence {
-  return {
-    success: result.success,
-    stdout: result.stdout,
-    stderr: result.stderr,
-    exitCode: result.exitCode,
-    diagnostics: result.diagnostics,
-    ...(contractError || result.contractError
-      ? { contractError: contractError ?? result.contractError }
-      : {}),
+  return toCliProjectionCommandEvidence(contractError ? { ...result, contractError } : result)
+}
+
+function ownedListContractError(
+  rootContext: RootContext,
+  result: CliCommandResult<CliSpecList>
+): string | undefined {
+  if (!result.data) {
+    return result.contractError ?? 'OpenSpec returned no owned Spec list.'
   }
+  if (!result.data.root) {
+    return 'OpenSpec returned no Root provenance for the owned Spec list.'
+  }
+  if (!rootContext.planningRoot) {
+    return 'The current Root Context has no Planning root for the owned Spec list.'
+  }
+  if (result.data.root.path !== rootContext.planningRoot.path) {
+    return `OpenSpec returned Root ${result.data.root.path} for expected Planning root ${rootContext.planningRoot.path}.`
+  }
+  const expectedStore = rootContext.storeId
+  const returnedStore = result.data.root.store_id ?? null
+  if (returnedStore !== expectedStore) {
+    return `OpenSpec returned Store ${returnedStore ?? '(none)'} for expected Store ${expectedStore ?? '(none)'}.`
+  }
+  return result.contractError
 }
 
 function referenceListContractError(

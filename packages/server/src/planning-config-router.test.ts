@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove the typed public Project Binding mutation settles after the launch write and preview.
  * 2. Prove a retiring Planning-root lease cannot turn write-then-converge back into a full wait.
  * 3. Require explicit launch-write and asynchronous transition evidence in the public response.
@@ -207,7 +207,6 @@ async function createRouterFixture() {
       await server.planningRootServices.dispose()
       await server.storeObservation.dispose()
       await server.dataHomeObserver.dispose()
-      server.storeInvalidation.dispose()
       server.projectInvalidation.dispose()
       await server.observationEnvironment.dispose()
       server.projectRecoveryService.dispose()

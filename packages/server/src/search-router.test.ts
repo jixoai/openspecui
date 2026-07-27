@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove the public Search subscription remains registered.
  * 2. Prove Search queries delegate through the Manager-owned Planning-root service.
  * 3. Prove query and subscription normalize source scope at the public boundary.
@@ -14,6 +14,7 @@ import {
   clearCache,
   CliContextSchema,
   CliDoctorSchema,
+  CliSpecListSchema,
   OpenSpecAdapter,
   parseCliCommandResult,
   type CliCommandResult,
@@ -95,6 +96,16 @@ async function createSearchCaller() {
       CliContextSchema
     )
   )
+  vi.spyOn(server.cliExecutor.contracts, 'listSpecs').mockResolvedValue(
+    commandResult(
+      {
+        specs: [],
+        root: { path: projectDir, source: 'nearest' },
+        status: [],
+      },
+      CliSpecListSchema
+    )
+  )
 
   return {
     caller: appRouter.createCaller(server.createContext()),
@@ -108,7 +119,6 @@ async function disposeFixture({ projectDir, server }: (typeof fixtures)[number])
   await server.planningRootServices.dispose()
   await server.storeObservation.dispose()
   await server.dataHomeObserver.dispose()
-  server.storeInvalidation.dispose()
   server.projectInvalidation.dispose()
   await server.observationEnvironment.dispose()
   server.projectRecoveryService.dispose()

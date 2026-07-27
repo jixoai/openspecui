@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
- * 1. Prime detail data before forward route View Transitions.
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Prime detail data into the exact cache consumed after forward route View Transitions.
  * 2. Preserve entity identity for Spec, Change, Archive, and Git detail routes.
  * 3. Keep Git prefetch repository binding aligned with the target route URL.
  * 4. Make cold detail preparation opportunistic within the route commit budget.
@@ -107,7 +107,7 @@ async function prepareChangeDetail(changeId: string): Promise<void> {
   const status = isStaticMode()
     ? await StaticProvider.getOpsxStatus(changeId)
     : await trpcClient.opsx.status.query({ change: changeId })
-  const cacheKey = getOpsxStatusSubscriptionCacheKey({ change: changeId, refreshKey: 0 })
+  const cacheKey = getOpsxStatusSubscriptionCacheKey({ change: changeId })
   if (cacheKey) {
     primeSubscriptionCache(cacheKey, status)
   }

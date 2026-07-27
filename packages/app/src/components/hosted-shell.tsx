@@ -1,15 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Orchestrate persisted credential-free project tabs and embedded frame lifecycle.
- * 2. Coordinate browser/PWA launch relay, install, and update ownership.
+ * 2. Coordinate PWA install, display, and update ownership.
  * 3. Publish shell state once and consume exact-tab reachability from the shared observation owner.
  * 4. Keep refresh/retry feedback attached to the affected tab runtime.
  * 5. Preserve cross-window shell-state convergence.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
- * Compromise: tab, frame, relay, and PWA browser lifecycles remain co-located because they must settle in
- * one mounted shell; health and Root observation are physically extracted into the App runtime owner.
+ * Compromise: tab, frame, and PWA display lifecycles remain co-located because they settle in one mounted
+ * shell; launch, health, and Root observation are physically extracted into App-lifetime owners.
  */
 import { Dialog } from '@openspecui/web-src/components/dialog'
 import { type Tab } from '@openspecui/web-src/components/tabs'
@@ -24,14 +24,11 @@ import {
   type CSSProperties,
   type FormEvent,
 } from 'react'
-import { consumeHostedLaunchUrl } from '../lib/bootstrap'
 import {
   ConnectionObservationBoundary,
   useConnectionObservationOwner,
   useConnectionObservations,
 } from '../lib/connection-observation'
-import { createHostedShellSync } from '../lib/hosted-shell-sync'
-import { createHostedLaunchRelay } from '../lib/launch-relay'
 import {
   computeHostedAppDisplayMode,
   EMPTY_TITLEBAR_INSETS,
@@ -46,24 +43,19 @@ import type { HostedTabReachability } from '../lib/reachability'
 import {
   activateHostedTab,
   applyHostedLaunchRequest,
-  areHostedShellStatesEqual,
   buildHostedEmbeddedUiUrl,
   getHostedTabLabel,
-  hasHostedTabForApi,
   normalizeHostedApiBaseUrl,
   removeHostedTab,
   reorderHostedTabs,
   type HostedShellLaunchRequest,
-  type HostedShellState,
   type HostedShellTab,
 } from '../lib/shell-state'
-import { useConnectionsActions } from '../lib/use-connections'
+import { useConnections, useConnectionsActions } from '../lib/use-connections'
+import { useAppLaunchError } from './app-launch-owner'
 import { HostedShellThemeBootstrap } from './hosted-shell-theme'
 
 const REFRESH_FEEDBACK_MS = 1200
-const FORWARDED_LAUNCH_MESSAGE = 'Launch forwarded to the active OpenSpec UI App window.'
-const FORWARDED_SYNC_TIMEOUT_MS = 1600
-const FORWARDED_SYNC_INTERVAL_MS = 120
 const UPDATE_CHECK_INTERVAL_MS = 60000
 const UPDATE_READY_MESSAGE = 'A newer OpenSpec UI App shell is ready.'
 
@@ -110,14 +102,9 @@ interface HostedShellRootStyle extends CSSProperties {
   '--hosted-pwa-titlebar-height': string
 }
 
-interface LaunchQueueLike {
-  setConsumer(consumer: (params: { targetURL?: URL | null }) => void): void
-}
-
 interface HostedNavigator extends Navigator {
   standalone?: boolean
   windowControlsOverlay?: HostedAppWindowControlsOverlayLike
-  launchQueue?: LaunchQueueLike
 }
 
 interface HostedShellTabContentProps {
@@ -200,18 +187,6 @@ function createBrowserPwaSnapshot(deferredPrompt: BeforeInstallPromptEventLike |
     displayMode,
     titlebarInsets: readHostedAppTitlebarInsets(runtime),
   } satisfies HostedShellPwaState
-}
-
-function closeCurrentWindowBestEffort(): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  try {
-    window.close()
-  } catch {
-    // Ignore best-effort close failures in regular browser tabs.
-  }
 }
 
 function HostedShellUpdateIcon() {
@@ -451,24 +426,18 @@ function HostedShellRuntime({
   fallbackLaunchRequest = null,
   initialError,
 }: HostedShellProps) {
-  const shellSync = useMemo(
-    () =>
-      createHostedShellSync({
-        storage: window.localStorage,
-      }),
-    []
-  )
+  const appLaunchError = useAppLaunchError()
   const [errorMessage, setErrorMessage] = useState(initialError)
-  const [shellState, setShellState] = useState(() => {
-    const persisted = shellSync.readCurrent()
-    if (persisted.tabs.length === 0 && fallbackLaunchRequest) {
-      return applyHostedLaunchRequest(persisted, fallbackLaunchRequest)
-    }
-    return persisted
-  })
   const connectionOwner = useConnectionObservationOwner()
   const connectionSnapshot = useConnectionObservations()
   const connectionActions = useConnectionsActions()
+  const shellState = useConnections()
+  const setShellState = useCallback(
+    (resolveNext: (current: typeof shellState) => typeof shellState) => {
+      connectionActions.setState(resolveNext(connectionActions.getState()))
+    },
+    [connectionActions]
+  )
   const [tabFrames, setTabFrames] = useState<Record<string, HostedTabFrameState>>({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isRefreshFeedbackActive, setIsRefreshFeedbackActive] = useState(false)
@@ -478,11 +447,15 @@ function HostedShellRuntime({
   const [pwaState, setPwaState] = useState<HostedShellPwaState>(DEFAULT_PWA_STATE)
   const [updateState, setUpdateState] = useState<HostedAppUpdateState>(DEFAULT_UPDATE_STATE)
   const installPromptRef = useRef<BeforeInstallPromptEventLike | null>(null)
-  const initialLaunchHandledRef = useRef(false)
+  const isolatedLaunchHandledRef = useRef(false)
   const refreshFeedbackTimerRef = useRef<number | null>(null)
   const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
   const serviceWorkerRegistrationRef = useRef<ServiceWorkerRegistration | null>(null)
   const shouldReloadForUpdateRef = useRef(false)
+
+  useEffect(() => {
+    if (appLaunchError !== undefined) setErrorMessage(appLaunchError)
+  }, [appLaunchError])
 
   const openAddDialog = useCallback(() => {
     setAddDialogError(null)
@@ -584,37 +557,18 @@ function HostedShellRuntime({
     }, REFRESH_FEEDBACK_MS)
   }, [])
 
-  const applySyncedShellState = useCallback((nextState: HostedShellState) => {
-    setShellState((current) =>
-      areHostedShellStatesEqual(current, nextState) ? current : nextState
-    )
-    if (nextState.tabs.length > 0) {
-      setErrorMessage((current) => (current === FORWARDED_LAUNCH_MESSAGE ? null : current))
-    }
-  }, [])
-
-  const waitForForwardedLaunch = useCallback(
-    async (apiBaseUrl: string) => {
-      const deadline = Date.now() + FORWARDED_SYNC_TIMEOUT_MS
-      while (Date.now() <= deadline) {
-        const syncedState = shellSync.syncNow(applySyncedShellState)
-        const currentState = syncedState ?? shellSync.readCurrent()
-        if (hasHostedTabForApi(currentState, apiBaseUrl)) {
-          setErrorMessage((current) => (current === FORWARDED_LAUNCH_MESSAGE ? null : current))
-          return
-        }
-        await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, FORWARDED_SYNC_INTERVAL_MS)
-        })
-      }
-    },
-    [applySyncedShellState, shellSync]
-  )
-
   useEffect(() => {
-    shellSync.write(shellState)
-    connectionActions.publishPersistedState(shellState)
-  }, [connectionActions, shellState, shellSync])
+    if (isolatedLaunchHandledRef.current) return
+    isolatedLaunchHandledRef.current = true
+    const persisted = connectionActions.getState()
+    if (initialLaunchRequest) {
+      connectionActions.setState(applyHostedLaunchRequest(persisted, initialLaunchRequest))
+      return
+    }
+    if (persisted.tabs.length === 0 && fallbackLaunchRequest) {
+      connectionActions.setState(applyHostedLaunchRequest(persisted, fallbackLaunchRequest))
+    }
+  }, [connectionActions, fallbackLaunchRequest, initialLaunchRequest])
 
   const tabRuntime = useMemo(() => {
     const byTabId = new Map(
@@ -649,31 +603,6 @@ function HostedShellRuntime({
       }
     }
   }, [])
-
-  useEffect(() => {
-    const syncNow = () => {
-      shellSync.syncNow(applySyncedShellState)
-    }
-
-    syncNow()
-    const stop = shellSync.start(applySyncedShellState)
-    const onFocus = () => {
-      syncNow()
-    }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        syncNow()
-      }
-    }
-
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => {
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      stop()
-    }
-  }, [applySyncedShellState, shellSync])
 
   useEffect(() => {
     setTabFrames((current) => {
@@ -780,56 +709,6 @@ function HostedShellRuntime({
       }))
     }
   }, [])
-
-  useEffect(() => {
-    const relay = createHostedLaunchRelay({
-      storage: window.localStorage,
-    })
-    const dispatchLaunch = async (request: HostedShellLaunchRequest) => {
-      const result = await relay.dispatch(request)
-      if (result === 'forwarded-to-pwa') {
-        await waitForForwardedLaunch(request.apiBaseUrl)
-        closeCurrentWindowBestEffort()
-        return
-      }
-      if (result === 'forwarded') {
-        setErrorMessage(FORWARDED_LAUNCH_MESSAGE)
-        await waitForForwardedLaunch(request.apiBaseUrl)
-        return
-      }
-      setErrorMessage(null)
-    }
-
-    const stop = relay.start((request) => {
-      submitApi(request.apiBaseUrl)
-    })
-
-    if (initialLaunchRequest && !initialLaunchHandledRef.current) {
-      initialLaunchHandledRef.current = true
-      void dispatchLaunch(initialLaunchRequest)
-    }
-
-    const hostedNavigator = navigator as HostedNavigator
-    hostedNavigator.launchQueue?.setConsumer((params) => {
-      const targetUrl = params.targetURL
-      if (!(targetUrl instanceof URL)) {
-        return
-      }
-      const launch = consumeHostedLaunchUrl(targetUrl.href)
-      if (launch.error) {
-        setErrorMessage(launch.error)
-        return
-      }
-      if (launch.request) {
-        void dispatchLaunch(launch.request)
-      }
-    })
-
-    return () => {
-      hostedNavigator.launchQueue?.setConsumer(() => {})
-      stop()
-    }
-  }, [initialLaunchRequest, submitApi, waitForForwardedLaunch])
 
   const probeTabs = useCallback(
     async (options?: { tabIds?: readonly string[]; visualFeedback?: boolean }) => {

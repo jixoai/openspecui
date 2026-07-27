@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove ChangeList click B crosses the real VTLink, detail preparation, and navigation coordinator.
  * 2. Assert one resolved Change-detail route with the exact collision-safe handoff.
  * 3. Stabilize only transport and native-transition runtime edges for an in-memory Router fixture.
@@ -92,14 +92,8 @@ vi.mock('@/lib/use-subscription', () => ({
 
 vi.mock('@/lib/use-opsx', () => ({
   useOpsxStatusListSubscription: useOpsxStatusListSubscriptionMock,
-  getOpsxStatusSubscriptionCacheKey: (input: {
-    change?: string
-    schema?: string
-    refreshKey?: number
-  }) =>
-    input.change === undefined
-      ? undefined
-      : `opsx.subscribeStatus:${input.change}:${input.schema}:${input.refreshKey}`,
+  getOpsxStatusSubscriptionCacheKey: (input: { change?: string; schema?: string }) =>
+    input.change === undefined ? undefined : `opsx.subscribeStatus:${input.change}:${input.schema}`,
 }))
 
 vi.mock('@/lib/nav-controller', () => ({
@@ -191,7 +185,7 @@ describe('ChangeList detail navigation', () => {
     expect(screen.getByTestId('change-detail-probe')).toBeTruthy()
     expect(opsxStatusQueryMock).toHaveBeenCalledExactlyOnceWith({ change: 'b' })
     expect(primeSubscriptionCacheMock).toHaveBeenCalledWith(
-      'opsx.subscribeStatus:b:undefined:0',
+      'opsx.subscribeStatus:b:undefined',
       preparedStatus
     )
     expect(runViewTransitionMock).toHaveBeenCalledOnce()

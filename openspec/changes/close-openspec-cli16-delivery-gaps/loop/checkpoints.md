@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
 1. Track independently verifiable delivery-gap corrections from focused proof through protected delivery.
 2. Separate external loading-regression recovery, automated preparation evidence, and manager walkthroughs.
 3. Preserve honest migration of the incomplete old Change rather than archival by assertion.
@@ -8,12 +8,13 @@ Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
 
 Original request (2026-07-23): "走查任务直接到新的change中做。你目前的工作就是：review + interview + replan(write new openspec change)"
 Original request (2026-07-21): "focused review 未通过，不跑全量门禁。"
+Original request (2026-07-26): "更新 change，展开全面的接口升级和内核升级和测试升级，等全部完成之后，我再来继续做验收。"
 -->
 
 ## Checkpoint State
 
-Planning is complete and focused implementation is active. Checkmarks prove only their named package and
-review boundary; they are not proof that broad gates, owner walkthrough, merge, archive, or release passed.
+Planning and P6 automated implementation are complete. Checkmarks prove only their named package and review
+boundary; P6 has passed local broad gates, while owner walkthrough, merge, archive, and release remain open.
 
 The worker must update `loop/implementation.md` after every accepted package with the actual changed owner,
 pre-fix red result, green result, mutation-resistance result, commands, output summary, and divergence.
@@ -90,6 +91,22 @@ the Web unit project to `50%` workers, the standard Web package command passed `
 with zero exit. No timeout, retry, assertion, browser-worker, or product behavior was changed. Exact evidence is
 recorded in `implementation.md`; 6.6 now owns PR delivery and fresh remote checks.
 
+## 7. P6 CLI-Backed Reactive Projection Upgrade
+
+The manager paused walkthrough at 6.9. Every item in this section is agent-owned and blocks resuming 6.7--6.12.
+Files and parsed structures are invalidation evidence only; every cached business value remains a settled typed
+OpenSpec CLI result with raw evidence, diagnostics, and exit status.
+
+- [x] 7.1 Re-audit the pinned OpenSpec 1.6 source for Root Context, Store list/Doctor, References, environment-global config, Schema/profile, and current CLI-backed project projections. The audit must include typed executor ownership for `schemas`, `schema which`, and `templates`, and must distinguish file-native Config/Catalog facets from CLI Work cached truth.
+- [x] 7.2 Published one browser-safe generic CLI projection lifecycle contract covering `loading`, `ready`, `revalidating`, `error`, and `refresh-error`; retained data carries exact provenance and is always display-only outside `ready`. Push messages carry projection identity/generation/lifecycle only, never replacement business data.
+- [x] 7.3 Upgraded Projection Work with immediate lifecycle reads, same-identity single-flight, retained settled CLI snapshots, atomic success replacement, refresh-error retention, late-generation retirement, and serializable failure evidence. A query may read cached state while the same Work is updating.
+- [x] 7.4 Reconcile dynamic trigger dependencies without publishing their parsed/file-native values through CLI Work. `schemas`, `schema which`, and `templates` must consume typed executor envelopes; Catalog membership must not combine a cached CLI list with local metadata; the CLI-resolved global config path may only invalidate its CLI Work.
+- [x] 7.5 Re-split Root Context and Environment observation into invalidation/lifecycle Push plus typed HTTP Pull. Environment Global's CLI Work must cache only `config path`, `config list --json`, profile, and drift CLI evidence; its editable raw file must be a separate reactive file-native owner. The App has no healthy 15-second Root/health projection polling; explicit user refresh and reconnect remain valid triggers, and retained health/Root evidence remains visible while replacement Work runs.
+- [x] 7.6 Migrated Store list/Doctor to the same CLI Work owner and lifecycle interface. Store list success alone reconciles the registered-root observation set; Doctor selector presence stays exact; mutation terminal invalidation wakes all clients without making the lifecycle ledger Store truth.
+- [x] 7.7 Re-audit every normal-path CLI-backed live projection and record each non-CLI fact owner in `research-plan.md`. System heartbeat, PWA update checks, PTY title sampling, watcher self-healing, missing-path polling, Git refresh progress, bounded degraded Store fallback, and raw Environment Global file content remain physically separate from projection freshness.
+- [x] 7.8 Prove the public-boundary and exact-owner matrix in `implementation.md`: typed Schema/Template contract drift, CLI-only Catalog membership, raw Environment Global file provenance, retained revalidation, initial/refresh errors, dynamic dependencies, mutation-triggered multi-client Pull, stale mutation authority, healthy-timer absence, and late A retirement. Every named fixture is TypeScript-checked; actual pinned OpenSpec 1.6 CLI runs are used where CLI truth is claimed.
+- [x] 7.9 After focused review, run scoped Core/Server/App suites, checked transport fixtures, typechecks, format/lint/diff/strict Change validation, then the complete local unit/component-browser/clean-SSG gates. Do not claim final browser acceptance.
+
 ### Manager-only final walkthrough ledger
 
 Execution steps and result fields are in `loop/manager-walkthrough.md`. The manager owns every checkbox below.
@@ -101,9 +118,9 @@ Execution steps and result fields are in `loop/manager-walkthrough.md`. The mana
 - [ ] 6.11 Context Matrix: multiple connected projects show observed Root/Reference relationships only, with no completeness claim.
 - [ ] 6.12 Static and responsive App: referenced static output has no invented live evidence; desktop/mobile layouts are readable and non-overlapping.
 
-## 7. Old Change Reconciliation and Delivery
+## 8. Old Change Reconciliation and Delivery
 
-- [x] 7.1 Map all 25 unresolved `target-openspec-cli-16-line` items, including independently reopened 8.12/9.4/9.5, to exact P1--P5 evidence or retain them openly unresolved.
-- [x] 7.2 Write `target-openspec-cli-16-line/loop/supersession.md` and link it from the old implementation record. Every transferred or abandoned item remains unchecked unless linked proof actually completes it.
-- [x] 7.3 Strictly validate this successor and recheck the old artifact/task status, then after manager confirmation archive `target-openspec-cli-16-line` with `-y --skip-specs`. The old loop Change has no deltas, so standalone strict change validation predictably rejects it while archive's own delta validation has nothing to inspect; the `109/131` pre-review baseline, corrected `106/131` state, and incomplete-task warning remain part of the record.
-- [ ] 7.4 Verify and archive this corrective Change only after its own code, focused/full gates, manager walkthrough, protected merge, and reconciliation are complete. Ask about release only after merge; follow changeversion/release automation only if explicitly approved.
+- [x] 8.1 Map all 25 unresolved `target-openspec-cli-16-line` items, including independently reopened 8.12/9.4/9.5, to exact P1--P5 evidence or retain them openly unresolved.
+- [x] 8.2 Write `target-openspec-cli-16-line/loop/supersession.md` and link it from the old implementation record. Every transferred or abandoned item remains unchecked unless linked proof actually completes it.
+- [x] 8.3 Strictly validate this successor and recheck the old artifact/task status, then after manager confirmation archive `target-openspec-cli-16-line` with `-y --skip-specs`. The old loop Change has no deltas, so standalone strict change validation predictably rejects it while archive's own delta validation has nothing to inspect; the `109/131` pre-review baseline, corrected `106/131` state, and incomplete-task warning remain part of the record.
+- [ ] 8.4 Verify and archive this corrective Change only after its own code, focused/full gates, manager walkthrough, protected merge, and reconciliation are complete. Ask about release only after merge; follow changeversion/release automation only if explicitly approved.

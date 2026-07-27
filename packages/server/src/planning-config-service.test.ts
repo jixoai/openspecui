@@ -171,7 +171,7 @@ describe('planning config ownership', () => {
     })
 
     expect(result.owner.kind).toBe('runtime-environment')
-    expect(result.file).toMatchObject({ path: configPath, exists: true, format: 'json' })
+    expect(result.configPath).toBe(configPath)
     expect(result.config).toEqual({ profile: 'core', workflows: ['apply'] })
     expect(result.evidence.path.exitCode).toBe(0)
     expect(result.evidence.config.stdout).toContain('"profile":"core"')

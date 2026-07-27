@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove the public Archive Router emits typed recompute lifecycle events.
  * 2. Prove replacement data follows its start event while the task is blocked.
  * 3. Prove replacement failure preserves the original error after its start event.
@@ -144,7 +144,6 @@ async function createArchiveRouterFixture() {
       await server.storeObservation.dispose()
       await server.dataHomeObserver.dispose()
       await server.toolCommandObservation.dispose()
-      server.storeInvalidation.dispose()
       server.projectInvalidation.dispose()
       await server.observationEnvironment.dispose()
       server.projectRecoveryService.dispose()

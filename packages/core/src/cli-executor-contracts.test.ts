@@ -3,10 +3,11 @@
  * 1. Lock command argv for root-aware workflow and Reference reads.
  * 2. Lock official Store mutation argv without registry synthesis.
  * 3. Lock strict validate/archive JSON argv and explicit bypass behavior.
+ * 4. Lock schema and template JSON reads to checked command contracts.
  *
  * Original request (2026-07-15): "坚持 CLI-first。"
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from './cli-executor.js'
 import { ConfigManager } from './config.js'
 
@@ -19,7 +20,7 @@ const EMPTY_JSON_RESULT: CliResult = {
 
 describe('CliExecutor OpenSpec 1.6 contracts', () => {
   let executor: CliExecutor
-  let execute: ReturnType<typeof vi.spyOn>
+  let execute: MockInstance<CliExecutor['execute']>
 
   beforeEach(() => {
     executor = new CliExecutor(new ConfigManager('/project'), '/project')
@@ -67,6 +68,20 @@ describe('CliExecutor OpenSpec 1.6 contracts', () => {
       ['status', '--change', 'add-auth', '--json', '--schema', 'custom', '--store', 'shared'],
       ['instructions', 'proposal', '--change', 'add-auth', '--json', '--store', 'shared'],
       ['instructions', 'apply', '--change', 'add-auth', '--json', '--store', 'shared'],
+    ])
+  })
+
+  it('builds checked Schema and Template JSON commands', async () => {
+    await executor.contracts.schemas()
+    await executor.contracts.schemaWhich('custom')
+    await executor.contracts.templates()
+    await executor.contracts.templates('custom')
+
+    expect(execute.mock.calls.map(([args]) => args)).toEqual([
+      ['schemas', '--json'],
+      ['schema', 'which', 'custom', '--json'],
+      ['templates', '--json'],
+      ['templates', '--json', '--schema', 'custom'],
     ])
   })
 

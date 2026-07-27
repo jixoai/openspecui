@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
- * 1. Own every root-scoped operation and project-Schema mutation for the CLI-selected Planning root.
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Own every root-scoped operation, CLI projection, and project-Schema mutation for the selected Planning root.
  * 2. Serialize replacement and issue fresh record/generation provenance without reconstructing root selection.
  * 3. Acquire and retire observation/invalidation leases with each active root.
  * 4. Keep reactive subscriptions and current-generation snapshots bound to Root Context dependencies and selection.
@@ -12,6 +12,8 @@
  * Original request (2026-07-17): "An admitted A operation settles before A is retired and B is exposed."
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Owner architecture clarification (2026-07-26): "将这些变更信息收集起来作为触发器，更新底层幂等计算的缓存结果。"
  */
 import {
   CliExecutor,
@@ -50,6 +52,12 @@ import { buildEntityReadOptions } from './entity-read-options.js'
 import { FilePreviewService } from './file-preview-service.js'
 import { createHookRuntime, type HookRuntime } from './hook-runtime.js'
 import {
+  createPlanningCliProjectionWorkOwner,
+  PlanningCliProjectionService,
+  PlanningCliRootContextState,
+  type PlanningCliProjectionWorkOwner,
+} from './planning-cli-projection-service.js'
+import {
   createServerProjectionWorkRuntime,
   type ProjectionWorkRuntime,
 } from './projection-work/runtime.js'
@@ -57,6 +65,7 @@ import { resolveServerRootContext, trackRootContextDependencies } from './root-c
 import { SchemaMutationService, type SchemaMutationAction } from './schema-mutation-service.js'
 import { SearchService } from './search-service.js'
 import { readSpecCatalog } from './spec-catalog-service.js'
+import type { StoreObservationReconciler } from './store-observation-service.js'
 import { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 /** Revocable services available only while one Manager-owned Planning-root operation is active. */
@@ -72,6 +81,7 @@ export interface PlanningRootServices {
   dashboardOverviewService: DashboardOverviewService
   dashboardProjectionService: DashboardProjectionServiceContract
   changesProjectionService: ChangesProjectionServiceContract
+  planningCliProjectionService: PlanningCliProjectionService
   workflowInvocationService: WorkflowInvocationService
 }
 
@@ -81,7 +91,7 @@ interface PlanningRootServiceRecord extends PlanningRootServices {
   hookRuntime: HookRuntime
   observationRelease: Promise<WatcherRootRelease | null>
   projectInvalidationRelease: () => void
-  rootContextRef: { current: RootContext }
+  rootContextValue: PlanningCliRootContextState
   activeOperationCount: number
   activeStreams: Set<CliStreamHandle>
   operationDrainListeners: Set<() => void>
@@ -112,6 +122,8 @@ export interface PlanningRootServiceResolver {
   resolveRootContext(): Promise<RootContextResolvedState>
   /** Resolve and track reactive Root Context dependencies inside the same serialized transition. */
   resolveRootContextReactive(): Promise<RootContextResolvedState>
+  /** Resolve one uncached Root Context attempt for the external Projection Work owner. */
+  resolveRootContextProjection?(): Promise<RootContextResolvedState>
   /** Run one complete operation while its selected Planning-root record remains alive. */
   runOperation<T>(operation: PlanningRootOperation<T>): Promise<T>
   /** Run one complete reactive operation while tracking current root dependencies. */
@@ -149,12 +161,15 @@ export interface PlanningRootServiceManagerOptions {
   observationEnvironment: ObservationRootOwner
   projectInvalidation: RuntimeRootInvalidationOwner
   runtimeInvalidation: RuntimeInvalidationReader
+  storeObservation: Pick<StoreObservationReconciler, 'subscribe'>
   /** Launch-owned Code provenance injected into every Dashboard snapshot projection. */
   codeBinding: import('./launch-git-repository-binding.js').LaunchGitRepositoryBinding
   /** Server-owned regional Dashboard registries shared across replaceable Planning-root records. */
   dashboardProjectionWorkOwner?: DashboardProjectionWorkOwner
   /** Server-owned progressive Change-row registry shared across replaceable Planning-root records. */
   changesProjectionWorkOwner?: ChangesProjectionWorkOwner
+  /** Server-owned selector-exact Planning CLI registry shared across replaceable root records. */
+  planningCliProjectionWorkOwner?: PlanningCliProjectionWorkOwner
 }
 
 /** Serialized deep owner for one replaceable Planning-root service record. */
@@ -167,12 +182,18 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   private disposed = false
   private readonly dashboardProjectionWorkOwner: DashboardProjectionWorkOwner
   private readonly changesProjectionWorkOwner: ChangesProjectionWorkOwner
+  private readonly planningCliProjectionWorkOwner: PlanningCliProjectionWorkOwner
   private readonly ownedProjectionWorkRuntime: ProjectionWorkRuntime | null
 
   constructor(private readonly options: PlanningRootServiceManagerOptions) {
-    if (options.dashboardProjectionWorkOwner && options.changesProjectionWorkOwner) {
+    if (
+      options.dashboardProjectionWorkOwner &&
+      options.changesProjectionWorkOwner &&
+      options.planningCliProjectionWorkOwner
+    ) {
       this.dashboardProjectionWorkOwner = options.dashboardProjectionWorkOwner
       this.changesProjectionWorkOwner = options.changesProjectionWorkOwner
+      this.planningCliProjectionWorkOwner = options.planningCliProjectionWorkOwner
       this.ownedProjectionWorkRuntime = null
     } else {
       const runtime = createServerProjectionWorkRuntime()
@@ -180,6 +201,8 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         options.dashboardProjectionWorkOwner ?? createDashboardProjectionWorkOwner(runtime)
       this.changesProjectionWorkOwner =
         options.changesProjectionWorkOwner ?? createChangesProjectionWorkOwner(runtime)
+      this.planningCliProjectionWorkOwner =
+        options.planningCliProjectionWorkOwner ?? createPlanningCliProjectionWorkOwner(runtime)
       this.ownedProjectionWorkRuntime = runtime
     }
   }
@@ -199,7 +222,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     }
 
     const projectDir = planningRoot.path
-    const rootContextRef = { current: rootContext }
+    const rootContextValue = new PlanningCliRootContextState(rootContext)
     const adapter = new OpenSpecAdapter(projectDir)
     // Schema CLI commands resolve project-local schema paths from cwd and accept no Store selector.
     const rootCliExecutor = new CliExecutor(this.options.configManager, projectDir)
@@ -222,8 +245,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       (stage, id) => buildEntityReadOptions(entityReadOptionsContext, stage, id),
       async () => {
         const catalog = await readSpecCatalog({
-          rootContext: rootContextRef.current,
-          adapter,
+          rootContext: rootContextValue.get(),
           documentService,
           contracts: this.options.cliExecutor.contracts,
         })
@@ -274,6 +296,16 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       },
       adapter,
     })
+    const planningCliProjectionService = new PlanningCliProjectionService({
+      rootContext: rootContextValue,
+      gitBindingToken,
+      kernel,
+      documentService,
+      contracts: this.options.cliExecutor.contracts,
+      invalidation: this.options.runtimeInvalidation,
+      storeObservation: this.options.storeObservation,
+      workOwner: this.planningCliProjectionWorkOwner,
+    })
     const filePreviewService = new FilePreviewService(projectDir, this.options.previewAssetsDir)
     const schemaMutationService = new SchemaMutationService({
       planningRoot: projectDir,
@@ -281,7 +313,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       kernel,
     })
     const workflowInvocationService = new WorkflowInvocationService({
-      getRootContext: () => rootContextRef.current,
+      getRootContext: () => rootContextValue.get(),
       rootGeneration: gitBindingToken,
       hookRuntime,
       contracts: this.options.cliExecutor.contracts,
@@ -310,8 +342,9 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       dashboardOverviewService,
       dashboardProjectionService,
       changesProjectionService,
+      planningCliProjectionService,
       workflowInvocationService,
-      rootContextRef,
+      rootContextValue,
       activeOperationCount: 0,
       activeStreams: new Set(),
       operationDrainListeners: new Set(),
@@ -338,6 +371,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         Promise.resolve().then(() => record.dashboardOverviewService.dispose()),
         Promise.resolve().then(() => record.dashboardProjectionService.dispose()),
         Promise.resolve().then(() => record.changesProjectionService.dispose()),
+        Promise.resolve().then(() => record.planningCliProjectionService.dispose()),
         record.hookRuntime.dispose(),
         record.searchService.dispose(),
         record.observationRelease.then((releaseObservationRoot) => releaseObservationRoot?.()),
@@ -434,6 +468,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       dashboardOverviewService: guardCapability(record.dashboardOverviewService),
       dashboardProjectionService: guardCapability(record.dashboardProjectionService),
       changesProjectionService: guardCapability(record.changesProjectionService),
+      planningCliProjectionService: guardCapability(record.planningCliProjectionService),
       workflowInvocationService: guardCapability(record.workflowInvocationService),
     }
 
@@ -511,7 +546,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     if (active?.identity === this.rootIdentity(state.data)) {
       const currentRootContext = { ...state.data, generation: active.gitBindingToken }
       active.rootContext = currentRootContext
-      active.rootContextRef.current = currentRootContext
+      active.rootContextValue.set(currentRootContext)
       return active
     }
 
@@ -528,12 +563,17 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     return created
   }
 
-  private async resolveActiveTransition(reactive: boolean): Promise<{
+  private async resolveActiveTransition(
+    reactive: boolean,
+    useRuntimeInvalidationCache = true
+  ): Promise<{
     state: RootContextResolvedState
     services: PlanningRootServiceRecord | null
   }> {
     if (this.disposed) throw new Error('Planning-root service manager is disposed.')
-    const invalidationKey = this.currentRootContextInvalidationKey()
+    const invalidationKey = useRuntimeInvalidationCache
+      ? this.currentRootContextInvalidationKey()
+      : null
     const cached = this.currentRootContextSnapshot
 
     // Only reactive display work can replay a validated Root snapshot. Imperative queries, mutations, and
@@ -541,6 +581,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     // the reactive filesystem invalidation graph.
     if (
       reactive &&
+      invalidationKey !== null &&
       cached?.invalidationKey === invalidationKey &&
       cached.services === this.activeRecord
     ) {
@@ -548,7 +589,6 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         await trackRootContextDependencies(
           {
             projectDir: this.options.launchProjectDir,
-            cliExecutor: this.options.cliExecutor,
           },
           cached.state
         )
@@ -566,7 +606,6 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       await trackRootContextDependencies(
         {
           projectDir: this.options.launchProjectDir,
-          cliExecutor: this.options.cliExecutor,
         },
         state
       )
@@ -580,7 +619,11 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         }
         // If a dependency changed while CLI resolution or record retirement was in flight, the reactive caller
         // will recompute B. Do not write an A result under B's identity.
-        if (reactive && this.currentRootContextInvalidationKey() === invalidationKey) {
+        if (
+          reactive &&
+          invalidationKey !== null &&
+          this.currentRootContextInvalidationKey() === invalidationKey
+        ) {
           this.currentRootContextSnapshot = {
             invalidationKey,
             state: resolvedState,
@@ -598,11 +641,16 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     }
   }
 
-  private resolveTransition(reactive: boolean): Promise<{
+  private resolveTransition(
+    reactive: boolean,
+    useRuntimeInvalidationCache = true
+  ): Promise<{
     state: RootContextResolvedState
     services: PlanningRootServiceRecord | null
   }> {
-    return this.runTransition(() => this.resolveActiveTransition(reactive))
+    return this.runTransition(() =>
+      this.resolveActiveTransition(reactive, useRuntimeInvalidationCache)
+    )
   }
 
   private requireActiveServices(result: {
@@ -639,6 +687,11 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   /** Resolve reactive Root Context through the same serialized active-record lifecycle. */
   async resolveRootContextReactive(): Promise<RootContextResolvedState> {
     return (await this.resolveTransition(true)).state
+  }
+
+  /** Resolve one exact attempt; Projection Work owns sharing, retention, and replacement. */
+  async resolveRootContextProjection(): Promise<RootContextResolvedState> {
+    return (await this.resolveTransition(true, false)).state
   }
 
   /** Run one complete operation without exposing a durable service handle. */

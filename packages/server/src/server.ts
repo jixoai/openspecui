@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
  * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
  * 3. Host Server-local terminal/Root Context notifications, sound, preview-resource, and translation HTTP boundaries.
  * 4. Host tRPC and PTY WebSocket transports with deterministic teardown.
  *    PTY planning-root creation and workflow input verify opaque Root generation provenance.
  * 5. Own the runtime observation environment and external Codex command lease while deferring expensive
- *    root-scoped projections until a foreground consumer requests them.
+ *    root-scoped projections until a foreground consumer requests them; keep Store-list registry/mutation
+ *    evidence distinct from selector-exact Store-root observation.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "Every Planning-root execution surface uses the same operation lifetime owner."
@@ -17,6 +18,9 @@
  * Derived requirement (2026-07-22): Checkpoint 6.15 publishes Root Context health only through this Server instance.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
+ * Owner-reported defect (2026-07-26): App-embedded Project Web must enter its canonical Dashboard
+ * route directly instead of visibly normalizing the backend root after iframe launch.
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  *
  * @module server
  */
@@ -45,7 +49,7 @@ import {
 import { TRPCError } from '@trpc/server'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { applyWSSHandler, type CreateWSSContextFnOptions } from '@trpc/server/adapters/ws'
-import type { Observable } from '@trpc/server/observable'
+import { observable, type Observable } from '@trpc/server/observable'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { readFileSync } from 'node:fs'
@@ -83,6 +87,10 @@ import {
 } from './ct2-model-cache-path.js'
 import { CustomSoundService } from './custom-sound-service.js'
 import { createDashboardProjectionWorkOwner } from './dashboard-projection-service.js'
+import {
+  createEnvironmentGlobalProjectionWorkOwner,
+  EnvironmentGlobalProjectionService,
+} from './environment-global-projection-service.js'
 import { GitRepositoryBindingService } from './git-repository-binding-service.js'
 import { LaunchGitRepositoryBindingOwner } from './launch-git-repository-binding.js'
 import { LlamaModelAssetService } from './llama-model-asset-service.js'
@@ -100,6 +108,7 @@ import {
   getDefaultLocalModelProfileManifestPath,
 } from './local-model-cache-path.js'
 import { NotificationService } from './notification-service.js'
+import { createPlanningCliProjectionWorkOwner } from './planning-cli-projection-service.js'
 import { PlanningRootServiceManager } from './planning-root-service.js'
 import { findAvailablePort } from './port-utils.js'
 import { ProjectRecoveryService } from './project-recovery-service.js'
@@ -107,7 +116,10 @@ import { createServerProjectionWorkRuntime } from './projection-work/runtime.js'
 import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
 import { createRootContextNotificationBridge } from './root-context-notification-bridge.js'
-import { createRootContextSubscription } from './root-context-service.js'
+import {
+  createRootContextProjectionWorkOwner,
+  RootContextProjectionService,
+} from './root-context-projection-service.js'
 import { appRouter, type Context, type GitWorktreeHandoffService } from './router.js'
 import {
   resolveDefaultServerHostIdentity,
@@ -116,6 +128,10 @@ import {
 import { StoreMutationService } from './store-mutation-service.js'
 import { StoreObservationFallbackService } from './store-observation-fallback.js'
 import { StoreObservationService } from './store-observation-service.js'
+import {
+  createStoreProjectionWorkOwner,
+  StoreProjectionService,
+} from './store-projection-service.js'
 import { ToolCommandObservationService } from './tool-command-observation-service.js'
 import { createRuntimeSqliteTranslationCacheAdapter } from './translation-cache-adapter.js'
 import { getDefaultTranslationCacheDatabasePath } from './translation-cache-path.js'
@@ -124,11 +140,23 @@ import { TranslationEngineService } from './translation-engine-service.js'
 import { createManagedLocalBatchTranslateWorkerExecutor } from './translation-engine-worker.js'
 
 function buildEmbeddedUiUrlForPort(port: number): string {
-  return `http://localhost:${port}`
+  return `http://localhost:${port}/dashboard`
 }
 
 function deferBackgroundTask(task: () => void): void {
   setTimeout(task, 0)
+}
+
+function createRootContextProjectionNotificationSource(
+  service: RootContextProjectionService
+): Observable<RootContextState, unknown> {
+  return observable<RootContextState>((emit) => {
+    const subscription = service.subscribe(() => {
+      const projection = service.read()
+      if (projection.state === 'ready') emit.next(projection.data)
+    })
+    return () => subscription.unsubscribe()
+  })
 }
 
 /**
@@ -213,11 +241,7 @@ export function createServer(config: ServerConfig) {
     environment: observationEnvironment,
     invalidation: runtimeInvalidation,
   })
-  const storeInvalidation = new RuntimeRootInvalidationRegistry(runtimeInvalidation, [
-    'stores',
-    'context',
-  ])
-  const storeObservation = new StoreObservationService(observationEnvironment, storeInvalidation)
+  const storeObservation = new StoreObservationService(observationEnvironment, runtimeInvalidation)
   const storeObservationFallback = new StoreObservationFallbackService({
     invalidation: runtimeInvalidation,
     dataHomeObservation: dataHomeObserver,
@@ -232,6 +256,21 @@ export function createServer(config: ServerConfig) {
   const projectionWorkRuntime = createServerProjectionWorkRuntime()
   const dashboardProjectionWorkOwner = createDashboardProjectionWorkOwner(projectionWorkRuntime)
   const changesProjectionWorkOwner = createChangesProjectionWorkOwner(projectionWorkRuntime)
+  const storeProjectionWorkOwner = createStoreProjectionWorkOwner(projectionWorkRuntime)
+  const planningCliProjectionWorkOwner = createPlanningCliProjectionWorkOwner(projectionWorkRuntime)
+  const environmentGlobalProjectionService = new EnvironmentGlobalProjectionService({
+    dataScope,
+    cliExecutor,
+    observationEnvironment,
+    workOwner: createEnvironmentGlobalProjectionWorkOwner(projectionWorkRuntime),
+  })
+  const storeProjectionService = new StoreProjectionService({
+    dataScopePath: dataScope.path,
+    cliExecutor,
+    invalidation: runtimeInvalidation,
+    storeObservation,
+    workOwner: storeProjectionWorkOwner,
+  })
   const planningRootServices = new PlanningRootServiceManager({
     launchProjectDir: config.projectDir,
     previewAssetsDir: config.previewAssetsDir ?? join(__dirname, '..', '..', 'web', 'dist'),
@@ -240,9 +279,17 @@ export function createServer(config: ServerConfig) {
     observationEnvironment,
     projectInvalidation,
     runtimeInvalidation,
+    storeObservation,
     codeBinding: codeGitBinding,
     dashboardProjectionWorkOwner,
     changesProjectionWorkOwner,
+    planningCliProjectionWorkOwner,
+  })
+  const rootContextProjectionService = new RootContextProjectionService({
+    launchProjectDir: config.projectDir,
+    dataScopePath: dataScope.path,
+    planningRootServices,
+    workOwner: createRootContextProjectionWorkOwner(projectionWorkRuntime),
   })
   const gitRepositoryBindings = new GitRepositoryBindingService({
     launchProjectDir: config.projectDir,
@@ -254,7 +301,7 @@ export function createServer(config: ServerConfig) {
     notificationService,
     rootContext:
       config.rootContextNotificationSource?.(planningRootServices, notificationService) ??
-      createRootContextSubscription(planningRootServices),
+      createRootContextProjectionNotificationSource(rootContextProjectionService),
   })
   const customSoundService = new CustomSoundService()
   const translationCacheDatabasePath =
@@ -492,6 +539,9 @@ export function createServer(config: ServerConfig) {
         gitRepositoryBindings,
         runtimeInvalidation,
         storeObservation,
+        storeProjectionService,
+        rootContextProjectionService,
+        environmentGlobalProjectionService,
         storeMutationService,
         toolCommandObservation,
         configManager,
@@ -536,6 +586,9 @@ export function createServer(config: ServerConfig) {
       gitRepositoryBindings,
       runtimeInvalidation,
       storeObservation,
+      storeProjectionService,
+      rootContextProjectionService,
+      environmentGlobalProjectionService,
       storeMutationService,
       toolCommandObservation,
       configManager,
@@ -568,7 +621,9 @@ export function createServer(config: ServerConfig) {
     projectInvalidation,
     dataHomeObserver,
     storeObservation,
-    storeInvalidation,
+    storeProjectionService,
+    rootContextProjectionService,
+    environmentGlobalProjectionService,
     storeObservationFallback,
     toolCommandObservation,
     adapter,
@@ -718,15 +773,16 @@ export async function createWebSocketServer(
         await settleCleanupPhase(failures, [() => server.storeObservationFallback.dispose()])
         await settleCleanupPhase(failures, [() => server.storeMutationService.dispose()])
         await settleCleanupPhase(failures, [() => server.rootContextNotificationBridge.dispose()])
-        await settleCleanupPhase(failures, [() => server.projectionWorkRuntime.clear()])
+        await settleCleanupPhase(failures, [() => server.storeProjectionService.dispose()])
+        await settleCleanupPhase(failures, [
+          () => server.environmentGlobalProjectionService.dispose(),
+        ])
         await settleCleanupPhase(failures, [() => server.planningRootServices.dispose()])
+        await settleCleanupPhase(failures, [() => server.projectionWorkRuntime.clear()])
         await settleCleanupPhase(failures, [() => server.storeObservation.dispose()])
         await settleCleanupPhase(failures, [() => server.dataHomeObserver.dispose()])
         await settleCleanupPhase(failures, [() => server.toolCommandObservation.dispose()])
-        await settleCleanupPhase(failures, [
-          () => server.storeInvalidation.dispose(),
-          () => server.projectInvalidation.dispose(),
-        ])
+        await settleCleanupPhase(failures, [() => server.projectInvalidation.dispose()])
         await settleCleanupPhase(failures, [() => server.observationEnvironment.dispose()])
         await settleCleanupPhase(failures, [
           () => server.projectRecoveryService.dispose(),
@@ -774,6 +830,7 @@ export async function startServer(
 
   // Create the server (HTTP app ready to accept requests)
   const server = createServer({ ...config, port })
+  server.storeProjectionService.start()
   server.rootContextNotificationBridge.start()
   let runtimeClosing = false
 

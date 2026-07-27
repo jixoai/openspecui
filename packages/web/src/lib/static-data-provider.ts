@@ -37,6 +37,7 @@ import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { isOpsxGlobPattern, opsxPathMatchesPattern } from '@openspecui/core/opsx-entity'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
 import {
+  createStaticSpecCatalogOwnedProjection,
   createStaticSpecCatalogReferenceProjection,
   createStaticSpecCatalogReferenceSource,
   specIdentityKey,
@@ -592,6 +593,7 @@ export async function getSpecCatalog(): Promise<SpecCatalog> {
   if (!snapshot) {
     return {
       entries: [],
+      ownedProjection: createStaticSpecCatalogOwnedProjection(),
       referenceSources: [],
       referenceProjection: createStaticSpecCatalogReferenceProjection(undefined),
       observedAt: 0,
@@ -606,6 +608,7 @@ export async function getSpecCatalog(): Promise<SpecCatalog> {
           readOnly: false,
           name: spec.name,
           summary: null,
+          requirementCount: spec.requirements.length,
           updatedAt: spec.updatedAt,
         }
       : {
@@ -623,6 +626,9 @@ export async function getSpecCatalog(): Promise<SpecCatalog> {
 
   return {
     entries,
+    ownedProjection: createStaticSpecCatalogOwnedProjection(
+      snapshot.specs.filter((spec) => spec.identity.kind === 'owned').length
+    ),
     referenceSources:
       snapshot.meta.referencePolicy?.kind === 'include'
         ? snapshot.meta.referencePolicy.referenceSources.map(createStaticSpecCatalogReferenceSource)

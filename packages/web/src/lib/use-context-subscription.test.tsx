@@ -1,20 +1,25 @@
 /**
- * Orthogonal intents (created 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Prove cached Root Context remains displayable but cannot authorize writes during a live rebind.
- * 2. Drive real Root Context tRPC lifecycle callbacks through the authoritative subscription owner.
- * 3. Prove retired Root observers cannot restore cached data or mutation authority.
+ * 2. Drive lifecycle-only Push followed by typed Root Projection Pull.
+ * 3. Prove revalidation/refresh-error and retired Pulls cannot restore mutation authority.
  *
  * Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等。"
+ * Original request (2026-07-26): "即便现在有正在的任务，界面上仍然可以读到缓存。"
  */
-import type { RootContext, RootContextState } from '@openspecui/core'
-import { act, renderHook } from '@testing-library/react'
+import type {
+  HostedRootContext,
+  HostedRootContextProjectionState,
+  HostedRootContextState,
+} from '@openspecui/core/hosted-contract'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useContextSubscription } from './use-context-subscription'
 import { useRootActionState } from './use-root-action-state'
 import { primeSubscriptionCache } from './use-subscription'
 
-type RootContextCallbacks = {
-  onData(data: RootContextState): void
+type RootContextNoticeCallbacks = {
+  onData(data: unknown): void
   onError(error: Error): void
   onConnectionStateChange(state: {
     state: 'idle' | 'connecting' | 'pending'
@@ -24,17 +29,22 @@ type RootContextCallbacks = {
   onComplete(): void
 }
 
-const { rootContextSubscribeMock, staticModeMock } = vi.hoisted(() => ({
-  rootContextSubscribeMock:
-    vi.fn<(input: undefined, callbacks: RootContextCallbacks) => { unsubscribe(): void }>(),
-  staticModeMock: vi.fn(() => false),
-}))
+const { rootContextReadProjectionMock, rootContextSubscribeProjectionMock, staticModeMock } =
+  vi.hoisted(() => ({
+    rootContextReadProjectionMock: vi.fn<() => Promise<HostedRootContextProjectionState>>(),
+    rootContextSubscribeProjectionMock:
+      vi.fn<(input: undefined, callbacks: RootContextNoticeCallbacks) => { unsubscribe(): void }>(),
+    staticModeMock: vi.fn(() => false),
+  }))
 
 vi.mock('./trpc', () => ({
   trpcClient: {
     rootContext: {
-      subscribe: {
-        subscribe: rootContextSubscribeMock,
+      readProjection: {
+        query: rootContextReadProjectionMock,
+      },
+      subscribeProjection: {
+        subscribe: rootContextSubscribeProjectionMock,
       },
     },
   },
@@ -44,7 +54,7 @@ vi.mock('./static-mode', () => ({
   isStaticMode: staticModeMock,
 }))
 
-function rootContext(path: string, observedAt: number): RootContext {
+function rootContext(path: string, observedAt: number): HostedRootContext {
   return {
     launchProject: { path: '/launch' },
     planningRoot: { path, source: 'nearest', healthy: true, status: [] },
@@ -63,7 +73,7 @@ function rootContext(path: string, observedAt: number): RootContext {
   }
 }
 
-function ready(path: string, observedAt: number): RootContextState {
+function ready(path: string, observedAt: number): HostedRootContextState {
   return {
     state: 'ready',
     data: rootContext(path, observedAt),
@@ -73,9 +83,67 @@ function ready(path: string, observedAt: number): RootContextState {
   }
 }
 
+function projection(
+  data: HostedRootContextState,
+  state: 'ready' | 'revalidating' = 'ready',
+  workGeneration = 1
+): HostedRootContextProjectionState {
+  if (data.state === 'loading' || data.state === 'refreshing') {
+    throw new Error('Projection fixtures require a settled Root result.')
+  }
+  return state === 'ready'
+    ? {
+        state,
+        identity: 'root-context:test',
+        workGeneration,
+        invalidationCause: 'initial',
+        data,
+        freshness: 'current',
+        snapshotGeneration: workGeneration,
+        error: null,
+      }
+    : {
+        state,
+        identity: 'root-context:test',
+        workGeneration,
+        invalidationCause: 'dependency',
+        data,
+        freshness: 'stale-display-only',
+        snapshotGeneration: workGeneration - 1,
+        error: null,
+      }
+}
+
+function refreshError(
+  data: HostedRootContextState,
+  workGeneration: number
+): HostedRootContextProjectionState {
+  if (data.state === 'loading' || data.state === 'refreshing') {
+    throw new Error('Projection fixtures require a settled Root result.')
+  }
+  return {
+    state: 'refresh-error',
+    identity: 'root-context:test',
+    workGeneration,
+    invalidationCause: 'dependency',
+    data,
+    freshness: 'stale-display-only',
+    snapshotGeneration: workGeneration - 1,
+    error: { name: 'Error', message: 'Root replacement failed.', cliEvidence: null },
+  }
+}
+
+const NOTICE = {
+  identity: 'root-context:test',
+  workGeneration: 1,
+  snapshotGeneration: 1,
+  state: 'ready' as const,
+  invalidationCause: 'initial' as const,
+}
+
 function emitAll(
-  callbacks: readonly RootContextCallbacks[],
-  emit: (callbacks: RootContextCallbacks) => void
+  callbacks: readonly RootContextNoticeCallbacks[],
+  emit: (callbacks: RootContextNoticeCallbacks) => void
 ): void {
   for (const callback of callbacks) emit(callback)
 }
@@ -90,18 +158,20 @@ function useRootContextAndActionState() {
 describe('useContextSubscription current authority', () => {
   beforeEach(() => {
     staticModeMock.mockReturnValue(false)
-    rootContextSubscribeMock.mockReset()
+    rootContextReadProjectionMock.mockReset()
+    rootContextSubscribeProjectionMock.mockReset()
   })
 
-  it('keeps cached A displayable and root actions locked through lifecycle states until current B arrives', () => {
+  it('keeps cached A displayable and root actions locked through lifecycle states until current B Pull arrives', async () => {
     const rootA = ready('/planning-a', 1)
     const rootB = ready('/planning-b', 2)
-    const callbacks: RootContextCallbacks[] = []
-    rootContextSubscribeMock.mockImplementation((_input, next) => {
+    const callbacks: RootContextNoticeCallbacks[] = []
+    rootContextSubscribeProjectionMock.mockImplementation((_input, next) => {
       callbacks.push(next)
       return { unsubscribe: vi.fn() }
     })
-    primeSubscriptionCache('root-context.subscribe', rootA)
+    rootContextReadProjectionMock.mockResolvedValue(projection(rootB))
+    primeSubscriptionCache('root-context.projection', rootA)
 
     const { result } = renderHook(() => useRootContextAndActionState())
 
@@ -135,11 +205,13 @@ describe('useContextSubscription current authority', () => {
     act(() => emitAll(callbacks, (callback) => callback.onComplete()))
     expect(result.current.action).toMatchObject({ status: 'blocked', disabled: true })
 
-    act(() => emitAll(callbacks, (callback) => callback.onData(rootB)))
-    expect(result.current.context).toMatchObject({
-      data: rootB,
-      isLoading: false,
-      authority: { state: 'current' },
+    act(() => emitAll(callbacks, (callback) => callback.onData(NOTICE)))
+    await waitFor(() => {
+      expect(result.current.context).toMatchObject({
+        data: rootB,
+        isLoading: false,
+        authority: { state: 'current' },
+      })
     })
     expect(result.current.action).toMatchObject({
       status: 'ready',
@@ -148,28 +220,33 @@ describe('useContextSubscription current authority', () => {
     })
   })
 
-  it('rejects late Root A callbacks after retirement without overwriting cached B', () => {
+  it('rejects a late Root A Pull after retirement without overwriting cached B', async () => {
     const rootA = ready('/planning-a', 1)
     const rootB = ready('/planning-b', 2)
-    const callbacks: RootContextCallbacks[] = []
-    rootContextSubscribeMock.mockImplementation((_input, next) => {
+    const callbacks: RootContextNoticeCallbacks[] = []
+    rootContextSubscribeProjectionMock.mockImplementation((_input, next) => {
       callbacks.push(next)
       return { unsubscribe: vi.fn() }
     })
-    primeSubscriptionCache('root-context.subscribe', rootA)
+    rootContextReadProjectionMock.mockResolvedValue(projection(rootB))
+    primeSubscriptionCache('root-context.projection', rootA)
 
     const mounted = renderHook(() => useRootContextAndActionState())
-    act(() => emitAll(callbacks, (callback) => callback.onData(rootB)))
-    expect(mounted.result.current.action).toMatchObject({ status: 'ready', disabled: false })
+    act(() => emitAll(callbacks, (callback) => callback.onData(NOTICE)))
+    await waitFor(() => {
+      expect(mounted.result.current.action).toMatchObject({ status: 'ready', disabled: false })
+    })
 
     const retiredCallbacks = [...callbacks]
     mounted.unmount()
+    rootContextReadProjectionMock.mockResolvedValue(projection(rootA, 'ready', 2))
     act(() => {
-      emitAll(retiredCallbacks, (callback) => callback.onData(rootA))
+      emitAll(retiredCallbacks, (callback) => callback.onData({ ...NOTICE, workGeneration: 2 }))
       emitAll(retiredCallbacks, (callback) =>
         callback.onError(new Error('late retired Root Context error'))
       )
     })
+    await Promise.resolve()
 
     const replacement = renderHook(() => useRootContextAndActionState())
     expect(replacement.result.current.context).toMatchObject({
@@ -178,5 +255,69 @@ describe('useContextSubscription current authority', () => {
     })
     expect(replacement.result.current.action).toMatchObject({ status: 'checking', disabled: true })
     replacement.unmount()
+  })
+
+  it('retains settled Root data as display-only through revalidation and refresh failure', async () => {
+    const rootA = ready('/planning-a', 1)
+    const rootB = ready('/planning-b', 2)
+    const callbacks: RootContextNoticeCallbacks[] = []
+    let currentProjection = projection(rootA)
+    rootContextReadProjectionMock.mockImplementation(async () => currentProjection)
+    rootContextSubscribeProjectionMock.mockImplementation((_input, next) => {
+      callbacks.push(next)
+      return { unsubscribe: vi.fn() }
+    })
+
+    const mounted = renderHook(() => useRootContextAndActionState())
+    act(() => emitAll(callbacks, (callback) => callback.onData(NOTICE)))
+    await waitFor(() => {
+      expect(mounted.result.current.action).toMatchObject({ status: 'ready', disabled: false })
+    })
+
+    currentProjection = projection(rootA, 'revalidating', 2)
+    act(() =>
+      emitAll(callbacks, (callback) =>
+        callback.onData({ ...NOTICE, state: 'revalidating', workGeneration: 2 })
+      )
+    )
+    await waitFor(() => {
+      expect(mounted.result.current.context).toMatchObject({
+        data: rootA,
+        isLoading: false,
+        authority: { state: 'waiting', reason: 'pending' },
+      })
+      expect(mounted.result.current.action).toMatchObject({ status: 'checking', disabled: true })
+    })
+
+    currentProjection = refreshError(rootA, 2)
+    act(() =>
+      emitAll(callbacks, (callback) =>
+        callback.onData({ ...NOTICE, state: 'refresh-error', workGeneration: 2 })
+      )
+    )
+    await waitFor(() => {
+      expect(mounted.result.current.context).toMatchObject({
+        data: rootA,
+        error: { message: 'Root replacement failed.' },
+        authority: { state: 'failed' },
+      })
+      expect(mounted.result.current.action).toMatchObject({ status: 'blocked', disabled: true })
+    })
+
+    currentProjection = projection(rootB, 'ready', 3)
+    act(() =>
+      emitAll(callbacks, (callback) =>
+        callback.onData({ ...NOTICE, workGeneration: 3, snapshotGeneration: 3 })
+      )
+    )
+    await waitFor(() => {
+      expect(mounted.result.current.context).toMatchObject({
+        data: rootB,
+        error: null,
+        authority: { state: 'current' },
+      })
+      expect(mounted.result.current.action).toMatchObject({ status: 'ready', disabled: false })
+    })
+    mounted.unmount()
   })
 })

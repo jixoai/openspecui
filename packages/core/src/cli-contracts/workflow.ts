@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Model camelCase workflow JSON independently from Store-family JSON.
  * 2. Preserve strict validate and archive outcomes, including failure payloads.
  * 3. Preserve multiline requirement bodies from `show --json`.
  * 4. Preserve complete OpenSpec 1.6 Status/Instructions action contracts as CLI facts.
+ * 5. Export the successful Spec-document schema for browser-safe projection validation.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
 import { z } from 'zod'
 import {
@@ -50,6 +52,49 @@ export const CliSpecListSchema = z
   })
   .passthrough()
 
+/** One workflow schema discovered by the CLI-selected OpenSpec runtime. */
+export const CliSchemaInfoSchema = z
+  .object({
+    name: z.string(),
+    description: z.string().optional(),
+    artifacts: z.array(z.string()),
+    source: z.enum(['project', 'user', 'package']),
+  })
+  .passthrough()
+
+/** Typed result of `openspec schemas --json`. */
+export const CliSchemasSchema = z.array(CliSchemaInfoSchema)
+
+/** CLI resolution for one schema, including lower-priority shadows. */
+export const CliSchemaShadowSchema = z
+  .object({
+    source: z.enum(['project', 'user', 'package']),
+    path: z.string(),
+  })
+  .passthrough()
+
+export const CliSchemaResolutionSchema = z
+  .object({
+    name: z.string(),
+    source: z.enum(['project', 'user', 'package']),
+    path: z.string(),
+    shadows: z.array(CliSchemaShadowSchema),
+  })
+  .passthrough()
+
+/** Typed result of `openspec schema which <name> --json`. */
+export const CliSchemaWhichSchema = CliSchemaResolutionSchema
+
+/** Typed result of `openspec templates --json [--schema <name>]`. */
+export const CliTemplateEntrySchema = z
+  .object({
+    path: z.string(),
+    source: z.enum(['project', 'user', 'package']),
+  })
+  .passthrough()
+
+export const CliTemplatesSchema = z.record(CliTemplateEntrySchema)
+
 const CliSpecRequirementSchema = z
   .object({
     text: z.string(),
@@ -57,27 +102,27 @@ const CliSpecRequirementSchema = z
   })
   .passthrough()
 
+/** Typed successful document returned by the CLI show-Spec JSON command. */
+export const CliShowSpecDocumentSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    overview: z.string(),
+    requirementCount: z.number(),
+    requirements: z.array(CliSpecRequirementSchema),
+    metadata: z
+      .object({
+        version: z.string(),
+        format: z.string(),
+        sourcePath: z.string().optional(),
+      })
+      .passthrough(),
+    root: CliRootSchema,
+  })
+  .passthrough()
+
 /** Typed success or diagnostic failure result of the CLI show-Spec JSON command. */
-export const CliShowSpecSchema = z.union([
-  z
-    .object({
-      id: z.string(),
-      title: z.string(),
-      overview: z.string(),
-      requirementCount: z.number(),
-      requirements: z.array(CliSpecRequirementSchema),
-      metadata: z
-        .object({
-          version: z.string(),
-          format: z.string(),
-          sourcePath: z.string().optional(),
-        })
-        .passthrough(),
-      root: CliRootSchema,
-    })
-    .passthrough(),
-  CliDiagnosticFailureSchema,
-])
+export const CliShowSpecSchema = z.union([CliShowSpecDocumentSchema, CliDiagnosticFailureSchema])
 
 /** CLI-resolved output and existing paths for one workflow artifact. */
 export const CliArtifactPathSchema = z
@@ -287,6 +332,10 @@ export const CliArchiveSchema = z
 
 export type CliChangeList = z.infer<typeof CliChangeListSchema>
 export type CliSpecList = z.infer<typeof CliSpecListSchema>
+export type CliSchemas = z.infer<typeof CliSchemasSchema>
+export type CliSchemaResolution = z.infer<typeof CliSchemaResolutionSchema>
+export type CliSchemaWhich = z.infer<typeof CliSchemaWhichSchema>
+export type CliTemplates = z.infer<typeof CliTemplatesSchema>
 export type CliShowSpec = z.infer<typeof CliShowSpecSchema>
 export type CliWorkflowStatus = z.infer<typeof CliWorkflowStatusSchema>
 export type CliWorkflowStatusSuccess = z.infer<typeof CliWorkflowStatusSuccessSchema>

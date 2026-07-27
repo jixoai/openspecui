@@ -91,6 +91,11 @@ describe('static-data-provider references', () => {
       source: 'referenced',
       readOnly: true,
     })
+    expect(catalog.ownedProjection).toEqual({
+      provenance: 'static',
+      state: 'available',
+      snapshot: { specCount: 0 },
+    })
     expect(catalog.referenceSources).toEqual([
       {
         storeId: 'team',
@@ -196,6 +201,7 @@ describe('static-data-provider references', () => {
     staticState.snapshot = snapshotWith([], { kind: 'omit', referenceSourceCount: 2 })
     let provider = await import('./static-data-provider')
     await expect(provider.getSpecCatalog()).resolves.toMatchObject({
+      ownedProjection: { provenance: 'static', state: 'available' },
       referenceProjection: {
         provenance: 'static',
         policy: 'omit',
@@ -207,6 +213,7 @@ describe('static-data-provider references', () => {
     vi.resetModules()
     provider = await import('./static-data-provider')
     await expect(provider.getSpecCatalog()).resolves.toMatchObject({
+      ownedProjection: { provenance: 'static', state: 'available' },
       referenceProjection: { provenance: 'static', policy: 'none' },
     })
 
@@ -214,6 +221,7 @@ describe('static-data-provider references', () => {
     vi.resetModules()
     provider = await import('./static-data-provider')
     await expect(provider.getSpecCatalog()).resolves.toMatchObject({
+      ownedProjection: { provenance: 'static', state: 'unavailable' },
       referenceProjection: { provenance: 'static', policy: 'unavailable' },
     })
   })

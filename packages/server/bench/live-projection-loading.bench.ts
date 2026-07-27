@@ -1,14 +1,23 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
- * 1. Measure real WebSocket wake-to-pull first-renderable latency for Dashboard and snapshot latency for Changes.
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * 1. Measure real WebSocket wake-to-pull first-renderable latency for Root Context, Dashboard, Changes, and selector-exact OPSX projections.
  * 2. Compare fresh-server cold starts with a fresh-client Dashboard reload on the same Server.
  * 3. Reproduce route admission order by starting lower-priority OPSX work after primary content.
  * 4. Emit bounded, machine-readable phase evidence without mutating project data.
- * 5. Keep the Dashboard Summary wake subscription alive until its typed pull pair is verified.
+ * 5. Keep lifecycle wake subscriptions alive until their typed Pull yields renderable data or exact error evidence.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
  */
-import type { DashboardSummaryInvalidation, DashboardSummaryRead } from '@openspecui/core'
+import type {
+  CliProjectionNotice,
+  CliProjectionState,
+  DashboardSummaryInvalidation,
+  DashboardSummaryRead,
+  PlanningCliProjectionSelector,
+  PlanningCliProjectionState,
+  RootContextResolvedState,
+} from '@openspecui/core'
 import { createTRPCClient, createWSClient, wsLink } from '@trpc/client'
 import { writeSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -277,6 +286,138 @@ function firstSummaryRead(
   })
 }
 
+/** Measure one lifecycle-only Push through the typed Pull that supplies first-renderable evidence. */
+function firstCliProjectionRead<T>(
+  phase: string,
+  label: string,
+  timeoutMs: number,
+  subscribe: (callbacks: SubscriptionCallbacks<CliProjectionNotice>) => Unsubscribable,
+  pull: () => Promise<CliProjectionState<T>>
+): Promise<CliProjectionState<T>> {
+  const startedAtMs = elapsedMs()
+  const started = performance.now()
+
+  return new Promise((resolvePromise, rejectPromise) => {
+    let settled = false
+    let pulling = false
+    let pullAgain = false
+    let latestWake: CliProjectionNotice | null = null
+    let subscription: Unsubscribable | null = null
+
+    const settle = (
+      outcome: Measurement['outcome'],
+      result: Measurement['result'],
+      read?: CliProjectionState<T>,
+      error?: Error
+    ) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      subscription?.unsubscribe()
+      record(phase, `${label}.first-renderable`, startedAtMs, started, outcome, result)
+      if (error) rejectPromise(error)
+      else if (read) resolvePromise(read)
+      else rejectPromise(new Error(`${label} Pull settled without a read.`))
+    }
+
+    const runPull = async (): Promise<void> => {
+      if (pulling || settled) {
+        pullAgain = true
+        return
+      }
+      pulling = true
+      try {
+        do {
+          pullAgain = false
+          const wake = latestWake
+          const read = await pull()
+          if (settled) return
+          if (wake && read.identity !== wake.identity) {
+            settle(
+              'error',
+              { wakeIdentity: wake.identity, readIdentity: read.identity },
+              undefined,
+              new Error(`${label} Push and Pull identities do not match.`)
+            )
+            return
+          }
+          if (read.state !== 'loading') {
+            settle(
+              'ok',
+              {
+                ...summarizeResult(read.data),
+                firstRenderable: label,
+                identity: read.identity,
+                workGeneration: read.workGeneration,
+                freshness: read.freshness,
+                state: read.state,
+              },
+              read
+            )
+            return
+          }
+        } while (pullAgain && !settled)
+      } catch (error: unknown) {
+        const normalized = error instanceof Error ? error : new Error(String(error))
+        settle('error', { message: normalized.message }, undefined, normalized)
+      } finally {
+        pulling = false
+      }
+    }
+
+    const timeout = setTimeout(() => {
+      settle(
+        'timeout',
+        { timeoutMs },
+        undefined,
+        new Error(`Timed out waiting for first-renderable ${label} Pull.`)
+      )
+    }, timeoutMs)
+
+    subscription = subscribe({
+      onData(wake) {
+        latestWake = wake
+        record(phase, `${label}.wake`, startedAtMs, started, 'ok', {
+          identity: wake.identity,
+          workGeneration: wake.workGeneration,
+          state: wake.state,
+        })
+        void runPull()
+      },
+      onError(error) {
+        settle('error', { message: error.message }, undefined, error)
+      },
+    })
+
+    if (settled) subscription.unsubscribe()
+  })
+}
+
+function firstRootContextRead(
+  phase: string,
+  timeoutMs: number,
+  subscribe: (callbacks: SubscriptionCallbacks<CliProjectionNotice>) => Unsubscribable,
+  pull: () => Promise<CliProjectionState<RootContextResolvedState>>
+): Promise<CliProjectionState<RootContextResolvedState>> {
+  return firstCliProjectionRead(phase, 'rootContext.readProjection', timeoutMs, subscribe, pull)
+}
+
+function firstPlanningCliProjectionRead(
+  phase: string,
+  timeoutMs: number,
+  selector: PlanningCliProjectionSelector,
+  subscribe: (callbacks: SubscriptionCallbacks<CliProjectionNotice>) => Unsubscribable,
+  pull: () => Promise<PlanningCliProjectionState>
+): Promise<PlanningCliProjectionState> {
+  return firstCliProjectionRead(
+    phase,
+    `planningCliProjection.${selector.kind}.read`,
+    timeoutMs,
+    subscribe,
+    pull
+  )
+}
+
 function recordProjectionStage(
   phase: string,
   label: string,
@@ -430,14 +571,27 @@ async function measureDashboardPage(
             (callbacks) => client.client.dashboard.subscribeGit.subscribe(undefined, callbacks),
             isProjectionSnapshot
           ),
-          firstPayload(
+          firstPlanningCliProjectionRead(
             'dashboard-page-cold',
-            'opsx.subscribeConfigBundle',
             timeoutMs,
-            (callbacks) => client.client.opsx.subscribeConfigBundle.subscribe(undefined, callbacks)
+            { kind: 'opsx-config-bundle' },
+            (callbacks) =>
+              client.client.planningCliProjection.subscribe.subscribe(
+                { kind: 'opsx-config-bundle' },
+                callbacks
+              ),
+            () => client.client.planningCliProjection.read.query({ kind: 'opsx-config-bundle' })
           ),
-          firstPayload('dashboard-page-cold', 'opsx.subscribeStatusList', timeoutMs, (callbacks) =>
-            client.client.opsx.subscribeStatusList.subscribe(undefined, callbacks)
+          firstPlanningCliProjectionRead(
+            'dashboard-page-cold',
+            timeoutMs,
+            { kind: 'opsx-status-list' },
+            (callbacks) =>
+              client.client.planningCliProjection.subscribe.subscribe(
+                { kind: 'opsx-status-list' },
+                callbacks
+              ),
+            () => client.client.planningCliProjection.read.query({ kind: 'opsx-status-list' })
           ),
         ])
       )
@@ -456,8 +610,12 @@ async function measureTransport(
   await withRunningServer(projectDir, port, 'transport-cold', async (server) => {
     const client = createWsClient(server)
     try {
-      await firstPayload('transport-cold', 'rootContext.subscribe', timeoutMs, (callbacks) =>
-        client.client.rootContext.subscribe.subscribe(undefined, callbacks)
+      await firstRootContextRead(
+        'transport-cold',
+        timeoutMs,
+        (callbacks) =>
+          client.client.rootContext.subscribeProjection.subscribe(undefined, callbacks),
+        () => client.client.rootContext.readProjection.query()
       )
     } finally {
       await client.close()
@@ -530,8 +688,16 @@ async function measureChangesPage(
       await Promise.all([
         firstRow,
         firstRow.then(() =>
-          firstPayload('changes-page-cold', 'opsx.subscribeStatusList', timeoutMs, (callbacks) =>
-            client.client.opsx.subscribeStatusList.subscribe(undefined, callbacks)
+          firstPlanningCliProjectionRead(
+            'changes-page-cold',
+            timeoutMs,
+            { kind: 'opsx-status-list' },
+            (callbacks) =>
+              client.client.planningCliProjection.subscribe.subscribe(
+                { kind: 'opsx-status-list' },
+                callbacks
+              ),
+            () => client.client.planningCliProjection.read.query({ kind: 'opsx-status-list' })
           )
         ),
       ])
@@ -549,8 +715,16 @@ async function measureConfigBundle(
   await withRunningServer(projectDir, port, 'config-cold', async (server) => {
     const client = createWsClient(server)
     try {
-      await firstPayload('config-cold', 'opsx.subscribeConfigBundle', timeoutMs, (callbacks) =>
-        client.client.opsx.subscribeConfigBundle.subscribe(undefined, callbacks)
+      await firstPlanningCliProjectionRead(
+        'config-cold',
+        timeoutMs,
+        { kind: 'opsx-config-bundle' },
+        (callbacks) =>
+          client.client.planningCliProjection.subscribe.subscribe(
+            { kind: 'opsx-config-bundle' },
+            callbacks
+          ),
+        () => client.client.planningCliProjection.read.query({ kind: 'opsx-config-bundle' })
       )
     } finally {
       await client.close()
@@ -566,8 +740,16 @@ async function measureStatusList(
   await withRunningServer(projectDir, port, 'status-cold', async (server) => {
     const client = createWsClient(server)
     try {
-      await firstPayload('status-cold', 'opsx.subscribeStatusList', timeoutMs, (callbacks) =>
-        client.client.opsx.subscribeStatusList.subscribe(undefined, callbacks)
+      await firstPlanningCliProjectionRead(
+        'status-cold',
+        timeoutMs,
+        { kind: 'opsx-status-list' },
+        (callbacks) =>
+          client.client.planningCliProjection.subscribe.subscribe(
+            { kind: 'opsx-status-list' },
+            callbacks
+          ),
+        () => client.client.planningCliProjection.read.query({ kind: 'opsx-status-list' })
       )
     } finally {
       await client.close()

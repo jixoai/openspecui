@@ -1,21 +1,30 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
- * 1. Prove multi-source health and Root Context collection in one owner.
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Prove multi-source health/Root collection and reconnect re-probe without healthy-path timers.
  * 2. Prove exact-tab generations retire late removed/replaced results.
  * 3. Preserve per-source authentication and error states without cross-source fallback.
- * 4. Keep retained evidence provenance separate from replacement observation identity.
+ * 4. Keep retained evidence and renderable health separate from replacement observation authority.
  * 5. Reject old-observation/new-tab hybrid authority.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
+ * Owner-reported defect (2026-07-26): "Dashboard加载完成的一瞬间开始reload。"
  */
+import { buildBackendHealthPayload, type HostedBackendHealthResponse } from '@openspecui/core'
 import {
-  buildBackendHealthPayload,
-  type HostedBackendHealthResponse,
-  type RootContext,
-  type RootContextState,
-} from '@openspecui/core'
+  HostedRootContextProjectionStateSchema,
+  HostedRootContextStateSchema,
+  type HostedRootContextProjectionState,
+  type HostedRootContextState,
+} from '@openspecui/core/hosted-contract'
 import { describe, expect, it, vi } from 'vitest'
-import { createConnectionObservationOwner } from './connection-observation'
+import type {
+  CliProjectionTransportCallbacks,
+  CliProjectionTransportFactory,
+} from './cli-projection-transport'
+import {
+  bindConnectionObservationRefreshTriggers,
+  createConnectionObservationOwner as createProductionConnectionObservationOwner,
+} from './connection-observation'
 import type { HostedBackendProbeResult } from './reachability'
 import type { HostedShellTab } from './shell-state'
 import { resolveActiveBackendAuthority } from './use-active-backend'
@@ -23,6 +32,25 @@ import { deriveProjectContexts, projectRootObservation } from './use-environment
 
 const API_A = 'http://localhost:3100'
 const API_B = 'http://localhost:3200'
+
+class RefreshEventTarget {
+  visibilityState: DocumentVisibilityState = 'hidden'
+  private readonly listeners = new Map<string, Set<() => void>>()
+
+  addEventListener(type: string, listener: () => void): void {
+    const listeners = this.listeners.get(type) ?? new Set<() => void>()
+    listeners.add(listener)
+    this.listeners.set(type, listeners)
+  }
+
+  removeEventListener(type: string, listener: () => void): void {
+    this.listeners.get(type)?.delete(listener)
+  }
+
+  dispatch(type: string): void {
+    this.listeners.get(type)?.forEach((listener) => listener())
+  }
+}
 
 function tab(id: string, apiBaseUrl: string): HostedShellTab {
   return { id, sessionId: `session-${id}`, apiBaseUrl, createdAt: 1 }
@@ -40,59 +68,133 @@ function health(apiBaseUrl: string, projectName: string): HostedBackendHealthRes
   })
 }
 
-function loadingRoot(observedAt: number): RootContextState {
-  return { state: 'loading', data: null, attempt: null, error: null, observedAt }
-}
-
-function readyRoot(projectName: string, observedAt: number): RootContextState {
-  const data: RootContext = {
-    launchProject: { path: `/tmp/${projectName}` },
-    planningRoot: {
-      path: `/stores/${projectName}`,
-      source: 'store',
-      store_id: projectName,
-      healthy: true,
-      status: [],
-    },
-    storeId: projectName,
-    generation: `root-${projectName}`,
-    cli: { available: true, version: '1.6.0' },
-    references: [
-      {
-        store_id: `${projectName}-reference`,
-        root: `/stores/${projectName}-reference`,
-        status: [
-          {
-            severity: 'warning',
-            code: 'reference-stale',
-            message: 'Retained Reference evidence.',
-          },
-        ],
-      },
-    ],
-    contextMembers: [],
-    dataScope: {
-      path: '/tmp/data/openspec',
-      source: 'user-home-default',
-      environmentVariable: null,
-    },
-    diagnostics: { root: [], doctor: [], context: [] },
-    evidence: { doctor: null, context: null },
+function loadingRoot(observedAt: number): HostedRootContextState {
+  return HostedRootContextStateSchema.parse({
+    state: 'loading',
+    data: null,
+    attempt: null,
+    error: null,
     observedAt,
-  }
-  return { state: 'ready', data, attempt: null, error: null, observedAt }
+  })
 }
 
-function failedRoot(projectName: string, observedAt: number): RootContextState {
+function readyRoot(projectName: string, observedAt: number): HostedRootContextState {
+  return HostedRootContextStateSchema.parse({
+    state: 'ready',
+    data: {
+      launchProject: { path: `/tmp/${projectName}` },
+      planningRoot: {
+        path: `/stores/${projectName}`,
+        source: 'store',
+        store_id: projectName,
+        healthy: true,
+        status: [],
+      },
+      storeId: projectName,
+      generation: `root-${projectName}`,
+      cli: { available: true, version: '1.6.0' },
+      references: [
+        {
+          store_id: `${projectName}-reference`,
+          root: `/stores/${projectName}-reference`,
+          status: [
+            {
+              severity: 'warning',
+              code: 'reference-stale',
+              message: 'Retained Reference evidence.',
+            },
+          ],
+        },
+      ],
+      contextMembers: [],
+      dataScope: {
+        path: '/tmp/data/openspec',
+        source: 'user-home-default',
+        environmentVariable: null,
+      },
+      diagnostics: { root: [], doctor: [], context: [] },
+      evidence: { doctor: null, context: null },
+      observedAt,
+    },
+    attempt: null,
+    error: null,
+    observedAt,
+  })
+}
+
+function failedRoot(projectName: string, observedAt: number): HostedRootContextState {
   const ready = readyRoot(projectName, observedAt)
   if (ready.state !== 'ready') throw new Error('Ready Root fixture is unavailable.')
-  return {
+  return HostedRootContextStateSchema.parse({
     state: 'error',
     data: ready.data,
     attempt: { ...ready.data, planningRoot: null, observedAt },
     error: { code: 'root-unhealthy', message: 'Root attempt B failed.' },
     observedAt,
+  })
+}
+
+function rootProjection(
+  rootContext: HostedRootContextState,
+  workGeneration = 1
+): HostedRootContextProjectionState {
+  if (rootContext.state === 'loading') {
+    return HostedRootContextProjectionStateSchema.parse({
+      state: 'loading',
+      identity: 'root-context:test',
+      workGeneration,
+      invalidationCause: 'initial',
+      data: null,
+      freshness: null,
+      snapshotGeneration: null,
+      error: null,
+    })
   }
+  const resolved =
+    rootContext.state === 'refreshing'
+      ? {
+          state: 'ready' as const,
+          data: rootContext.data,
+          attempt: null,
+          error: null,
+          observedAt: rootContext.observedAt,
+        }
+      : rootContext
+  return HostedRootContextProjectionStateSchema.parse({
+    state: 'ready',
+    identity: 'root-context:test',
+    workGeneration,
+    invalidationCause: 'initial',
+    data: resolved,
+    freshness: 'current',
+    snapshotGeneration: workGeneration,
+    error: null,
+  })
+}
+
+const immediateProjectionTransportFactory: CliProjectionTransportFactory = {
+  connect(_apiBaseUrl, _selector, callbacks) {
+    queueMicrotask(() => {
+      callbacks.onNotice({
+        identity: 'root-context:test',
+        workGeneration: 1,
+        snapshotGeneration: 1,
+        state: 'ready',
+        invalidationCause: 'initial',
+      })
+    })
+    return { unsubscribe() {} }
+  },
+}
+
+function createConnectionObservationOwner(
+  overrides: Parameters<typeof createProductionConnectionObservationOwner>[0]
+) {
+  return createProductionConnectionObservationOwner({
+    projectionTransportFactory: immediateProjectionTransportFactory,
+    refreshRootProjection: async () => {},
+    ...overrides,
+  })
 }
 
 function online(backendHealth: HostedBackendHealthResponse): HostedBackendProbeResult {
@@ -116,7 +218,51 @@ function deferred<T>(): {
   }
 }
 
+interface ProjectionCallbackCapture {
+  current: CliProjectionTransportCallbacks | null
+}
+
+function requireProjectionCallbacks(
+  capture: ProjectionCallbackCapture
+): CliProjectionTransportCallbacks {
+  if (!capture.current) throw new Error('Projection transport callbacks are unavailable.')
+  return capture.current
+}
+
 describe('connection observation owner', () => {
+  it('has no healthy timer and refreshes only for explicit focus or visible lifecycle events', async () => {
+    vi.useFakeTimers()
+    const refresh = vi.fn(async () => {})
+    const windowTarget = new RefreshEventTarget()
+    const documentTarget = new RefreshEventTarget()
+    const release = bindConnectionObservationRefreshTriggers({
+      owner: { refresh },
+      windowTarget,
+      documentTarget,
+    })
+
+    try {
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(refresh).not.toHaveBeenCalled()
+
+      windowTarget.dispatch('focus')
+      expect(refresh).toHaveBeenCalledTimes(1)
+
+      documentTarget.dispatch('visibilitychange')
+      expect(refresh).toHaveBeenCalledTimes(1)
+      documentTarget.visibilityState = 'visible'
+      documentTarget.dispatch('visibilitychange')
+      expect(refresh).toHaveBeenCalledTimes(2)
+
+      release()
+      windowTarget.dispatch('focus')
+      documentTarget.dispatch('visibilitychange')
+      expect(refresh).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rejects an old observation for a same-id and same-locator replacement tab', () => {
     const original = tab('a', API_A)
     const replacement = { ...original, sessionId: 'replacement-session', createdAt: 2 }
@@ -168,7 +314,7 @@ describe('connection observation owner', () => {
     let probeCount = 0
     const owner = createConnectionObservationOwner({
       probe: () => (++probeCount === 1 ? firstProbe.promise : secondProbe.promise),
-      fetchRootContext: async () => loadingRoot(1),
+      fetchRootProjection: async () => rootProjection(loadingRoot(1)),
       now: () => 1,
     })
 
@@ -205,7 +351,7 @@ describe('connection observation owner', () => {
               health: null,
               errorMessage: 'credential required',
             },
-      fetchRootContext: async () => loadingRoot(2),
+      fetchRootProjection: async () => rootProjection(loadingRoot(2)),
       now: () => 2,
     })
 
@@ -239,7 +385,7 @@ describe('connection observation owner', () => {
         probeCount += 1
         return probeCount === 1 ? oldProbe.promise : replacementProbe.promise
       },
-      fetchRootContext: async () => loadingRoot(3),
+      fetchRootProjection: async () => rootProjection(loadingRoot(3)),
       now: () => 3,
     })
 
@@ -284,7 +430,7 @@ describe('connection observation owner', () => {
           ? initialProbe.promise
           : online(health(API_A, 'replacement-generation'))
       },
-      fetchRootContext: async () => loadingRoot(4),
+      fetchRootProjection: async () => rootProjection(loadingRoot(4)),
       now: () => 4,
     })
 
@@ -321,14 +467,66 @@ describe('connection observation owner', () => {
     ).toBe(true)
   })
 
+  it('retains renderable health while a replacement probe is pending', async () => {
+    const replacementProbe = deferred<HostedBackendProbeResult>()
+    let probeCount = 0
+    const owner = createConnectionObservationOwner({
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1
+          ? online(health(API_A, 'initial-generation'))
+          : replacementProbe.promise
+      },
+      fetchRootProjection: async () =>
+        rootProjection(readyRoot('initial-generation', probeCount), probeCount),
+      now: () => probeCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+    const initial = owner.getSnapshot().observations[0]
+    if (!initial) throw new Error('Initial backend observation is unavailable.')
+
+    const refresh = owner.refresh(['a'])
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.generation).not.toBe(initial.generation)
+    })
+
+    const pending = owner.getSnapshot().observations[0]
+    expect(pending).toMatchObject({
+      reachability: 'checking',
+      current: false,
+      stale: true,
+      health: { embeddedUiUrl: API_A, projectName: 'initial-generation' },
+      rootAttempt: { health: null, status: 'idle' },
+    })
+    expect(
+      owner.isCurrentAuthority({
+        tabId: initial.tabId,
+        sessionId: initial.sessionId,
+        apiBaseUrl: initial.apiBaseUrl,
+        tabCreatedAt: initial.tabCreatedAt,
+        generation: initial.generation,
+      })
+    ).toBe(false)
+
+    replacementProbe.resolve(online(health(API_A, 'replacement-generation')))
+    await refresh
+  })
+
   it('keeps retained Root and Reference evidence stale until replacement data commits', async () => {
-    const replacementRoot = deferred<RootContextState>()
+    const replacementRoot = deferred<HostedRootContextState>()
     let rootFetchCount = 0
     const owner = createConnectionObservationOwner({
       probe: async () => online(health(API_A, 'project-a')),
-      fetchRootContext: async () => {
+      fetchRootProjection: async () => {
         rootFetchCount += 1
-        return rootFetchCount === 1 ? readyRoot('project-a', 1) : replacementRoot.promise
+        return rootProjection(
+          rootFetchCount === 1 ? readyRoot('project-a', 1) : await replacementRoot.promise,
+          rootFetchCount
+        )
       },
       now: () => rootFetchCount + 1,
     })
@@ -359,8 +557,254 @@ describe('connection observation owner', () => {
     expect(owner.getSnapshot().observations[0]?.rootEvidence).toBe(retained)
   })
 
+  it('marks retained Root evidence stale as soon as a replacement lifecycle notice arrives', async () => {
+    const replacementRoot = deferred<HostedRootContextState>()
+    const callbackCapture: ProjectionCallbackCapture = { current: null }
+    let rootFetchCount = 0
+    const projectionTransportFactory: CliProjectionTransportFactory = {
+      connect(_apiBaseUrl, _selector, nextCallbacks) {
+        callbackCapture.current = nextCallbacks
+        return { unsubscribe() {} }
+      },
+    }
+    const owner = createConnectionObservationOwner({
+      projectionTransportFactory,
+      probe: async () => online(health(API_A, 'project-a')),
+      fetchRootProjection: async () => {
+        rootFetchCount += 1
+        return rootProjection(
+          rootFetchCount === 1 ? readyRoot('project-a', 1) : await replacementRoot.promise,
+          rootFetchCount
+        )
+      },
+      now: () => rootFetchCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
+    const callbacks = requireProjectionCallbacks(callbackCapture)
+    callbacks.onNotice({
+      identity: 'root-context:test',
+      workGeneration: 1,
+      snapshotGeneration: 1,
+      state: 'ready',
+      invalidationCause: 'initial',
+    })
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+    const retained = owner.getSnapshot().observations[0]?.rootEvidence
+
+    callbacks.onNotice({
+      identity: 'root-context:test',
+      workGeneration: 2,
+      snapshotGeneration: 1,
+      state: 'revalidating',
+      invalidationCause: 'dependency',
+    })
+    expect(owner.getSnapshot().observations[0]).toMatchObject({
+      rootAttempt: { status: 'refreshing' },
+      stale: true,
+    })
+    expect(owner.getSnapshot().observations[0]?.rootEvidence).toBe(retained)
+
+    replacementRoot.resolve(readyRoot('project-b', 2))
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]).toMatchObject({
+        rootAttempt: { status: 'ready' },
+        stale: false,
+      })
+    })
+  })
+
+  it('re-probes health and credential authority before recommitting Root after reconnect', async () => {
+    const callbackCapture: ProjectionCallbackCapture = { current: null }
+    let probeCount = 0
+    let rootFetchCount = 0
+    const owner = createConnectionObservationOwner({
+      projectionTransportFactory: {
+        connect(_apiBaseUrl, _selector, nextCallbacks) {
+          callbackCapture.current = nextCallbacks
+          return { unsubscribe() {} }
+        },
+      },
+      probe: async () => {
+        probeCount += 1
+        return online(
+          buildBackendHealthPayload({
+            projectDir: '/tmp/project-a',
+            projectName: 'project-a',
+            watcherEnabled: true,
+            openspecuiVersion: probeCount === 1 ? '6.0.0' : '6.1.0',
+            embeddedUiUrl: API_A,
+            apiBaseUrl: API_A,
+            envUri: probeCount === 1 ? 'env:a' : 'env:b',
+          })
+        )
+      },
+      fetchRootProjection: async () => {
+        rootFetchCount += 1
+        return rootProjection(readyRoot('project-a', rootFetchCount), rootFetchCount)
+      },
+      now: () => probeCount + rootFetchCount,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
+    const callbacks = requireProjectionCallbacks(callbackCapture)
+    callbacks.onConnectionState('pending')
+    callbacks.onNotice({
+      identity: 'root-context:test',
+      workGeneration: 1,
+      snapshotGeneration: 1,
+      state: 'ready',
+      invalidationCause: 'initial',
+    })
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]).toMatchObject({
+        current: true,
+        rootEvidence: { health: { envUri: 'env:a', openspecuiVersion: '6.0.0' } },
+      })
+    })
+
+    callbacks.onConnectionState('connecting')
+    expect(owner.getSnapshot().observations[0]).toMatchObject({
+      reachability: 'checking',
+      current: false,
+      stale: true,
+      rootAttempt: { status: 'refreshing' },
+    })
+    callbacks.onConnectionState('pending')
+
+    await vi.waitFor(() => {
+      expect(probeCount).toBe(2)
+      expect(owner.getSnapshot().observations[0]).toMatchObject({
+        reachability: 'online',
+        current: true,
+        stale: false,
+        rootEvidence: { health: { envUri: 'env:b', openspecuiVersion: '6.1.0' } },
+      })
+    })
+    expect(rootFetchCount).toBe(2)
+  })
+
+  it('keeps retained Root display-only when reconnect health loses its credential', async () => {
+    const callbackCapture: ProjectionCallbackCapture = { current: null }
+    let probeCount = 0
+    let rootFetchCount = 0
+    const owner = createConnectionObservationOwner({
+      projectionTransportFactory: {
+        connect(_apiBaseUrl, _selector, nextCallbacks) {
+          callbackCapture.current = nextCallbacks
+          return { unsubscribe() {} }
+        },
+      },
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1
+          ? online(health(API_A, 'project-a'))
+          : {
+              reachability: 'authentication-required',
+              health: null,
+              errorMessage: 'credential required',
+            }
+      },
+      fetchRootProjection: async () => {
+        rootFetchCount += 1
+        return rootProjection(readyRoot('project-a', rootFetchCount), rootFetchCount)
+      },
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
+    const callbacks = requireProjectionCallbacks(callbackCapture)
+    callbacks.onConnectionState('pending')
+    callbacks.onNotice({
+      identity: 'root-context:test',
+      workGeneration: 1,
+      snapshotGeneration: 1,
+      state: 'ready',
+      invalidationCause: 'initial',
+    })
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+    const retained = owner.getSnapshot().observations[0]?.rootEvidence
+
+    callbacks.onConnectionState('connecting')
+    callbacks.onConnectionState('pending')
+
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]).toMatchObject({
+        reachability: 'authentication-required',
+        current: false,
+        stale: true,
+        healthError: 'credential required',
+      })
+    })
+    expect(owner.getSnapshot().observations[0]?.rootEvidence).toBe(retained)
+    expect(rootFetchCount).toBe(1)
+  })
+
+  it('retires an older Root Pull when a newer lifecycle generation settles first', async () => {
+    const firstPull = deferred<HostedRootContextProjectionState>()
+    const callbackCapture: ProjectionCallbackCapture = { current: null }
+    let rootFetchCount = 0
+    const owner = createConnectionObservationOwner({
+      projectionTransportFactory: {
+        connect(_apiBaseUrl, _selector, nextCallbacks) {
+          callbackCapture.current = nextCallbacks
+          return { unsubscribe() {} }
+        },
+      },
+      probe: async () => online(health(API_A, 'project-a')),
+      fetchRootProjection: async () => {
+        rootFetchCount += 1
+        return rootFetchCount === 1
+          ? firstPull.promise
+          : rootProjection(readyRoot('project-b', 202), 2)
+      },
+      now: () => rootFetchCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
+    const callbacks = requireProjectionCallbacks(callbackCapture)
+    callbacks.onNotice({
+      identity: 'root-context:test',
+      workGeneration: 1,
+      snapshotGeneration: 1,
+      state: 'ready',
+      invalidationCause: 'initial',
+    })
+    callbacks.onNotice({
+      identity: 'root-context:test',
+      workGeneration: 2,
+      snapshotGeneration: 2,
+      state: 'ready',
+      invalidationCause: 'dependency',
+    })
+
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootEvidence?.rootContext).toMatchObject({
+        state: 'ready',
+        data: { planningRoot: { store_id: 'project-b' } },
+      })
+    })
+    firstPull.resolve(rootProjection(readyRoot('project-a', 101), 1))
+    await Promise.resolve()
+
+    expect(owner.getSnapshot().observations[0]).toMatchObject({
+      rootAttempt: { status: 'ready' },
+      stale: false,
+      rootEvidence: {
+        rootContext: { state: 'ready', data: { planningRoot: { store_id: 'project-b' } } },
+      },
+    })
+  })
+
   it('does not relabel retained Root evidence while a new environment generation is pending', async () => {
-    const replacementRoot = deferred<RootContextState>()
+    const replacementRoot = deferred<HostedRootContextState>()
     let probeCount = 0
     const owner = createConnectionObservationOwner({
       probe: async () => {
@@ -377,8 +821,11 @@ describe('connection observation owner', () => {
           })
         )
       },
-      fetchRootContext: async () =>
-        probeCount === 1 ? readyRoot('project-a', 101) : replacementRoot.promise,
+      fetchRootProjection: async () =>
+        rootProjection(
+          probeCount === 1 ? readyRoot('project-a', 101) : await replacementRoot.promise,
+          probeCount
+        ),
       now: () => 999,
     })
 
@@ -433,9 +880,12 @@ describe('connection observation owner', () => {
           })
         )
       },
-      fetchRootContext: async () => {
+      fetchRootProjection: async () => {
         rootFetchCount += 1
-        return rootFetchCount === 1 ? readyRoot('project-a', 101) : failedRoot('project-b', 202)
+        return rootProjection(
+          rootFetchCount === 1 ? readyRoot('project-a', 101) : failedRoot('project-b', 202),
+          rootFetchCount
+        )
       },
       now: () => 999,
     })
@@ -491,9 +941,9 @@ describe('connection observation owner', () => {
     let rootFetchCount = 0
     const owner = createConnectionObservationOwner({
       probe: async () => online(health(API_A, 'project-a')),
-      fetchRootContext: async () => {
+      fetchRootProjection: async () => {
         rootFetchCount += 1
-        if (rootFetchCount === 1) return readyRoot('project-a', 1)
+        if (rootFetchCount === 1) return rootProjection(readyRoot('project-a', 1))
         throw new Error('websocket reconnect failed')
       },
       now: () => rootFetchCount + 1,
@@ -530,7 +980,7 @@ describe('connection observation owner', () => {
               errorMessage: 'credential required',
             }
       },
-      fetchRootContext: async () => readyRoot('project-a', 1),
+      fetchRootProjection: async () => rootProjection(readyRoot('project-a', 1)),
       now: () => probeCount + 1,
     })
 

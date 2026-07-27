@@ -4,9 +4,11 @@
  * 2. Decode one successful tRPC result envelope into typed data or retained contract-error evidence.
  * 3. Preserve upstream Store and OpenSpec diagnostic facts without inferring health or ownership.
  * 4. Keep this protocol entry free of Node runtime dependencies for hosted browser consumers.
+ * 5. Publish Store CLI projection lifecycle Pull schemas and data-free Push notices.
  *
  * Original request (2026-07-24): "可以归档旧change了，然后我们继续新的change 的开发推进"
  * P4.1 contract boundary: malformed successful hosted payloads must not become asserted public facts.
+ * Original request (2026-07-26): "这是一套通用的数据拉取推送技术。"
  */
 import { z } from 'zod'
 import {
@@ -15,6 +17,7 @@ import {
   CliRootSchema,
   CliRootSourceSchema,
 } from './cli-contracts/common.js'
+import { CliProjectionNoticeSchema, createCliProjectionStateSchema } from './cli-projection.js'
 import { StoreMutationStartResponseSchema } from './store-mutation-protocol.js'
 import { StoreDoctorStoreSchema, StoreListEntrySchema } from './store-types.js'
 
@@ -104,6 +107,19 @@ export const HostedStoreDoctorEnvelopeSchema = z
   })
   .passthrough()
 
+/** Browser-safe Pull state for Store Inventory CLI Projection Work. */
+export const HostedStoreListProjectionStateSchema = createCliProjectionStateSchema(
+  HostedStoreListEnvelopeSchema
+)
+
+/** Browser-safe Pull state for Store Doctor CLI Projection Work. */
+export const HostedStoreDoctorProjectionStateSchema = createCliProjectionStateSchema(
+  HostedStoreDoctorEnvelopeSchema
+)
+
+/** Browser-safe lifecycle-only Push shared by hosted CLI projections. */
+export const HostedCliProjectionNoticeSchema = CliProjectionNoticeSchema
+
 const HostedRootContextCliSchema = z
   .object({
     available: z.boolean(),
@@ -188,36 +204,55 @@ export const HostedRootContextErrorCodeSchema = z.enum([
   'resolver-failed',
 ])
 
-/** Browser-safe Root Context lifecycle emitted by the hosted router. */
+const HostedRootContextLoadingStateSchema = z.object({
+  state: z.literal('loading'),
+  data: z.null(),
+  attempt: z.null(),
+  error: z.null(),
+  observedAt: z.number(),
+})
+
+const HostedRootContextReadyStateSchema = z.object({
+  state: z.literal('ready'),
+  data: HostedRootContextSchema,
+  attempt: z.null(),
+  error: z.null(),
+  observedAt: z.number(),
+})
+
+const HostedRootContextRefreshingStateSchema = z.object({
+  state: z.literal('refreshing'),
+  data: HostedRootContextSchema,
+  attempt: z.null(),
+  error: z.null(),
+  observedAt: z.number(),
+})
+
+const HostedRootContextErrorStateSchema = z.object({
+  state: z.literal('error'),
+  data: HostedRootContextSchema.nullable(),
+  attempt: HostedRootContextSchema,
+  error: z.object({ code: HostedRootContextErrorCodeSchema, message: z.string() }),
+  observedAt: z.number(),
+})
+
+/** Browser-safe settled CLI result cached by Root Context Projection Work. */
+export const HostedRootContextResolvedStateSchema = z.discriminatedUnion('state', [
+  HostedRootContextReadyStateSchema,
+  HostedRootContextErrorStateSchema,
+])
+
+/** Browser-safe Pull lifecycle for cached Root Context CLI Projection Work. */
+export const HostedRootContextProjectionStateSchema = createCliProjectionStateSchema(
+  HostedRootContextResolvedStateSchema
+)
+
+/** Browser-safe legacy Root Context lifecycle retained for project-workspace adapters. */
 export const HostedRootContextStateSchema = z.discriminatedUnion('state', [
-  z.object({
-    state: z.literal('loading'),
-    data: z.null(),
-    attempt: z.null(),
-    error: z.null(),
-    observedAt: z.number(),
-  }),
-  z.object({
-    state: z.literal('ready'),
-    data: HostedRootContextSchema,
-    attempt: z.null(),
-    error: z.null(),
-    observedAt: z.number(),
-  }),
-  z.object({
-    state: z.literal('refreshing'),
-    data: HostedRootContextSchema,
-    attempt: z.null(),
-    error: z.null(),
-    observedAt: z.number(),
-  }),
-  z.object({
-    state: z.literal('error'),
-    data: HostedRootContextSchema.nullable(),
-    attempt: HostedRootContextSchema,
-    error: z.object({ code: HostedRootContextErrorCodeSchema, message: z.string() }),
-    observedAt: z.number(),
-  }),
+  HostedRootContextLoadingStateSchema,
+  HostedRootContextReadyStateSchema,
+  HostedRootContextRefreshingStateSchema,
+  HostedRootContextErrorStateSchema,
 ])
 
 /** Hosted mutation admission shares the Server-owned P3 lifecycle schema. */
@@ -274,7 +309,16 @@ export type HostedBackendRootSummary = z.infer<typeof HostedBackendRootSummarySc
 export type HostedBackendHealthResponse = z.infer<typeof HostedBackendHealthResponseSchema>
 export type HostedStoreListEnvelope = z.infer<typeof HostedStoreListEnvelopeSchema>
 export type HostedStoreDoctorEnvelope = z.infer<typeof HostedStoreDoctorEnvelopeSchema>
+export type HostedStoreListProjectionState = z.infer<typeof HostedStoreListProjectionStateSchema>
+export type HostedStoreDoctorProjectionState = z.infer<
+  typeof HostedStoreDoctorProjectionStateSchema
+>
+export type HostedCliProjectionNotice = z.infer<typeof HostedCliProjectionNoticeSchema>
 export type HostedRootContext = z.infer<typeof HostedRootContextSchema>
+export type HostedRootContextResolvedState = z.infer<typeof HostedRootContextResolvedStateSchema>
+export type HostedRootContextProjectionState = z.infer<
+  typeof HostedRootContextProjectionStateSchema
+>
 export type HostedRootContextState = z.infer<typeof HostedRootContextStateSchema>
 export type HostedRootContextErrorCode = z.infer<typeof HostedRootContextErrorCodeSchema>
 export type HostedStoreMutationStartResponse = z.infer<

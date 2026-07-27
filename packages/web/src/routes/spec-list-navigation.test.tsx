@@ -40,6 +40,7 @@ function createOwned(specId: string, name: string): SpecCatalogEntry {
     readOnly: false,
     name,
     summary: null,
+    requirementCount: 1,
     updatedAt: 1,
   }
 }
@@ -67,6 +68,7 @@ function createReferenceSource(storeId: string): SpecCatalogReferenceSource {
       stdout: '{}',
       stderr: '',
       exitCode: 0,
+      payload: {},
       diagnostics: [],
     },
   }
@@ -75,6 +77,18 @@ function createReferenceSource(storeId: string): SpecCatalogReferenceSource {
 function createCatalog(entries: SpecCatalogEntry[], stores: string[] = []): SpecCatalog {
   return {
     entries,
+    ownedProjection: {
+      provenance: 'live',
+      root: { path: '/planning', source: 'nearest' },
+      evidence: {
+        success: true,
+        stdout: '{}',
+        stderr: '',
+        exitCode: 0,
+        payload: {},
+        diagnostics: [],
+      },
+    },
     referenceSources: stores.map(createReferenceSource),
     referenceProjection: { provenance: 'live' },
     observedAt: 1,
@@ -196,6 +210,7 @@ describe('SpecList detail navigation', () => {
       stdout: '{}',
       stderr: '',
       exitCode: 0,
+      payload: {},
       diagnostics: [],
     },
   }

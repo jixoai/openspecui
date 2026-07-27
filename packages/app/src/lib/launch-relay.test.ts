@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Prove PWA/browser launch leadership and relay settlement.
  * 2. Prove forwarded credentials bind only in runtime memory for the matching locator.
+ * 3. Prove every live window converges on the complete locator credential set without persistence.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Delivery correction (2026-07-24): relay credentials transiently without persisted shell state.
@@ -58,6 +59,37 @@ function createChannelPair() {
   return {
     primary: makeChannel(listeners, listenersPeer),
     secondary: makeChannel(listenersPeer, listeners),
+  }
+}
+
+function createChannelHub() {
+  const listenersByChannel = new Map<string, Set<EventListener>>()
+
+  return {
+    create(channelId: string) {
+      const listeners = new Set<EventListener>()
+      listenersByChannel.set(channelId, listeners)
+      return {
+        postMessage(message: unknown) {
+          globalThis.setTimeout(() => {
+            const event = new MessageEvent('message', { data: message })
+            for (const [peerId, peerListeners] of listenersByChannel) {
+              if (peerId === channelId) continue
+              for (const listener of peerListeners) listener(event)
+            }
+          }, 0)
+        },
+        addEventListener(_type: 'message', listener: EventListener) {
+          listeners.add(listener)
+        },
+        removeEventListener(_type: 'message', listener: EventListener) {
+          listeners.delete(listener)
+        },
+        close() {
+          listenersByChannel.delete(channelId)
+        },
+      }
+    },
   }
 }
 
@@ -199,6 +231,69 @@ describe('hosted launch relay', () => {
 
     stopBrowser()
     stopPwa()
+    vi.useRealTimers()
+  })
+
+  it('converges three live windows on every locator credential without persisting secrets', async () => {
+    vi.useFakeTimers()
+    const storage = createMemoryStorage()
+    const hub = createChannelHub()
+    const credentials = {
+      a: new Map([['http://localhost:3101', 'credential-a']]),
+      b: new Map([['http://localhost:3102', 'credential-b']]),
+      c: new Map([['http://localhost:3103', 'credential-c']]),
+    }
+
+    const createRelay = (windowId: keyof typeof credentials) =>
+      createHostedLaunchRelay({
+        storage,
+        createChannel: () => hub.create(windowId),
+        windowId,
+        role: 'browser',
+        readCredential: (apiBaseUrl) => credentials[windowId].get(apiBaseUrl) ?? null,
+        readCredentialSnapshot: () =>
+          Array.from(credentials[windowId], ([apiBaseUrl, credential]) => ({
+            apiBaseUrl,
+            credential,
+          })),
+        bindCredential(apiBaseUrl, credential) {
+          credentials[windowId].set(apiBaseUrl, credential)
+          return true
+        },
+        ...createNoHeartbeatRuntime(),
+      })
+
+    const relayA = createRelay('a')
+    const relayB = createRelay('b')
+    const relayC = createRelay('c')
+    const stopA = relayA.start(() => {})
+    const stopB = relayB.start(() => {})
+    const stopC = relayC.start(() => {})
+
+    const launchB = relayB.dispatch({ apiBaseUrl: 'http://localhost:3102' })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await launchB).toBe('forwarded')
+
+    const launchC = relayC.dispatch({ apiBaseUrl: 'http://localhost:3103' })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await launchC).toBe('forwarded')
+
+    const expected = new Map([
+      ['http://localhost:3101', 'credential-a'],
+      ['http://localhost:3102', 'credential-b'],
+      ['http://localhost:3103', 'credential-c'],
+    ])
+    expect(credentials.a).toEqual(expected)
+    expect(credentials.b).toEqual(expected)
+    expect(credentials.c).toEqual(expected)
+    expect(Array.from({ length: storage.length }, (_, index) => storage.key(index))).toEqual([
+      'openspecui-app:pwa-leader',
+    ])
+    expect(storage.getItem('openspecui-app:pwa-leader')).not.toContain('credential-')
+
+    stopC()
+    stopB()
+    stopA()
     vi.useRealTimers()
   })
 

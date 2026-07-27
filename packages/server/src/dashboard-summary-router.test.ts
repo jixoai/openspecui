@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove the public Dashboard Summary v2 Router serializes a real Server-owned wake-up.
  * 2. Prove the public typed pull correlates to that wake without exposing Planning-root paths.
  * 3. Keep the fixture fully typed through createServer, createContext, and the tRPC caller.
@@ -72,7 +72,6 @@ async function createSummaryRouterFixture() {
       await server.planningRootServices.dispose()
       await server.storeObservation.dispose()
       await server.dataHomeObserver.dispose()
-      server.storeInvalidation.dispose()
       server.projectInvalidation.dispose()
       await server.observationEnvironment.dispose()
       server.projectRecoveryService.dispose()

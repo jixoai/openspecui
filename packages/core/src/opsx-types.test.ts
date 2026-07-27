@@ -1,13 +1,24 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify Apply instruction context-file normalization.
  * 2. Require command-specific CLI evidence on demand-driven instruction leaves.
+ * 3. Preserve typed OpenSpec 1.6 Reference indexes on both instruction surfaces.
  *
  * Original request (2026-07-15): "Preserve CLI-provided paths, action context, References, and diagnostics end to end."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  */
 import { describe, expect, it } from 'vitest'
 import { ApplyInstructionsSchema, ArtifactInstructionsSchema } from './opsx-types.js'
+
+const referenceIndex = [
+  {
+    store_id: 'platform',
+    root: '/stores/platform',
+    specs: [{ id: 'identity', summary: 'Shared identity facts.' }],
+    fetch: 'openspec list --specs --store platform',
+    status: [],
+  },
+] as const
 
 const baseApplyInstructions = {
   changeName: 'add-example',
@@ -27,6 +38,7 @@ const baseApplyInstructions = {
   ],
   state: 'ready',
   instruction: 'Read context files and apply the change.',
+  references: referenceIndex,
   evidence: {
     command: 'instructions apply',
     success: true,
@@ -71,6 +83,7 @@ describe('ApplyInstructionsSchema', () => {
       state: 'ready',
       divergence: null,
     })
+    expect(parsed.references).toEqual(referenceIndex)
   })
 
   it('normalizes legacy contextFiles strings to arrays', () => {
@@ -116,6 +129,7 @@ describe('ArtifactInstructionsSchema', () => {
       template: '# Proposal',
       dependencies: [],
       unlocks: ['design'],
+      references: referenceIndex,
       evidence: {
         command: 'instructions',
         success: true,
@@ -134,5 +148,6 @@ describe('ArtifactInstructionsSchema', () => {
       selector: {},
       root: { source: 'nearest' },
     })
+    expect(parsed.references).toEqual(referenceIndex)
   })
 })

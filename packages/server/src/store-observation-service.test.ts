@@ -1,8 +1,10 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify successful CLI Store truth acquires, retains, replaces, and removes root leases.
  * 2. Verify failed root observation cannot retain a stale registration lease.
- * 3. Verify service teardown releases every Store root.
+ * 3. Verify service teardown releases every Store root and Doctor dependency observation.
+ * 4. Verify Spec-content and Doctor physical facts publish separate per-Store generations.
+ * 5. Verify Git working-tree facts legitimately produce Doctor-context invalidation.
  *
  * Original request (2026-07-15): "Registered Store roots are added/removed from observation as registry truth changes."
  */
@@ -10,23 +12,28 @@ import {
   closeAllWatchers,
   getWatcherRuntimeStatus,
   ReactiveObservationEnvironment,
+  RuntimeInvalidationIndex,
   type ObservationRootOwner,
-  type RuntimeRootInvalidationOwner,
 } from '@openspecui/core'
 import type { StoreListEntry } from '@openspecui/core/store-types'
 import { realpathSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { StoreDoctorDependencyObservationFactory } from './store-doctor-dependency-observer.js'
 import { StoreObservationService } from './store-observation-service.js'
 
 function store(id: string, root: string): StoreListEntry {
   return { id, root }
 }
 
-function createInvalidationOwner(): RuntimeRootInvalidationOwner {
-  return { acquireRoot: vi.fn(() => vi.fn()) }
+function createInvalidationController(): RuntimeInvalidationIndex {
+  return new RuntimeInvalidationIndex()
+}
+
+function createDoctorDependencyFactory(): StoreDoctorDependencyObservationFactory {
+  return vi.fn(async () => ({ dispose: vi.fn(async () => {}) }))
 }
 
 const tempDirs: string[] = []
@@ -37,6 +44,89 @@ afterEach(async () => {
 })
 
 describe('StoreObservationService', () => {
+  it('publishes Spec content separately from Doctor dependency changes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openspecui-store-spec-observation-'))
+    tempDirs.push(root)
+    await mkdir(join(root, 'openspec', 'specs', 'auth'), { recursive: true })
+    await writeFile(join(root, 'openspec', 'specs', 'auth', 'spec.md'), '# Auth\n', 'utf8')
+    const environment = new ReactiveObservationEnvironment()
+    const invalidation = createInvalidationController()
+    const doctorOwner: { changed: (() => void) | null } = { changed: null }
+    const service = new StoreObservationService(
+      environment,
+      invalidation,
+      vi.fn(async (input) => {
+        doctorOwner.changed = input.onChange
+        return { dispose: vi.fn(async () => {}) }
+      })
+    )
+    const changes: Array<{ kind: string; storeId?: string }> = []
+    const unsubscribe = service.subscribe((change) => changes.push(change))
+
+    try {
+      await service.reconcile([store('team', root)])
+      changes.length = 0
+      const contextGeneration = invalidation.current('context')
+      await writeFile(
+        join(root, 'openspec', 'specs', 'auth', 'spec.md'),
+        '# Auth\n\n## Requirements\n',
+        'utf8'
+      )
+      await vi.waitFor(() =>
+        expect(changes).toContainEqual(
+          expect.objectContaining({ kind: 'spec-root', storeId: 'team' })
+        )
+      )
+      expect(changes).not.toContainEqual(
+        expect.objectContaining({ kind: 'doctor-root', storeId: 'team' })
+      )
+      expect(invalidation.current('context')).toBe(contextGeneration)
+
+      if (!doctorOwner.changed) throw new Error('Doctor dependency callback was not installed.')
+      doctorOwner.changed()
+      expect(changes).toContainEqual(
+        expect.objectContaining({ kind: 'doctor-root', storeId: 'team' })
+      )
+      expect(invalidation.current('context')).toBe(contextGeneration + 1)
+    } finally {
+      unsubscribe()
+      await service.dispose()
+      await environment.dispose()
+    }
+  })
+
+  it('publishes Doctor-context invalidation for a Git Store working-tree change', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openspecui-store-git-observation-'))
+    tempDirs.push(root)
+    await mkdir(join(root, '.git', 'refs', 'heads'), { recursive: true })
+    await Promise.all([
+      writeFile(join(root, '.git', 'HEAD'), 'ref: refs/heads/main\n', 'utf8'),
+      writeFile(join(root, '.git', 'index'), 'index-a', 'utf8'),
+      writeFile(join(root, '.git', 'config'), '[core]\nrepositoryformatversion = 0\n', 'utf8'),
+    ])
+    const environment = new ReactiveObservationEnvironment()
+    const invalidation = createInvalidationController()
+    const service = new StoreObservationService(environment, invalidation)
+    const changes: Array<{ kind: string; storeId?: string }> = []
+    const unsubscribe = service.subscribe((change) => changes.push(change))
+
+    try {
+      await service.reconcile([store('team', root)])
+      const contextGeneration = invalidation.current('context')
+      await writeFile(join(root, 'working.md'), '# tracked dirty fact\n', 'utf8')
+      await vi.waitFor(() =>
+        expect(changes).toContainEqual(
+          expect.objectContaining({ kind: 'doctor-root', storeId: 'team' })
+        )
+      )
+      expect(invalidation.current('context')).toBe(contextGeneration + 1)
+    } finally {
+      unsubscribe()
+      await service.dispose()
+      await environment.dispose()
+    }
+  })
+
   it('reconciles added, retained, moved, and removed Store roots', async () => {
     const releases = new Map<string, ReturnType<typeof vi.fn>>()
     const environment: ObservationRootOwner = {
@@ -46,7 +136,11 @@ describe('StoreObservationService', () => {
         return release
       }),
     }
-    const service = new StoreObservationService(environment, createInvalidationOwner())
+    const service = new StoreObservationService(
+      environment,
+      createInvalidationController(),
+      createDoctorDependencyFactory()
+    )
 
     await service.reconcile([store('alpha', '/stores/alpha'), store('beta', '/stores/beta')])
     expect(service.getObservedStores()).toEqual([
@@ -77,7 +171,11 @@ describe('StoreObservationService', () => {
         return releaseOld
       }),
     }
-    const service = new StoreObservationService(environment, createInvalidationOwner())
+    const service = new StoreObservationService(
+      environment,
+      createInvalidationController(),
+      createDoctorDependencyFactory()
+    )
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await service.reconcile([store('alpha', '/stores/old')])
@@ -101,7 +199,11 @@ describe('StoreObservationService', () => {
         .mockRejectedValueOnce(new Error('watcher unavailable'))
         .mockResolvedValueOnce(release),
     }
-    const service = new StoreObservationService(environment, createInvalidationOwner())
+    const service = new StoreObservationService(
+      environment,
+      createInvalidationController(),
+      createDoctorDependencyFactory()
+    )
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await service.reconcile([store('alpha', '/stores/alpha')])
@@ -119,7 +221,7 @@ describe('StoreObservationService', () => {
     const secondRoot = await mkdtemp(join(tmpdir(), 'openspecui-store-observation-b-'))
     tempDirs.push(firstRoot, secondRoot)
     const environment = new ReactiveObservationEnvironment()
-    const service = new StoreObservationService(environment, createInvalidationOwner())
+    const service = new StoreObservationService(environment, createInvalidationController())
 
     await service.reconcile([store('alpha', firstRoot)])
     expect(getWatcherRuntimeStatus()?.roots.map((root) => root.rootPath)).toEqual([

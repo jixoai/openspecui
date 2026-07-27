@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Consume one internal cached subscription lifecycle and cache-aware revalidation path for live and static projections.
  * 2. Bind Spec, progressive Change, Archive, Config, Notification, and CLI projections to typed hooks.
  * 3. Preserve cache identity for detail projections across remounts and view transitions.
@@ -10,6 +10,7 @@
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  * Derived requirement (2026-07-19): Checkpoint 6.11 locks cached Git scope data during reconnect.
  * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  *
  * Compromise: typed entity hooks remain aggregated because they share the same cache and live/static
  * subscription primitive; splitting them now would add import churn outside checkpoint 6.9.
@@ -25,6 +26,7 @@ import type {
   OpenSpecUIGlobalSettings,
   OpsxEntityDetail,
 } from '@openspecui/core'
+import type { PlanningCliProjectionData } from '@openspecui/core/planning-cli-projection'
 import {
   specIdentityKey,
   type SpecCatalog,
@@ -36,8 +38,16 @@ import * as StaticProvider from './static-data-provider'
 import { isStaticMode } from './static-mode'
 import { SubscriptionLifecycleOwner } from './subscription-lifecycle'
 import { trpcClient } from './trpc'
+import { useCliProjectionSubscription } from './use-cli-projection'
 
 export { primeSubscriptionCache } from './subscription-lifecycle'
+export { useAuthoritativeSubscription } from './use-authoritative-subscription'
+export type {
+  AuthoritativeSubscriptionCallbacks,
+  AuthoritativeSubscriptionState,
+  SubscriptionAuthority,
+  SubscriptionConnectionState,
+} from './use-authoritative-subscription'
 
 /** 订阅状态 */
 export interface SubscriptionState<T> {
@@ -101,17 +111,6 @@ function changeProjectionWorkIdentityKey(identity: ChangeProjectionWorkIdentity)
   ])
 }
 
-/** Explicit authority for projections whose cached data must never authorize live operations. */
-export type SubscriptionAuthority =
-  | { state: 'waiting'; reason: 'initial' | 'rebind' | 'idle' | 'connecting' | 'pending' }
-  | { state: 'current' }
-  | { state: 'failed'; error: Error }
-
-/** Subscription state whose operation authority is independent from loading presentation. */
-export interface AuthoritativeSubscriptionState<T> extends SubscriptionState<T> {
-  authority: SubscriptionAuthority
-}
-
 /** Controls whether cached data remains authoritative while a subscription reconnects. */
 export type SubscriptionCacheRebindPolicy = 'retain' | 'loading'
 
@@ -129,19 +128,6 @@ interface ReactiveProjectionSubscriptionCallbacks<T> {
 /** Read-only cache fact supplied to a projection adapter when its live generation begins. */
 interface ReactiveProjectionSubscriptionLifecycle {
   hasCached: boolean
-}
-
-/** Transport lifecycle projected by a typed subscription observer. */
-export interface SubscriptionConnectionState {
-  state: 'idle' | 'connecting' | 'pending'
-  error: Error | null
-}
-
-/** Callbacks for a projection that revokes authority on transport lifecycle changes. */
-export interface AuthoritativeSubscriptionCallbacks<T> extends SubscriptionCallbacks<T> {
-  onConnectionStateChange: (state: SubscriptionConnectionState) => void
-  onStopped: () => void
-  onComplete: () => void
 }
 
 /** 可取消订阅的对象 */
@@ -395,183 +381,39 @@ export function useReactiveProjectionSubscription<T>(
  * Cached data remains available for stale context, but only a replacement data emission makes it
  * current. Connecting, pending, idle, and terminal error states all revoke operation authority.
  */
-export function useAuthoritativeSubscription<T>(
-  subscribe: (callbacks: AuthoritativeSubscriptionCallbacks<T>) => Unsubscribable,
-  staticLoader?: () => Promise<T>,
-  deps: unknown[] = [],
-  cacheKey?: string
-): AuthoritativeSubscriptionState<T> {
-  const lifecycleOwnerRef = useRef<SubscriptionLifecycleOwner | null>(null)
-  if (lifecycleOwnerRef.current === null) {
-    lifecycleOwnerRef.current = new SubscriptionLifecycleOwner()
-  }
-  const initialSnapshot = lifecycleOwnerRef.current.snapshot<T>(cacheKey)
-  const [state, setState] = useState<AuthoritativeSubscriptionState<T>>(() => ({
-    data: initialSnapshot.data,
-    isLoading: true,
-    error: null,
-    authority: { state: 'waiting', reason: initialSnapshot.hasCached ? 'rebind' : 'initial' },
-  }))
-  const inStaticMode = isStaticMode()
-
-  useEffect(() => {
-    const generation = lifecycleOwnerRef.current?.begin()
-    if (!generation) return
-    let terminalError: Error | null = null
-    let terminal = false
-    const snapshot = generation.snapshot<T>(cacheKey)
-    setState({
-      data: snapshot.data,
-      isLoading: true,
-      error: null,
-      authority: { state: 'waiting', reason: snapshot.hasCached ? 'rebind' : 'initial' },
-    })
-
-    if (inStaticMode) {
-      if (!staticLoader) {
-        const error = new Error('Static loader not available')
-        generation.publish(() => {
-          setState((previous) => ({
-            ...previous,
-            isLoading: false,
-            error,
-            authority: { state: 'failed', error },
-          }))
-        })
-        return () => generation.retire()
-      }
-      staticLoader()
-        .then((data) => {
-          generation.publishData(cacheKey, data, () => {
-            setState({ data, isLoading: false, error: null, authority: { state: 'current' } })
-          })
-        })
-        .catch((cause: unknown) => {
-          const error = cause instanceof Error ? cause : new Error(String(cause))
-          generation.publish(() => {
-            setState((previous) => ({
-              ...previous,
-              isLoading: false,
-              error,
-              authority: { state: 'failed', error },
-            }))
-          })
-        })
-      return () => generation.retire()
-    }
-
-    const subscription = subscribe({
-      onData(data) {
-        generation.publishData(cacheKey, data, () => {
-          terminal = false
-          terminalError = null
-          setState({ data, isLoading: false, error: null, authority: { state: 'current' } })
-        })
-      },
-      onError(error) {
-        generation.publish(() => {
-          terminalError = error
-          setState((previous) => ({
-            ...previous,
-            isLoading: false,
-            error,
-            authority: { state: 'failed', error },
-          }))
-        })
-      },
-      onConnectionStateChange(connection) {
-        if (terminal || terminalError) return
-        generation.publish(() => {
-          setState((previous) => ({
-            ...previous,
-            // A transport reconnect over already-readable content must not relabel it as initial-loading
-            // (the pervasive-Loading root cause). Retained data stays readable/copyable; only authority is
-            // revoked so current-dependent mutations stay locked until a matching current payload commits.
-            // When no readable content exists yet, the initial-loading surface must remain visible.
-            isLoading: previous.data === undefined,
-            error: connection.error ?? terminalError,
-            authority: { state: 'waiting', reason: connection.state },
-          }))
-        })
-      },
-      onStopped() {
-        generation.publish(() => {
-          terminal = true
-          setState((previous) =>
-            terminalError
-              ? {
-                  ...previous,
-                  isLoading: false,
-                  error: terminalError,
-                  authority: { state: 'failed', error: terminalError },
-                }
-              : {
-                  ...previous,
-                  isLoading: previous.data === undefined,
-                  authority: { state: 'waiting', reason: 'idle' },
-                }
-          )
-        })
-      },
-      onComplete() {
-        generation.publish(() => {
-          terminal = true
-          setState((previous) =>
-            terminalError
-              ? {
-                  ...previous,
-                  isLoading: false,
-                  error: terminalError,
-                  authority: { state: 'failed', error: terminalError },
-                }
-              : {
-                  ...previous,
-                  isLoading: previous.data === undefined,
-                  authority: { state: 'waiting', reason: 'idle' },
-                }
-          )
-        })
-      },
-    })
-    generation.attach(subscription)
-    return () => generation.retire()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inStaticMode, ...deps])
-
-  return state
-}
-
 // =====================
 // Spec subscriptions
 // =====================
 
 export function useSpecsSubscription(): SubscriptionState<SpecCatalog> {
-  return useSubscription<SpecCatalog>(
-    (callbacks) =>
-      trpcClient.spec.subscribeCatalog.subscribe(undefined, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
-      }),
-    StaticProvider.getSpecCatalog,
-    [],
-    'spec.subscribeCatalog'
-  )
+  return useCliProjectionSubscription<SpecCatalog>({
+    selector: { kind: 'spec-catalog' },
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'spec-catalog') {
+        throw new Error(`Expected spec-catalog projection, received ${data.kind}.`)
+      }
+      return data.value
+    },
+    staticLoader: StaticProvider.getSpecCatalog,
+    cacheKey: 'spec.subscribeCatalog',
+  })
 }
 
 export function useSpecDocumentSubscription(
   identity: SpecIdentity
 ): SubscriptionState<SpecDocumentProjection> {
   const cacheKey = getSpecDocumentSubscriptionCacheKey(identity)
-  return useSubscription<SpecDocumentProjection>(
-    (callbacks) =>
-      trpcClient.spec.subscribeDocument.subscribe(identity, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
-      }),
-    () => StaticProvider.getSpecDocument(identity),
-    [cacheKey],
-    cacheKey
-  )
+  return useCliProjectionSubscription<SpecDocumentProjection>({
+    selector: { kind: 'spec-document', identity },
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'spec-document') {
+        throw new Error(`Expected spec-document projection, received ${data.kind}.`)
+      }
+      return data.value
+    },
+    staticLoader: () => StaticProvider.getSpecDocument(identity),
+    cacheKey,
+  })
 }
 
 // =====================

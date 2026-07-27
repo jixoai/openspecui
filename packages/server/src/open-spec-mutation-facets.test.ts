@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Lock mutation-to-facet mappings for project, schema, data-home, Store, and Workset commands.
  * 2. Prove read-only and unknown commands do not invent affected projections.
+ * 3. Prove environment-global config does not invalidate the separate OpenSpec data home.
  *
  * Original request (2026-07-15): "操作成功底层是要推送变更的，然后让多端基于订阅拉取更新。"
  */
@@ -32,10 +33,6 @@ describe('getOpenSpecMutationFacets', () => {
       ['project', 'context', 'schemas'],
     ],
     [
-      ['config', '--scope', 'global', 'set', 'profile', 'core'],
-      ['stores', 'worksets', 'schemas', 'context'],
-    ],
-    [
       ['store', 'remove', 'shared', '--yes'],
       ['stores', 'context'],
     ],
@@ -48,6 +45,7 @@ describe('getOpenSpecMutationFacets', () => {
     ['list', '--json'],
     ['validate', 'change-id', '--type', 'change'],
     ['schema', 'which', 'spec-driven', '--json'],
+    ['config', '--scope', 'global', 'set', 'profile', 'core'],
     ['config', 'get', 'set'],
     ['store', 'doctor', '--json'],
     ['workset', 'list', '--json'],

@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Prove launch credentials bind only to their normalized backend locator in runtime memory.
  * 2. Prove launch parsing binds credentials before visible URL stripping.
  * 3. Reject credential fragments without a valid launch locator using actionable evidence.
+ * 4. Prove same-origin convergence reads an isolated runtime snapshot without persistence.
  *
  * Original request (2026-07-15): "我们可以在 cli 上新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): credentials are per-locator and never a global session slot.
@@ -13,6 +14,7 @@ import {
   clearLaunchCredential,
   consumeLaunchCredential,
   readLaunchCredential,
+  readLaunchCredentialSnapshot,
 } from './launch-credential'
 
 const API_A = 'http://localhost:3100'
@@ -36,6 +38,24 @@ describe('locator-scoped launch credential registry', () => {
 
     expect(readLaunchCredential(API_A)).toBe('credential-a')
     expect(readLaunchCredential(`${API_B}/`)).toBe('credential-b')
+  })
+
+  it('returns an isolated normalized snapshot of runtime-only bindings', () => {
+    consumeLaunchCredential({ apiBaseUrl: `${API_A}/`, hash: '#credential=credential-a' })
+    consumeLaunchCredential({ apiBaseUrl: API_B, hash: '#credential=credential-b' })
+
+    const snapshot = readLaunchCredentialSnapshot()
+    expect(snapshot).toEqual([
+      { apiBaseUrl: API_A, credential: 'credential-a' },
+      { apiBaseUrl: API_B, credential: 'credential-b' },
+    ])
+
+    const firstBinding = snapshot[0]
+    expect(firstBinding).toBeDefined()
+    if (!firstBinding) return
+    consumeLaunchCredential({ apiBaseUrl: API_A, hash: '#credential=changed-runtime' })
+    expect(firstBinding.credential).toBe('credential-a')
+    expect(readLaunchCredential(API_A)).toBe('changed-runtime')
   })
 
   it('preserves unrelated fragment state without exposing the consumed credential', () => {

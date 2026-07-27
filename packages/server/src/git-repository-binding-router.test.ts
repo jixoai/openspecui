@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove the typed public Router rejects stale Planning refresh intent.
  * 2. Prove the conflict happens before the rebound repository receives a refresh stamp.
  * 3. Preserve Dashboard Git-region refresh while Code Git remains Planning-failure independent.
@@ -149,7 +149,6 @@ async function createRouterFixture() {
       await server.planningRootServices.dispose()
       await server.storeObservation.dispose()
       await server.dataHomeObserver.dispose()
-      server.storeInvalidation.dispose()
       server.projectInvalidation.dispose()
       await server.observationEnvironment.dispose()
       server.projectRecoveryService.dispose()

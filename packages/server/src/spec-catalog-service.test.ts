@@ -1,11 +1,19 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Prove Catalog composition and exact CLI Store selection for duplicate Spec ids.
- * 2. Prove unrelated Stores cannot become project Reference documents.
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Prove owned Catalog membership and requirement counts come from exact-root CLI truth.
+ * 2. Prove Catalog composition and exact CLI Store selection for duplicate Spec ids.
+ * 3. Prove unrelated Stores cannot become project Reference documents.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  */
-import type { RootContext } from '@openspecui/core'
+import {
+  CliJsonValueSchema,
+  OpenSpecCliContractExecutor,
+  type CliCommandResult,
+  type CliShowSpec,
+  type CliSpecList,
+  type RootContext,
+} from '@openspecui/core'
 import { describe, expect, it, vi } from 'vitest'
 import {
   readSpecCatalog,
@@ -47,61 +55,72 @@ function rootContext(): RootContext {
   }
 }
 
+function createListSpecsResult(selector: { store?: string } = {}): CliCommandResult<CliSpecList> {
+  const storeId = selector.store
+  const owned = storeId === undefined
+  const root = owned
+    ? { path: '/planning', source: 'nearest' as const }
+    : { path: `/stores/${storeId}`, source: 'store' as const, store_id: storeId }
+  const data: CliSpecList = {
+    specs: [
+      {
+        id: 'auth',
+        requirementCount: owned ? 3 : storeId === 'platform-a' ? 1 : 2,
+      },
+    ],
+    root,
+    status: [],
+  }
+  return {
+    success: true,
+    stdout: JSON.stringify(data),
+    stderr: '',
+    exitCode: 0,
+    data,
+    payload: CliJsonValueSchema.parse(data),
+    diagnostics: [],
+  }
+}
+
 function createSource() {
-  const listSpecs = vi.fn(async (selector: { store?: string } = {}) => {
-    const data = {
-      specs: [{ id: 'auth', requirementCount: selector.store === 'platform-a' ? 1 : 2 }],
-      root: {
-        path: `/stores/${selector.store}`,
-        source: 'store' as const,
-        store_id: selector.store,
-      },
-      status: [],
+  const listSpecs = vi.fn(async (selector: { store?: string } = {}) =>
+    createListSpecsResult(selector)
+  )
+  const showSpec = vi.fn(
+    async (
+      specId: string,
+      selector: { store?: string } = {}
+    ): Promise<CliCommandResult<CliShowSpec>> => {
+      const storeId = selector.store ?? 'missing-store'
+      const title = selector.store === 'platform-a' ? 'Platform A Auth' : 'Platform B Auth'
+      const data = {
+        id: specId,
+        title,
+        overview: `${title} overview`,
+        requirementCount: 1,
+        requirements: [
+          { text: `${title} SHALL work`, scenarios: [{ rawText: 'WHEN used\nTHEN works' }] },
+        ],
+        metadata: { version: '1.0.0', format: 'openspec' },
+        root: {
+          path: `/stores/${selector.store}`,
+          source: 'store' as const,
+          store_id: storeId,
+        },
+      }
+      return {
+        success: true,
+        stdout: JSON.stringify(data),
+        stderr: '',
+        exitCode: 0,
+        data,
+        payload: CliJsonValueSchema.parse(data),
+        diagnostics: [],
+      }
     }
-    return {
-      success: true,
-      stdout: JSON.stringify(data),
-      stderr: '',
-      exitCode: 0,
-      data,
-      payload: data,
-      diagnostics: [],
-    }
-  })
-  const showSpec = vi.fn(async (specId: string, selector: { store?: string } = {}) => {
-    const title = selector.store === 'platform-a' ? 'Platform A Auth' : 'Platform B Auth'
-    const data = {
-      id: specId,
-      title,
-      overview: `${title} overview`,
-      requirementCount: 1,
-      requirements: [
-        { text: `${title} SHALL work`, scenarios: [{ rawText: 'WHEN used\nTHEN works' }] },
-      ],
-      metadata: { version: '1.0.0', format: 'openspec' },
-      root: {
-        path: `/stores/${selector.store}`,
-        source: 'store' as const,
-        store_id: selector.store,
-      },
-    }
-    return {
-      success: true,
-      stdout: JSON.stringify(data),
-      stderr: '',
-      exitCode: 0,
-      data,
-      payload: data,
-      diagnostics: [],
-    }
-  })
+  )
   const source: SpecCatalogServiceSource = {
     rootContext: rootContext(),
-    adapter: {
-      listSpecsWithMeta: vi
-        .fn()
-        .mockResolvedValue([{ id: 'auth', name: 'Owned Auth', createdAt: 1, updatedAt: 2 }]),
-    },
     documentService: {
       readSpec: vi.fn().mockResolvedValue({
         id: 'auth',
@@ -128,14 +147,52 @@ describe('Spec Catalog service', () => {
       { kind: 'referenced', storeId: 'platform-a', specId: 'auth' },
       { kind: 'referenced', storeId: 'platform-b', specId: 'auth' },
     ])
-    expect(listSpecs).toHaveBeenNthCalledWith(1, { store: 'platform-a' })
-    expect(listSpecs).toHaveBeenNthCalledWith(2, { store: 'platform-b' })
+    expect(listSpecs).toHaveBeenNthCalledWith(1, {})
+    expect(listSpecs).toHaveBeenNthCalledWith(2, { store: 'platform-a' })
+    expect(listSpecs).toHaveBeenNthCalledWith(3, { store: 'platform-b' })
+    expect(catalog.entries[0]).toMatchObject({
+      identity: { kind: 'owned', specId: 'auth' },
+      name: 'auth',
+      requirementCount: 3,
+      updatedAt: 0,
+    })
+    expect(catalog.entries).not.toContainEqual(
+      expect.objectContaining({ identity: { kind: 'owned', specId: 'physical-only' } })
+    )
     expect(catalog).toMatchObject({
+      ownedProjection: {
+        provenance: 'live',
+        root: { path: '/planning', source: 'nearest' },
+        evidence: {
+          success: true,
+          payload: {
+            specs: [{ id: 'auth', requirementCount: 3 }],
+            root: { path: '/planning', source: 'nearest' },
+          },
+        },
+      },
       referenceSources: [
         { storeId: 'platform-a', state: 'ready' },
         { storeId: 'platform-b', state: 'ready' },
       ],
     })
+  })
+
+  it('settles from typed CLI membership without touching legacy filesystem metadata', async () => {
+    const { source } = createSource()
+    const legacyMetadataReader = vi
+      .fn()
+      .mockRejectedValue(new Error('legacy metadata must not run'))
+    const candidate = Object.assign(source, {
+      adapter: { listSpecsWithMeta: legacyMetadataReader },
+    })
+
+    await expect(readSpecCatalog(candidate)).resolves.toMatchObject({
+      entries: expect.arrayContaining([
+        expect.objectContaining({ identity: { kind: 'owned', specId: 'auth' } }),
+      ]),
+    })
+    expect(legacyMetadataReader).not.toHaveBeenCalled()
   })
 
   it('reads each referenced duplicate through its exact Store selector', async () => {
@@ -187,6 +244,28 @@ describe('Spec Catalog service', () => {
     expect(showSpec).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['missing Root', null],
+    ['wrong Root', { path: '/other', source: 'nearest' as const }],
+    ['wrong Store', { path: '/planning', source: 'store' as const, store_id: 'unexpected' }],
+  ])('rejects owned CLI membership with %s provenance', async (_label, root) => {
+    const { source, listSpecs } = createSource()
+    listSpecs.mockResolvedValueOnce({
+      success: true,
+      stdout: JSON.stringify({ specs: [{ id: 'auth', requirementCount: 3 }], root, status: [] }),
+      stderr: '',
+      exitCode: 0,
+      data: { specs: [{ id: 'auth', requirementCount: 3 }], root, status: [] },
+      payload: { specs: [{ id: 'auth', requirementCount: 3 }], root, status: [] },
+      diagnostics: [],
+    })
+
+    await expect(readSpecCatalog(source)).rejects.toMatchObject({
+      name: 'CliProjectionCommandError',
+      cliEvidence: { contractError: expect.stringMatching(/Root|Store/i) },
+    })
+  })
+
   it('preserves a failed Store enumeration without erasing healthy Store entries', async () => {
     const { source, listSpecs } = createSource()
     source.rootContext.references.splice(1, 0, {
@@ -211,24 +290,7 @@ describe('Spec Catalog service', () => {
           diagnostics: [],
         }
       }
-      const data = {
-        specs: [{ id: 'auth', requirementCount: 1 }],
-        root: {
-          path: `/stores/${selector.store}`,
-          source: 'store' as const,
-          store_id: selector.store,
-        },
-        status: [],
-      }
-      return {
-        success: true,
-        stdout: JSON.stringify(data),
-        stderr: '',
-        exitCode: 0,
-        data,
-        payload: data,
-        diagnostics: [],
-      }
+      return createListSpecsResult(selector)
     })
 
     const catalog = await readSpecCatalog(source)
@@ -261,14 +323,18 @@ describe('Spec Catalog service', () => {
   ])('rejects %s Store provenance from referenced list results', async (_label, root) => {
     const { source, listSpecs } = createSource()
     source.rootContext.references.splice(1)
-    listSpecs.mockResolvedValueOnce({
-      success: true,
-      stdout: JSON.stringify({ specs: [{ id: 'auth', requirementCount: 1 }], root, status: [] }),
-      stderr: '',
-      exitCode: 0,
-      data: { specs: [{ id: 'auth', requirementCount: 1 }], root, status: [] },
-      payload: { specs: [{ id: 'auth', requirementCount: 1 }], root, status: [] },
-      diagnostics: [],
+    listSpecs.mockImplementation(async (selector: { store?: string } = {}) => {
+      if (selector.store !== 'platform-a') return createListSpecsResult(selector)
+      const data = { specs: [{ id: 'auth', requirementCount: 1 }], root, status: [] }
+      return {
+        success: true,
+        stdout: JSON.stringify(data),
+        stderr: '',
+        exitCode: 0,
+        data,
+        payload: data,
+        diagnostics: [],
+      }
     })
 
     const catalog = await readSpecCatalog(source)
@@ -285,17 +351,7 @@ describe('Spec Catalog service', () => {
     ])
   })
 
-  it.each([
-    ['missing', null],
-    [
-      'mismatched',
-      {
-        path: '/stores/platform-b',
-        source: 'store' as const,
-        store_id: 'platform-b',
-      },
-    ],
-  ])('rejects %s Store provenance from referenced show results', async (_label, root) => {
+  it('rejects mismatched Store provenance from referenced show results', async () => {
     const { source, showSpec } = createSource()
     const data = {
       id: 'auth',
@@ -304,7 +360,11 @@ describe('Spec Catalog service', () => {
       requirementCount: 0,
       requirements: [],
       metadata: { version: '1.0.0', format: 'openspec' as const },
-      root,
+      root: {
+        path: '/stores/platform-b',
+        source: 'store' as const,
+        store_id: 'platform-b',
+      },
     }
     showSpec.mockResolvedValueOnce({
       success: true,
@@ -328,6 +388,44 @@ describe('Spec Catalog service', () => {
       upstream: null,
       evidence: {
         contractError: expect.stringMatching(/platform-a/i),
+      },
+    })
+  })
+
+  it('rejects missing Store provenance through the checked CLI contract parser', async () => {
+    const { source, listSpecs } = createSource()
+    const raw = {
+      id: 'auth',
+      title: 'Unattributed auth',
+      overview: 'This payload must not become a referenced document.',
+      requirementCount: 0,
+      requirements: [],
+      metadata: { version: '1.0.0', format: 'openspec' },
+      root: null,
+    }
+    const contracts = new OpenSpecCliContractExecutor(async () => ({
+      success: true,
+      stdout: JSON.stringify(raw),
+      stderr: '',
+      exitCode: 0,
+    }))
+    source.contracts = {
+      listSpecs,
+      showSpec: (specId, selector) => contracts.showSpec(specId, selector),
+    }
+
+    const document = await readSpecDocument(source, {
+      kind: 'referenced',
+      storeId: 'platform-a',
+      specId: 'auth',
+    })
+
+    expect(document).toMatchObject({
+      state: 'error',
+      source: 'referenced',
+      upstream: null,
+      evidence: {
+        contractError: expect.stringMatching(/root/i),
       },
     })
   })

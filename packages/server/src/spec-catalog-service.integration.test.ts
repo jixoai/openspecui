@@ -114,7 +114,6 @@ describe('pinned OpenSpec 1.6 Spec Catalog integration', () => {
 
       const source = {
         rootContext: rootState.data,
-        adapter: { listSpecsWithMeta: vi.fn().mockResolvedValue([]) },
         documentService: {
           readSpec: vi.fn().mockResolvedValue(null),
           readSpecRaw: vi.fn().mockResolvedValue(null),

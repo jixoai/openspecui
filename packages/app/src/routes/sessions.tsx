@@ -1,12 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Preserve the existing multi-tab HostedShell as the project Sessions surface.
- * 2. Reuse router-owned launch parameters without reparsing them.
+ * 2. Present App-lifetime launch errors without owning launch delivery.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  */
 import { HostedShell } from '../components/hosted-shell'
-import { useRouterContext } from '../lib/use-router-context'
 
 /**
  * Sessions 路由：现有 iframe 多标签 HostedShell，作为项目工作面入口。
@@ -16,12 +15,7 @@ import { useRouterContext } from '../lib/use-router-context'
  * 保证 PWA 首运行 / ?api=... 启动路径与改造前完全一致。
  */
 export function SessionsRoute() {
-  const ctx = useRouterContext()
   return (
-    <HostedShell
-      initialLaunchRequest={ctx.initialLaunchRequest}
-      fallbackLaunchRequest={ctx.fallbackLaunchRequest}
-      initialError={ctx.initialError}
-    />
+    <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
   )
 }

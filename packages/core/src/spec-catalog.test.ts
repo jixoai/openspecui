@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove compound Spec keys, routes, and lookup remain collision-safe across sources.
+ * 2. Prove live and static owned Catalog provenance remain source-distinct.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  */
 import { describe, expect, it } from 'vitest'
 import {
   buildSpecCatalog,
+  createStaticSpecCatalogOwnedProjection,
   getSpecCatalogEntry,
   specIdentityFromRoute,
   specIdentityKey,
@@ -15,7 +17,19 @@ import {
 
 describe('Spec Catalog', () => {
   const catalog = buildSpecCatalog({
-    owned: [{ id: 'auth', name: 'Owned Auth', updatedAt: 3 }],
+    owned: [{ id: 'auth', requirementCount: 3 }],
+    ownedProjection: {
+      provenance: 'live',
+      root: { path: '/planning', source: 'nearest' },
+      evidence: {
+        success: true,
+        stdout: '{}',
+        stderr: '',
+        exitCode: 0,
+        payload: {},
+        diagnostics: [],
+      },
+    },
     referenced: [
       {
         storeId: 'platform-a',
@@ -35,6 +49,7 @@ describe('Spec Catalog', () => {
         stdout: '{}',
         stderr: '',
         exitCode: 0,
+        payload: {},
         diagnostics: [],
       },
     })),
@@ -49,6 +64,24 @@ describe('Spec Catalog', () => {
       'referenced:platform-b:auth',
     ])
     expect(catalog.entries.map((entry) => entry.readOnly)).toEqual([false, true, true])
+    expect(catalog.entries[0]).toMatchObject({
+      name: 'auth',
+      requirementCount: 3,
+      updatedAt: 0,
+    })
+    expect(catalog.ownedProjection).toMatchObject({ provenance: 'live' })
+  })
+
+  it('does not turn static snapshot inventory into live CLI evidence', () => {
+    expect(createStaticSpecCatalogOwnedProjection(2)).toEqual({
+      provenance: 'static',
+      state: 'available',
+      snapshot: { specCount: 2 },
+    })
+    expect(createStaticSpecCatalogOwnedProjection()).toEqual({
+      provenance: 'static',
+      state: 'unavailable',
+    })
   })
 
   it('looks up the exact compound identity instead of bare specId', () => {

@@ -108,6 +108,7 @@ describe('SpecView', () => {
         stdout: '{}',
         stderr: '',
         exitCode: 0,
+        payload: {},
         diagnostics: [],
       },
     }

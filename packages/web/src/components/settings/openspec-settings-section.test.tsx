@@ -260,6 +260,7 @@ function environmentConfig(): EnvironmentGlobalConfig {
         environmentVariable: 'XDG_DATA_HOME',
       },
     },
+    configPath: '/runtime/data/openspec/config.json',
     file: {
       path: '/runtime/data/openspec/config.json',
       format: 'json',

@@ -1,13 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Elect one browser/PWA launch owner and relay credential-free tab requests.
- * 2. Transfer a launch credential transiently to the owner without storing it in shell state/localStorage.
+ * 2. Converge same-origin windows on locator credentials without storing them in shell state/localStorage.
  * 3. Preserve acknowledgement and local fallback behavior across window lifecycles.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Delivery correction (2026-07-24): forwarded PWA launches retain locator-scoped Access Gate credentials.
  */
-import { bindLaunchCredential, readLaunchCredential } from './launch-credential'
+import {
+  bindLaunchCredential,
+  readLaunchCredential,
+  readLaunchCredentialSnapshot,
+  type LaunchCredentialBinding,
+} from './launch-credential'
 import { generateHostedSessionId, type HostedShellLaunchRequest } from './shell-state'
 
 const LEADER_STORAGE_KEY = 'openspecui-app:pwa-leader'
@@ -47,6 +52,7 @@ export interface HostedLaunchRelayMessageAck {
   id: string
   targetWindowId: string
   leaderRole: HostedLaunchRole
+  credentials: readonly LaunchCredentialBinding[]
 }
 
 export type HostedLaunchRelayMessage = HostedLaunchRelayMessageLaunch | HostedLaunchRelayMessageAck
@@ -73,6 +79,8 @@ export interface HostedLaunchRelayRuntime {
   readCredential?: (apiBaseUrl: string) => string | null
   /** Runtime-only credential binder for the receiving window. */
   bindCredential?: (apiBaseUrl: string, credential: string) => boolean
+  /** Runtime-only credential snapshot reader for directed acknowledgement convergence. */
+  readCredentialSnapshot?: () => readonly LaunchCredentialBinding[]
 }
 
 interface LeaderRecord {
@@ -105,10 +113,11 @@ function detectHostedLaunchRole(): HostedLaunchRole {
   }
 
   const hostedNavigator = window.navigator as Navigator & { standalone?: boolean }
-  const inStandaloneMode =
-    hostedNavigator.standalone === true ||
-    window.matchMedia('(display-mode: standalone)').matches ||
-    window.matchMedia('(display-mode: window-controls-overlay)').matches
+  const matchesDisplayMode =
+    typeof window.matchMedia === 'function' &&
+    (window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: window-controls-overlay)').matches)
+  const inStandaloneMode = hostedNavigator.standalone === true || matchesDisplayMode
 
   return inStandaloneMode ? 'pwa' : 'browser'
 }
@@ -138,7 +147,14 @@ function isAckMessage(value: unknown): value is HostedLaunchRelayMessageAck {
     value.type === 'launch-ack' &&
     typeof value.id === 'string' &&
     typeof value.targetWindowId === 'string' &&
-    isHostedLaunchRole(value.leaderRole)
+    isHostedLaunchRole(value.leaderRole) &&
+    Array.isArray(value.credentials) &&
+    value.credentials.every(
+      (credential) =>
+        isRecord(credential) &&
+        typeof credential.apiBaseUrl === 'string' &&
+        typeof credential.credential === 'string'
+    )
   )
 }
 
@@ -231,6 +247,7 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
   const role = runtime.role ?? detectHostedLaunchRole()
   const readCredential = runtime.readCredential ?? readLaunchCredential
   const bindCredential = runtime.bindCredential ?? bindLaunchCredential
+  const readCredentialSnapshot = runtime.readCredentialSnapshot ?? readLaunchCredentialSnapshot
   const pending = new Map<string, PendingLaunch>()
   let onLaunch: ((request: HostedShellLaunchRequest) => void) | null = null
   let isLeader = false
@@ -257,13 +274,14 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
   }
 
   const handleLaunchMessage = (message: HostedLaunchRelayMessageLaunch) => {
+    if (message.credential !== undefined) {
+      bindCredential(message.request.apiBaseUrl, message.credential)
+    }
+
     if (!refreshLeadership() || !onLaunch) {
       return
     }
 
-    if (message.credential !== undefined) {
-      bindCredential(message.request.apiBaseUrl, message.credential)
-    }
     onLaunch(message.request)
     focusWindow()
     channel?.postMessage({
@@ -271,12 +289,17 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
       id: message.id,
       targetWindowId: message.sourceWindowId,
       leaderRole: role,
+      credentials: readCredentialSnapshot(),
     })
   }
 
   const handleAckMessage = (message: HostedLaunchRelayMessageAck) => {
     if (message.targetWindowId !== windowId) {
       return
+    }
+
+    for (const credential of message.credentials) {
+      bindCredential(credential.apiBaseUrl, credential.credential)
     }
 
     const pendingLaunch = pending.get(message.id)
@@ -348,14 +371,6 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
       }
 
       const id = generateHostedSessionId()
-      channel.postMessage({
-        type: 'launch',
-        id,
-        sourceWindowId: windowId,
-        request,
-        credential: readCredential(request.apiBaseUrl) ?? undefined,
-      })
-
       return await new Promise<HostedLaunchDispatchResult>((resolve) => {
         const timer = setTimeoutImpl(() => {
           pending.delete(id)
@@ -374,6 +389,13 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
           request,
           timer,
           resolve,
+        })
+        channel.postMessage({
+          type: 'launch',
+          id,
+          sourceWindowId: windowId,
+          request,
+          credential: readCredential(request.apiBaseUrl) ?? undefined,
         })
       })
     },

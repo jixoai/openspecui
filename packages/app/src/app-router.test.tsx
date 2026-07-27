@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * 1. Prove the App router renders every first-party product surface.
+ * 2. Prove launch ownership remains active outside the Sessions route.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Owner-reported defect (2026-07-26): opening B or C eventually makes older tabs lose authentication.
+ */
 // @vitest-environment jsdom
 
 import { RouterProvider } from '@tanstack/react-router'
@@ -6,6 +14,8 @@ import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createAppRouter, type AppRouterContext } from './app-router'
+import { clearLaunchCredential, readLaunchCredential } from './lib/launch-credential'
+import { getHostedShellStorageKey } from './lib/shell-state'
 
 const EMPTY_CONTEXT: AppRouterContext = {
   initialLaunchRequest: null,
@@ -13,10 +23,47 @@ const EMPTY_CONTEXT: AppRouterContext = {
   initialError: null,
 }
 
+const renderedRoots = new Set<Root>()
+const originalBroadcastChannel = globalThis.BroadcastChannel
+const originalMatchMedia = window.matchMedia
+
+class TestBroadcastChannel {
+  static readonly channels = new Map<string, Set<TestBroadcastChannel>>()
+  readonly listeners = new Set<EventListener>()
+
+  constructor(readonly name: string) {
+    const channels = TestBroadcastChannel.channels.get(name) ?? new Set<TestBroadcastChannel>()
+    channels.add(this)
+    TestBroadcastChannel.channels.set(name, channels)
+  }
+
+  postMessage(message: unknown): void {
+    for (const peer of TestBroadcastChannel.channels.get(this.name) ?? []) {
+      if (peer === this) continue
+      const event = new MessageEvent('message', { data: message })
+      for (const listener of peer.listeners) listener(event)
+    }
+  }
+
+  addEventListener(_type: 'message', listener: EventListener): void {
+    this.listeners.add(listener)
+  }
+
+  removeEventListener(_type: 'message', listener: EventListener): void {
+    this.listeners.delete(listener)
+  }
+
+  close(): void {
+    TestBroadcastChannel.channels.get(this.name)?.delete(this)
+    this.listeners.clear()
+  }
+}
+
 async function renderAt(element: ReactElement): Promise<{ container: HTMLDivElement; root: Root }> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
+  renderedRoots.add(root)
   await act(async () => {
     root.render(element)
   })
@@ -38,9 +85,40 @@ describe('app-router', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
     localStorage.clear()
+    TestBroadcastChannel.channels.clear()
+    Object.defineProperty(globalThis, 'BroadcastChannel', {
+      configurable: true,
+      value: TestBroadcastChannel,
+    })
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener() {},
+        removeListener() {},
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent: () => false,
+      }),
+    })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await act(async () => {
+      for (const root of renderedRoots) root.unmount()
+    })
+    renderedRoots.clear()
+    clearLaunchCredential('http://localhost:3102')
+    Object.defineProperty(globalThis, 'BroadcastChannel', {
+      configurable: true,
+      value: originalBroadcastChannel,
+    })
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: originalMatchMedia,
+    })
     document.body.innerHTML = ''
   })
 
@@ -67,6 +145,45 @@ describe('app-router', () => {
     // envUri 中性表达：不声称全集。
     expect(text).not.toMatch(/all references|unreferenced/i)
     expect(text).toContain('No runtime environments observed')
+  })
+
+  it('keeps the launch owner active while Environment is the current route', async () => {
+    const router = routerFor(EMPTY_CONTEXT, '/environment')
+    await renderAt(<RouterProvider router={router} />)
+    const launcher = new TestBroadcastChannel('openspecui-app:pwa-launch')
+
+    await act(async () => {
+      launcher.postMessage({
+        type: 'launch',
+        id: 'launch-b',
+        sourceWindowId: 'launcher-b',
+        request: { apiBaseUrl: 'http://localhost:3102' },
+        credential: 'credential-b',
+      })
+      await Promise.resolve()
+    })
+
+    const stored = JSON.parse(localStorage.getItem(getHostedShellStorageKey()) ?? '{}') as unknown
+    expect(stored).toMatchObject({
+      tabs: [{ apiBaseUrl: 'http://localhost:3102' }],
+    })
+    expect(readLaunchCredential('http://localhost:3102')).toBe('credential-b')
+    launcher.close()
+  })
+
+  it('preserves an App-lifetime launch error for the Sessions surface', async () => {
+    const router = routerFor(
+      {
+        ...EMPTY_CONTEXT,
+        initialError: 'The launch credential requires a valid backend locator.',
+      },
+      '/sessions'
+    )
+    const { container } = await renderAt(<RouterProvider router={router} />)
+
+    expect(container.textContent).toContain(
+      'The launch credential requires a valid backend locator.'
+    )
   })
 
   it('redirects Store Manager root to Inspector', async () => {

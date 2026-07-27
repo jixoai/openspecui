@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Render a dense wide-screen projection of Store list facts.
  * 2. Keep Inventory secondary to Inspector and Context navigation.
  * 3. Read only from the exact selected current backend.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
+ * Original request (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
  */
 import type { StoreListEntry } from '@openspecui/core/store-types'
+import { RefreshCw } from 'lucide-react'
 import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StatusBadge } from '../components/status-badge'
 import { StoreManagerShell } from '../components/store-manager-shell'
@@ -28,14 +30,16 @@ import { useStoreData } from '../lib/use-store-data'
  */
 export function StoreInventoryRoute() {
   const { active } = useActiveBackend()
-  const { inventory, isLoading, error } = useStoreData({ apiBaseUrl: active?.apiBaseUrl })
+  const { inventory, isInventoryLoading, isInventoryUpdating, inventoryError } = useStoreData({
+    apiBaseUrl: active?.apiBaseUrl,
+  })
   const stores = inventory?.stores ?? []
 
   let body
-  if (isLoading && !inventory) {
+  if (isInventoryLoading && !inventory) {
     body = <LoadingView label="Loading store registry..." />
-  } else if (error && !inventory) {
-    body = <ErrorView message={error.message} />
+  } else if (inventoryError && !inventory) {
+    body = <ErrorView message={inventoryError.message} />
   } else if (stores.length === 0) {
     body = (
       <EmptyView title="Registry is empty">
@@ -47,7 +51,21 @@ export function StoreInventoryRoute() {
     body = renderInventoryBody(stores)
   }
 
-  return <StoreManagerShell>{body}</StoreManagerShell>
+  return (
+    <StoreManagerShell>
+      {isInventoryUpdating && inventory ? (
+        <span
+          role="status"
+          aria-label="Refreshing store registry"
+          className="text-muted-foreground inline-flex self-start"
+        >
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        </span>
+      ) : null}
+      {inventoryError && inventory ? <ErrorView message={inventoryError.message} /> : null}
+      {body}
+    </StoreManagerShell>
+  )
 }
 
 function renderInventoryBody(stores: StoreListEntry[]) {

@@ -1,20 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
- * 1. Prove Store Inventory/Inspector transport preserves backend envelopes and failures.
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Prove Store Inventory/Inspector/Root lifecycle Pulls preserve typed projection states and failures.
  * 2. Prove every hosted HTTP/RPC request resolves credentials by its own normalized locator.
  * 3. Prove successful hosted envelopes are decoded instead of asserted into Store/Root/Mutation contracts.
+ * 4. Prove an all-Store Doctor projection Pull omits nullable input that the optional Router contract rejects.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Delivery correction (2026-07-24): callers cannot supply another locator's credential.
+ * Owner-reported defect (2026-07-26): Store Inspector sent `input=null` and received HTTP 400.
  */
 import { HostedBackendContractError } from '@openspecui/core/hosted-contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BackendStoreMutationContractError,
   BackendStoreMutationRequestError,
-  fetchBackendRootContext,
-  fetchBackendStoreInspector,
-  fetchBackendStoreInventory,
+  fetchBackendRootContextProjection,
+  fetchBackendStoreInspectorProjection,
+  fetchBackendStoreInventoryProjection,
   mutateBackendStore,
 } from './backend-client'
 import { bindLaunchCredential, clearLaunchCredential } from './launch-credential'
@@ -32,90 +34,129 @@ function createJsonFetch(response: unknown, status = 200): typeof fetch {
   )
 }
 
+function readyProjection(data: unknown): unknown {
+  return {
+    result: {
+      data: {
+        state: 'ready',
+        identity: 'projection-id',
+        workGeneration: 1,
+        invalidationCause: 'initial',
+        data,
+        freshness: 'current',
+        snapshotGeneration: 1,
+        error: null,
+      },
+    },
+  }
+}
+
+function loadingProjectionData(): unknown {
+  return {
+    state: 'loading',
+    identity: 'projection-id',
+    workGeneration: 1,
+    invalidationCause: 'initial',
+    data: null,
+    freshness: null,
+    snapshotGeneration: null,
+    error: null,
+  }
+}
+
 afterEach(() => {
   clearLaunchCredential(API_A)
   clearLaunchCredential(API_B)
 })
 
-describe('backend-client store inventory', () => {
+describe('backend-client Store Inventory projection', () => {
   it('parses an available tRPC envelope and preserves upstream stores', async () => {
-    const fetchImpl = createJsonFetch({
-      result: {
-        data: {
-          available: true,
-          stores: [{ id: 'team', root: '/stores/team' }],
-          evidence: { success: true },
-        },
-      },
-    })
-    const envelope = await fetchBackendStoreInventory({
+    const fetchImpl = createJsonFetch(
+      readyProjection({
+        available: true,
+        stores: [{ id: 'team', root: '/stores/team' }],
+        evidence: { success: true },
+      })
+    )
+    const projection = await fetchBackendStoreInventoryProjection({
       apiBaseUrl: `${API_A}/`,
       fetchImpl,
     })
-    expect(envelope.available).toBe(true)
-    expect(envelope.stores).toEqual([{ id: 'team', root: '/stores/team' }])
+    expect(projection.state).toBe('ready')
+    if (projection.state !== 'ready') throw new Error('Expected a ready Store list projection.')
+    expect(projection.data.available).toBe(true)
+    expect(projection.data.stores).toEqual([{ id: 'team', root: '/stores/team' }])
   })
 
-  it('degrades to unavailable on a non-ok response without throwing', async () => {
+  it('exposes a non-ok response as transport failure instead of Store business data', async () => {
     const fetchImpl = createJsonFetch({}, 500)
-    const envelope = await fetchBackendStoreInventory({ apiBaseUrl: API_A, fetchImpl })
-    expect(envelope.available).toBe(false)
-    expect(envelope.error?.kind).toBe('transport')
+    await expect(
+      fetchBackendStoreInventoryProjection({ apiBaseUrl: API_A, fetchImpl })
+    ).rejects.toThrow('Store list projection request failed: 500')
   })
 
-  it('classifies malformed 200 Store data as a contract error instead of a successful empty inventory', async () => {
-    const envelope = await fetchBackendStoreInventory({
-      apiBaseUrl: API_A,
-      fetchImpl: createJsonFetch({ result: { data: { available: true } } }),
-    })
-
-    expect(envelope).toMatchObject({
-      available: false,
-      stores: [],
-      error: { kind: 'contract' },
-    })
+  it('rejects malformed 200 Store data instead of publishing a projection', async () => {
+    await expect(
+      fetchBackendStoreInventoryProjection({
+        apiBaseUrl: API_A,
+        fetchImpl: createJsonFetch({ result: { data: { state: 'ready' } } }),
+      })
+    ).rejects.toBeInstanceOf(HostedBackendContractError)
   })
 })
 
-describe('backend-client store inspector', () => {
+describe('backend-client Store Inspector projection', () => {
   it('parses an available doctor envelope', async () => {
-    const fetchImpl = createJsonFetch({
-      result: { data: { available: true, stores: [{ id: 'team', healthy: true }] } },
-    })
-    const envelope = await fetchBackendStoreInspector({
+    const fetchImpl = createJsonFetch(
+      readyProjection({ available: true, stores: [{ id: 'team', healthy: true }] })
+    )
+    const projection = await fetchBackendStoreInspectorProjection({
       apiBaseUrl: API_A,
       storeId: 'team',
       fetchImpl,
     })
-    expect(envelope.available).toBe(true)
-    expect(envelope.stores).toEqual([{ id: 'team', healthy: true }])
+    expect(projection.state).toBe('ready')
+    if (projection.state !== 'ready') throw new Error('Expected a ready Store Doctor projection.')
+    expect(projection.data.available).toBe(true)
+    expect(projection.data.stores).toEqual([{ id: 'team', healthy: true }])
   })
 
   it('encodes the optional storeId input safely', async () => {
     let requestedUrl = ''
     const fetchImpl: typeof fetch = vi.fn(async (input) => {
       requestedUrl = String(input)
-      return new Response(JSON.stringify({ result: { data: { available: true, stores: [] } } }), {
+      return new Response(JSON.stringify({ result: { data: loadingProjectionData() } }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
     })
-    await fetchBackendStoreInspector({ apiBaseUrl: API_A, storeId: 'team id', fetchImpl })
+    await fetchBackendStoreInspectorProjection({ apiBaseUrl: API_A, storeId: 'team id', fetchImpl })
     expect(requestedUrl).not.toContain('team id')
     expect(requestedUrl).toContain('input=')
   })
 
-  it('classifies malformed 200 Store doctor data as a contract error instead of a successful empty inspector', async () => {
-    const envelope = await fetchBackendStoreInspector({
-      apiBaseUrl: API_A,
-      fetchImpl: createJsonFetch({ result: { data: { available: true } } }),
+  it('omits the optional tRPC input when requesting Doctor for all Stores', async () => {
+    let requestedUrl = ''
+    const fetchImpl: typeof fetch = vi.fn(async (input) => {
+      requestedUrl = String(input)
+      return new Response(JSON.stringify({ result: { data: loadingProjectionData() } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
     })
 
-    expect(envelope).toMatchObject({
-      available: false,
-      stores: [],
-      error: { kind: 'contract' },
-    })
+    await fetchBackendStoreInspectorProjection({ apiBaseUrl: API_A, fetchImpl })
+
+    expect(new URL(requestedUrl).searchParams.has('input')).toBe(false)
+  })
+
+  it('rejects malformed 200 Store Doctor data instead of publishing a projection', async () => {
+    await expect(
+      fetchBackendStoreInspectorProjection({
+        apiBaseUrl: API_A,
+        fetchImpl: createJsonFetch({ result: { data: { state: 'ready' } } }),
+      })
+    ).rejects.toBeInstanceOf(HostedBackendContractError)
   })
 })
 
@@ -139,18 +180,16 @@ describe('backend-client credential ownership', () => {
             observedAt: 1,
             rejoined: false,
           }
-        : url.includes('rootContext.get')
-          ? { state: 'loading', data: null, attempt: null, error: null, observedAt: 1 }
-          : { available: true, stores: [] }
+        : loadingProjectionData()
       return new Response(JSON.stringify({ result: { data } }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
     })
 
-    await fetchBackendStoreInventory({ apiBaseUrl: API_A, fetchImpl })
-    await fetchBackendStoreInspector({ apiBaseUrl: API_B, fetchImpl })
-    await fetchBackendRootContext({ apiBaseUrl: API_A, fetchImpl })
+    await fetchBackendStoreInventoryProjection({ apiBaseUrl: API_A, fetchImpl })
+    await fetchBackendStoreInspectorProjection({ apiBaseUrl: API_B, fetchImpl })
+    await fetchBackendRootContextProjection({ apiBaseUrl: API_A, fetchImpl })
     await mutateBackendStore(
       { apiBaseUrl: API_B, fetchImpl },
       { requestId: 'request-b', kind: 'register', path: '/tmp/store-b' }
@@ -168,22 +207,22 @@ describe('backend-client credential ownership', () => {
 describe('backend-client Root Context', () => {
   it('rejects malformed 200 Root Context data instead of collapsing it to null', async () => {
     await expect(
-      fetchBackendRootContext({
+      fetchBackendRootContextProjection({
         apiBaseUrl: API_A,
         fetchImpl: createJsonFetch({ result: { data: { state: 'ready' } } }),
       })
-    ).rejects.toThrow('Root Context contract')
+    ).rejects.toThrow('Root Context projection response is malformed')
   })
 
   it('keeps a non-ok Root Context response as a transport request failure, not a contract failure', async () => {
-    const failure = await fetchBackendRootContext({
+    const failure = await fetchBackendRootContextProjection({
       apiBaseUrl: API_A,
       fetchImpl: createJsonFetch({}, 503),
     }).catch((error: unknown) => error)
 
     expect(failure).toBeInstanceOf(Error)
     expect(failure).not.toBeInstanceOf(HostedBackendContractError)
-    expect(failure).toMatchObject({ message: 'Root Context request failed: 503' })
+    expect(failure).toMatchObject({ message: 'Root Context projection request failed: 503' })
   })
 })
 

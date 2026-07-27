@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Prove scoped Git detail rendering, back navigation, and document flow.
  * 2. Prove mounted binding replacement retires stale detail, files, and patch content.
  * 3. Prove Git loading handoffs match both repository binding and target entity.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
 import type {
   GitRepositoryScopeDescriptor,
@@ -18,6 +19,11 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  createRootProjectionFixture,
+  createRootProjectionNoticeFixture,
+  type RootProjectionFixtureCallbacks,
+} from '../test-fixtures/root-context-projection'
 import { GitCommitViewRoute, GitUncommittedViewRoute } from './git-view'
 
 type Equal<Left, Right> =
@@ -42,7 +48,8 @@ const checkedScopeContract: [ResolvingPlanningIsNull, SettledPlanningAllowsDescr
 const {
   scopesQueryMock,
   scopesSubscribeMock,
-  rootContextSubscribeMock,
+  rootContextReadProjectionMock,
+  rootContextSubscribeProjectionMock,
   getEntryMetaQueryMock,
   getEntryFilesQueryMock,
   staticModeMock,
@@ -53,7 +60,8 @@ const {
 } = vi.hoisted(() => ({
   scopesQueryMock: vi.fn(),
   scopesSubscribeMock: vi.fn(),
-  rootContextSubscribeMock: vi.fn(),
+  rootContextReadProjectionMock: vi.fn(),
+  rootContextSubscribeProjectionMock: vi.fn(),
   getEntryMetaQueryMock: vi.fn(),
   getEntryFilesQueryMock: vi.fn(),
   staticModeMock: vi.fn(() => false),
@@ -73,10 +81,7 @@ const {
       onData(data: GitRepositoryScopes): void
       onError(error: Error): void
     }
-    rootCallbacks?: {
-      onData(data: RootContextState): void
-      onError(error: Error): void
-    }
+    rootCallbacks?: RootProjectionFixtureCallbacks
   },
 }))
 
@@ -97,8 +102,11 @@ vi.mock('@/lib/trpc', () => ({
       },
     },
     rootContext: {
-      subscribe: {
-        subscribe: rootContextSubscribeMock,
+      readProjection: {
+        query: rootContextReadProjectionMock,
+      },
+      subscribeProjection: {
+        subscribe: rootContextSubscribeProjectionMock,
       },
     },
   },
@@ -247,14 +255,16 @@ describe('Git entry routes', () => {
         return { unsubscribe: vi.fn() }
       }
     )
-    rootContextSubscribeMock.mockImplementation(
-      (
-        _input: undefined,
-        callbacks: { onData(data: RootContextState): void; onError(error: Error): void }
-      ) => {
+    rootContextReadProjectionMock.mockImplementation(async () => {
+      const current = subscriptionState.currentRoot
+      if (!current) throw new Error('Missing Root Context fixture state.')
+      return createRootProjectionFixture(current)
+    })
+    rootContextSubscribeProjectionMock.mockImplementation(
+      (_input: undefined, callbacks: RootProjectionFixtureCallbacks) => {
         subscriptionState.rootCallbacks = callbacks
         const current = subscriptionState.currentRoot
-        if (current) callbacks.onData(current)
+        if (current) callbacks.onData(createRootProjectionNoticeFixture(current))
         return { unsubscribe: vi.fn() }
       }
     )
@@ -427,10 +437,12 @@ describe('Git entry routes', () => {
     expect(await screen.findByTestId('git-detail-loading')).toBeTruthy()
     expect(screen.queryByText('Commit A handoff title')).toBeNull()
     expect(screen.queryByText('Commit A handoff subtitle')).toBeNull()
-    expect(getEntryMetaQueryMock).toHaveBeenCalledWith({
-      scope: 'planning',
-      expectedBindingToken: 'planning-binding-a',
-      selector: { type: 'commit', hash: 'def67890' },
+    await waitFor(() => {
+      expect(getEntryMetaQueryMock).toHaveBeenCalledWith({
+        scope: 'planning',
+        expectedBindingToken: 'planning-binding-a',
+        selector: { type: 'commit', hash: 'def67890' },
+      })
     })
   })
 
@@ -614,7 +626,7 @@ describe('Git entry routes', () => {
       const rootCallbacks = subscriptionState.rootCallbacks
       if (!scopesCallbacks || !rootCallbacks) throw new Error('Git subscriptions are unavailable.')
       scopesCallbacks.onData(scopesB)
-      rootCallbacks.onData(rootB)
+      rootCallbacks.onData(createRootProjectionNoticeFixture(rootB))
     })
 
     await waitFor(() => {

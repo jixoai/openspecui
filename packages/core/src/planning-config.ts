@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Define distinct Project Binding, Active Root, and reactive Environment Global config projections.
  * 2. Inspect launch-project Store/Reference declarations without replacing CLI Root Context truth.
  * 3. Update only binding fields while preserving unrelated YAML fields and comments.
  * 4. Describe a typed launch-write result separately from asynchronous Root Context convergence.
+ * 5. Separate CLI-owned Environment Global facts from the file-native editable document owner.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
@@ -171,14 +172,14 @@ export interface EnvironmentGlobalProfileState {
   error?: string
 }
 
-/** Environment-global configuration projection selected by the CLI. */
-export interface EnvironmentGlobalConfig {
+/** CLI-owned Environment Global path, parsed config, profile, drift, and command evidence. */
+export interface EnvironmentGlobalCliProjection {
   kind: 'environment-global'
   owner: {
     kind: 'runtime-environment'
     dataScope: OpenSpecDataScope
   }
-  file: PlanningConfigFile
+  configPath: string | null
   config: Record<string, CliJsonValue> | null
   profileState: EnvironmentGlobalProfileState
   evidence: {
@@ -186,6 +187,22 @@ export interface EnvironmentGlobalConfig {
     config: CliCommandResult<Record<string, CliJsonValue>>
     drift: CliResult
   }
+}
+
+/** File-native Environment Global document selected by the CLI projection. */
+export interface EnvironmentGlobalFileProjection {
+  kind: 'environment-global-file'
+  owner: {
+    kind: 'runtime-environment'
+    dataScope: OpenSpecDataScope
+  }
+  file: PlanningConfigFile
+}
+
+/** Combined compatibility view for consumers that need CLI facts and editable file bytes. */
+export interface EnvironmentGlobalConfig extends Omit<EnvironmentGlobalCliProjection, 'kind'> {
+  kind: 'environment-global'
+  file: PlanningConfigFile
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

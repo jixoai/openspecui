@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Subscribe to backend-advertised Code and optional Planning repository bindings.
  * 2. Derive the selected scope from URL state with Code as the explicit fallback.
  * 3. Join Planning bindings to current scope projection and Root Context readiness.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
+ * Original request (2026-07-26): "缓存现在正在被更新中。"
  */
 import { parseGitRepositoryScope } from '@/lib/git-panel'
 import { trpcClient } from '@/lib/trpc'
@@ -89,6 +90,7 @@ export function useGitRepositoryScope(enabled = true): GitRepositoryScopeState {
     planning !== null &&
     scopes?.planningState === 'settled' &&
     query.authority.state === 'current' &&
+    rootContext.authority.state === 'current' &&
     !rootContext.isLoading &&
     rootContext.error === null &&
     currentPlanningPath === planning.rootPath
@@ -108,7 +110,9 @@ export function useGitRepositoryScope(enabled = true): GitRepositoryScopeState {
             ? `Planning Root Context failed: ${rootContext.error.message}`
             : rootProjection?.state === 'error'
               ? `Planning Root Context failed: ${rootProjection.error.message}`
-              : rootProjection?.state === 'refreshing' || rootProjection?.state === 'loading'
+              : rootContext.authority.state === 'waiting' ||
+                  rootProjection?.state === 'refreshing' ||
+                  rootProjection?.state === 'loading'
                 ? 'Planning repository is locked while Root Context refreshes.'
                 : scopes?.planningState === 'resolving'
                   ? 'Planning repository binding is resolving.'

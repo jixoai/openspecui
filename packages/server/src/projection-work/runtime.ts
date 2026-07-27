@@ -3,6 +3,7 @@
  * 1. Create a Projection Work registry per Server runtime, never as module-global state.
  * 2. Declare conservative bounded resource, trace, and snapshot-cache budgets.
  * 3. Keep future warmup opt-in until benchmark evidence supports a larger budget.
+ * 4. Reserve one additional bounded registry for the file-native Environment Global owner.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  */
@@ -27,7 +28,7 @@ export const serverProjectionWorkCacheBudget = {
   maxBytes: 2 * 1024 * 1024,
   maxWorkEntries: 64,
   traceCapacity: 256,
-  maxRegistryCount: 8,
+  maxRegistryCount: 9,
 } as const
 
 interface ClearableProjectionWorkRegistry {

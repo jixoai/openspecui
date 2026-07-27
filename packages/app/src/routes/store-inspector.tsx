@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Make Store Doctor evidence the primary Store Manager interaction.
  * 2. Reserve backend-owned mutation controls without inferring applicability.
  * 3. Keep Access Gate credentials outside route/component props.
@@ -9,7 +9,7 @@
  * Original request (2026-07-15): "Store Manager uses the Store Inspector as its primary interaction."
  */
 import type { StoreDoctorStore } from '@openspecui/core/store-types'
-import { Search, Trash2 } from 'lucide-react'
+import { RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
 import { StatusBadge, StatusDot, type StatusVariant } from '../components/status-badge'
@@ -38,6 +38,14 @@ function healthVariant(health: StoreHealthSummary): StatusVariant {
   return 'neutral'
 }
 
+interface StoreSetupRegisterDraft {
+  kind: 'setup' | 'register'
+  id: string
+  path: string
+  remote: string
+  authority: StoreActionAuthority | null
+}
+
 /**
  * Store Inspector（B 视图，主交互）：selection-first master/detail。
  *
@@ -48,9 +56,8 @@ function healthVariant(health: StoreHealthSummary): StatusVariant {
  */
 export function StoreInspectorRoute() {
   const { active } = useActiveBackend()
-  const { inspector, isLoading, error, refresh } = useStoreData({
-    apiBaseUrl: active?.apiBaseUrl,
-  })
+  const { inspector, isInspectorLoading, isInspectorUpdating, inspectorError, canMutate, refresh } =
+    useStoreData({ apiBaseUrl: active?.apiBaseUrl })
   const mutationLifecycle = useStoreMutationLifecycle(active?.apiBaseUrl, refresh)
   const mutationSnapshot = useMutationObservations()
   const stores = inspector?.stores ?? []
@@ -63,6 +70,13 @@ export function StoreInspectorRoute() {
   } | null>(null)
   const dispatchStoreMutation = useStoreMutationDispatcher()
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const [setupRegisterDraft, setSetupRegisterDraft] = useState<StoreSetupRegisterDraft>({
+    kind: 'register',
+    id: '',
+    path: '',
+    remote: '',
+    authority: null,
+  })
 
   const visibleStores = useMemo(() => {
     const normalized = filter.trim().toLowerCase()
@@ -89,17 +103,20 @@ export function StoreInspectorRoute() {
       authority: StoreActionAuthority | null = active
     ): Promise<void> => {
       setMutationError(null)
+      if (!canMutate) {
+        throw new Error('Store diagnostics are not current. Wait for refresh to settle.')
+      }
       const requestId = `${kind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
       await dispatchAndCorrelate(authority, { requestId, kind, ...input })
     },
-    [active, dispatchAndCorrelate]
+    [active, canMutate, dispatchAndCorrelate]
   )
 
   let body
-  if (isLoading && !inspector) {
+  if (isInspectorLoading && !inspector) {
     body = <LoadingView label="Loading store diagnostics..." />
-  } else if (error && !inspector) {
-    body = <ErrorView message={error.message} />
+  } else if (inspectorError && !inspector) {
+    body = <ErrorView message={inspectorError.message} />
   } else if (stores.length === 0) {
     body = (
       <EmptyView title="No Stores registered">
@@ -109,8 +126,10 @@ export function StoreInspectorRoute() {
             <code className="bg-muted rounded px-1">openspec store doctor</code>.
           </p>
           <StoreSetupRegisterForm
-            disabled={!active?.apiBaseUrl}
+            disabled={!active?.apiBaseUrl || !canMutate}
             authority={active}
+            draft={setupRegisterDraft}
+            onDraftChange={setSetupRegisterDraft}
             onSubmit={(authority, kind, input) => {
               runMutation(kind, input, authority).catch((err: unknown) => {
                 setMutationError(err instanceof Error ? err.message : String(err))
@@ -168,7 +187,7 @@ export function StoreInspectorRoute() {
           <StoreInspectorDetail
             store={selected}
             onRemove={() => {
-              if (active) {
+              if (active && canMutate) {
                 setRemoveTarget({
                   store: selected,
                   authority: active,
@@ -182,6 +201,7 @@ export function StoreInspectorRoute() {
                 setMutationError(err instanceof Error ? err.message : String(err))
               })
             }}
+            mutationDisabled={!canMutate}
           />
         ) : (
           <EmptyView title="Select a Store to inspect" />
@@ -214,6 +234,16 @@ export function StoreInspectorRoute() {
 
   return (
     <StoreManagerShell>
+      {isInspectorUpdating && inspector ? (
+        <span
+          role="status"
+          aria-label="Refreshing store diagnostics"
+          className="text-muted-foreground inline-flex self-start"
+        >
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        </span>
+      ) : null}
+      {inspectorError && inspector ? <ErrorView message={inspectorError.message} /> : null}
       {body}
       {mutationError ? (
         <p
@@ -232,10 +262,12 @@ function StoreInspectorDetail({
   store,
   onRemove,
   onUnregister,
+  mutationDisabled,
 }: {
   store: StoreDoctorStore
   onRemove: () => void
   onUnregister: () => void
+  mutationDisabled: boolean
 }) {
   const health = deriveHealthFromDiagnostics(store.status)
   return (
@@ -293,6 +325,7 @@ function StoreInspectorDetail({
           <button
             type="button"
             onClick={onUnregister}
+            disabled={mutationDisabled}
             className="hover:bg-muted rounded-md border px-3 py-1.5 text-xs"
           >
             Unregister (forget entry)
@@ -300,6 +333,7 @@ function StoreInspectorDetail({
           <button
             type="button"
             onClick={onRemove}
+            disabled={mutationDisabled}
             className="border-destructive/40 text-destructive hover:bg-destructive/10 inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -318,34 +352,32 @@ function StoreInspectorDetail({
 function StoreSetupRegisterForm({
   disabled,
   authority,
+  draft,
+  onDraftChange,
   onSubmit,
 }: {
   disabled: boolean
   authority: StoreActionAuthority | null
+  draft: StoreSetupRegisterDraft
+  onDraftChange: (draft: StoreSetupRegisterDraft) => void
   onSubmit: (
     authority: StoreActionAuthority | null,
     kind: 'setup' | 'register',
     input: Record<string, unknown>
   ) => void
 }) {
-  const [kind, setKind] = useState<'setup' | 'register'>('register')
-  const [id, setId] = useState('')
-  const [path, setPath] = useState('')
-  const [remote, setRemote] = useState('')
-  const [draftAuthority, setDraftAuthority] = useState<StoreActionAuthority | null>(null)
-
   const submit = () => {
-    if (!path.trim()) return
-    if (kind === 'setup') {
-      onSubmit(draftAuthority ?? authority, 'setup', {
-        storeId: id.trim() || undefined,
-        path: path.trim(),
-        remote: remote.trim() || undefined,
+    if (!draft.path.trim()) return
+    if (draft.kind === 'setup') {
+      onSubmit(draft.authority ?? authority, 'setup', {
+        storeId: draft.id.trim() || undefined,
+        path: draft.path.trim(),
+        remote: draft.remote.trim() || undefined,
       })
     } else {
-      onSubmit(draftAuthority ?? authority, 'register', {
-        path: path.trim(),
-        id: id.trim() || undefined,
+      onSubmit(draft.authority ?? authority, 'register', {
+        path: draft.path.trim(),
+        id: draft.id.trim() || undefined,
       })
     }
   }
@@ -362,15 +394,15 @@ function StoreSetupRegisterForm({
       <div className="flex gap-2 text-xs">
         <button
           type="button"
-          onClick={() => setKind('register')}
-          className={`rounded-md border px-2 py-1 ${kind === 'register' ? 'bg-primary text-primary-foreground' : ''}`}
+          onClick={() => onDraftChange({ ...draft, kind: 'register' })}
+          className={`rounded-md border px-2 py-1 ${draft.kind === 'register' ? 'bg-primary text-primary-foreground' : ''}`}
         >
           Register existing
         </button>
         <button
           type="button"
-          onClick={() => setKind('setup')}
-          className={`rounded-md border px-2 py-1 ${kind === 'setup' ? 'bg-primary text-primary-foreground' : ''}`}
+          onClick={() => onDraftChange({ ...draft, kind: 'setup' })}
+          className={`rounded-md border px-2 py-1 ${draft.kind === 'setup' ? 'bg-primary text-primary-foreground' : ''}`}
         >
           Setup new
         </button>
@@ -378,36 +410,27 @@ function StoreSetupRegisterForm({
       <input
         type="text"
         placeholder="Store id (optional override)"
-        value={id}
-        onChange={(e) => {
-          setDraftAuthority(authority)
-          setId(e.target.value)
-        }}
+        value={draft.id}
+        onChange={(event) => onDraftChange({ ...draft, id: event.target.value, authority })}
         className="border-border bg-background w-full rounded border px-2 py-1 text-xs"
       />
       <input
         type="text"
         placeholder="Path to Store root"
-        value={path}
-        onChange={(e) => {
-          setDraftAuthority(authority)
-          setPath(e.target.value)
-        }}
+        value={draft.path}
+        onChange={(event) => onDraftChange({ ...draft, path: event.target.value, authority })}
         className="border-border bg-background w-full rounded border px-2 py-1 text-xs"
       />
-      {kind === 'setup' ? (
+      {draft.kind === 'setup' ? (
         <input
           type="text"
           placeholder="Git remote (optional)"
-          value={remote}
-          onChange={(e) => {
-            setDraftAuthority(authority)
-            setRemote(e.target.value)
-          }}
+          value={draft.remote}
+          onChange={(event) => onDraftChange({ ...draft, remote: event.target.value, authority })}
           className="border-border bg-background w-full rounded border px-2 py-1 text-xs"
         />
       ) : null}
-      {draftAuthority && !isSameStoreActionAuthority(draftAuthority, authority) ? (
+      {draft.authority && !isSameStoreActionAuthority(draft.authority, authority) ? (
         <p className="text-xs text-amber-700" role="status">
           This draft belongs to a previous environment observation. Edit a field to bind the current
           environment.
@@ -415,10 +438,10 @@ function StoreSetupRegisterForm({
       ) : null}
       <button
         type="submit"
-        disabled={disabled || !path.trim()}
+        disabled={disabled || !draft.path.trim()}
         className="bg-primary text-primary-foreground w-full rounded-md px-3 py-1.5 text-xs disabled:opacity-50"
       >
-        {kind === 'setup' ? 'Setup Store' : 'Register Store'}
+        {draft.kind === 'setup' ? 'Setup Store' : 'Register Store'}
       </button>
     </form>
   )

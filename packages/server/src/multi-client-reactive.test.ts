@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Verify two clients observe external Store and registry invalidations from one environment.
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Verify two clients ignore unrelated Store content and observe Store registry invalidations from one environment.
  * 2. Verify concurrent mutation settlement coalesces and reconnect snapshots recover current identity.
  * 3. Verify Store-root disappearance reaches every connected client.
  * 4. Verify the complete multi-client environment tears down without watcher residue.
@@ -14,7 +14,6 @@ import {
   OpenSpecDataHomeObserver,
   ReactiveObservationEnvironment,
   RuntimeInvalidationIndex,
-  RuntimeRootInvalidationRegistry,
   type RuntimeInvalidationToken,
 } from '@openspecui/core'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -39,7 +38,7 @@ afterEach(async () => {
 })
 
 describe('multi-client reactive environment', () => {
-  it('converges external edits, concurrent mutations, reconnect, and root disappearance', async () => {
+  it('converges registry changes, concurrent mutations, reconnect, and root disappearance', async () => {
     const dataHomeRoot = await createRoot('openspecui-multi-client-data-')
     const storeRoot = await createRoot('openspecui-multi-client-store-')
     const environment = new ReactiveObservationEnvironment()
@@ -50,11 +49,7 @@ describe('multi-client reactive environment', () => {
       invalidation,
     })
     await dataHome.start()
-    const storeInvalidation = new RuntimeRootInvalidationRegistry(invalidation, [
-      'stores',
-      'context',
-    ])
-    const stores = new StoreObservationService(environment, storeInvalidation)
+    const stores = new StoreObservationService(environment, invalidation)
     await stores.reconcile([{ id: 'shared', root: storeRoot }])
     const fallback = new StoreObservationFallbackService({
       invalidation,
@@ -74,18 +69,12 @@ describe('multi-client reactive environment', () => {
       secondClient.push(tokens)
     })
 
+    const contextBeforeUnrelatedStoreContent = invalidation.current('context')
     await writeFile(join(storeRoot, 'external.md'), '# External Store edit\n', 'utf8')
-    await vi.waitFor(
-      () => {
-        expect(firstClient.length).toBeGreaterThan(0)
-        expect(secondClient.length).toBe(firstClient.length)
-      },
-      { timeout: 3_000, interval: 50 }
-    )
-    expect(firstClient.at(-1)).toEqual(secondClient.at(-1))
-    expect(firstClient.at(-1)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ facet: 'stores' })])
-    )
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    expect(invalidation.current('context')).toBe(contextBeforeUnrelatedStoreContent)
+    expect(firstClient).toEqual([])
+    expect(secondClient).toEqual([])
 
     await mkdir(join(dataHomeRoot, 'stores'), { recursive: true })
     await writeFile(
@@ -93,9 +82,9 @@ describe('multi-client reactive environment', () => {
       'version: 1\nstores: {}\n',
       'utf8'
     )
-    const contextAfterStoreEdit = invalidation.current('context')
+    const contextAfterStoreRegistry = invalidation.current('context')
     await vi.waitFor(
-      () => expect(invalidation.current('context')).toBeGreaterThan(contextAfterStoreEdit),
+      () => expect(invalidation.current('context')).toBeGreaterThan(contextAfterStoreRegistry),
       { timeout: 3_000, interval: 50 }
     )
     await vi.waitFor(() => expect(firstClient.at(-1)).toEqual(secondClient.at(-1)))
@@ -146,7 +135,6 @@ describe('multi-client reactive environment', () => {
     await fallback.dispose()
     await stores.dispose()
     await dataHome.dispose()
-    storeInvalidation.dispose()
     await environment.dispose()
     expect(getActiveWatcherCount()).toBe(0)
     expect(getWatcherRuntimeStatus()).toBeNull()

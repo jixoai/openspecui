@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
  * 1. Expose the Server-owned live Projection Work primitives.
- * 2. Keep protocol, trace, scheduler, and registry physically discoverable.
+ * 2. Keep protocol, trace, scheduler, registry, and lifecycle Pull/Push physically discoverable.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  */

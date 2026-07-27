@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove reactive Code/Planning binding epochs across A -> B -> Code -> A.
  * 2. Prove stale Planning intent conflicts before refresh, removal, or handoff side effects.
  * 3. Prove Launch-owned Code Git remains available when Planning resolution fails.
@@ -174,6 +174,7 @@ async function createFixture(): Promise<GitBindingFixture> {
     observationEnvironment: { acquireRoot: async () => async () => {} },
     projectInvalidation: { acquireRoot: () => () => {} },
     runtimeInvalidation,
+    storeObservation: { subscribe: () => () => {} },
     codeBinding,
   })
   const fixture: GitBindingFixture = {

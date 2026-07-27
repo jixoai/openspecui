@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify Store unregister releases its physical observation root.
  * 2. Verify invalidation subscriber disconnect releases pending notification delivery.
  * 3. Verify fallback, path subscriptions, and every environment root release on teardown.
@@ -55,11 +55,7 @@ describe('runtime observation lifecycle', () => {
       invalidation,
     })
     await dataHome.start()
-    const storeInvalidation = new RuntimeRootInvalidationRegistry(invalidation, [
-      'stores',
-      'context',
-    ])
-    const stores = new StoreObservationService(environment, storeInvalidation)
+    const stores = new StoreObservationService(environment, invalidation)
     await stores.reconcile([{ id: 'shared', root: storeRoot }])
     const fallback = new StoreObservationFallbackService({
       invalidation,
@@ -89,7 +85,6 @@ describe('runtime observation lifecycle', () => {
     await fallback.dispose()
     await stores.dispose()
     await dataHome.dispose()
-    storeInvalidation.dispose()
     projectInvalidation.dispose()
     await environment.dispose()
 

@@ -4,10 +4,20 @@
  * 2. Retain bounded display snapshots while preserving freshness and provenance.
  * 3. Retire generations so late A work cannot publish into current B state.
  * 4. Expose explicit invalidation, cancellation, batches, and typed failures.
+ * 5. Expose immediate cached lifecycle reads and data-free lifecycle notices.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
  */
-import { ReactiveContext } from '@openspecui/core'
+import {
+  ReactiveContext,
+  toCliProjectionFailure,
+  toCliProjectionNotice,
+  type CliProjectionFailure,
+  type CliProjectionInvalidationCause,
+  type CliProjectionNotice,
+  type CliProjectionState,
+} from '@openspecui/core'
 import { ProjectionWorkPhaseTrace } from './phase-trace.js'
 import { ProjectionWorkScheduler } from './scheduler.js'
 import {
@@ -84,6 +94,10 @@ function validateLimit(value: number, label: string): void {
 
 type ProjectionWorkListener<T, TBatch> = (event: ProjectionWorkEvent<T, TBatch>) => void
 
+type ProjectionWorkAttempt<T> =
+  | { outcome: 'succeeded'; data: T; generation: number }
+  | { outcome: 'failed'; error: unknown; generation: number }
+
 class ProjectionWork<T, TBatch> {
   private readonly listeners = new Set<ProjectionWorkListener<T, TBatch>>()
   private snapshot: ProjectionWorkSnapshot<T> | null = null
@@ -94,6 +108,8 @@ class ProjectionWork<T, TBatch> {
   private loading = false
   private controller: AbortController | null = null
   private reactiveContext: ReactiveContext | null = null
+  private lastFailure: CliProjectionFailure | null = null
+  private invalidationCause: CliProjectionInvalidationCause = 'initial'
   private disposed = false
   private touchedAt = 0
 
@@ -108,6 +124,10 @@ class ProjectionWork<T, TBatch> {
 
   get listenerCount(): number {
     return this.listeners.size
+  }
+
+  get identity(): ProjectionWorkIdentity {
+    return this.request.identity
   }
 
   get hasSnapshot(): boolean {
@@ -128,6 +148,62 @@ class ProjectionWork<T, TBatch> {
 
   get isLoading(): boolean {
     return this.loading
+  }
+
+  get state(): CliProjectionState<T> {
+    const common = {
+      identity: this.key,
+      workGeneration: this.workGeneration,
+      invalidationCause: this.invalidationCause,
+    }
+    const snapshot = this.snapshot
+    if (!snapshot) {
+      return this.lastFailure
+        ? {
+            ...common,
+            state: 'error',
+            data: null,
+            freshness: null,
+            snapshotGeneration: null,
+            error: this.lastFailure,
+          }
+        : {
+            ...common,
+            state: 'loading',
+            data: null,
+            freshness: null,
+            snapshotGeneration: null,
+            error: null,
+          }
+    }
+    if (this.lastFailure) {
+      return {
+        ...common,
+        state: 'refresh-error',
+        data: snapshot.data,
+        freshness: 'stale-display-only',
+        snapshotGeneration: snapshot.workGeneration,
+        error: this.lastFailure,
+      }
+    }
+    if (this.loading || snapshot.freshness === 'stale-display-only') {
+      return {
+        ...common,
+        state: 'revalidating',
+        data: snapshot.data,
+        freshness: 'stale-display-only',
+        snapshotGeneration: snapshot.workGeneration,
+        error: null,
+      }
+    }
+    return {
+      ...common,
+      state: 'ready',
+      data: snapshot.data,
+      freshness: 'current',
+      snapshotGeneration: snapshot.workGeneration,
+      error: null,
+    }
   }
 
   touch(sequence: number): void {
@@ -155,6 +231,20 @@ class ProjectionWork<T, TBatch> {
       this.publishTo(listener, { type: 'snapshot', snapshot: this.snapshot })
     }
 
+    // A failed reactive run remains alive so a later dependency change can recover it. Subscribers
+    // arriving inside that interval must observe the settled failure immediately instead of waiting
+    // forever for a transition that already happened.
+    if (this.activeRun && !this.loading && this.lastFailure) {
+      const error = new Error(this.lastFailure.message)
+      error.name = this.lastFailure.name
+      this.publishTo(listener, {
+        type: 'failed',
+        error,
+        retainedSnapshot: this.snapshot,
+        workGeneration: this.workGeneration,
+      })
+    }
+
     if (this.activeRun && this.loading) {
       this.record('join', this.workGeneration)
       this.publishTo(listener, {
@@ -170,7 +260,7 @@ class ProjectionWork<T, TBatch> {
         workGeneration: this.workGeneration,
       })
     } else {
-      this.start()
+      this.start(this.snapshot ? 'subscriber-resume' : 'initial')
     }
 
     let subscribed = true
@@ -184,11 +274,11 @@ class ProjectionWork<T, TBatch> {
     }
   }
 
-  invalidate(): void {
+  invalidate(cause: CliProjectionInvalidationCause = 'explicit-refresh'): void {
     if (this.disposed) return
     this.retireActiveRun()
     this.markSnapshotStale()
-    if (this.listeners.size > 0) this.start()
+    if (this.listeners.size > 0) this.start(cause)
     else this.registry.onDormant(this)
   }
 
@@ -220,8 +310,9 @@ class ProjectionWork<T, TBatch> {
     this.registry.onDormant(this)
   }
 
-  private start(): void {
+  private start(cause: CliProjectionInvalidationCause): void {
     if (this.disposed || this.listeners.size === 0 || this.activeRun) return
+    this.invalidationCause = cause
     this.workGeneration += 1
     const generation = this.workGeneration
     const controller = new AbortController()
@@ -229,6 +320,7 @@ class ProjectionWork<T, TBatch> {
     this.reactiveContext = new ReactiveContext()
     this.activeRun = true
     this.loading = true
+    this.lastFailure = null
     this.record('start', generation)
     this.publishStage('start', generation)
 
@@ -237,36 +329,43 @@ class ProjectionWork<T, TBatch> {
 
   private async run(controller: AbortController, context: ReactiveContext): Promise<void> {
     try {
-      for await (const result of context.stream(
+      for await (const result of context.stream<ProjectionWorkAttempt<T>>(
         async () => {
           const generation = this.workGeneration
-          const data = await this.registry.scheduler.schedule({
-            resourceClass: this.request.resourceClass,
-            priority: this.request.priority,
-            signal: controller.signal,
-            run: (scheduleSignal) =>
-              this.request.load({
-                signal: scheduleSignal,
-                workGeneration: generation,
-                reportStage: (phase) => {
-                  if (this.isCurrentRun(generation, controller)) {
-                    this.record(phase, generation)
-                    this.publishStage(phase, generation)
-                  }
-                },
-                emitBatch: (batch, progress) => {
-                  if (!this.isCurrentRun(generation, controller)) return
-                  this.publish({
-                    type: 'batch',
-                    batch,
-                    progress,
-                    identity: this.request.identity,
+          try {
+            const data = await this.registry.scheduler.schedule({
+              resourceClass: this.request.resourceClass,
+              priority: this.request.priority,
+              signal: controller.signal,
+              run: (scheduleSignal) =>
+                context.runOnce(() =>
+                  this.request.load({
+                    signal: scheduleSignal,
                     workGeneration: generation,
+                    reportStage: (phase) => {
+                      if (this.isCurrentRun(generation, controller)) {
+                        this.record(phase, generation)
+                        this.publishStage(phase, generation)
+                      }
+                    },
+                    emitBatch: (batch, progress) => {
+                      if (!this.isCurrentRun(generation, controller)) return
+                      this.publish({
+                        type: 'batch',
+                        batch,
+                        progress,
+                        identity: this.request.identity,
+                        workGeneration: generation,
+                      })
+                    },
                   })
-                },
-              }),
-          })
-          return { data, generation }
+                ),
+            })
+            return { outcome: 'succeeded', data, generation }
+          } catch (error) {
+            if (controller.signal.aborted || isAbortError(error)) throw error
+            return { outcome: 'failed', error, generation }
+          }
         },
         controller.signal,
         {
@@ -274,6 +373,19 @@ class ProjectionWork<T, TBatch> {
         }
       )) {
         if (!this.isCurrentRun(result.generation, controller)) continue
+        if (result.outcome === 'failed') {
+          this.loading = false
+          this.lastFailure = toCliProjectionFailure(result.error)
+          this.record('error', result.generation)
+          this.publishStage('error', result.generation)
+          this.publish({
+            type: 'failed',
+            error: result.error instanceof Error ? result.error : new Error(String(result.error)),
+            retainedSnapshot: this.snapshot,
+            workGeneration: result.generation,
+          })
+          continue
+        }
         this.loading = false
         const snapshot: ProjectionWorkSnapshot<T> = {
           data: result.data,
@@ -282,6 +394,7 @@ class ProjectionWork<T, TBatch> {
           workGeneration: result.generation,
         }
         this.snapshot = snapshot
+        this.lastFailure = null
         this.snapshotBytes = normalizeSnapshotBytes(this.request.estimateSnapshotBytes(result.data))
         this.registry.onSnapshot(this)
         this.record('first-stable-payload', snapshot.workGeneration)
@@ -298,6 +411,7 @@ class ProjectionWork<T, TBatch> {
         return
       }
       this.loading = false
+      this.lastFailure = toCliProjectionFailure(error)
       this.record('error', this.workGeneration)
       this.publishStage('error', this.workGeneration)
       this.publish({
@@ -318,8 +432,10 @@ class ProjectionWork<T, TBatch> {
 
   private beginReactiveReplacement(controller: AbortController): void {
     if (!this.isCurrentController(controller) || this.listeners.size === 0) return
+    this.invalidationCause = 'dependency'
     this.workGeneration += 1
     this.loading = true
+    this.lastFailure = null
     this.markSnapshotStale()
     this.record('start', this.workGeneration)
     this.publishStage('start', this.workGeneration)
@@ -431,9 +547,48 @@ export class ProjectionWorkRegistry<T, TBatch = never> {
     return work.subscribe(listener)
   }
 
-  invalidate(identity: ProjectionWorkIdentity): void {
+  /** Subscribe to data-free lifecycle wake-ups while the same Work owns the actual projection payload. */
+  subscribeLifecycle(
+    request: ProjectionWorkRequest<T, TBatch>,
+    listener: (notice: CliProjectionNotice) => void
+  ): ProjectionWorkSubscription {
+    let lastNoticeKey: string | null = null
+    return this.subscribe(request, () => {
+      const state = this.read(request.identity)
+      if (!state) return
+      const notice = toCliProjectionNotice(state)
+      const noticeKey = JSON.stringify(notice)
+      if (noticeKey === lastNoticeKey) return
+      lastNoticeKey = noticeKey
+      listener(notice)
+    })
+  }
+
+  /** Read the current cached/in-flight lifecycle without awaiting replacement settlement. */
+  read(identity: ProjectionWorkIdentity): CliProjectionState<T> | null {
+    return this.works.get(projectionWorkIdentityKey(identity))?.state ?? null
+  }
+
+  invalidate(
+    identity: ProjectionWorkIdentity,
+    cause: CliProjectionInvalidationCause = 'explicit-refresh'
+  ): void {
     const work = this.works.get(projectionWorkIdentityKey(identity))
-    work?.invalidate()
+    work?.invalidate(cause)
+  }
+
+  /** Invalidate only currently retained Work identities; evicted selectors leave no side registry. */
+  invalidateMatching(
+    predicate: (identity: ProjectionWorkIdentity) => boolean,
+    cause: CliProjectionInvalidationCause = 'explicit-refresh'
+  ): number {
+    let invalidated = 0
+    for (const work of this.works.values()) {
+      if (!predicate(work.identity)) continue
+      work.invalidate(cause)
+      invalidated += 1
+    }
+    return invalidated
   }
 
   clear(): void {

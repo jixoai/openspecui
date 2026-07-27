@@ -1,5 +1,15 @@
+/**
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Gate Web compatibility from the shared Root Context CLI evidence only.
+ * 2. Preserve session-only bypass and execute-path repair controls.
+ * 3. Revalidate the shared Root Context Work after explicit repair or refresh.
+ *
+ * Original request (2026-07-15): "CLI 1.6 compatibility gate."
+ * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
+ */
 import { isStaticMode } from '@/lib/static-mode'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
+import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import { useConfigSubscription } from '@/lib/use-subscription'
 import {
   classifyOpenSpecCliVersion,
@@ -7,7 +17,7 @@ import {
   OPENSPEC_CLI_RECOMMENDED_RANGE,
   OPENSPECUI_TARGET_MAJOR,
 } from '@openspecui/core/openspec-compat'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { AlertCircle, Loader2, ShieldAlert, Terminal } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -24,17 +34,9 @@ export function CliHealthGate() {
   if (isStaticMode()) return null
 
   const { data: config } = useConfigSubscription()
-
-  const {
-    data,
-    isLoading,
-    refetch: recheckCli,
-    isFetching,
-  } = useQuery({
-    ...trpc.cli.checkAvailability.queryOptions(),
-    staleTime: 0,
-    gcTime: 0,
-  })
+  const rootSubscription = useContextSubscription()
+  const rootContext = selectRootContextSnapshot(rootSubscription.data)
+  const data = rootContext?.cli
   const [cliCommand, setCliCommand] = useState('')
 
   const savedCliCommand = useMemo(() => {
@@ -46,16 +48,15 @@ export function CliHealthGate() {
     setCliCommand(savedCliCommand)
   }, [savedCliCommand])
 
-  useEffect(() => {
-    void recheckCli()
-  }, [config?.cli?.command, config?.cli?.args, recheckCli])
+  const recheckCliMutation = useMutation({
+    mutationFn: () => trpcClient.rootContext.refreshProjection.mutate(),
+  })
 
   const saveCliCommandMutation = useMutation({
     mutationFn: (command: string) => trpcClient.config.update.mutate({ cli: { command } }),
     onSuccess: async () => {
       await Promise.allSettled([
-        recheckCli(),
-        queryClient.invalidateQueries(trpc.cli.checkAvailability.queryFilter()),
+        trpcClient.rootContext.refreshProjection.mutate(),
         queryClient.invalidateQueries(trpc.config.getEffectiveCliCommand.queryFilter()),
       ])
     },
@@ -65,7 +66,7 @@ export function CliHealthGate() {
   // out-of-range OpenSpec CLI version. Not persisted — a refresh re-checks.
   const [forceBypassed, setForceBypassed] = useState(false)
 
-  if (isLoading) {
+  if (rootSubscription.isLoading && !data) {
     return null
   }
 
@@ -92,7 +93,11 @@ export function CliHealthGate() {
     )
   }
 
-  const checking = isFetching || saveCliCommandMutation.isPending
+  const checking =
+    recheckCliMutation.isPending ||
+    saveCliCommandMutation.isPending ||
+    rootSubscription.authority.state === 'waiting' ||
+    rootSubscription.data?.state === 'refreshing'
 
   const reason = !data?.available ? data?.error || 'OpenSpec CLI not found.' : compatibility.message
 
@@ -132,7 +137,7 @@ export function CliHealthGate() {
         </div>
         <div className="flex items-center gap-2 text-sm">
           <button
-            onClick={() => void recheckCli()}
+            onClick={() => recheckCliMutation.mutate()}
             disabled={checking}
             className="border-border hover:bg-muted flex items-center gap-2 rounded-md border px-3 py-1.5 disabled:opacity-50"
           >

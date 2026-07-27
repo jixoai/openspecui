@@ -5,6 +5,7 @@
  * 3. Publish browser-safe subpath contracts, including Dashboard Summary v2 and the external Codex command
  *    observation root, without forcing browser runtimes through this root.
  * 4. Export the typed Git repository binding and Dashboard provenance contracts.
+ * 5. Export the generic CLI-backed projection lifecycle while preserving the browser-safe subpath.
  *
  * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
  * Original request (2026-07-17): "Root-scoped stream startup returns an owned handle, not a void cancel function."
@@ -12,6 +13,7 @@
  * Derived requirement (2026-07-19): "Static Git remains unavailable and must not fabricate live binding provenance."
  * Derived requirement (2026-07-19): "Project Binding writes return typed launch and transition evidence."
  * Derived requirement (2026-07-20): "Environment-global Codex command observation shares Core path truth."
+ * Original request (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
  */
 /**
  * @openspecui/core
@@ -163,8 +165,12 @@ export {
 export {
   OwnedSpecIdentitySchema,
   ReferencedSpecIdentitySchema,
+  SpecCatalogSchema,
+  SpecCommandEvidenceSchema,
+  SpecDocumentProjectionSchema,
   SpecIdentitySchema,
   buildSpecCatalog,
+  createStaticSpecCatalogOwnedProjection,
   createStaticSpecCatalogReferenceProjection,
   createStaticSpecCatalogReferenceSource,
   getSpecCatalogEntry,
@@ -175,6 +181,7 @@ export {
   specRoutePath,
   type CliShowSpecDocument,
   type LiveReferencedSpecDocumentProjection,
+  type LiveSpecCatalogOwnedProjection,
   type LiveSpecCatalogReferenceSource,
   type OwnedSpecCatalogEntry,
   type OwnedSpecDocumentProjection,
@@ -184,12 +191,14 @@ export {
   type ReferencedSpecIdentity,
   type SpecCatalog,
   type SpecCatalogEntry,
+  type SpecCatalogOwnedProjection,
   type SpecCatalogReferenceProjection,
   type SpecCatalogReferenceSource,
   type SpecCommandEvidence,
   type SpecDocumentProjection,
   type SpecIdentity,
   type StaticReferencedSpecDocumentProjection,
+  type StaticSpecCatalogOwnedProjection,
   type StaticSpecCatalogReferenceProjection,
   type StaticSpecCatalogReferenceSource,
 } from './spec-catalog.js'
@@ -211,7 +220,9 @@ export {
   inspectProjectBinding,
   updateProjectBindingContent,
   type ActiveRootConfig,
+  type EnvironmentGlobalCliProjection,
   type EnvironmentGlobalConfig,
+  type EnvironmentGlobalFileProjection,
   type EnvironmentGlobalProfileState,
   type PlanningConfigDiagnostic,
   type PlanningConfigFile,
@@ -604,6 +615,7 @@ export {
   CliReferenceIndexEntrySchema,
   CliRootSchema,
   CliRootSourceSchema,
+  CliShowSpecDocumentSchema,
   CliShowSpecSchema,
   CliSpecListSchema,
   CliStoreCleanupSchema,
@@ -650,7 +662,27 @@ export {
 } from './cli-contracts/index.js'
 
 export {
-  OPEN_SPEC_DATA_HOME_INVALIDATION_FACETS,
+  CliJsonValueSchema,
+  CliProjectionCommandError,
+  CliProjectionCommandEvidenceSchema,
+  CliProjectionFailureSchema,
+  CliProjectionInvalidationCauseSchema,
+  CliProjectionNoticeSchema,
+  CliProjectionStateNameSchema,
+  cliProjectionStates,
+  createCliProjectionStateSchema,
+  toCliProjectionCommandEvidence,
+  toCliProjectionFailure,
+  toCliProjectionNotice,
+  type CliProjectionCommandEvidence,
+  type CliProjectionFailure,
+  type CliProjectionInvalidationCause,
+  type CliProjectionNotice,
+  type CliProjectionState,
+  type CliProjectionStateName,
+} from './cli-projection.js'
+export {
+  OPEN_SPEC_DATA_HOME_OBSERVATION_TARGETS,
   OpenSpecDataHomeObserver,
   type OpenSpecDataHomeObservationState,
   type OpenSpecDataHomeObserverOptions,
@@ -662,6 +694,22 @@ export {
   type OpenSpecDataScopeSource,
   type ResolveOpenSpecDataScopeOptions,
 } from './open-spec-data-scope.js'
+export {
+  EnvironmentGlobalFileProjectionDataSchema,
+  EnvironmentGlobalFileProjectionStateSchema,
+  EnvironmentGlobalProjectionDataSchema,
+  EnvironmentGlobalProjectionStateSchema,
+  PlanningCliProjectionDataSchema,
+  PlanningCliProjectionSelectorSchema,
+  PlanningCliProjectionStateSchema,
+  type EnvironmentGlobalFileProjectionData,
+  type EnvironmentGlobalFileProjectionState,
+  type EnvironmentGlobalProjectionData,
+  type EnvironmentGlobalProjectionState,
+  type PlanningCliProjectionData,
+  type PlanningCliProjectionSelector,
+  type PlanningCliProjectionState,
+} from './planning-cli-projection.js'
 export {
   getRootContextCliSelector,
   resolveRootContext,
@@ -919,7 +967,7 @@ export {
 } from './terminal-theme.js'
 
 // OPSX Kernel - reactive in-memory data store
-export { OpsxKernel, type TemplateContentMap } from './opsx-kernel.js'
+export { OpsxKernel } from './opsx-kernel.js'
 
 // OPSX CLI output schemas and types
 export {
@@ -948,6 +996,7 @@ export {
 export { parseOpsxSchemaDetail, type ParsedOpsxSchemaDetail } from './opsx-schema-detail.js'
 export {
   ApplyInstructionsContextFilesSchema,
+  ApplyInstructionsProjectionSchema,
   ApplyInstructionsSchema,
   ApplyTaskSchema,
   ArtifactInstructionsSchema,
@@ -955,11 +1004,14 @@ export {
   ChangeStatusSchema,
   DependencyInfoSchema,
   OpsxCliEvidenceSchema,
+  OpsxConfigBundleSchema,
   OpsxStatusEvidenceSchema,
   SchemaArtifactSchema,
   SchemaDetailSchema,
   SchemaInfoSchema,
   SchemaResolutionSchema,
+  TemplateContentMapSchema,
+  TemplateContentSchema,
   TemplatesSchema,
   isGlobPattern,
   type ApplyInstructions,
@@ -969,11 +1021,13 @@ export {
   type ChangeStatus,
   type DependencyInfo,
   type OpsxCliEvidence,
+  type OpsxConfigBundle,
   type OpsxStatusEvidence,
   type SchemaArtifact,
   type SchemaDetail,
   type SchemaInfo,
   type SchemaResolution,
+  type TemplateContentMap,
   type TemplatesMap,
 } from './opsx-types.js'
 

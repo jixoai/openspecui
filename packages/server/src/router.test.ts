@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove public Router owner boundaries and Planning-root stream settlement.
  * 2. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
  * 4. Prove stale Git binding intent conflicts before rebound repository side effects.
- * 5. Prove OPSX Status and lazy leaves bypass full Kernel warmup while preserving typed evidence.
+ * 5. Prove Root, Store, Planning CLI, and Environment Global Projection Work routes through their real Server owners.
  *
  * Original request (2026-07-17): "Every public application mutation remains inside its Server-owned root and lifetime."
  * Original request (2026-07-17): "Rejected Validate and Update handles converge to one public terminal error."
@@ -12,6 +12,7 @@
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  * Derived requirement (2026-07-19): Project Binding mutation exposes launch-write and convergence evidence.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
 import {
   CliExecutor,
@@ -24,6 +25,7 @@ import {
   type CliCommandResult,
   type CliContext,
   type CliDoctor,
+  type CliProjectionNotice,
   type CliStreamEvent,
   type CliStreamHandle,
   type CliStreamSettlement,
@@ -53,10 +55,30 @@ import type {
   ChangeProjectionEvent,
   ChangesProjectionServiceContract,
 } from './changes-projection-service.js'
+import {
+  createEnvironmentGlobalProjectionWorkOwner,
+  EnvironmentGlobalProjectionService,
+} from './environment-global-projection-service.js'
 import { FilePreviewService } from './file-preview-service.js'
+import {
+  createPlanningCliProjectionWorkOwner,
+  PlanningCliProjectionService,
+} from './planning-cli-projection-service.js'
 import { PlanningRootServiceManager, type PlanningRootServices } from './planning-root-service.js'
-import type { ProjectionWorkIdentity, ProjectionWorkSubscription } from './projection-work/index.js'
+import {
+  createServerProjectionWorkRuntime,
+  type ProjectionWorkIdentity,
+  type ProjectionWorkSubscription,
+} from './projection-work/index.js'
+import {
+  createRootContextProjectionWorkOwner,
+  RootContextProjectionService,
+} from './root-context-projection-service.js'
 import type { SchemaMutationAction } from './schema-mutation-service.js'
+import {
+  createStoreProjectionWorkOwner,
+  StoreProjectionService,
+} from './store-projection-service.js'
 
 function settledStreamHandle(exitCode: number | null): CliStreamHandle {
   const settlement: CliStreamSettlement = { reason: 'exited', exitCode }
@@ -421,6 +443,7 @@ const createMockContext = (
     projectRecoveryService?: Context['projectRecoveryService']
   } = {}
 ): Context => {
+  const projectDir = options.projectDir ?? '/tmp/openspecui-router-test'
   const configManager = {
     readConfig: vi.fn().mockResolvedValue({
       cli: {},
@@ -538,6 +561,36 @@ const createMockContext = (
         },
         diagnostics: [],
       }),
+      listSpecs: vi.fn().mockResolvedValue({
+        success: true,
+        stdout: JSON.stringify({
+          specs: [
+            { id: 'auth', requirementCount: 2 },
+            { id: 'api', requirementCount: 1 },
+          ],
+          root: { path: projectDir, source: 'nearest' },
+          status: [],
+        }),
+        stderr: '',
+        exitCode: 0,
+        data: {
+          specs: [
+            { id: 'auth', requirementCount: 2 },
+            { id: 'api', requirementCount: 1 },
+          ],
+          root: { path: projectDir, source: 'nearest' },
+          status: [],
+        },
+        payload: {
+          specs: [
+            { id: 'auth', requirementCount: 2 },
+            { id: 'api', requirementCount: 1 },
+          ],
+          root: { path: projectDir, source: 'nearest' },
+          status: [],
+        },
+        diagnostics: [],
+      }),
       showSpec: vi.fn(),
       listStores: vi.fn().mockResolvedValue({
         success: true,
@@ -568,10 +621,38 @@ const createMockContext = (
 
   const kernel = {
     waitForWarmup: vi.fn().mockResolvedValue(undefined),
-    ensureStatusList: vi.fn().mockResolvedValue(undefined),
-    getStatusList: vi.fn().mockReturnValue([]),
-    ensureApplyInstructions: vi.fn().mockResolvedValue(undefined),
-    getApplyInstructions: vi.fn().mockReturnValue({
+    readStatusProjection: vi.fn(),
+    readChangeListProjection: vi.fn().mockResolvedValue({
+      value: ['add-caching'],
+      evidence: {
+        success: true,
+        stdout: '{"changes":[{"name":"add-caching"}]}',
+        stderr: '',
+        exitCode: 0,
+        payload: { changes: [{ name: 'add-caching' }] },
+        diagnostics: [],
+      },
+    }),
+    readStatusListProjection: vi.fn().mockResolvedValue({
+      value: [],
+      evidence: {
+        success: true,
+        stdout: '{"changes":[]}',
+        stderr: '',
+        exitCode: 0,
+        payload: { changes: [] },
+        diagnostics: [],
+      },
+    }),
+    readInstructionsProjection: vi.fn(),
+    readApplyInstructionsProjection: vi.fn().mockResolvedValue({
+      changeName: 'add-caching',
+      changeDir: '/tmp/openspecui-router-test/openspec/changes/add-caching',
+      schemaName: 'spec-driven',
+      contextFiles: {},
+      tasks: [],
+      state: 'all_done',
+      instruction: 'No pending tasks.',
       applyInstructionProgress: {
         source: 'openspec-instructions-apply',
         total: 0,
@@ -592,6 +673,13 @@ const createMockContext = (
         root: { path: '/tmp/openspecui-router-test', source: 'nearest' },
       },
     }),
+    readConfigBundleProjection: vi.fn().mockResolvedValue({
+      schemas: [],
+      schemaDetails: {},
+      schemaResolutions: {},
+    }),
+    readTemplatesProjection: vi.fn().mockResolvedValue({}),
+    readTemplateContentsProjection: vi.fn().mockResolvedValue({}),
     ensureArtifactOutput: vi.fn().mockResolvedValue(undefined),
     getArtifactOutput: vi.fn().mockReturnValue('# Source artifact'),
     ensureGlobArtifactFiles: vi.fn().mockResolvedValue(undefined),
@@ -666,7 +754,6 @@ artifacts:
     remove: vi.fn(),
   }
 
-  const projectDir = options.projectDir ?? '/tmp/openspecui-router-test'
   const filePreviewService = new FilePreviewService(projectDir, join(projectDir, '.preview-assets'))
   const dashboardOverviewService = new DashboardOverviewService((reason) =>
     loadDashboardOverview(
@@ -757,6 +844,23 @@ artifacts:
     evidence: { doctor: null, context: null },
     observedAt: 1,
   }
+  const runtimeInvalidation = new RuntimeInvalidationIndex()
+  const projectionWorkRuntime = createServerProjectionWorkRuntime()
+  const storeObservation = {
+    reconcile: vi.fn().mockResolvedValue(undefined),
+    subscribe: vi.fn(() => () => {}),
+    dispose: vi.fn().mockResolvedValue(undefined),
+  }
+  const planningCliProjectionService = new PlanningCliProjectionService({
+    rootContext,
+    gitBindingToken: 'planning-binding',
+    kernel,
+    documentService,
+    contracts: (cliExecutor as unknown as Context['cliExecutor']).contracts,
+    invalidation: runtimeInvalidation,
+    storeObservation,
+    workOwner: createPlanningCliProjectionWorkOwner(projectionWorkRuntime),
+  })
   const planningRootServices = {
     gitBindingToken: 'planning-binding',
     rootContext,
@@ -768,6 +872,7 @@ artifacts:
     dashboardOverviewService,
     dashboardProjectionService,
     changesProjectionService,
+    planningCliProjectionService,
     workflowInvocationService:
       workflowInvocationService as unknown as PlanningRootServices['workflowInvocationService'],
   } satisfies PlanningRootServices
@@ -777,11 +882,6 @@ artifacts:
     attempt: null,
     error: null,
     observedAt: rootContext.observedAt,
-  }
-  const runtimeInvalidation = new RuntimeInvalidationIndex()
-  const storeObservation = {
-    reconcile: vi.fn().mockResolvedValue(undefined),
-    dispose: vi.fn().mockResolvedValue(undefined),
   }
   const planningRootResolver: Context['planningRootServices'] = {
     resolveRootContext: vi.fn().mockResolvedValue(rootContextState),
@@ -793,6 +893,25 @@ artifacts:
     readPreviewRequest: vi.fn().mockReturnValue(null),
     dispose: vi.fn().mockResolvedValue(undefined),
   }
+  const storeProjectionService = new StoreProjectionService({
+    dataScopePath: rootContext.dataScope.path,
+    cliExecutor: cliExecutor as unknown as Context['cliExecutor'],
+    invalidation: runtimeInvalidation,
+    storeObservation,
+    workOwner: createStoreProjectionWorkOwner(projectionWorkRuntime),
+  })
+  const rootContextProjectionService = new RootContextProjectionService({
+    launchProjectDir: projectDir,
+    dataScopePath: rootContext.dataScope.path,
+    planningRootServices: planningRootResolver,
+    workOwner: createRootContextProjectionWorkOwner(projectionWorkRuntime),
+  })
+  const environmentGlobalProjectionService = new EnvironmentGlobalProjectionService({
+    dataScope: rootContext.dataScope,
+    cliExecutor: cliExecutor as unknown as Context['cliExecutor'],
+    observationEnvironment: { acquireRoot: async () => async () => {} },
+    workOwner: createEnvironmentGlobalProjectionWorkOwner(projectionWorkRuntime),
+  })
   const gitRepositoryBindings = new GitRepositoryBindingService({
     launchProjectDir: projectDir,
     planningRootServices: planningRootResolver,
@@ -805,6 +924,9 @@ artifacts:
     gitRepositoryBindings,
     runtimeInvalidation,
     storeObservation,
+    storeProjectionService,
+    rootContextProjectionService,
+    environmentGlobalProjectionService,
     configManager: configManager as unknown as Context['configManager'],
     cliExecutor: cliExecutor as unknown as Context['cliExecutor'],
     projectRecoveryService: options.projectRecoveryService ?? createMockProjectRecoveryService(),
@@ -907,11 +1029,18 @@ describe('appRouter', () => {
         observationEnvironment,
         projectInvalidation,
         runtimeInvalidation: new RuntimeInvalidationIndex(),
+        storeObservation: { subscribe: () => () => {} },
         codeBinding: { bindingToken: 'code-binding' },
       })
       const context = createMockContext(createMockAdapter(), { projectDir: launchProjectDir })
       context.planningRootServices = manager
       context.cliExecutor = cliExecutor
+      context.rootContextProjectionService = new RootContextProjectionService({
+        launchProjectDir,
+        dataScopePath: join(tempDir, 'openspec-data'),
+        planningRootServices: manager,
+        workOwner: createRootContextProjectionWorkOwner(createServerProjectionWorkRuntime()),
+      })
       const caller = appRouter.createCaller(context)
 
       const originalWriteSpec = OpenSpecAdapter.prototype.writeSpec
@@ -1702,7 +1831,7 @@ apply:
       expect(overview.git.worktrees[0]?.branchName).toBe('main')
       const planning = await resolveMockPlanningRoot(context)
       expect(planning.kernel.waitForWarmup).not.toHaveBeenCalled()
-      expect(planning.kernel.ensureApplyInstructions).not.toHaveBeenCalled()
+      expect(planning.kernel.readApplyInstructionsProjection).not.toHaveBeenCalled()
     })
 
     it('exposes independently wired Dashboard regional projections', async () => {
@@ -2387,19 +2516,34 @@ apply:
           identity: { kind: 'owned', specId: 'auth' },
           source: 'owned',
           readOnly: false,
-          name: 'Authentication',
+          name: 'auth',
           summary: null,
-          updatedAt: 20,
+          requirementCount: 2,
+          updatedAt: 0,
         },
         {
           identity: { kind: 'owned', specId: 'api' },
           source: 'owned',
           readOnly: false,
-          name: 'Public API',
+          name: 'api',
           summary: null,
-          updatedAt: 10,
+          requirementCount: 1,
+          updatedAt: 0,
         },
       ])
+      expect(catalog.ownedProjection).toMatchObject({
+        provenance: 'live',
+        root: { path: '/tmp/openspecui-router-test', source: 'nearest' },
+        evidence: {
+          success: true,
+          payload: {
+            specs: [
+              { id: 'auth', requirementCount: 2 },
+              { id: 'api', requirementCount: 1 },
+            ],
+          },
+        },
+      })
     })
 
     it('should get an owned Spec document', async () => {
@@ -3013,7 +3157,7 @@ apply:
       )
     })
 
-    it('reads and writes global config via path resolution', async () => {
+    it('reads and writes global config without fabricating data-home invalidation', async () => {
       const context = createMockContext()
       const executeMock = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
 
@@ -3052,16 +3196,16 @@ apply:
       expect(environment.file.path).toBe('/tmp/mock-openspec-config.json')
       expect(environment.config).toMatchObject({ profile: 'core', delivery: 'both' })
       expect(environment.owner.kind).toBe('runtime-environment')
-      expect(context.planningRootServices.resolveRootContext).toHaveBeenCalledOnce()
+      expect(context.planningRootServices.resolveRootContext).not.toHaveBeenCalled()
       expect(setResult.success).toBe(true)
       const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
-      expect(invalidation.current('stores')).toBe(1)
-      expect(invalidation.current('worksets')).toBe(1)
-      expect(invalidation.current('schemas')).toBe(1)
-      expect(invalidation.current('context')).toBe(1)
+      expect(invalidation.current('stores')).toBe(0)
+      expect(invalidation.current('worksets')).toBe(0)
+      expect(invalidation.current('schemas')).toBe(0)
+      expect(invalidation.current('context')).toBe(0)
     })
 
-    it('subscribes to Environment Global Config through the resolved CLI file', async () => {
+    it('pushes Environment Global lifecycle notices and Pulls typed CLI data', async () => {
       const context = createMockContext()
       const executeMock = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
       executeMock
@@ -3084,21 +3228,32 @@ apply:
           exitCode: 0,
         })
 
-      const observable = await appRouter
-        .createCaller(context)
-        .planningConfig.subscribeEnvironmentGlobal()
-      const firstResult = Promise.withResolvers<unknown>()
+      const caller = appRouter.createCaller(context)
+      const observable = await caller.planningConfig.subscribeEnvironmentGlobalProjection()
+      const readyNotice = Promise.withResolvers<CliProjectionNotice>()
       const subscription = observable.subscribe({
-        next: firstResult.resolve,
-        error: firstResult.reject,
+        next: (notice) => {
+          expect(notice).not.toHaveProperty('data')
+          if (notice.state === 'ready') readyNotice.resolve(notice)
+        },
+        error: readyNotice.reject,
       })
 
-      await expect(firstResult.promise).resolves.toMatchObject({
-        file: { path: '/tmp/mock-openspec-config.json' },
-        config: { profile: 'core', delivery: 'both', workflows: ['propose'] },
-        owner: { kind: 'runtime-environment' },
+      await expect(readyNotice.promise).resolves.toMatchObject({
+        identity: expect.any(String),
+        workGeneration: 1,
+        state: 'ready',
       })
-      expect(context.planningRootServices.resolveRootContextReactive).toHaveBeenCalledOnce()
+      await expect(caller.planningConfig.readEnvironmentGlobalProjection()).resolves.toMatchObject({
+        state: 'ready',
+        freshness: 'current',
+        data: {
+          configPath: '/tmp/mock-openspec-config.json',
+          config: { profile: 'core', delivery: 'both', workflows: ['propose'] },
+          owner: { kind: 'runtime-environment' },
+        },
+      })
+      expect(context.planningRootServices.resolveRootContextReactive).not.toHaveBeenCalled()
       subscription.unsubscribe()
     })
 
@@ -3177,7 +3332,7 @@ apply:
       expect(executeStream).toHaveBeenCalledWith(['update', '/stores/shared'], expect.any(Function))
     })
 
-    it('applies the fixed Core profile through the Environment Global owner', async () => {
+    it('applies Core profile without relabeling config-home as data-home', async () => {
       const context = createMockContext()
       const execute = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
 
@@ -3185,10 +3340,10 @@ apply:
 
       expect(execute).toHaveBeenCalledWith(['config', 'profile', 'core'])
       const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
-      expect(invalidation.current('stores')).toBe(1)
-      expect(invalidation.current('worksets')).toBe(1)
-      expect(invalidation.current('schemas')).toBe(1)
-      expect(invalidation.current('context')).toBe(1)
+      expect(invalidation.current('stores')).toBe(0)
+      expect(invalidation.current('worksets')).toBe(0)
+      expect(invalidation.current('schemas')).toBe(0)
+      expect(invalidation.current('context')).toBe(0)
     })
   })
 
@@ -3310,7 +3465,17 @@ apply:
           },
         },
       }
-      planning.kernel.getStatusList.mockReturnValue([status])
+      planning.kernel.readStatusListProjection.mockResolvedValue({
+        value: [status],
+        evidence: {
+          success: true,
+          stdout: '{"changes":[{"name":"add-caching"}]}',
+          stderr: '',
+          exitCode: 0,
+          payload: { changes: [{ name: 'add-caching' }] },
+          diagnostics: [],
+        },
+      })
       const caller = appRouter.createCaller(context)
       const timeout = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Status List remained behind full warmup.')), 250)
@@ -3319,7 +3484,7 @@ apply:
       const result = await Promise.race([caller.opsx.statusList(), timeout])
 
       expect(result).toEqual([status])
-      expect(planning.kernel.ensureStatusList).toHaveBeenCalledTimes(1)
+      expect(planning.kernel.readStatusListProjection).toHaveBeenCalledTimes(1)
       expect(pendingWarmup).not.toHaveBeenCalled()
       expect(result[0]?.provenance).toMatchObject({
         kind: 'cli',
@@ -3354,7 +3519,10 @@ apply:
         selector: {},
         root: { source: 'nearest' },
       })
-      expect(planning.kernel.ensureApplyInstructions).toHaveBeenCalledWith('add-caching', undefined)
+      expect(planning.kernel.readApplyInstructionsProjection).toHaveBeenCalledWith(
+        'add-caching',
+        undefined
+      )
       expect(pendingWarmup).not.toHaveBeenCalled()
     })
 

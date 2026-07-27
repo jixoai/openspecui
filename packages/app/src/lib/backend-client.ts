@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
- * 1. Project backend Store list/doctor through the hosted REST boundary without registry semantics.
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Pull backend Store and Root CLI Projection Work through the hosted REST boundary.
  * 2. Preserve upstream Store facts and exit status; never invent health/completeness/ownership.
  * 3. Resolve Access Gate credentials only from the runtime registry for the request locator.
  * 4. Decode every successful hosted tRPC envelope through the shared browser-safe contract boundary.
+ * 5. Encode optional Store Doctor selection by presence and omit absent Projection input instead of sending null.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Section 9.6/9.8 App Store Inspector/Inventory wiring against the backend store procedures.
+ * Owner-reported defect (2026-07-26): Store Inspector sent `input=null` and received HTTP 400.
  *
  * 关键中性约束（AGENTS.md）：
  *  - Inventory 投影 `openspec store list --json`；Inspector 投影 `openspec store doctor [id] --json`。
@@ -16,20 +18,17 @@
 import {
   decodeHostedTrpcData,
   HostedBackendContractError,
-  HostedRootContextStateSchema,
-  HostedStoreDoctorEnvelopeSchema,
-  HostedStoreListEnvelopeSchema,
+  HostedRootContextProjectionStateSchema,
+  HostedStoreDoctorProjectionStateSchema,
+  HostedStoreListProjectionStateSchema,
   HostedStoreMutationStartResponseSchema,
-  type HostedRootContextState,
-  type HostedStoreDoctorEnvelope,
-  type HostedStoreListEnvelope,
+  type HostedRootContextProjectionState,
+  type HostedStoreDoctorProjectionState,
+  type HostedStoreListProjectionState,
   type HostedStoreMutationStartResponse,
+  type HostedTrpcDecodeResult,
 } from '@openspecui/core/hosted-contract'
 import { readLaunchCredential } from './launch-credential'
-
-/** Minimal REST shapes returned by the backend Store feature envelope. */
-export type BackendStoreListEnvelope = HostedStoreListEnvelope
-export type BackendStoreDoctorEnvelope = HostedStoreDoctorEnvelope
 
 /** Hosted client locator; its optional Bearer credential is resolved from runtime memory at dispatch. */
 export interface BackendClientOptions {
@@ -46,139 +45,104 @@ function authHeaders(apiBaseUrl: string): Record<string, string> {
   return credential ? { Authorization: `Bearer ${credential}` } : {}
 }
 
-function unavailableStoreList(error: {
-  kind: string
-  message: string
-  cause?: unknown
-}): BackendStoreListEnvelope {
-  return {
-    available: false,
-    stores: [],
-    error: error.cause ? { ...error, cause: error.cause } : error,
-  }
-}
-
-function unavailableStoreDoctor(error: {
-  kind: string
-  message: string
-  cause?: unknown
-}): BackendStoreDoctorEnvelope {
-  return {
-    available: false,
-    stores: [],
-    error: error.cause ? { ...error, cause: error.cause } : error,
-  }
-}
-
-/** Fetch the Store Inventory (`store list`) projection for one backend. */
-export async function fetchBackendStoreInventory(
-  options: BackendClientOptions
-): Promise<BackendStoreListEnvelope> {
+async function fetchHostedProjection<T>(
+  options: BackendClientOptions,
+  requestUrl: string,
+  decode: (payload: unknown) => HostedTrpcDecodeResult<T>,
+  label: string
+): Promise<T> {
   const fetchImpl = options.fetchImpl ?? fetch
-  const response = await fetchImpl(`${normalizeBaseUrl(options.apiBaseUrl)}/trpc/stores.list`, {
+  const response = await fetchImpl(requestUrl, {
     cache: 'no-store',
     headers: { accept: 'application/json', ...authHeaders(options.apiBaseUrl) },
   })
-  if (!response.ok) {
-    return unavailableStoreList({
-      kind: 'transport',
-      message: `Store list request failed: ${response.status}`,
-    })
-  }
+  if (!response.ok) throw new Error(`${label} request failed: ${response.status}`)
   let payload: unknown
   try {
     payload = await response.json()
   } catch (error) {
-    return unavailableStoreList({
-      kind: 'contract',
-      message: 'Malformed Store list JSON response.',
-      cause: new HostedBackendContractError('Malformed Store list JSON response.', {
-        cause: error,
-      }),
-    })
+    throw new HostedBackendContractError(`${label} JSON response is malformed.`, { cause: error })
   }
-  const decoded = decodeHostedTrpcData(HostedStoreListEnvelopeSchema, payload)
+  const decoded = decode(payload)
   if (decoded.kind === 'contract-error') {
-    return unavailableStoreList({
-      kind: 'contract',
-      message: 'Malformed Store list contract response.',
+    throw new HostedBackendContractError(`${label} response is malformed.`, {
       cause: decoded.error,
     })
   }
   return decoded.data
 }
 
-/** Fetch the Store Inspector (`store doctor`) projection for one backend, optionally one Store id. */
-export async function fetchBackendStoreInspector(
-  options: BackendClientOptions & { storeId?: string }
-): Promise<BackendStoreDoctorEnvelope> {
-  const fetchImpl = options.fetchImpl ?? fetch
-  const input = options.storeId
-    ? encodeURIComponent(JSON.stringify({ id: options.storeId }))
-    : 'null'
-  const response = await fetchImpl(
-    `${normalizeBaseUrl(options.apiBaseUrl)}/trpc/stores.doctor?input=${input}`,
-    {
-      cache: 'no-store',
-      headers: { accept: 'application/json', ...authHeaders(options.apiBaseUrl) },
-    }
+/** Pull the immediate Store Inventory Projection Work lifecycle. */
+export function fetchBackendStoreInventoryProjection(
+  options: BackendClientOptions
+): Promise<HostedStoreListProjectionState> {
+  return fetchHostedProjection(
+    options,
+    `${normalizeBaseUrl(options.apiBaseUrl)}/trpc/stores.readListProjection`,
+    (payload) => decodeHostedTrpcData(HostedStoreListProjectionStateSchema, payload),
+    'Store list projection'
   )
-  if (!response.ok) {
-    return unavailableStoreDoctor({
-      kind: 'transport',
-      message: `Store doctor request failed: ${response.status}`,
-    })
-  }
-  let payload: unknown
-  try {
-    payload = await response.json()
-  } catch (error) {
-    return unavailableStoreDoctor({
-      kind: 'contract',
-      message: 'Malformed Store doctor JSON response.',
-      cause: new HostedBackendContractError('Malformed Store doctor JSON response.', {
-        cause: error,
-      }),
-    })
-  }
-  const decoded = decodeHostedTrpcData(HostedStoreDoctorEnvelopeSchema, payload)
-  if (decoded.kind === 'contract-error') {
-    return unavailableStoreDoctor({
-      kind: 'contract',
-      message: 'Malformed Store doctor contract response.',
-      cause: decoded.error,
-    })
-  }
-  return decoded.data
 }
 
-/** Fetch the project Root Context (`openspec context --json` joined with Doctor) for the Context Matrix. */
-export async function fetchBackendRootContext(
+/** Pull the immediate selector-exact Store Doctor Projection Work lifecycle. */
+export function fetchBackendStoreInspectorProjection(
+  options: BackendClientOptions & { storeId?: string }
+): Promise<HostedStoreDoctorProjectionState> {
+  const endpoint = `${normalizeBaseUrl(options.apiBaseUrl)}/trpc/stores.readDoctorProjection`
+  const requestUrl =
+    options.storeId === undefined
+      ? endpoint
+      : `${endpoint}?input=${encodeURIComponent(JSON.stringify({ id: options.storeId }))}`
+  return fetchHostedProjection(
+    options,
+    requestUrl,
+    (payload) => decodeHostedTrpcData(HostedStoreDoctorProjectionStateSchema, payload),
+    'Store doctor projection'
+  )
+}
+
+/** Pull the immediate Root Context Projection Work lifecycle. */
+export function fetchBackendRootContextProjection(
   options: BackendClientOptions
-): Promise<HostedRootContextState> {
+): Promise<HostedRootContextProjectionState> {
+  return fetchHostedProjection(
+    options,
+    `${normalizeBaseUrl(options.apiBaseUrl)}/trpc/rootContext.readProjection`,
+    (payload) => decodeHostedTrpcData(HostedRootContextProjectionStateSchema, payload),
+    'Root Context projection'
+  )
+}
+
+async function requestProjectionRefresh(
+  options: BackendClientOptions,
+  procedure: string,
+  input?: unknown
+): Promise<void> {
   const fetchImpl = options.fetchImpl ?? fetch
-  const response = await fetchImpl(`${normalizeBaseUrl(options.apiBaseUrl)}/trpc/rootContext.get`, {
+  const response = await fetchImpl(`${normalizeBaseUrl(options.apiBaseUrl)}/trpc/${procedure}`, {
+    method: 'POST',
     cache: 'no-store',
-    headers: { accept: 'application/json', ...authHeaders(options.apiBaseUrl) },
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json',
+      ...authHeaders(options.apiBaseUrl),
+    },
+    ...(input === undefined ? {} : { body: JSON.stringify(input) }),
   })
-  if (!response.ok) {
-    throw new Error(`Root Context request failed: ${response.status}`)
-  }
-  let payload: unknown
-  try {
-    payload = await response.json()
-  } catch (error) {
-    throw new HostedBackendContractError('Root Context contract JSON response is malformed.', {
-      cause: error,
-    })
-  }
-  const decoded = decodeHostedTrpcData(HostedRootContextStateSchema, payload)
-  if (decoded.kind === 'contract-error') {
-    throw new HostedBackendContractError('Root Context contract response is malformed.', {
-      cause: decoded.error,
-    })
-  }
-  return decoded.data
+  if (!response.ok) throw new Error(`Projection refresh request failed: ${response.status}`)
+}
+
+/** Explicitly invalidate the Root Context Work; lifecycle Push wakes all clients. */
+export function refreshBackendRootContextProjection(options: BackendClientOptions): Promise<void> {
+  return requestProjectionRefresh(options, 'rootContext.refreshProjection')
+}
+
+/** Explicitly invalidate Store list and Doctor Work; lifecycle Push wakes all clients. */
+export async function refreshBackendStoreProjections(options: BackendClientOptions): Promise<void> {
+  await Promise.all([
+    requestProjectionRefresh(options, 'stores.refreshProjection', { kind: 'list' }),
+    requestProjectionRefresh(options, 'stores.refreshProjection', { kind: 'doctor' }),
+  ])
 }
 
 /** Store mutation kind, mirroring the backend `stores.mutate` procedure. */

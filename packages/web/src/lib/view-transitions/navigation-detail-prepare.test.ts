@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Exercise the production navigation coordinator with real detail preparation and wait policy.
  * 2. Prove a cold detail route commits within the 140ms preparation budget before remote data settles.
  * 3. Preserve warm View Transitions, error/timeout route commits, and Escape cancellation.
@@ -143,7 +143,7 @@ describe('production detail navigation preparation policy', () => {
     held.resolve({ changeName: 'change-a' })
     await navigation
     expect(primeSubscriptionCacheMock).toHaveBeenCalledWith(
-      'opsx.subscribeStatus:change-a:undefined:0',
+      'opsx.subscribeStatus:change-a:undefined',
       { changeName: 'change-a' }
     )
   })

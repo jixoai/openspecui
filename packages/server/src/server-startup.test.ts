@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
- * 1. Prove server startup remains non-blocking while runtime observers warm up.
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Prove server startup and its canonical embedded entry remain available while runtime observers warm up.
  * 2. Prove shutdown is idempotent and continues across independent owner failures.
  * 3. Prove backend shutdown settles attached Planning-root CLI streams without client cooperation.
  * 4. Prove preview assets remain bound to the current Planning-root lifecycle.
@@ -8,9 +8,11 @@
  *
  * Original request (2026-07-17): "Backend disposal actively cancels every owned stream and awaits settlement."
  * Original checkpoint (2026-07-16): "6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging."
+ * Owner-reported defect (2026-07-26): "a内容还没加载出来，页面就自动刷新了。"
  */
 import {
   ConfigManager,
+  isHostedBackendHealthResponse,
   type CliCommandResult,
   type CliContext,
   type CliDoctor,
@@ -189,9 +191,13 @@ describe('server startup runtime contract', () => {
     })
     runningServers.push(started)
 
-    await expect(fetch(`${started.url}/api/health`)).resolves.toMatchObject({
-      ok: true,
-    })
+    const healthResponse = await fetch(`${started.url}/api/health`)
+    expect(healthResponse.ok).toBe(true)
+    const health: unknown = await healthResponse.json()
+    if (!isHostedBackendHealthResponse(health)) {
+      throw new Error('Expected a supported hosted backend health response.')
+    }
+    expect(new URL(health.embeddedUiUrl).pathname).toBe('/dashboard')
     expect(coreMockState.acquireObservationRoot).toHaveBeenCalledWith(projectDir)
     expect(coreMockState.startDataHomeObservation).toHaveBeenCalledTimes(1)
   })
@@ -215,7 +221,7 @@ describe('server startup runtime contract', () => {
     expect(started.close()).toBe(firstClose)
     await expect(firstClose).rejects.toBeInstanceOf(AggregateError)
     expect(coreMockState.disposeDataHomeObservation).toHaveBeenCalledOnce()
-    expect(coreMockState.disposeProjectInvalidation).toHaveBeenCalledTimes(2)
+    expect(coreMockState.disposeProjectInvalidation).toHaveBeenCalledOnce()
     expect(coreMockState.disposeObservationEnvironment).toHaveBeenCalledOnce()
   })
 

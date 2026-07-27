@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove detail View Transition preparation primes authoritative caches.
  * 2. Prove Git preparation includes the current repository binding token.
  * 3. Prove Git handoff provenance matches both the target entity and repository binding.
- * 4. Prove late detail preparation retains exact identity-specific cache provenance.
+ * 4. Prove late detail preparation retains the selector-exact cache consumed by the detail hook.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git prefetch bindings.
@@ -226,7 +226,7 @@ describe('prepareRouteDetailViewTransition', () => {
 
     expect(opsxStatusQueryMock).toHaveBeenCalledWith({ change: 'alpha-change' })
     expect(primeSubscriptionCacheMock).toHaveBeenCalledWith(
-      'opsx.subscribeStatus:alpha-change:undefined:0',
+      'opsx.subscribeStatus:alpha-change:undefined',
       status
     )
   })
@@ -261,17 +261,17 @@ describe('prepareRouteDetailViewTransition', () => {
     await expect(pendingA).resolves.toBe('ready')
 
     expect(primeSubscriptionCacheMock).toHaveBeenCalledWith(
-      'opsx.subscribeStatus:change-b:undefined:0',
+      'opsx.subscribeStatus:change-b:undefined',
       { changeName: 'change-b' }
     )
     expect(primeSubscriptionCacheMock).toHaveBeenCalledWith(
-      'opsx.subscribeStatus:change-a:undefined:0',
+      'opsx.subscribeStatus:change-a:undefined',
       { changeName: 'change-a' }
     )
-    expect(primeSubscriptionCacheStore.get('opsx.subscribeStatus:change-b:undefined:0')).toEqual({
+    expect(primeSubscriptionCacheStore.get('opsx.subscribeStatus:change-b:undefined')).toEqual({
       changeName: 'change-b',
     })
-    expect(primeSubscriptionCacheStore.get('opsx.subscribeStatus:change-a:undefined:0')).toEqual({
+    expect(primeSubscriptionCacheStore.get('opsx.subscribeStatus:change-a:undefined')).toEqual({
       changeName: 'change-a',
     })
   })

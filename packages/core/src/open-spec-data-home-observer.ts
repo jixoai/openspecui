@@ -1,12 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Own the effective OpenSpec data-home observation lease for one runtime environment.
- * 2. Convert external data-home filesystem changes into facet invalidation identity.
+ * 2. Map registry, Workset, and schema paths to their objective invalidation facets.
  * 3. Keep Store, Workset, schema, and Context projections responsible for fresh pulls.
  * 4. Release the path subscription and root lease deterministically.
+ * 5. Ignore unrelated data-home content instead of creating broad projection invalidation.
  *
  * Original request (2026-07-15): "有效 OpenSpec data home 的变化要让所有端拉取最新投影。"
+ * Original request (2026-07-26): "真正基于文件、甚至是文件内容结构的变更去拉取更新。"
  */
+import { join } from 'node:path'
 import type { ObservationRootOwner } from './reactive-fs/observation-environment.js'
 import { acquireWatcher } from './reactive-fs/watcher-pool.js'
 import {
@@ -21,13 +24,20 @@ export interface OpenSpecDataHomeObserverOptions {
   invalidation: RuntimeInvalidationController
 }
 
-/** Runtime facets invalidated by effective OpenSpec data-home changes. */
-export const OPEN_SPEC_DATA_HOME_INVALIDATION_FACETS = [
-  'stores',
-  'worksets',
-  'schemas',
-  'context',
-] as const satisfies readonly RuntimeInvalidationFacet[]
+/** Official OpenSpec 1.6 data-home paths and the projections whose inputs they can change. */
+export const OPEN_SPEC_DATA_HOME_OBSERVATION_TARGETS = [
+  {
+    relativePath: 'stores/registry.yaml',
+    recursive: false,
+    facets: ['stores', 'context'],
+  },
+  { relativePath: 'worksets', recursive: true, facets: ['worksets'] },
+  { relativePath: 'schemas', recursive: true, facets: ['schemas', 'context'] },
+] as const satisfies readonly {
+  relativePath: string
+  recursive: boolean
+  facets: readonly RuntimeInvalidationFacet[]
+}[]
 
 /** Lifecycle state of effective OpenSpec data-home observation. */
 export type OpenSpecDataHomeObservationState =
@@ -43,7 +53,7 @@ export class OpenSpecDataHomeObserver {
   private readonly environment: ObservationRootOwner
   private readonly invalidation: RuntimeInvalidationController
   private startPromise: Promise<void> | null = null
-  private releasePathSubscription: (() => void) | null = null
+  private releasePathSubscriptions: Array<() => void> = []
   private releaseRoot: (() => Promise<void>) | null = null
   private disposed = false
   private state: OpenSpecDataHomeObservationState = 'idle'
@@ -61,12 +71,12 @@ export class OpenSpecDataHomeObserver {
     if (this.startPromise) return this.startPromise
 
     this.state = 'starting'
-    this.releasePathSubscription = acquireWatcher(
-      this.dataHomePath,
-      () => {
-        this.invalidation.invalidate(OPEN_SPEC_DATA_HOME_INVALIDATION_FACETS)
-      },
-      { recursive: true }
+    this.releasePathSubscriptions = OPEN_SPEC_DATA_HOME_OBSERVATION_TARGETS.map((target) =>
+      acquireWatcher(
+        join(this.dataHomePath, target.relativePath),
+        () => this.invalidation.invalidate(target.facets),
+        { recursive: target.recursive }
+      )
     )
     const startPromise = this.environment
       .acquireRoot(this.dataHomePath)
@@ -79,8 +89,8 @@ export class OpenSpecDataHomeObserver {
         this.state = 'active'
       })
       .catch((error: unknown) => {
-        this.releasePathSubscription?.()
-        this.releasePathSubscription = null
+        this.releasePathSubscriptions.forEach((release) => release())
+        this.releasePathSubscriptions = []
         if (!this.disposed) this.state = 'failed'
         if (this.startPromise === startPromise) this.startPromise = null
         throw error
@@ -98,8 +108,8 @@ export class OpenSpecDataHomeObserver {
     if (this.disposed) return
     this.disposed = true
     this.state = 'disposed'
-    this.releasePathSubscription?.()
-    this.releasePathSubscription = null
+    this.releasePathSubscriptions.forEach((release) => release())
+    this.releasePathSubscriptions = []
     await this.startPromise?.catch(() => {})
     const releaseRoot = this.releaseRoot
     this.releaseRoot = null

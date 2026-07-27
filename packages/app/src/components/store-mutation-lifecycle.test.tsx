@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Prove equivalent raw locator formatting cannot retire an admitted Store request.
  * 2. Drive the real mutation-observation provider through its transport callback and React rerender.
- * 3. Preserve one Store pull and one exact-tab Context pull for the correlated terminal snapshot.
+ * 3. Preserve one Store pull and one exact-tab Root refresh/Pull for the correlated terminal snapshot.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Review correction (2026-07-25): raw `http://host` -> `http://host/` must preserve lifecycle identity.
+ * Original request (2026-07-26): "推送变更，然后让多端基于订阅拉取更新。"
  */
 // @vitest-environment jsdom
 
@@ -154,6 +155,7 @@ describe('Store mutation lifecycle equivalent locator identity', () => {
 
   it('preserves an admission across raw equivalent locator rerender and pulls the matching Context once', async () => {
     let contextPulls = 0
+    let contextRefreshes = 0
     const refreshStore = vi.fn()
     let resolveLifecycle: (api: LifecycleApi) => void = () => {}
     const lifecycleReady = new Promise<LifecycleApi>((resolve) => {
@@ -165,9 +167,25 @@ describe('Store mutation lifecycle equivalent locator identity', () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input)
         if (url === `${API}/api/health`) return healthResponse()
-        if (url === `${API}/trpc/rootContext.get`) {
+        if (url === `${API}/trpc/rootContext.refreshProjection`) {
+          contextRefreshes += 1
+          return Response.json({ result: { data: null } })
+        }
+        if (url === `${API}/trpc/rootContext.readProjection`) {
           contextPulls += 1
-          return Response.json({ result: { data: { state: 'loading' } } })
+          return Response.json({
+            result: {
+              data: {
+                state: 'loading',
+                identity: 'root-context:test',
+                workGeneration: 1,
+                data: null,
+                freshness: null,
+                snapshotGeneration: null,
+                error: null,
+              },
+            },
+          })
         }
         throw new Error(`Unexpected fetch: ${url}`)
       })
@@ -178,8 +196,6 @@ describe('Store mutation lifecycle equivalent locator identity', () => {
     })
     try {
       await waitFor(() => transportProbe.callbacks())
-      await waitFor(() => expect(contextPulls).toBe(1))
-      const initialContextPulls = contextPulls
       const admittedLifecycle = await lifecycleReady
 
       await act(async () => {
@@ -206,7 +222,8 @@ describe('Store mutation lifecycle equivalent locator identity', () => {
       await waitFor(() => {
         expect(snapshot).toEqual({ current: true, recordCount: 1, mutationLifecycle: 'current' })
         expect(refreshStore).toHaveBeenCalledTimes(1)
-        expect(contextPulls).toBe(initialContextPulls + 1)
+        expect(contextRefreshes).toBe(1)
+        expect(contextPulls).toBe(1)
       })
     } finally {
       await act(async () => rendered.root.unmount())

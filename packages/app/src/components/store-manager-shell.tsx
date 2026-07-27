@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Compose Inspector, Context Matrix, and Inventory as sibling Store views.
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * 1. Compose the selected backend, Inspector, Context Matrix, and Inventory as one Store workspace.
  * 2. Keep Store Manager explicitly experimental.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
+ * Owner-reported acceptance gap (2026-07-26): Store Manager did not expose how to select B while retaining A.
  */
 import { Link, useRouterState } from '@tanstack/react-router'
 import { Columns3, FlaskConical, List, Search } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { StoreManagerBackendSelector } from './store-manager-backend-selector'
 
 /**
  * Store Manager 共享外壳：Experimental 标记 + 三视图导航。
@@ -26,12 +28,15 @@ export function StoreManagerShell({ children }: { children: ReactNode }) {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <header className="space-y-2">
-        <div className="flex items-center gap-2">
-          <h1 className="font-nav text-2xl font-bold">Store Manager</h1>
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-            <FlaskConical className="h-3 w-3" />
-            Experimental
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <h1 className="font-nav text-2xl font-bold">Store Manager</h1>
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+              <FlaskConical className="h-3 w-3" />
+              Experimental
+            </span>
+          </div>
+          <StoreManagerBackendSelector />
         </div>
         <p className="text-muted-foreground text-sm">
           Environment-scoped Store administration. Store mutations are backend-owned operations;

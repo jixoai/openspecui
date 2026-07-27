@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Read launch-project binding and active-root config from physically distinct roots.
  * 2. Project environment-global config, profile, and drift through one CLI-owned reactive read.
  * 3. Mutate only the explicitly selected ownership facet and refresh reactive caches.
  * 4. Return launch-file write evidence without waiting for Planning-root service convergence.
+ * 5. Keep editable Environment Global file bytes in a file-native owner separate from CLI Work.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
@@ -20,7 +21,8 @@ import {
   type ActiveRootConfig,
   type CliExecutor,
   type CliJsonValue,
-  type EnvironmentGlobalConfig,
+  type EnvironmentGlobalCliProjection,
+  type EnvironmentGlobalFileProjection,
   type EnvironmentGlobalProfileState,
   type OpenSpecDataScope,
   type ProjectBindingConfig,
@@ -140,7 +142,9 @@ export async function readActiveRootConfig(input: {
 export async function readEnvironmentGlobalConfig(input: {
   dataScope: OpenSpecDataScope
   cliExecutor: CliExecutor
-}): Promise<EnvironmentGlobalConfig> {
+  /** Acquire the CLI-resolved physical config path before its reactive content read. */
+  observeConfigPath?(path: string | null): Promise<void>
+}): Promise<EnvironmentGlobalCliProjection> {
   const [pathEvidence, configResult, driftEvidence] = await Promise.all([
     input.cliExecutor.execute(['config', 'path']),
     input.cliExecutor.execute(['config', 'list', '--json']),
@@ -148,17 +152,11 @@ export async function readEnvironmentGlobalConfig(input: {
   ])
   const configEvidence = parseCliCommandResult(configResult, EnvironmentGlobalConfigValueSchema)
   const configPath = pathEvidence.success ? pathEvidence.stdout.trim() || null : null
-  const content = configPath ? await reactiveReadFile(configPath) : null
-
+  await input.observeConfigPath?.(configPath)
   return {
     kind: 'environment-global',
     owner: { kind: 'runtime-environment', dataScope: input.dataScope },
-    file: {
-      path: configPath,
-      format: 'json',
-      exists: content !== null,
-      content,
-    },
+    configPath,
     config: configEvidence.data,
     profileState: projectEnvironmentProfileState(
       configEvidence.data,
@@ -169,6 +167,24 @@ export async function readEnvironmentGlobalConfig(input: {
       driftEvidence
     ),
     evidence: { path: pathEvidence, config: configEvidence, drift: driftEvidence },
+  }
+}
+
+/** Read the file-native Environment Global document selected by the CLI path. */
+export async function readEnvironmentGlobalFileConfig(input: {
+  dataScope: OpenSpecDataScope
+  configPath: string | null
+}): Promise<EnvironmentGlobalFileProjection> {
+  const content = input.configPath ? await reactiveReadFile(input.configPath) : null
+  return {
+    kind: 'environment-global-file',
+    owner: { kind: 'runtime-environment', dataScope: input.dataScope },
+    file: {
+      path: input.configPath,
+      format: 'json',
+      exists: content !== null,
+      content,
+    },
   }
 }
 

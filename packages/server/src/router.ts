@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX, regional Dashboard, and archive procedures.
  * 2. Register CLI, Root Context, reactive launch-tool initialization, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
@@ -19,6 +19,7 @@
  * Derived requirement (2026-07-19): Project Binding mutation returns launch-write and convergence evidence.
  * Derived requirement (2026-07-22): Archive retains its current rows while a reactive replacement is running.
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
 import type {
   ChangeFile,
@@ -46,7 +47,7 @@ import type {
 } from '@openspecui/core'
 import {
   BatchTranslateInputSchema,
-  classifyStoreCliResult,
+  CliProjectionNoticeSchema,
   CodeEditorThemeSchema,
   createToolInitStateProjection,
   DashboardConfigSchema,
@@ -56,6 +57,8 @@ import {
   DashboardTrendsProjectionSchema,
   DocumentTranslationConfigUpdateSchema,
   EnvironmentGlobalConfigValueSchema,
+  EnvironmentGlobalFileProjectionStateSchema,
+  EnvironmentGlobalProjectionStateSchema,
   getAllTools,
   getAvailableTools,
   getConfiguredTools,
@@ -71,6 +74,8 @@ import {
   OPSX_TEXT_INPUT_ACTIONS,
   OpsxConfigSchema,
   OwnedSpecIdentitySchema,
+  PlanningCliProjectionSelectorSchema,
+  PlanningCliProjectionStateSchema,
   ProjectBindingUpdateSchema,
   ReactiveContext,
   requireCanonicalOpenSpecEntityId,
@@ -80,14 +85,11 @@ import {
   ServiceTranslationEngineIdSchema,
   sniffGlobalCli,
   SpecIdentitySchema,
-  StoreDoctorResultSchema,
-  StoreListResultSchema,
   StoreMutationLifecycleEventSchema,
   StoreMutationStartResponseSchema,
   subscribeWatcherRuntimeStatus,
   TerminalConfigSchema,
   TerminalRendererEngineSchema,
-  toStoreFeatureResult,
   TranslationCacheReadInputSchema,
   TranslationCacheWriteInputSchema,
   TranslationEngineIdSchema,
@@ -96,7 +98,9 @@ import {
   type ApplyInstructions,
   type ArtifactInstructions,
   type ChangeStatus,
+  type CliProjectionNotice,
   type EnvUri,
+  type PlanningCliProjectionSelector,
   type ProjectBindingUpdate,
   type ProjectBindingUpdateResult,
   type ProjectRecoveryStatus,
@@ -105,17 +109,20 @@ import {
   type RuntimeInvalidationToken,
   type RunWorkflowInputV1,
   type RunWorkflowResultV2,
-  type SchemaDetail,
-  type SchemaInfo,
-  type SchemaResolution,
-  type StoreDoctorStore,
-  type StoreFeatureResult,
-  type StoreListEntry,
   type StoreMutationLifecycleEvent,
   type TemplateContentMap,
   type TemplatesMap,
   type WorkflowRequestedModeV1,
 } from '@openspecui/core'
+import {
+  HostedCliProjectionNoticeSchema,
+  HostedRootContextProjectionStateSchema,
+  HostedRootContextResolvedStateSchema,
+  HostedStoreDoctorEnvelopeSchema,
+  HostedStoreDoctorProjectionStateSchema,
+  HostedStoreListEnvelopeSchema,
+  HostedStoreListProjectionStateSchema,
+} from '@openspecui/core/hosted-contract'
 import {
   NotificationGroupKeySchema,
   NotificationPublishInputSchema,
@@ -143,6 +150,7 @@ import {
   type DashboardGitTaskStatus,
 } from './dashboard-overview.js'
 import { buildEntityReadOptions } from './entity-read-options.js'
+import type { EnvironmentGlobalProjectionService } from './environment-global-projection-service.js'
 import { invalidateGitPanelCache } from './git-panel-cache.js'
 import {
   buildGitWorktreeOverview,
@@ -161,9 +169,7 @@ import type { LocalModelAssetService } from './local-model-asset-service.js'
 import type { NotificationService } from './notification-service.js'
 import { getOpenSpecMutationFacets } from './open-spec-mutation-facets.js'
 import {
-  dataScopeFromRootPreview,
   readActiveRootConfig,
-  readEnvironmentGlobalConfig,
   readProjectBindingConfig,
   writeActiveRootConfig,
   writeEnvironmentGlobalConfig,
@@ -177,15 +183,13 @@ import {
   createReactiveProjectionSubscription,
   createReactiveSubscription,
 } from './reactive-subscription.js'
-import { createRootContextSubscription, resolveServerRootContext } from './root-context-service.js'
+import type { RootContextProjectionService } from './root-context-projection-service.js'
+import { resolveServerRootContext } from './root-context-service.js'
 import { parseSchemaMutationAction, type SchemaMutationAction } from './schema-mutation-service.js'
-import {
-  readSpecCatalog,
-  readSpecDocument,
-  SpecCatalogIdentityNotFoundError,
-} from './spec-catalog-service.js'
+import { SpecCatalogIdentityNotFoundError } from './spec-catalog-service.js'
 import { StoreMutationService, type StartStoreMutationInput } from './store-mutation-service.js'
 import type { StoreObservationReconciler } from './store-observation-service.js'
+import type { StoreProjectionService } from './store-projection-service.js'
 import { startStrictArchiveStream } from './strict-archive-stream.js'
 import type { ToolCommandObservationService } from './tool-command-observation-service.js'
 import { setTrackedTaskCompletion } from './tracked-task-mutation.js'
@@ -204,6 +208,12 @@ export interface Context {
   runtimeInvalidation: RuntimeInvalidationController
   /** CLI-truth reconciler for dynamic registered Store observation roots. */
   storeObservation: StoreObservationReconciler
+  /** CLI-backed cached Store list/Doctor Work and lifecycle owner. */
+  storeProjectionService: StoreProjectionService
+  /** CLI-backed cached Root Context Work and lifecycle owner. */
+  rootContextProjectionService: RootContextProjectionService
+  /** CLI-backed runtime-environment config/profile Work and lifecycle owner. */
+  environmentGlobalProjectionService: EnvironmentGlobalProjectionService
   /** Server-local Store mutation admission and lifecycle ledger. */
   storeMutationService: StoreMutationService
   /** Runtime owner for environment-global tool command watcher leases. */
@@ -278,9 +288,11 @@ function createPlanningRootProjectionWorkSubscription<T, TBatch = never>(
     const reactiveContext = new ReactiveContext()
     const controller = new AbortController()
     let regionalSubscription: ProjectionWorkSubscription | null = null
+    let regionalEpoch = 0
     let active = true
 
     const retireRegionalSubscription = () => {
+      regionalEpoch += 1
       regionalSubscription?.unsubscribe()
       regionalSubscription = null
     }
@@ -290,9 +302,10 @@ function createPlanningRootProjectionWorkSubscription<T, TBatch = never>(
         for await (const _ of reactiveContext.stream(
           () => {
             retireRegionalSubscription()
+            const epoch = regionalEpoch
             return ctx.planningRootServices.runReactiveOperation((services) => {
               regionalSubscription = subscribe(services, (event) => {
-                if (!active) return
+                if (!active || epoch !== regionalEpoch) return
                 try {
                   emit.next(parseEvent(event))
                 } catch (error: unknown) {
@@ -321,19 +334,20 @@ function createPlanningRootProjectionWorkSubscription<T, TBatch = never>(
   })
 }
 
-/**
- * Bridge the migrated Summary v2 wake-up stream across Planning-root replacement without exposing the
- * underlying Projection Work identity or data. The first event for a replacement is a root-rebind wake.
- */
-function createPlanningRootSummaryInvalidationSubscription(ctx: Context) {
-  return observable<DashboardSummaryInvalidation>((emit) => {
+/** Bind selector-exact lifecycle-only CLI wake-ups to the current Planning-root generation. */
+function createPlanningRootCliProjectionSubscription(
+  ctx: Context,
+  selector: PlanningCliProjectionSelector
+) {
+  return observable<CliProjectionNotice>((emit) => {
     const reactiveContext = new ReactiveContext()
     const controller = new AbortController()
     let regionalSubscription: ProjectionWorkSubscription | null = null
+    let regionalEpoch = 0
     let active = true
-    let bindingCount = 0
 
     const retireRegionalSubscription = () => {
+      regionalEpoch += 1
       regionalSubscription?.unsubscribe()
       regionalSubscription = null
     }
@@ -343,13 +357,75 @@ function createPlanningRootSummaryInvalidationSubscription(ctx: Context) {
         for await (const _ of reactiveContext.stream(
           () => {
             retireRegionalSubscription()
+            const epoch = regionalEpoch
+            return ctx.planningRootServices.runReactiveOperation(
+              ({ planningCliProjectionService }) => {
+                regionalSubscription = planningCliProjectionService.subscribe(
+                  selector,
+                  (notice) => {
+                    if (!active || epoch !== regionalEpoch) return
+                    try {
+                      emit.next(CliProjectionNoticeSchema.parse(notice))
+                    } catch (error: unknown) {
+                      emit.error(error instanceof Error ? error : new Error(String(error)))
+                    }
+                  }
+                )
+              }
+            )
+          },
+          controller.signal,
+          { onRecomputeStarted: retireRegionalSubscription }
+        )) {
+          // The active Planning-root service owns selector lifecycle wake-ups.
+        }
+      } catch (error: unknown) {
+        if (active && !controller.signal.aborted) {
+          emit.error(error instanceof Error ? error : new Error(String(error)))
+        }
+      }
+    })()
+
+    return () => {
+      active = false
+      controller.abort()
+      retireRegionalSubscription()
+    }
+  })
+}
+
+/**
+ * Bridge the migrated Summary v2 wake-up stream across Planning-root replacement without exposing the
+ * underlying Projection Work identity or data. The first event for a replacement is a root-rebind wake.
+ */
+function createPlanningRootSummaryInvalidationSubscription(ctx: Context) {
+  return observable<DashboardSummaryInvalidation>((emit) => {
+    const reactiveContext = new ReactiveContext()
+    const controller = new AbortController()
+    let regionalSubscription: ProjectionWorkSubscription | null = null
+    let regionalEpoch = 0
+    let active = true
+    let bindingCount = 0
+
+    const retireRegionalSubscription = () => {
+      regionalEpoch += 1
+      regionalSubscription?.unsubscribe()
+      regionalSubscription = null
+    }
+
+    void (async () => {
+      try {
+        for await (const _ of reactiveContext.stream(
+          () => {
+            retireRegionalSubscription()
+            const epoch = regionalEpoch
             const cause = bindingCount === 0 ? 'initial' : 'root-rebind'
             bindingCount += 1
             let emittedForBinding = false
             return ctx.planningRootServices.runReactiveOperation((services) => {
               regionalSubscription =
                 services.dashboardProjectionService.subscribeSummaryInvalidation((event) => {
-                  if (!active) return
+                  if (!active || epoch !== regionalEpoch) return
                   try {
                     emit.next(
                       DashboardSummaryInvalidationSchema.parse({
@@ -1415,129 +1491,6 @@ function requireOpsxArtifactLocation(input: { changeId: string; outputPath: stri
   }
 }
 
-async function fetchOpsxStatus(
-  ctx: Context,
-  input: { change?: string; schema?: string },
-  reactive = false
-): Promise<ChangeStatus> {
-  const changeId = requireChangeId(input.change)
-  return runPlanningRoot(
-    ctx,
-    async ({ kernel }) => {
-      await kernel.ensureStatus(changeId, input.schema)
-      return kernel.getStatus(changeId, input.schema)
-    },
-    { reactive }
-  )
-}
-
-async function fetchOpsxStatusList(ctx: Context, reactive = false): Promise<ChangeStatus[]> {
-  return runPlanningRoot(
-    ctx,
-    async ({ kernel }) => {
-      await kernel.ensureStatusList()
-      return kernel.getStatusList()
-    },
-    { reactive }
-  )
-}
-
-async function fetchOpsxInstructions(
-  ctx: Context,
-  input: { change?: string; artifact: string; schema?: string },
-  reactive = false
-): Promise<ArtifactInstructions> {
-  const changeId = requireChangeId(input.change)
-  return runPlanningRoot(
-    ctx,
-    async ({ kernel }) => {
-      await kernel.ensureInstructions(changeId, input.artifact, input.schema)
-      return kernel.getInstructions(changeId, input.artifact, input.schema)
-    },
-    { reactive }
-  )
-}
-
-async function fetchOpsxApplyInstructions(
-  ctx: Context,
-  input: { change?: string; schema?: string },
-  reactive = false
-): Promise<ApplyInstructions> {
-  const changeId = requireChangeId(input.change)
-  return runPlanningRoot(
-    ctx,
-    async ({ kernel }) => {
-      await kernel.ensureApplyInstructions(changeId, input.schema)
-      return kernel.getApplyInstructions(changeId, input.schema)
-    },
-    { reactive }
-  )
-}
-
-async function fetchOpsxConfigBundle(
-  ctx: Context,
-  reactive = false
-): Promise<{
-  schemas: SchemaInfo[]
-  schemaDetails: Record<string, SchemaDetail | null>
-  schemaResolutions: Record<string, SchemaResolution | null>
-}> {
-  return runPlanningRoot(
-    ctx,
-    async ({ kernel }) => {
-      await kernel.ensureSchemas()
-      const schemas = kernel.getSchemas()
-
-      await Promise.allSettled(
-        schemas.flatMap((schema) => [
-          kernel.ensureSchemaDetail(schema.name),
-          kernel.ensureSchemaResolution(schema.name),
-        ])
-      )
-
-      const schemaDetails: Record<string, SchemaDetail | null> = {}
-      const schemaResolutions: Record<string, SchemaResolution | null> = {}
-      for (const schema of schemas) {
-        schemaDetails[schema.name] = kernel.peekSchemaDetail(schema.name)
-        schemaResolutions[schema.name] = kernel.peekSchemaResolution(schema.name)
-      }
-
-      return { schemas, schemaDetails, schemaResolutions }
-    },
-    { reactive }
-  )
-}
-
-async function fetchOpsxTemplates(
-  ctx: Context,
-  schema?: string,
-  reactive = false
-): Promise<TemplatesMap> {
-  return runPlanningRoot(
-    ctx,
-    async ({ kernel }) => {
-      await kernel.ensureTemplates(schema)
-      return kernel.getTemplates(schema)
-    },
-    { reactive }
-  )
-}
-
-async function fetchOpsxTemplateContents(
-  ctx: Context,
-  schema?: string,
-  reactive = false
-): Promise<TemplateContentMap> {
-  return runPlanningRoot(
-    ctx,
-    async ({ kernel }) => {
-      await kernel.ensureTemplateContents(schema)
-      return kernel.getTemplateContents(schema)
-    },
-    { reactive }
-  )
-}
-
 interface SystemStatusPayload {
   projectDir: string
   watcherEnabled: boolean
@@ -1559,28 +1512,27 @@ function buildSystemStatus(ctx: Context): SystemStatusPayload {
   }
 }
 
-function specCatalogSource(ctx: Context, services: PlanningRootServices) {
-  return {
-    rootContext: services.rootContext,
-    adapter: services.adapter,
-    documentService: services.documentService,
-    contracts: ctx.cliExecutor.contracts,
-  }
-}
-
 /** Source-aware Spec Catalog and document operations. */
 export const specRouter = router({
   /** Return owned and direct referenced Specs without flattening compound identity. */
   catalog: publicProcedure.query(async ({ ctx }) => {
-    return runPlanningRoot(ctx, (services) => readSpecCatalog(specCatalogSource(ctx, services)))
+    const data = await runPlanningRoot(ctx, ({ planningCliProjectionService }) =>
+      planningCliProjectionService.getCurrent({ kind: 'spec-catalog' })
+    )
+    if (data.kind !== 'spec-catalog') throw new Error('Unexpected Spec Catalog projection.')
+    return data.value
   }),
 
   /** Return the exact owned or referenced document projection and its source evidence. */
   document: publicProcedure.input(SpecIdentitySchema).query(async ({ ctx, input }) => {
     try {
-      return await runPlanningRoot(ctx, (services) =>
-        readSpecDocument(specCatalogSource(ctx, services), input)
+      const data = await runPlanningRoot(ctx, ({ planningCliProjectionService }) =>
+        planningCliProjectionService.getCurrent({ kind: 'spec-document', identity: input })
       )
+      if (data.kind !== 'spec-document') {
+        throw new Error('Unexpected Spec Document projection.')
+      }
+      return data.value
     } catch (error) {
       if (error instanceof SpecCatalogIdentityNotFoundError) {
         throw new TRPCError({ code: 'NOT_FOUND', message: error.message })
@@ -1601,20 +1553,6 @@ export const specRouter = router({
   /** Validate an owned Spec; referenced identities remain immutable CLI projections. */
   validate: publicProcedure.input(OwnedSpecIdentitySchema).query(async ({ ctx, input }) => {
     return runPlanningRoot(ctx, ({ adapter }) => adapter.validateSpec(input.specId))
-  }),
-
-  /** Reactively rebuild the source-aware catalog after Root/Reference invalidation. */
-  subscribeCatalog: publicProcedure.subscription(({ ctx }) => {
-    return createPlanningRootSubscription(ctx, (services) =>
-      readSpecCatalog(specCatalogSource(ctx, services))
-    )
-  }),
-
-  /** Reactively pull the exact source document after project or Store invalidation. */
-  subscribeDocument: publicProcedure.input(SpecIdentitySchema).subscription(({ ctx, input }) => {
-    return createPlanningRootSubscription(ctx, (services) =>
-      readSpecDocument(specCatalogSource(ctx, services), input)
-    )
   }),
 })
 
@@ -2061,10 +1999,6 @@ function buildPlanningRootUpdateArgs(
  * CLI router - execute external openspec CLI commands
  */
 export const cliRouter = router({
-  checkAvailability: publicProcedure.query(async ({ ctx }) => {
-    return ctx.cliExecutor.checkAvailability()
-  }),
-
   /** 嗅探全局 openspec 命令（无缓存） */
   sniffGlobalCli: publicProcedure.query(async () => {
     return sniffGlobalCli()
@@ -2344,6 +2278,37 @@ export const cliRouter = router({
 /**
  * OPSX router - CLI-driven workflow data
  */
+export const planningCliProjectionRouter = router({
+  /** Pull the immediate lifecycle and retained typed CLI snapshot for one exact selector. */
+  read: publicProcedure
+    .input(PlanningCliProjectionSelectorSchema)
+    .query(({ ctx, input }) =>
+      runPlanningRoot(
+        ctx,
+        ({ planningCliProjectionService }) =>
+          PlanningCliProjectionStateSchema.parse(planningCliProjectionService.read(input)),
+        { reactive: true }
+      )
+    ),
+
+  /** Invalidate one selector without awaiting its replacement CLI settlement. */
+  refresh: publicProcedure
+    .input(PlanningCliProjectionSelectorSchema)
+    .mutation(({ ctx, input }) =>
+      runPlanningRoot(
+        ctx,
+        ({ planningCliProjectionService }) =>
+          PlanningCliProjectionStateSchema.parse(planningCliProjectionService.refresh(input)),
+        { reactive: true }
+      )
+    ),
+
+  /** Lifecycle-only Push; business data remains available only through `read`. */
+  subscribe: publicProcedure
+    .input(PlanningCliProjectionSelectorSchema)
+    .subscription(({ ctx, input }) => createPlanningRootCliProjectionSubscription(ctx, input)),
+})
+
 export const opsxRouter = router({
   runWorkflow: publicProcedure
     .input(
@@ -2369,26 +2334,25 @@ export const opsxRouter = router({
       })
     )
     .query(async ({ ctx, input }): Promise<ChangeStatus> => {
-      return fetchOpsxStatus(ctx, input)
-    }),
-
-  subscribeStatus: publicProcedure
-    .input(
-      z.object({
-        change: z.string().optional(),
-        schema: z.string().optional(),
-      })
-    )
-    .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(() => fetchOpsxStatus(ctx, input, true))
+      const data = await runPlanningRoot(ctx, ({ planningCliProjectionService }) =>
+        planningCliProjectionService.getCurrent({
+          kind: 'opsx-status',
+          change: requireChangeId(input.change),
+          schema: input.schema,
+        })
+      )
+      if (data.kind !== 'opsx-status') throw new Error('Unexpected OPSX Status projection.')
+      return data.value
     }),
 
   statusList: publicProcedure.query(async ({ ctx }): Promise<ChangeStatus[]> => {
-    return fetchOpsxStatusList(ctx)
-  }),
-
-  subscribeStatusList: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(() => fetchOpsxStatusList(ctx, true))
+    const data = await runPlanningRoot(ctx, ({ planningCliProjectionService }) =>
+      planningCliProjectionService.getCurrent({ kind: 'opsx-status-list' })
+    )
+    if (data.kind !== 'opsx-status-list') {
+      throw new Error('Unexpected OPSX Status-list projection.')
+    }
+    return data.value
   }),
 
   instructions: publicProcedure
@@ -2400,19 +2364,18 @@ export const opsxRouter = router({
       })
     )
     .query(async ({ ctx, input }): Promise<ArtifactInstructions> => {
-      return fetchOpsxInstructions(ctx, input)
-    }),
-
-  subscribeInstructions: publicProcedure
-    .input(
-      z.object({
-        change: z.string().optional(),
-        artifact: z.string(),
-        schema: z.string().optional(),
-      })
-    )
-    .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(() => fetchOpsxInstructions(ctx, input, true))
+      const data = await runPlanningRoot(ctx, ({ planningCliProjectionService }) =>
+        planningCliProjectionService.getCurrent({
+          kind: 'opsx-instructions',
+          change: requireChangeId(input.change),
+          artifact: input.artifact,
+          schema: input.schema,
+        })
+      )
+      if (data.kind !== 'opsx-instructions') {
+        throw new Error('Unexpected OPSX Instructions projection.')
+      }
+      return data.value
     }),
 
   applyInstructions: publicProcedure
@@ -2423,50 +2386,57 @@ export const opsxRouter = router({
       })
     )
     .query(async ({ ctx, input }): Promise<ApplyInstructions> => {
-      return fetchOpsxApplyInstructions(ctx, input)
-    }),
-
-  subscribeApplyInstructions: publicProcedure
-    .input(
-      z.object({
-        change: z.string().optional(),
-        schema: z.string().optional(),
-      })
-    )
-    .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(() => fetchOpsxApplyInstructions(ctx, input, true))
+      const data = await runPlanningRoot(ctx, ({ planningCliProjectionService }) =>
+        planningCliProjectionService.getCurrent({
+          kind: 'opsx-apply-instructions',
+          change: requireChangeId(input.change),
+          schema: input.schema,
+        })
+      )
+      if (data.kind !== 'opsx-apply-instructions') {
+        throw new Error('Unexpected OPSX Apply-instructions projection.')
+      }
+      return data.value
     }),
 
   configBundle: publicProcedure.query(async ({ ctx }) => {
-    return fetchOpsxConfigBundle(ctx)
-  }),
-
-  subscribeConfigBundle: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(() => fetchOpsxConfigBundle(ctx, true))
+    const data = await runPlanningRoot(ctx, ({ planningCliProjectionService }) =>
+      planningCliProjectionService.getCurrent({ kind: 'opsx-config-bundle' })
+    )
+    if (data.kind !== 'opsx-config-bundle') {
+      throw new Error('Unexpected OPSX Config-bundle projection.')
+    }
+    return data.value
   }),
 
   templates: publicProcedure
     .input(z.object({ schema: z.string().optional() }).optional())
     .query(async ({ ctx, input }): Promise<TemplatesMap> => {
-      return fetchOpsxTemplates(ctx, input?.schema)
-    }),
-
-  subscribeTemplates: publicProcedure
-    .input(z.object({ schema: z.string().optional() }).optional())
-    .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(() => fetchOpsxTemplates(ctx, input?.schema, true))
+      const data = await runPlanningRoot(ctx, ({ planningCliProjectionService }) =>
+        planningCliProjectionService.getCurrent({
+          kind: 'opsx-templates',
+          schema: input?.schema,
+        })
+      )
+      if (data.kind !== 'opsx-templates') {
+        throw new Error('Unexpected OPSX Templates projection.')
+      }
+      return data.value
     }),
 
   templateContents: publicProcedure
     .input(z.object({ schema: z.string().optional() }).optional())
     .query(async ({ ctx, input }): Promise<TemplateContentMap> => {
-      return fetchOpsxTemplateContents(ctx, input?.schema)
-    }),
-
-  subscribeTemplateContents: publicProcedure
-    .input(z.object({ schema: z.string().optional() }).optional())
-    .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(() => fetchOpsxTemplateContents(ctx, input?.schema, true))
+      const data = await runPlanningRoot(ctx, ({ planningCliProjectionService }) =>
+        planningCliProjectionService.getCurrent({
+          kind: 'opsx-template-contents',
+          schema: input?.schema,
+        })
+      )
+      if (data.kind !== 'opsx-template-contents') {
+        throw new Error('Unexpected OPSX Template-contents projection.')
+      }
+      return data.value
     }),
 
   schemaFiles: publicProcedure
@@ -2562,30 +2532,6 @@ export const opsxRouter = router({
       return { success: true }
     }),
 
-  templateContent: publicProcedure
-    .input(z.object({ schema: z.string(), artifactId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const templateContents = await fetchOpsxTemplateContents(ctx, input.schema)
-      const info = templateContents[input.artifactId]
-      if (!info) {
-        throw new Error(`Template not found for ${input.schema}:${input.artifactId}`)
-      }
-      return info
-    }),
-
-  subscribeTemplateContent: publicProcedure
-    .input(z.object({ schema: z.string(), artifactId: z.string() }))
-    .subscription(({ ctx, input }) => {
-      return createReactiveSubscription(async () => {
-        const templateContents = await fetchOpsxTemplateContents(ctx, input.schema, true)
-        const info = templateContents[input.artifactId]
-        if (!info) {
-          throw new Error(`Template not found for ${input.schema}:${input.artifactId}`)
-        }
-        return info
-      })
-    }),
-
   writeTemplateContent: publicProcedure
     .input(z.object({ schema: z.string(), artifactId: z.string(), content: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -2627,18 +2573,15 @@ export const opsxRouter = router({
       return result
     }),
 
+  /** Compatibility Pull backed by the same CLI-owned Change-list Projection Work. */
   listChanges: publicProcedure.query(async ({ ctx }) => {
-    return runPlanningRoot(ctx, async ({ kernel }) => {
-      await kernel.ensureChangeIds()
-      return kernel.getChangeIds()
-    })
-  }),
-
-  subscribeChanges: publicProcedure.subscription(({ ctx }) => {
-    return createPlanningRootSubscription(ctx, async ({ kernel }) => {
-      await kernel.ensureChangeIds()
-      return kernel.getChangeIds()
-    })
+    const data = await runPlanningRoot(ctx, ({ planningCliProjectionService }) =>
+      planningCliProjectionService.getCurrent({ kind: 'opsx-change-list' })
+    )
+    if (data.kind !== 'opsx-change-list') {
+      throw new Error('Unexpected OPSX Change-list projection.')
+    }
+    return data.value
   }),
 
   readArtifactOutput: publicProcedure
@@ -3167,94 +3110,71 @@ export const gitRouter = router({
  *  - 异常二（指令变更/缺失）：非零退出 → available=false + error.kind='command-unavailable'
  * 两种异常都尽力携带 cliVersion（版本信息非常重要）。前端据此决定"显示错误+版本"或"隐藏入口"。
  */
-const STORES_LIST_CACHE_TTL_MS = 30_000
-let cachedCliVersion: { value: string | undefined; expiresAt: number } | null = null
-
-async function resolveCliVersion(ctx: Context): Promise<string | undefined> {
-  const now = Date.now()
-  if (cachedCliVersion && cachedCliVersion.expiresAt > now) {
-    return cachedCliVersion.value
-  }
-  try {
-    const availability = await ctx.cliExecutor.checkAvailability()
-    cachedCliVersion = { value: availability.version, expiresAt: now + STORES_LIST_CACHE_TTL_MS }
-    return availability.version
-  } catch {
-    cachedCliVersion = { value: undefined, expiresAt: now + STORES_LIST_CACHE_TTL_MS }
-    return undefined
-  }
-}
-
-async function fetchStoresList(ctx: Context): Promise<StoreFeatureResult<StoreListEntry[]>> {
-  // 永不抛：CLI 调用、解析、版本探测全部包裹，失败归类为两类异常之一。
-  const cliVersion = await resolveCliVersion(ctx).catch(() => undefined)
-  try {
-    const result = await ctx.cliExecutor.contracts.listStores()
-    const classification = classifyStoreCliResult({
-      result,
-      schema: StoreListResultSchema,
-      cliVersion,
-    })
-    const projection = toStoreFeatureResult(classification, {
-      fromData: (data) => data.stores,
-      fallback: [],
-      cliVersion,
-    })
-    if (projection.available) {
-      await ctx.storeObservation.reconcile(projection.stores)
-    }
-    return projection
-  } catch (error) {
-    // 兜底：任何未预期错误都归类为指令变更（异常二），让前端隐藏入口，绝不崩溃。
-    const message = error instanceof Error ? error.message : String(error)
-    return {
-      available: false,
-      stores: [],
-      evidence: null,
-      error: { kind: 'command-unavailable', message, ...(cliVersion ? { cliVersion } : {}) },
-      ...(cliVersion ? { cliVersion } : {}),
-    }
-  }
-}
-
-async function fetchStoresDoctor(
-  ctx: Context,
-  id?: string
-): Promise<StoreFeatureResult<StoreDoctorStore[]>> {
-  const cliVersion = await resolveCliVersion(ctx).catch(() => undefined)
-  try {
-    const result = await ctx.cliExecutor.contracts.doctorStores(id)
-    const classification = classifyStoreCliResult({
-      result,
-      schema: StoreDoctorResultSchema,
-      cliVersion,
-    })
-    return toStoreFeatureResult(classification, {
-      fromData: (data) => data.stores,
-      fallback: [],
-      cliVersion,
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return {
-      available: false,
-      stores: [],
-      evidence: null,
-      error: { kind: 'command-unavailable', message, ...(cliVersion ? { cliVersion } : {}) },
-      ...(cliVersion ? { cliVersion } : {}),
-    }
-  }
-}
-
 /** Read-only Store registry and Doctor projections for the current runtime environment. */
 export const storesRouter = router({
   /** store 列表（只读，带异常归类） */
-  list: publicProcedure.query(({ ctx }) => fetchStoresList(ctx)),
+  list: publicProcedure.query(async ({ ctx }) =>
+    HostedStoreListEnvelopeSchema.parse(await ctx.storeProjectionService.getListCurrent())
+  ),
 
   /** 单个/全部 store 健康诊断（按需，带异常归类） */
   doctor: publicProcedure
     .input(z.object({ id: z.string().optional() }).optional())
-    .query(({ ctx, input }) => fetchStoresDoctor(ctx, input?.id)),
+    .query(async ({ ctx, input }) =>
+      HostedStoreDoctorEnvelopeSchema.parse(
+        await ctx.storeProjectionService.getDoctorCurrent(input?.id)
+      )
+    ),
+
+  /** Immediate Store-list Pull state; retained data remains display-only during replacement. */
+  readListProjection: publicProcedure.query(({ ctx }) =>
+    HostedStoreListProjectionStateSchema.parse(ctx.storeProjectionService.readList())
+  ),
+
+  /** Immediate selector-exact Store-Doctor Pull state. */
+  readDoctorProjection: publicProcedure
+    .input(z.object({ id: z.string().optional() }).optional())
+    .query(({ ctx, input }) =>
+      HostedStoreDoctorProjectionStateSchema.parse(ctx.storeProjectionService.readDoctor(input?.id))
+    ),
+
+  /** Explicit Store projection invalidation; active subscribers share the replacement CLI Work. */
+  refreshProjection: publicProcedure
+    .input(
+      z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('list') }),
+        z.object({ kind: z.literal('doctor'), id: z.string().optional() }),
+      ])
+    )
+    .mutation(({ ctx, input }) =>
+      input.kind === 'list'
+        ? HostedStoreListProjectionStateSchema.parse(ctx.storeProjectionService.refreshList())
+        : HostedStoreDoctorProjectionStateSchema.parse(
+            ctx.storeProjectionService.refreshDoctor(input.id)
+          )
+    ),
+
+  /** Lifecycle-only Push for Store CLI projections. Clients Pull data after each wake-up. */
+  subscribeProjection: publicProcedure
+    .input(
+      z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('list') }),
+        z.object({ kind: z.literal('doctor'), id: z.string().optional() }),
+      ])
+    )
+    .subscription(({ ctx, input }) =>
+      observable<import('@openspecui/core').CliProjectionNotice>((emit) => {
+        const subscription =
+          input.kind === 'list'
+            ? ctx.storeProjectionService.subscribeList((notice) =>
+                emit.next(HostedCliProjectionNoticeSchema.parse(notice))
+              )
+            : ctx.storeProjectionService.subscribeDoctor(input.id, (notice) =>
+                emit.next(HostedCliProjectionNoticeSchema.parse(notice))
+              )
+        return () => subscription.unsubscribe()
+      })
+    ),
 
   /** Snapshot then Server-local lifecycle changes for Store mutation evidence; never Store inventory. */
   subscribeMutations: publicProcedure.subscription(({ ctx }) =>
@@ -3445,16 +3365,6 @@ async function fetchActiveRootConfig(ctx: Context, reactive = false) {
   )
 }
 
-async function fetchEnvironmentGlobalConfig(ctx: Context, reactive = false) {
-  const rootPreview = reactive
-    ? await ctx.planningRootServices.resolveRootContextReactive()
-    : await ctx.planningRootServices.resolveRootContext()
-  return readEnvironmentGlobalConfig({
-    dataScope: dataScopeFromRootPreview(rootPreview),
-    cliExecutor: ctx.cliExecutor,
-  })
-}
-
 /** OpenSpec configuration surfaces separated by their physical owners. */
 export const planningConfigRouter = router({
   projectBinding: publicProcedure.query(({ ctx }) => fetchProjectBindingConfig(ctx)),
@@ -3493,10 +3403,29 @@ export const planningConfigRouter = router({
       return { success: true }
     }),
 
-  environmentGlobal: publicProcedure.query(({ ctx }) => fetchEnvironmentGlobalConfig(ctx)),
+  /** Settled compatibility read from the runtime-environment Projection Work owner. */
+  environmentGlobal: publicProcedure.query(({ ctx }) =>
+    ctx.environmentGlobalProjectionService.getCurrentConfig()
+  ),
 
-  subscribeEnvironmentGlobal: publicProcedure.subscription(({ ctx }) =>
-    createReactiveSubscription(() => fetchEnvironmentGlobalConfig(ctx, true))
+  /** Immediate Environment Global lifecycle Pull with retained display-only data. */
+  readEnvironmentGlobalProjection: publicProcedure.query(({ ctx }) =>
+    EnvironmentGlobalProjectionStateSchema.parse(ctx.environmentGlobalProjectionService.read())
+  ),
+
+  /** Explicit environment-global invalidation without awaiting CLI settlement. */
+  refreshEnvironmentGlobalProjection: publicProcedure.mutation(({ ctx }) =>
+    EnvironmentGlobalProjectionStateSchema.parse(ctx.environmentGlobalProjectionService.refresh())
+  ),
+
+  /** Lifecycle-only Push; clients Pull replacement config/profile truth. */
+  subscribeEnvironmentGlobalProjection: publicProcedure.subscription(({ ctx }) =>
+    observable<CliProjectionNotice>((emit) => {
+      const subscription = ctx.environmentGlobalProjectionService.subscribe((notice) =>
+        emit.next(CliProjectionNoticeSchema.parse(notice))
+      )
+      return () => subscription.unsubscribe()
+    })
   ),
 
   /** Apply the official Core profile preset in the backend runtime environment. */
@@ -3504,6 +3433,30 @@ export const planningConfigRouter = router({
     const args = ['config', 'profile', 'core']
     return runOpenSpecCliMutation(ctx, args, () => ctx.cliExecutor.execute(args))
   }),
+
+  /** Immediate file-native Pull for the CLI-selected editable config document. */
+  readEnvironmentGlobalFileProjection: publicProcedure.query(({ ctx }) =>
+    EnvironmentGlobalFileProjectionStateSchema.parse(
+      ctx.environmentGlobalProjectionService.readFile()
+    )
+  ),
+
+  /** Explicitly invalidate the file-native config owner. */
+  refreshEnvironmentGlobalFileProjection: publicProcedure.mutation(({ ctx }) =>
+    EnvironmentGlobalFileProjectionStateSchema.parse(
+      ctx.environmentGlobalProjectionService.refreshFile()
+    )
+  ),
+
+  /** Lifecycle-only Push for file-native config content. */
+  subscribeEnvironmentGlobalFileProjection: publicProcedure.subscription(({ ctx }) =>
+    observable<CliProjectionNotice>((emit) => {
+      const subscription = ctx.environmentGlobalProjectionService.subscribeFile((notice) =>
+        emit.next(CliProjectionNoticeSchema.parse(notice))
+      )
+      return () => subscription.unsubscribe()
+    })
+  ),
 
   writeEnvironmentGlobal: publicProcedure
     .input(z.object({ config: EnvironmentGlobalConfigValueSchema }))
@@ -3517,9 +3470,26 @@ export const planningConfigRouter = router({
 
 /** CLI-owned planning Root Context shared by every project-workspace surface. */
 export const rootContextRouter = router({
-  get: publicProcedure.query(({ ctx }) => ctx.planningRootServices.resolveRootContext()),
-  subscribe: publicProcedure.subscription(({ ctx }) =>
-    createRootContextSubscription(ctx.planningRootServices)
+  /** Imperative settled read retained for mutation/readiness callers. */
+  get: publicProcedure.query(async ({ ctx }) =>
+    HostedRootContextResolvedStateSchema.parse(await ctx.rootContextProjectionService.getCurrent())
+  ),
+  /** Immediate lifecycle Pull; replacement work never hides the retained settled result. */
+  readProjection: publicProcedure.query(({ ctx }) =>
+    HostedRootContextProjectionStateSchema.parse(ctx.rootContextProjectionService.read())
+  ),
+  /** Explicit refresh invalidates the Work identity; active subscribers share one replacement. */
+  refreshProjection: publicProcedure.mutation(({ ctx }) =>
+    HostedRootContextProjectionStateSchema.parse(ctx.rootContextProjectionService.refresh())
+  ),
+  /** Lifecycle-only Push. Business Root Context data is read through `readProjection`. */
+  subscribeProjection: publicProcedure.subscription(({ ctx }) =>
+    observable<import('@openspecui/core').CliProjectionNotice>((emit) => {
+      const subscription = ctx.rootContextProjectionService.subscribe((notice) =>
+        emit.next(HostedCliProjectionNoticeSchema.parse(notice))
+      )
+      return () => subscription.unsubscribe()
+    })
   ),
 })
 
@@ -3547,6 +3517,7 @@ export const appRouter = router({
   cli: cliRouter,
   rootContext: rootContextRouter,
   runtimeInvalidation: runtimeInvalidationRouter,
+  planningCliProjection: planningCliProjectionRouter,
   opsx: opsxRouter,
   stores: storesRouter,
   kv: kvRouter,

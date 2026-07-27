@@ -1,16 +1,29 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Define collision-safe owned and referenced Spec identity.
- * 2. Build one source-aware live/static Spec Catalog without bare-id deduplication, forged CLI evidence, or lost policy facts.
+ * 2. Build one source-aware live/static Spec Catalog with CLI-owned membership and source-exact provenance.
  * 3. Define source-distinct Spec detail projections without inventing upstream or snapshot fields.
- * 4. Centralize route, cache, search, and provider lookup identity.
+ * 4. Publish browser-safe Catalog/document runtime schemas for typed Projection Pull.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
 import { match } from 'ts-pattern'
 import { z } from 'zod'
-import type { CliDiagnostic, CliShowSpec, CliSpecList } from './cli-contracts/index.js'
-import type { Spec } from './schemas.js'
+import {
+  CliDiagnosticSchema,
+  CliRootSchema,
+  CliShowSpecDocumentSchema,
+  type CliDiagnostic,
+  type CliRoot,
+  type CliShowSpec,
+  type CliSpecList,
+} from './cli-contracts/index.js'
+import {
+  CliProjectionCommandEvidenceSchema,
+  type CliProjectionCommandEvidence,
+} from './cli-projection.js'
+import { SpecSchema, type Spec } from './schemas.js'
 
 /** Runtime validator for one writable owned Spec identity. */
 export const OwnedSpecIdentitySchema = z.object({
@@ -45,6 +58,7 @@ export interface OwnedSpecCatalogEntry {
   readOnly: false
   name: string
   summary: null
+  requirementCount: number
   updatedAt: number
 }
 
@@ -66,20 +80,33 @@ export type SpecCatalogEntry = OwnedSpecCatalogEntry | ReferencedSpecCatalogEntr
 /** Source-aware Spec list with per-Reference enumeration evidence. */
 export interface SpecCatalog {
   entries: SpecCatalogEntry[]
+  ownedProjection: SpecCatalogOwnedProjection
   referenceSources: SpecCatalogReferenceSource[]
   referenceProjection: SpecCatalogReferenceProjection
   observedAt: number
 }
 
 /** Raw process and contract evidence retained for one Spec CLI command. */
-export interface SpecCommandEvidence {
-  success: boolean
-  stdout: string
-  stderr: string
-  exitCode: number | null
-  diagnostics: CliDiagnostic[]
-  contractError?: string
+export type SpecCommandEvidence = CliProjectionCommandEvidence
+
+export const SpecCommandEvidenceSchema = CliProjectionCommandEvidenceSchema
+
+/** Owned Catalog membership projected by a real OpenSpec CLI list command. */
+export interface LiveSpecCatalogOwnedProjection {
+  provenance: 'live'
+  root: CliRoot
+  evidence: SpecCommandEvidence
 }
+
+/** Owned Catalog membership projected solely from a published static snapshot. */
+export type StaticSpecCatalogOwnedProjection =
+  | { provenance: 'static'; state: 'available'; snapshot: { specCount: number } }
+  | { provenance: 'static'; state: 'unavailable' }
+
+/** Source-exact provenance for the writable Spec inventory. */
+export type SpecCatalogOwnedProjection =
+  | LiveSpecCatalogOwnedProjection
+  | StaticSpecCatalogOwnedProjection
 
 /** Per-Store Doctor and list evidence retained even when one live Reference cannot be enumerated. */
 export interface LiveSpecCatalogReferenceSource {
@@ -122,6 +149,91 @@ export type StaticSpecCatalogReferenceProjection =
 export type SpecCatalogReferenceProjection =
   | LiveSpecCatalogReferenceProjection
   | StaticSpecCatalogReferenceProjection
+
+const OwnedSpecCatalogEntrySchema = z.object({
+  identity: OwnedSpecIdentitySchema,
+  source: z.literal('owned'),
+  readOnly: z.literal(false),
+  name: z.string(),
+  summary: z.null(),
+  requirementCount: z.number(),
+  updatedAt: z.number(),
+})
+
+const SpecCatalogOwnedProjectionSchema = z.union([
+  z.object({
+    provenance: z.literal('live'),
+    root: CliRootSchema,
+    evidence: SpecCommandEvidenceSchema,
+  }),
+  z.discriminatedUnion('state', [
+    z.object({
+      provenance: z.literal('static'),
+      state: z.literal('available'),
+      snapshot: z.object({ specCount: z.number().int().nonnegative() }),
+    }),
+    z.object({ provenance: z.literal('static'), state: z.literal('unavailable') }),
+  ]),
+])
+
+const ReferencedSpecCatalogEntrySchema = z.object({
+  identity: ReferencedSpecIdentitySchema,
+  source: z.literal('referenced'),
+  readOnly: z.literal(true),
+  name: z.string(),
+  summary: z.null(),
+  requirementCount: z.number(),
+  updatedAt: z.literal(0),
+})
+
+const LiveSpecCatalogReferenceSourceSchema = z.object({
+  storeId: z.string(),
+  provenance: z.literal('live'),
+  state: z.enum(['ready', 'error']),
+  diagnostics: z.array(CliDiagnosticSchema),
+  evidence: SpecCommandEvidenceSchema,
+})
+
+const StaticSpecCatalogReferenceSourceSchema = z.object({
+  storeId: z.string(),
+  provenance: z.literal('static'),
+  state: z.enum(['ready', 'error']),
+  snapshot: z.object({ policy: z.literal('include'), specCount: z.number() }),
+})
+
+const SpecCatalogReferenceProjectionSchema = z.union([
+  z.object({ provenance: z.literal('live') }),
+  z.discriminatedUnion('policy', [
+    z.object({ provenance: z.literal('static'), policy: z.literal('include') }),
+    z.object({
+      provenance: z.literal('static'),
+      policy: z.literal('omit'),
+      referenceSourceCount: z.number(),
+    }),
+    z.object({ provenance: z.literal('static'), policy: z.literal('none') }),
+    z.object({ provenance: z.literal('static'), policy: z.literal('unavailable') }),
+  ]),
+])
+
+/** Runtime schema for the complete source-aware Spec Catalog. */
+export const SpecCatalogSchema: z.ZodType<SpecCatalog, z.ZodTypeDef, unknown> = z.object({
+  entries: z.array(z.union([OwnedSpecCatalogEntrySchema, ReferencedSpecCatalogEntrySchema])),
+  ownedProjection: SpecCatalogOwnedProjectionSchema,
+  referenceSources: z.array(
+    z.union([LiveSpecCatalogReferenceSourceSchema, StaticSpecCatalogReferenceSourceSchema])
+  ),
+  referenceProjection: SpecCatalogReferenceProjectionSchema,
+  observedAt: z.number(),
+})
+
+/** Map a published snapshot count without implying that the browser executed OpenSpec CLI. */
+export function createStaticSpecCatalogOwnedProjection(
+  specCount?: number
+): StaticSpecCatalogOwnedProjection {
+  return specCount === undefined
+    ? { provenance: 'static', state: 'unavailable' }
+    : { provenance: 'static', state: 'available', snapshot: { specCount } }
+}
 
 /** Map published Reference source facts without implying a CLI execution occurred. */
 export function createStaticSpecCatalogReferenceSource(input: {
@@ -229,6 +341,71 @@ export type ReferencedSpecDocumentProjection =
 /** Source-aware owned/referenced Spec document projection union. */
 export type SpecDocumentProjection = OwnedSpecDocumentProjection | ReferencedSpecDocumentProjection
 
+const OwnedSpecDocumentProjectionSchema = z.object({
+  identity: OwnedSpecIdentitySchema,
+  source: z.literal('owned'),
+  readOnly: z.literal(false),
+  state: z.enum(['ready', 'not-found']),
+  spec: SpecSchema.nullable(),
+  rawMarkdown: z.string().nullable(),
+  upstream: z.null(),
+  evidence: z.null(),
+})
+
+const LiveReferencedSpecDocumentProjectionSchema = z.object({
+  identity: ReferencedSpecIdentitySchema,
+  source: z.literal('referenced'),
+  readOnly: z.literal(true),
+  state: z.enum(['ready', 'error']),
+  spec: z.null(),
+  rawMarkdown: z.null(),
+  upstream: CliShowSpecDocumentSchema.nullable(),
+  provenance: z.object({ kind: z.literal('live') }),
+  evidence: SpecCommandEvidenceSchema,
+})
+
+const StaticReferencedSpecDocumentProjectionSchema = z.object({
+  identity: ReferencedSpecIdentitySchema,
+  source: z.literal('referenced'),
+  readOnly: z.literal(true),
+  state: z.enum(['ready', 'error']),
+  spec: SpecSchema.nullable(),
+  rawMarkdown: z.string().nullable(),
+  upstream: CliShowSpecDocumentSchema.nullable(),
+  provenance: z.discriminatedUnion('state', [
+    z.object({
+      kind: z.literal('static'),
+      state: z.enum(['included', 'missing']),
+      policy: z.enum(['include', 'unrecorded']),
+      source: StaticSpecCatalogReferenceSourceSchema.nullable(),
+    }),
+    z.object({
+      kind: z.literal('static'),
+      state: z.literal('omitted'),
+      policy: z.literal('omit'),
+      referenceSourceCount: z.number(),
+    }),
+    z.object({ kind: z.literal('static'), state: z.literal('none'), policy: z.literal('none') }),
+    z.object({
+      kind: z.literal('static'),
+      state: z.literal('snapshot-unavailable'),
+      policy: z.literal('absent'),
+    }),
+  ]),
+  evidence: z.null(),
+})
+
+/** Runtime schema for one source-aware owned or referenced Spec document projection. */
+export const SpecDocumentProjectionSchema: z.ZodType<
+  SpecDocumentProjection,
+  z.ZodTypeDef,
+  unknown
+> = z.union([
+  OwnedSpecDocumentProjectionSchema,
+  LiveReferencedSpecDocumentProjectionSchema,
+  StaticReferencedSpecDocumentProjectionSchema,
+])
+
 /** Build a collision-safe cache/search key for a compound Spec identity. */
 export function specIdentityKey(identity: SpecIdentity): string {
   const specId = encodeURIComponent(identity.specId)
@@ -256,21 +433,24 @@ export function specIdentityFromRoute(params: { specId: string; storeId?: string
 export function mergeSpecCatalog(
   owned: readonly OwnedSpecCatalogEntry[],
   referenced: readonly ReferencedSpecCatalogEntry[],
+  ownedProjection: SpecCatalogOwnedProjection,
   referenceSources: readonly SpecCatalogReferenceSource[],
   observedAt: number,
   referenceProjection: SpecCatalogReferenceProjection = { provenance: 'live' }
 ): SpecCatalog {
   return {
     entries: [...owned, ...referenced],
+    ownedProjection,
     referenceSources: [...referenceSources],
     referenceProjection,
     observedAt,
   }
 }
 
-/** Project owned metadata and explicit per-Store Spec lists into one Catalog. */
+/** Project CLI-owned Spec membership and explicit per-Store Spec lists into one Catalog. */
 export function buildSpecCatalog(input: {
-  owned: ReadonlyArray<{ id: string; name: string; updatedAt: number }>
+  owned: CliSpecList['specs']
+  ownedProjection: SpecCatalogOwnedProjection
   referenced: ReadonlyArray<{ storeId: string; specs: CliSpecList['specs'] }>
   referenceSources: readonly SpecCatalogReferenceSource[]
   observedAt: number
@@ -279,9 +459,10 @@ export function buildSpecCatalog(input: {
     identity: { kind: 'owned', specId: spec.id },
     source: 'owned',
     readOnly: false,
-    name: spec.name,
+    name: spec.id,
     summary: null,
-    updatedAt: spec.updatedAt,
+    requirementCount: spec.requirementCount,
+    updatedAt: 0,
   }))
   const referenced: ReferencedSpecCatalogEntry[] = input.referenced.flatMap((source) =>
     source.specs.map((spec) => ({
@@ -294,7 +475,13 @@ export function buildSpecCatalog(input: {
       updatedAt: 0,
     }))
   )
-  return mergeSpecCatalog(owned, referenced, input.referenceSources, input.observedAt)
+  return mergeSpecCatalog(
+    owned,
+    referenced,
+    input.ownedProjection,
+    input.referenceSources,
+    input.observedAt
+  )
 }
 
 /** Look up only the exact compound identity in a Catalog. */

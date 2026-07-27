@@ -1,14 +1,20 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Cross real HTTP mutation admission and WebSocket lifecycle delivery.
  * 2. Prove delayed CLI admission, request-id deduplication, and terminal invalidation order.
  * 3. Preserve pre-admission rejection and deterministic CLI failure as non-indeterminate evidence.
+ * 4. Prove Store mutation invalidation wakes two lifecycle-only clients into typed Pulls and one CLI replacement.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
-import { ConfigManager, type StoreMutationLifecycleEvent } from '@openspecui/core'
+import {
+  ConfigManager,
+  type CliProjectionNotice,
+  type StoreMutationLifecycleEvent,
+} from '@openspecui/core'
 import { createTRPCClient, createWSClient, httpBatchLink, wsLink } from '@trpc/client'
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -20,6 +26,27 @@ import { createDeferred } from './test-support/deferred.js'
 const runningServers: RunningServer[] = []
 const wsClients: Array<ReturnType<typeof createWSClient>> = []
 const tempDirs: string[] = []
+const CLI_PROJECTION_NOTICE_KEYS = [
+  'identity',
+  'invalidationCause',
+  'snapshotGeneration',
+  'state',
+  'workGeneration',
+] satisfies Array<keyof CliProjectionNotice>
+
+type StoreProjectionPullPhase = 'initial' | 'replacement'
+
+interface StoreProjectionClientEvidence {
+  notices: CliProjectionNotice[]
+  pullPhases: StoreProjectionPullPhase[]
+}
+
+function expectLifecycleOnlyNotices(notices: readonly CliProjectionNotice[]): void {
+  expect(notices.length).toBeGreaterThan(0)
+  for (const notice of notices) {
+    expect(Object.keys(notice).sort()).toEqual(CLI_PROJECTION_NOTICE_KEYS)
+  }
+}
 
 afterEach(async () => {
   for (const client of wsClients.splice(0)) client.close()
@@ -100,7 +127,194 @@ async function startDelayedCliServer() {
   return { projectDir, releasePath, server, spawnMarker }
 }
 
+async function startProjectionCliServer() {
+  const projectDir = await createTempDir('openspecui-store-projection-project-')
+  const storeRoot = join(projectDir, 'mutation-store')
+  const statePath = join(projectDir, 'store-present')
+  const listTracePath = join(projectDir, 'list-trace.log')
+  const runnerPath = join(projectDir, 'projection-store-runner.cjs')
+  await writeFile(statePath, 'present\n', 'utf8')
+  await mkdir(storeRoot, { recursive: true })
+  await writeFile(
+    runnerPath,
+    [
+      "const fs = require('node:fs')",
+      `const statePath = ${JSON.stringify(statePath)}`,
+      `const listTracePath = ${JSON.stringify(listTracePath)}`,
+      `const storeRoot = ${JSON.stringify(storeRoot)}`,
+      'const args = process.argv.slice(2)',
+      "if (args.includes('--version')) { process.stdout.write('1.6.0'); process.exit(0) }",
+      "if (args[0] === 'store' && args[1] === 'list') {",
+      "  fs.appendFileSync(listTracePath, 'list\\n')",
+      "  const stores = fs.existsSync(statePath) ? [{ id: 'mutation-store', root: storeRoot }] : []",
+      '  process.stdout.write(JSON.stringify({ stores, status: [] }))',
+      '  process.exit(0)',
+      '}',
+      "if (args[0] === 'store' && args[1] === 'unregister') {",
+      '  if (fs.existsSync(statePath)) fs.unlinkSync(statePath)',
+      '  process.stdout.write(JSON.stringify({',
+      "    store: { id: 'mutation-store', root: storeRoot },",
+      "    registry: { path: '/runtime/stores/registry.yaml', removed: true },",
+      '    files: null,',
+      '    status: []',
+      '  }))',
+      '  process.exit(0)',
+      '}',
+      "if (args[0] === 'doctor') {",
+      '  process.stdout.write(JSON.stringify({ root: null, store: null, references: [], status: [] }))',
+      '  process.exit(0)',
+      '}',
+      "if (args[0] === 'context') {",
+      '  process.stdout.write(JSON.stringify({ root: null, members: [], status: [] }))',
+      '  process.exit(0)',
+      '}',
+      'process.exit(2)',
+    ].join('\n'),
+    'utf8'
+  )
+  await new ConfigManager(projectDir).writeConfig({
+    cli: { command: `${process.execPath} ${runnerPath}` },
+  })
+  const server = await startServer({
+    projectDir,
+    port: await findAvailablePort(35_700, 100),
+    enableWatcher: false,
+  })
+  runningServers.push(server)
+  return { listTracePath, server }
+}
+
 describe('Store mutation ledger transport', () => {
+  it('wakes two Store clients into one replacement Pull after mutation terminal', async () => {
+    const fixture = await startProjectionCliServer()
+    const firstWs = createWSClient({
+      url: `ws://localhost:${fixture.server.port}/trpc`,
+      WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
+    })
+    const secondWs = createWSClient({
+      url: `ws://localhost:${fixture.server.port}/trpc`,
+      WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
+    })
+    wsClients.push(firstWs, secondWs)
+    const firstSubscriptionClient = createTRPCClient<AppRouter>({
+      links: [wsLink({ client: firstWs })],
+    })
+    const secondSubscriptionClient = createTRPCClient<AppRouter>({
+      links: [wsLink({ client: secondWs })],
+    })
+    const firstPullClient = createTRPCClient<AppRouter>({
+      links: [httpBatchLink({ url: `${fixture.server.url}/trpc` })],
+    })
+    const secondPullClient = createTRPCClient<AppRouter>({
+      links: [httpBatchLink({ url: `${fixture.server.url}/trpc` })],
+    })
+    const firstInitial = createDeferred<void>()
+    const secondInitial = createDeferred<void>()
+    const firstReplacement = createDeferred<void>()
+    const secondReplacement = createDeferred<void>()
+    const terminal = createDeferred<void>()
+    const firstEvidence: StoreProjectionClientEvidence = { notices: [], pullPhases: [] }
+    const secondEvidence: StoreProjectionClientEvidence = { notices: [], pullPhases: [] }
+
+    const subscribeList = (
+      subscriptionClient: typeof firstSubscriptionClient,
+      pullClient: typeof firstPullClient,
+      initial: ReturnType<typeof createDeferred<void>>,
+      replacement: ReturnType<typeof createDeferred<void>>,
+      evidence: StoreProjectionClientEvidence
+    ) =>
+      subscriptionClient.stores.subscribeProjection.subscribe(
+        { kind: 'list' },
+        {
+          async onData(notice) {
+            evidence.notices.push(notice)
+            const projection = await pullClient.stores.readListProjection.query()
+            if (projection.state !== 'ready') return
+            if (projection.data.stores.length === 1 && !evidence.pullPhases.includes('initial')) {
+              evidence.pullPhases.push('initial')
+              initial.resolve()
+            }
+            if (
+              projection.data.stores.length === 0 &&
+              !evidence.pullPhases.includes('replacement')
+            ) {
+              evidence.pullPhases.push('replacement')
+              replacement.resolve()
+            }
+          },
+          onError: replacement.reject,
+        }
+      )
+
+    const firstSubscription = subscribeList(
+      firstSubscriptionClient,
+      firstPullClient,
+      firstInitial,
+      firstReplacement,
+      firstEvidence
+    )
+    const secondSubscription = subscribeList(
+      secondSubscriptionClient,
+      secondPullClient,
+      secondInitial,
+      secondReplacement,
+      secondEvidence
+    )
+    const lifecycleSubscription = firstSubscriptionClient.stores.subscribeMutations.subscribe(
+      undefined,
+      {
+        onData(event) {
+          if (
+            event.type === 'changed' &&
+            event.record.requestId === 'projection-unregister' &&
+            event.record.status === 'succeeded'
+          ) {
+            terminal.resolve()
+          }
+        },
+        onError: terminal.reject,
+      }
+    )
+
+    try {
+      await withTimeout(
+        Promise.all([firstInitial.promise, secondInitial.promise]).then(() => undefined),
+        'initial Store projection'
+      )
+      const start = await firstPullClient.stores.mutate.mutate({
+        requestId: 'projection-unregister',
+        kind: 'unregister',
+        storeId: 'mutation-store',
+      })
+      expect(start.status).toBe('accepted')
+      await withTimeout(terminal.promise, 'Store mutation terminal')
+      await withTimeout(
+        Promise.all([firstReplacement.promise, secondReplacement.promise]).then(() => undefined),
+        'two-client Store replacement'
+      )
+
+      expect(firstEvidence.pullPhases).toEqual(['initial', 'replacement'])
+      expect(secondEvidence.pullPhases).toEqual(['initial', 'replacement'])
+      expectLifecycleOnlyNotices(firstEvidence.notices)
+      expectLifecycleOnlyNotices(secondEvidence.notices)
+      const replacementNotices = [...firstEvidence.notices, ...secondEvidence.notices].filter(
+        (notice) => notice.workGeneration === 2
+      )
+      expect(replacementNotices.length).toBeGreaterThan(0)
+      expect(replacementNotices.every((notice) => notice.invalidationCause === 'dependency')).toBe(
+        true
+      )
+      expect((await readFile(fixture.listTracePath, 'utf8')).trim().split('\n')).toEqual([
+        'list',
+        'list',
+      ])
+    } finally {
+      firstSubscription.unsubscribe()
+      secondSubscription.unsubscribe()
+      lifecycleSubscription.unsubscribe()
+    }
+  })
+
   it('admits once before terminal, streams lifecycle evidence, and invalidates before one terminal publish', async () => {
     const fixture = await startDelayedCliServer()
     const wsClient = createWSClient({

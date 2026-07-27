@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Collect reactive dependencies for asynchronous projections.
  * 2. Coalesce dependency changes into replacement task executions.
  * 3. Expose opt-in recompute lifecycle without changing yielded data.
  *
  * Original request (2026-07-22): "整个过程中，几乎都在 Loading。"
+ * Original request (2026-07-26): "真正基于文件、甚至是文件内容结构的变更去拉取更新。"
  */
 import { contextStorage, type ReactiveState } from './reactive-state.js'
 
@@ -46,6 +47,8 @@ export class ReactiveContext {
   private changePromise?: PromiseWithResolvers<void>
   /** 是否已销毁 */
   private destroyed = false
+  /** 当前任务执行期间是否已有依赖变化，使其结果不再可提交 */
+  private changePending = false
 
   /**
    * 追踪依赖
@@ -62,9 +65,9 @@ export class ReactiveContext {
    * 由 ReactiveState.set() 调用
    */
   notifyChange(): void {
-    if (!this.destroyed && this.changePromise) {
-      this.changePromise.resolve()
-    }
+    if (this.destroyed) return
+    this.changePending = true
+    this.changePromise?.resolve()
   }
 
   /**
@@ -80,16 +83,38 @@ export class ReactiveContext {
     signal?: AbortSignal,
     observer?: ReactiveContextStreamObserver
   ): AsyncGenerator<T> {
+    let abortPromise: Promise<void> | null = null
     try {
       while (!signal?.aborted && !this.destroyed) {
         // 清理上一轮的依赖
         this.clearDependencies()
 
         // 创建新的变更等待 Promise
+        this.changePending = false
         this.changePromise = createPromiseWithResolvers()
 
         // 在上下文中执行任务，收集依赖
-        const result = await contextStorage.run(this, task)
+        let result: T
+        try {
+          result = await contextStorage.run(this, task)
+        } catch (error) {
+          if (this.changePending) {
+            if (signal?.aborted) break
+            observer?.onRecomputeStarted()
+            continue
+          }
+          throw error
+        }
+
+        if (signal?.aborted) break
+
+        // A dependency changed while the async task was running. Its result never represented a
+        // settled dependency generation, so retire it before the consumer can cache or publish it.
+        if (this.changePending) {
+          if (signal?.aborted) break
+          observer?.onRecomputeStarted()
+          continue
+        }
 
         // yield 结果
         yield result
@@ -100,10 +125,8 @@ export class ReactiveContext {
         }
 
         // 等待依赖变更
-        await Promise.race([
-          this.changePromise.promise,
-          signal ? this.waitForAbort(signal) : new Promise(() => {}),
-        ])
+        abortPromise ??= signal ? this.waitForAbort(signal) : new Promise<never>(() => {})
+        await Promise.race([this.changePromise.promise, abortPromise])
 
         // 检查是否被取消
         if (signal?.aborted) {

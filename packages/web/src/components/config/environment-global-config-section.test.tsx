@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify environment-global path, data-scope, CLI evidence, and static absence.
  * 2. Verify JSON writes preserve unknown fields and reject invalid/non-object drafts.
  * 3. Verify mutation pending/failure state and gated typed Planning-root Update dispatch.
@@ -9,6 +9,7 @@
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  * Original request (2026-07-18): "Update and auto-Update must use useRootActionState."
  * Original request (2026-07-18): "Environment Global Profile Apply remains valid when Root Context is blocked; only Update is root-owned."
+ * Original request (2026-07-26): "缓存更新期间仍可读，但不能授权写入。"
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -130,6 +131,7 @@ function environmentGlobalConfig() {
         environmentVariable: 'XDG_DATA_HOME',
       },
     },
+    configPath: '/runtime/openspec/config.json',
     file: {
       path: '/runtime/openspec/config.json',
       format: 'json' as const,
@@ -193,6 +195,7 @@ describe('EnvironmentGlobalConfigSection', () => {
       data: environmentGlobalConfig(),
       isLoading: false,
       error: null,
+      authority: { state: 'current' },
       refresh: vi.fn(),
       refreshPending: false,
     })
@@ -241,7 +244,9 @@ describe('EnvironmentGlobalConfigSection', () => {
       },
       isLoading: false,
       error: null,
+      authority: { state: 'current' },
       refresh: vi.fn(),
+      refreshPending: false,
     })
     view.rerender(
       <QueryClientProvider client={queryClient}>
@@ -269,6 +274,7 @@ describe('EnvironmentGlobalConfigSection', () => {
       },
       isLoading: false,
       error: null,
+      authority: { state: 'current' },
       refresh: vi.fn(),
       refreshPending: false,
     })
@@ -288,6 +294,7 @@ describe('EnvironmentGlobalConfigSection', () => {
       data: current,
       isLoading: false,
       error: null,
+      authority: { state: 'current' },
       refresh: refreshMock,
       refreshPending: false,
     })
@@ -317,7 +324,9 @@ describe('EnvironmentGlobalConfigSection', () => {
       },
       isLoading: false,
       error: null,
+      authority: { state: 'current' },
       refresh: vi.fn(),
+      refreshPending: false,
     })
     renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
 
@@ -423,6 +432,7 @@ describe('EnvironmentGlobalConfigSection', () => {
       data: current,
       isLoading: false,
       error: new Error('global refresh failed'),
+      authority: { state: 'failed', error: new Error('global refresh failed') },
       refresh: vi.fn(),
       refreshPending: false,
     })
@@ -466,6 +476,7 @@ describe('EnvironmentGlobalConfigSection', () => {
       },
       isLoading: false,
       error: null,
+      authority: { state: 'current' },
       refresh: vi.fn(),
       refreshPending: false,
     })
@@ -496,6 +507,7 @@ describe('EnvironmentGlobalConfigSection', () => {
       data: current,
       isLoading: false,
       error: null,
+      authority: { state: 'waiting', reason: 'rebind' },
       refresh: refreshMock,
       refreshPending: true,
     })
@@ -516,6 +528,35 @@ describe('EnvironmentGlobalConfigSection', () => {
     expect(writeEnvironmentGlobalMock).not.toHaveBeenCalled()
   })
 
+  it('keeps a cached config display-only while the subscription rebinds', () => {
+    const current = environmentGlobalConfig()
+    const view = renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Editor' }))
+    fireEvent.change(screen.getByLabelText('Environment Global config editor'), {
+      target: { value: '{"profile":"custom"}' },
+    })
+
+    environmentGlobalSubscriptionMock.mockReturnValue({
+      data: current,
+      isLoading: false,
+      error: null,
+      authority: { state: 'waiting', reason: 'rebind' },
+      refresh: vi.fn(),
+      refreshPending: false,
+    })
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <EnvironmentGlobalConfigSection isStatic={false} />
+      </QueryClientProvider>
+    )
+
+    expect(screen.getByLabelText('Environment Global config editor')).toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    fireEvent.click(screen.getByTestId('environment-save-shortcut'))
+    expect(writeEnvironmentGlobalMock).not.toHaveBeenCalled()
+  })
+
   it('does not confirm an already-open Apply dialog after the projection becomes stale', () => {
     const current = environmentGlobalConfig()
     const view = renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
@@ -529,6 +570,7 @@ describe('EnvironmentGlobalConfigSection', () => {
       data: current,
       isLoading: false,
       error: new Error('global projection became stale'),
+      authority: { state: 'failed', error: new Error('global projection became stale') },
       refresh: vi.fn(),
       refreshPending: false,
     })
@@ -646,7 +688,9 @@ describe('EnvironmentGlobalConfigSection', () => {
       data: undefined,
       isLoading: true,
       error: null,
+      authority: { state: 'waiting', reason: 'initial' },
       refresh: vi.fn(),
+      refreshPending: false,
     })
     const { unmount, container } = renderSection(
       <EnvironmentGlobalConfigSection isStatic={false} />
@@ -658,7 +702,9 @@ describe('EnvironmentGlobalConfigSection', () => {
       data: undefined,
       isLoading: false,
       error: new Error('config list failed'),
+      authority: { state: 'failed', error: new Error('config list failed') },
       refresh: vi.fn(),
+      refreshPending: false,
     })
     renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
     expect(screen.getByRole('alert')).toHaveTextContent('config list failed')
@@ -717,7 +763,9 @@ describe('EnvironmentGlobalConfigSection', () => {
       },
       isLoading: false,
       error: null,
+      authority: { state: 'current' },
       refresh: vi.fn(),
+      refreshPending: false,
     })
     renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
 

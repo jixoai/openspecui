@@ -17,6 +17,8 @@
         "../core/src/dashboard-summary-transport.ts"
       ],
       "@openspecui/core/hosted-app": ["../core/src/hosted-app.ts"],
+      "@openspecui/core/hosted-contract": ["../core/src/hosted-contract.ts"],
+      "@openspecui/core/planning-cli-projection": ["../core/src/planning-cli-projection.ts"],
       "@openspecui/core/markdown-facts": ["../core/src/markdown-facts.ts"],
       "@openspecui/core/markdown-reading": ["../core/src/markdown-reading.ts"],
       "@openspecui/core/document-translation": ["../core/src/document-translation.ts"],
