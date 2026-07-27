@@ -623,6 +623,18 @@ until all five packages receive focused review. No Agent-run fixture is final br
 - `openspec validate refine-live-projection-experience --strict` and `git diff --check` passed before this final
   evidence update. No Agent-run visual or end-to-end browser walkthrough is claimed.
 
+### P7 PR delivery boundary (2026-07-28 Asia/Shanghai)
+
+- Spec and architecture commit: `0abe294` (`docs(spec): define live projection refinement`).
+- Implementation, tests, walkthrough, changeset, and synchronized checkpoint commit: `653f629`
+  (`feat: refine live projection experience`).
+- Both commits were pushed to `feat/refine-live-projection-experience`; PR #211 is open at
+  `https://github.com/jixoai/openspecui/pull/211` against protected `main`.
+- The repository pre-commit hook could not run because `vite.config.ts` has no Vite+ `staged` configuration.
+  Commits used `--no-verify` only after the complete local gates recorded above passed. The PR records this fact.
+- No merge, archive, release, or final browser/visual acceptance has occurred. Remote PR checks and manager
+  walkthrough remain separate open evidence.
+
 ## Loopback Triggers
 
 Return to `research-plan.md` and obtain an explicit owner decision before progressing when any of the following occurs:

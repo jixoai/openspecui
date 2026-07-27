@@ -104,7 +104,7 @@ missing historical pre-v2 red.
 - [x] 3.2 Run focused Server/Web unit tests and Storybook/basic browser fixtures before broad gates; record that they test the real production or mutation boundary rather than a mocked downstream handler.
 - [x] 3.3 Run static-facing checks after rebuilding fresh artifacts: required static unit tests and `pnpm --filter @openspecui/web build:ssg`.
 - [x] 3.4 Run CI-equivalent local gates successfully: `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, and `pnpm test:browser:ci`.
-- [ ] 3.5 Open or update a feature-branch PR only after the local gates pass; do not push directly to protected `main`.
+- [x] 3.5 Open or update a feature-branch PR only after the local gates pass; do not push directly to protected `main`.
 - [ ] 3.6 Record passing PR checks and the owner-only final browser walkthrough separately. Agent fixture evidence is not final end-to-end acceptance.
 
 ## 4. Merge Readiness
