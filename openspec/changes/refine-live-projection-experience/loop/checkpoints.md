@@ -107,6 +107,12 @@ missing historical pre-v2 red.
 - [x] 3.5 Open or update a feature-branch PR only after the local gates pass; do not push directly to protected `main`.
 - [ ] 3.6 Record passing PR checks and the owner-only final browser walkthrough separately. Agent fixture evidence is not final end-to-end acceptance.
 
+PR Quality run `30289438230` on head `0add7a9` did not satisfy 3.6. Changeset Gate and CI Scope passed, while
+Fast Gate exposed a same-generation duplicate health probe during concurrent focus refresh and transport
+disconnect; browser shards were consequently skipped. The controlled owner red/green/mutation correction is
+recorded in `implementation.md`. Full local gates now pass; a new exact-head remote run is still required, and
+the manager walkthrough remains a separate acceptance fact.
+
 ## 4. Merge Readiness
 
 - [ ] 4.1 Confirm all P1-P5 work is complete, all strict/OpenSpec validation is green, no loopback trigger remains unresolved, and implementation notes match the checked source.

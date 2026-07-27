@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Verify Settings preference, translation, terminal, and asset-management interactions.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Verify Settings preference, translation, terminal, and asset-management interactions under a bounded heavy-suite execution budget.
  * 2. Verify the route-level responsive ToC and static/dynamic composition boundaries.
  * 3. Keep extracted OpenSpec diagnostics and initialization behavior in focused component tests.
  * 4. Prove live Settings composition is present before passive effects can run.
@@ -2520,7 +2520,7 @@ vi.mock('@/lib/trpc', () => ({
   },
 }))
 
-describe('Settings', () => {
+describe('Settings', { timeout: 10_000 }, () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()

@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Own health and Root Context admission Pull/reconnect/disconnect re-probe for every retained backend tab identity.
+ * 1. Own generation-deduplicated health and Root Context admission Pull/reconnect/disconnect re-probe for every retained backend tab identity.
  * 2. Retire late results when a locator is removed, replaced, or refreshed.
  * 3. Correlate mutation authority with the full tab identity and observation generation.
  * 4. Keep retained renderable health/Root evidence separate from the current attempt and authority.
@@ -212,7 +212,10 @@ export function createConnectionObservationOwner(
     string,
     { generation: number; state: HostedRootContextProjectionState }
   >()
-  const transportFailureProbes = new Map<string, { generation: number; promise: Promise<void> }>()
+  const healthProbes = new Map<
+    string,
+    { generation: number; promise: Promise<HostedBackendProbeResult> }
+  >()
   let nextGeneration = 0
   let nextTransportEpoch = 0
   let revision = 0
@@ -378,36 +381,43 @@ export function createConnectionObservationOwner(
 
   const retireProjectionTransport = (tabId: string): void => {
     retireRootPull(tabId)
-    transportFailureProbes.delete(tabId)
+    healthProbes.delete(tabId)
     const existing = projectionTransports.get(tabId)
     if (!existing) return
     projectionTransports.delete(tabId)
     existing.transport.unsubscribe()
   }
 
+  const probeHealth = (
+    tab: HostedShellTab,
+    generation: number
+  ): Promise<HostedBackendProbeResult> => {
+    const existing = healthProbes.get(tab.id)
+    if (existing?.generation === generation) return existing.promise
+    const promise = dependencies.probe(tab.apiBaseUrl)
+    const release = () => {
+      const current = healthProbes.get(tab.id)
+      if (current?.generation === generation && current.promise === promise) {
+        healthProbes.delete(tab.id)
+      }
+    }
+    healthProbes.set(tab.id, { generation, promise })
+    void promise.then(release, release)
+    return promise
+  }
+
   const probeTransportFailure = (tab: HostedShellTab, generation: number): void => {
-    const existing = transportFailureProbes.get(tab.id)
-    if (existing?.generation === generation) return
-    const promise = dependencies
-      .probe(tab.apiBaseUrl)
-      .then((probe) => {
-        if (probe.reachability === 'online' || !isCurrentGeneration(tab.id, generation)) return
-        update(tab.id, generation, (current) => ({
-          ...current,
-          reachability: probe.reachability,
-          healthError: probe.errorMessage,
-          current: false,
-          stale: Boolean(current.health || current.rootEvidence),
-          observedAt: dependencies.now(),
-        }))
-      })
-      .finally(() => {
-        const current = transportFailureProbes.get(tab.id)
-        if (current?.generation === generation && current.promise === promise) {
-          transportFailureProbes.delete(tab.id)
-        }
-      })
-    transportFailureProbes.set(tab.id, { generation, promise })
+    void probeHealth(tab, generation).then((probe) => {
+      if (probe.reachability === 'online' || !isCurrentGeneration(tab.id, generation)) return
+      update(tab.id, generation, (current) => ({
+        ...current,
+        reachability: probe.reachability,
+        healthError: probe.errorMessage,
+        current: false,
+        stale: Boolean(current.health || current.rootEvidence),
+        observedAt: dependencies.now(),
+      }))
+    })
   }
 
   const ensureProjectionTransport = (tab: HostedShellTab): void => {
@@ -474,7 +484,7 @@ export function createConnectionObservationOwner(
             }
             if (!needsReconnectProbe) return
             needsReconnectProbe = false
-            transportFailureProbes.delete(tab.id)
+            healthProbes.delete(tab.id)
             void observe(tab.id, false)
             return
           }
@@ -561,7 +571,7 @@ export function createConnectionObservationOwner(
     })
     publish()
 
-    const probe = await dependencies.probe(tab.apiBaseUrl)
+    const probe = await probeHealth(tab, generation)
     if (probe.reachability !== 'online' || !probe.health) {
       update(tabId, generation, (current) => ({
         ...current,

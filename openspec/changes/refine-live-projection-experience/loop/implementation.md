@@ -635,6 +635,42 @@ until all five packages receive focused review. No Agent-run fixture is final br
 - No merge, archive, release, or final browser/visual acceptance has occurred. Remote PR checks and manager
   walkthrough remain separate open evidence.
 
+### P7 first remote CI correction (2026-07-28 Asia/Shanghai)
+
+- PR Quality run `30289438230` tested exact head `0add7a9c2c5a5098c5cdfe97e2df94aedc963b95`.
+  Changeset Gate and CI Scope passed, but Fast Gate job `90055492377` failed in the complete App suite:
+  `HostedShell > keeps the iframe mounted while a background health refresh is pending` observed three health
+  requests where the contract permits two. Browser shards were skipped and the aggregate Browser Gate failed as
+  a consequence; no browser-test failure was produced.
+- The HostedShell fixture starts the real connection owner. Under CI timing, its real transport could disconnect
+  while the focus-triggered replacement health request was pending. `ConnectionObservationOwner` deduplicated
+  multiple transport-failure probes, but did not share that in-flight request with ordinary explicit refresh. The
+  third request was therefore a production owner race exposed by the test, not an assertion to relax.
+- A controlled owner-boundary red suspends the explicit refresh probe, emits an established transport disconnect,
+  and deterministically failed `expected 3 to be 2`. The owner now shares one `tabId + generation` health-probe
+  promise across explicit refresh and transport-failure confirmation. An intermediate helper that returned a
+  `.finally()`-wrapped promise was rejected because it changed the original settlement microtask and failed three
+  existing generation fixtures; cleanup now observes the original promise out of band. The final owner plus
+  HostedShell lane passed 28/28, the CI-shaped App suite passed 205/205, and App checked TypeScript passed.
+- Mutation resistance replaced only the explicit-refresh call with a direct probe; the same owner test failed
+  again at `3 -> 2`, then passed after restoring the shared probe boundary. At that correction point, full
+  repository gates and a replacement remote run remained required; checkpoint 3.6 stayed open.
+- The first workspace-serial `pnpm test:ci` after that correction passed Root, Core, Server, and App, then one of
+  Settings' 61 interaction cases crossed Vitest's default five-second test timeout. Its exact replay completed in
+  1.59 seconds. A second complete run crossed the same default in two different Settings cases at approximately
+  5.9 and 6.3 seconds, which localized the failure to whole-suite jsdom resource contention rather than one
+  production path or assertion.
+- `settings.test.tsx` now assigns that heavy interaction suite a bounded 10-second execution budget. No production
+  code, assertion, `waitFor`, transport deadline, mutation deadline, or user-visible lifecycle threshold changed.
+  The complete Web unit project then passed 158 files / 1,016 tests.
+- The final-tree workspace-serial `pnpm test:ci` passed Root 43/43, Core 479/479, Server 542/542, App 205/205,
+  Web 1,016/1,016, and CLI 68/68. Existing jsdom Canvas not-implemented diagnostics remained non-fatal. The
+  replacement exact-head remote run and manager walkthrough remain required; checkpoint 3.6 stays open.
+- Final-tree `pnpm format:check` passed all seven changed files; `pnpm lint:ci` reported no warnings/errors over
+  1,024 files; `pnpm typecheck` passed all 15 workspace packages; strict OpenSpec validation and
+  `git diff --check` passed. The basic browser fixture gate passed xterm 60/60 with one skipped and Web Storybook
+  12/12. These browser fixtures are preparation evidence only and do not replace manager acceptance.
+
 ## Loopback Triggers
 
 Return to `research-plan.md` and obtain an explicit owner decision before progressing when any of the following occurs:

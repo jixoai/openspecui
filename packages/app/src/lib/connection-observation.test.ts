@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Prove multi-source health/Root collection, initial Pull, and reconnect re-probe without healthy-path timers.
+ * 1. Prove multi-source health/Root collection, initial Pull, and generation-scoped health re-probe without timers or duplicate requests.
  * 2. Prove exact-tab generations retire late removed/replaced results.
  * 3. Preserve per-source authentication and event-driven disconnect states without cross-source fallback.
  * 4. Keep retained evidence and renderable health separate from replacement observation authority.
@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Owner-reported defect (2026-07-26): "Dashboard加载完成的一瞬间开始reload。"
+ * Owner-reported defect (2026-07-27): "SessionTabs 的样式没有立刻更新成 Offline 的 icon。"
  */
 import { buildBackendHealthPayload, type HostedBackendHealthResponse } from '@openspecui/core'
 import {
@@ -523,6 +524,46 @@ describe('connection observation owner', () => {
         generation: initial.generation,
       })
     ).toBe(false)
+
+    replacementProbe.resolve(online(health(API_A, 'replacement-generation')))
+    await refresh
+  })
+
+  it('reuses a pending refresh probe when the established transport disconnects', async () => {
+    const replacementProbe = deferred<HostedBackendProbeResult>()
+    const callbackCapture: ProjectionCallbackCapture = { current: null }
+    let probeCount = 0
+    const owner = createConnectionObservationOwner({
+      projectionTransportFactory: {
+        connect(_apiBaseUrl, _selector, nextCallbacks) {
+          callbackCapture.current = nextCallbacks
+          return { unsubscribe() {} }
+        },
+      },
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1
+          ? online(health(API_A, 'initial-generation'))
+          : replacementProbe.promise
+      },
+      fetchRootProjection: async () =>
+        rootProjection(readyRoot('project-a', probeCount), probeCount),
+      now: () => probeCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
+    const callbacks = requireProjectionCallbacks(callbackCapture)
+    callbacks.onConnectionState('pending')
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+
+    const refresh = owner.refresh(['a'])
+    await vi.waitFor(() => expect(probeCount).toBe(2))
+    callbacks.onConnectionState('connecting')
+
+    expect(probeCount).toBe(2)
 
     replacementProbe.resolve(online(health(API_A, 'replacement-generation')))
     await refresh
