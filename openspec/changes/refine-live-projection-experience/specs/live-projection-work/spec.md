@@ -1,10 +1,12 @@
 <!--
-Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
 1. Extend Server-owned Projection Work from snapshot push to identity-only invalidation plus typed current pull.
 2. Preserve exact identity/generation acceptance and display-only authority during client revalidation.
 3. Bound same-identity invalidation fan-out without delaying direct user or terminal transitions.
+4. Deliver bounded retained state to a fresh client Document before current recomputation settles.
 
 Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
+Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
 -->
 
 # Delta for Live Projection Work
@@ -47,3 +49,23 @@ The system SHALL coalesce bursty invalidations for one active identity into boun
 - **THEN** the system SHALL start the required current pull without waiting for that window
 - **AND** SHALL still apply the identity/generation acceptance gate
 
+### Requirement: Fresh-Document Retained Projection Read
+
+The system SHALL allow a fresh client Document to read a bounded Server-retained projection state before a
+replacement Work generation becomes current. Retained data SHALL remain `stale-display-only`; only a matching
+current state SHALL restore mutation authority.
+
+#### Scenario: A fresh Document reads a dormant retained snapshot
+
+- **GIVEN** the Server retains a snapshot after the previous subscriber became dormant
+- **AND** a fresh client Document has no module-local snapshot cache
+- **WHEN** the client performs the typed projection read
+- **THEN** the Server SHALL return the retained data without waiting for current recomputation
+- **AND** the read SHALL preserve exact identity, work generation, snapshot generation, and `stale-display-only` freshness
+
+#### Scenario: Retained data converges to current
+
+- **GIVEN** a fresh client displays retained data as `display-only`
+- **WHEN** a matching replacement Work state becomes current
+- **THEN** the client SHALL commit that matching current state and restore eligible current-dependent actions
+- **AND** SHALL reject late or mismatched retained/current reads from another identity or generation
