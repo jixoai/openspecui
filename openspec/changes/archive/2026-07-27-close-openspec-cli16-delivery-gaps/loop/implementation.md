@@ -3064,3 +3064,25 @@ The successor must keep four independently reviewable production packages:
 Each package requires one real owner-boundary red, green, and exact mutation-resistance result before broad gates.
 Vitest and basic component Playwright remain agent-owned preparation; the manager retains final browser and visual
 acceptance. PR merge, spec sync, archive, and release remain separate actions after this documentation commit.
+
+#### Protected merge, spec sync, and partial archive: 2026-07-27 Asia/Shanghai
+
+PR #207 closure head `ad9fe9c` passed all six checks in run `30272356791`: Changeset Gate, CI Scope, Fast Gate,
+Web Browser, xterm Browser, and aggregate Browser Gate. GitHub merged it through protected `main` as merge commit
+`6649bf1`.
+
+Before archive, all three delta capabilities were synchronized as new main specifications because no same-name main
+spec existed:
+
+```text
+openspec/specs/hosted-environment-delivery/spec.md
+openspec/specs/projection-contract-truth/spec.md
+openspec/specs/cli-backed-reactive-projection/spec.md
+```
+
+`openspec archive close-openspec-cli16-delivery-gaps -y --skip-specs` then reported `63/66`, preserved its three
+incomplete tasks, and moved the Change to
+`openspec/changes/archive/2026-07-27-close-openspec-cli16-delivery-gaps/`. `--skip-specs` prevents a second sync; it
+does not discard the already-created main specs. The intentionally open history remains `6.8`, `6.12`, and `8.4`.
+Their production work is owned by active Change `refine-live-projection-experience`; archive is closure of the
+planning folder, not a false completion claim. No release or changeversion action was performed.
