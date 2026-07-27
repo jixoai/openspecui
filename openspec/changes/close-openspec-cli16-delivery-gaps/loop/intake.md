@@ -1,12 +1,13 @@
 <!--
-Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
 1. Capture the independent review's confirmed OpenSpec 1.6 delivery gaps.
 2. Freeze the old adaptation Change as traceable source material while this Change closes its migrated obligations.
 3. Separate implementation proof, loading-change regression ownership, and owner-only browser walkthroughs.
-4. Define the product boundary for a neutral, backend-owned multi-environment projection.
+4. Define the neutral multi-environment projection and CLI-backed reactive Work upgrade required before walkthrough resumes.
 
 Original request (2026-07-23): "走查任务直接到新的change中做。你目前的工作就是：review + interview + replan(write new openspec change)"
 Original request (2026-07-20): "以后任何需要最终端到端的浏览器走查，就交给我来做。你最多负责到最基础的vitest+playwright的相关组件化的测试。"
+Original request (2026-07-26): "这个任务很重要 请你更新 change，展开全面的接口升级和内核升级和测试升级，等全部完成之后，我再来继续做验收"
 -->
 
 ## User Input
@@ -18,6 +19,8 @@ Original request (2026-07-20): "以后任何需要最终端到端的浏览器走
 > 对我进行采访提问的时候，我们需要高效一点，对于一般的共识没必要提问（你知道我的哲学）。
 >
 > 以后任何需要最终端到端的浏览器走查，就交给我来做。你最多负责到最基础的 vitest+playwright 的相关组件化的测试。
+>
+> 最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。即便现在有正在的任务，界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。这是一套通用的数据拉取推送技术。
 
 The independent review baseline is `24c313c...HEAD` on `feat/openspec-cli-16-contract-baseline`.
 The reviewed old Change `target-openspec-cli-16-line` was at `109/131`; independent correction reopens
@@ -57,6 +60,9 @@ The Change owns the following fixed points:
   settlement, checked test fixtures, source headers, and passing delivery gates;
 - one owner-per-fixed-point implementation sequence and a final manual walkthrough ledger owned by the
   manager.
+- one general CLI-backed reactive Work contract: official-source-audited physical evidence establishes
+  dynamic invalidation dependencies; only settled typed CLI results enter the projection cache; Push
+  carries invalidation/lifecycle and clients Pull replacement data while retained cache remains visible.
 
 `target-openspec-cli-16-line` remains frozen until its 25 unchecked items are mapped by proof or explicit
 transfer. With manager confirmation it may then be archived as an honestly partial/superseded record;
@@ -71,8 +77,9 @@ Change's implementation scope.
   permission system, expose Store Git clone/pull/push/synchronization, or scan arbitrary filesystems.
 - Do not invent a second App data store, construct `envUri` in the App, infer health from URL strings, or
   treat a failed authentication request as a completed Store mutation.
-- Do not implement the independent loading-experience redesign, pending Kanban layout work, or unrelated
-  performance optimization in this Change.
+- Do not absorb the independent visual loading-language redesign or pending Kanban layout work. The
+  CLI-backed reactive interface/kernel/test upgrade is now explicitly in scope because it is a correctness
+  prerequisite for Store, Root, Context, and Environment acceptance rather than a cosmetic optimization.
 - Do not claim user-facing desktop, mobile, multi-tab, static, WebSocket, or mutation walkthrough
   acceptance from Vitest, component Playwright, Storybook, source inspection, or CI alone.
 - Do not archive the old Change before its transfer ledger and manager confirmation; do not merge the
@@ -89,6 +96,8 @@ It is implementation-complete only when all of the following are true:
 - `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`,
   `pnpm test:browser:ci`, and fresh static SSG checks pass on the candidate;
 - the loading-change regression is independently repaired and no longer blocks those gates;
+- every migrated CLI-backed projection exposes the no-data/data-present lifecycle, retains settled cache
+  during revalidation, derives replacement truth only from the CLI, and has no healthy-path polling owner;
 - the manager records the final real-browser walkthroughs in this Change; and
 - the old Change's migrated entries are reconciled honestly and may use the documented partial archive;
   this corrective Change still follows complete verify/archive and protected-branch delivery rules.

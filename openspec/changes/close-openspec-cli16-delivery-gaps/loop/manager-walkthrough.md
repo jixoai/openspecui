@@ -1,15 +1,17 @@
 <!--
-Orthogonal intents (created 2026-07-26 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
 1. Provide the manager-owned final browser walkthrough topology and commands.
 2. Record pass/fail evidence for checkpoints 6.7-6.12 without treating automation as acceptance.
+3. Preserve manager-reported blockers and their exact retest boundary.
 
 Original request (2026-07-20): "以后任何需要最终端到端的浏览器走查，就交给我来做。"
 -->
 
 # Manager Walkthrough: OpenSpec CLI 1.6 Delivery Gaps
 
-PR #207 head `7e0a71c` is open, clean, and 6/6 CI green. This ledger is the remaining product acceptance boundary.
-The Agent does not execute or pre-check these browser steps.
+The P6 candidate is currently a local, uncommitted worktree; the earlier PR #207 evidence does not prove this
+candidate. Run this ledger against the local candidate before any delivery commit. This is the remaining product
+acceptance boundary. The Agent does not execute or pre-check these browser steps.
 
 ## Environment Topology
 
@@ -48,10 +50,27 @@ App tab remains open.
 
 ### 6.9 Multi-environment targeting
 
+Keep A, B, and C running. In Store Manager, use the `Backend` selector to choose
+`http://localhost:3112` (B); this changes the same active tab used by Sessions and does not disconnect A. In
+Inspector, select `mutation-store`, run `Unregister`, and inspect the lifecycle evidence before navigating away.
+
 - [ ] Select B while A remains online; a Store action is dispatched only to B.
 - [ ] A and B group under one opaque `envUri`; C is a distinct environment.
 - [ ] Duplicate or replaced same-locator tabs do not inherit a retired tab's mutation authority.
 - Result / defect:
+  - Blocked on 2026-07-26: opening B made A report `authentication-required`; opening C then made B report it,
+    and C failed after its next background health refresh. Diagnostics proved the three backend credentials
+    remained stable, but each App window held only the credential it directly consumed.
+  - Candidate correction: the relay is now App-root-owned across every route; all live windows absorb each new
+    locator credential and the leader ACK returns its existing in-memory binding snapshot to the source window.
+    Focused Vitest and typecheck evidence are green. Manager must restart this A/B/C step from fresh App windows;
+    6.9 remains unchecked until the complete grouping, selection, and Store-action behavior passes.
+  - Blocked again on 2026-07-26: Store Inspector requested all-Store Doctor as
+    `/trpc/stores.doctor?input=null`; the optional Router accepts absent input or an object and rejected `null` with
+    HTTP 400. The corrected client omits `input` for all-Store Doctor and retains object input for an explicitly
+    supplied id. Store Manager now visibly selects the same global `activeTabId` used by Sessions, so B can be
+    chosen without disconnecting A. Focused client/route tests and App typecheck are green; manager must retest the
+    real B `mutation-store` Unregister lifecycle before 6.9 closes.
 
 ### 6.10 Store lifecycle
 

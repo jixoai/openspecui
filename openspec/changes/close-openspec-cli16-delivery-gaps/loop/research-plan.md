@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
 1. Record verified review findings at the hosted protocol, App projection, static, and delivery boundaries.
 2. Split correction into independently reviewable production-owner packages.
 3. Preserve the old Change and independent loading Change as separate sources of truth.
@@ -8,6 +8,7 @@ Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
 
 Original request (2026-07-23): "走查任务直接到新的change中做。你目前的工作就是：review + interview + replan(write new openspec change)"
 Original request (2026-07-21): "每项先明确一个生产 owner、一个精准红例、一个绿例。focused review 未通过，不跑全量门禁。"
+Original request (2026-07-26): "更新 change，展开全面的接口升级和内核升级和测试升级，等全部完成之后，我再来继续做验收。"
 -->
 
 ## Research Findings
@@ -209,6 +210,140 @@ Change's reviewer for gate evidence and tracker reconciliation; manager for fina
    manager then performs the real end-to-end walkthroughs. Only after that may this corrective Change verify,
    merge, archive, and enter optional release sequencing.
 
+### P6: CLI-backed reactive projection interface, kernel, and test upgrade
+
+The manager paused walkthrough because the current App keeps Root/health fresh with a 15-second timer and Store
+Inventory/Doctor are one-shot HTTP pulls. Existing Projection Work already proves bounded single-flight, retained
+snapshots, reactive replacement, and late-generation retirement for Dashboard/Changes, but it is not the common
+contract used by Store, Root Context, or Environment.
+
+#### Official OpenSpec 1.6 trigger evidence map
+
+| CLI projection                    | Official source path                                                                              | Physical/content triggers                                                                                                                               | Dynamic reconciliation                                                                                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `store list --json`               | `commands/store.ts` -> `core/store/operations.ts` -> `core/store/registry.ts` / `foundation.ts`   | effective `${dataHome}/stores/registry.yaml` and its existence/type                                                                                     | a successful typed list replaces the observed registered-Store root set by Store id plus canonical root                                                        |
+| `store doctor [id] --json`        | `commands/store.ts` -> `core/store/operations.ts` -> `core/openspec-root.ts` and Store Git probes | registry; selected/all CLI-listed roots; `openspec/`; `openspec/config.yaml` or `config.yml`; specs/changes/archive shape; Store metadata; Git metadata | selector presence is exact; all-Store Doctor follows the latest successful typed list, and moved/removed roots retire old leases                               |
+| `doctor --json`                   | `commands/doctor.ts` -> root selection -> `core/references.ts`                                    | launch and selected-root config; registry; selected Planning-root shape; declared direct Reference Store roots and diagnostics                          | parsed Store/Reference declarations only add or remove trigger roots; returned Root/Reference facts remain typed CLI output                                    |
+| `context --json`                  | `commands/context.ts` -> root selection -> `core/references.ts`                                   | the Root selection inputs plus direct Reference resolution and metadata                                                                                 | direct Reference ids/roots are one-level dynamic observation dependencies; no recursive Reference graph is inferred                                            |
+| environment-global config/profile | `commands/config.ts` -> `core/global-config.ts` and profile resolution                            | `${XDG_CONFIG_HOME}/openspec/config.json` or the platform fallback returned by `openspec config path`; `config list --json` reads this global file only | the CLI-resolved path replaces the observed config-file dependency; project Context, Store registry, and data-home schema invalidations do not rerun this Work |
+| Status and Instructions           | `commands/workflow/status.ts`; `commands/workflow/instructions.ts`; `commands/shared-gather.ts`   | active-root config; Store registry when selected; Change metadata; schema graph; concrete artifact paths and tracked globs; direct Reference roots      | each exact Change/schema/artifact selector owns one Work identity; CLI-discovered paths replace, rather than append to, dependencies                           |
+| schemas and templates             | `commands/workflow/schemas.ts`; `commands/workflow/templates.ts`; artifact-graph resolver         | active-root `openspec/config.*`; project `openspec/schemas`; effective data-home `schemas`; package schemas; resolved `schema.yaml` and template paths  | the typed CLI schema/template result chooses the exact resolved schema and template dependency set                                                             |
+| referenced Spec catalog/document  | `core/list.ts`; `commands/show.ts`; `core/references.ts`                                          | active-root owned Spec inventory; direct Reference declarations; registry; each Doctor-declared Reference root; selected referenced Spec content        | the Catalog preserves owned file facts plus per-Store typed CLI list evidence; referenced detail uses exact typed CLI list/show proof                          |
+
+This map is an invalidation map, not permission to duplicate OpenSpec resolution. Trigger reads may inspect enough
+structure to bind watchers, while all browser-visible business values come from typed `CliCommandResult` envelopes.
+
+#### Timer classification
+
+| Current timer                                                                               | Classification                                       | P6 action                                                                                                      |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `app/connection-observation.tsx` 15-second `owner.refresh()`                                | normal Root/health projection polling                | remove; replace with locator-scoped WS lifecycle/invalidation plus typed Pull, explicit refresh, and reconnect |
+| `server/router.ts` three-second `system.subscribe` push                                     | mixed system heartbeat, watcher/recovery status      | separate heartbeat from OpenSpec projection freshness; it must not execute Root/Store CLI Work                 |
+| `store-observation-fallback.ts`                                                             | bounded degraded watcher/data-home/root-gap fallback | retain, prove inert while healthy, and ensure it publishes invalidation only                                   |
+| reactive-fs missing-path timer and ProjectWatcher liveness/reinitialize timers              | missing-path/platform watcher self-healing           | retain as infrastructure fallback; never call CLI directly                                                     |
+| launch relay heartbeat, PWA update check, PTY title sampling, debounce/retry/process timers | unrelated transport/runtime maintenance              | keep physically separate and exclude from projection freshness claims                                          |
+
+#### Interface and owner sequence
+
+```text
+official-source trigger map
+          |
+          v
+dynamic observation + exact invalidation
+          |
+          v
+Projection Work registry ---- same identity ----> single CLI execution
+          |                                           |
+          | retained A + revalidating                 | settled B / error B
+          v                                           v
+typed HTTP Pull state <----- lifecycle-only WS Push --+
+```
+
+1. Core publishes browser-safe lifecycle/state schemas and serializable CLI failure evidence.
+2. Server Projection Work exposes immediate state reads plus lifecycle-only subscriptions while retaining its
+   bounded registry/scheduler and dynamic `ReactiveContext` dependency replacement.
+3. `OpsxKernel` exposes direct one-shot typed readers for Status, Instructions, Schema bundles, Templates, and
+   template contents. Projection Work executes those readers inside its own reactive generation; the legacy Kernel
+   streams cannot hide the interval between physical invalidation and CLI settlement.
+4. One Planning-root projection owner serves selector-exact OPSX and Spec Catalog/document Work. Root replacement
+   retires the regional listener before exposing the replacement record, while the full Work identity prevents A
+   cache or failure from publishing into B.
+5. One Server-runtime CLI Work serves Environment Global path/config/profile/drift facts. A separate
+   file-native Work reads the editable JSON bytes selected by the current typed `config path`; project, Store,
+   Context, and Planning-root generations never invalidate either runtime-environment owner.
+6. Runtime projection owners bind exact invalidation facets and CLI-discovered observation roots before publishing
+   a settled result; only successful typed Store list may replace the registered-root inventory.
+7. App keeps one locator-scoped transport generation per retained backend, pulls on lifecycle wake-up, and preserves
+   old health/Root/Store data as display-only while replacement work runs. Project Web uses the same lifecycle Pull
+   adapter for OPSX, Environment Global, and Reference-aware Spec projections.
+8. Focused tests precede broad gates and prove the actual file/invalidation -> Work -> public Pull path, not a
+   hand-authored refresh callback.
+
+#### P6 Store-root precision correction (2026-07-27 Asia/Shanghai)
+
+The Store-root observer has two non-interchangeable physical paths. A recursive Store-root watcher that maps every
+event directly to the runtime `context` facet is invalid because it lets referenced Spec-content edits rerun Root
+Context/Doctor even when the official command does not consume those bytes.
+
+```text
+Store `openspec/specs/**` change
+  -> Store `spec-root` generation
+  -> relevant Catalog / Document / Instructions / Apply Work only
+
+Store Doctor dependency change
+  -> Store `doctor-root` generation
+  -> selected/all Store Doctor Work + runtime `context` invalidation
+```
+
+The second path is derived from the official `store doctor` trigger set in the table above. A non-Git Store ignores
+ordinary content and `openspec/config.*` bytes; Store metadata/shape changes remain Doctor facts. A Git Store's
+working-tree and Git metadata can legitimately be Doctor facts because upstream Doctor probes Git state. The
+observation service therefore owns explicit Doctor and Spec leases and injects the runtime invalidation controller;
+it MUST NOT acquire a broad `RuntimeRootInvalidationRegistry(['context'])` lease for every registered Store root.
+
+#### P6 interface migration inventory
+
+| Interface family              | Current Push behavior                      | P6 owner and result                                                                                        |
+| ----------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Root Context                  | already migrated to lifecycle-only Push    | retain launch-scoped Root Projection Work and typed Pull                                                   |
+| Store list / Doctor           | already migrated to lifecycle-only Push    | retain runtime Store Projection Work; exact optional Doctor selector                                       |
+| OPSX Status / Instructions    | full `ChangeStatus`/instruction WS payload | Planning-root selector Work; direct Kernel reader; lifecycle-only Push and typed Pull                      |
+| Schema bundle / Templates     | full schema/template WS payload            | Planning-root selector Work; direct Kernel reader; dynamic resolved-path dependencies                      |
+| Environment Global            | full config/profile WS payload             | separate CLI path/profile Work plus file-native JSON Work; lifecycle-only Push and typed Pull              |
+| Spec Catalog / document       | full Catalog/document WS payload           | Planning-root selector Work; CLI list/show membership/evidence plus explicit file-native document content  |
+| Project Binding / Active Root | full file-native reactive payload          | explicit non-CLI projection exception; keep physical/reactive subscription and Root authority join         |
+| Schema files / YAML           | full file-native reactive payload          | explicit non-CLI projection exception; CLI selects the resolved root, file content remains the actual fact |
+| artifact output / preview     | full file-native reactive payload          | explicit non-CLI projection exception; no CLI business result is fabricated                                |
+
+#### P6 remaining live-projection owner audit (2026-07-27 Asia/Shanghai)
+
+The normal Project Web path has no remaining OpenSpec CLI result that is both live and still carried by a
+full-business-payload Push. `useContextSubscription`, `useCliProjectionSubscription`, and the Environment Global
+hook now consume lifecycle-only Push and typed Pull. The legacy compatibility queries below call the same Work's
+`getCurrent`; they do not own a second cache, watcher, or polling loop.
+
+| Surface or compatibility Pull                                                        | Production owner                                                 | Objective fact                                                               | P6 classification                                                                                 |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Root Context / `rootContext.get`                                                     | `RootContextProjectionService`                                   | typed `doctor --json` + `context --json` result                              | CLI Work; lifecycle Push + typed Pull                                                             |
+| Store list/Doctor                                                                    | `StoreProjectionService`                                         | typed `store list` / exact-selector `store doctor` result                    | CLI Work; lifecycle Push + typed Pull                                                             |
+| OPSX status, change list, status list, instructions, Apply, config bundle, templates | `PlanningCliProjectionService` + direct `OpsxKernel` readers     | typed pinned-CLI result                                                      | CLI Work; lifecycle Push + typed Pull                                                             |
+| Spec Catalog/document, including References                                          | `PlanningCliProjectionService` + `SpecCatalogService`            | typed list/show membership/evidence; document bytes remain named file owners | CLI Work where CLI truth is claimed; source-aware document content stays explicit                 |
+| Environment Global / `planningConfig.environmentGlobal`                              | `EnvironmentGlobalProjectionService`                             | CLI path/config/profile/drift plus separate file-native JSON bytes           | two runtime-environment Works; lifecycle Push + typed Pull                                        |
+| Change and Archive inventories/details/files                                         | `ChangesProjectionService`, `OpenSpecAdapter`, `DocumentService` | planning-root Markdown/filesystem structure and content                      | explicit file-native exception; CLI is not an authoritative replacement for editable local source |
+| Schema YAML/files and artifact output/glob previews                                  | `SchemaMutationService`, `OpsxKernel.ensure*`, `DocumentService` | exact selected file bytes and directory structure                            | explicit file-native exception; CLI chooses a schema/template but does not own editable bytes     |
+| Dashboard facts, Git, Search, configured tools                                       | their named Dashboard/Git/Search/tool observation services       | filesystem, Git process, local index, or physical tool-delivery facts        | explicit non-OpenSpec-CLI projections with their existing reactive owners                         |
+| Settings, notifications, sound, translation, local models, terminal/PTy              | their Server-local or PTY owners                                 | Server-local runtime/application state                                       | outside the OpenSpec project-projection domain                                                    |
+
+Timer audit remains equally strict. `system.subscribe`'s three-second emission is a watcher/recovery heartbeat;
+the Store fallback timer only tests degraded watcher/data-home coverage; reactive-fs missing-path/liveness/debounce
+timers only restore file observation; PTY title sampling observes a terminal process; App PWA checks observe a
+service worker; and Dashboard/Git 250ms timers render an already-scheduled Git-refresh progress indicator. None
+executes Root, Context, Store, Environment Global, OPSX, or Spec CLI Work on a healthy path. Explicit Git
+auto-refresh is a separate Git feature, not an OpenSpec CLI freshness mechanism.
+
+The audit therefore records exceptions instead of migrating them into a generic CLI projection. Doing otherwise
+would make current file or runtime facts look like stale CLI cache entries and violate the source-of-truth boundary.
+
 ## Capability Impact
 
 ### New or Expanded Behavior
@@ -229,6 +364,8 @@ Change's reviewer for gate evidence and tracker reconciliation; manager for fina
 - Environment-scoped actions no longer target the first online backend.
 - Delivery completion no longer treats old green PR checks, local casts, or owner walkthrough placeholders
   as completion evidence.
+- CLI-backed projections share one typed no-data/data-present lifecycle, lifecycle-only Push, typed Pull, retained
+  stale display, dynamic official-source trigger graph, and timer-free healthy path.
 
 ## Risks and Mitigations
 
@@ -243,6 +380,10 @@ Change's reviewer for gate evidence and tracker reconciliation; manager for fina
 | Same-locator tab replacement inherits old authority.                         | Join on exact tab identity plus observation generation and make the real Store action mutation test fail when either check is removed.                    |
 | Loading-change regression is misattributed or silently masked.               | Run its exact failing tests before and after its own correction; record stdout and do not weaken timeouts/assertions to pass.                             |
 | Owner walkthrough waits on unrelated visual work.                            | Record only required behavioral checks here; visual/loading redesign remains in `refine-live-projection-experience`.                                      |
+| Watcher event arrives while a CLI Work is already running.                   | Single-flight by full identity, monotonic Work generation, and exact late-generation mutation proof.                                                      |
+| Dynamic Store/Reference roots move or disappear.                             | Reconcile leases from successful CLI identities; add/move/remove tests and bounded degraded fallback only for observation gaps.                           |
+| Replacement CLI command fails after a cached success.                        | Return `refresh-error` with retained display-only snapshot and exact B evidence; mutation gate remains closed.                                            |
+| Timer removal hides an unobserved change.                                    | Source-audited dependencies, real physical-change transport fixtures, and healthy-path timer assertions.                                                  |
 
 ## Verification Strategy
 
