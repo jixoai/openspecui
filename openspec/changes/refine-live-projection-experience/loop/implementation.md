@@ -671,6 +671,40 @@ until all five packages receive focused review. No Agent-run fixture is final br
   `git diff --check` passed. The basic browser fixture gate passed xterm 60/60 with one skipped and Web Storybook
   12/12. These browser fixtures are preparation evidence only and do not replace manager acceptance.
 
+### P7 second remote CI correction (2026-07-28 Asia/Shanghai)
+
+- PR Quality run `30296656775` tested exact head `285d440fc7d8fb01e16ec47ab87eb17ffba90bcc`.
+  Changeset Gate and CI Scope passed. Fast Gate stopped in the complete Server suite at 541/542:
+  `tool-subscription-router.test.ts` did not receive the `Launch Codex skill creation` emission within its four
+  fallback-cycle budget. Browser shards were skipped and Browser Gate failed only as a consequence. The job did
+  not reach App tests, so this run is not remote acceptance of the preceding health-probe correction.
+- The failing subscription uses `createToolInitStateProjection`, which was changed on 2026-07-26 from per-file
+  `reactiveExists` to bounded `reactiveReadDir` inventories. The Server fixture comment still claimed a 1,000ms
+  missing-path fallback, but directory inventories intentionally had none. When Linux watcher delivery coalesced
+  the deep `.codex/skills/.../SKILL.md` creation to a parent event, the leaf subscription did not match it and the
+  cached empty inventory had no remaining convergence path.
+- An initial generic Core red disabled watcher delivery after a missing `reactiveReadDir`, then proved the absence
+  of fallback. Adding a timer to every missing directory made that red pass, but the existing fanout gate failed
+  with 60 missing-path polls. That candidate was discarded before delivery: it repaired convergence by violating
+  the bounded physical-inventory contract.
+- The accepted Core owner red stages `.codex`, `.codex/skills`, then `SKILL.md` creation through the real retained
+  Tool projection. Before the fix it deterministically failed after two seconds at `tool root creation`. Tool
+  skills now read the existing project inventory, then an existing tool-root inventory, then the existing skills
+  inventory. Each parent creation wakes a recompute that safely moves observation one level deeper; absent leaf
+  directories create no poll. Explicit one-shot `getToolInitStates` also retires its project-root cache so fresh
+  reads do not retain the pre-creation parent inventory.
+- The staged Core red passed after the fix; the complete Tool state file passed 10/10, including the existing
+  one-shot freshness and `missingPathPolls = 0` fanout assertions. Mutation resistance removed only the
+  project-root inventory dependency; the same red failed again at `tool root creation`, then passed after
+  restoration.
+- The final-tree serial `pnpm test:ci` passed with Root 43/43, Core 480/480, Server 542/542, App 205/205, Web
+  1,016/1,016, and CLI 68/68. This directly replays the complete Server suite that failed remotely; existing jsdom
+  Canvas not-implemented diagnostics remained non-fatal. `pnpm typecheck` passed all 15 checked workspace
+  packages with an explicit zero exit. The basic component browser gate passed xterm 60/60 with one skipped and
+  Web Storybook 12/12. These fixtures remain preparation evidence only. Final formatting, lint, strict Change
+  validation, and diff checks are rerun after this evidence edit; another exact-head remote run remains required,
+  and checkpoint 3.6 stays open.
+
 ## Loopback Triggers
 
 Return to `research-plan.md` and obtain an explicit owner decision before progressing when any of the following occurs:

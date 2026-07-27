@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Preserve Tool initialization projection semantics across delivery modes and physical scopes.
  * 2. Bound Tool artifact observation fanout at directory-inventory scale across recomputes.
  *
  * Original request (2026-07-25): "格式问题？md文件有什么格式问题，直接快速处理掉，然后继续工作"
  * Repeated fixed point (2026-07-26): clean CI runs 30163937799 and 30165778790 missed the same Launch update creation emission.
+ * Repeated fixed point (2026-07-28): PR Quality run 30296656775 missed Launch Codex skill creation below an initially absent tool root.
  */
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
@@ -207,6 +208,65 @@ describe('getToolInitStates', () => {
     } finally {
       await projection.return(undefined)
       setIntervalSpy.mockRestore()
+      await releaseRoot()
+      await environment.dispose()
+    }
+  })
+
+  it('rebinds staged Launch skill creation through existing parent inventories', async () => {
+    process.env.CODEX_HOME = join(tempDir, 'codex-home')
+    const environment = new ReactiveObservationEnvironment()
+    const releaseRoot = await environment.acquireRoot(tempDir)
+    const context = new ReactiveContext()
+    const controller = new AbortController()
+    const emissions: Awaited<ReturnType<typeof getToolInitStates>>[] = []
+    const consume = (async () => {
+      try {
+        for await (const value of context.stream(
+          createToolInitStateProjection(tempDir, {
+            delivery: 'skills',
+            workflows: ['update'],
+          }),
+          controller.signal
+        )) {
+          emissions.push(value)
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          throw error
+        }
+      }
+    })()
+
+    const waitForNextEmission = async (stage: string, startIndex: number): Promise<void> => {
+      await vi.waitFor(() => expect(emissions.length, stage).toBeGreaterThan(startIndex), {
+        timeout: 2_000,
+      })
+    }
+
+    try {
+      await waitForNextEmission('initial projection', 0)
+      expect(emissions.at(-1)?.find((entry) => entry.toolId === 'codex')?.status).toBe(
+        'uninitialized'
+      )
+
+      const toolRootStart = emissions.length
+      await mkdir(join(tempDir, '.codex'))
+      await waitForNextEmission('tool root creation', toolRootStart)
+
+      const skillsRootStart = emissions.length
+      await mkdir(join(tempDir, '.codex', 'skills'))
+      await waitForNextEmission('skills root creation', skillsRootStart)
+
+      const skillStart = emissions.length
+      await writeArtifact(join(tempDir, '.codex', 'skills', 'openspec-update-change', 'SKILL.md'))
+      await waitForNextEmission('skill artifact creation', skillStart)
+      expect(emissions.at(-1)?.find((entry) => entry.toolId === 'codex')?.status).toBe(
+        'initialized'
+      )
+    } finally {
+      controller.abort()
+      await consume
       await releaseRoot()
       await environment.dispose()
     }

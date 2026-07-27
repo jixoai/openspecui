@@ -113,6 +113,12 @@ disconnect; browser shards were consequently skipped. The controlled owner red/g
 recorded in `implementation.md`. Full local gates now pass; a new exact-head remote run is still required, and
 the manager walkthrough remains a separate acceptance fact.
 
+Replacement PR Quality run `30296656775` on head `285d440` also did not satisfy 3.6. The previous App failure was
+corrected locally, but Fast Gate stopped at Server 541/542 before reaching App tests: a Launch-local Codex skill
+directory created below a previously missing inventory root never emitted. The Core red/green/mutation correction
+for progressive parent-inventory rebinding is recorded in `implementation.md`. Full local workspace tests,
+typecheck, and basic component browser fixtures now pass; another exact-head run remains required.
+
 ## 4. Merge Readiness
 
 - [ ] 4.1 Confirm all P1-P5 work is complete, all strict/OpenSpec validation is green, no loopback trigger remains unresolved, and implementation notes match the checked source.
