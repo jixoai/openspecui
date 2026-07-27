@@ -1,3 +1,9 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Verify change-scoped OPSX compose route and evidence-source mapping.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ */
 import { describe, expect, it } from 'vitest'
 import {
   buildOpsxComposeDraft,
@@ -37,6 +43,21 @@ describe('opsx-compose helpers', () => {
     expect(source).toEqual({
       command: 'openspec',
       args: ['instructions', 'apply', '--change', 'add-search'],
+    })
+  })
+
+  it.each(['update', 'sync'] as const)('builds and parses the %s change action', (action) => {
+    const href = buildOpsxComposeHref({ action, changeId: 'add-search' })
+
+    expect(href).toBe(`/opsx-compose?action=${action}&change=add-search`)
+    expect(parseOpsxComposeLocationSearch(`?action=${action}&change=add-search`)).toEqual({
+      action,
+      changeId: 'add-search',
+      artifactId: undefined,
+    })
+    expect(resolveOpsxPromptSource({ action, changeId: 'add-search' })).toEqual({
+      command: 'openspec',
+      args: ['status', '--change', 'add-search'],
     })
   })
 

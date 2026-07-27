@@ -1,3 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * 1. Own reusable worktree Server instances and their readiness lifecycle.
+ * 2. Select worker-thread or process bootstrap without exposing private runtime inputs through argv or URLs.
+ * 3. Propagate one parent Access Gate and resolved Web asset root through child launch and readiness.
+ * 4. Preserve nested worker handoff delegation and deterministic child teardown.
+ *
+ * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
+ * Delivery correction (2026-07-26): nested worktree Servers reuse the parent runtime's Web assets.
+ */
 import { findAvailablePort } from '@openspecui/server'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -7,12 +17,18 @@ import { Worker } from 'node:worker_threads'
 import {
   OPENSPECUI_RUNTIME_CAPABILITIES,
   isHostedBackendHealthResponse,
+  type AccessGateCredential,
   type GitWorktreeHandoff,
 } from '@openspecui/core'
 import type { SpawnCommandConfig } from './local-hosted-app-dev'
 import type {
   WorktreeServerWorkerData,
   WorktreeServerWorkerFactory,
+} from './worktree-server-worker'
+import {
+  WORKTREE_ACCESS_GATE_CREDENTIAL_ENV,
+  WORKTREE_SERVER_WORKER_KIND,
+  WORKTREE_WEB_ASSETS_DIR_ENV,
 } from './worktree-server-worker'
 import {
   isWorktreeHandoffRequestMessage,
@@ -41,6 +57,8 @@ interface WorktreeInstanceManagerOptions {
   createWorker?: WorktreeServerWorkerFactory
   readinessTimeoutMs?: number
   preferredPortStart?: number
+  webAssetsDir: string
+  accessGateCredential?: AccessGateCredential | null
 }
 
 interface ManagedInstance {
@@ -123,9 +141,15 @@ function describeIncompatibleHealth(value: unknown, projectDir: string): string 
 export async function assertWorktreeServerCompatible(options: {
   serverUrl: string
   projectDir: string
+  accessGateCredential?: AccessGateCredential | null
 }): Promise<void> {
   const response = await fetch(`${options.serverUrl}/api/health`, {
-    headers: { accept: 'application/json' },
+    headers: {
+      accept: 'application/json',
+      ...(options.accessGateCredential
+        ? { Authorization: options.accessGateCredential.authorizationHeader }
+        : {}),
+    },
     cache: 'no-store',
   })
   if (!response.ok) {
@@ -179,7 +203,16 @@ function createNodeCliCommandPlan(options: {
   projectDir: string
   port: number
   cwd: string
+  webAssetsDir: string
+  accessGateCredential?: AccessGateCredential | null
 }): WorktreeServerProcessLaunchPlan {
+  const env = { ...process.env }
+  delete env[WORKTREE_ACCESS_GATE_CREDENTIAL_ENV]
+  delete env[WORKTREE_WEB_ASSETS_DIR_ENV]
+  env[WORKTREE_WEB_ASSETS_DIR_ENV] = options.webAssetsDir
+  if (options.accessGateCredential) {
+    env[WORKTREE_ACCESS_GATE_CREDENTIAL_ENV] = options.accessGateCredential.credential
+  }
   return {
     kind: 'process',
     command: process.execPath,
@@ -192,7 +225,7 @@ function createNodeCliCommandPlan(options: {
       '--no-open',
     ],
     cwd: options.cwd,
-    env: { ...process.env },
+    env,
   }
 }
 
@@ -200,11 +233,16 @@ export function createWorktreeServerLaunchPlan(options: {
   runtimeDir: string
   projectDir: string
   port: number
+  webAssetsDir: string
   createWorker?: WorktreeServerWorkerFactory
+  accessGateCredential?: AccessGateCredential | null
 }): WorktreeServerLaunchPlan {
-  const workerData = {
+  const workerData: WorktreeServerWorkerData = {
+    kind: WORKTREE_SERVER_WORKER_KIND,
     projectDir: options.projectDir,
     port: options.port,
+    webAssetsDir: options.webAssetsDir,
+    ...(options.accessGateCredential ? { accessGateCredential: options.accessGateCredential } : {}),
   }
   const workspace = resolveLocalCliWorkspace(options.runtimeDir)
 
@@ -230,6 +268,8 @@ export function createWorktreeServerLaunchPlan(options: {
     projectDir: options.projectDir,
     port: options.port,
     cwd: options.projectDir,
+    webAssetsDir: options.webAssetsDir,
+    accessGateCredential: options.accessGateCredential,
   })
 }
 
@@ -238,6 +278,7 @@ async function waitForServerReady(options: {
   projectDir: string
   runtime: WorktreeServerRuntime
   timeoutMs: number
+  accessGateCredential?: AccessGateCredential | null
 }): Promise<void> {
   let exitMessage: string | null = null
   let startupError: Error | null = null
@@ -266,6 +307,7 @@ async function waitForServerReady(options: {
       await assertWorktreeServerCompatible({
         serverUrl: readyServerUrl,
         projectDir: options.projectDir,
+        accessGateCredential: options.accessGateCredential,
       })
       return
     }
@@ -274,6 +316,7 @@ async function waitForServerReady(options: {
       await assertWorktreeServerCompatible({
         serverUrl: options.serverUrl,
         projectDir: options.projectDir,
+        accessGateCredential: options.accessGateCredential,
       })
       return
     } catch (error) {
@@ -433,11 +476,15 @@ function startWorktreeServerRuntime(plan: WorktreeServerLaunchPlan): WorktreeSer
   return new ProcessWorktreeServerRuntime(plan)
 }
 
-async function isHealthyInstance(instance: ManagedInstance): Promise<boolean> {
+async function isHealthyInstance(
+  instance: ManagedInstance,
+  accessGateCredential?: AccessGateCredential | null
+): Promise<boolean> {
   try {
     await assertWorktreeServerCompatible({
       serverUrl: instance.serverUrl,
       projectDir: instance.projectDir,
+      accessGateCredential,
     })
     return true
   } catch {
@@ -540,7 +587,7 @@ export function createWorktreeInstanceManager(
     }
 
     const existing = instances.get(targetPath)
-    if (existing && (await isHealthyInstance(existing))) {
+    if (existing && (await isHealthyInstance(existing, options.accessGateCredential))) {
       existing.lastUsedAt = Date.now()
       return {
         projectDir: existing.projectDir,
@@ -567,7 +614,9 @@ export function createWorktreeInstanceManager(
         runtimeDir: options.runtimeDir,
         projectDir: targetPath,
         port,
+        webAssetsDir: options.webAssetsDir,
         createWorker: options.createWorker,
+        accessGateCredential: options.accessGateCredential,
       })
       const runtime = startWorktreeServerRuntime(plan)
       const serverUrl = `http://localhost:${port}`
@@ -578,6 +627,7 @@ export function createWorktreeInstanceManager(
           projectDir: targetPath,
           runtime,
           timeoutMs: options.readinessTimeoutMs ?? DEFAULT_CHILD_TIMEOUT_MS,
+          accessGateCredential: options.accessGateCredential,
         })
       } catch (error) {
         await runtime.stop()

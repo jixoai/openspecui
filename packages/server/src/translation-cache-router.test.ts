@@ -1,16 +1,20 @@
+/**
+ * Orthogonal intents (created 2026-07-19 Asia/Shanghai):
+ * 1. Prove translation-cache router delegation and global settings updates.
+ * 2. Keep translation-router fixtures type-safe across the Planning-root resolver contract.
+ *
+ * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ */
 import { describe, expect, it, vi } from 'vitest'
 import { appRouter, type Context } from './router.js'
+import { createUnavailablePlanningRootServices } from './test-support/planning-root-services.js'
 
 function createCaller(partial: Partial<Context> = {}) {
   return appRouter.createCaller({
-    adapter: {} as Context['adapter'],
+    launchProjectAdapter: {} as Context['launchProjectAdapter'],
+    planningRootServices: createUnavailablePlanningRootServices(),
     configManager: {} as Context['configManager'],
-    documentService: {} as Context['documentService'],
     cliExecutor: {} as Context['cliExecutor'],
-    kernel: {} as Context['kernel'],
-    workflowInvocationService: {} as Context['workflowInvocationService'],
-    searchService: {} as Context['searchService'],
-    dashboardOverviewService: {} as Context['dashboardOverviewService'],
     projectRecoveryService: {
       getCurrent: () => ({ state: 'idle' }),
       subscribe: () => () => {},

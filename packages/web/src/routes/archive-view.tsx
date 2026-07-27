@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Render one schema-neutral Archive from the current writable Planning root.
+ * 2. Preserve processed/source files, diagnostics, and stable list return navigation.
+ *
+ * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
+ */
 import { OpsxEntityDetailView } from '@/components/opsx/opsx-entity-detail-view'
 import { fileCountLabel } from '@/components/opsx/opsx-markdown-files-viewer'
 import { useArchiveSubscription } from '@/lib/use-subscription'
@@ -46,7 +53,7 @@ export function ArchiveView() {
       }
       notFoundMessage={
         isMissingArchiveError && !entity
-          ? 'Archived change not found in the current project.'
+          ? 'Archived change not found in the current Planning root.'
           : !entity && !isLoading && !error
             ? `Archived change not found: ${changeId}`
             : undefined

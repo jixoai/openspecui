@@ -1,3 +1,16 @@
+/**
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * 1. Own a reference-counted dynamic set of physical watcher roots, including missing logical roots
+ *    through their nearest existing ancestor.
+ * 2. Bind shared path subscriptions to the deepest active containing root.
+ * 3. Rebind pending subscriptions when roots appear, disappear, or recover.
+ * 4. Expose aggregate and per-root runtime status for server diagnostics.
+ * 5. Release subscriptions, timers, roots, and status listeners deterministically.
+ *
+ * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
+ */
+import { existsSync } from 'node:fs'
+import { dirname, isAbsolute, relative } from 'node:path'
 import { resolveRealPathThroughExistingAncestor } from './path-realpath.js'
 import {
   getProjectWatcher,
@@ -6,45 +19,72 @@ import {
   type ProjectWatcherRuntimeStatusListener,
 } from './project-watcher.js'
 
-/**
- * 获取路径的真实路径（解析符号链接）
- */
+const DEBOUNCE_MS = 100
+
 function getRealPath(path: string): string {
   return resolveRealPathThroughExistingAncestor(path)
 }
 
-/**
- * 全局 ProjectWatcher 实例
- * 通过 initWatcherPool 初始化
- */
-let globalProjectWatcher: ProjectWatcher | null = null
-let globalProjectDir: string | null = null
+function getExistingWatcherRoot(rootPath: string): string {
+  let currentPath = rootPath
+  while (!existsSync(currentPath)) {
+    const parentPath = dirname(currentPath)
+    if (parentPath === currentPath) return currentPath
+    currentPath = parentPath
+  }
+  return currentPath
+}
 
-/** 默认防抖时间 (ms) */
-const DEBOUNCE_MS = 100
+function pathBelongsToRoot(path: string, rootPath: string): boolean {
+  const relativePath = relative(rootPath, path)
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
+}
 
-/** 路径订阅条目 */
+export type WatcherRootRelease = () => Promise<void>
+
+interface WatcherRootRecord {
+  rootPath: string
+  physicalRootPath: string
+  watcher: ProjectWatcher
+  referenceCount: number
+  ready: Promise<void>
+  releaseRuntimeStatus: () => void
+}
+
 interface PathSubscription {
   path: string
+  recursive: boolean
+  debounceMs: number
   callbacks: Set<() => void>
-  unsubscribe: () => void
+  rootPath: string | null
+  unsubscribe: (() => void) | null
   onError?: () => void
 }
 
-/** 路径订阅缓存 */
+const watcherRoots = new Map<string, WatcherRootRecord>()
+const closingWatcherRoots = new Map<string, Promise<void>>()
+const physicalWatcherReferences = new Map<
+  string,
+  { watcher: ProjectWatcher; referenceCount: number }
+>()
+const closingPhysicalWatchers = new Map<string, Promise<void>>()
 const subscriptionCache = new Map<string, PathSubscription>()
-
-/** 防抖定时器 */
 const debounceTimers = new Map<string, NodeJS.Timeout>()
-
 const watcherRuntimeStatusListeners = new Set<(status: WatcherRuntimeStatus | null) => void>()
-let releaseProjectWatcherRuntimeSubscription: (() => void) | null = null
 
-/** watcher 运行时状态（供 server 订阅） */
-export interface WatcherRuntimeStatus extends ProjectWatcherRuntimeStatus {
-  projectDir: string | null
+export interface WatcherRootRuntimeStatus extends ProjectWatcherRuntimeStatus {
+  rootPath: string
+  referenceCount: number
   initialized: boolean
   subscriptionCount: number
+}
+
+/** Aggregate watcher state for the current process. */
+export interface WatcherRuntimeStatus {
+  initialized: boolean
+  rootCount: number
+  subscriptionCount: number
+  roots: WatcherRootRuntimeStatus[]
 }
 
 function emitWatcherRuntimeStatus(): void {
@@ -54,217 +94,282 @@ function emitWatcherRuntimeStatus(): void {
   }
 }
 
-function bindProjectWatcherRuntimeStatus(): void {
-  releaseProjectWatcherRuntimeSubscription?.()
-  releaseProjectWatcherRuntimeSubscription = null
-
-  if (!globalProjectWatcher) {
-    emitWatcherRuntimeStatus()
-    return
+function findWatcherRoot(path: string): WatcherRootRecord | null {
+  let selected: WatcherRootRecord | null = null
+  for (const root of watcherRoots.values()) {
+    if (
+      root.referenceCount > 0 &&
+      root.watcher.isInitialized &&
+      pathBelongsToRoot(path, root.rootPath) &&
+      (!selected || root.rootPath.length > selected.rootPath.length)
+    ) {
+      selected = root
+    }
   }
+  return selected
+}
+
+function dispatchSubscription(cacheKey: string, subscription: PathSubscription): void {
+  const existingTimer = debounceTimers.get(cacheKey)
+  if (existingTimer) {
+    clearTimeout(existingTimer)
+  }
+
+  const timer = setTimeout(() => {
+    debounceTimers.delete(cacheKey)
+    const current = subscriptionCache.get(cacheKey)
+    if (current !== subscription) return
+    for (const callback of current.callbacks) {
+      try {
+        callback()
+      } catch (error) {
+        console.error(`[watcher-pool] Callback error for ${subscription.path}:`, error)
+      }
+    }
+  }, subscription.debounceMs)
+  debounceTimers.set(cacheKey, timer)
+}
+
+function rebindSubscription(cacheKey: string, subscription: PathSubscription): void {
+  const root = findWatcherRoot(subscription.path)
+  if (subscription.rootPath === root?.rootPath) return
+
+  subscription.unsubscribe?.()
+  subscription.unsubscribe = null
+  subscription.rootPath = null
+
+  if (!root) return
+
+  try {
+    subscription.unsubscribe = root.watcher.subscribeSync(
+      subscription.path,
+      () => dispatchSubscription(cacheKey, subscription),
+      { watchChildren: subscription.recursive }
+    )
+    subscription.rootPath = root.rootPath
+  } catch (error) {
+    subscription.onError?.()
+    console.error(`[watcher-pool] Failed to bind ${subscription.path}:`, error)
+  }
+}
+
+function rebindAllSubscriptions(): void {
+  for (const [cacheKey, subscription] of subscriptionCache) {
+    rebindSubscription(cacheKey, subscription)
+  }
+}
+
+function createWatcherRoot(rootPath: string): WatcherRootRecord {
+  const physicalRootPath = getExistingWatcherRoot(rootPath)
+  const existingPhysical = physicalWatcherReferences.get(physicalRootPath)
+  const watcher = existingPhysical?.watcher ?? getProjectWatcher(physicalRootPath)
+  if (existingPhysical) {
+    existingPhysical.referenceCount += 1
+  } else {
+    physicalWatcherReferences.set(physicalRootPath, { watcher, referenceCount: 1 })
+  }
+  const record: WatcherRootRecord = {
+    rootPath,
+    physicalRootPath,
+    watcher,
+    referenceCount: 0,
+    ready: Promise.resolve(),
+    releaseRuntimeStatus: () => {},
+  }
+  watcherRoots.set(rootPath, record)
 
   const forward: ProjectWatcherRuntimeStatusListener = () => {
+    rebindAllSubscriptions()
     emitWatcherRuntimeStatus()
   }
-  releaseProjectWatcherRuntimeSubscription = globalProjectWatcher.subscribeRuntimeStatus(forward, {
-    emitCurrent: false,
+  record.releaseRuntimeStatus = watcher.subscribeRuntimeStatus(forward, { emitCurrent: false })
+  record.ready = watcher.init().then(() => {
+    rebindAllSubscriptions()
+    emitWatcherRuntimeStatus()
   })
-  emitWatcherRuntimeStatus()
+  return record
 }
 
-/**
- * 初始化 watcher pool
- *
- * 必须在使用 acquireWatcher 之前调用。
- * 通常由 server 在启动时调用。
- *
- * @param projectDir 项目根目录
- */
-export async function initWatcherPool(projectDir: string): Promise<void> {
-  const normalizedDir = getRealPath(projectDir)
+async function releaseWatcherRootReference(record: WatcherRootRecord): Promise<void> {
+  if (watcherRoots.get(record.rootPath) !== record || record.referenceCount === 0) return
 
-  if (globalProjectWatcher && globalProjectDir === normalizedDir) {
-    // 已初始化为同一目录
+  record.referenceCount -= 1
+  if (record.referenceCount > 0) {
+    emitWatcherRuntimeStatus()
     return
   }
 
-  // 关闭旧的 watcher
-  if (globalProjectWatcher) {
-    releaseProjectWatcherRuntimeSubscription?.()
-    releaseProjectWatcherRuntimeSubscription = null
-    await globalProjectWatcher.close()
+  watcherRoots.delete(record.rootPath)
+  record.releaseRuntimeStatus()
+  rebindAllSubscriptions()
+
+  const physical = physicalWatcherReferences.get(record.physicalRootPath)
+  if (!physical || physical.referenceCount <= 0) {
+    emitWatcherRuntimeStatus()
+    return
+  }
+  physical.referenceCount -= 1
+  if (physical.referenceCount > 0) {
+    emitWatcherRuntimeStatus()
+    return
+  }
+  physicalWatcherReferences.delete(record.physicalRootPath)
+
+  const closing = record.watcher.close().finally(() => {
+    if (closingWatcherRoots.get(record.rootPath) === closing) {
+      closingWatcherRoots.delete(record.rootPath)
+    }
+    if (closingPhysicalWatchers.get(record.physicalRootPath) === closing) {
+      closingPhysicalWatchers.delete(record.physicalRootPath)
+    }
+    emitWatcherRuntimeStatus()
+  })
+  closingWatcherRoots.set(record.rootPath, closing)
+  closingPhysicalWatchers.set(record.physicalRootPath, closing)
+  emitWatcherRuntimeStatus()
+  await closing
+}
+
+/** Acquire one physical observation root and release it when the returned lease is no longer used. */
+export async function acquireWatcherRoot(rootPath: string): Promise<WatcherRootRelease> {
+  const normalizedRoot = getRealPath(rootPath)
+  const physicalRootPath = getExistingWatcherRoot(normalizedRoot)
+  await Promise.all([
+    closingWatcherRoots.get(normalizedRoot),
+    closingPhysicalWatchers.get(physicalRootPath),
+  ])
+
+  const record = watcherRoots.get(normalizedRoot) ?? createWatcherRoot(normalizedRoot)
+  record.referenceCount += 1
+  emitWatcherRuntimeStatus()
+
+  try {
+    await record.ready
+  } catch (error) {
+    await releaseWatcherRootReference(record)
+    throw error
   }
 
-  globalProjectDir = normalizedDir
-  globalProjectWatcher = getProjectWatcher(normalizedDir)
-  bindProjectWatcherRuntimeStatus()
-  await globalProjectWatcher.init()
+  let released = false
+  return async () => {
+    if (released) return
+    released = true
+    await releaseWatcherRootReference(record)
+  }
 }
 
 /**
- * 获取或创建文件/目录监听器
+ * Acquire a shared path subscription.
  *
- * 特性：
- * - 使用 @parcel/watcher 监听项目根目录
- * - 自动处理新创建的目录（解决 init 后无法监听的问题）
- * - 同一路径共享订阅
- * - 引用计数管理生命周期
- * - 内置防抖机制
- *
- * @param path 要监听的路径
- * @param onChange 变更回调
- * @param options 监听选项
- * @returns 释放函数，调用后取消订阅
+ * The subscription remains pending when no active root contains the path and binds automatically
+ * after a matching root is acquired. This keeps static reads inert without making later live reads
+ * permanently lose observation.
  */
 export function acquireWatcher(
   path: string,
   onChange: () => void,
   options: { recursive?: boolean; debounceMs?: number; onError?: () => void } = {}
 ): () => void {
-  if (!globalProjectWatcher || !globalProjectWatcher.isInitialized) {
-    // Watcher not initialized - this is expected during static export mode
-    // Return no-op function to avoid errors
-    return () => {}
-  }
-
   const normalizedPath = getRealPath(path)
-  const debounceMs = options.debounceMs ?? DEBOUNCE_MS
-  const isRecursive = options.recursive ?? false
-
-  // 生成缓存 key（包含 recursive 选项）
-  const cacheKey = `${normalizedPath}:${isRecursive}`
-
+  const recursive = options.recursive ?? false
+  const cacheKey = `${normalizedPath}:${recursive}`
   let subscription = subscriptionCache.get(cacheKey)
 
   if (!subscription) {
-    // 创建新的订阅（同步，因为 watcher 已初始化）
-    const unsubscribe = globalProjectWatcher.subscribeSync(
-      normalizedPath,
-      () => {
-        // 防抖处理
-        const existingTimer = debounceTimers.get(cacheKey)
-        if (existingTimer) {
-          clearTimeout(existingTimer)
-        }
-
-        const timer = setTimeout(() => {
-          debounceTimers.delete(cacheKey)
-          const currentSub = subscriptionCache.get(cacheKey)
-          if (currentSub) {
-            for (const cb of currentSub.callbacks) {
-              try {
-                cb()
-              } catch (err) {
-                console.error(`[watcher-pool] Callback error for ${normalizedPath}:`, err)
-              }
-            }
-          }
-        }, debounceMs)
-
-        debounceTimers.set(cacheKey, timer)
-      },
-      { watchChildren: isRecursive }
-    )
-
     subscription = {
       path: normalizedPath,
+      recursive,
+      debounceMs: options.debounceMs ?? DEBOUNCE_MS,
       callbacks: new Set(),
-      unsubscribe,
+      rootPath: null,
+      unsubscribe: null,
       onError: options.onError,
     }
     subscriptionCache.set(cacheKey, subscription)
+    rebindSubscription(cacheKey, subscription)
   }
 
-  // 添加回调
   subscription.callbacks.add(onChange)
-
-  // 返回释放函数
+  let released = false
   return () => {
-    const currentSub = subscriptionCache.get(cacheKey)
-    if (!currentSub) return
+    if (released) return
+    released = true
+    const current = subscriptionCache.get(cacheKey)
+    if (!current) return
+    current.callbacks.delete(onChange)
+    if (current.callbacks.size > 0) return
 
-    currentSub.callbacks.delete(onChange)
-
-    // 所有回调都已移除，清理订阅
-    if (currentSub.callbacks.size === 0) {
-      currentSub.unsubscribe()
-      subscriptionCache.delete(cacheKey)
-
-      // 清理防抖定时器
-      const timer = debounceTimers.get(cacheKey)
-      if (timer) {
-        clearTimeout(timer)
-        debounceTimers.delete(cacheKey)
-      }
+    current.unsubscribe?.()
+    subscriptionCache.delete(cacheKey)
+    const timer = debounceTimers.get(cacheKey)
+    if (timer) {
+      clearTimeout(timer)
+      debounceTimers.delete(cacheKey)
     }
   }
 }
 
-/**
- * 获取当前活跃的监听器数量（用于调试）
- */
 export function getActiveWatcherCount(): number {
   return subscriptionCache.size
 }
 
-/**
- * 关闭所有监听器（用于测试清理）
- */
+/** Close the entire process-level pool. Intended for runtime teardown and test isolation. */
 export async function closeAllWatchers(): Promise<void> {
-  // 清理所有订阅
-  for (const [key, sub] of subscriptionCache) {
-    sub.unsubscribe()
-    const timer = debounceTimers.get(key)
-    if (timer) {
-      clearTimeout(timer)
-    }
+  for (const [cacheKey, subscription] of subscriptionCache) {
+    subscription.unsubscribe?.()
+    const timer = debounceTimers.get(cacheKey)
+    if (timer) clearTimeout(timer)
   }
   subscriptionCache.clear()
   debounceTimers.clear()
 
-  // 关闭 ProjectWatcher
-  if (globalProjectWatcher) {
-    releaseProjectWatcherRuntimeSubscription?.()
-    releaseProjectWatcherRuntimeSubscription = null
-    await globalProjectWatcher.close()
-    globalProjectWatcher = null
-    globalProjectDir = null
+  const records = [...watcherRoots.values()]
+  watcherRoots.clear()
+  for (const record of records) {
+    record.referenceCount = 0
+    record.releaseRuntimeStatus()
   }
+  const physicalWatchers = [...physicalWatcherReferences.values()].map(({ watcher }) => watcher)
+  physicalWatcherReferences.clear()
+  await Promise.all([
+    ...physicalWatchers.map((watcher) => watcher.close()),
+    ...closingWatcherRoots.values(),
+    ...closingPhysicalWatchers.values(),
+  ])
+  closingWatcherRoots.clear()
+  closingPhysicalWatchers.clear()
   emitWatcherRuntimeStatus()
 }
 
-/**
- * 检查 watcher pool 是否已初始化
- */
 export function isWatcherPoolInitialized(): boolean {
-  return globalProjectWatcher !== null && globalProjectWatcher.isInitialized
+  return [...watcherRoots.values()].some((root) => root.watcher.isInitialized)
 }
 
-/**
- * 获取当前监听的项目目录
- */
-export function getWatchedProjectDir(): string | null {
-  return globalProjectDir
-}
-
-/**
- * 获取 watcher 运行时状态
- */
 export function getWatcherRuntimeStatus(): WatcherRuntimeStatus | null {
-  if (!globalProjectWatcher) {
-    return null
-  }
+  const roots = [...watcherRoots.values()]
+    .filter((root) => root.referenceCount > 0)
+    .map((root): WatcherRootRuntimeStatus => {
+      const runtime = root.watcher.runtimeStatus
+      return {
+        rootPath: root.rootPath,
+        referenceCount: root.referenceCount,
+        initialized: root.watcher.isInitialized,
+        subscriptionCount: root.watcher.subscriptionCount,
+        generation: runtime.generation,
+        reinitializeCount: runtime.reinitializeCount,
+        lastReinitializeReason: runtime.lastReinitializeReason,
+        reinitializeReasonCounts: runtime.reinitializeReasonCounts,
+        projectResidency: runtime.projectResidency,
+      }
+    })
+    .sort((left, right) => left.rootPath.localeCompare(right.rootPath))
 
-  const runtime = globalProjectWatcher.runtimeStatus
+  if (roots.length === 0) return null
   return {
-    projectDir: globalProjectDir,
-    initialized: globalProjectWatcher.isInitialized,
-    subscriptionCount: globalProjectWatcher.subscriptionCount,
-    generation: runtime.generation,
-    reinitializeCount: runtime.reinitializeCount,
-    lastReinitializeReason: runtime.lastReinitializeReason,
-    reinitializeReasonCounts: runtime.reinitializeReasonCounts,
-    projectResidency: runtime.projectResidency,
+    initialized: roots.some((root) => root.initialized),
+    rootCount: roots.length,
+    subscriptionCount: roots.reduce((count, root) => count + root.subscriptionCount, 0),
+    roots,
   }
 }
 
@@ -276,7 +381,6 @@ export function subscribeWatcherRuntimeStatus(
   if (options.emitCurrent !== false) {
     listener(getWatcherRuntimeStatus())
   }
-
   return () => {
     watcherRuntimeStatusListeners.delete(listener)
   }

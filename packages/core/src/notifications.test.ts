@@ -1,8 +1,17 @@
+/**
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Verify typed terminal-control notification parsing.
+ * 2. Verify stable typed notification grouping and aggregation.
+ * 3. Verify root-context source grouping has no backend identity.
+ *
+ * Original checkpoint (2026-07-16): "6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging."
+ */
 import { describe, expect, it } from 'vitest'
 import {
   TerminalNotificationParser,
   aggregateNotifications,
   getNotificationGroupKey,
+  getNotificationGroupLabel,
   groupNotifications,
   terminalNotificationEventToPublishInput,
   type NotificationRecord,
@@ -96,6 +105,13 @@ describe('TerminalNotificationParser', () => {
 })
 
 describe('notification helpers', () => {
+  it('groups the typed root-context source under one stable label without backend identity', () => {
+    const source = { type: 'root-context' } as const
+
+    expect(getNotificationGroupKey({ source })).toBe('root-context')
+    expect(getNotificationGroupLabel(source)).toBe('Root Context')
+  })
+
   it('creates terminal focus publish input from a parsed event', () => {
     const input = terminalNotificationEventToPublishInput({
       event: { type: 'notification', protocol: 'osc777', title: 'Job', body: 'Done' },

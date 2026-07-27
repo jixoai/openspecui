@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Unlock and play managed notification/bell audio with deterministic fallbacks.
+ * 2. Resolve custom sounds from the live backend and authenticate existence probes.
+ * 3. Bound active audio ownership and normalize playback volume.
+ *
+ * Original request (2026-07-24): "完整审计 Project Web 的 raw resource 网络路径。"
+ */
 import {
   DEFAULT_BELL_SOUND_ID,
   DEFAULT_NOTIFICATION_SOUND_ID,
@@ -7,6 +15,7 @@ import {
   type SoundId,
 } from '@openspecui/core/sounds'
 import { getApiBaseUrl } from './api-config'
+import { accessGateFetch } from './access-gate-credential'
 import {
   createAudioContextAfterUserGesture,
   prepareAudioContextAfterUserGesture,
@@ -97,7 +106,7 @@ export class AudioCueEngine {
 
   private async isMissingSound(url: string): Promise<boolean> {
     try {
-      const response = await fetch(url, { method: 'HEAD' })
+      const response = await accessGateFetch(url, { method: 'HEAD' })
       return response.status === 404
     } catch {
       return false

@@ -9,7 +9,7 @@ import {
 } from './global-settings.js'
 import * as reactiveFs from './reactive-fs/index.js'
 import { clearCache } from './reactive-fs/index.js'
-import { closeAllWatchers, initWatcherPool } from './reactive-fs/watcher-pool.js'
+import { acquireWatcherRoot, closeAllWatchers } from './reactive-fs/watcher-pool.js'
 
 describe('GlobalSettingsManager', () => {
   let tempDir: string
@@ -20,7 +20,7 @@ describe('GlobalSettingsManager', () => {
     tempDir = await createTempDir()
     settingsPath = join(tempDir, '.openspecui', 'settings.json')
     settingsManager = new GlobalSettingsManager(settingsPath)
-    await initWatcherPool(tempDir)
+    await acquireWatcherRoot(tempDir)
     clearCache()
   })
 

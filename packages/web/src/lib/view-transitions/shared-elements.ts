@@ -1,4 +1,15 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Define shared-element descriptors and navigation handoff payloads.
+ * 2. Sanitize and validate handoff state crossing route boundaries.
+ * 3. Validate Git binding and selector identity before detail presentation or prefetch.
+ *
+ * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 carries Git origin tokens through VT.
+ */
+import type { GitEntrySelector } from '@openspecui/core'
 import { useMemo } from 'react'
+import { getGitEntryEntityId } from '../git-panel'
 
 export type SharedElementSlot = 'container' | 'icon' | 'title'
 
@@ -13,6 +24,14 @@ export interface SharedElementHandoff {
   entityId: string
   title?: string
   subtitle?: string
+  /** Optional source binding provenance; Git handoffs require it to render detail text. */
+  bindingToken?: string
+}
+
+/** Git handoff with mandatory origin binding provenance and selector identity. */
+export interface GitSharedElementHandoff extends SharedElementHandoff {
+  family: 'git'
+  bindingToken: string
 }
 
 interface SharedElementNavigationState {
@@ -111,11 +130,43 @@ export function readSharedElementHandoffState(state: unknown): SharedElementHand
   const handoff = (state as SharedElementNavigationState).__vtHandoff
   if (typeof handoff !== 'object' || handoff == null) return null
   if (typeof handoff.family !== 'string' || typeof handoff.entityId !== 'string') return null
+  const bindingToken =
+    typeof handoff.bindingToken === 'string' && handoff.bindingToken.trim().length > 0
+      ? handoff.bindingToken
+      : undefined
 
   return {
     family: handoff.family,
     entityId: handoff.entityId,
     title: typeof handoff.title === 'string' ? handoff.title : undefined,
     subtitle: typeof handoff.subtitle === 'string' ? handoff.subtitle : undefined,
+    bindingToken,
+  }
+}
+
+/** Read a Git handoff only when its token and selector exactly match current provenance. */
+export function readGitSharedElementHandoffState(
+  state: unknown,
+  selector: GitEntrySelector,
+  expectedBindingToken: string | null
+): GitSharedElementHandoff | null {
+  if (!expectedBindingToken || expectedBindingToken.trim().length === 0) return null
+  const entityId = getGitEntryEntityId(selector)
+  if (entityId.trim().length === 0) return null
+  const handoff = readSharedElementHandoffState(state)
+  if (
+    handoff?.family !== 'git' ||
+    handoff.entityId !== entityId ||
+    handoff.bindingToken !== expectedBindingToken ||
+    handoff.bindingToken.trim().length === 0
+  ) {
+    return null
+  }
+  return {
+    family: 'git',
+    entityId,
+    title: handoff.title,
+    subtitle: handoff.subtitle,
+    bindingToken: handoff.bindingToken,
   }
 }

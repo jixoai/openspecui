@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Define source-safe Git entry, diff, and worktree projections.
+ * 2. Define explicit code/planning repository scope, identity, and binding provenance.
+ * 3. Keep worktree handoff facts separate from repository selection.
+ *
+ * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
+ */
 import type {
   DashboardGitDiffStats,
   DashboardGitEntry,
@@ -5,6 +14,70 @@ import type {
 } from './dashboard-types.js'
 
 export type GitEntryCursor = string
+
+export type GitRepositoryScope = 'code' | 'planning'
+
+export interface GitRepositoryIdentity {
+  /** Canonical root of the selected Git worktree. */
+  topLevel: string
+  /** Canonical common directory shared by linked Git worktrees. */
+  commonDir: string
+}
+
+export interface GitRepositoryScopeDescriptor {
+  scope: GitRepositoryScope
+  /** Opaque backend-issued binding epoch; provenance only, never authorization or a path. */
+  bindingToken: string
+  /** Launch-project or planning-root path that requested this repository. */
+  rootPath: string
+  /** Null when the requested root does not currently resolve to a Git repository. */
+  repository: GitRepositoryIdentity | null
+}
+
+/** Static/export scope descriptor with no live backend provenance. */
+export interface StaticGitRepositoryScopeDescriptor
+  extends Omit<GitRepositoryScopeDescriptor, 'bindingToken'> {
+  bindingToken: null
+}
+
+export interface GitRepositoryScopeFailure {
+  /** Objective diagnostic retained when Planning binding resolution failed. */
+  message: string
+}
+
+interface GitRepositoryScopesBase {
+  readonly defaultScope: 'code'
+  readonly code: GitRepositoryScopeDescriptor & { readonly scope: 'code' }
+}
+
+/** Current Code/Planning Git scope projection with explicit resolution lifecycle. */
+export type GitRepositoryScopes = GitRepositoryScopesBase &
+  (
+    | {
+        /** Planning has not settled; its identity is not authoritative. */
+        readonly planningState: 'resolving'
+        readonly planning: null
+      }
+    | {
+        /** Planning resolution completed; null means it is absent or the same identity as Code. */
+        readonly planningState: 'settled'
+        readonly planning: (GitRepositoryScopeDescriptor & { readonly scope: 'planning' }) | null
+      }
+    | {
+        /** Planning resolution failed; Code remains usable but Planning is locked. */
+        readonly planningState: 'failed'
+        readonly planning: null
+        readonly planningError: GitRepositoryScopeFailure
+      }
+  )
+
+/** Static Git projection; it is intentionally ineligible for live RPC calls. */
+export interface StaticGitRepositoryScopes {
+  readonly defaultScope: 'code'
+  readonly code: StaticGitRepositoryScopeDescriptor & { readonly scope: 'code' }
+  readonly planningState: 'settled'
+  readonly planning: null
+}
 
 export type GitEntrySelector = { type: 'uncommitted' } | { type: 'commit'; hash: string }
 
@@ -76,6 +149,8 @@ export interface GitWorktreeOverview {
 }
 
 export interface GitWorktreeHandoff {
+  /** Canonical project path of the target worktree server. */
   projectDir: string
+  /** Target server URL; never contains repository binding credentials. */
   serverUrl: string
 }

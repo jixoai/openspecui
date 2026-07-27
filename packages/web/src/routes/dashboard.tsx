@@ -1,15 +1,33 @@
+/**
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Render independent Dashboard Summary, trends, workflow, and Code Git projections.
+ * 2. Keep Dashboard-owned Code Git actions separate from Planning-root readiness.
+ * 3. Carry the Code Git binding token through dashboard detail handoff navigation.
+ * 4. Bind refresh and detached-worktree removal to the rendered Code snapshot generation.
+ * 5. Retain stable regional snapshots beside their own loading, updating, and error evidence.
+ *
+ * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff and action provenance.
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ */
 import { Badge } from '@/components/badge'
+import { DashboardContextSummary } from '@/components/dashboard/context-summary'
+import { DashboardGitRefreshControl } from '@/components/dashboard/git-refresh-control'
 import { DashboardMetricCard } from '@/components/dashboard/metric-card'
 import {
   getGitEntrySharedDescriptor,
   getGitEntrySharedHandoff,
   GIT_WORKTREE_LINE_CLASS,
-  GitAutoRefreshPresetIcon,
   GitEntryRow,
   isHttpUrl,
   WorktreeRow,
 } from '@/components/git/git-shared'
-import { Select, type SelectOption } from '@/components/select'
+import {
+  ChangeListSkeleton,
+  DashboardSummarySkeleton,
+  DashboardTrendsSkeleton,
+} from '@/components/realtime'
+import type { SelectOption } from '@/components/select'
 import {
   classifyChangeWorkflowPhase,
   inferTrackedArtifactStatus,
@@ -32,6 +50,7 @@ import {
   useDashboardGitTaskStatusSubscription,
   useDashboardOverviewSubscription,
 } from '@/lib/use-dashboard'
+import { useGitRepositoryScopes } from '@/lib/use-git-repository-scope'
 import { useOpsxConfigBundleSubscription, useOpsxStatusListSubscription } from '@/lib/use-opsx'
 import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import {
@@ -45,6 +64,7 @@ import type {
   DashboardMetricKey,
   DashboardTrendKind,
 } from '@openspecui/core'
+import { specIdentityKey } from '@openspecui/core/spec-catalog'
 import {
   AlertCircle,
   Archive,
@@ -52,7 +72,6 @@ import {
   FileText,
   GitBranch,
   LayoutDashboard,
-  RefreshCw,
   Sparkles,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -69,6 +88,18 @@ export { WorktreeRow } from '@/components/git/git-shared'
 
 function isAnimatedGitRefreshReason(reason: string | null): boolean {
   return reason === 'manual-button' || reason?.startsWith('auto-refresh:') === true
+}
+
+function formatGitActionError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (typeof error === 'object' && error !== null && 'data' in error) {
+    const data = error.data
+    if (typeof data === 'object' && data !== null && 'code' in data) {
+      const code = data.code
+      if (typeof code === 'string' && code.length > 0) return `${code}: ${message}`
+    }
+  }
+  return message
 }
 
 function createDefaultCardAvailability(
@@ -132,7 +163,7 @@ function buildWorkflowSchemaCards(
   taskCompleteChangeIds: ReadonlySet<string>
 ): Array<{
   schemaName: string
-  readyToArchive: number
+  workflowComplete: number
   steps: Array<{
     id: string
     label: string
@@ -203,7 +234,7 @@ function buildWorkflowSchemaCards(
 
       return {
         schemaName,
-        readyToArchive: schemaStatuses.filter(
+        workflowComplete: schemaStatuses.filter(
           (status) => status.isComplete && taskCompleteChangeIds.has(status.changeName)
         ).length,
         steps,
@@ -243,10 +274,48 @@ function getStepPalette(stepName: string): {
 
 export function Dashboard() {
   const staticMode = isStaticMode()
-  const { data: overview, isLoading, error } = useDashboardOverviewSubscription()
+  const dashboardState = useDashboardOverviewSubscription()
+  const { data: overview, isLoading, error } = dashboardState
+  const summaryRegion = dashboardState.regions?.summary
+  const trendsRegion = dashboardState.regions?.trends
+  const gitRegion = dashboardState.regions?.git
+  const summaryProjection =
+    summaryRegion?.data ??
+    (overview
+      ? {
+          summary: overview.summary,
+          specifications: overview.specifications,
+          activeChanges: overview.activeChanges,
+        }
+      : undefined)
+  const trendsProjection =
+    trendsRegion?.data ??
+    (overview
+      ? {
+          trends: overview.trends,
+          triColorTrends: overview.triColorTrends,
+          trendKinds: overview.trendKinds,
+          cardAvailability: overview.cardAvailability,
+          trendMeta: overview.trendMeta,
+        }
+      : undefined)
+  const dashboardGit = gitRegion?.data ?? overview?.git ?? null
+  const summaryIsLoading = summaryRegion?.isLoading ?? isLoading
+  const summaryIsUpdating = summaryRegion?.isUpdating ?? false
+  const summaryError = summaryRegion?.error ?? error
+  const trendsIsLoading = trendsRegion?.isLoading ?? (isLoading && !overview)
+  const trendsIsUpdating = trendsRegion?.isUpdating ?? false
+  const trendsError = trendsRegion?.error ?? (overview ? null : error)
+  const gitIsLoading = gitRegion?.isLoading ?? (isLoading && !overview)
+  const gitIsUpdating = gitRegion?.isUpdating ?? false
+  const gitError = gitRegion?.error ?? (overview ? null : error)
+  const admitSecondaryProjections = summaryProjection !== undefined
+  const { data: gitScopes, authority: gitScopesAuthority } = useGitRepositoryScopes(
+    !staticMode && admitSecondaryProjections
+  )
   const { data: gitTaskStatus } = useDashboardGitTaskStatusSubscription()
-  const { data: statuses } = useOpsxStatusListSubscription()
-  const { data: configBundle } = useOpsxConfigBundleSubscription()
+  const { data: statuses } = useOpsxStatusListSubscription(admitSecondaryProjections)
+  const { data: configBundle } = useOpsxConfigBundleSubscription(admitSecondaryProjections)
   const [gitAutoRefreshPreset, setGitAutoRefreshPreset] = useState<DashboardGitAutoRefreshPreset>(
     () => loadDashboardGitAutoRefreshPreset()
   )
@@ -261,6 +330,14 @@ export function Dashboard() {
     reason: string
     requestedAt: number
   } | null>(null)
+  const [gitActionError, setGitActionError] = useState<string | null>(null)
+  const dashboardGitBindingToken =
+    !staticMode &&
+    gitScopesAuthority.state === 'current' &&
+    dashboardGit?.bindingToken !== null &&
+    dashboardGit?.bindingToken === gitScopes?.code.bindingToken
+      ? (dashboardGit?.bindingToken ?? null)
+      : null
 
   const runPropose = useCallback(() => {
     vtNavController.activatePop('/opsx-propose')
@@ -271,8 +348,12 @@ export function Dashboard() {
   }, [])
 
   const triggerGitRefresh = useCallback(
-    async (reason: string) => refreshDashboardGitSnapshot(reason),
-    []
+    async (reason: string) => {
+      if (!dashboardGitBindingToken) return
+      setGitActionError(null)
+      await refreshDashboardGitSnapshot(reason, dashboardGitBindingToken)
+    },
+    [dashboardGitBindingToken]
   )
 
   const focusRefreshAtRef = useRef(0)
@@ -303,6 +384,7 @@ export function Dashboard() {
         })
         .catch((err) => {
           console.error('[Dashboard] Failed to refresh git snapshot:', err)
+          setGitActionError(formatGitActionError(err))
           setGitRefreshRequest((current) =>
             current?.reason === reason && current.requestedAt === requestedAt ? null : current
           )
@@ -321,6 +403,7 @@ export function Dashboard() {
         : getDashboardGitAutoRefreshReason(gitAutoRefreshPreset)
     if (
       staticMode ||
+      dashboardGitBindingToken === null ||
       intervalMs === null ||
       autoRefreshReason === null ||
       gitRefreshRequest !== null ||
@@ -342,6 +425,7 @@ export function Dashboard() {
     }, intervalMs)
   }, [
     clearGitAutoRefreshTimer,
+    dashboardGitBindingToken,
     gitAutoRefreshPreset,
     gitRefreshRequest,
     isDocumentVisible,
@@ -350,38 +434,50 @@ export function Dashboard() {
   ])
 
   const handleManualGitRefresh = useCallback(() => {
+    if (dashboardGitBindingToken === null) return
     clearGitAutoRefreshTimer()
     setGitAutoRefreshCycleStartedAt(null)
     setGitAutoRefreshNow(Date.now())
     runDashboardGitRefresh('manual-button')
-  }, [clearGitAutoRefreshTimer, runDashboardGitRefresh])
+  }, [clearGitAutoRefreshTimer, dashboardGitBindingToken, runDashboardGitRefresh])
 
-  const handleRemoveDetachedWorktree = useCallback(async (worktree: DashboardGitWorktree) => {
-    if (isStaticMode() || worktree.isCurrent || !worktree.detached || isHttpUrl(worktree.path)) {
-      return
-    }
+  const handleRemoveDetachedWorktree = useCallback(
+    async (worktree: DashboardGitWorktree) => {
+      if (
+        dashboardGitBindingToken === null ||
+        isStaticMode() ||
+        worktree.isCurrent ||
+        !worktree.detached ||
+        isHttpUrl(worktree.path)
+      ) {
+        return
+      }
 
-    const confirmed = window.confirm(
-      [
-        'Remove detached worktree?',
-        '',
-        worktree.path,
-        '',
-        'This runs git worktree remove --force.',
-      ].join('\n')
-    )
-    if (!confirmed) return
+      const confirmed = window.confirm(
+        [
+          'Remove detached worktree?',
+          '',
+          worktree.path,
+          '',
+          'This runs git worktree remove --force.',
+        ].join('\n')
+      )
+      if (!confirmed) return
 
-    setRemovingWorktreePath(worktree.path)
-    try {
-      await removeDetachedDashboardWorktree(worktree.path)
-    } catch (error) {
-      console.error('[Dashboard] Failed to remove detached worktree:', error)
-      window.alert(error instanceof Error ? error.message : 'Failed to remove detached worktree.')
-    } finally {
-      setRemovingWorktreePath((current) => (current === worktree.path ? null : current))
-    }
-  }, [])
+      setRemovingWorktreePath(worktree.path)
+      setGitActionError(null)
+      try {
+        await removeDetachedDashboardWorktree(worktree.path, dashboardGitBindingToken)
+      } catch (error) {
+        console.error('[Dashboard] Failed to remove detached worktree:', error)
+        setGitActionError(formatGitActionError(error))
+        window.alert(error instanceof Error ? error.message : 'Failed to remove detached worktree.')
+      } finally {
+        setRemovingWorktreePath((current) => (current === worktree.path ? null : current))
+      }
+    },
+    [dashboardGitBindingToken]
+  )
 
   useEffect(() => {
     gitRefreshRequestRef.current = gitRefreshRequest
@@ -473,7 +569,7 @@ export function Dashboard() {
     }
   }, [gitAutoRefreshCycleStartedAt, gitAutoRefreshPreset, staticMode])
 
-  const activeChanges = overview?.activeChanges ?? []
+  const activeChanges = summaryProjection?.activeChanges ?? []
   const activeChangeIdSet = useMemo(
     () => new Set(activeChanges.map((change) => change.id)),
     [activeChanges]
@@ -497,10 +593,7 @@ export function Dashboard() {
     () =>
       new Set(
         activeChanges
-          .filter(
-            (change) =>
-              change.progress.total === 0 || change.progress.completed >= change.progress.total
-          )
+          .filter((change) => change.trackedTaskProgress.phase === 'complete')
           .map((change) => change.id)
       ),
     [activeChanges]
@@ -522,20 +615,33 @@ export function Dashboard() {
     return tracked
   }, [configBundle])
 
-  if (isLoading && !overview) {
-    return <div className="route-loading animate-pulse">Loading dashboard...</div>
-  }
-
-  if (error) {
+  if (summaryIsLoading && !summaryProjection) {
+    // Preserve page chrome (header/nav) and render a stable skeleton body rather than a full-tree barrier,
+    // so the surrounding layout and navigation do not flash on the first dashboard visit.
     return (
-      <div className="text-destructive flex items-center gap-2">
-        <AlertCircle className="h-5 w-5" />
-        Error loading dashboard: {error.message}
+      <div className="min-w-0 space-y-6 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
+            <LayoutDashboard className="h-6 w-6 shrink-0" />
+            Dashboard
+          </h1>
+        </div>
+        <DashboardSummarySkeleton count={6} />
+        <ChangeListSkeleton count={3} />
       </div>
     )
   }
 
-  const summary = overview?.summary ?? {
+  if (summaryError && !summaryProjection) {
+    return (
+      <div role="alert" className="text-destructive flex items-center gap-2">
+        <AlertCircle className="h-5 w-5" />
+        Error loading dashboard: {summaryError.message}
+      </div>
+    )
+  }
+
+  const summary = summaryProjection?.summary ?? {
     specifications: 0,
     requirements: 0,
     activeChanges: 0,
@@ -548,15 +654,27 @@ export function Dashboard() {
   }
 
   const cardAvailability =
-    overview?.cardAvailability ?? createDefaultCardAvailability(summary.taskCompletionPercent)
-  const trendKinds = overview?.trendKinds ?? createDefaultTrendKinds()
-
-  const git = overview?.git ?? {
-    defaultBranch: 'main',
-    worktrees: [],
-  }
-  const showGitSnapshot =
-    !staticMode || git.worktrees.some((worktree) => worktree.entries.length > 0)
+    trendsProjection?.cardAvailability ??
+    createDefaultCardAvailability(summary.taskCompletionPercent)
+  const trendKinds = trendsProjection?.trendKinds ?? createDefaultTrendKinds()
+  const dashboardGitIsCurrent =
+    staticMode ||
+    (gitScopesAuthority.state === 'current' &&
+      gitScopes !== undefined &&
+      dashboardGit?.bindingToken !== null &&
+      dashboardGit?.bindingToken === gitScopes?.code.bindingToken)
+  const git =
+    dashboardGitIsCurrent && dashboardGit
+      ? dashboardGit
+      : {
+          bindingToken: null,
+          defaultBranch: 'main',
+          worktrees: [],
+        }
+  const showGitSnapshot = staticMode
+    ? git.worktrees.some((worktree) => worktree.entries.length > 0)
+    : dashboardGitIsCurrent
+  const showGitRegion = staticMode ? showGitSnapshot : true
 
   const hasChanges = activeChanges.length > 0
   const currentWorktree = git.worktrees.find((worktree) => worktree.isCurrent) ?? null
@@ -573,35 +691,55 @@ export function Dashboard() {
   const showGitRefreshProgress = gitAutoRefreshIntervalMs !== null && gitRefreshRequest === null
   const animateRefreshButton =
     gitRefreshRequest !== null && isAnimatedGitRefreshReason(gitRefreshReason)
-  const disableRefreshButton = gitRefreshRequest !== null
+  const disableRefreshButton = gitRefreshRequest !== null || dashboardGitBindingToken === null
 
   const renderHistoryCards = () => (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <DashboardMetricCard
-        label="Specifications / Requirements"
-        value={`${summary.specifications} / ${summary.requirements}`}
-        icon={FileText}
-        availability={cardAvailability.specifications}
-        trendKind={trendKinds.specifications}
-        points={overview?.trends.specifications ?? []}
-        triColorPoints={[]}
-        className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
-      />
-      <DashboardMetricCard
-        label="Archived Changes / Completed Tasks"
-        value={`${summary.completedChanges} / ${summary.archivedTasksCompleted}`}
-        icon={Archive}
-        availability={cardAvailability.completedChanges}
-        trendKind={trendKinds.completedChanges}
-        points={overview?.trends.completedChanges ?? []}
-        triColorPoints={[]}
-        className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
-      />
+    <div className="space-y-2">
+      {trendsIsLoading && !trendsProjection ? (
+        <div aria-busy="true">
+          <DashboardTrendsSkeleton count={2} />
+        </div>
+      ) : trendsIsUpdating ? (
+        <div className="text-muted-foreground text-xs" role="status">
+          Updating dashboard trends...
+        </div>
+      ) : null}
+      {trendsError ? (
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
+        >
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>Dashboard trends failed: {trendsError.message}</span>
+        </div>
+      ) : null}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <DashboardMetricCard
+          label="Specifications / Requirements"
+          value={`${summary.specifications} / ${summary.requirements}`}
+          icon={FileText}
+          availability={cardAvailability.specifications}
+          trendKind={trendKinds.specifications}
+          points={trendsProjection?.trends.specifications ?? []}
+          triColorPoints={[]}
+          className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
+        />
+        <DashboardMetricCard
+          label="Archived Changes / Completed Tasks"
+          value={`${summary.completedChanges} / ${summary.archivedTasksCompleted}`}
+          icon={Archive}
+          availability={cardAvailability.completedChanges}
+          trendKind={trendKinds.completedChanges}
+          points={trendsProjection?.trends.completedChanges ?? []}
+          triColorPoints={[]}
+          className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
+        />
+      </div>
     </div>
   )
 
   const renderExecutionSnapshot = () => (
-    <div className={`grid min-w-0 gap-3 ${showGitSnapshot ? 'xl:grid-cols-2' : 'xl:grid-cols-1'}`}>
+    <div className={`grid min-w-0 gap-3 ${showGitRegion ? 'xl:grid-cols-2' : 'xl:grid-cols-1'}`}>
       <section className="@container min-w-0 space-y-2">
         <div>
           <h2 className="font-medium">Workflow Progress</h2>
@@ -626,14 +764,14 @@ export function Dashboard() {
                   <div className="min-w-0">
                     <h3 className="text-xs font-semibold">{schema.schemaName}</h3>
                   </div>
-                  {schema.readyToArchive > 0 ? (
+                  {schema.workflowComplete > 0 ? (
                     <Badge
                       tone="custom"
                       size="xs"
                       shape="box"
                       className="text-muted-foreground border"
                     >
-                      archive-ready {schema.readyToArchive}
+                      workflow-complete {schema.workflowComplete}
                     </Badge>
                   ) : null}
                 </div>
@@ -687,130 +825,130 @@ export function Dashboard() {
         )}
       </section>
 
-      {showGitSnapshot ? (
+      {showGitRegion ? (
         <section className="min-w-0 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="font-medium">Git Snapshot</h2>
+              <h2 className="font-medium">Code Git Snapshot</h2>
               <p className="text-muted-foreground truncate text-xs">
-                Default branch: {git.defaultBranch}
+                {showGitSnapshot
+                  ? `Default branch: ${git.defaultBranch}`
+                  : 'Waiting for the current Code Git projection.'}
               </p>
             </div>
             {!staticMode ? (
-              <div className="border-border bg-card inline-flex overflow-hidden rounded-md border">
-                <Select
-                  value={gitAutoRefreshPreset}
-                  options={GIT_AUTO_REFRESH_OPTIONS}
-                  onValueChange={setGitAutoRefreshPreset}
-                  ariaLabel="Git auto refresh"
-                  className="text-foreground/75 hover:text-foreground border-r-current/10 bg-muted/20 relative isolate h-7 w-9 shrink-0 justify-center rounded-none border-0 border-r px-0"
-                  positionerClassName="z-50"
-                  popupClassName="min-w-[7rem]"
-                  renderTrigger={({ selectedOption }) => (
-                    <span className="relative inline-flex h-full w-full items-center justify-center overflow-hidden">
-                      <span className="bg-muted/20 pointer-events-none absolute inset-0" />
-                      {showGitRefreshProgress ? (
-                        <span
-                          className="bg-primary/30 dark:bg-primary/35 pointer-events-none absolute inset-y-0 left-0 transition-[width]"
-                          style={{ width: `${gitAutoRefreshProgress * 100}%` }}
-                        />
-                      ) : null}
-                      <span className="relative z-10 inline-flex items-center justify-center">
-                        <GitAutoRefreshPresetIcon
-                          preset={selectedOption?.value ?? gitAutoRefreshPreset}
-                        />
-                      </span>
-                    </span>
-                  )}
-                />
-                <button
-                  type="button"
-                  onClick={handleManualGitRefresh}
-                  disabled={disableRefreshButton}
-                  className={`inline-flex h-7 items-center gap-1 px-2 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
-                    animateRefreshButton
-                      ? 'text-primary bg-primary/10'
-                      : 'text-foreground/75 hover:text-foreground'
-                  }`}
-                >
-                  <RefreshCw
-                    className={`h-3.5 w-3.5 ${animateRefreshButton ? 'animate-spin' : ''}`}
-                  />
-                  Refresh
-                </button>
-              </div>
+              <DashboardGitRefreshControl
+                options={GIT_AUTO_REFRESH_OPTIONS}
+                value={gitAutoRefreshPreset}
+                onValueChange={setGitAutoRefreshPreset}
+                progress={gitAutoRefreshProgress}
+                showProgress={showGitRefreshProgress}
+                disabled={disableRefreshButton}
+                animated={animateRefreshButton}
+                onRefresh={handleManualGitRefresh}
+              />
             ) : null}
           </div>
-          <div className="border-border/80 bg-card min-w-0 rounded-lg border p-3">
-            <div className="mb-2 flex items-center gap-1.5">
-              <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" />
-              <span className="text-muted-foreground truncate text-xs">
-                Default branch: {git.defaultBranch}
-              </span>
+          {gitIsLoading && !dashboardGit ? (
+            <div
+              className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm"
+              role="status"
+            >
+              Loading Code Git snapshot...
             </div>
+          ) : null}
+          {gitIsUpdating && dashboardGit ? (
+            <div className="text-muted-foreground text-xs" role="status">
+              Updating Code Git snapshot...
+            </div>
+          ) : null}
+          {gitError ? (
+            <div
+              role="alert"
+              className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
+            >
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>Code Git snapshot failed: {gitError.message}</span>
+            </div>
+          ) : null}
+          {!showGitSnapshot && dashboardGit && !gitIsLoading && !gitError ? (
+            <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
+              Waiting for the current Code Git binding.
+            </div>
+          ) : null}
+          {showGitSnapshot ? (
+            <div className="border-border/80 bg-card min-w-0 rounded-lg border p-3">
+              <div className="mb-2 flex items-center gap-1.5">
+                <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" />
+                <span className="text-muted-foreground truncate text-xs">
+                  Default branch: {git.defaultBranch}
+                </span>
+              </div>
 
-            {currentWorktree ? (
-              <div className="space-y-0">
-                <WorktreeRow
-                  worktree={currentWorktree}
-                  emphasize
-                  removing={removingWorktreePath === currentWorktree.path}
-                  onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
-                />
-                <div className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}>
-                  {sortDashboardGitEntries(currentWorktree.entries).map((entry) => (
-                    <GitEntryRow
-                      key={
-                        entry.type === 'commit'
-                          ? entry.hash
-                          : `${entry.type}:${entry.updatedAt ?? 'none'}`
-                      }
-                      entry={entry}
-                      onSelect={
-                        staticMode
-                          ? undefined
-                          : (selectedEntry, sourceElement) => {
-                              void vtNavController.push(
-                                'bottom',
-                                buildGitEntryHrefFromEntry(selectedEntry),
-                                withSharedElementHandoffState(
-                                  undefined,
-                                  getGitEntrySharedHandoff(selectedEntry)
-                                ),
-                                {
-                                  source: sourceElement,
-                                  sharedElements: getGitEntrySharedDescriptor(selectedEntry),
-                                }
-                              )
-                            }
-                      }
+              {currentWorktree ? (
+                <div className="space-y-0">
+                  <WorktreeRow
+                    worktree={currentWorktree}
+                    emphasize
+                    removing={removingWorktreePath === currentWorktree.path}
+                    onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
+                  />
+                  <div className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}>
+                    {sortDashboardGitEntries(currentWorktree.entries).map((entry) => (
+                      <GitEntryRow
+                        key={
+                          entry.type === 'commit'
+                            ? entry.hash
+                            : `${entry.type}:${entry.updatedAt ?? 'none'}`
+                        }
+                        entry={entry}
+                        onSelect={
+                          staticMode
+                            ? undefined
+                            : (selectedEntry, sourceElement) => {
+                                if (git.bindingToken === null) return
+                                void vtNavController.push(
+                                  'bottom',
+                                  buildGitEntryHrefFromEntry(selectedEntry),
+                                  withSharedElementHandoffState(
+                                    undefined,
+                                    getGitEntrySharedHandoff(selectedEntry, git.bindingToken)
+                                  ),
+                                  {
+                                    source: sourceElement,
+                                    sharedElements: getGitEntrySharedDescriptor(selectedEntry),
+                                  }
+                                )
+                              }
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-muted-foreground rounded-md border border-dashed px-2.5 py-2 text-xs">
+                  No worktree snapshot available.
+                </div>
+              )}
+
+              {otherWorktrees.length > 0 && (
+                <div className="border-border/70 mt-3 space-y-1 border-t pt-2">
+                  <div className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Other Worktrees
+                  </div>
+                  {otherWorktrees.map((worktree) => (
+                    <WorktreeRow
+                      key={worktree.path}
+                      worktree={worktree}
+                      emphasize={false}
+                      removing={removingWorktreePath === worktree.path}
+                      onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
                     />
                   ))}
                 </div>
-              </div>
-            ) : (
-              <div className="text-muted-foreground rounded-md border border-dashed px-2.5 py-2 text-xs">
-                No worktree snapshot available.
-              </div>
-            )}
-
-            {otherWorktrees.length > 0 && (
-              <div className="border-border/70 mt-3 space-y-1 border-t pt-2">
-                <div className="text-muted-foreground text-xs uppercase tracking-wide">
-                  Other Worktrees
-                </div>
-                {otherWorktrees.map((worktree) => (
-                  <WorktreeRow
-                    key={worktree.path}
-                    worktree={worktree}
-                    emphasize={false}
-                    removing={removingWorktreePath === worktree.path}
-                    onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>
@@ -825,19 +963,23 @@ export function Dashboard() {
         </span>
       </div>
       <div className="bg-card divide-border min-w-0 divide-y">
-        {overview?.specifications.map((spec) => {
-          const sharedDescriptor = { family: 'specs', entityId: spec.id } as const
+        {summaryProjection?.specifications.map((spec) => {
+          const identity = { kind: 'owned' as const, specId: spec.id }
+          const sharedDescriptor = {
+            family: 'specs',
+            entityId: specIdentityKey(identity),
+          } as const
 
           return (
             <VTLink
               key={spec.id}
-              to="/specs/$specId"
+              to="/specs/owned/$specId"
               params={{ specId: spec.id }}
               state={(prev) => ({
                 ...prev,
                 __vtHandoff: {
                   family: 'specs',
-                  entityId: spec.id,
+                  entityId: specIdentityKey(identity),
                   title: spec.name,
                   subtitle: spec.id,
                 },
@@ -867,7 +1009,7 @@ export function Dashboard() {
             </VTLink>
           )
         })}
-        {overview?.specifications.length === 0 && (
+        {summaryProjection?.specifications.length === 0 && (
           <div className="text-muted-foreground px-4 py-6 text-center text-sm">
             No specifications found.
           </div>
@@ -886,7 +1028,7 @@ export function Dashboard() {
       </div>
       <div className="bg-card divide-border flex min-w-0 flex-1 flex-col divide-y">
         {activeChanges.map((change) => {
-          const progress = change.progress
+          const progress = change.trackedTaskProgress
           const taskPercent =
             progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
           const status = activeStatuses.find((item) => item.changeName === change.id)
@@ -906,7 +1048,7 @@ export function Dashboard() {
           const phase = classifyChangeWorkflowPhase({
             hasStatus: Boolean(status),
             isComplete: status?.isComplete ?? false,
-            tasksComplete: progress.total === 0 || progress.completed >= progress.total,
+            trackedTaskPhase: progress.phase,
             trackedArtifactStatus,
           })
 
@@ -1014,6 +1156,34 @@ export function Dashboard() {
           Start Propose
         </button>
       </div>
+
+      <DashboardContextSummary staticMode={staticMode} />
+
+      {summaryIsUpdating && summaryProjection ? (
+        <div className="text-muted-foreground text-sm" role="status">
+          Updating dashboard summary...
+        </div>
+      ) : null}
+
+      {summaryError ? (
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-sm"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Error loading dashboard: {summaryError.message}</span>
+        </div>
+      ) : null}
+
+      {gitActionError ? (
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-sm"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Git action failed: {gitActionError}</span>
+        </div>
+      ) : null}
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium">Historical Trends</h2>

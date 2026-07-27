@@ -1,7 +1,18 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Normalize Settings initialization choices into typed Server input.
+ * 2. Derive display argv from the same normalized initialization input.
+ * 3. Project tool initialization state into concise Settings actions.
+ *
+ * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ */
 import type { ToolInitState } from '@openspecui/core'
 
+/** Tool-selection mode exposed by the Settings initialization surface. */
 export type InitToolsMode = 'auto' | 'selected' | 'all'
+/** Optional workflow-profile override for initialization. */
 export type InitProfileOverride = 'default' | 'core' | 'custom'
+/** Derived label and availability for the current initialization choice. */
 export interface SettingsInitActionState {
   label: string
   disabled: boolean
@@ -9,34 +20,61 @@ export interface SettingsInitActionState {
   helperText: string
 }
 
-export function buildSettingsInitArgs(options: {
+/** Settings choices required to construct one typed Init request. */
+export interface SettingsInitOptions {
   mode: InitToolsMode
   selectedToolIds: readonly string[]
   cliSupportedToolIds: ReadonlySet<string>
   profileOverride: InitProfileOverride
   force: boolean
-}): string[] {
-  const args = ['init']
+}
+
+/** Structured input accepted by the Server-owned Init transport. */
+export interface SettingsInitInput {
+  tools?: string[] | 'all' | 'none'
+  profile?: 'core' | 'custom'
+  force?: boolean
+}
+
+/** Normalize Settings choices without exposing raw CLI argv to the mutation owner. */
+export function buildSettingsInitInput(options: SettingsInitOptions): SettingsInitInput {
+  const input: SettingsInitInput = { force: options.force }
 
   if (options.mode === 'selected') {
     const selectedCliTools = options.selectedToolIds.filter((toolId) =>
       options.cliSupportedToolIds.has(toolId)
     )
-    args.push('--tools', selectedCliTools.length > 0 ? selectedCliTools.join(',') : 'none')
+    input.tools = selectedCliTools.length > 0 ? selectedCliTools : 'none'
   } else if (options.mode === 'all') {
-    args.push('--tools', 'all')
+    input.tools = 'all'
   }
 
   if (options.profileOverride !== 'default') {
-    args.push('--profile', options.profileOverride)
+    input.profile = options.profileOverride
   }
-  if (options.force) {
+
+  return input
+}
+
+/** Derive display-only OpenSpec argv from the normalized typed Init request. */
+export function buildSettingsInitArgs(options: SettingsInitOptions): string[] {
+  const input = buildSettingsInitInput(options)
+  const args = ['init']
+
+  if (input.tools) {
+    args.push('--tools', Array.isArray(input.tools) ? input.tools.join(',') : input.tools)
+  }
+  if (input.profile) {
+    args.push('--profile', input.profile)
+  }
+  if (input.force) {
     args.push('--force')
   }
 
   return args
 }
 
+/** Return the effective initialization state for one tool. */
 export function getToolInitStatus(
   toolStateById: ReadonlyMap<string, ToolInitState>,
   toolId: string
@@ -44,6 +82,7 @@ export function getToolInitStatus(
   return toolStateById.get(toolId)?.status ?? 'uninitialized'
 }
 
+/** Count new and repair actions represented by the selected tools. */
 export function countSelectedToolActions(
   toolStateById: ReadonlyMap<string, ToolInitState>,
   selectedToolIds: readonly string[]
@@ -63,6 +102,7 @@ export function countSelectedToolActions(
   return { newCount, repairCount }
 }
 
+/** Format the selected-tools action label from its normalized counts. */
 export function formatSelectedInitLabel(counts: { newCount: number; repairCount: number }): string {
   if (counts.newCount > 0 && counts.repairCount > 0) {
     return `Initialize selected (${counts.newCount} new, ${counts.repairCount} repair)`
@@ -76,10 +116,12 @@ export function formatSelectedInitLabel(counts: { newCount: number; repairCount:
   return 'Initialize selected'
 }
 
+/** Report whether automatic tool detection produced an actionable selection. */
 export function canAutoInit(detectedToolIds: readonly string[]): boolean {
   return detectedToolIds.length > 0
 }
 
+/** Derive the primary initialization action for the current selection mode. */
 export function getSettingsInitActionState(options: {
   mode: InitToolsMode
   selectedLabel: string

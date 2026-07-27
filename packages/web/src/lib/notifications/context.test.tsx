@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Verify notification actions resolve against current project-Web navigation and terminal ownership.
+ * 2. Verify notification read mutations target only the invoked current-backend record.
+ * 3. Verify Root Context health records open the existing Context route.
+ *
+ * Original checkpoint (2026-07-16): "6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging."
+ */
 import { DEFAULT_CONFIG, type OpenSpecUIConfig } from '@openspecui/core'
 import type { NotificationAction, NotificationRecord } from '@openspecui/core/notifications'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -108,6 +116,25 @@ function createTerminalNotification(
   }
 }
 
+function createRootContextNotification(): NotificationRecord {
+  return {
+    id: 'root-context-1',
+    title: 'Planning root changed',
+    body: 'Open Root Context for the current planning-root details.',
+    source: { type: 'root-context' },
+    actions: [
+      {
+        type: 'href.open',
+        label: 'Open context',
+        target: { href: '/context' },
+      },
+    ],
+    level: 'info',
+    createdAt: 200,
+    groupKey: 'root-context',
+  }
+}
+
 function ActionHarness() {
   const notification = currentNotifications[0]
   const { resolveAction } = useNotifications()
@@ -205,6 +232,29 @@ describe('NotificationProvider action resolution', () => {
       expect(requestActivateServerSessionMock).toHaveBeenCalledWith('pty-1')
     })
     expect(pushMock).not.toHaveBeenCalled()
+  })
+
+  it('opens Context and marks only the invoked root-context record read', async () => {
+    currentNotifications = [createRootContextNotification(), createTerminalNotification()]
+    useNavLayoutMock.mockReturnValue({
+      popActive: true,
+      popLocation: { pathname: '/notifications', search: '' },
+    })
+
+    render(
+      <NotificationProvider>
+        <ActionHarness />
+      </NotificationProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open context' }))
+
+    await waitFor(() => {
+      expect(deactivatePopMock).toHaveBeenCalledTimes(1)
+      expect(pushMock).toHaveBeenCalledWith('main', '/context', null)
+      expect(markReadMock).toHaveBeenCalledWith({ id: 'root-context-1' })
+    })
+    expect(markReadMock).toHaveBeenCalledTimes(1)
   })
 
   it('disables terminal focus actions when the target terminal is gone', () => {

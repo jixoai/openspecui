@@ -14,6 +14,11 @@ tmp/
 .chat/
 *.tgz
 codedb.snapshot
+GOAL.md
+.zcode/
+
+# Atomic staging directory used by the watched Web-to-CLI asset sync.
+packages/cli/.web-sync-*/
 
 # Example directory for E2E testing
 example/

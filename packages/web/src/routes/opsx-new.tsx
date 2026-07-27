@@ -1,18 +1,35 @@
+/**
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * 1. Build one typed OpenSpec new-change command from user input.
+ * 2. Dispatch creation through a dedicated terminal session.
+ * 3. Lock preparation and dispatch until Root Context is ready.
+ * 4. Preserve and verify the Server-owned planning-root target before dispatch.
+ * 5. Keep the public submit guard independent from the disabled-control projection.
+ *
+ * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ */
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
+import { RootActionNotice } from '@/components/root-action-notice'
 import { navController } from '@/lib/nav-controller'
 import { CHANGE_NAME_PATTERN, buildNewChangeArgs, quoteShellToken } from '@/lib/opsx-new-command'
-import { prepareWorkflowInvocation } from '@/lib/opsx-workflow-invocation'
+import { isWorkflowTargetCurrent, prepareWorkflowInvocation } from '@/lib/opsx-workflow-invocation'
 import { useTerminalContext } from '@/lib/terminal-context'
 import { useOpsxConfigBundleSubscription } from '@/lib/use-opsx'
+import { useRootActionState } from '@/lib/use-root-action-state'
 import { vtNavController } from '@/lib/view-transitions/navigation'
+import type { WorkflowInvocationTargetV2 } from '@openspecui/core'
 import { Sparkles, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export function OpsxNewRoute() {
   const { setConfig } = usePopAreaConfigContext()
   const { requestClose } = usePopAreaLifecycleContext()
   const { createDedicatedSession } = useTerminalContext()
   const { data: configBundle } = useOpsxConfigBundleSubscription()
+  const rootAction = useRootActionState()
+  const rootActionRef = useRef(rootAction)
+  rootActionRef.current = rootAction
 
   const [changeName, setChangeName] = useState('')
   const [schema, setSchema] = useState('')
@@ -21,6 +38,12 @@ export function OpsxNewRoute() {
   const [extraArgDraft, setExtraArgDraft] = useState('')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [workflowTarget, setWorkflowTarget] = useState<WorkflowInvocationTargetV2 | null>(null)
+  const [preparedCommand, setPreparedCommand] = useState<{
+    command: string
+    args: string[]
+    target: WorkflowInvocationTargetV2 | null
+  } | null>(null)
 
   useEffect(() => {
     setConfig({
@@ -38,7 +61,11 @@ export function OpsxNewRoute() {
 
   const trimmedName = changeName.trim()
   const isNameValid = CHANGE_NAME_PATTERN.test(trimmedName)
-  const canSubmit = trimmedName.length > 0 && isNameValid
+  const isFormValid = trimmedName.length > 0 && isNameValid
+  const preparedTargetCurrent =
+    !preparedCommand?.target || isWorkflowTargetCurrent(preparedCommand.target, rootAction)
+  const formSubmissionReady = isFormValid && !rootAction.disabled
+  const canSubmit = formSubmissionReady && preparedTargetCurrent
 
   const args = useMemo(
     () =>
@@ -52,13 +79,21 @@ export function OpsxNewRoute() {
   )
 
   const commandPreview = useMemo(() => {
-    if (!canSubmit) {
+    if (preparedCommand) {
+      return [preparedCommand.command, ...preparedCommand.args].map(quoteShellToken).join(' ')
+    }
+    if (!isFormValid) {
       return 'openspec new change <change-name>'
     }
     return ['openspec', ...args].map(quoteShellToken).join(' ')
-  }, [args, canSubmit])
+  }, [args, isFormValid, preparedCommand])
 
   const schemaOptions = configBundle?.schemas.map((item) => item.name) ?? []
+
+  useEffect(() => {
+    setPreparedCommand(null)
+    setWorkflowTarget(null)
+  }, [description, extraArgs, schema, trimmedName])
 
   const addExtraArg = () => {
     const token = extraArgDraft.trim()
@@ -72,12 +107,41 @@ export function OpsxNewRoute() {
       className="flex h-full min-h-0 min-w-0 flex-col"
       onSubmit={(event) => {
         event.preventDefault()
-        if (!canSubmit) return
+        if (!formSubmissionReady) return
 
         const submit = async () => {
           setSubmitError(null)
           setIsSubmitting(true)
           try {
+            if (preparedCommand) {
+              if (
+                preparedCommand.target &&
+                !isWorkflowTargetCurrent(preparedCommand.target, rootActionRef.current)
+              ) {
+                setPreparedCommand(null)
+                setWorkflowTarget(null)
+                throw new Error(
+                  'Planning root changed before dispatch. Prepare this workflow again.'
+                )
+              }
+              const normalizedId = trimmedName
+              createDedicatedSession(preparedCommand.command, preparedCommand.args, {
+                cwdTarget: preparedCommand.target ? 'planning-root' : 'launch-project',
+                ...(preparedCommand.target?.generation
+                  ? { expectedRootGeneration: preparedCommand.target.generation }
+                  : {}),
+                closeTip: 'Press any key or close action to finish this session.',
+                closeCallbackUrl: {
+                  0: `/changes/${encodeURIComponent(normalizedId)}`,
+                },
+              })
+              const terminalArea = navController.getAreaForPath('/terminal')
+              void vtNavController.push(terminalArea, '/terminal', null)
+              requestClose()
+              return
+            }
+
+            setWorkflowTarget(null)
             const result = await prepareWorkflowInvocation({
               requestedMode: 'direct',
               workflowInput: {
@@ -92,25 +156,25 @@ export function OpsxNewRoute() {
                 command: 'openspec',
                 args,
                 mode: { requestedMode: 'direct', actualMode: 'direct', fallbackReason: null },
+                target: null,
+                evidence: null,
               }),
             })
             if (result.kind !== 'cli-command') {
               throw new Error('Create change workflow must return a CLI command.')
             }
-
-            const normalizedId = trimmedName
-            const closeCallbackUrl = {
-              0: `/changes/${encodeURIComponent(normalizedId)}`,
+            setWorkflowTarget(result.target)
+            if (result.target && !isWorkflowTargetCurrent(result.target, rootActionRef.current)) {
+              setWorkflowTarget(null)
+              throw new Error(
+                'Planning root changed while preparing this workflow. Refresh and retry.'
+              )
             }
-
-            createDedicatedSession(result.command, result.args, {
-              closeTip: 'Press any key or close action to finish this session.',
-              closeCallbackUrl,
+            setPreparedCommand({
+              command: result.command,
+              args: result.args,
+              target: result.target,
             })
-
-            const terminalArea = navController.getAreaForPath('/terminal')
-            void vtNavController.push(terminalArea, '/terminal', null)
-            requestClose()
           } catch (error) {
             setSubmitError(error instanceof Error ? error.message : String(error))
           } finally {
@@ -127,6 +191,9 @@ export function OpsxNewRoute() {
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <RootActionNotice state={rootAction} />
+        <WorkflowTargetNotice target={workflowTarget} stale={!preparedTargetCurrent} />
+
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium">Change Name</span>
           <input

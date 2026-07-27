@@ -1,20 +1,35 @@
-import { mkdir, readFile, rename, writeFile } from 'fs/promises'
+/**
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Read and mutate one CLI-selected planning root through reactive filesystem APIs.
+ * 2. Project Specs, Changes, Archives, and schema-neutral entity files.
+ * 3. Keep tracked workflow tasks distinct from document checklist analytics.
+ * 4. Preserve filesystem provenance and mutation boundaries for server consumers.
+ * 5. Expose one bounded Change row projection for progressive list delivery without warming workflow details.
+ *
+ * Original request (2026-07-15): "Split formal tracked progress, document checklist statistics, and Apply instruction progress into non-interchangeable facts."
+ */
+import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
+import { requireCanonicalOpenSpecEntityId, requireOpenSpecEntityRelativePath } from './entity-id.js'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
 import {
   buildOpsxEntityDetail,
+  getOpsxEntityRootRelativePath,
   parseOpsxEntityMetadata,
   type OpsxEntityDetail,
   type OpsxEntityReadOptions,
+  type OpsxEntityStage,
 } from './opsx-entity.js'
 import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
 import { MarkdownParser } from './parser.js'
+import { writePhysicalReactiveFile } from './physical-reactive-file-writer.js'
 import { reactiveReadDir, reactiveReadFile, reactiveStat } from './reactive-fs/index.js'
 import type { Change, ChangeFile, DeltaSpec, Spec } from './schemas.js'
 import {
-  projectTasksFromMarkdownFiles,
-  type TaskProgress,
-  type TaskProjection,
+  projectTaskProjectionsFromMarkdownFiles,
+  type DocumentChecklistSummary,
+  type TaskProjections,
+  type TrackedTaskProgress,
 } from './task-progress.js'
 import { Validator, type ValidationResult } from './validator.js'
 
@@ -30,7 +45,8 @@ export interface SpecMeta {
 export interface ChangeMeta {
   id: string
   name: string
-  progress: TaskProgress
+  trackedTaskProgress: TrackedTaskProgress
+  documentChecklistSummary: DocumentChecklistSummary
   createdAt: number
   updatedAt: number
 }
@@ -39,7 +55,8 @@ export interface ChangeMeta {
 export interface ArchiveMeta {
   id: string
   name: string
-  progress: TaskProgress
+  trackedTaskProgress: TrackedTaskProgress
+  documentChecklistSummary: DocumentChecklistSummary
   createdAt: number
   updatedAt: number
 }
@@ -133,33 +150,35 @@ export class OpenSpecAdapter {
     return reactiveReadDir(this.changesDir, { directoriesOnly: true, exclude: ['archive'] })
   }
 
+  /** Read one active Change row without resolving workflow Status, Apply, or artifact instructions. */
+  async readChangeMeta(id: string): Promise<ChangeMeta> {
+    const canonicalId = requireCanonicalOpenSpecEntityId(id, 'changeId')
+    const changeDir = join(this.changesDir, canonicalId)
+    const [change, taskProjection, timeInfo] = await Promise.all([
+      this.readChange(canonicalId),
+      this.readChangeTaskProjection(canonicalId),
+      this.getFileTimeInfo(changeDir),
+    ])
+    return {
+      id: canonicalId,
+      // Legacy parser can be unavailable for custom schemas; keep the change visible with objective fallback metadata.
+      name: change?.name ?? canonicalId,
+      trackedTaskProgress: taskProjection.trackedTaskProgress,
+      documentChecklistSummary: taskProjection.documentChecklistSummary,
+      createdAt: timeInfo?.createdAt ?? 0,
+      updatedAt: timeInfo?.updatedAt ?? 0,
+    }
+  }
+
   /**
-   * List changes with metadata (id, name, progress, and time info)
+   * List changes with metadata, separated task projections, and time info.
    * Returns every change directory, including schema-specific layouts that
    * don't use proposal.md/tasks.md.
    * Sorted by updatedAt descending (most recent first)
    */
   async listChangesWithMeta(): Promise<ChangeMeta[]> {
     const ids = await this.listChanges()
-    const results = await Promise.all(
-      ids.map(async (id) => {
-        const changeDir = join(this.changesDir, id)
-        const [change, taskProjection, timeInfo] = await Promise.all([
-          this.readChange(id),
-          this.readChangeTaskProjection(id),
-          this.getFileTimeInfo(changeDir),
-        ])
-        return {
-          id,
-          // Legacy parser can be unavailable for custom schemas; keep the
-          // change visible with objective fallback metadata.
-          name: change?.name ?? id,
-          progress: taskProjection.progress,
-          createdAt: timeInfo?.createdAt ?? 0,
-          updatedAt: timeInfo?.updatedAt ?? 0,
-        }
-      })
-    )
+    const results = await Promise.all(ids.map((id) => this.readChangeMeta(id)))
     return results.sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
@@ -185,7 +204,8 @@ export class OpenSpecAdapter {
         return {
           id,
           name: id,
-          progress: taskProjection.progress,
+          trackedTaskProgress: taskProjection.trackedTaskProgress,
+          documentChecklistSummary: taskProjection.documentChecklistSummary,
           createdAt: timeInfo?.createdAt ?? 0,
           updatedAt: timeInfo?.updatedAt ?? 0,
         }
@@ -229,7 +249,8 @@ export class OpenSpecAdapter {
   }
 
   async readSpecRaw(specId: string): Promise<string | null> {
-    const specPath = join(this.specsDir, specId, 'spec.md')
+    const canonicalSpecId = requireCanonicalOpenSpecEntityId(specId, 'specId')
+    const specPath = join(this.specsDir, canonicalSpecId, 'spec.md')
     return reactiveReadFile(specPath)
   }
 
@@ -247,21 +268,25 @@ export class OpenSpecAdapter {
   }
 
   async readChangeFiles(changeId: string): Promise<ChangeFile[]> {
-    const changeRoot = join(this.changesDir, changeId)
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const changeRoot = join(this.changesDir, canonicalChangeId)
     return this.readFilesUnderRoot(changeRoot)
   }
 
   async readArchivedChangeFiles(changeId: string): Promise<ChangeFile[]> {
-    const archiveRoot = join(this.archiveDir, changeId)
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const archiveRoot = join(this.archiveDir, canonicalChangeId)
     return this.readFilesUnderRoot(archiveRoot)
   }
 
-  async readChangeTaskProjection(changeId: string): Promise<TaskProjection> {
-    return this.readEntityTaskProjection(join(this.changesDir, changeId))
+  async readChangeTaskProjection(changeId: string): Promise<TaskProjections> {
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    return this.readEntityTaskProjection(join(this.changesDir, canonicalChangeId))
   }
 
-  async readArchivedChangeTaskProjection(changeId: string): Promise<TaskProjection> {
-    return this.readEntityTaskProjection(join(this.archiveDir, changeId))
+  async readArchivedChangeTaskProjection(changeId: string): Promise<TaskProjections> {
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    return this.readEntityTaskProjection(join(this.archiveDir, canonicalChangeId))
   }
 
   async readEntityDetail(
@@ -269,7 +294,9 @@ export class OpenSpecAdapter {
     id: string,
     options: OpsxEntityReadOptions = {}
   ): Promise<OpsxEntityDetail | null> {
-    const root = stage === 'change' ? join(this.changesDir, id) : join(this.archiveDir, id)
+    const canonicalId = requireCanonicalOpenSpecEntityId(id, 'changeId')
+    const root =
+      stage === 'change' ? join(this.changesDir, canonicalId) : join(this.archiveDir, canonicalId)
     const files = await this.readFilesUnderRoot(root)
     if (files.length === 0) {
       const statInfo = await reactiveStat(root)
@@ -277,7 +304,7 @@ export class OpenSpecAdapter {
     }
     return buildOpsxEntityDetail({
       stage,
-      id,
+      id: canonicalId,
       files,
       schemas: options.schemas,
       schemaDiagnostics: options.schemaDiagnostics,
@@ -336,7 +363,7 @@ export class OpenSpecAdapter {
     }).detail
   }
 
-  private async readEntityTaskProjection(root: string): Promise<TaskProjection> {
+  private async readEntityTaskProjection(root: string): Promise<TaskProjections> {
     const files = await this.readFilesUnderRoot(root)
     const metadataContent =
       files.find((file) => file.type === 'file' && file.path === '.openspec.yaml')?.content ?? null
@@ -345,7 +372,7 @@ export class OpenSpecAdapter {
       ? await this.readProjectSchemaDetail(metadata.schemaName)
       : null
 
-    return projectTasksFromMarkdownFiles(files, {
+    return projectTaskProjectionsFromMarkdownFiles(files, {
       schemaDetail,
       hasSchemaMetadata: Boolean(metadata.schemaName),
     })
@@ -354,7 +381,8 @@ export class OpenSpecAdapter {
   async readChangeRaw(
     changeId: string
   ): Promise<{ proposal: string; tasks: string; design?: string; deltaSpecs: DeltaSpec[] } | null> {
-    const changeDir = join(this.changesDir, changeId)
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const changeDir = join(this.changesDir, canonicalChangeId)
     const proposalPath = join(changeDir, 'proposal.md')
     const tasksPath = join(changeDir, 'tasks.md')
     const designPath = join(changeDir, 'design.md')
@@ -417,7 +445,8 @@ export class OpenSpecAdapter {
   async readArchivedChangeRaw(
     changeId: string
   ): Promise<{ proposal: string; tasks: string; design?: string; deltaSpecs: DeltaSpec[] } | null> {
-    const archiveChangeDir = join(this.archiveDir, changeId)
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const archiveChangeDir = join(this.archiveDir, canonicalChangeId)
     const proposalPath = join(archiveChangeDir, 'proposal.md')
     const tasksPath = join(archiveChangeDir, 'tasks.md')
     const designPath = join(archiveChangeDir, 'design.md')
@@ -447,35 +476,44 @@ export class OpenSpecAdapter {
   // =====================
 
   async writeSpec(specId: string, content: string): Promise<void> {
-    const specDir = join(this.specsDir, specId)
-    await mkdir(specDir, { recursive: true })
-    await writeFile(join(specDir, 'spec.md'), content, 'utf-8')
+    const canonicalSpecId = requireCanonicalOpenSpecEntityId(specId, 'specId')
+    await writePhysicalReactiveFile({
+      rootPath: this.projectDir,
+      relativePath: join('openspec', 'specs', canonicalSpecId, 'spec.md'),
+      content,
+    })
   }
 
   async writeChange(changeId: string, proposal: string, tasks?: string): Promise<void> {
-    const changeDir = join(this.changesDir, changeId)
-    await mkdir(changeDir, { recursive: true })
-    await writeFile(join(changeDir, 'proposal.md'), proposal, 'utf-8')
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    await writePhysicalReactiveFile({
+      rootPath: this.projectDir,
+      relativePath: join('openspec', 'changes', canonicalChangeId, 'proposal.md'),
+      content: proposal,
+    })
     if (tasks !== undefined) {
-      await writeFile(join(changeDir, 'tasks.md'), tasks, 'utf-8')
+      await writePhysicalReactiveFile({
+        rootPath: this.projectDir,
+        relativePath: join('openspec', 'changes', canonicalChangeId, 'tasks.md'),
+        content: tasks,
+      })
     }
   }
 
-  // =====================
-  // Archive operations
-  // =====================
-
-  async archiveChange(changeId: string): Promise<boolean> {
-    try {
-      const changeDir = join(this.changesDir, changeId)
-      const archivePath = join(this.archiveDir, changeId)
-
-      await mkdir(this.archiveDir, { recursive: true })
-      await rename(changeDir, archivePath)
-      return true
-    } catch {
-      return false
-    }
+  /** Write one validated Change or Archive entity file through the shared physical/reactive owner. */
+  async writeEntityFile(
+    stage: OpsxEntityStage,
+    changeId: string,
+    path: string,
+    content: string
+  ): Promise<void> {
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const relativePath = requireOpenSpecEntityRelativePath(path, 'path')
+    await writePhysicalReactiveFile({
+      rootPath: this.projectDir,
+      relativePath: join(getOpsxEntityRootRelativePath(stage, canonicalChangeId), relativePath),
+      content,
+    })
   }
 
   // =====================
@@ -498,52 +536,6 @@ This project uses OpenSpec for spec-driven development.
 - \`changes/archive/\` - Completed changes
 `
     await writeFile(join(this.openspecDir, 'project.md'), projectMd, 'utf-8')
-  }
-
-  // =====================
-  // Task operations
-  // =====================
-
-  /**
-   * Toggle a task's completion status in tasks.md
-   * @param changeId - The change ID
-   * @param taskIndex - 1-based task index
-   * @param completed - New completion status
-   */
-  async toggleTask(changeId: string, taskIndex: number, completed: boolean): Promise<boolean> {
-    try {
-      const tasksPath = join(this.changesDir, changeId, 'tasks.md')
-      const content = await readFile(tasksPath, 'utf-8')
-
-      const lines = content.split('\n')
-      let currentTaskIndex = 0
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]
-        // Match task lines: - [ ] or - [x] or * [ ] or * [x]
-        const taskMatch = line.match(/^([-*]\s+)\[([ xX])\](\s+.*)$/)
-        if (taskMatch) {
-          currentTaskIndex++
-          if (currentTaskIndex === taskIndex) {
-            // Update the checkbox
-            const prefix = taskMatch[1]
-            const suffix = taskMatch[3]
-            const newCheckbox = completed ? '[x]' : '[ ]'
-            lines[i] = `${prefix}${newCheckbox}${suffix}`
-            break
-          }
-        }
-      }
-
-      if (currentTaskIndex < taskIndex) {
-        return false // Task not found
-      }
-
-      await writeFile(tasksPath, lines.join('\n'), 'utf-8')
-      return true
-    } catch {
-      return false
-    }
   }
 
   // =====================
@@ -590,8 +582,14 @@ This project uses OpenSpec for spec-driven development.
     const validChanges = changes.filter((c): c is Change => c !== null)
 
     const totalRequirements = validSpecs.reduce((sum, s) => sum + s.requirements.length, 0)
-    const totalTasks = validChanges.reduce((sum, c) => sum + c.progress.total, 0)
-    const completedTasks = validChanges.reduce((sum, c) => sum + c.progress.completed, 0)
+    const totalTasks = validChanges.reduce(
+      (sum, change) => sum + change.trackedTaskProgress.total,
+      0
+    )
+    const completedTasks = validChanges.reduce(
+      (sum, change) => sum + change.trackedTaskProgress.completed,
+      0
+    )
 
     return {
       specs: validSpecs,

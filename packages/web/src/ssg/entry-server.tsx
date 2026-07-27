@@ -16,6 +16,8 @@ import { createStaticRouteTree } from '../lib/route-tree-static'
 import { setSSRBasePath, setStaticMode } from '../lib/static-mode'
 import { StaticDataProvider } from './static-data-context'
 
+export { getRoutes, getTitle } from './route-manifest'
+
 /**
  * Render a route to HTML string
  */
@@ -50,45 +52,4 @@ export async function render(
       </QueryClientProvider>
     </StaticDataProvider>
   )
-}
-
-/**
- * Get all routes to pre-render
- */
-export function getRoutes(snapshot: ExportSnapshot): string[] {
-  return [
-    '/dashboard',
-    '/specs',
-    '/changes',
-    '/archive',
-    '/config',
-    '/settings',
-    ...snapshot.specs.map((s) => `/specs/${s.id}`),
-    ...snapshot.changes.map((c) => `/changes/${c.id}`),
-    ...snapshot.archives.map((a) => `/archive/${a.id}`),
-  ]
-}
-
-/**
- * Get page title for a route
- */
-export function getTitle(path: string, snapshot: ExportSnapshot): string {
-  if (path === '/dashboard' || path === '/') return 'Dashboard'
-  if (path === '/specs') return 'Specifications'
-  if (path === '/changes') return 'Active Changes'
-  if (path === '/archive') return 'Archived Changes'
-  if (path === '/config') return 'Config'
-  if (path === '/settings') return 'Settings'
-
-  const specMatch = path.match(/^\/specs\/(.+)$/)
-  if (specMatch) return snapshot.specs.find((s) => s.id === specMatch[1])?.name || 'Spec'
-
-  const changeMatch = path.match(/^\/changes\/(.+)$/)
-  if (changeMatch) return snapshot.changes.find((c) => c.id === changeMatch[1])?.name || 'Change'
-
-  const archiveMatch = path.match(/^\/archive\/(.+)$/)
-  if (archiveMatch)
-    return snapshot.archives.find((a) => a.id === archiveMatch[1])?.name || 'Archive'
-
-  return 'OpenSpec UI'
 }

@@ -1,9 +1,19 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Register the canonical live project route tree around one writable planning root.
+ * 2. Register pop-layer workflows independently from project workspace tabs.
+ * 3. Keep terminal registration configurable for hosted project surfaces.
+ *
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ */
 import { createRoute, type AnyRootRoute, type AnyRoute } from '@tanstack/react-router'
 import { ArchiveList } from '../routes/archive-list'
 import { ArchiveView } from '../routes/archive-view'
 import { ChangeList } from '../routes/change-list'
 import { ChangeView } from '../routes/change-view'
 import { Config } from '../routes/config'
+import { ContextView } from '../routes/context'
 import { Dashboard } from '../routes/dashboard'
 import { GitRoute } from '../routes/git'
 import { GitCommitViewRoute, GitUncommittedViewRoute } from '../routes/git-view'
@@ -16,7 +26,6 @@ import { SearchRoute } from '../routes/search'
 import { Settings } from '../routes/settings'
 import { SpecList } from '../routes/spec-list'
 import { SpecView } from '../routes/spec-view'
-import { StoresList } from '../routes/stores-list'
 import { TerminalPage } from '../routes/terminal'
 
 /** Create the interactive route tree (includes terminal route by default). */
@@ -41,7 +50,18 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
       component: GitCommitViewRoute,
     }),
     createRoute({ getParentRoute: () => rootRoute, path: '/specs', component: SpecList }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/specs/$specId', component: SpecView }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/specs/owned/$specId',
+      component: SpecView,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/specs/referenced/$storeId/$specId',
+      component: SpecView,
+    }),
+    // 6.9 项目级 Context 视图（取代项目 Stores 页）。
+    createRoute({ getParentRoute: () => rootRoute, path: '/context', component: ContextView }),
     createRoute({ getParentRoute: () => rootRoute, path: '/changes', component: ChangeList }),
     createRoute({
       getParentRoute: () => rootRoute,
@@ -54,7 +74,6 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
       path: '/archive/$changeId',
       component: ArchiveView,
     }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/stores', component: StoresList }),
     createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: Settings }),
   ]
 
@@ -67,6 +86,7 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
   return rootRoute.addChildren(routes)
 }
 
+/** Create the independent pop-layer route tree. */
 export function createPopRouteTree(rootRoute: AnyRootRoute) {
   return rootRoute.addChildren([
     createRoute({

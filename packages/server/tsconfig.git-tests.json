@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.check.json",
+  "include": [
+    "src/huggingface-transformers.d.ts",
+    "src/dashboard-git-projection.test.ts",
+    "src/dashboard-git-snapshot.test.ts",
+    "src/dashboard-overview-service.test.ts",
+    "src/dashboard-summary-router.test.ts",
+    "src/git-repository-binding-router.test.ts",
+    "src/git-repository-binding-service.test.ts",
+    "src/git-repository-scope.test.ts",
+    "../local-translator/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

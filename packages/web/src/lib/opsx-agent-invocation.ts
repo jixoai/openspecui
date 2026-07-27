@@ -1,8 +1,22 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Resolve Web agent invocation modes for user-facing OPSX actions.
+ * 2. Build official slash commands and propose fallbacks without changing action identity.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ */
 import type { OpsxAgentInvocationMode } from '@openspecui/core'
 
 export type { OpsxAgentInvocationMode } from '@openspecui/core'
 
-export type OpsxAgentActionId = 'propose' | 'continue' | 'ff' | 'apply' | 'archive'
+export type OpsxAgentActionId =
+  | 'propose'
+  | 'continue'
+  | 'ff'
+  | 'apply'
+  | 'update'
+  | 'sync'
+  | 'archive'
 
 export interface OpsxInvocationModeResolution {
   requestedMode: OpsxAgentInvocationMode
@@ -21,7 +35,13 @@ export const OPSX_AGENT_INVOCATION_MODE_OPTIONS = [
   { value: 'command', label: 'Command' },
 ] as const satisfies readonly { value: OpsxAgentInvocationMode; label: string }[]
 
-const COMMAND_CAPABLE_ACTIONS = new Set<OpsxAgentActionId>(['propose', 'apply', 'archive'])
+const COMMAND_CAPABLE_ACTIONS = new Set<OpsxAgentActionId>([
+  'propose',
+  'apply',
+  'update',
+  'sync',
+  'archive',
+])
 
 const COMMAND_FALLBACK_REASONS: Partial<Record<OpsxAgentActionId, string>> = {
   continue: 'Continue uses the selected artifact context, so compose mode is required.',
@@ -72,6 +92,8 @@ export function buildOpsxSlashCommand(input: OpsxSlashCommandInput): string | nu
       return `/opsx:propose ${normalized}`
     }
     case 'apply':
+    case 'update':
+    case 'sync':
     case 'archive': {
       const changeId = input.changeId?.trim()
       if (!changeId) return null

@@ -1,4 +1,13 @@
 /**
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Expose reactive file, directory, existence, and stat projections.
+ * 2. Expose dynamic reference-counted observation-root ownership.
+ * 3. Expose immediate settlement for application-owned filesystem mutations.
+ * 4. Expose optional dependency-recompute lifecycle observation.
+ *
+ * Original request (2026-07-15): "操作成功底层是要推送变更的，然后让多端基于订阅拉取更新。"
+ */
+/**
  * @module reactive-fs
  *
  * 响应式文件系统模块
@@ -12,16 +21,16 @@
  * - reactiveReadFile/reactiveReadDir: 响应式文件操作
  *
  * 使用方式：
- * 1. 在应用启动时调用 initWatcherPool(projectDir) 初始化监听
+ * 1. 为当前运行环境创建 ReactiveObservationEnvironment 并获取所需根
  * 2. 使用 ReactiveContext.stream() 包装任务
  * 3. 任务中的 reactiveReadFile/reactiveReadDir 调用会自动追踪依赖
  *
  * @example
  * ```typescript
- * import { initWatcherPool, ReactiveContext, reactiveReadFile } from './reactive-fs'
+ * import { ReactiveObservationEnvironment, ReactiveContext, reactiveReadFile } from './reactive-fs'
  *
- * // 启动时初始化
- * await initWatcherPool('/path/to/project')
+ * const environment = new ReactiveObservationEnvironment()
+ * await environment.acquireRoot('/path/to/project')
  *
  * // 创建响应式流
  * const context = new ReactiveContext()
@@ -35,7 +44,12 @@
  */
 
 // 核心类
-export { ReactiveContext } from './reactive-context.js'
+export {
+  ReactiveObservationEnvironment,
+  type ObservationEnvironmentRoot,
+  type ObservationRootOwner,
+} from './observation-environment.js'
+export { ReactiveContext, type ReactiveContextStreamObserver } from './reactive-context.js'
 export { ReactiveState, contextStorage, type ReactiveStateOptions } from './reactive-state.js'
 
 // 响应式文件操作
@@ -46,19 +60,22 @@ export {
   reactiveReadDir,
   reactiveReadFile,
   reactiveStat,
+  settleReactiveFileWrite,
+  settleReactivePathMutation,
   updateReactiveFileCache,
 } from './reactive-fs.js'
 
 // 监听器池管理（基于 @parcel/watcher）
 export {
   acquireWatcher,
+  acquireWatcherRoot,
   closeAllWatchers,
   getActiveWatcherCount,
-  getWatchedProjectDir,
   getWatcherRuntimeStatus,
-  initWatcherPool,
   isWatcherPoolInitialized,
   subscribeWatcherRuntimeStatus,
+  type WatcherRootRelease,
+  type WatcherRootRuntimeStatus,
   type WatcherRuntimeStatus,
 } from './watcher-pool.js'
 

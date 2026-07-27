@@ -1,4 +1,30 @@
-export const OPENSPECUI_HOOKS_VERSION = 1
+/**
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * 1. Define the stable project document-read hook contract.
+ * 2. Define the root-explicit OPSX workflow invocation hook v2 contract.
+ * 3. Version document and workflow hooks independently after the workflow breaking change.
+ * 4. Carry observed root generation on every Server-owned workflow target.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ */
+import type {
+  CliApplyInstructions,
+  CliArtifactInstructions,
+  CliCommandResult,
+  CliRootSelector,
+  CliWorkflowOptions,
+  CliWorkflowStatus,
+} from './cli-contracts/index.js'
+import type {
+  OpsxArtifactInputAction,
+  OpsxChangeInputAction,
+  OpsxTextInputAction,
+  OpsxWorkflowId,
+} from './opsx-workflows.js'
+import type { RootContext } from './root-context.js'
+
+export const OPENSPECUI_DOCUMENT_HOOK_VERSION = 1
+export const OPENSPECUI_WORKFLOW_HOOK_VERSION = 2
 
 /** Severity level for diagnostics returned by project hooks. */
 export type HookDiagnosticLevel = 'info' | 'warning' | 'error'
@@ -41,7 +67,7 @@ export interface DocumentRefV1 {
 
 /** Context passed to `onReadDocument`. */
 export interface ReadDocumentContextV1 {
-  version: typeof OPENSPECUI_HOOKS_VERSION
+  version: typeof OPENSPECUI_DOCUMENT_HOOK_VERSION
   projectDir: string
   consumer: DocumentConsumerV1
   document: DocumentRefV1
@@ -65,25 +91,14 @@ export type OnReadDocumentHookV1 = (
 ) => Promise<ReadDocumentResultV1>
 
 /** OPSX workflow action names that can be customized by `onRunWorkflow`. */
-export type WorkflowActionV1 =
-  | 'explore'
-  | 'propose'
-  | 'new'
-  | 'continue'
-  | 'ff'
-  | 'apply'
-  | 'verify'
-  | 'sync'
-  | 'archive'
-  | 'bulk-archive'
-  | 'onboard'
+export type WorkflowActionV1 = OpsxWorkflowId
 
 /** Invocation mode requested by the UI before action-specific fallback resolution. */
 export type WorkflowRequestedModeV1 = 'compose' | 'command' | 'direct'
 
 /** Normalized OPSX workflow input passed to `onRunWorkflow`. */
 export type RunWorkflowInputV1 =
-  | { action: 'explore' | 'propose'; text: string }
+  | { action: OpsxTextInputAction; text: string }
   | {
       action: 'new'
       changeId: string
@@ -91,9 +106,9 @@ export type RunWorkflowInputV1 =
       description?: string
       extraArgs: string[]
     }
-  | { action: 'continue' | 'ff'; changeId: string; artifactId: string; schema?: string }
+  | { action: OpsxArtifactInputAction; changeId: string; artifactId: string; schema?: string }
   | {
-      action: 'apply' | 'archive' | 'verify' | 'sync'
+      action: OpsxChangeInputAction
       changeId: string
       schema?: string
       strict?: boolean
@@ -108,10 +123,43 @@ export interface WorkflowInvocationModeResolutionV1 {
   fallbackReason: string | null
 }
 
+/** Root and CLI evidence that fixes one workflow invocation to one writable planning root. */
+export interface WorkflowInvocationTargetV2 {
+  launchProject: RootContext['launchProject']
+  planningRoot: NonNullable<RootContext['planningRoot']>
+  storeId: string | null
+  /** Opaque Server-owned generation for the active planning-root service lease. */
+  generation: string
+  /** Root Context observation that created this target; used to reject stale dispatch. */
+  observedAt: RootContext['observedAt']
+  rootSelector: CliRootSelector
+  references: RootContext['references']
+  diagnostics: RootContext['diagnostics']
+  rootEvidence: RootContext['evidence']
+}
+
+/** Command-specific OpenSpec evidence used to prepare one change action. */
+export type WorkflowActionEvidenceV2 =
+  | {
+      kind: 'workflow-status'
+      options: CliWorkflowOptions
+      result: CliCommandResult<CliWorkflowStatus>
+    }
+  | {
+      kind: 'artifact-instructions'
+      options: CliWorkflowOptions
+      result: CliCommandResult<CliArtifactInstructions>
+    }
+  | {
+      kind: 'apply-instructions'
+      options: CliWorkflowOptions
+      result: CliCommandResult<CliApplyInstructions>
+    }
+
 /** Context passed to `onRunWorkflow`. */
-export interface RunWorkflowContextV1 {
-  version: typeof OPENSPECUI_HOOKS_VERSION
-  projectDir: string
+export interface RunWorkflowContextV2 {
+  version: typeof OPENSPECUI_WORKFLOW_HOOK_VERSION
+  target: WorkflowInvocationTargetV2
   action: WorkflowActionV1
   requestedMode: WorkflowRequestedModeV1
   input: RunWorkflowInputV1
@@ -119,37 +167,41 @@ export interface RunWorkflowContextV1 {
   lifecycle: HookLifecycleV1
 }
 
+interface RunWorkflowResultBaseV2 {
+  /** Null only for static-mode fallbacks that have no backend Root Context. */
+  target: WorkflowInvocationTargetV2 | null
+  evidence: WorkflowActionEvidenceV2 | null
+  mode?: WorkflowInvocationModeResolutionV1
+  diagnostics?: HookDiagnosticV1[]
+}
+
 /** Final OPSX invocation payload produced by OpenSpecUI or `onRunWorkflow`. */
-export type RunWorkflowResultV1 =
-  | {
-      kind: 'agent-prompt'
-      text: string
-      format: 'markdown'
-      mode?: WorkflowInvocationModeResolutionV1
-      diagnostics?: HookDiagnosticV1[]
-    }
-  | {
-      kind: 'agent-command'
-      text: string
-      mode?: WorkflowInvocationModeResolutionV1
-      diagnostics?: HookDiagnosticV1[]
-    }
-  | {
-      kind: 'cli-command'
-      command: string
-      args: string[]
-      mode?: WorkflowInvocationModeResolutionV1
-      diagnostics?: HookDiagnosticV1[]
-    }
+export type RunWorkflowResultV2 = RunWorkflowResultBaseV2 &
+  (
+    | {
+        kind: 'agent-prompt'
+        text: string
+        format: 'markdown'
+      }
+    | {
+        kind: 'agent-command'
+        text: string
+      }
+    | {
+        kind: 'cli-command'
+        command: string
+        args: string[]
+      }
+  )
 
 /** Intercepts the final OPSX invocation payload before the UI runs it. */
-export type OnRunWorkflowHookV1 = (
-  ctx: RunWorkflowContextV1,
-  run: () => Promise<RunWorkflowResultV1>
-) => Promise<RunWorkflowResultV1>
+export type OnRunWorkflowHookV2 = (
+  ctx: RunWorkflowContextV2,
+  run: () => Promise<RunWorkflowResultV2>
+) => Promise<RunWorkflowResultV2>
 
 /** Project hook module shape exported from `openspec/openspecui.hooks.ts`. */
-export interface OpenSpecUIHooksV1 {
+export interface OpenSpecUIHooks {
   onReadDocument?: OnReadDocumentHookV1
-  onRunWorkflow?: OnRunWorkflowHookV1
+  onRunWorkflow?: OnRunWorkflowHookV2
 }

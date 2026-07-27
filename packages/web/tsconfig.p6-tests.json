@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/vite-env.d.ts",
+    "src/types/global.d.ts",
+    "src/components/cli-health-gate.test.tsx",
+    "src/lib/use-cli-projection.test.tsx",
+    "src/lib/use-context-subscription.test.tsx",
+    "src/lib/use-opsx.test.tsx",
+    "src/lib/use-planning-config.test.tsx",
+    "../server/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

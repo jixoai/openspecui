@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * 1. Verify path subscriptions share callbacks and release deterministically.
+ * 2. Verify multiple observation roots, including missing logical roots sharing an existing ancestor,
+ *    coexist and use reference-counted leases.
+ * 3. Verify runtime status reports the complete dynamic root set.
+ *
+ * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
+ */
 import { realpathSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -11,9 +20,10 @@ import {
 } from '../__tests__/test-utils.js'
 import {
   acquireWatcher,
+  acquireWatcherRoot,
   closeAllWatchers,
   getActiveWatcherCount,
-  initWatcherPool,
+  getWatcherRuntimeStatus,
   isWatcherPoolInitialized,
   subscribeWatcherRuntimeStatus,
 } from './watcher-pool.js'
@@ -23,8 +33,7 @@ describe('WatcherPool', () => {
 
   beforeEach(async () => {
     tempDir = await createTempDir()
-    // Initialize watcher pool with temp directory as project root
-    await initWatcherPool(tempDir)
+    await acquireWatcherRoot(tempDir)
   })
 
   afterEach(async () => {
@@ -32,14 +41,82 @@ describe('WatcherPool', () => {
     await cleanupTempDir(tempDir)
   })
 
-  describe('initWatcherPool()', () => {
+  describe('acquireWatcherRoot()', () => {
     it('should initialize watcher pool', async () => {
       expect(isWatcherPoolInitialized()).toBe(true)
     })
 
-    it('should handle re-initialization with same directory', async () => {
-      await initWatcherPool(tempDir)
+    it('keeps a shared root alive until its final lease is released', async () => {
+      const release = await acquireWatcherRoot(tempDir)
+
+      expect(getWatcherRuntimeStatus()?.roots).toEqual([
+        expect.objectContaining({
+          rootPath: realpathSync(tempDir),
+          referenceCount: 2,
+        }),
+      ])
+
+      await release()
       expect(isWatcherPoolInitialized()).toBe(true)
+      expect(getWatcherRuntimeStatus()?.roots[0]?.referenceCount).toBe(1)
+    })
+
+    it('observes multiple roots without replacing the existing root', async () => {
+      const secondRoot = await createTempDir()
+      try {
+        const releaseSecondRoot = await acquireWatcherRoot(secondRoot)
+        const onChange = vi.fn()
+        const releasePath = acquireWatcher(secondRoot, onChange, {
+          recursive: true,
+          debounceMs: 50,
+        })
+
+        expect(
+          getWatcherRuntimeStatus()
+            ?.roots.map((root) => root.rootPath)
+            .sort()
+        ).toEqual([realpathSync(tempDir), realpathSync(secondRoot)].sort())
+
+        await writeFile(join(secondRoot, 'outside-launch.txt'), 'content', 'utf8')
+        await waitFor(() => onChange.mock.calls.length > 0, { timeout: 2000, interval: 50 })
+
+        releasePath()
+        await releaseSecondRoot()
+        expect(getWatcherRuntimeStatus()?.roots).toEqual([
+          expect.objectContaining({ rootPath: realpathSync(tempDir) }),
+        ])
+      } finally {
+        await cleanupTempDir(secondRoot)
+      }
+    })
+
+    it('keeps a shared physical watcher alive while missing logical roots release independently', async () => {
+      const firstMissingRoot = join(tempDir, 'missing-root-a')
+      const secondMissingRoot = join(tempDir, 'missing-root-b')
+      const releaseFirst = await acquireWatcherRoot(firstMissingRoot)
+      const releaseSecond = await acquireWatcherRoot(secondMissingRoot)
+      const onChange = vi.fn()
+      const releasePath = acquireWatcher(secondMissingRoot, onChange, {
+        recursive: true,
+        debounceMs: 50,
+      })
+
+      try {
+        await mkdir(secondMissingRoot, { recursive: true })
+        await writeFile(join(secondMissingRoot, 'first.txt'), 'first', 'utf8')
+        await waitFor(() => onChange.mock.calls.length > 0, { timeout: 2000, interval: 50 })
+
+        await releaseFirst()
+        const changesAfterFirstRelease = onChange.mock.calls.length
+        await writeFile(join(secondMissingRoot, 'second.txt'), 'second', 'utf8')
+        await waitFor(() => onChange.mock.calls.length > changesAfterFirstRelease, {
+          timeout: 2000,
+          interval: 50,
+        })
+      } finally {
+        releasePath()
+        await releaseSecond()
+      }
     })
 
     it('emits watcher runtime state to subscribers', async () => {
@@ -48,9 +125,14 @@ describe('WatcherPool', () => {
 
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({
-          projectDir: realpathSync(tempDir),
           initialized: true,
-          projectResidency: { state: 'active' },
+          rootCount: 1,
+          roots: [
+            expect.objectContaining({
+              rootPath: realpathSync(tempDir),
+              projectResidency: { state: 'active' },
+            }),
+          ],
         })
       )
 
@@ -320,9 +402,6 @@ describe('WatcherPool', () => {
     })
 
     it('should clear pending debounce timers', async () => {
-      // Re-initialize for this test
-      await initWatcherPool(tempDir)
-
       const filepath = await createTempFile(tempDir, 'test.txt', 'content')
       const onChange = vi.fn()
 

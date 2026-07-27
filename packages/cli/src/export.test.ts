@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * 1. Verify static export produces the expected OpenSpec project snapshot.
+ * 2. Verify export combines local planning artifacts with CLI-backed schema projection.
+ * 3. Cover Reference-aware export materialization and publication behavior.
+ *
+ * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ */
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -64,7 +72,12 @@ describe('Export Functions', () => {
       expect(snapshot.meta).toBeDefined()
       expect(snapshot.meta.timestamp).toBeDefined()
       expect(snapshot.meta.version).toBeDefined()
-      expect(snapshot.meta.projectDir).toBe(testProjectDir)
+      // The absolute project path is intentionally not retained; only a display-safe name survives.
+      expect(snapshot.meta.projectName).toMatch(/\S/)
+      expect(snapshot.meta).not.toHaveProperty('projectDir')
+      expect(snapshot.meta.observedAt).toBeGreaterThan(0)
+      expect(snapshot.meta.root).toBeDefined()
+      expect(snapshot.meta.referencePolicy).toEqual({ kind: 'none' })
       expect(new Date(snapshot.meta.timestamp).getTime()).toBeGreaterThan(0)
     })
 
@@ -219,9 +232,9 @@ Testing purposes.
       expect(snapshot.changes[0].id).toBe('test-change')
       expect(snapshot.changes[0].proposal).toContain('Test Change')
       expect(snapshot.changes[0].tasks).toContain('Test task')
-      expect(snapshot.changes[0].parsedTasks).toHaveLength(1)
-      expect(snapshot.changes[0].parsedTasks[0].text).toContain('Test task')
-      expect(snapshot.changes[0].parsedTasks[0].completed).toBe(false)
+      expect(snapshot.changes[0].trackedTaskProgress.tasks).toHaveLength(1)
+      expect(snapshot.changes[0].trackedTaskProgress.tasks[0].text).toContain('Test task')
+      expect(snapshot.changes[0].trackedTaskProgress.tasks[0].completed).toBe(false)
     })
 
     it('should snapshot schema change task progress without proposal.md', async () => {
@@ -249,8 +262,13 @@ apply:
       const change = snapshot.changes.find((item) => item.id === 'vision-change')
 
       expect(change?.proposal).toBe('')
-      expect(change?.progress).toEqual({ total: 3, completed: 2 })
-      expect(change?.parsedTasks.map((task) => task.text)).toEqual(['Planned', 'Done', 'Todo'])
+      expect(change?.trackedTaskProgress).toMatchObject({
+        total: 2,
+        completed: 1,
+        phase: 'in-progress',
+      })
+      expect(change?.trackedTaskProgress.tasks.map((task) => task.text)).toEqual(['Done', 'Todo'])
+      expect(change?.documentChecklistSummary).toMatchObject({ total: 3, completed: 2 })
     })
 
     it('should parse change with deltas correctly', async () => {
@@ -361,7 +379,12 @@ Historical change.
       expect(archive?.entity.diagnostics.map((item) => item.message).join('\n')).toContain(
         'custom-audit'
       )
-      expect(archive?.progress).toEqual({ total: 1, completed: 1 })
+      expect(archive?.trackedTaskProgress).toMatchObject({
+        total: 0,
+        completed: 0,
+        phase: 'no-tasks',
+      })
+      expect(archive?.documentChecklistSummary).toMatchObject({ total: 1, completed: 1 })
     })
 
     it('should handle spec with multiple requirements', async () => {

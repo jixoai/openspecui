@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenSpec planning topology quick reference</title>
+    <link rel="stylesheet" href="../assets/lesson.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>OpenSpec 规划拓扑速查</h1>
+        <p class="lede">
+          先找唯一可写 root，再叠加只读 References；Context 是推导结果，Workset 是个人视图。
+        </p>
+      </header>
+
+      <section>
+        <h2>Root selection</h2>
+        <pre><code>--store &lt;id&gt;
+  &gt; nearest real openspec/ root
+  &gt; config-only repo's store: pointer
+  &gt; error when registered stores make the target ambiguous
+  &gt; implicit cwd only when the command allows scaffolding</code></pre>
+      </section>
+
+      <section>
+        <h2>Relationship law</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Term</th>
+              <th>Shared</th>
+              <th>Writable</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Project root</td>
+              <td>Git</td>
+              <td>Yes</td>
+              <td>Code repo planning</td>
+            </tr>
+            <tr>
+              <td>Store</td>
+              <td>Git</td>
+              <td>When selected</td>
+              <td>Standalone planning</td>
+            </tr>
+            <tr>
+              <td>Reference</td>
+              <td>config.yaml</td>
+              <td>No</td>
+              <td>External spec context</td>
+            </tr>
+            <tr>
+              <td>Context</td>
+              <td>No, derived</td>
+              <td>No</td>
+              <td>Root plus references</td>
+            </tr>
+            <tr>
+              <td>Workset</td>
+              <td>No, local</td>
+              <td>N/A</td>
+              <td>Open folders together</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout">
+          Reference 只接受注册 Store id；它不是任意项目规划根或 package 路径之间的边。<code
+            >store:</code
+          >
+          只在 config-only root 中作为可写根的 fallback，存在本地 planning shape 时会被忽略。
+        </div>
+        <pre><code>default registry:
+  Unix/macOS  ~/.local/share/openspec/stores/registry.yaml
+  Windows     %LOCALAPPDATA%\openspec\stores\registry.yaml
+
+override root for one environment:
+  XDG_DATA_HOME=/isolated/data openspec store list</code></pre>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,4 +1,17 @@
+/**
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * 1. Execute buffered CLI processes with runner recovery and complete process evidence.
+ * 2. Own streaming CLI processes through cancellation request, escalation, and confirmed settlement.
+ * 3. Retain established init/schema/template and human validate/archive helpers.
+ * 4. Expose the physically separated OpenSpec 1.6 typed command facade.
+ * 5. Clear the Core-owned direct-child slot independently from stream settlement.
+ *
+ * Original request (2026-07-15): "你先负责后端（内核）的开发。"
+ * Original request (2026-07-17): "A stream cancellation request is not child-process settlement."
+ */
 import { type ChildProcess } from 'child_process'
+import { OpenSpecCliContractExecutor } from './cli-contracts/index.js'
+import { CliStreamChildOwner } from './cli-stream-child-owner.js'
 import { createCleanCliEnv, type ConfigManager } from './config.js'
 import { formatSpawnError, runBufferedCommand, spawnSafe } from './spawn-safe.js'
 
@@ -17,8 +30,45 @@ export interface CliStreamEvent {
   exitCode?: number | null
 }
 
+/** Terminal fact that releases ownership of one CLI stream process. */
+export interface CliStreamSettlement {
+  reason: 'exited' | 'cancelled' | 'startup-failed'
+  exitCode: number | null
+}
+
+/** Settlement-aware owner returned immediately for one CLI stream. */
+export interface CliStreamHandle {
+  readonly settled: Promise<CliStreamSettlement>
+  cancel(): Promise<CliStreamSettlement>
+}
+
+/** Failure raised when even forced termination cannot confirm child-process close. */
+export class CliStreamTerminationError extends Error {
+  constructor(command: string) {
+    super(`CLI stream did not close after forced termination: ${command}`)
+    this.name = 'CliStreamTerminationError'
+  }
+}
+
+const STREAM_TERMINATION_GRACE_MS = 1_000
+const STREAM_FORCE_CLOSE_TIMEOUT_MS = 1_000
+
 interface CliResultInternal extends CliResult {
   errorCode?: string
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve(value: T): void
+  reject(reason?: unknown): void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
 }
 
 /**
@@ -28,10 +78,14 @@ interface CliResultInternal extends CliResult {
  * 所有命令都使用 shell: false，避免 shell 注入风险。
  */
 export class CliExecutor {
+  readonly contracts: OpenSpecCliContractExecutor
+
   constructor(
     private configManager: ConfigManager,
     private projectDir: string
-  ) {}
+  ) {
+    this.contracts = new OpenSpecCliContractExecutor((args) => this.execute(args))
+  }
 
   private async buildCommandArray(args: string[]): Promise<string[]> {
     const commandParts = await this.configManager.getCliCommand()
@@ -140,8 +194,8 @@ export class CliExecutor {
    */
   async validate(type?: 'spec' | 'change', id?: string): Promise<CliResult> {
     const args = ['validate']
-    if (type) args.push(type)
     if (id) args.push(id)
+    if (type) args.push('--type', type)
     return this.execute(args)
   }
 
@@ -169,39 +223,22 @@ export class CliExecutor {
   }
 
   /**
-   * 执行 openspec store list --json
-   *
-   * Beta 功能（Stores）。返回原始 CliResult；数据归类（ok / 异常一数据不兼容 /
-   * 异常二指令变更）由调用方用 classifyStoreCliOutput 完成。这样 CliExecutor 保持单一职责。
-   * Spec: openspec-cli-integration › Stores CLI Query Mapping / Beta Feature Fault Tolerance。
-   */
-  async listStores(): Promise<CliResult> {
-    return this.execute(['store', 'list', '--json'])
-  }
-
-  /**
-   * 执行 openspec store doctor [--json] [id]
-   *
-   * Beta 功能（Stores）。同 listStores，归类交给调用方。
-   */
-  async doctorStores(id?: string): Promise<CliResult> {
-    const args = ['store', 'doctor']
-    if (id) args.push(id)
-    args.push('--json')
-    return this.execute(args)
-  }
-
-  /**
    * 流式执行 openspec validate
    */
   validateStream(
-    type: 'spec' | 'change' | undefined,
-    id: string | undefined,
+    options: {
+      type?: 'spec' | 'change'
+      id?: string
+      strict?: boolean
+      store?: string
+    },
     onEvent: (event: CliStreamEvent) => void
-  ): Promise<() => void> {
+  ): CliStreamHandle {
     const args = ['validate']
-    if (type) args.push(type)
-    if (id) args.push(id)
+    if (options.id) args.push(options.id)
+    if (options.type) args.push('--type', options.type)
+    if (options.strict) args.push('--strict')
+    if (options.store !== undefined) args.push('--store', options.store)
     return this.executeStream(args, onEvent)
   }
 
@@ -256,26 +293,88 @@ export class CliExecutor {
   /**
    * 流式执行 CLI 命令
    */
-  async executeStream(
-    args: string[],
-    onEvent: (event: CliStreamEvent) => void
-  ): Promise<() => void> {
-    let cancelled = false
-    let activeChild: ChildProcess | null = null
+  executeStream(args: string[], onEvent: (event: CliStreamEvent) => void): CliStreamHandle {
+    return this.createStreamHandle(
+      async () => this.buildCommandArray(args),
+      onEvent,
+      () => this.configManager.invalidateResolvedCliRunner()
+    )
+  }
+
+  private createStreamHandle(
+    resolveCommand: () => Promise<string[]> | string[],
+    onEvent: (event: CliStreamEvent) => void,
+    retryRunner?: () => void
+  ): CliStreamHandle {
+    const settlement = createDeferred<CliStreamSettlement>()
+    let settled = false
+    let cancelRequested = false
+    let terminationStarted = false
+    const childOwner = new CliStreamChildOwner()
+    let activeCommand = 'CLI command'
+    let terminationTimer: ReturnType<typeof setTimeout> | null = null
+    let forceCloseTimer: ReturnType<typeof setTimeout> | null = null
+
+    const clearTerminationTimers = () => {
+      if (terminationTimer) clearTimeout(terminationTimer)
+      if (forceCloseTimer) clearTimeout(forceCloseTimer)
+      terminationTimer = null
+      forceCloseTimer = null
+    }
+
+    const settle = (value: CliStreamSettlement) => {
+      if (settled) return
+      settled = true
+      clearTerminationTimers()
+      onEvent({ type: 'exit', exitCode: value.exitCode })
+      settlement.resolve(value)
+    }
+
+    const failTermination = () => {
+      if (settled) return
+      settled = true
+      clearTerminationTimers()
+      settlement.reject(new CliStreamTerminationError(activeCommand))
+    }
+
+    const requestChildTermination = (child: ChildProcess) => {
+      if (terminationStarted || settled) return
+      terminationStarted = true
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        // A concurrent close/error event remains the settlement authority.
+      }
+      terminationTimer = setTimeout(() => {
+        if (settled || !childOwner.owns(child)) return
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          // The close event may already be queued; the bounded confirmation still applies.
+        }
+        forceCloseTimer = setTimeout(() => {
+          if (!settled && childOwner.owns(child)) failTermination()
+        }, STREAM_FORCE_CLOSE_TIMEOUT_MS)
+      }, STREAM_TERMINATION_GRACE_MS)
+    }
 
     const start = async (allowRetry: boolean): Promise<void> => {
-      if (cancelled) return
+      if (cancelRequested || settled) return
 
       let fullCommand: string[]
       try {
-        fullCommand = await this.buildCommandArray(args)
+        fullCommand = await resolveCommand()
       } catch (err) {
+        if (cancelRequested || settled) return
         onEvent({ type: 'stderr', data: err instanceof Error ? err.message : String(err) })
-        onEvent({ type: 'exit', exitCode: null })
+        settle({ reason: 'startup-failed', exitCode: null })
         return
       }
 
-      onEvent({ type: 'command', data: fullCommand.join(' ') })
+      if (cancelRequested || settled) return
+
+      activeCommand = fullCommand.join(' ')
+      onEvent({ type: 'command', data: activeCommand })
       const [cmd, ...cmdArgs] = fullCommand
 
       const started = spawnSafe(cmd, cmdArgs, {
@@ -287,19 +386,24 @@ export class CliExecutor {
       if (!started.ok) {
         const { code, message } = started.error
 
-        if (allowRetry && code === 'ENOENT' && !cancelled) {
-          this.configManager.invalidateResolvedCliRunner()
+        if (allowRetry && code === 'ENOENT' && !cancelRequested && retryRunner) {
+          retryRunner()
           void start(false)
           return
         }
 
         onEvent({ type: 'stderr', data: message })
-        onEvent({ type: 'exit', exitCode: null })
+        settle({ reason: 'startup-failed', exitCode: null })
         return
       }
 
       const child = started.child
-      activeChild = child
+      childOwner.claim(child)
+      let childSpawned = false
+
+      child.once('spawn', () => {
+        childSpawned = true
+      })
 
       child.stdout?.on('data', (data: Buffer) => {
         onEvent({ type: 'stdout', data: data.toString() })
@@ -310,34 +414,54 @@ export class CliExecutor {
       })
 
       child.on('close', (exitCode: number | null) => {
-        if (activeChild !== child) return
-        activeChild = null
-        onEvent({ type: 'exit', exitCode })
+        if (!childOwner.owns(child)) return
+        childOwner.release(child)
+        settle({ reason: cancelRequested ? 'cancelled' : 'exited', exitCode })
       })
 
       child.on('error', (err: Error) => {
-        if (activeChild !== child) return
-        activeChild = null
+        if (!childOwner.owns(child)) return
         const { code, message } = formatSpawnError(err)
 
-        if (allowRetry && code === 'ENOENT' && !cancelled) {
-          this.configManager.invalidateResolvedCliRunner()
+        if (childSpawned) {
+          onEvent({ type: 'stderr', data: message })
+          return
+        }
+
+        childOwner.release(child)
+
+        if (allowRetry && code === 'ENOENT' && !cancelRequested && retryRunner) {
+          retryRunner()
           void start(false)
           return
         }
 
         onEvent({ type: 'stderr', data: message })
-        onEvent({ type: 'exit', exitCode: null })
+        settle({
+          reason: cancelRequested ? 'cancelled' : 'startup-failed',
+          exitCode: null,
+        })
       })
     }
 
-    await start(true)
+    void start(true)
 
-    return () => {
-      cancelled = true
-      activeChild?.kill()
-      activeChild = null
+    const handle: CliStreamHandle = {
+      settled: settlement.promise,
+      cancel: () => {
+        if (cancelRequested || settled) return settlement.promise
+        cancelRequested = true
+        const child = childOwner.currentChild
+        if (child) {
+          requestChildTermination(child)
+        } else {
+          settle({ reason: 'cancelled', exitCode: null })
+        }
+        return settlement.promise
+      },
     }
+    void settlement.promise.catch(() => {})
+    return handle
   }
 
   /**
@@ -350,7 +474,7 @@ export class CliExecutor {
       force?: boolean
     },
     onEvent: (event: CliStreamEvent) => void
-  ): Promise<() => void> {
+  ): CliStreamHandle {
     const args = ['init']
     if (options.tools !== undefined) {
       const toolsArg = Array.isArray(options.tools) ? options.tools.join(',') : options.tools
@@ -370,12 +494,13 @@ export class CliExecutor {
    */
   archiveStream(
     changeId: string,
-    options: { skipSpecs?: boolean; noValidate?: boolean },
+    options: { skipSpecs?: boolean; noValidate?: boolean; store?: string },
     onEvent: (event: CliStreamEvent) => void
-  ): Promise<() => void> {
+  ): CliStreamHandle {
     const args = ['archive', '-y', changeId]
     if (options.skipSpecs) args.push('--skip-specs')
     if (options.noValidate) args.push('--no-validate')
+    if (options.store !== undefined) args.push('--store', options.store)
     return this.executeStream(args, onEvent)
   }
 
@@ -388,69 +513,12 @@ export class CliExecutor {
   executeCommandStream(
     command: readonly string[],
     onEvent: (event: CliStreamEvent) => void
-  ): () => void {
+  ): CliStreamHandle {
     const [cmd, ...cmdArgs] = command
 
     if (cmd === 'openspec') {
-      let cancelResolved: (() => void) | null = null
-      let cancelled = false
-
-      void this.executeStream([...cmdArgs], onEvent)
-        .then((cancel) => {
-          if (cancelled) {
-            cancel()
-            return
-          }
-          cancelResolved = cancel
-        })
-        .catch((err) => {
-          const message = err instanceof Error ? err.message : String(err)
-          onEvent({ type: 'stderr', data: message })
-          onEvent({ type: 'exit', exitCode: null })
-        })
-
-      return () => {
-        cancelled = true
-        cancelResolved?.()
-      }
+      return this.executeStream([...cmdArgs], onEvent)
     }
-
-    onEvent({ type: 'command', data: command.join(' ') })
-
-    const started = spawnSafe(cmd, cmdArgs, {
-      cwd: this.projectDir,
-      shell: false,
-      env: createCleanCliEnv(),
-    })
-
-    if (!started.ok) {
-      onEvent({ type: 'stderr', data: started.error.message })
-      onEvent({ type: 'exit', exitCode: null })
-      return () => {}
-    }
-
-    const child = started.child
-
-    child.stdout?.on('data', (data: Buffer) => {
-      onEvent({ type: 'stdout', data: data.toString() })
-    })
-
-    child.stderr?.on('data', (data: Buffer) => {
-      onEvent({ type: 'stderr', data: data.toString() })
-    })
-
-    child.on('close', (exitCode: number | null) => {
-      onEvent({ type: 'exit', exitCode })
-    })
-
-    child.on('error', (err: Error) => {
-      const { message } = formatSpawnError(err)
-      onEvent({ type: 'stderr', data: message })
-      onEvent({ type: 'exit', exitCode: null })
-    })
-
-    return () => {
-      child.kill()
-    }
+    return this.createStreamHandle(() => [cmd, ...cmdArgs], onEvent)
   }
 }

@@ -1,3 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Verify Settings preference, translation, terminal, and asset-management interactions.
+ * 2. Verify the route-level responsive ToC and static/dynamic composition boundaries.
+ * 3. Keep extracted OpenSpec diagnostics and initialization behavior in focused component tests.
+ * 4. Prove live Settings composition is present before passive effects can run.
+ * 5. Prove Terminal drafts synchronize by upstream field value without losing dirty edits.
+ *
+ * Original request (2026-07-20): "Split OpenSpec diagnostics/initialization out of the oversized Settings route."
+ * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
+ */
 import type {
   LocalModelAssetLog,
   LocalModelAssetState,
@@ -12,6 +23,7 @@ import {
 } from '@openspecui/core/translator'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useSyncExternalStore, type ReactNode } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Settings } from './settings'
 
@@ -1954,55 +1966,8 @@ vi.mock('@tanstack/react-query', () => ({
 }))
 
 function resolveQueryResultForKey(key: string) {
-  if (key === 'cli.getAllTools') {
-    return { data: [{ value: 'claude', name: 'Claude', available: true }], isLoading: false }
-  }
-  if (key === 'cli.getDetectedProjectTools') {
-    return { data: [{ value: 'claude', name: 'Claude' }], isLoading: false, refetch: vi.fn() }
-  }
-  if (key === 'cli.getProfileState') {
-    return {
-      data: {
-        available: true,
-        delivery: 'both',
-        workflows: [],
-        profile: 'core',
-        driftStatus: 'in-sync',
-        warningText: null,
-      },
-      isLoading: false,
-      refetch: vi.fn(),
-    }
-  }
-  if (key === 'cli.getToolInitStates') {
-    return {
-      data: [
-        {
-          toolId: 'claude',
-          toolName: 'Claude',
-          status: 'uninitialized',
-          hasAnyArtifacts: false,
-          expectedSkillCount: 0,
-          presentExpectedSkillCount: 0,
-          detectedSkillCount: 0,
-          expectedCommandCount: 0,
-          presentExpectedCommandCount: 0,
-          detectedCommandCount: 0,
-          missingSkillWorkflows: [],
-          missingCommandWorkflows: [],
-          unexpectedSkillWorkflows: [],
-          unexpectedCommandWorkflows: [],
-          legacyCommandWorkflows: [],
-        },
-      ],
-      refetch: vi.fn(),
-    }
-  }
   if (key === 'cli.sniffGlobalCli') {
     return { data: { hasGlobal: true, version: '1.4.1', hasUpdate: false }, isLoading: false }
-  }
-  if (key === 'cli.checkAvailability') {
-    return { data: { available: true, version: '1.4.1' }, isLoading: false, refetch: vi.fn() }
   }
   if (key === 'config.getEffectiveCliCommand') {
     return { data: 'openspec', refetch: vi.fn() }
@@ -2181,6 +2146,10 @@ vi.mock('@/components/cli-terminal', () => ({
   CliTerminal: () => <div data-testid="cli-terminal" />,
 }))
 
+vi.mock('@/components/settings/openspec-settings-section', () => ({
+  OpenSpecSettingsSections: () => <section data-testid="openspec-settings-sections" />,
+}))
+
 vi.mock('@/components/toc', () => ({
   generateTimelineScope: () => '',
   Toc: ({ className, items }: { className?: string; items: { id: string; label: string }[] }) => {
@@ -2279,24 +2248,8 @@ vi.mock('@/lib/trpc', () => ({
   trpc: {
     cli: {
       sniffGlobalCli: {
-        queryOptions: () => ({ queryKey: ['cli.getAllTools'] }),
+        queryOptions: () => ({ queryKey: ['cli.sniffGlobalCli'] }),
         queryFilter: () => ({ queryKey: ['cli.sniffGlobalCli'] }),
-      },
-      checkAvailability: {
-        queryOptions: () => ({ queryKey: ['cli.checkAvailability'] }),
-        queryFilter: () => ({ queryKey: ['cli.checkAvailability'] }),
-      },
-      getAllTools: {
-        queryOptions: () => ({ queryKey: ['cli.getAllTools'] }),
-      },
-      getDetectedProjectTools: {
-        queryOptions: () => ({ queryKey: ['cli.getDetectedProjectTools'] }),
-      },
-      getProfileState: {
-        queryOptions: () => ({ queryKey: ['cli.getProfileState'] }),
-      },
-      getToolInitStates: {
-        queryOptions: () => ({ queryKey: ['cli.getToolInitStates'] }),
       },
     },
     config: {
@@ -2576,6 +2529,7 @@ describe('Settings', () => {
     vi.useRealTimers()
   })
   beforeEach(() => {
+    staticModeMock.mockReturnValue(false)
     useConfigPresenceSubscriptionMock.mockImplementation(() => {
       const config = useConfigSubscriptionMock().data as
         | {
@@ -2670,7 +2624,144 @@ describe('Settings', () => {
     })
   })
 
-  it('renders force init as the shared Switch control', async () => {
+  it('renders the live Settings composition before passive effects', () => {
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        theme: 'dark',
+        codeEditor: { theme: 'monokai' },
+        cli: { command: 'custom-openspec', args: ['--profile', 'strict'] },
+        appBaseUrl: 'https://app.example.test/workbench',
+        terminal: {
+          fontSize: 19,
+          fontFamily: 'Config Mono',
+          cursorBlink: false,
+          cursorStyle: 'bar',
+          scrollback: 24_000,
+          useTheme: 'dark',
+          lightTheme: 'solarized-light',
+          darkTheme: 'nord',
+          rendererEngine: 'xterm',
+          bellSound: 'silent',
+          bellVolume: 0.35,
+        },
+        dashboard: { trendPointLimit: 240 },
+        git: { diffEagerLineBudget: 6_400 },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    const markup = renderToStaticMarkup(<Settings />)
+    const root = document.createElement('div')
+    root.innerHTML = markup
+    const readInputValue = (labelText: string): string => {
+      const label = Array.from(root.querySelectorAll('label')).find(
+        (candidate) => candidate.textContent?.trim() === labelText
+      )
+      const input = label?.parentElement?.querySelector('input')
+      if (!(input instanceof HTMLInputElement)) {
+        throw new Error(`Input for ${labelText} was not rendered.`)
+      }
+      return input.value
+    }
+
+    expect(markup).toContain('>Settings</h1>')
+    expect(markup).toContain('>Appearance</h2>')
+    expect(markup).toContain('data-testid="openspec-settings-sections"')
+    expect(markup).not.toContain('Loading settings...')
+    expect(
+      Array.from(root.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Dark' && button.ariaPressed === 'true'
+      )
+    ).toBeTruthy()
+    expect(root.querySelector('button[aria-label="Code Editor Theme"]')?.textContent).toContain(
+      'Monokai'
+    )
+    expect(readInputValue('Execute Path')).toBe('custom-openspec --profile strict')
+    expect(readInputValue('Base URL')).toBe('https://app.example.test/workbench')
+    expect(readInputValue('Font Size: 19px')).toBe('19')
+    expect(readInputValue('Font Family')).toBe('Config Mono')
+    expect(readInputValue('Scrollback Lines: 24,000')).toBe('24000')
+    expect(readInputValue('Trend Point Limit')).toBe('240')
+    expect(readInputValue('Eager Patch Line Budget')).toBe('6400')
+  })
+
+  it('preserves cached Terminal drafts after mount effects', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    useConfigSubscriptionMock.mockReturnValue({
+      data: {
+        terminal: {
+          fontSize: 19,
+          scrollback: 24_000,
+        },
+      },
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    render(<Settings />)
+
+    expect(screen.getByText('Font Size: 19px')).toBeTruthy()
+    expect(screen.getByText('Scrollback Lines: 24,000')).toBeTruthy()
+  })
+
+  it('preserves dirty Terminal fields across value-equal Config emissions', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+    let terminal = {
+      fontSize: 19,
+      scrollback: 24_000,
+    }
+    useConfigSubscriptionMock.mockImplementation(() => ({ data: { terminal } }))
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    const { rerender } = render(<Settings />)
+    const readRangeInput = (labelText: string): HTMLInputElement => {
+      const label = screen.getByText(labelText)
+      const input = label.parentElement?.querySelector('input[type="range"]')
+      if (!(input instanceof HTMLInputElement)) {
+        throw new Error(`Range input for ${labelText} was not rendered.`)
+      }
+      return input
+    }
+    const fontSizeInput = readRangeInput('Font Size: 19px')
+    const scrollbackInput = readRangeInput('Scrollback Lines: 24,000')
+
+    fireEvent.change(fontSizeInput, { target: { value: '23' } })
+    fireEvent.change(scrollbackInput, { target: { value: '31000' } })
+    expect(fontSizeInput.value).toBe('23')
+    expect(scrollbackInput.value).toBe('31000')
+
+    terminal = {
+      fontSize: 19,
+      scrollback: 24_000,
+    }
+    rerender(<Settings />)
+    expect(fontSizeInput.value).toBe('23')
+    expect(scrollbackInput.value).toBe('31000')
+
+    terminal = {
+      fontSize: 21,
+      scrollback: 24_000,
+    }
+    rerender(<Settings />)
+    expect(fontSizeInput.value).toBe('21')
+    expect(scrollbackInput.value).toBe('31000')
+  })
+
+  it('keeps static Settings Appearance-only without mounting live OpenSpec projections', async () => {
+    staticModeMock.mockReturnValue(true)
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -2680,15 +2771,15 @@ describe('Settings', () => {
       }))
     )
     useConfigSubscriptionMock.mockReturnValue({ data: {} })
-    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
 
     render(<Settings />)
 
-    const forceSwitch = await screen.findByRole('switch', { name: 'Force non-interactive init' })
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
-
-    expect(forceSwitch).toHaveAttribute('aria-checked', 'true')
-    expect(forceSwitch.className).toContain('w-11')
+    expect(screen.getByRole('heading', { name: 'Appearance' })).toBeTruthy()
+    expect(screen.queryByTestId('openspec-settings-sections')).toBeNull()
+    expect(tocRenderMock).toHaveBeenCalledWith(
+      expect.objectContaining({ itemIds: ['settings-appearance'] })
+    )
   })
 
   it('renders translation settings and initializes browser support when enabled', async () => {

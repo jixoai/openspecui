@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Host deterministic worktree readiness payloads on a real HTTP listener.
+ * 2. Optionally enforce the inherited Access Gate at that readiness boundary.
+ *
+ * Original request (2026-07-24): "Authenticate worktree readiness with the parent Access Gate."
+ */
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 
@@ -6,10 +13,18 @@ export interface TestHealthServer {
   close: () => Promise<void>
 }
 
-export async function createTestHealthServer(payload: unknown): Promise<TestHealthServer> {
+export async function createTestHealthServer(
+  payload: unknown,
+  options?: { authorizationHeader: string }
+): Promise<TestHealthServer> {
   const server = createServer((request, response) => {
     if (request.url !== '/api/health') {
       response.writeHead(404)
+      response.end()
+      return
+    }
+    if (options && request.headers.authorization !== options.authorizationHeader) {
+      response.writeHead(401)
       response.end()
       return
     }

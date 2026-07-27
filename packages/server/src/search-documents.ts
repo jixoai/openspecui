@@ -1,7 +1,22 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Project Planning-root Specs, Changes, and Archives into search documents.
+ * 2. Preserve compound identity for read-only Referenced Specs.
+ * 3. Apply processed document reads without flattening entity provenance.
+ *
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ */
 import type { OpenSpecAdapter, OpsxEntityReadOptions, OpsxEntityStage } from '@openspecui/core'
-import type { SearchDocument } from '@openspecui/search'
+import {
+  specIdentityKey,
+  specRoutePath,
+  type ReferencedSpecCatalogEntry,
+} from '@openspecui/core/spec-catalog'
+import type { ProjectSearchDocument } from '@openspecui/search'
 import type { DocumentService } from './document-service.js'
 
+/** Resolve stage-specific processed-document options for one searchable entity. */
 export type EntityReadOptionsResolver = (
   stage: OpsxEntityStage,
   id: string
@@ -14,28 +29,45 @@ function joinParts(parts: Array<string | undefined>): string {
     .join('\n\n')
 }
 
+/** Collect the complete search index projection owned by one Planning-root service record. */
 export async function collectSearchDocuments(
   adapter: OpenSpecAdapter,
   documentService?: DocumentService,
-  resolveEntityReadOptions?: EntityReadOptionsResolver
-): Promise<SearchDocument[]> {
-  const docs: SearchDocument[] = []
+  resolveEntityReadOptions?: EntityReadOptionsResolver,
+  referencedSpecs: readonly ReferencedSpecCatalogEntry[] = []
+): Promise<ProjectSearchDocument[]> {
+  const docs: ProjectSearchDocument[] = []
 
   const specs = await adapter.listSpecsWithMeta()
   for (const spec of specs) {
+    const identity = { kind: 'owned' as const, specId: spec.id }
     const raw = documentService
       ? await documentService.readSpecRaw(spec.id, 'search', 'processed')
       : await adapter.readSpecRaw(spec.id)
     if (!raw) continue
 
     docs.push({
-      id: `spec:${spec.id}`,
+      id: `spec:${specIdentityKey(identity)}`,
       kind: 'spec',
+      scope: 'active-root',
       title: spec.name,
-      href: `/specs/${encodeURIComponent(spec.id)}`,
-      path: `openspec/specs/${spec.id}/spec.md`,
+      href: specRoutePath(identity),
+      path: `owned:openspec/specs/${spec.id}/spec.md`,
       content: typeof raw === 'string' ? raw : raw.markdown,
       updatedAt: spec.updatedAt,
+    })
+  }
+
+  for (const spec of referencedSpecs) {
+    docs.push({
+      id: `spec:${specIdentityKey(spec.identity)}`,
+      kind: 'spec',
+      scope: 'referenced-specs',
+      title: spec.name,
+      href: specRoutePath(spec.identity),
+      path: `referenced:${spec.identity.storeId}:specs/${spec.identity.specId}`,
+      content: `Requirement count: ${spec.requirementCount}`,
+      updatedAt: 0,
     })
   }
 
@@ -49,6 +81,7 @@ export async function collectSearchDocuments(
     docs.push({
       id: `change:${change.id}`,
       kind: 'change',
+      scope: 'active-root',
       title: change.name,
       href: `/changes/${encodeURIComponent(change.id)}`,
       path: `openspec/changes/${change.id}`,
@@ -81,6 +114,7 @@ export async function collectSearchDocuments(
     docs.push({
       id: `archive:${archive.id}`,
       kind: 'archive',
+      scope: 'active-root',
       title: archive.name,
       href: `/archive/${encodeURIComponent(archive.id)}`,
       path: `openspec/changes/archive/${archive.id}`,

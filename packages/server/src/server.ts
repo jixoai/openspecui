@@ -1,12 +1,26 @@
 /**
- * OpenSpecUI HTTP/WebSocket server.
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
+ * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
+ * 3. Host Server-local terminal/Root Context notifications, sound, preview-resource, and translation HTTP boundaries.
+ * 4. Host tRPC and PTY WebSocket transports with deterministic teardown.
+ *    PTY planning-root creation and workflow input verify opaque Root generation provenance.
+ * 5. Own the runtime observation environment and external Codex command lease while deferring expensive
+ *    root-scoped projections until a foreground consumer requests them; keep Store-list registry/mutation
+ *    evidence distinct from selector-exact Store-root observation.
  *
- * Provides tRPC endpoints for:
- * - Dashboard data and project status
- * - Spec CRUD operations
- * - Change proposal management
- * - AI-assisted operations (review, translate, suggest)
- * - Realtime file change subscriptions via WebSocket
+ * Original request (2026-07-15): "你先负责后端（内核）的开发。"
+ * Original request (2026-07-17): "Every Planning-root execution surface uses the same operation lifetime owner."
+ * Derived requirement (2026-07-19): Checkpoint 6.11 binds Git operations to backend-owned repository epochs.
+ * Derived requirement (2026-07-20): Environment-global Codex command observation is Server-owned and
+ * released with the runtime environment.
+ * Owner-reported defect (2026-07-21): Pre-created Agent terminals are absent from Compose Send.
+ * Derived requirement (2026-07-22): Checkpoint 6.15 publishes Root Context health only through this Server instance.
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
+ * Owner-reported defect (2026-07-26): App-embedded Project Web must enter its canonical Dashboard
+ * route directly instead of visibly normalizing the backend root after iframe launch.
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  *
  * @module server
  */
@@ -15,18 +29,27 @@ import { serve } from '@hono/node-server'
 import {
   buildBackendHealthPayload,
   CliExecutor,
+  computeEnvUri,
   ConfigManager,
   CustomSoundHashSchema,
+  getExternalCodexCommandObservationRoot,
   GlobalSettingsManager,
-  initWatcherPool,
-  isWatcherPoolInitialized,
   NotificationPublishInputSchema,
   OpenSpecAdapter,
+  OpenSpecDataHomeObserver,
   OpenSpecWatcher,
-  OpsxKernel,
+  ReactiveObservationEnvironment,
+  resolveOpenSpecDataScope,
+  RuntimeInvalidationIndex,
+  RuntimeRootInvalidationRegistry,
+  type AccessGateCredential,
+  type EnvUri,
+  type RootContextState,
 } from '@openspecui/core'
+import { TRPCError } from '@trpc/server'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
-import { applyWSSHandler } from '@trpc/server/adapters/ws'
+import { applyWSSHandler, type CreateWSSContextFnOptions } from '@trpc/server/adapters/ws'
+import { observable, type Observable } from '@trpc/server/observable'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { readFileSync } from 'node:fs'
@@ -47,6 +70,14 @@ function getServerPackageVersion(): string {
 
 const SERVER_PACKAGE_VERSION = getServerPackageVersion()
 
+import {
+  checkWebSocketConnectionParams,
+  createAccessGate,
+  createAccessGateMiddleware,
+  extractBearerCredential,
+  type AccessGate,
+} from './access-gate.js'
+import { createChangesProjectionWorkOwner } from './changes-projection-service.js'
 import { Ct2ModelAssetService } from './ct2-model-asset-service.js'
 import {
   getDefaultLocalCt2ModelCacheDir,
@@ -55,12 +86,13 @@ import {
   getDefaultLocalCt2ModelProfileManifestPath,
 } from './ct2-model-cache-path.js'
 import { CustomSoundService } from './custom-sound-service.js'
-import { DashboardOverviewService } from './dashboard-overview-service.js'
-import { loadDashboardOverview } from './dashboard-overview.js'
-import { DocumentService } from './document-service.js'
-import { buildEntityReadOptions } from './entity-read-options.js'
-import { FilePreviewService } from './file-preview-service.js'
-import { createHookRuntime } from './hook-runtime.js'
+import { createDashboardProjectionWorkOwner } from './dashboard-projection-service.js'
+import {
+  createEnvironmentGlobalProjectionWorkOwner,
+  EnvironmentGlobalProjectionService,
+} from './environment-global-projection-service.js'
+import { GitRepositoryBindingService } from './git-repository-binding-service.js'
+import { LaunchGitRepositoryBindingOwner } from './launch-git-repository-binding.js'
 import { LlamaModelAssetService } from './llama-model-asset-service.js'
 import {
   getDefaultLocalLlamaModelCacheDir,
@@ -76,31 +108,55 @@ import {
   getDefaultLocalModelProfileManifestPath,
 } from './local-model-cache-path.js'
 import { NotificationService } from './notification-service.js'
+import { createPlanningCliProjectionWorkOwner } from './planning-cli-projection-service.js'
+import { PlanningRootServiceManager } from './planning-root-service.js'
 import { findAvailablePort } from './port-utils.js'
 import { ProjectRecoveryService } from './project-recovery-service.js'
+import { createServerProjectionWorkRuntime } from './projection-work/runtime.js'
 import { PtyManager } from './pty-manager.js'
 import { createPtyWebSocketHandler } from './pty-websocket.js'
+import { createRootContextNotificationBridge } from './root-context-notification-bridge.js'
+import {
+  createRootContextProjectionWorkOwner,
+  RootContextProjectionService,
+} from './root-context-projection-service.js'
 import { appRouter, type Context, type GitWorktreeHandoffService } from './router.js'
-import { SearchService } from './search-service.js'
+import {
+  resolveDefaultServerHostIdentity,
+  type ServerHostIdentityProvider,
+} from './server-host-identity.js'
+import { StoreMutationService } from './store-mutation-service.js'
+import { StoreObservationFallbackService } from './store-observation-fallback.js'
+import { StoreObservationService } from './store-observation-service.js'
+import {
+  createStoreProjectionWorkOwner,
+  StoreProjectionService,
+} from './store-projection-service.js'
+import { ToolCommandObservationService } from './tool-command-observation-service.js'
 import { createRuntimeSqliteTranslationCacheAdapter } from './translation-cache-adapter.js'
 import { getDefaultTranslationCacheDatabasePath } from './translation-cache-path.js'
 import { TranslationCacheService } from './translation-cache-service.js'
 import { TranslationEngineService } from './translation-engine-service.js'
 import { createManagedLocalBatchTranslateWorkerExecutor } from './translation-engine-worker.js'
-import { WorkflowInvocationService } from './workflow-invocation-service.js'
 
 function buildEmbeddedUiUrlForPort(port: number): string {
-  return `http://localhost:${port}`
-}
-
-function initializeWatcherPoolInBackground(projectDir: string): void {
-  void initWatcherPool(projectDir).catch((err) => {
-    console.error('Watcher pool initialization failed:', err)
-  })
+  return `http://localhost:${port}/dashboard`
 }
 
 function deferBackgroundTask(task: () => void): void {
   setTimeout(task, 0)
+}
+
+function createRootContextProjectionNotificationSource(
+  service: RootContextProjectionService
+): Observable<RootContextState, unknown> {
+  return observable<RootContextState>((emit) => {
+    const subscription = service.subscribe(() => {
+      const projection = service.read()
+      if (projection.state === 'ready') emit.next(projection.data)
+    })
+    return () => subscription.unsubscribe()
+  })
 }
 
 /**
@@ -115,10 +171,23 @@ export interface ServerConfig {
   enableWatcher?: boolean
   /** CORS origins (defaults to localhost dev servers) */
   corsOrigins?: string[]
+  /**
+   * Optional whole-backend Access Gate credential. When set, every HTTP, tRPC, PTY, file, terminal,
+   * and notification transport requires the matching Bearer credential. Absent by default so the
+   * unguarded dev workflow is unchanged.
+   */
+  accessGate?: AccessGateCredential | null
+  /** Backend host identity provider; injectable for deterministic hosted-environment tests. */
+  hostIdentityProvider?: ServerHostIdentityProvider
   /** Directory containing built preview entry assets */
   previewAssetsDir?: string
   /** Optional worktree handoff provider for runtimes that can spawn sibling instances */
   gitWorktreeHandoff?: GitWorktreeHandoffService
+  /** Test-only typed Root Context source override for asserting Server-local notification ownership. */
+  rootContextNotificationSource?: (
+    planningRootServices: PlanningRootServiceManager,
+    notificationService: NotificationService
+  ) => Observable<RootContextState, unknown>
   /** Optional path overrides for isolated runtimes and tests */
   runtimePaths?: {
     globalSettingsPath?: string
@@ -141,24 +210,99 @@ export interface ServerConfig {
 /**
  * Create an OpenSpecUI HTTP server with optional WebSocket support
  */
-export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
+export function createServer(config: ServerConfig) {
+  // Whole-backend Access Gate. Default loopback; the live listener revises this once bound.
+  const accessGate: AccessGate = createAccessGate({
+    credential: config.accessGate ?? null,
+    loopback: true,
+  })
+  // Opaque runtime-environment identity for the hosted protocol (host identity + effective data home).
+  const dataScope = resolveOpenSpecDataScope()
+  const hostIdentity = (config.hostIdentityProvider ?? resolveDefaultServerHostIdentity)()
+  const envUri: EnvUri = computeEnvUri({ hostIdentity, dataHome: dataScope.path })
   const adapter = new OpenSpecAdapter(config.projectDir)
   const configManager = new ConfigManager(config.projectDir)
   const globalSettingsManager = new GlobalSettingsManager(config.runtimePaths?.globalSettingsPath)
   const cliExecutor = new CliExecutor(configManager, config.projectDir)
-  const kernel = config.kernel
-  const hookRuntime = createHookRuntime(config.projectDir)
-  const documentService = new DocumentService(config.projectDir, adapter, hookRuntime)
-  const filePreviewService = new FilePreviewService(
-    config.projectDir,
-    config.previewAssetsDir ?? join(__dirname, '..', '..', 'web', 'dist')
+  const observationEnvironment = new ReactiveObservationEnvironment()
+  const runtimeInvalidation = new RuntimeInvalidationIndex()
+  // One process-local ledger belongs to this Server, not the Router module. Closing subscriptions never
+  // cancels an already-admitted CLI process.
+  const storeMutationService = new StoreMutationService(() => {
+    runtimeInvalidation.invalidate(['stores', 'context'])
+  })
+  const projectInvalidation = new RuntimeRootInvalidationRegistry(runtimeInvalidation, [
+    'project',
+    'context',
+  ])
+  projectInvalidation.acquireRoot(config.projectDir)
+  const dataHomeObserver = new OpenSpecDataHomeObserver({
+    dataHomePath: dataScope.path,
+    environment: observationEnvironment,
+    invalidation: runtimeInvalidation,
+  })
+  const storeObservation = new StoreObservationService(observationEnvironment, runtimeInvalidation)
+  const storeObservationFallback = new StoreObservationFallbackService({
+    invalidation: runtimeInvalidation,
+    dataHomeObservation: dataHomeObserver,
+    storeObservation,
+    observationEnvironment,
+  })
+  const toolCommandObservation = new ToolCommandObservationService(
+    observationEnvironment,
+    getExternalCodexCommandObservationRoot()
   )
-  const workflowInvocationService = new WorkflowInvocationService({
-    projectDir: config.projectDir,
-    hookRuntime,
-    executeCli: (args) => cliExecutor.execute(args),
+  const codeGitBinding = new LaunchGitRepositoryBindingOwner()
+  const projectionWorkRuntime = createServerProjectionWorkRuntime()
+  const dashboardProjectionWorkOwner = createDashboardProjectionWorkOwner(projectionWorkRuntime)
+  const changesProjectionWorkOwner = createChangesProjectionWorkOwner(projectionWorkRuntime)
+  const storeProjectionWorkOwner = createStoreProjectionWorkOwner(projectionWorkRuntime)
+  const planningCliProjectionWorkOwner = createPlanningCliProjectionWorkOwner(projectionWorkRuntime)
+  const environmentGlobalProjectionService = new EnvironmentGlobalProjectionService({
+    dataScope,
+    cliExecutor,
+    observationEnvironment,
+    workOwner: createEnvironmentGlobalProjectionWorkOwner(projectionWorkRuntime),
+  })
+  const storeProjectionService = new StoreProjectionService({
+    dataScopePath: dataScope.path,
+    cliExecutor,
+    invalidation: runtimeInvalidation,
+    storeObservation,
+    workOwner: storeProjectionWorkOwner,
+  })
+  const planningRootServices = new PlanningRootServiceManager({
+    launchProjectDir: config.projectDir,
+    previewAssetsDir: config.previewAssetsDir ?? join(__dirname, '..', '..', 'web', 'dist'),
+    configManager,
+    cliExecutor,
+    observationEnvironment,
+    projectInvalidation,
+    runtimeInvalidation,
+    storeObservation,
+    codeBinding: codeGitBinding,
+    dashboardProjectionWorkOwner,
+    changesProjectionWorkOwner,
+    planningCliProjectionWorkOwner,
+  })
+  const rootContextProjectionService = new RootContextProjectionService({
+    launchProjectDir: config.projectDir,
+    dataScopePath: dataScope.path,
+    planningRootServices,
+    workOwner: createRootContextProjectionWorkOwner(projectionWorkRuntime),
+  })
+  const gitRepositoryBindings = new GitRepositoryBindingService({
+    launchProjectDir: config.projectDir,
+    planningRootServices,
+    codeBinding: codeGitBinding,
   })
   const notificationService = new NotificationService()
+  const rootContextNotificationBridge = createRootContextNotificationBridge({
+    notificationService,
+    rootContext:
+      config.rootContextNotificationSource?.(planningRootServices, notificationService) ??
+      createRootContextProjectionNotificationSource(rootContextProjectionService),
+  })
   const customSoundService = new CustomSoundService()
   const translationCacheDatabasePath =
     config.runtimePaths?.translationCacheDatabasePath ?? getDefaultTranslationCacheDatabasePath()
@@ -273,26 +417,6 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
   // Create file watcher if enabled
   const watcher =
     config.enableWatcher !== false ? new OpenSpecWatcher(config.projectDir) : undefined
-  const entityReadOptionsContext = { adapter, kernel }
-  const searchService = new SearchService(
-    adapter,
-    watcher,
-    undefined,
-    documentService,
-    (stage, id) => buildEntityReadOptions(entityReadOptionsContext, stage, id)
-  )
-  const dashboardOverviewService = new DashboardOverviewService(
-    (reason) =>
-      loadDashboardOverview(
-        {
-          adapter,
-          configManager,
-          projectDir: config.projectDir,
-        },
-        reason
-      ),
-    watcher
-  )
   const projectRecoveryService = new ProjectRecoveryService({
     projectDir: config.projectDir,
     gitWorktreeHandoff: config.gitWorktreeHandoff,
@@ -311,6 +435,9 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     })
   )
 
+  // Whole-backend Access Gate middleware (HTTP). Pass-through when no gate is configured.
+  app.use('*', createAccessGateMiddleware(accessGate))
+
   // Health check
   app.get('/api/health', (c) => {
     return c.json(
@@ -320,6 +447,12 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         watcherEnabled: !!watcher,
         openspecuiVersion: SERVER_PACKAGE_VERSION,
         embeddedUiUrl: buildEmbeddedUiUrlForPort(config.port ?? 3100),
+        // 1.6 hosted-protocol additions.
+        apiBaseUrl: `http://localhost:${config.port ?? 3100}`,
+        cliVersion: null,
+        envUri,
+        rootSummary: null,
+        accessGateEnabled: accessGate !== null,
       })
     )
   })
@@ -376,7 +509,7 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
     const hash = c.req.param('hash')
     const prefix = `/api/file-preview/${hash}/`
     const requestPath = c.req.path.startsWith(prefix) ? c.req.path.slice(prefix.length) : ''
-    const asset = filePreviewService.readPreviewRequest(hash, requestPath)
+    const asset = planningRootServices.readPreviewRequest(hash, requestPath)
     if (!asset) {
       return c.notFound()
     }
@@ -401,20 +534,23 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
       req: c.req.raw,
       router: appRouter,
       createContext: (): Context => ({
-        adapter,
+        launchProjectAdapter: adapter,
+        planningRootServices,
+        gitRepositoryBindings,
+        runtimeInvalidation,
+        storeObservation,
+        storeProjectionService,
+        rootContextProjectionService,
+        environmentGlobalProjectionService,
+        storeMutationService,
+        toolCommandObservation,
         configManager,
-        documentService,
         cliExecutor,
-        kernel,
-        workflowInvocationService,
-        searchService,
-        dashboardOverviewService,
         projectRecoveryService,
         notificationService,
         customSoundService,
         globalSettingsManager,
         translationCacheService,
-        filePreviewService,
         translationEngineService,
         localModelAssetService,
         localCt2ModelAssetService,
@@ -422,57 +558,88 @@ export function createServer(config: ServerConfig & { kernel: OpsxKernel }) {
         gitWorktreeHandoff: config.gitWorktreeHandoff,
         watcher,
         projectDir: config.projectDir,
+        envUri,
       }),
     })
     return response
   })
 
   // Create context factory for WebSocket connections
-  const createContext = (): Context => ({
-    adapter,
-    configManager,
-    documentService,
-    cliExecutor,
-    kernel,
-    workflowInvocationService,
-    searchService,
-    dashboardOverviewService,
-    projectRecoveryService,
-    notificationService,
-    customSoundService,
-    globalSettingsManager,
-    translationCacheService,
-    filePreviewService,
-    translationEngineService,
-    localModelAssetService,
-    localCt2ModelAssetService,
-    localLlamaModelAssetService,
-    gitWorktreeHandoff: config.gitWorktreeHandoff,
-    watcher,
-    projectDir: config.projectDir,
-  })
+  const createContext = (options?: CreateWSSContextFnOptions): Context => {
+    if (options && accessGate) {
+      const connectionParamsFailure = checkWebSocketConnectionParams(
+        accessGate,
+        options.info.connectionParams
+      )
+      const authorization = options.req.headers.authorization
+      const authorizationHeader = Array.isArray(authorization)
+        ? (authorization[0] ?? null)
+        : (authorization ?? null)
+      const headerOutcome = accessGate.check(extractBearerCredential(authorizationHeader))
+      if (connectionParamsFailure !== null && !headerOutcome.ok) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: connectionParamsFailure })
+      }
+    }
+    return {
+      launchProjectAdapter: adapter,
+      planningRootServices,
+      gitRepositoryBindings,
+      runtimeInvalidation,
+      storeObservation,
+      storeProjectionService,
+      rootContextProjectionService,
+      environmentGlobalProjectionService,
+      storeMutationService,
+      toolCommandObservation,
+      configManager,
+      cliExecutor,
+      projectRecoveryService,
+      notificationService,
+      customSoundService,
+      globalSettingsManager,
+      translationCacheService,
+      translationEngineService,
+      localModelAssetService,
+      localCt2ModelAssetService,
+      localLlamaModelAssetService,
+      gitWorktreeHandoff: config.gitWorktreeHandoff,
+      watcher,
+      projectDir: config.projectDir,
+      envUri,
+    }
+  }
 
   return {
     app,
+    accessGate,
+    envUri,
+    planningRootServices,
+    gitRepositoryBindings,
+    observationEnvironment,
+    runtimeInvalidation,
+    storeMutationService,
+    projectInvalidation,
+    dataHomeObserver,
+    storeObservation,
+    storeProjectionService,
+    rootContextProjectionService,
+    environmentGlobalProjectionService,
+    storeObservationFallback,
+    toolCommandObservation,
     adapter,
     configManager,
-    documentService,
     cliExecutor,
-    kernel,
-    workflowInvocationService,
-    searchService,
-    dashboardOverviewService,
     projectRecoveryService,
     notificationService,
+    rootContextNotificationBridge,
     customSoundService,
     globalSettingsManager,
     translationCacheService,
-    filePreviewService,
     translationEngineService,
     localModelAssetService,
     localCt2ModelAssetService,
     localLlamaModelAssetService,
-    hookRuntime,
+    projectionWorkRuntime,
     watcher,
     createContext,
     port: config.port ?? 3100,
@@ -487,10 +654,6 @@ export async function createWebSocketServer(
   httpServer: { on: (event: string, handler: (...args: unknown[]) => void) => void },
   config: { projectDir: string }
 ) {
-  if (!isWatcherPoolInitialized()) {
-    deferBackgroundTask(() => initializeWatcherPoolInBackground(config.projectDir))
-  }
-
   // tRPC WebSocket server
   const wss = new WebSocketServer({ noServer: true })
 
@@ -506,14 +669,56 @@ export async function createWebSocketServer(
   })
 
   // PTY WebSocket server
-  const ptyManager = new PtyManager(config.projectDir)
+  const ptyManager = new PtyManager()
   const ptyWss = new WebSocketServer({ noServer: true })
-  const ptyHandler = createPtyWebSocketHandler(ptyManager, server.notificationService)
+  const ptyHandler = createPtyWebSocketHandler(ptyManager, server.notificationService, {
+    accessGate: server.accessGate,
+    async withCwdTarget(cwdTarget, task, expectedRootGeneration) {
+      if (cwdTarget === 'launch-project') {
+        if (expectedRootGeneration) {
+          throw new Error('Planning-root generation cannot target the launch project.')
+        }
+        return task({ cwdTarget, cwd: config.projectDir, rootGeneration: null })
+      }
+      return server.planningRootServices.runOperation(({ rootContext, gitBindingToken }) => {
+        if (expectedRootGeneration && expectedRootGeneration !== gitBindingToken) {
+          throw new Error(
+            'Planning root changed before terminal operation. Prepare the workflow again.'
+          )
+        }
+        const planningRoot = rootContext.planningRoot
+        if (!planningRoot) {
+          throw new Error('Planning root cwd is unavailable.')
+        }
+        return task({ cwdTarget, cwd: planningRoot.path, rootGeneration: gitBindingToken })
+      })
+    },
+  })
   ptyWss.on('connection', ptyHandler)
 
   // Handle upgrade requests - route by URL path
   httpServer.on('upgrade', (...args: unknown[]) => {
-    const [request, socket, head] = args as [{ url?: string }, unknown, Buffer]
+    const [request, socket, head] = args as [
+      { url?: string; headers?: Record<string, string | string[] | undefined> },
+      { write: (data: string) => boolean; destroy: () => void },
+      Buffer,
+    ]
+    // Whole-backend Access Gate on the WS upgrade. The Authorization header is honored when present
+    // (app/non-browser clients). Browser WS clients cannot set headers, so tRPC connection params and
+    // the PTY first-message auth handshake remain the authoritative post-upgrade checks below.
+    if (server.accessGate) {
+      const authHeader = request.headers?.['authorization']
+      const headerValue = Array.isArray(authHeader) ? (authHeader[0] ?? null) : (authHeader ?? null)
+      if (headerValue) {
+        const presented = extractBearerCredential(headerValue)
+        const outcome = server.accessGate.check(presented)
+        if (!outcome.ok) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+          socket.destroy()
+          return
+        }
+      }
+    }
     if (request.url?.startsWith('/ws/pty')) {
       ptyWss.handleUpgrade(
         request as Parameters<typeof ptyWss.handleUpgrade>[0],
@@ -526,7 +731,7 @@ export async function createWebSocketServer(
     } else if (request.url?.startsWith('/trpc')) {
       wss.handleUpgrade(
         request as Parameters<typeof wss.handleUpgrade>[0],
-        socket as Parameters<typeof wss.handleUpgrade>[1],
+        socket as Parameters<typeof ptyWss.handleUpgrade>[1],
         head,
         (ws) => {
           wss.emit('connection', ws, request)
@@ -538,21 +743,56 @@ export async function createWebSocketServer(
   // Start legacy file watcher if available
   server.watcher?.start()
 
+  let closePromise: Promise<void> | null = null
+
+  const settleCleanupPhase = async (
+    failures: unknown[],
+    tasks: Array<() => void | Promise<void>>
+  ): Promise<void> => {
+    const results = await Promise.allSettled(tasks.map((task) => Promise.resolve().then(task)))
+    for (const result of results) {
+      if (result.status === 'rejected') failures.push(result.reason)
+    }
+  }
+
   return {
     wss,
     ptyWss,
     ptyManager,
     handler,
     close: () => {
-      handler.broadcastReconnectNotification()
-      ptyManager.closeAll()
-      ptyWss.close()
-      wss.close()
-      server.watcher?.stop()
-      server.searchService.dispose().catch(() => {})
-      server.dashboardOverviewService.dispose()
-      server.projectRecoveryService.dispose()
-      server.translationCacheService.close()
+      closePromise ??= (async () => {
+        const failures: unknown[] = []
+        await settleCleanupPhase(failures, [
+          () => handler.broadcastReconnectNotification(),
+          () => ptyManager.closeAll(),
+          () => ptyWss.close(),
+          () => wss.close(),
+          () => server.watcher?.stop(),
+        ])
+        await settleCleanupPhase(failures, [() => server.storeObservationFallback.dispose()])
+        await settleCleanupPhase(failures, [() => server.storeMutationService.dispose()])
+        await settleCleanupPhase(failures, [() => server.rootContextNotificationBridge.dispose()])
+        await settleCleanupPhase(failures, [() => server.storeProjectionService.dispose()])
+        await settleCleanupPhase(failures, [
+          () => server.environmentGlobalProjectionService.dispose(),
+        ])
+        await settleCleanupPhase(failures, [() => server.planningRootServices.dispose()])
+        await settleCleanupPhase(failures, [() => server.projectionWorkRuntime.clear()])
+        await settleCleanupPhase(failures, [() => server.storeObservation.dispose()])
+        await settleCleanupPhase(failures, [() => server.dataHomeObserver.dispose()])
+        await settleCleanupPhase(failures, [() => server.toolCommandObservation.dispose()])
+        await settleCleanupPhase(failures, [() => server.projectInvalidation.dispose()])
+        await settleCleanupPhase(failures, [() => server.observationEnvironment.dispose()])
+        await settleCleanupPhase(failures, [
+          () => server.projectRecoveryService.dispose(),
+          () => server.translationCacheService.close(),
+        ])
+        if (failures.length > 0) {
+          throw new AggregateError(failures, 'Server runtime teardown failed.')
+        }
+      })()
+      return closePromise
     },
   }
 }
@@ -588,15 +828,22 @@ export async function startServer(
   // Find an available port
   const port = await findAvailablePort(preferredPort)
 
-  // Create kernel (warmup deferred until after server is listening)
-  const configManager = new ConfigManager(config.projectDir)
-  const cliExecutor = new CliExecutor(configManager, config.projectDir)
-  const kernel = new OpsxKernel(config.projectDir, cliExecutor)
-
-  deferBackgroundTask(() => initializeWatcherPoolInBackground(config.projectDir))
-
   // Create the server (HTTP app ready to accept requests)
-  const server = createServer({ ...config, port, kernel })
+  const server = createServer({ ...config, port })
+  server.storeProjectionService.start()
+  server.rootContextNotificationBridge.start()
+  let runtimeClosing = false
+
+  deferBackgroundTask(() => {
+    if (runtimeClosing) return
+    void server.observationEnvironment.acquireRoot(config.projectDir).catch((error: unknown) => {
+      console.error('Launch-project observation failed:', error)
+    })
+    void server.dataHomeObserver.start().catch((error: unknown) => {
+      console.error('OpenSpec data-home observation failed:', error)
+    })
+    server.storeObservationFallback.start()
+  })
 
   // Allow caller to configure app (e.g., add static file middleware)
   if (setupApp) {
@@ -613,35 +860,37 @@ export async function startServer(
   const wsServer = await createWebSocketServer(server, httpServer, {
     projectDir: config.projectDir,
   })
+  let closePromise: Promise<void> | null = null
 
   const url = `http://localhost:${port}`
-
-  // Warmup kernel in background — subscriptions will push data as it arrives
-  deferBackgroundTask(() => {
-    kernel.warmup().catch((err) => {
-      console.error('Kernel warmup failed:', err)
-    })
-    server.searchService.init().catch((err) => {
-      console.error('Search service warmup failed:', err)
-    })
-    server.dashboardOverviewService.init().catch((err) => {
-      console.error('Dashboard overview warmup failed:', err)
-    })
-  })
 
   return {
     url,
     port,
     preferredPort,
-    close: async () => {
-      kernel.dispose()
-      await server.hookRuntime.dispose()
-      await server.createContext().localModelAssetService.close()
-      await server.createContext().localCt2ModelAssetService.close()
-      await server.createContext().localLlamaModelAssetService.close()
-      server.translationCacheService.close()
-      wsServer.close()
-      httpServer.close()
+    close: () => {
+      closePromise ??= (async () => {
+        runtimeClosing = true
+        const context = server.createContext()
+        const modelResults = await Promise.allSettled([
+          Promise.resolve().then(() => context.localModelAssetService.close()),
+          Promise.resolve().then(() => context.localCt2ModelAssetService.close()),
+          Promise.resolve().then(() => context.localLlamaModelAssetService.close()),
+        ])
+        const websocketResults = await Promise.allSettled([
+          Promise.resolve().then(() => wsServer.close()),
+        ])
+        const httpResults = await Promise.allSettled([
+          Promise.resolve().then(() => httpServer.close()),
+        ])
+        const failures = [...modelResults, ...websocketResults, ...httpResults].flatMap((result) =>
+          result.status === 'rejected' ? [result.reason] : []
+        )
+        if (failures.length > 0) {
+          throw new AggregateError(failures, 'Server shutdown failed.')
+        }
+      })()
+      return closePromise
     },
   }
 }

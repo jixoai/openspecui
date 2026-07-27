@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client"]
+  },
+  "include": [
+    "src/components/store-remove-dialog.test.tsx",
+    "src/components/store-mutation-lifecycle.test.tsx",
+    "src/lib/store-action-correlation.test.ts",
+    "src/lib/store-lifecycle-composer.test.ts",
+    "src/lib/use-store-data.test.tsx",
+    "src/routes/connection-context.test.tsx",
+    "../server/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

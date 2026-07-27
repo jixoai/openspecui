@@ -4,6 +4,7 @@ import { ArchiveView } from '../routes/archive-view'
 import { ChangeList } from '../routes/change-list'
 import { ChangeView } from '../routes/change-view'
 import { Config } from '../routes/config'
+import { ContextView } from '../routes/context'
 import { Dashboard } from '../routes/dashboard'
 import { SearchRoute } from '../routes/search'
 import { SettingsStatic } from '../routes/settings-static'
@@ -23,7 +24,16 @@ export function createStaticRouteTree(rootRoute: AnyRootRoute) {
     createRoute({ getParentRoute: () => rootRoute, path: '/dashboard', component: Dashboard }),
     createRoute({ getParentRoute: () => rootRoute, path: '/config', component: Config }),
     createRoute({ getParentRoute: () => rootRoute, path: '/specs', component: SpecList }),
-    createRoute({ getParentRoute: () => rootRoute, path: '/specs/$specId', component: SpecView }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/specs/owned/$specId',
+      component: SpecView,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/specs/referenced/$storeId/$specId',
+      component: SpecView,
+    }),
     createRoute({ getParentRoute: () => rootRoute, path: '/changes', component: ChangeList }),
     createRoute({
       getParentRoute: () => rootRoute,
@@ -36,6 +46,8 @@ export function createStaticRouteTree(rootRoute: AnyRootRoute) {
       path: '/archive/$changeId',
       component: ArchiveView,
     }),
+    // 6.9 Context 视图：静态导航不 404；内容是后端 Context 投影占位。
+    createRoute({ getParentRoute: () => rootRoute, path: '/context', component: ContextView }),
     createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: SettingsStatic }),
   ])
 }

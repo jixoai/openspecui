@@ -1,8 +1,17 @@
+/**
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Build a static OpenSpec project snapshot from its resolved planning artifacts.
+ * 2. Preserve Reference-aware export and publication-redaction policy.
+ * 3. Package and launch the static site with the locally resolved Web distribution.
+ *
+ * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ */
 import {
   CliExecutor,
   ConfigManager,
   DEFAULT_CONFIG,
   OpenSpecAdapter,
+  redactSnapshotForPublication,
   SchemaInfoSchema,
   SchemaResolutionSchema,
   TemplatesSchema,
@@ -15,19 +24,27 @@ import {
   type TemplatesMap,
 } from '@openspecui/core'
 import { parseOpsxSchemaDetail } from '@openspecui/core/opsx-schema-detail'
-import { DocumentService, createHookRuntime } from '@openspecui/server'
+import { createHookRuntime, DocumentService } from '@openspecui/server'
 import { execFile, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import pkg from '../package.json' with { type: 'json' }
+import {
+  hasEffectiveReferences,
+  materializeReferences,
+  resolveOmitPolicy,
+} from './export-references.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const execFileAsync = promisify(execFile)
 
 export type ExportFormat = 'html' | 'json'
+
+/** Direct Reference export policy. Required when effective References exist. */
+export type ExportReferencesPolicy = 'include' | 'omit'
 
 export interface ExportOptions {
   /** Project directory containing openspec/ */
@@ -46,6 +63,17 @@ export interface ExportOptions {
   previewPort?: number
   /** Host for preview server */
   previewHost?: string
+  /**
+   * Direct Reference export policy (Section 7.3). Required when the planning root declares effective
+   * References. `include` materializes direct Reference Specs (complete-or-fail); `omit` records an
+   * explicit omission state without leaking unpublished Store ids or Spec metadata.
+   */
+  references?: ExportReferencesPolicy
+}
+
+export interface GenerateSnapshotOptions {
+  /** Direct Reference export policy; see {@link ExportOptions.references}. */
+  references?: ExportReferencesPolicy
 }
 
 // Re-export ExportSnapshot from core for backwards compatibility
@@ -300,7 +328,10 @@ async function readSnapshotGit(projectDir: string): Promise<ExportSnapshot['git'
  * Generate a complete data snapshot of the OpenSpec project
  * (Kept for backwards compatibility and testing)
  */
-export async function generateSnapshot(projectDir: string): Promise<ExportSnapshot> {
+export async function generateSnapshot(
+  projectDir: string,
+  options: GenerateSnapshotOptions = {}
+): Promise<ExportSnapshot> {
   const adapter = new OpenSpecAdapter(projectDir)
   const configManager = new ConfigManager(projectDir)
   const cliExecutor = new CliExecutor(configManager, projectDir)
@@ -317,11 +348,14 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
   try {
     // Get all specs with parsed content
     const specsMeta = await adapter.listSpecsWithMeta()
-    const specs = await Promise.all(
+    const specs: ExportSnapshot['specs'] = await Promise.all(
       specsMeta.map(async (meta) => {
         const raw = await documentService.readSpecRaw(meta.id, 'export', 'processed')
         const parsed = await documentService.readSpec(meta.id, 'export', 'processed')
         return {
+          identity: { kind: 'owned' as const, specId: meta.id },
+          source: 'owned' as const,
+          readOnly: false as const,
           id: meta.id,
           name: meta.name,
           content: raw?.markdown || '',
@@ -362,9 +396,9 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
           sourceDesign: raw?.design?.sourceMarkdown,
           why: change?.why || '',
           whatChanges: change?.whatChanges || '',
-          parsedTasks: taskProjection.tasks,
+          trackedTaskProgress: taskProjection.trackedTaskProgress,
+          documentChecklistSummary: taskProjection.documentChecklistSummary,
           deltas,
-          progress: taskProjection.progress,
           createdAt: meta.createdAt,
           updatedAt: meta.updatedAt,
         }
@@ -573,7 +607,8 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
           id: meta.id,
           name: meta.name || meta.id,
           entity,
-          progress: meta.progress,
+          trackedTaskProgress: meta.trackedTaskProgress,
+          documentChecklistSummary: meta.documentChecklistSummary,
           createdAt: meta.createdAt,
           updatedAt: meta.updatedAt,
         }
@@ -582,20 +617,63 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
 
     const git = await readSnapshotGit(projectDir)
 
+    // Resolve CLI-selected planning-root provenance and direct Reference policy (Section 7.2-7.7).
+    const contextResult = await cliExecutor.contracts.context()
+    const contextData = contextResult.success ? contextResult.data : null
+    const resolvedRoot =
+      contextData && contextData.root
+        ? {
+            planningRootPath: contextData.root.path,
+            rootSource: contextData.root.source,
+            storeId: contextData.root.store_id ?? null,
+          }
+        : {
+            planningRootPath: null,
+            rootSource: 'nearest' as const,
+            storeId: null,
+          }
+
+    // Determine whether the planning root declares direct References. When it does, a Reference policy
+    // is mandatory; `include` materializes bodies (complete-or-fail), `omit` records provenance only.
+    const referencesActive = await hasEffectiveReferences(cliExecutor.contracts)
+    if (referencesActive && !options.references) {
+      throw new Error(
+        'This project declares effective OpenSpec References. Static export requires an explicit ' +
+          '--references policy: use --references include to materialize direct Reference Specs, or ' +
+          '--references omit to exclude them with an explicit omission state.'
+      )
+    }
+
+    let referencePolicy: ExportSnapshot['meta']['referencePolicy'] = { kind: 'none' }
+    let allSpecs = specs
+    if (referencesActive && options.references === 'include') {
+      const materialized = await materializeReferences(cliExecutor.contracts)
+      referencePolicy = materialized.policy
+      allSpecs = [...specs, ...materialized.referencedSpecs]
+    } else if (referencesActive && options.references === 'omit') {
+      const omit = await resolveOmitPolicy(cliExecutor.contracts)
+      referencePolicy = omit.policy
+    }
+
     const snapshot: ExportSnapshot = {
       meta: {
         timestamp: new Date().toISOString(),
+        observedAt: Date.now(),
         version: pkg.version,
-        projectDir,
+        // Display-safe project label: derive a readable name without retaining an absolute path.
+        // The launch `projectDir` absolute location is intentionally not serialized into the snapshot.
+        projectName: basename(projectDir) || 'project',
+        root: resolvedRoot,
+        referencePolicy,
       },
       dashboard: {
-        specsCount: specs.length,
+        specsCount: allSpecs.length,
         changesCount: changes.filter((c) => c !== null).length,
         archivesCount: archives.length,
       },
       git,
       config: uiConfig,
-      specs,
+      specs: allSpecs,
       changes,
       archives,
       projectMd,
@@ -611,7 +689,9 @@ export async function generateSnapshot(projectDir: string): Promise<ExportSnapsh
       },
     }
 
-    return snapshot
+    // Single publication redaction boundary (Section 7.8): strip absolute paths, host identity, and
+    // gate the Git remote behind the explicit include policy before the snapshot leaves this process.
+    return redactSnapshotForPublication(snapshot)
   } finally {
     await hookRuntime.dispose()
   }
@@ -767,7 +847,7 @@ function getExecCommand(pm: PackageManager, webPkgSpec: string): { cmd: string; 
  * Export as JSON only (data.json)
  */
 async function exportJson(options: ExportOptions): Promise<void> {
-  const { projectDir, outputDir, clean } = options
+  const { projectDir, outputDir, clean, references } = options
 
   if (clean && existsSync(outputDir)) {
     rmSync(outputDir, { recursive: true })
@@ -775,7 +855,7 @@ async function exportJson(options: ExportOptions): Promise<void> {
   mkdirSync(outputDir, { recursive: true })
 
   console.log('Generating data snapshot...')
-  const snapshot = await generateSnapshot(projectDir)
+  const snapshot = await generateSnapshot(projectDir, { references })
   const dataJsonPath = join(outputDir, 'data.json')
   writeFileSync(dataJsonPath, JSON.stringify(snapshot, null, 2))
   console.log(`\nExported to ${dataJsonPath}`)
@@ -788,7 +868,16 @@ async function exportJson(options: ExportOptions): Promise<void> {
  * Export as static HTML site
  */
 async function exportHtml(options: ExportOptions): Promise<void> {
-  const { projectDir, outputDir, basePath = '/', clean, open, previewPort, previewHost } = options
+  const {
+    projectDir,
+    outputDir,
+    basePath = '/',
+    clean,
+    open,
+    previewPort,
+    previewHost,
+    references,
+  } = options
 
   if (clean && existsSync(outputDir)) {
     rmSync(outputDir, { recursive: true })
@@ -797,7 +886,7 @@ async function exportHtml(options: ExportOptions): Promise<void> {
 
   // 1. Generate data.json
   console.log('Generating data snapshot...')
-  const snapshot = await generateSnapshot(projectDir)
+  const snapshot = await generateSnapshot(projectDir, { references })
   const dataJsonPath = join(outputDir, 'data.json')
   writeFileSync(dataJsonPath, JSON.stringify(snapshot, null, 2))
   console.log(`Data snapshot written to ${dataJsonPath}`)

@@ -1,25 +1,31 @@
+/**
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * 1. Map official OPSX workflows to generated skill and command locations.
+ * 2. Project launch-local skills and physically scoped tool command initialization state.
+ * 3. Provide the runtime owner with the same external Codex command root used by command projection.
+ * 4. Bound reactive observation by physical artifact inventories while preserving fresh one-shot reads.
+ *
+ * Original request (2026-07-15): "sync、update、Oh My Pi、Trae 的完整交付链。"
+ */
 import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { clearCache, reactiveExists } from './reactive-fs/index.js'
+import { basename, dirname, join, resolve } from 'node:path'
+import {
+  OPSX_ALL_WORKFLOWS,
+  OPSX_WORKFLOW_TO_SKILL_DIR as TOOL_WORKFLOW_TO_SKILL_DIR,
+  type OpsxWorkflowId,
+} from './opsx-workflows.js'
+import { clearCache, reactiveReadDir } from './reactive-fs/index.js'
 import { AI_TOOLS } from './tool-config.js'
 
-export const TOOL_WORKFLOW_TO_SKILL_DIR = {
-  propose: 'openspec-propose',
-  explore: 'openspec-explore',
-  new: 'openspec-new-change',
-  continue: 'openspec-continue-change',
-  apply: 'openspec-apply-change',
-  ff: 'openspec-ff-change',
-  sync: 'openspec-sync-specs',
-  archive: 'openspec-archive-change',
-  'bulk-archive': 'openspec-bulk-archive-change',
-  verify: 'openspec-verify-change',
-  onboard: 'openspec-onboard',
-} as const
-
-export type ToolWorkflowId = keyof typeof TOOL_WORKFLOW_TO_SKILL_DIR
+export { TOOL_WORKFLOW_TO_SKILL_DIR }
+export type ToolWorkflowId = OpsxWorkflowId
 export type ToolInitDelivery = 'both' | 'skills' | 'commands'
 export type ToolInitStatus = 'uninitialized' | 'partial' | 'initialized'
+
+/** Return the external runtime directory containing official Codex command prompts. */
+export function getExternalCodexCommandObservationRoot(): string {
+  return join(resolveCodexHome(), 'prompts')
+}
 
 export interface ToolInitState {
   toolId: string
@@ -45,7 +51,7 @@ interface ArtifactEntry {
   legacyPaths?: readonly string[]
 }
 
-const ALL_TOOL_WORKFLOWS = Object.keys(TOOL_WORKFLOW_TO_SKILL_DIR) as ToolWorkflowId[]
+const ALL_TOOL_WORKFLOWS = [...OPSX_ALL_WORKFLOWS]
 
 type CommandPathResolver = (projectDir: string, workflow: ToolWorkflowId) => string
 
@@ -153,6 +159,10 @@ const TOOL_COMMAND_PATHS: Record<string, ToolCommandPathConfig> = {
       (projectDir, workflow) => resolve(projectDir, '.opencode', 'command', `opsx-${workflow}.md`),
     ],
   },
+  'oh-my-pi': {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.omp', 'commands', `opsx-${workflow}.md`),
+  },
   pi: {
     primary: (projectDir, workflow) => resolve(projectDir, '.pi', 'prompts', `opsx-${workflow}.md`),
   },
@@ -167,6 +177,10 @@ const TOOL_COMMAND_PATHS: Record<string, ToolCommandPathConfig> = {
   roocode: {
     primary: (projectDir, workflow) =>
       resolve(projectDir, '.roo', 'commands', `opsx-${workflow}.md`),
+  },
+  trae: {
+    primary: (projectDir, workflow) =>
+      resolve(projectDir, '.trae', 'commands', `opsx-${workflow}.md`),
   },
   windsurf: {
     primary: (projectDir, workflow) =>
@@ -229,12 +243,55 @@ function invalidateToolInitCaches(projectDir: string): void {
   }
 }
 
-async function getExistingArtifactPaths(entries: readonly ArtifactEntry[]): Promise<Set<string>> {
-  const paths = entries.flatMap((entry) => [entry.path, ...(entry.legacyPaths ?? [])])
-  const presence = await Promise.all(
-    paths.map(async (path) => ({ path, exists: await reactiveExists(path) }))
+async function readArtifactDirectory(dir: string): Promise<ReadonlySet<string>> {
+  return new Set(await reactiveReadDir(dir, { includeHidden: true }))
+}
+
+async function getExistingSkillPaths(
+  projectDir: string,
+  skillsDir: string,
+  entries: readonly ArtifactEntry[]
+): Promise<Set<string>> {
+  const inventoryRoot = resolve(projectDir, skillsDir, 'skills')
+  const rootEntries = await readArtifactDirectory(inventoryRoot)
+  const presentEntries = entries.filter((entry) => rootEntries.has(basename(dirname(entry.path))))
+  const directoryEntries = await Promise.all(
+    presentEntries.map(async (entry) => ({
+      entry,
+      files: await readArtifactDirectory(dirname(entry.path)),
+    }))
   )
-  return new Set(presence.filter((entry) => entry.exists).map((entry) => entry.path))
+
+  return new Set(
+    directoryEntries
+      .filter(({ entry, files }) => files.has(basename(entry.path)))
+      .map(({ entry }) => entry.path)
+  )
+}
+
+async function getExistingCommandPaths(entries: readonly ArtifactEntry[]): Promise<Set<string>> {
+  const pathsByDirectory = new Map<string, string[]>()
+  for (const entry of entries) {
+    for (const path of [entry.path, ...(entry.legacyPaths ?? [])]) {
+      const directory = dirname(path)
+      const paths = pathsByDirectory.get(directory) ?? []
+      paths.push(path)
+      pathsByDirectory.set(directory, paths)
+    }
+  }
+
+  const directoryEntries = await Promise.all(
+    [...pathsByDirectory].map(async ([directory, paths]) => ({
+      paths,
+      files: await readArtifactDirectory(directory),
+    }))
+  )
+
+  return new Set(
+    directoryEntries.flatMap(({ paths, files }) =>
+      paths.filter((path) => files.has(basename(path)))
+    )
+  )
 }
 
 function hasExistingArtifact(entry: ArtifactEntry, existingPaths: ReadonlySet<string>): boolean {
@@ -289,12 +346,10 @@ function collectLegacyWorkflows(
     .map((entry) => entry.workflow)
 }
 
-export async function getToolInitStates(
+async function projectToolInitStates(
   projectDir: string,
   options: { delivery: ToolInitDelivery; workflows: readonly string[] }
 ): Promise<ToolInitState[]> {
-  invalidateToolInitCaches(projectDir)
-
   const desiredWorkflows = toKnownWorkflows(options.workflows)
   const desiredWorkflowSet = new Set(desiredWorkflows)
   const shouldGenerateSkills = options.delivery !== 'commands'
@@ -304,8 +359,12 @@ export async function getToolInitStates(
     AI_TOOLS.filter((tool) => tool.skillsDir).map(async (tool) => {
       const skillArtifacts = getSkillArtifacts(projectDir, tool.skillsDir!)
       const commandArtifacts = getCommandArtifacts(projectDir, tool.value)
-      const existingSkillPaths = await getExistingArtifactPaths(skillArtifacts)
-      const existingCommandPaths = await getExistingArtifactPaths(commandArtifacts)
+      const existingSkillPaths = await getExistingSkillPaths(
+        projectDir,
+        tool.skillsDir!,
+        skillArtifacts
+      )
+      const existingCommandPaths = await getExistingCommandPaths(commandArtifacts)
 
       const expectedSkillArtifacts = shouldGenerateSkills
         ? skillArtifacts.filter((entry) => desiredWorkflowSet.has(entry.workflow))
@@ -368,4 +427,25 @@ export async function getToolInitStates(
       } satisfies ToolInitState
     })
   )
+}
+
+/** Read a fresh one-shot Project Tool artifact inventory. */
+export async function getToolInitStates(
+  projectDir: string,
+  options: { delivery: ToolInitDelivery; workflows: readonly string[] }
+): Promise<ToolInitState[]> {
+  invalidateToolInitCaches(projectDir)
+  return projectToolInitStates(projectDir, options)
+}
+
+/** Create a retained Tool inventory task that must be executed by one ReactiveContext. */
+export function createToolInitStateProjection(
+  projectDir: string,
+  options: { delivery: ToolInitDelivery; workflows: readonly string[] }
+): () => Promise<ToolInitState[]> {
+  const projectionOptions = {
+    delivery: options.delivery,
+    workflows: [...options.workflows],
+  } satisfies { delivery: ToolInitDelivery; workflows: readonly string[] }
+  return () => projectToolInitStates(projectDir, projectionOptions)
 }

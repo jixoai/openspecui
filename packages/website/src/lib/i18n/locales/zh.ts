@@ -1,3 +1,9 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Provide the canonical Chinese product-site copy.
+ *
+ * Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
+ */
 import type { WebsiteContent } from '$lib/i18n/schema'
 
 export const zh = {
@@ -51,7 +57,7 @@ export const zh = {
     appOffSummary: '启动本地后端，并由当前机器直接提供本地 Web UI。',
     exportLabel: '静态导出',
     exportSummary: '生成可部署的静态快照，用于文档站点或离线审阅。',
-    compatibility: 'OpenSpecUI 4.x 面向 OpenSpec CLI 1.4.x，并兼容 1.3.x 项目。',
+    compatibility: 'OpenSpecUI 6.x 面向 OpenSpec CLI 1.6.x，并将 1.5.x 作为遗留兼容线。',
   },
   modes: {
     title: '选择合适的界面',
@@ -111,11 +117,11 @@ export const zh = {
     onRunWorkflow: {
       name: 'onRunWorkflow',
       purpose: '在不替换 OpenSpec CLI 契约的前提下，包裹一次 OpenSpec 工作流运行。',
-      signature: 'onRunWorkflow(ctx, run): Promise<RunWorkflowResultV1>',
+      signature: 'onRunWorkflow(ctx, run): Promise<RunWorkflowResultV2>',
       when: '适合选择 workflow tools、注入安全环境变量、记录审计输出，或者基于项目策略拦截执行。',
       stableFor: ['工作流编排', '工具选择', '执行审计'],
       example:
-        "import type { OnRunWorkflowHookV1 } from 'openspecui/hooks'\n\nexport const onRunWorkflow: OnRunWorkflowHookV1 = async (ctx, run) => {\n  const result = await run()\n  if (result.kind !== 'agent-prompt') return result\n\n  return {\n    ...result,\n    text: `${result.text}\\n\\nProject policy: include security impact in the final summary.`,\n  }\n}",
+        "import type { OnRunWorkflowHookV2 } from 'openspecui/hooks'\n\nexport const onRunWorkflow: OnRunWorkflowHookV2 = async (ctx, run) => {\n  const result = await run()\n  if (result.kind !== 'agent-prompt') return result\n\n  return {\n    ...result,\n    text: `${result.text}\\n\\nPlanning root: ${ctx.target.planningRoot.path}\\nProject policy: include security impact in the final summary.`,\n  }\n}",
     },
   },
   footer: {

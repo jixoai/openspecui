@@ -1,4 +1,11 @@
-export type OpsxComposeActionId = 'continue' | 'ff' | 'apply' | 'archive'
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Encode change-scoped OPSX compose route state and CLI evidence sources.
+ * 2. Build action-specific fallback prompts without changing workflow identity.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ */
+export type OpsxComposeActionId = 'continue' | 'ff' | 'apply' | 'update' | 'sync' | 'archive'
 
 export interface OpsxComposeInput {
   action: OpsxComposeActionId
@@ -15,7 +22,14 @@ const ACTION_QUERY_KEY = 'action'
 const CHANGE_QUERY_KEY = 'change'
 const ARTIFACT_QUERY_KEY = 'artifact'
 
-const ACTION_SET = new Set<OpsxComposeActionId>(['continue', 'ff', 'apply', 'archive'])
+const ACTION_SET = new Set<OpsxComposeActionId>([
+  'continue',
+  'ff',
+  'apply',
+  'update',
+  'sync',
+  'archive',
+])
 
 export function isOpsxComposeActionId(value: string): value is OpsxComposeActionId {
   return ACTION_SET.has(value as OpsxComposeActionId)
@@ -64,6 +78,8 @@ export function resolveOpsxPromptSource(input: OpsxComposeInput): OpsxPromptSour
         args: ['instructions', 'apply', '--change', input.changeId],
       }
     case 'archive':
+    case 'update':
+    case 'sync':
       return {
         command: 'openspec',
         args: ['status', '--change', input.changeId],
@@ -81,6 +97,10 @@ export function buildOpsxComposeFallbackPrompt(input: OpsxComposeInput): string 
       return `Fast-forward artifact ${input.artifactId ?? '<missing-artifact>'} for change ${input.changeId}.`
     case 'apply':
       return `Apply change ${input.changeId} based on current completed artifacts.`
+    case 'update':
+      return `Update the existing planning artifacts for change ${input.changeId}.`
+    case 'sync':
+      return `Sync specs for change ${input.changeId}.`
     case 'archive':
       return `Archive change ${input.changeId} after verifying completion and risks.`
   }

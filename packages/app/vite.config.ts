@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Configure the hosted App, PWA assets, and development shell endpoints.
+ * 2. Resolve browser-safe workspace source entries, including the Store mutation protocol.
+ *
+ * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
+ */
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { createHash } from 'node:crypto'
@@ -66,6 +73,11 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
       '@openspecui/core': resolve(__dirname, '../core/src'),
       '@openspecui/core/hosted-app': resolve(__dirname, '../core/src/hosted-app.ts'),
+      '@openspecui/core/store-types': resolve(__dirname, '../core/src/store-types.ts'),
+      '@openspecui/core/store-mutation-protocol': resolve(
+        __dirname,
+        '../core/src/store-mutation-protocol.ts'
+      ),
       '@openspecui/web-src': resolve(__dirname, '../web/src'),
     },
   },

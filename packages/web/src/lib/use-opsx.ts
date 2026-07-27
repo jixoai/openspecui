@@ -1,3 +1,16 @@
+/**
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Adapt typed OPSX lifecycle Push/Pull, file-native schema, and artifact projections to React.
+ * 2. Let routes defer expensive aggregate Status and Config subscriptions until primary content is renderable.
+ * 3. Keep browser cache identity equal to the typed CLI selector across prefetch and route remounts.
+ * 4. Keep optional Change, Schema, and artifact selectors from issuing unrelated projection work.
+ *
+ * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ *
+ * Compromise: these OPSX hooks remain in one physical module because routes already consume this public
+ * adapter surface; splitting every entity hook during the loading fix would create unrelated import churn.
+ */
 import type {
   ApplyInstructions,
   ArtifactInstructions,
@@ -8,9 +21,11 @@ import type {
   SchemaResolution,
   TemplatesMap,
 } from '@openspecui/core'
+import type { PlanningCliProjectionData } from '@openspecui/core/planning-cli-projection'
 import { useCallback } from 'react'
 import * as StaticProvider from './static-data-provider'
 import { trpcClient } from './trpc'
+import { useCliProjectionSubscription } from './use-cli-projection'
 import { useSubscription, type SubscriptionState } from './use-subscription'
 
 export interface OpsxTemplateContent {
@@ -25,14 +40,12 @@ export type OpsxTemplateContentMap = Record<string, OpsxTemplateContent>
 interface OpsxStatusInput {
   change?: string
   schema?: string
-  refreshKey?: number
 }
 
 interface OpsxInstructionsInput {
   change?: string
   artifact?: string
   schema?: string
-  refreshKey?: number
 }
 
 export interface OpsxConfigBundle {
@@ -43,124 +56,105 @@ export interface OpsxConfigBundle {
 
 export function getOpsxStatusSubscriptionCacheKey(input: OpsxStatusInput): string | undefined {
   if (!input.change) return undefined
-  return `opsx.subscribeStatus:${input.change}:${input.schema}:${input.refreshKey}`
+  return `opsx.subscribeStatus:${input.change}:${input.schema}`
 }
 
 export function useOpsxStatusSubscription(
   input: OpsxStatusInput
 ): SubscriptionState<ChangeStatus | null> {
-  const subscribe = useCallback(
-    (callbacks: { onData: (data: ChangeStatus | null) => void; onError: (err: Error) => void }) => {
-      if (!input.change) {
-        callbacks.onData(null)
-        return { unsubscribe: () => {} }
-      }
-      return trpcClient.opsx.subscribeStatus.subscribe(
-        { change: input.change, schema: input.schema },
-        {
-          onData: callbacks.onData,
-          onError: callbacks.onError,
-        }
-      )
+  const state = useCliProjectionSubscription<ChangeStatus | null>({
+    selector: {
+      kind: 'opsx-status',
+      change: input.change ?? '__inactive__',
+      schema: input.schema,
     },
-    [input.change, input.schema, input.refreshKey]
-  )
-
-  return useSubscription<ChangeStatus | null>(
-    subscribe,
-    () => StaticProvider.getOpsxStatus(input.change, input.schema),
-    [input.change, input.schema, input.refreshKey],
-    getOpsxStatusSubscriptionCacheKey(input)
-  )
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'opsx-status') {
+        throw new Error(`Expected opsx-status projection, received ${data.kind}.`)
+      }
+      return data.value
+    },
+    staticLoader: () => StaticProvider.getOpsxStatus(input.change, input.schema),
+    cacheKey: getOpsxStatusSubscriptionCacheKey(input) ?? 'opsx.status:inactive',
+    enabled: Boolean(input.change),
+  })
+  return input.change ? state : { ...state, data: null, isLoading: false }
 }
 
 export function useOpsxInstructionsSubscription(
   input: OpsxInstructionsInput
 ): SubscriptionState<ArtifactInstructions | null> {
-  const subscribe = useCallback(
-    (callbacks: {
-      onData: (data: ArtifactInstructions | null) => void
-      onError: (err: Error) => void
-    }) => {
-      if (!input.change || !input.artifact) {
-        callbacks.onData(null)
-        return { unsubscribe: () => {} }
-      }
-      return trpcClient.opsx.subscribeInstructions.subscribe(
-        { change: input.change, artifact: input.artifact, schema: input.schema },
-        {
-          onData: callbacks.onData,
-          onError: callbacks.onError,
-        }
-      )
+  const enabled = Boolean(input.change && input.artifact)
+  const state = useCliProjectionSubscription<ArtifactInstructions | null>({
+    selector: {
+      kind: 'opsx-instructions',
+      change: input.change ?? '__inactive__',
+      artifact: input.artifact ?? '__inactive__',
+      schema: input.schema,
     },
-    [input.change, input.artifact, input.schema, input.refreshKey]
-  )
-
-  return useSubscription<ArtifactInstructions | null>(
-    subscribe,
-    async () => null,
-    [input.change, input.artifact, input.schema, input.refreshKey],
-    input.change && input.artifact
-      ? `opsx.subscribeInstructions:${input.change}:${input.artifact}:${input.schema}:${input.refreshKey}`
-      : undefined
-  )
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'opsx-instructions') {
+        throw new Error(`Expected opsx-instructions projection, received ${data.kind}.`)
+      }
+      return data.value
+    },
+    staticLoader: async () => null,
+    cacheKey: enabled
+      ? `opsx.subscribeInstructions:${input.change}:${input.artifact}:${input.schema}`
+      : 'opsx.instructions:inactive',
+    enabled,
+  })
+  return enabled ? state : { ...state, data: null, isLoading: false }
 }
 
-export function useOpsxConfigBundleSubscription(): SubscriptionState<OpsxConfigBundle> {
-  const subscribe = useCallback(
-    (callbacks: { onData: (data: OpsxConfigBundle) => void; onError: (err: Error) => void }) =>
-      trpcClient.opsx.subscribeConfigBundle.subscribe(undefined, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
-      }),
-    []
-  )
-
-  return useSubscription<OpsxConfigBundle>(
-    subscribe,
-    StaticProvider.getOpsxConfigBundle,
-    [],
-    'opsx.subscribeConfigBundle'
-  )
+/** Subscribe to the aggregate config projection only after its owning route admits the work. */
+export function useOpsxConfigBundleSubscription(
+  enabled = true
+): SubscriptionState<OpsxConfigBundle> {
+  return useCliProjectionSubscription<OpsxConfigBundle>({
+    selector: { kind: 'opsx-config-bundle' },
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'opsx-config-bundle') {
+        throw new Error(`Expected opsx-config-bundle projection, received ${data.kind}.`)
+      }
+      return data.value
+    },
+    staticLoader: StaticProvider.getOpsxConfigBundle,
+    cacheKey: 'opsx.subscribeConfigBundle',
+    enabled,
+  })
 }
 
-export function useOpsxStatusListSubscription(): SubscriptionState<ChangeStatus[]> {
-  const subscribe = useCallback(
-    (callbacks: { onData: (data: ChangeStatus[]) => void; onError: (err: Error) => void }) =>
-      trpcClient.opsx.subscribeStatusList.subscribe(undefined, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
-      }),
-    []
-  )
-
-  return useSubscription<ChangeStatus[]>(
-    subscribe,
-    StaticProvider.getOpsxStatusList,
-    [],
-    'opsx.subscribeStatusList'
-  )
+/** Subscribe to all Change statuses only after the route's primary projection is renderable. */
+export function useOpsxStatusListSubscription(enabled = true): SubscriptionState<ChangeStatus[]> {
+  return useCliProjectionSubscription<ChangeStatus[]>({
+    selector: { kind: 'opsx-status-list' },
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'opsx-status-list') {
+        throw new Error(`Expected opsx-status-list projection, received ${data.kind}.`)
+      }
+      return data.value
+    },
+    staticLoader: StaticProvider.getOpsxStatusList,
+    cacheKey: 'opsx.subscribeStatusList',
+    enabled,
+  })
 }
 
 export function useOpsxTemplatesSubscription(
   schema?: string
 ): SubscriptionState<TemplatesMap | null> {
-  const subscribe = useCallback(
-    (callbacks: { onData: (data: TemplatesMap) => void; onError: (err: Error) => void }) =>
-      trpcClient.opsx.subscribeTemplates.subscribe(schema ? { schema } : undefined, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
-      }),
-    [schema]
-  )
-
-  return useSubscription<TemplatesMap | null>(
-    subscribe,
-    () => StaticProvider.getOpsxTemplates(schema),
-    [schema],
-    `opsx.subscribeTemplates:${schema ?? ''}`
-  )
+  return useCliProjectionSubscription<TemplatesMap | null>({
+    selector: { kind: 'opsx-templates', schema },
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'opsx-templates') {
+        throw new Error(`Expected opsx-templates projection, received ${data.kind}.`)
+      }
+      return data.value
+    },
+    staticLoader: () => StaticProvider.getOpsxTemplates(schema),
+    cacheKey: `opsx.subscribeTemplates:${schema ?? ''}`,
+  })
 }
 
 export function useOpsxSchemaYamlSubscription(name?: string): SubscriptionState<string | null> {
@@ -221,126 +215,78 @@ export function useOpsxTemplateContentSubscription(
   schema?: string,
   artifactId?: string
 ): SubscriptionState<OpsxTemplateContent | null> {
-  const subscribe = useCallback(
-    (callbacks: {
-      onData: (data: OpsxTemplateContent | null) => void
-      onError: (err: Error) => void
-    }) => {
-      if (!schema || !artifactId) {
-        callbacks.onData(null)
-        return { unsubscribe: () => {} }
+  const enabled = Boolean(schema && artifactId)
+  const state = useCliProjectionSubscription<OpsxTemplateContent | null>({
+    selector: { kind: 'opsx-template-contents', schema },
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'opsx-template-contents') {
+        throw new Error(`Expected opsx-template-contents projection, received ${data.kind}.`)
       }
-      return trpcClient.opsx.subscribeTemplateContent.subscribe(
-        { schema, artifactId },
-        {
-          onData: callbacks.onData,
-          onError: callbacks.onError,
-        }
-      )
+      return artifactId ? (data.value[artifactId] ?? null) : null
     },
-    [schema, artifactId]
-  )
-
-  return useSubscription<OpsxTemplateContent | null>(
-    subscribe,
-    () => StaticProvider.getOpsxTemplateContent(schema, artifactId),
-    [schema, artifactId],
-    schema && artifactId ? `opsx.subscribeTemplateContent:${schema}:${artifactId}` : undefined
-  )
+    staticLoader: () => StaticProvider.getOpsxTemplateContent(schema, artifactId),
+    cacheKey: enabled
+      ? `opsx.subscribeTemplateContent:${schema}:${artifactId}`
+      : 'opsx.template-content:inactive',
+    enabled,
+  })
+  return enabled ? state : { ...state, data: null, isLoading: false }
 }
 
 export function useOpsxTemplateContentsSubscription(
   schema?: string
 ): SubscriptionState<OpsxTemplateContentMap | null> {
-  const subscribe = useCallback(
-    (callbacks: {
-      onData: (data: OpsxTemplateContentMap | null) => void
-      onError: (err: Error) => void
-    }) =>
-      trpcClient.opsx.subscribeTemplateContents.subscribe(schema ? { schema } : undefined, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
-      }),
-    [schema]
-  )
-
-  return useSubscription<OpsxTemplateContentMap | null>(
-    subscribe,
-    () => StaticProvider.getOpsxTemplateContents(schema),
-    [schema],
-    `opsx.subscribeTemplateContents:${schema ?? ''}`
-  )
+  return useCliProjectionSubscription<OpsxTemplateContentMap | null>({
+    selector: { kind: 'opsx-template-contents', schema },
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'opsx-template-contents') {
+        throw new Error(`Expected opsx-template-contents projection, received ${data.kind}.`)
+      }
+      return data.value
+    },
+    staticLoader: () => StaticProvider.getOpsxTemplateContents(schema),
+    cacheKey: `opsx.subscribeTemplateContents:${schema ?? ''}`,
+  })
 }
 
 export function useOpsxApplyInstructionsSubscription(input: {
   change?: string
   schema?: string
-  refreshKey?: number
 }): SubscriptionState<ApplyInstructions | null> {
-  const subscribe = useCallback(
-    (callbacks: {
-      onData: (data: ApplyInstructions | null) => void
-      onError: (err: Error) => void
-    }) => {
-      if (!input.change) {
-        callbacks.onData(null)
-        return { unsubscribe: () => {} }
-      }
-      return trpcClient.opsx.subscribeApplyInstructions.subscribe(
-        { change: input.change, schema: input.schema },
-        {
-          onData: callbacks.onData,
-          onError: callbacks.onError,
-        }
-      )
+  const enabled = Boolean(input.change)
+  const state = useCliProjectionSubscription<ApplyInstructions | null>({
+    selector: {
+      kind: 'opsx-apply-instructions',
+      change: input.change ?? '__inactive__',
+      schema: input.schema,
     },
-    [input.change, input.schema, input.refreshKey]
-  )
-
-  return useSubscription<ApplyInstructions | null>(
-    subscribe,
-    async () => null,
-    [input.change, input.schema, input.refreshKey],
-    input.change
-      ? `opsx.subscribeApplyInstructions:${input.change}:${input.schema}:${input.refreshKey}`
-      : undefined
-  )
-}
-
-export function useOpsxProjectConfigSubscription(): SubscriptionState<string | null> {
-  const subscribe = useCallback(
-    (callbacks: { onData: (data: string | null) => void; onError: (err: Error) => void }) =>
-      trpcClient.opsx.subscribeProjectConfig.subscribe(undefined, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
-      }),
-    []
-  )
-
-  return useSubscription<string | null>(
-    subscribe,
-    StaticProvider.getOpsxProjectConfig,
-    [],
-    'opsx.subscribeProjectConfig'
-  )
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'opsx-apply-instructions') {
+        throw new Error(`Expected opsx-apply-instructions projection, received ${data.kind}.`)
+      }
+      return data.value
+    },
+    staticLoader: async () => null,
+    cacheKey: enabled
+      ? `opsx.subscribeApplyInstructions:${input.change}:${input.schema}`
+      : 'opsx.apply-instructions:inactive',
+    enabled,
+  })
+  return enabled ? state : { ...state, data: null, isLoading: false }
 }
 
 export function useOpsxChangeListSubscription(): SubscriptionState<string[]> {
-  const subscribe = useCallback(
-    (callbacks: { onData: (data: string[]) => void; onError: (err: Error) => void }) =>
-      trpcClient.opsx.subscribeChanges.subscribe(undefined, {
-        onData: callbacks.onData,
-        onError: callbacks.onError,
-      }),
-    []
-  )
-
-  return useSubscription<string[]>(
-    subscribe,
-    StaticProvider.getOpsxChangeList,
-    [],
-    'opsx.subscribeChanges'
-  )
+  return useCliProjectionSubscription<string[]>({
+    selector: { kind: 'opsx-change-list' },
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'opsx-change-list') {
+        throw new Error(`Expected opsx-change-list projection, received ${data.kind}.`)
+      }
+      return data.value
+    },
+    staticLoader: StaticProvider.getOpsxChangeList,
+    cacheKey: 'opsx.changeList',
+  })
 }
 
 export function useOpsxArtifactOutputSubscription(

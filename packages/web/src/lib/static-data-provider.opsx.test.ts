@@ -1,4 +1,8 @@
-import type { ExportSnapshot } from '@openspecui/core'
+import {
+  createDocumentChecklistSummary,
+  createTrackedTaskProgress,
+  type ExportSnapshot,
+} from '@openspecui/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const staticState = vi.hoisted(() => ({
@@ -9,6 +13,10 @@ vi.mock('./static-mode', () => ({
   getBasePath: () => '/',
   getInitialData: () => staticState.snapshot,
 }))
+
+function documentChecklistSummary() {
+  return createDocumentChecklistSummary([])
+}
 
 function createSnapshot(): ExportSnapshot {
   return {
@@ -32,14 +40,21 @@ function createSnapshot(): ExportSnapshot {
         design: '# Design',
         why: 'why',
         whatChanges: 'what',
-        parsedTasks: [],
         deltas: [
           {
             capability: 'auth',
             content: '# Delta',
           },
         ],
-        progress: { total: 1, completed: 0 },
+        trackedTaskProgress: createTrackedTaskProgress([
+          {
+            id: 'task-1',
+            text: 'task',
+            completed: false,
+            location: { filePath: 'tasks.md', taskIndex: 1 },
+          },
+        ]),
+        documentChecklistSummary: documentChecklistSummary(),
         createdAt: 1,
         updatedAt: 1,
       },
@@ -215,6 +230,8 @@ describe('static-data-provider opsx adapters', () => {
             ],
             diagnostics: [],
           },
+          trackedTaskProgress: createTrackedTaskProgress([]),
+          documentChecklistSummary: documentChecklistSummary(),
           createdAt: 1,
           updatedAt: 1,
         },

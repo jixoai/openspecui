@@ -1,7 +1,23 @@
+/**
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Compose ownership-specific Config sections with routed Schema tabs.
+ * 2. Orchestrate Schema discovery, inspection, creation, and file editing.
+ * 3. Preserve Schema source-specific read-only behavior and shared Root action gating.
+ * 4. Keep static/live tab selection on one route contract.
+ * 5. Represent independent Schema catalog and selected-file projections without false empty conclusions.
+ *
+ * Original request (2026-07-15): "sync、update 的完整交付链。"
+ * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
+ * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
+ * Original request (2026-07-18): "Schema and Template mutations must use useRootActionState."
+ * Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading。"
+ */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
-import { CliTerminal } from '@/components/cli-terminal'
 import { CodeEditor } from '@/components/code-editor'
+import { ActiveRootConfigSection } from '@/components/config/active-root-config-section'
+import { EnvironmentGlobalConfigSection } from '@/components/config/environment-global-config-section'
+import { ProjectBindingSection } from '@/components/config/project-binding-section'
 import {
   ContextMenu,
   ContextMenuTargeter,
@@ -16,88 +32,42 @@ import {
   type FileExplorerEntry,
 } from '@/components/file-explorer'
 import { MarkdownViewer } from '@/components/markdown-viewer'
+import { RootActionNotice } from '@/components/root-action-notice'
 import { useViewportConstrainedHeight } from '@/components/scroll-spy'
 import { Select, type SelectOption } from '@/components/select'
-import { Switch } from '@/components/switch'
 import { Tabs, type Tab } from '@/components/tabs'
-import { navController } from '@/lib/nav-controller'
 import { isStaticMode } from '@/lib/static-mode'
-import { useTerminalContext } from '@/lib/terminal-context'
-import { queryClient, trpc, trpcClient } from '@/lib/trpc'
-import { useCliRunner, type CliRunnerLine } from '@/lib/use-cli-runner'
+import { trpcClient } from '@/lib/trpc'
 import {
   useOpsxConfigBundleSubscription,
-  useOpsxProjectConfigSubscription,
   useOpsxSchemaFilesSubscription,
   useOpsxTemplateContentsSubscription,
   useOpsxTemplatesSubscription,
 } from '@/lib/use-opsx'
-import { vtNavController } from '@/lib/view-transitions/navigation'
+import { useRootActionState } from '@/lib/use-root-action-state'
 import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import {
-  Check,
-  Edit2,
   EllipsisVertical,
   FilePlus,
   FileText,
   FolderPlus,
   Info,
   Layers,
-  Loader2,
+  Link2,
   Plus,
-  RefreshCw,
   Save,
   SlidersHorizontal,
-  TerminalSquare,
   Trash2,
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { parse as parseYaml } from 'yaml'
 
-type ConfigTab = 'project-config' | 'global-config' | `schema:${string}`
+type ConfigTab = 'project-binding' | 'active-root' | 'environment-global' | `schema:${string}`
 type SchemaMode = 'read' | 'preview' | 'edit'
 type SchemaCreateMode = 'init' | 'fork'
-type ProfileEditMode = 'both' | 'delivery' | 'workflows'
-type DeliveryMode = 'both' | 'skills' | 'commands'
-type GlobalConfigTab = 'preview' | 'editor' | 'profile'
-
-const DELIVERY_MODE_OPTIONS: SelectOption<DeliveryMode>[] = [
-  { value: 'both', label: 'both' },
-  { value: 'skills', label: 'skills' },
-  { value: 'commands', label: 'commands' },
-]
-
-const DEFAULT_CONFIG_TEMPLATE = `schema: spec-driven\n\ncontext: |\n  \n\nrules:\n  proposal:\n    - \n`
-const CORE_WORKFLOWS = ['propose', 'explore', 'apply', 'archive'] as const
-const ALL_WORKFLOWS = [
-  'propose',
-  'explore',
-  'new',
-  'continue',
-  'apply',
-  'ff',
-  'sync',
-  'archive',
-  'bulk-archive',
-  'verify',
-  'onboard',
-] as const
-const WORKFLOW_LABELS: Record<string, string> = {
-  propose: 'Propose change',
-  explore: 'Explore ideas',
-  new: 'New change',
-  continue: 'Continue change',
-  apply: 'Apply tasks',
-  ff: 'Fast-forward',
-  sync: 'Sync specs',
-  archive: 'Archive change',
-  'bulk-archive': 'Bulk archive',
-  verify: 'Verify change',
-  onboard: 'Onboard',
-}
 
 const PATH_KEYS = new Set(['generates', 'template', 'path', 'outputPath'])
 const TAG_KEYS = new Set(['requires', 'tags'])
@@ -133,28 +103,6 @@ function getParentPath(path: string): string | null {
   return parent.length > 0 ? parent : null
 }
 
-function isRecordObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function normalizeWorkflowList(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  return value.filter((item): item is string => typeof item === 'string' && item.length > 0)
-}
-
-function isCoreWorkflowSelection(workflows: readonly string[]): boolean {
-  return (
-    workflows.length === CORE_WORKFLOWS.length &&
-    CORE_WORKFLOWS.every((workflow) => workflows.includes(workflow))
-  )
-}
-
-function createRunnerLineId() {
-  return typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2)
-}
-
 function useTabPanelViewportHeight() {
   const [target, setTarget] = useState<HTMLDivElement | null>(null)
   const height = useViewportConstrainedHeight({
@@ -168,58 +116,11 @@ function useTabPanelViewportHeight() {
   }
 }
 
-function JsonStructuredValue({ value }: { value: unknown }) {
-  if (value === null) {
-    return <span className="text-muted-foreground font-mono text-xs">null</span>
-  }
-  if (typeof value === 'string') {
-    return <code className="bg-muted rounded px-1.5 py-0.5 text-xs">{value}</code>
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return <span className="font-mono text-xs">{String(value)}</span>
-  }
-  if (Array.isArray(value)) {
-    if (value.length === 0) {
-      return <span className="text-muted-foreground text-xs">[]</span>
-    }
-    return (
-      <div className="space-y-1">
-        {value.map((item, index) => (
-          <div key={`json-array-${index}`} className="border-border/60 rounded-md border px-2 py-1">
-            <div className="text-muted-foreground mb-1 font-mono text-[10px]">[{index}]</div>
-            <JsonStructuredValue value={item} />
-          </div>
-        ))}
-      </div>
-    )
-  }
-  if (isRecordObject(value)) {
-    const entries = Object.entries(value)
-    if (entries.length === 0) {
-      return <span className="text-muted-foreground text-xs">{'{}'}</span>
-    }
-    return (
-      <div className="space-y-1.5">
-        {entries.map(([key, item]) => (
-          <div key={`json-object-${key}`} className="border-border/60 rounded-md border px-2 py-1">
-            <div className="mb-1 font-mono text-[10px] font-semibold">{key}</div>
-            <JsonStructuredValue value={item} />
-          </div>
-        ))}
-      </div>
-    )
-  }
-  return <span className="font-mono text-xs">{String(value)}</span>
-}
-
+/** Render configuration ownership and the read-only/editable Schema workspace for one project. */
 export function Config() {
   const isStatic = isStaticMode()
   const { viewportHeight: schemaViewportHeight, setViewportNode: setSchemaViewportNode } =
     useTabPanelViewportHeight()
-  const {
-    viewportHeight: projectConfigViewportHeight,
-    setViewportNode: setProjectConfigViewportNode,
-  } = useTabPanelViewportHeight()
   const [schemaMode, setSchemaMode] = useState<SchemaMode>('read')
   const [schemaActionError, setSchemaActionError] = useState<string | null>(null)
   const [schemaEntryError, setSchemaEntryError] = useState<string | null>(null)
@@ -240,18 +141,24 @@ export function Config() {
   const [newSchemaName, setNewSchemaName] = useState('')
   const [newSchemaMode, setNewSchemaMode] = useState<SchemaCreateMode>('init')
   const [newSchemaSource, setNewSchemaSource] = useState('spec-driven')
+  const rootAction = useRootActionState()
+  const rootActionRef = useRef(rootAction)
+  rootActionRef.current = rootAction
 
-  const { data: configYaml, isLoading: configLoading } = useOpsxProjectConfigSubscription()
   const {
     data: configBundle,
     isLoading: schemasLoading,
     error: schemasError,
   } = useOpsxConfigBundleSubscription()
   const schemas = configBundle?.schemas
+  const schemaCatalogInitialLoading =
+    schemas === undefined && schemasLoading && schemasError === null
+  const hasCurrentEmptySchemaCatalog = schemas?.length === 0 && schemasError === null
   const configTabIds = useMemo<ConfigTab[]>(
     () => [
-      'project-config',
-      'global-config',
+      'project-binding',
+      'active-root',
+      'environment-global',
       ...(schemas?.map((schema) => `schema:${schema.name}` as const) ?? []),
     ],
     [schemas]
@@ -264,7 +171,7 @@ export function Config() {
   } = useRoutedCarouselTabs<ConfigTab>({
     queryKey: 'configTab',
     tabs: configTabIds.map((id) => ({ id })),
-    initialTab: 'project-config',
+    initialTab: isStatic ? 'active-root' : 'project-binding',
     allowUnknownSelection: true,
   })
   const activeSchemaName = activeTab.startsWith('schema:')
@@ -280,69 +187,30 @@ export function Config() {
   const schemaResolution = selectedSchema
     ? (configBundle?.schemaResolutions[selectedSchema] ?? null)
     : null
-  const { data: schemaFiles, error: schemaFilesError } =
-    useOpsxSchemaFilesSubscription(selectedSchema)
+  const {
+    data: schemaFiles,
+    isLoading: schemaFilesLoading,
+    error: schemaFilesError,
+  } = useOpsxSchemaFilesSubscription(selectedSchema)
   const { data: templates } = useOpsxTemplatesSubscription(selectedSchema)
   const { data: templateContents } = useOpsxTemplateContentsSubscription(selectedSchema)
-
-  const [isConfigEditing, setIsConfigEditing] = useState(false)
-  const [configDraft, setConfigDraft] = useState('')
-  const [configDirty, setConfigDirty] = useState(false)
-  const [autoUpdateAfterProfileChange, setAutoUpdateAfterProfileChange] = useState(true)
-  const [profileEditMode, setProfileEditMode] = useState<ProfileEditMode>('both')
-  const [profileDelivery, setProfileDelivery] = useState<DeliveryMode>('both')
-  const [profileWorkflows, setProfileWorkflows] = useState<string[]>([...CORE_WORKFLOWS])
-  const [globalConfigTab, setGlobalConfigTab] = useState<GlobalConfigTab>('preview')
-  const [globalConfigDraft, setGlobalConfigDraft] = useState('{}')
-  const [globalConfigDraftDirty, setGlobalConfigDraftDirty] = useState(false)
-  const [globalConfigError, setGlobalConfigError] = useState<string | null>(null)
-  const [isRefreshingGlobalConfig, setIsRefreshingGlobalConfig] = useState(false)
-  const [shouldScrollRunner, setShouldScrollRunner] = useState(false)
-  const runnerOutputRef = useRef<HTMLDivElement | null>(null)
-  const [pendingCommandKind, setPendingCommandKind] = useState<'apply' | 'update' | null>(null)
-  const [isExecutingPendingCommand, setIsExecutingPendingCommand] = useState(false)
-  const [applyRunnerLines, setApplyRunnerLines] = useState<CliRunnerLine[]>([])
-
-  const { createDedicatedSession } = useTerminalContext()
-
-  const configRunner = useCliRunner()
-
-  const {
-    lines: configRunnerLines,
-    status: configRunnerStatus,
-    commands: configRunnerCommands,
-    reset: resetConfigRunner,
-  } = configRunner
-
-  const {
-    data: opsxProfileState,
-    isLoading: isLoadingOpsxProfileState,
-    refetch: refetchOpsxProfileState,
-  } = useQuery({
-    ...trpc.cli.getProfileState.queryOptions(),
-    enabled: !isStatic,
-  })
-  const {
-    data: globalConfigData,
-    isLoading: isLoadingGlobalConfig,
-    error: globalConfigQueryError,
-    refetch: refetchGlobalConfig,
-  } = useQuery({
-    ...trpc.cli.getGlobalConfig.queryOptions(),
-    enabled: !isStatic,
-  })
-  const { data: globalConfigPathData, refetch: refetchGlobalConfigPath } = useQuery({
-    ...trpc.cli.getGlobalConfigPath.queryOptions(),
-    enabled: !isStatic,
-  })
 
   const [selectedSchemaPath, setSelectedSchemaPath] = useState<string | null>(null)
   const [fileDrafts, setFileDrafts] = useState<Record<string, string>>({})
   const [dirtyFiles, setDirtyFiles] = useState<Record<string, boolean>>({})
 
   const schemaCanEdit =
-    !isStatic && schemaResolution?.source !== undefined && schemaResolution.source !== 'package'
+    !isStatic &&
+    !rootAction.disabled &&
+    schemaResolution?.source !== undefined &&
+    schemaResolution.source !== 'package'
   const canManageEntries = schemaCanEdit && !isStatic
+  const requireRootActionReady = useCallback(() => {
+    const currentRootAction = rootActionRef.current
+    if (currentRootAction.disabled) {
+      throw new Error(currentRootAction.message ?? 'Planning root is unavailable.')
+    }
+  }, [])
 
   useEffect(() => {
     if (!schemas || schemas.length === 0) return
@@ -350,41 +218,8 @@ export function Config() {
     const name = activeTab.slice('schema:'.length)
     if (schemas.some((schema) => schema.name === name)) return
     const fallback = schemas[0]?.name
-    setActiveTab(fallback ? `schema:${fallback}` : 'project-config')
-  }, [activeTab, schemas])
-
-  useEffect(() => {
-    if (isConfigEditing) return
-    setConfigDraft(configYaml ?? '')
-    setConfigDirty(false)
-  }, [configYaml, isConfigEditing])
-
-  useEffect(() => {
-    if (!isRecordObject(globalConfigData)) return
-    const nextDelivery = globalConfigData.delivery
-    setProfileDelivery(
-      nextDelivery === 'skills' || nextDelivery === 'commands' || nextDelivery === 'both'
-        ? nextDelivery
-        : 'both'
-    )
-    setProfileWorkflows(normalizeWorkflowList(globalConfigData.workflows))
-  }, [globalConfigData])
-
-  useEffect(() => {
-    if (!isRecordObject(globalConfigData)) return
-    if (globalConfigDraftDirty) return
-    setGlobalConfigDraft(JSON.stringify(globalConfigData, null, 2))
-  }, [globalConfigData, globalConfigDraftDirty])
-
-  useEffect(() => {
-    if (!shouldScrollRunner) return
-    if (configRunnerStatus !== 'running' && configRunnerLines.length === 0) return
-    const raf = window.requestAnimationFrame(() => {
-      runnerOutputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    })
-    setShouldScrollRunner(false)
-    return () => window.cancelAnimationFrame(raf)
-  }, [configRunnerLines.length, configRunnerStatus, shouldScrollRunner])
+    setActiveTab(fallback ? `schema:${fallback}` : isStatic ? 'active-root' : 'project-binding')
+  }, [activeTab, isStatic, schemas])
 
   useEffect(() => {
     if (schemaMode === 'edit' && !schemaCanEdit) {
@@ -421,6 +256,10 @@ export function Config() {
   }, [schemaFiles, selectedSchemaPath])
 
   const schemaEntries = useMemo(() => (schemaFiles ?? []) as FileExplorerEntry[], [schemaFiles])
+  const schemaFilesInitialLoading =
+    schemaFiles === undefined && schemaFilesLoading && schemaFilesError === null
+  const shouldRenderSchemaFileExplorer =
+    !schemaFilesInitialLoading && (!schemaFilesError || schemaEntries.length > 0)
 
   const activeSchemaFile = useMemo(() => {
     if (!schemaEntries.length || !selectedSchemaPath) return null
@@ -543,40 +382,9 @@ export function Config() {
   }, [schemaResolution])
   const schemaRootEntry = useMemo<FileExplorerEntry>(() => ({ path: '/', type: 'directory' }), [])
 
-  const saveConfigMutation = useMutation({
-    mutationFn: async () => {
-      await trpcClient.opsx.writeProjectConfig.mutate({ content: configDraft })
-    },
-    onSuccess: () => {
-      setIsConfigEditing(false)
-      setConfigDirty(false)
-    },
-  })
-  const saveGlobalConfigMutation = useMutation({
-    mutationFn: async (config: Record<string, unknown>) => {
-      await trpcClient.cli.setGlobalConfig.mutate({ config })
-    },
-    onSuccess: async () => {
-      setGlobalConfigDraftDirty(false)
-      setGlobalConfigError(null)
-      await Promise.allSettled([
-        queryClient.invalidateQueries(trpc.cli.getGlobalConfig.queryFilter()),
-        queryClient.invalidateQueries(trpc.cli.getProfileState.queryFilter()),
-        queryClient.invalidateQueries(trpc.cli.getGlobalConfigPath.queryFilter()),
-      ])
-      await Promise.allSettled([
-        refetchGlobalConfig(),
-        refetchOpsxProfileState(),
-        refetchGlobalConfigPath(),
-      ])
-    },
-    onError: (error) => {
-      setGlobalConfigError(error instanceof Error ? error.message : String(error))
-    },
-  })
-
   const saveSchemaFileMutation = useMutation({
     mutationFn: async (payload: { path: string; content: string }) => {
+      requireRootActionReady()
       if (!selectedSchema) return
       await trpcClient.opsx.writeSchemaFile.mutate({
         schema: selectedSchema,
@@ -595,6 +403,7 @@ export function Config() {
 
   const createSchemaFileMutation = useMutation({
     mutationFn: async (payload: { path: string; content: string }) => {
+      requireRootActionReady()
       if (!selectedSchema) return
       await trpcClient.opsx.createSchemaFile.mutate({
         schema: selectedSchema,
@@ -615,6 +424,7 @@ export function Config() {
 
   const createSchemaDirectoryMutation = useMutation({
     mutationFn: async (payload: { path: string }) => {
+      requireRootActionReady()
       if (!selectedSchema) return
       await trpcClient.opsx.createSchemaDirectory.mutate({
         schema: selectedSchema,
@@ -633,6 +443,7 @@ export function Config() {
 
   const deleteSchemaEntryMutation = useMutation({
     mutationFn: async (payload: { path: string }) => {
+      requireRootActionReady()
       if (!selectedSchema) return
       await trpcClient.opsx.deleteSchemaEntry.mutate({
         schema: selectedSchema,
@@ -660,8 +471,18 @@ export function Config() {
   })
 
   const createSchemaMutation = useMutation({
-    mutationFn: async (args: string[]) => {
-      return trpcClient.cli.execute.mutate({ args })
+    mutationFn: async (
+      input: { mode: 'init'; name: string } | { mode: 'fork'; source: string; name: string }
+    ) => {
+      requireRootActionReady()
+      const result =
+        input.mode === 'init'
+          ? await trpcClient.opsx.initSchema.mutate({ name: input.name })
+          : await trpcClient.opsx.forkSchema.mutate({ source: input.source, name: input.name })
+      if (!result.success) {
+        throw new Error(result.stderr || `Schema ${input.mode} failed.`)
+      }
+      return result
     },
     onSuccess: () => {
       setSchemaActionError(null)
@@ -673,6 +494,7 @@ export function Config() {
 
   const deleteSchemaMutation = useMutation({
     mutationFn: async () => {
+      requireRootActionReady()
       if (!selectedSchema) return
       await trpcClient.opsx.deleteSchema.mutate({ name: selectedSchema })
     },
@@ -683,18 +505,6 @@ export function Config() {
       setSchemaActionError(error instanceof Error ? error.message : String(error))
     },
   })
-
-  const handleConfigEdit = useCallback(() => {
-    setConfigDraft(configYaml ?? DEFAULT_CONFIG_TEMPLATE)
-    setConfigDirty(!configYaml)
-    setIsConfigEditing(true)
-  }, [configYaml])
-
-  const handleConfigCancel = useCallback(() => {
-    setConfigDraft(configYaml ?? '')
-    setConfigDirty(false)
-    setIsConfigEditing(false)
-  }, [configYaml])
 
   const handleSchemaModeChange = useCallback(
     (mode: SchemaMode) => {
@@ -723,10 +533,10 @@ export function Config() {
   }, [activeSchemaFile])
 
   const handleFileSave = useCallback(() => {
-    if (!activeSchemaFile) return
+    if (!activeSchemaFile || !schemaCanEdit) return
     const content = activeSchemaDraft ?? activeSchemaFile.content ?? ''
     saveSchemaFileMutation.mutate({ path: activeSchemaFile.path, content })
-  }, [activeSchemaDraft, activeSchemaFile, saveSchemaFileMutation])
+  }, [activeSchemaDraft, activeSchemaFile, saveSchemaFileMutation, schemaCanEdit])
 
   const normalizeEntryPath = useCallback((parent: string | null, name: string) => {
     const trimmed = name.trim().replace(/^\/+/, '')
@@ -747,6 +557,7 @@ export function Config() {
   )
 
   const handleConfirmCreateEntry = useCallback(() => {
+    if (!canManageEntries) return
     const trimmed = createEntryName.trim()
     if (!trimmed) {
       setSchemaEntryError('Name is required.')
@@ -773,6 +584,7 @@ export function Config() {
     createSchemaDirectoryMutation,
     createSchemaFileMutation,
     normalizeEntryPath,
+    canManageEntries,
   ])
 
   const handleOpenDeleteEntry = useCallback((entry: FileExplorerEntry) => {
@@ -782,9 +594,9 @@ export function Config() {
   }, [])
 
   const handleConfirmDeleteEntry = useCallback(() => {
-    if (!activeEntry) return
+    if (!activeEntry || !canManageEntries) return
     deleteSchemaEntryMutation.mutate({ path: activeEntry.path })
-  }, [activeEntry, deleteSchemaEntryMutation])
+  }, [activeEntry, canManageEntries, deleteSchemaEntryMutation])
 
   const handleOpenEntryInfo = useCallback((entry: FileExplorerEntry) => {
     setActiveEntry(entry)
@@ -848,13 +660,13 @@ export function Config() {
   }, [schemaEditorWrap])
 
   const handleAddSchema = useCallback(() => {
-    if (isStatic) return
+    if (!schemaCanEdit) return
     setSchemaActionError(null)
     setNewSchemaName('')
     setNewSchemaMode('init')
     setNewSchemaSource(selectedSchema ?? 'spec-driven')
     setIsAddSchemaOpen(true)
-  }, [isStatic, selectedSchema])
+  }, [schemaCanEdit, selectedSchema])
 
   const handleDeleteSchema = useCallback(() => {
     if (!selectedSchema || !schemaCanEdit) return
@@ -863,187 +675,36 @@ export function Config() {
   }, [schemaCanEdit, selectedSchema])
 
   const handleConfirmAddSchema = useCallback(() => {
+    if (!schemaCanEdit) return
     const normalizedName = newSchemaName.trim()
     if (!normalizedName) {
       setSchemaActionError('Schema name is required.')
       return
     }
-    const args: string[] =
+    const input =
       newSchemaMode === 'fork'
-        ? ['schema', 'fork', newSchemaSource.trim() || 'spec-driven', normalizedName]
-        : ['schema', 'init', normalizedName]
-    createSchemaMutation.mutate(args, {
+        ? {
+            mode: 'fork' as const,
+            source: newSchemaSource.trim() || 'spec-driven',
+            name: normalizedName,
+          }
+        : { mode: 'init' as const, name: normalizedName }
+    createSchemaMutation.mutate(input, {
       onSuccess: () => {
         setIsAddSchemaOpen(false)
         setActiveTab(`schema:${normalizedName}`)
       },
     })
-  }, [createSchemaMutation, newSchemaMode, newSchemaName, newSchemaSource])
+  }, [createSchemaMutation, newSchemaMode, newSchemaName, newSchemaSource, schemaCanEdit])
 
   const handleConfirmDeleteSchema = useCallback(() => {
+    if (!schemaCanEdit) return
     deleteSchemaMutation.mutate(undefined, {
       onSuccess: () => {
         setIsDeleteSchemaOpen(false)
       },
     })
-  }, [deleteSchemaMutation])
-
-  const runConfigCommands = useCallback(
-    (commands: Array<{ command: string; args: string[] }>) => {
-      if (isStatic) return
-      setShouldScrollRunner(true)
-      configRunnerCommands.replaceAll(commands)
-      void configRunnerCommands.runAll()
-    },
-    [configRunnerCommands, isStatic]
-  )
-
-  const handleRefreshGlobalConfig = useCallback(async () => {
-    if (isStatic) return
-    setIsRefreshingGlobalConfig(true)
-    try {
-      await Promise.allSettled([
-        queryClient.invalidateQueries(trpc.cli.getGlobalConfig.queryFilter()),
-        queryClient.invalidateQueries(trpc.cli.getGlobalConfigPath.queryFilter()),
-        queryClient.invalidateQueries(trpc.cli.getProfileState.queryFilter()),
-      ])
-      await Promise.allSettled([
-        refetchGlobalConfig(),
-        refetchGlobalConfigPath(),
-        refetchOpsxProfileState(),
-      ])
-    } finally {
-      setIsRefreshingGlobalConfig(false)
-    }
-  }, [isStatic, refetchGlobalConfig, refetchGlobalConfigPath, refetchOpsxProfileState])
-
-  const handleLaunchInteractiveProfile = useCallback(() => {
-    createDedicatedSession('openspec', ['config', 'profile'])
-    const terminalArea = navController.getAreaForPath('/terminal')
-    void vtNavController.push(terminalArea, '/terminal', null)
-  }, [createDedicatedSession])
-
-  const executeApplyProfile = useCallback(async () => {
-    if (!isRecordObject(globalConfigData)) return
-    const nextConfig = JSON.parse(JSON.stringify(globalConfigData)) as Record<string, unknown>
-
-    if (profileEditMode === 'both' || profileEditMode === 'delivery') {
-      nextConfig.delivery = profileDelivery
-    }
-    if (profileEditMode === 'both' || profileEditMode === 'workflows') {
-      nextConfig.workflows = [...profileWorkflows]
-      nextConfig.profile = isCoreWorkflowSelection(profileWorkflows) ? 'core' : 'custom'
-    }
-
-    setGlobalConfigError(null)
-    setApplyRunnerLines((previous) => [
-      ...previous,
-      {
-        id: createRunnerLineId(),
-        kind: 'ascii',
-        text: 'Applying profile settings to global config...',
-      },
-    ])
-    try {
-      await saveGlobalConfigMutation.mutateAsync(nextConfig)
-      setApplyRunnerLines((previous) => [
-        ...previous,
-        {
-          id: createRunnerLineId(),
-          kind: 'ascii',
-          text: 'Profile settings applied successfully.',
-          tone: 'success',
-        },
-      ])
-      if (autoUpdateAfterProfileChange) {
-        setApplyRunnerLines((previous) => [
-          ...previous,
-          {
-            id: createRunnerLineId(),
-            kind: 'ascii',
-            text: 'Starting openspec update...',
-          },
-        ])
-        runConfigCommands([{ command: 'openspec', args: ['update'] }])
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setApplyRunnerLines((previous) => [
-        ...previous,
-        {
-          id: createRunnerLineId(),
-          kind: 'ascii',
-          text: `Apply failed: ${message}`,
-          tone: 'error',
-        },
-      ])
-      throw error
-    }
-  }, [
-    autoUpdateAfterProfileChange,
-    globalConfigData,
-    profileDelivery,
-    profileEditMode,
-    profileWorkflows,
-    runConfigCommands,
-    saveGlobalConfigMutation,
-  ])
-
-  const handleApplyProfile = useCallback(() => {
-    setGlobalConfigError(null)
-    resetConfigRunner()
-    setApplyRunnerLines([])
-    setPendingCommandKind('apply')
-  }, [resetConfigRunner])
-
-  const handleRunUpdate = useCallback(() => {
-    resetConfigRunner()
-    setApplyRunnerLines([])
-    setPendingCommandKind('update')
-  }, [resetConfigRunner])
-
-  const handleConfirmPendingCommand = useCallback(async () => {
-    if (!pendingCommandKind) return
-    setIsExecutingPendingCommand(true)
-    setShouldScrollRunner(true)
-    try {
-      if (pendingCommandKind === 'apply') {
-        await executeApplyProfile()
-      } else {
-        runConfigCommands([{ command: 'openspec', args: ['update'] }])
-      }
-    } catch {
-      // errors are already surfaced via mutation state and terminal lines
-    } finally {
-      setIsExecutingPendingCommand(false)
-    }
-  }, [executeApplyProfile, pendingCommandKind, runConfigCommands])
-
-  const handleSaveGlobalConfigEditor = useCallback(() => {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(globalConfigDraft)
-    } catch (error) {
-      setGlobalConfigError(error instanceof Error ? error.message : String(error))
-      return
-    }
-    if (!isRecordObject(parsed)) {
-      setGlobalConfigError('Global config must be a JSON object.')
-      return
-    }
-    setGlobalConfigError(null)
-    saveGlobalConfigMutation.mutate(parsed, {
-      onSuccess: async () => {
-        setGlobalConfigTab('preview')
-        await handleRefreshGlobalConfig()
-      },
-    })
-  }, [globalConfigDraft, handleRefreshGlobalConfig, saveGlobalConfigMutation])
-
-  useEffect(() => {
-    if (configRunnerStatus !== 'success') return
-    void handleRefreshGlobalConfig()
-  }, [configRunnerStatus, handleRefreshGlobalConfig])
+  }, [deleteSchemaMutation, schemaCanEdit])
 
   const renderFieldValue = useCallback((key: string, value: unknown) => {
     if (value === null || value === undefined) {
@@ -1109,67 +770,6 @@ export function Config() {
     return <span>{String(value)}</span>
   }, [])
 
-  const globalConfigOtherFields = useMemo(() => {
-    if (!isRecordObject(globalConfigData)) return {}
-    const entries = Object.entries(globalConfigData).filter(
-      ([key]) => !['profile', 'delivery', 'workflows', 'featureFlags', 'telemetry'].includes(key)
-    )
-    return Object.fromEntries(entries)
-  }, [globalConfigData])
-
-  const selectedWorkflowSet = useMemo(() => new Set(profileWorkflows), [profileWorkflows])
-  const activeWorkflowSet = useMemo(() => {
-    if (!isRecordObject(globalConfigData)) return new Set<string>()
-    return new Set(normalizeWorkflowList(globalConfigData.workflows))
-  }, [globalConfigData])
-  const selectedWorkflowList = useMemo(
-    () => ALL_WORKFLOWS.filter((workflow) => selectedWorkflowSet.has(workflow)),
-    [selectedWorkflowSet]
-  )
-  const unselectedWorkflowList = useMemo(
-    () => ALL_WORKFLOWS.filter((workflow) => !selectedWorkflowSet.has(workflow)),
-    [selectedWorkflowSet]
-  )
-  const profileRequiresWorkflowSelection =
-    profileEditMode === 'both' || profileEditMode === 'workflows'
-  const profileDeliverySaved =
-    profileEditMode === 'workflows' ||
-    (isRecordObject(globalConfigData) && globalConfigData.delivery === profileDelivery)
-  const profileWorkflowsSaved =
-    profileEditMode === 'delivery' ||
-    (selectedWorkflowList.length === activeWorkflowSet.size &&
-      selectedWorkflowList.every((workflow) => activeWorkflowSet.has(workflow)))
-  const profileApplySaved = profileDeliverySaved && profileWorkflowsSaved
-  const canApplyProfile =
-    isRecordObject(globalConfigData) &&
-    !saveGlobalConfigMutation.isPending &&
-    (!profileRequiresWorkflowSelection || profileWorkflows.length > 0)
-  const pendingCommandLines = useMemo(() => {
-    if (pendingCommandKind === 'update') {
-      return ['openspec update']
-    }
-    if (pendingCommandKind === 'apply') {
-      const lines = ['apply profile settings to global config']
-      if (autoUpdateAfterProfileChange) lines.push('openspec update')
-      return lines
-    }
-    return []
-  }, [autoUpdateAfterProfileChange, pendingCommandKind])
-  const pendingCommandOutputLines = useMemo(
-    () =>
-      pendingCommandKind === 'apply'
-        ? [...applyRunnerLines, ...configRunnerLines]
-        : configRunnerLines,
-    [applyRunnerLines, configRunnerLines, pendingCommandKind]
-  )
-  const isPendingCommandRunning = isExecutingPendingCommand || configRunnerStatus === 'running'
-  const pendingCommandTitle = pendingCommandKind === 'apply' ? 'Apply profile' : 'Run update'
-  const pendingCommandActionLabel = pendingCommandKind === 'apply' ? 'Apply profile' : 'Run command'
-  const handleClosePendingCommandDialog = useCallback(() => {
-    if (isPendingCommandRunning) return
-    setPendingCommandKind(null)
-  }, [isPendingCommandRunning])
-
   const schemaTabContent = (
     <section
       data-tab-scroll-root="true"
@@ -1190,7 +790,7 @@ export function Config() {
             <button
               type="button"
               onClick={handleAddSchema}
-              disabled={isStatic || createSchemaMutation.isPending}
+              disabled={!schemaCanEdit || createSchemaMutation.isPending}
               className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -1208,25 +808,15 @@ export function Config() {
           </div>
         </div>
 
+        {!isStatic && rootAction.disabled ? <RootActionNotice state={rootAction} /> : null}
+
         {schemaActionError && <div className="text-destructive text-xs">{schemaActionError}</div>}
         {schemaEntryError && <div className="text-destructive text-xs">{schemaEntryError}</div>}
-        {schemasError && (
-          <div className="text-destructive text-sm">
-            Failed to load schemas: {schemasError.message}
-          </div>
-        )}
-
         <div
           ref={setSchemaViewportNode}
           className="flex min-h-0 flex-col"
           style={schemaViewportHeight != null ? { height: `${schemaViewportHeight}px` } : undefined}
         >
-          {schemasLoading && (!schemas || schemas.length === 0) && (
-            <div className="text-muted-foreground mb-3 text-sm">Loading schemas…</div>
-          )}
-          {schemas && schemas.length === 0 && (
-            <div className="text-muted-foreground mb-3 text-sm">No schemas available.</div>
-          )}
           {selectedSchemaInfo ? (
             schemaMode === 'preview' ? (
               <MarkdownViewer
@@ -1465,180 +1055,186 @@ export function Config() {
                 className="flex min-h-0 flex-1 flex-col gap-4"
               >
                 {schemaFilesError && (
-                  <div className="text-destructive text-xs">
+                  <div role="alert" className="text-destructive text-xs">
                     Failed to load schema files: {schemaFilesError.message}
                   </div>
                 )}
-                <div className="min-h-0 flex-1">
-                  <FileExplorer
-                    entries={schemaEntries}
-                    selectedPath={selectedSchemaPath}
-                    onSelect={setSelectedSchemaPath}
-                    breadcrumbRoot={schemaRootLabel}
-                    headerLabel={
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="uppercase tracking-wide">Files</span>
-                        <span
-                          className="text-muted-foreground/80 truncate text-[10px] normal-case"
-                          title={schemaRootLabel}
-                        >
-                          {schemaRootLabel}
-                        </span>
-                      </span>
-                    }
-                    headerActions={
-                      headerMenuItems.length > 0 ? (
-                        <ContextMenuTargeter>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              setFileMenuAnchor(null)
-                              setViewMenuAnchor(null)
-                              setHeaderMenuAnchor({
-                                type: 'target',
-                                element: event.currentTarget,
-                                placement: 'bottom-end',
-                              })
-                            }}
-                            className="hover:bg-muted rounded-md p-1"
-                            aria-label="Schema menu"
+                {schemaFilesInitialLoading ? (
+                  <div role="status" className="text-muted-foreground text-sm">
+                    Loading schema files...
+                  </div>
+                ) : shouldRenderSchemaFileExplorer ? (
+                  <div className="min-h-0 flex-1">
+                    <FileExplorer
+                      entries={schemaEntries}
+                      selectedPath={selectedSchemaPath}
+                      onSelect={setSelectedSchemaPath}
+                      breadcrumbRoot={schemaRootLabel}
+                      headerLabel={
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="uppercase tracking-wide">Files</span>
+                          <span
+                            className="text-muted-foreground/80 truncate text-[10px] normal-case"
+                            title={schemaRootLabel}
                           >
-                            <EllipsisVertical className="h-4 w-4" />
-                          </button>
-                        </ContextMenuTargeter>
-                      ) : undefined
-                    }
-                    entryActions={(entry) => {
-                      const propertiesAction = {
-                        id: 'properties',
-                        label: 'Properties',
-                        icon: <Info className="h-3.5 w-3.5" />,
-                        onSelect: () => handleOpenEntryInfo(entry),
+                            {schemaRootLabel}
+                          </span>
+                        </span>
                       }
-
-                      if (schemaMode !== 'edit' || !canManageEntries) {
-                        return [propertiesAction]
+                      headerActions={
+                        headerMenuItems.length > 0 ? (
+                          <ContextMenuTargeter>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                setFileMenuAnchor(null)
+                                setViewMenuAnchor(null)
+                                setHeaderMenuAnchor({
+                                  type: 'target',
+                                  element: event.currentTarget,
+                                  placement: 'bottom-end',
+                                })
+                              }}
+                              className="hover:bg-muted rounded-md p-1"
+                              aria-label="Schema menu"
+                            >
+                              <EllipsisVertical className="h-4 w-4" />
+                            </button>
+                          </ContextMenuTargeter>
+                        ) : undefined
                       }
+                      entryActions={(entry) => {
+                        const propertiesAction = {
+                          id: 'properties',
+                          label: 'Properties',
+                          icon: <Info className="h-3.5 w-3.5" />,
+                          onSelect: () => handleOpenEntryInfo(entry),
+                        }
 
-                      const parent =
-                        entry.type === 'directory' ? entry.path : getParentPath(entry.path)
-                      const isDirectory = entry.type === 'directory'
-                      return [
-                        {
-                          id: 'new-file',
-                          label: isDirectory ? 'New file inside' : 'New sibling file',
-                          icon: <FilePlus className="h-3.5 w-3.5" />,
-                          onSelect: () => handleOpenCreateEntry('file', parent),
-                        },
-                        {
-                          id: 'new-folder',
-                          label: isDirectory ? 'New folder inside' : 'New sibling folder',
-                          icon: <FolderPlus className="h-3.5 w-3.5" />,
-                          onSelect: () => handleOpenCreateEntry('directory', parent),
-                        },
-                        propertiesAction,
-                        {
-                          id: 'delete',
-                          label: 'Delete',
-                          icon: <Trash2 className="h-3.5 w-3.5" />,
-                          tone: 'destructive',
-                          onSelect: () => handleOpenDeleteEntry(entry),
-                        },
-                      ]
-                    }}
-                    emptyState={<span>No files found for this schema.</span>}
-                    renderEditor={(activeFile) =>
-                      activeFile ? (
-                        <div className="flex min-h-0 flex-1 flex-col">
-                          {schemaMode === 'edit' && (
-                            <div className="border-border/50 flex items-center justify-between border-b px-3 py-2 text-xs">
-                              <div className="flex items-center gap-2">
-                                <ContextMenuTargeter>
+                        if (schemaMode !== 'edit' || !canManageEntries) {
+                          return [propertiesAction]
+                        }
+
+                        const parent =
+                          entry.type === 'directory' ? entry.path : getParentPath(entry.path)
+                        const isDirectory = entry.type === 'directory'
+                        return [
+                          {
+                            id: 'new-file',
+                            label: isDirectory ? 'New file inside' : 'New sibling file',
+                            icon: <FilePlus className="h-3.5 w-3.5" />,
+                            onSelect: () => handleOpenCreateEntry('file', parent),
+                          },
+                          {
+                            id: 'new-folder',
+                            label: isDirectory ? 'New folder inside' : 'New sibling folder',
+                            icon: <FolderPlus className="h-3.5 w-3.5" />,
+                            onSelect: () => handleOpenCreateEntry('directory', parent),
+                          },
+                          propertiesAction,
+                          {
+                            id: 'delete',
+                            label: 'Delete',
+                            icon: <Trash2 className="h-3.5 w-3.5" />,
+                            tone: 'destructive',
+                            onSelect: () => handleOpenDeleteEntry(entry),
+                          },
+                        ]
+                      }}
+                      emptyState={<span>No files found for this schema.</span>}
+                      renderEditor={(activeFile) =>
+                        activeFile ? (
+                          <div className="flex min-h-0 flex-1 flex-col">
+                            {schemaMode === 'edit' && (
+                              <div className="border-border/50 flex items-center justify-between border-b px-3 py-2 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <ContextMenuTargeter>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        setHeaderMenuAnchor(null)
+                                        setViewMenuAnchor(null)
+                                        setFileMenuAnchor({
+                                          type: 'target',
+                                          element: event.currentTarget,
+                                          placement: 'bottom-start',
+                                        })
+                                      }}
+                                      className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                                    >
+                                      File
+                                    </button>
+                                  </ContextMenuTargeter>
+                                  <ContextMenuTargeter>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        setHeaderMenuAnchor(null)
+                                        setFileMenuAnchor(null)
+                                        setViewMenuAnchor({
+                                          type: 'target',
+                                          element: event.currentTarget,
+                                          placement: 'bottom-start',
+                                        })
+                                      }}
+                                      className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                                    >
+                                      View
+                                    </button>
+                                  </ContextMenuTargeter>
+                                </div>
+                                <div className="flex items-center gap-2">
                                   <button
                                     type="button"
-                                    onClick={(event) => {
-                                      setHeaderMenuAnchor(null)
-                                      setViewMenuAnchor(null)
-                                      setFileMenuAnchor({
-                                        type: 'target',
-                                        element: event.currentTarget,
-                                        placement: 'bottom-start',
-                                      })
-                                    }}
-                                    className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                                    onClick={handleFileCancel}
+                                    className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
                                   >
-                                    File
+                                    <X className="h-3.5 w-3.5" />
+                                    Cancel
                                   </button>
-                                </ContextMenuTargeter>
-                                <ContextMenuTargeter>
-                                  <button
-                                    type="button"
-                                    onClick={(event) => {
-                                      setHeaderMenuAnchor(null)
-                                      setFileMenuAnchor(null)
-                                      setViewMenuAnchor({
-                                        type: 'target',
-                                        element: event.currentTarget,
-                                        placement: 'bottom-start',
-                                      })
-                                    }}
-                                    className="hover:bg-muted rounded-md px-2 py-1 text-xs font-semibold"
+                                  <Button
+                                    size="sm"
+                                    onClick={handleFileSave}
+                                    disabled={saveSchemaFileMutation.isPending || !schemaCanEdit}
+                                    activity={!activeSchemaDirty && schemaCanEdit}
                                   >
-                                    View
-                                  </button>
-                                </ContextMenuTargeter>
+                                    <Save className="h-3.5 w-3.5" />
+                                    {saveSchemaFileMutation.isPending
+                                      ? 'Saving...'
+                                      : activeSchemaDirty
+                                        ? 'Save'
+                                        : 'Saved'}
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={handleFileCancel}
-                                  className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                  Cancel
-                                </button>
-                                <Button
-                                  size="sm"
-                                  onClick={handleFileSave}
-                                  disabled={saveSchemaFileMutation.isPending || !schemaCanEdit}
-                                  activity={!activeSchemaDirty && schemaCanEdit}
-                                >
-                                  <Save className="h-3.5 w-3.5" />
-                                  {saveSchemaFileMutation.isPending
-                                    ? 'Saving...'
-                                    : activeSchemaDirty
-                                      ? 'Save'
-                                      : 'Saved'}
-                                </Button>
+                            )}
+                            <FileExplorerCodeEditor
+                              file={activeFile}
+                              value={
+                                schemaMode === 'edit'
+                                  ? (activeSchemaDraft ?? activeFile.content ?? '')
+                                  : (activeFile.content ?? '')
+                              }
+                              readOnly={schemaMode !== 'edit' || !schemaCanEdit}
+                              onChange={schemaMode === 'edit' ? handleFileChange : undefined}
+                              lineWrapping={schemaEditorWrap}
+                              editorMinHeight="0px"
+                            />
+                            {schemaResolution?.source === 'package' && (
+                              <div className="text-muted-foreground border-border/50 border-t px-3 py-2 text-xs">
+                                Package-provided schemas are read-only.
                               </div>
-                            </div>
-                          )}
-                          <FileExplorerCodeEditor
-                            file={activeFile}
-                            value={
-                              schemaMode === 'edit'
-                                ? (activeSchemaDraft ?? activeFile.content ?? '')
-                                : (activeFile.content ?? '')
-                            }
-                            readOnly={schemaMode !== 'edit' || !schemaCanEdit}
-                            onChange={schemaMode === 'edit' ? handleFileChange : undefined}
-                            lineWrapping={schemaEditorWrap}
-                            editorMinHeight="0px"
-                          />
-                          {schemaResolution?.source === 'package' && (
-                            <div className="text-muted-foreground border-border/50 border-t px-3 py-2 text-xs">
-                              Package-provided schemas are read-only.
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground flex h-full items-center justify-center">
-                          Select a file to view
-                        </div>
-                      )
-                    }
-                  />
-                </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground flex h-full items-center justify-center">
+                            Select a file to view
+                          </div>
+                        )
+                      }
+                    />
+                  </div>
+                ) : null}
                 <ContextMenu
                   open={!!headerMenuAnchor}
                   items={headerMenuItems}
@@ -1677,433 +1273,53 @@ export function Config() {
     content: schemaTabContent,
   }))
 
-  const projectConfigTabContent = (
+  const projectBindingTabContent = (
     <section
       data-tab-scroll-root="true"
       className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto"
     >
-      <div className="space-y-4 pr-1">
-        <div
-          ref={setProjectConfigViewportNode}
-          className="flex min-h-0 flex-col"
-          style={
-            projectConfigViewportHeight != null
-              ? { height: `${projectConfigViewportHeight}px` }
-              : undefined
-          }
-        >
-          <section className="border-border bg-card flex min-h-0 flex-1 flex-col gap-4 overflow-hidden rounded-lg border p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold">OpenSpec Project Config</h2>
-              {!isStatic && configYaml && !isConfigEditing && (
-                <button
-                  type="button"
-                  onClick={handleConfigEdit}
-                  className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
-                >
-                  <Edit2 className="h-3.5 w-3.5" />
-                  Edit
-                </button>
-              )}
-              {isConfigEditing && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleConfigCancel}
-                    className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    Cancel
-                  </button>
-                  <Button
-                    size="sm"
-                    onClick={() => saveConfigMutation.mutate()}
-                    disabled={saveConfigMutation.isPending}
-                    activity={!configDirty}
-                  >
-                    <Save className="h-3.5 w-3.5" />
-                    {saveConfigMutation.isPending ? 'Saving...' : configDirty ? 'Save' : 'Saved'}
-                  </Button>
-                </div>
-              )}
-            </div>
+      <ProjectBindingSection isStatic={isStatic} />
+    </section>
+  )
 
-            {configYaml || isConfigEditing ? (
-              <CodeEditor
-                value={configDraft}
-                onChange={(value) => {
-                  setConfigDraft(value)
-                  setConfigDirty(true)
-                }}
-                readOnly={!isConfigEditing}
-                filename="config.yaml"
-                className="min-h-0 flex-1"
-                editorMinHeight="0px"
-              />
-            ) : configLoading ? (
-              <div className="route-loading animate-pulse">Loading config…</div>
-            ) : (
-              <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
-                <p className="mb-3">openspec/config.yaml not found.</p>
-                {!isStatic && (
-                  <button
-                    type="button"
-                    onClick={handleConfigEdit}
-                    className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium"
-                  >
-                    Create config.yaml
-                  </button>
-                )}
-              </div>
-            )}
-          </section>
-        </div>
+  const activeRootTabContent = (
+    <section
+      data-tab-scroll-root="true"
+      className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto"
+    >
+      <div className="pr-1">
+        <ActiveRootConfigSection isStatic={isStatic} />
       </div>
     </section>
   )
 
-  const globalConfigTabContent = isStatic ? (
+  const environmentGlobalTabContent = (
     <section
       data-tab-scroll-root="true"
       className="scrollbar-thin scrollbar-track-transparent flex min-h-0 flex-1 flex-col overflow-hidden"
     >
-      <section className="border-border bg-card flex min-h-0 flex-1 flex-col gap-4 overflow-hidden rounded-lg border p-4">
-        <div className="flex flex-none items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">OpenSpec Global Config</h2>
-        </div>
-        <div className="text-muted-foreground min-h-0 flex-1 overflow-auto pr-1">
-          <div className="rounded-md border border-dashed p-4 text-sm">
-            Global config commands are unavailable in static export mode.
-          </div>
-        </div>
-      </section>
-    </section>
-  ) : (
-    <section
-      data-tab-scroll-root="true"
-      className="scrollbar-thin scrollbar-track-transparent flex min-h-0 flex-1 flex-col overflow-hidden"
-    >
-      <section className="border-border bg-card flex min-h-0 flex-1 flex-col gap-4 overflow-hidden rounded-lg border p-4">
-        <div className="flex flex-none flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-semibold">OpenSpec Global Config</h2>
-            <div className="text-muted-foreground mt-1 text-xs">
-              <span className="mr-1">Path:</span>
-              <code className="bg-muted rounded px-1">
-                {globalConfigPathData?.path ?? 'Unavailable'}
-              </code>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleLaunchInteractiveProfile}
-              className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
-            >
-              <TerminalSquare className="h-3.5 w-3.5" />
-              Interactive
-            </button>
-            <button
-              type="button"
-              onClick={handleRefreshGlobalConfig}
-              disabled={isRefreshingGlobalConfig}
-              className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
-            >
-              {isRefreshingGlobalConfig ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        <div className="text-muted-foreground flex-none text-xs">
-          Reads from <code>openspec config list --json</code> and writes to the global config file.
-        </div>
-
-        <ButtonGroup<GlobalConfigTab>
-          value={globalConfigTab}
-          onChange={setGlobalConfigTab}
-          options={[
-            { value: 'preview', label: 'Preview' },
-            { value: 'editor', label: 'Editor' },
-            { value: 'profile', label: 'Profile' },
-          ]}
-        />
-
-        {(globalConfigQueryError || globalConfigError) && (
-          <div className="text-destructive border-destructive/40 bg-destructive/10 rounded-md border px-3 py-2 text-xs">
-            {globalConfigQueryError?.message ?? globalConfigError}
-          </div>
-        )}
-
-        {globalConfigTab === 'preview' ? (
-          isLoadingGlobalConfig ? (
-            <div className="text-muted-foreground text-sm">Loading global config…</div>
-          ) : isRecordObject(globalConfigData) ? (
-            <div className="min-h-0 flex-1 space-y-3 overflow-auto pr-1">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="border-border rounded-md border px-3 py-2 text-xs">
-                  <div className="text-muted-foreground">profile</div>
-                  <div className="mt-1 font-medium">
-                    {typeof globalConfigData.profile === 'string'
-                      ? globalConfigData.profile
-                      : 'N/A'}
-                  </div>
-                </div>
-                <div className="border-border rounded-md border px-3 py-2 text-xs">
-                  <div className="text-muted-foreground">delivery</div>
-                  <div className="mt-1 font-medium">
-                    {typeof globalConfigData.delivery === 'string'
-                      ? globalConfigData.delivery
-                      : 'N/A'}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="text-muted-foreground text-xs">workflows</div>
-                {normalizeWorkflowList(globalConfigData.workflows).length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {normalizeWorkflowList(globalConfigData.workflows).map((workflow) => (
-                      <span key={workflow} className="bg-muted rounded px-2 py-0.5 text-[10px]">
-                        {workflow}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground text-xs">—</div>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <div className="text-muted-foreground text-xs">featureFlags</div>
-                <JsonStructuredValue value={globalConfigData.featureFlags ?? {}} />
-              </div>
-
-              <div className="space-y-1">
-                <div className="text-muted-foreground text-xs">telemetry</div>
-                <JsonStructuredValue value={globalConfigData.telemetry ?? {}} />
-              </div>
-
-              {Object.keys(globalConfigOtherFields).length > 0 && (
-                <div className="space-y-1">
-                  <div className="text-muted-foreground text-xs">other fields</div>
-                  <JsonStructuredValue value={globalConfigOtherFields} />
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-muted-foreground text-sm">Global config unavailable.</div>
-          )
-        ) : globalConfigTab === 'editor' ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-            <CodeEditor
-              value={globalConfigDraft}
-              onChange={(value) => {
-                setGlobalConfigDraft(value)
-                setGlobalConfigDraftDirty(true)
-                setGlobalConfigError(null)
-              }}
-              readOnly={saveGlobalConfigMutation.isPending}
-              filename="openspec.global.config.json"
-              language="json"
-              className="min-h-0 flex-1"
-              editorMinHeight="0px"
-            />
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isRecordObject(globalConfigData)) return
-                  setGlobalConfigDraft(JSON.stringify(globalConfigData, null, 2))
-                  setGlobalConfigDraftDirty(false)
-                  setGlobalConfigError(null)
-                }}
-                className="border-border hover:bg-muted rounded-md border px-3 py-1.5 text-xs"
-              >
-                Revert
-              </button>
-              <Button
-                size="sm"
-                disabled={saveGlobalConfigMutation.isPending || !isRecordObject(globalConfigData)}
-                onClick={handleSaveGlobalConfigEditor}
-                activity={!globalConfigDraftDirty && isRecordObject(globalConfigData)}
-              >
-                <Save className="h-3.5 w-3.5" />
-                {globalConfigDraftDirty ? 'Save' : 'Saved'}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[minmax(18rem,0.9fr)_minmax(0,1.1fr)]">
-            <section className="min-h-0 space-y-4 overflow-auto pr-1">
-              <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
-                <div className="border-border rounded-md border px-3 py-2 text-xs">
-                  <div className="text-muted-foreground">Profile</div>
-                  <div className="mt-1 font-medium">
-                    {isLoadingOpsxProfileState ? 'Loading…' : (opsxProfileState?.profile ?? 'N/A')}
-                  </div>
-                </div>
-                <div className="border-border rounded-md border px-3 py-2 text-xs">
-                  <div className="text-muted-foreground">Delivery</div>
-                  <div className="mt-1 font-medium">
-                    {isLoadingOpsxProfileState ? 'Loading…' : (opsxProfileState?.delivery ?? 'N/A')}
-                  </div>
-                </div>
-                <div className="border-border rounded-md border px-3 py-2 text-xs">
-                  <div className="text-muted-foreground">Drift</div>
-                  <div className="mt-1 font-medium">
-                    {isLoadingOpsxProfileState
-                      ? 'Loading…'
-                      : (opsxProfileState?.driftStatus ?? 'unknown')}
-                  </div>
-                </div>
-              </div>
-
-              {opsxProfileState?.warningText && (
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
-                  {opsxProfileState.warningText}
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <div className="text-muted-foreground text-xs">Apply mode</div>
-                  <ButtonGroup<ProfileEditMode>
-                    value={profileEditMode}
-                    onChange={setProfileEditMode}
-                    options={[
-                      { value: 'both', label: 'Delivery + Workflows' },
-                      { value: 'delivery', label: 'Delivery only' },
-                      { value: 'workflows', label: 'Workflows only' },
-                    ]}
-                  />
-                </div>
-
-                {(profileEditMode === 'both' || profileEditMode === 'delivery') && (
-                  <label className="space-y-1">
-                    <div className="text-muted-foreground text-xs">Delivery</div>
-                    <Select
-                      value={profileDelivery}
-                      options={DELIVERY_MODE_OPTIONS}
-                      onValueChange={setProfileDelivery}
-                      ariaLabel="Delivery"
-                      className="w-full"
-                    />
-                  </label>
-                )}
-
-                <label className="border-border flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs">
-                  <span>
-                    Run <code>openspec update</code> automatically after apply
-                  </span>
-                  <Switch
-                    checked={autoUpdateAfterProfileChange}
-                    onCheckedChange={setAutoUpdateAfterProfileChange}
-                    ariaLabel="Run openspec update automatically after apply"
-                  />
-                </label>
-              </div>
-            </section>
-
-            <section className="space-y-3 overflow-auto pr-1">
-              {profileEditMode === 'both' || profileEditMode === 'workflows' ? (
-                <>
-                  <div className="text-muted-foreground text-xs">Workflows</div>
-                  <div className="border-border/70 bg-muted/20 rounded-md border border-dashed px-3 py-2">
-                    <div className="text-muted-foreground mb-1 text-[10px] font-medium uppercase tracking-wide">
-                      Reference
-                    </div>
-                    <div className="text-muted-foreground space-y-0.5 font-mono text-[11px] leading-relaxed">
-                      <div>selected: [{selectedWorkflowList.join(', ')}]</div>
-                      <div>unselected: [{unselectedWorkflowList.join(', ')}]</div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2">
-                    {ALL_WORKFLOWS.map((workflow) => {
-                      const isSelected = selectedWorkflowSet.has(workflow)
-                      const isActive = activeWorkflowSet.has(workflow)
-                      const isDirty = isSelected !== isActive
-                      return (
-                        <button
-                          type="button"
-                          key={workflow}
-                          onClick={() =>
-                            setProfileWorkflows((previous) =>
-                              previous.includes(workflow)
-                                ? previous.filter((item) => item !== workflow)
-                                : [...previous, workflow]
-                            )
-                          }
-                          className={`flex items-center justify-between gap-2 rounded border px-2.5 py-1.5 text-left text-xs transition-colors ${
-                            isSelected && !isDirty
-                              ? 'border-primary bg-primary/10 text-primary'
-                              : !isSelected && !isDirty
-                                ? 'border-border hover:bg-muted'
-                                : isSelected
-                                  ? 'rounded border border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-200'
-                                  : 'rounded border border-amber-500/50 bg-amber-500/5 text-amber-700/90 dark:text-amber-200'
-                          }`}
-                        >
-                          <span className="flex items-center gap-1.5">
-                            {isSelected && <Check className="h-3 w-3 shrink-0" />}
-                            <span>{WORKFLOW_LABELS[workflow] ?? workflow}</span>
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </>
-              ) : (
-                <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-xs">
-                  Switch apply mode to include workflows to edit the workflow set.
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <Button
-                  size="sm"
-                  disabled={!canApplyProfile}
-                  onClick={handleApplyProfile}
-                  activity={canApplyProfile && profileApplySaved}
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  {profileApplySaved ? 'Applied' : 'Apply'}
-                </Button>
-                <button
-                  type="button"
-                  onClick={handleRunUpdate}
-                  className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Run update
-                </button>
-                {saveGlobalConfigMutation.isPending && (
-                  <span className="text-muted-foreground text-xs">Saving…</span>
-                )}
-              </div>
-            </section>
-          </div>
-        )}
-      </section>
+      <EnvironmentGlobalConfigSection isStatic={isStatic} />
     </section>
   )
 
   const tabs: Tab[] = [
     {
-      id: 'project-config',
-      label: 'Project Config',
-      icon: <FileText className="h-4 w-4" />,
-      content: projectConfigTabContent,
+      id: 'project-binding',
+      label: 'Project Binding',
+      icon: <Link2 className="h-4 w-4" />,
+      content: projectBindingTabContent,
     },
     {
-      id: 'global-config',
-      label: 'Global Config',
+      id: 'active-root',
+      label: 'Active Root',
+      icon: <FileText className="h-4 w-4" />,
+      content: activeRootTabContent,
+    },
+    {
+      id: 'environment-global',
+      label: 'Environment Global',
       icon: <SlidersHorizontal className="h-4 w-4" />,
-      content: globalConfigTabContent,
+      content: environmentGlobalTabContent,
     },
     ...schemaTabs,
   ]
@@ -2131,7 +1347,7 @@ export function Config() {
             <button
               type="button"
               onClick={handleConfirmAddSchema}
-              disabled={!newSchemaName.trim() || createSchemaMutation.isPending}
+              disabled={!schemaCanEdit || !newSchemaName.trim() || createSchemaMutation.isPending}
               className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -2145,6 +1361,7 @@ export function Config() {
             <div className="text-xs font-medium">Schema name</div>
             <input
               value={newSchemaName}
+              disabled={!schemaCanEdit || createSchemaMutation.isPending}
               onChange={(event) => {
                 setNewSchemaName(event.target.value)
                 setSchemaActionError(null)
@@ -2160,8 +1377,8 @@ export function Config() {
               value={newSchemaMode}
               onChange={setNewSchemaMode}
               options={[
-                { value: 'init', label: 'Init' },
-                { value: 'fork', label: 'Fork' },
+                { value: 'init', label: 'Init', disabled: !schemaCanEdit },
+                { value: 'fork', label: 'Fork', disabled: !schemaCanEdit },
               ]}
             />
           </div>
@@ -2174,6 +1391,7 @@ export function Config() {
                 options={schemaSourceOptions}
                 onValueChange={setNewSchemaSource}
                 ariaLabel="Fork from"
+                disabled={!schemaCanEdit}
                 className="w-full"
               />
             </label>
@@ -2205,7 +1423,7 @@ export function Config() {
             <button
               type="button"
               onClick={handleConfirmDeleteSchema}
-              disabled={deleteSchemaMutation.isPending}
+              disabled={!schemaCanEdit || deleteSchemaMutation.isPending}
               className="bg-destructive text-destructive-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -2256,6 +1474,7 @@ export function Config() {
               type="button"
               onClick={handleConfirmCreateEntry}
               disabled={
+                !canManageEntries ||
                 !createEntryName.trim() ||
                 createSchemaFileMutation.isPending ||
                 createSchemaDirectoryMutation.isPending
@@ -2284,6 +1503,11 @@ export function Config() {
             </div>
             <input
               value={createEntryName}
+              disabled={
+                !canManageEntries ||
+                createSchemaFileMutation.isPending ||
+                createSchemaDirectoryMutation.isPending
+              }
               onChange={(event) => {
                 setCreateEntryName(event.target.value)
                 setSchemaEntryError(null)
@@ -2321,7 +1545,7 @@ export function Config() {
             <button
               type="button"
               onClick={handleConfirmDeleteEntry}
-              disabled={!activeEntry || deleteSchemaEntryMutation.isPending}
+              disabled={!canManageEntries || !activeEntry || deleteSchemaEntryMutation.isPending}
               className="bg-destructive text-destructive-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -2396,60 +1620,6 @@ export function Config() {
         </div>
       </Dialog>
 
-      <Dialog
-        open={pendingCommandKind !== null}
-        onClose={handleClosePendingCommandDialog}
-        bodyClassName="space-y-3"
-        title={
-          <div className="flex items-center gap-2">
-            <TerminalSquare className="h-4 w-4" />
-            <span className="text-sm font-semibold">{pendingCommandTitle}</span>
-          </div>
-        }
-        footer={
-          <>
-            <button
-              type="button"
-              onClick={handleClosePendingCommandDialog}
-              disabled={isPendingCommandRunning}
-              className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              disabled={isPendingCommandRunning || !pendingCommandKind}
-              onClick={() => void handleConfirmPendingCommand()}
-              className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isPendingCommandRunning ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Check className="h-3.5 w-3.5" />
-              )}
-              {isPendingCommandRunning ? 'Running…' : pendingCommandActionLabel}
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-3 text-sm">
-          <div>
-            <div className="text-muted-foreground mb-1 text-xs">Command plan</div>
-            <div className="bg-muted rounded-md px-3 py-2">
-              {pendingCommandLines.map((line, index) => (
-                <div key={`${line}-${index}`} className="font-mono text-xs">
-                  {line}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div ref={runnerOutputRef}>
-            <CliTerminal lines={pendingCommandOutputLines} maxHeight="42vh" />
-          </div>
-        </div>
-      </Dialog>
-
       <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
         <SlidersHorizontal className="h-6 w-6 shrink-0" />
         Config
@@ -2462,6 +1632,21 @@ export function Config() {
         onTabChange={onConfigTabChange}
         className="min-h-0 flex-1 gap-4"
       />
+      <div data-schema-workspace-status="true" className="shrink-0">
+        {schemasError && (
+          <div role="alert" className="text-destructive text-sm">
+            Failed to load schemas: {schemasError.message}
+          </div>
+        )}
+        {schemaCatalogInitialLoading && (
+          <div role="status" className="text-muted-foreground text-sm">
+            Loading schemas...
+          </div>
+        )}
+        {hasCurrentEmptySchemaCatalog && (
+          <div className="text-muted-foreground text-sm">No schemas available.</div>
+        )}
+      </div>
     </div>
   )
 }

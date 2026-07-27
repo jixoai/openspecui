@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/vite-env.d.ts",
+    "src/types/global.d.ts",
+    "src/access-gate-resource-worker.test.ts",
+    "src/lib/server-handoff.test.ts",
+    "../cli/src/start-command-browser-target.test.ts",
+    "../cli/src/worktree-instance-manager.test.ts",
+    "../server/src/browser-access-gate-product-chain.test.ts",
+    "../local-translator/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

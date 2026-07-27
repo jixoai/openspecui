@@ -1,3 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * 1. Prove health metadata creates the canonical authenticated Project Web iframe.
+ * 2. Prove explicit refresh, tab switching, and dialog interactions target the intended tab.
+ * 3. Preserve per-tab iframe sessions and runtime identity across ordinary shell updates.
+ * 4. Keep a rendered iframe mounted while backend health is revalidated or temporarily offline.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Owner-reported defect (2026-07-26): "Dashboard加载完成的一瞬间开始reload。"
+ */
 // @vitest-environment jsdom
 
 import { buildBackendHealthPayload } from '@openspecui/core/hosted-app'
@@ -13,6 +23,7 @@ const originalMatchMedia = window.matchMedia
 const originalShowModal = HTMLDialogElement.prototype.showModal
 const originalClose = HTMLDialogElement.prototype.close
 const originalConsoleError = console.error
+const renderedRoots = new Set<Root>()
 
 interface FetchHealthOptions {
   online?: boolean
@@ -22,6 +33,20 @@ interface FetchHealthOptions {
 
 interface HostedFetchOptions extends FetchHealthOptions {
   perApi?: Record<string, FetchHealthOptions>
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
+  let resolvePromise: ((value: T) => void) | null = null
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve
+  })
+  return {
+    promise,
+    resolve(value) {
+      if (!resolvePromise) throw new Error('Deferred promise is not initialized.')
+      resolvePromise(value)
+    },
+  }
 }
 
 function setSuccessfulFetch(options?: HostedFetchOptions) {
@@ -72,6 +97,7 @@ async function renderShell(element: ReactElement): Promise<{
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
+  renderedRoots.add(root)
   await act(async () => {
     root.render(element)
   })
@@ -122,7 +148,11 @@ describe('HostedShell', () => {
     setSuccessfulFetch()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await act(async () => {
+      for (const root of renderedRoots) root.unmount()
+    })
+    renderedRoots.clear()
     global.fetch = originalFetch
     window.matchMedia = originalMatchMedia
     HTMLDialogElement.prototype.showModal = originalShowModal
@@ -155,6 +185,48 @@ describe('HostedShell', () => {
     })
 
     expect(screen.queryByText('Loading view...')).toBeNull()
+  })
+
+  it('keeps the iframe mounted while a background health refresh is pending', async () => {
+    const replacementHealth = deferred<Response>()
+    const immediateFetch = global.fetch
+    let healthRequestCount = 0
+    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith('/api/health')) {
+        healthRequestCount += 1
+        if (healthRequestCount === 2) return replacementHealth.promise
+      }
+      return immediateFetch(input, init)
+    }) as typeof fetch
+
+    const { container } = await renderShell(
+      <HostedShell
+        initialLaunchRequest={{ apiBaseUrl: 'http://localhost:3100' }}
+        initialError={null}
+      />
+    )
+    const initialIframe = container.querySelector<HTMLIFrameElement>(
+      'iframe[title="Hosted OpenSpec UI opsx-project"]'
+    )
+    expect(initialIframe).toBeTruthy()
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+    })
+
+    expect(healthRequestCount).toBe(2)
+    expect(
+      container.querySelector<HTMLIFrameElement>('iframe[title="Hosted OpenSpec UI opsx-project"]')
+    ).toBe(initialIframe)
+
+    replacementHealth.resolve(await immediateFetch('http://localhost:3100/api/health'))
+    await flushEffects()
+    expect(
+      container.querySelector<HTMLIFrameElement>('iframe[title="Hosted OpenSpec UI opsx-project"]')
+    ).toBe(initialIframe)
   })
 
   it('opens the add dialog when the empty shell header is double-clicked', async () => {
@@ -265,6 +337,75 @@ describe('HostedShell', () => {
     expect(alphaReload).not.toHaveBeenCalled()
     expect(betaReload).toHaveBeenCalledTimes(1)
     expect(screen.getByText('Loading view...')).toBeTruthy()
+  })
+
+  it('keeps each project tab bound to its own iframe session and runtime when switching tabs', async () => {
+    localStorage.setItem(
+      getHostedShellStorageKey(),
+      JSON.stringify({
+        activeTabId: 'session-alpha',
+        tabs: [
+          {
+            id: 'session-alpha',
+            sessionId: 'session-alpha',
+            apiBaseUrl: 'http://localhost:3100',
+            createdAt: 1,
+          },
+          {
+            id: 'session-beta',
+            sessionId: 'session-beta',
+            apiBaseUrl: 'http://localhost:3200',
+            createdAt: 2,
+          },
+        ],
+      })
+    )
+    setSuccessfulFetch({
+      perApi: {
+        'http://localhost:3100': {
+          projectName: 'alpha',
+          openspecuiVersion: '2.0.2',
+        },
+        'http://localhost:3200': {
+          projectName: 'beta',
+          openspecuiVersion: '2.0.2',
+        },
+      },
+    })
+
+    const { container } = await renderShell(
+      <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
+    )
+
+    await flushEffects()
+
+    const alphaFrame = container.querySelector<HTMLIFrameElement>(
+      'iframe[title="Hosted OpenSpec UI alpha"]'
+    )
+    const betaFrame = container.querySelector<HTMLIFrameElement>(
+      'iframe[title="Hosted OpenSpec UI beta"]'
+    )
+    expect(alphaFrame?.src).toContain(
+      'http://localhost:3100/dashboard?api=http%3A%2F%2Flocalhost%3A3100&session=session-alpha'
+    )
+    expect(betaFrame?.src).toContain(
+      'http://localhost:3200/dashboard?api=http%3A%2F%2Flocalhost%3A3200&session=session-beta'
+    )
+
+    const alphaPanel = alphaFrame?.closest('[data-tab-panel-state]')
+    const betaPanel = betaFrame?.closest('[data-tab-panel-state]')
+    expect(alphaPanel?.getAttribute('data-tab-panel-state')).toBe('active')
+    expect(betaPanel?.getAttribute('data-tab-panel-state')).toBe('inactive')
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /beta.*localhost:3200/i }))
+    })
+
+    expect(alphaFrame?.src).toContain('session=session-alpha')
+    expect(betaFrame?.src).toContain('session=session-beta')
+    expect(alphaPanel?.getAttribute('data-tab-panel-state')).toBe('inactive')
+    expect(betaPanel?.getAttribute('data-tab-panel-state')).toBe('active')
+    expect(document.title).toBe('beta - OpenSpec UI App')
   })
 
   it('keeps offline tabs visible and shows retry guidance', async () => {

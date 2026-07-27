@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.check.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "src/pty-input-writer.test.ts",
+    "src/pty-output-transport.test.ts",
+    "src/pty-websocket.test.ts",
+    "src/pty-cwd-contract.test.ts",
+    "src/pty-server-cwd-owner.test.ts",
+    "../local-translator/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,8 +1,16 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Render accessible expanded/collapsed navigation for the project workspace.
+ * 2. Preserve the Root Context and search entry points across sidebar states.
+ * 3. Render static links or live draggable areas from the canonical navigation registry.
+ *
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ */
 import { getHostedScopedStorageKey } from '@/lib/hosted-session'
 import { getBasePath, isStaticMode } from '@/lib/static-mode'
 import { useDarkMode } from '@/lib/use-dark-mode'
 import { useNavLayout } from '@/lib/use-nav-controller'
-import { useStoresVisibility } from '@/lib/use-stores-visibility'
 import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import { PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -10,6 +18,7 @@ import { Tooltip } from '../tooltip'
 import { AreaNav } from './area-nav'
 import { BetaCornerMark, BetaPill } from './beta-mark'
 import { navItems, settingsItem } from './nav-items'
+import { RootContextIndicator } from './root-context-indicator'
 import { TopLayerEntryButton } from './top-layer-entry-button'
 
 const DESKTOP_SIDEBAR_COLLAPSED_STORAGE_KEY = 'openspecui:desktop-sidebar-collapsed'
@@ -35,8 +44,6 @@ export function DesktopSidebar() {
   const navLayout = useNavLayout()
   const basePath = getBasePath()
   const isStatic = isStaticMode()
-  // Beta 入口可见性：Stores 在异常二（command-unavailable）时隐藏入口。
-  const { visible: storesVisible } = useStoresVisibility()
   const [collapsed, setCollapsed] = useState(readDesktopSidebarCollapsed)
 
   useEffect(() => {
@@ -83,6 +90,8 @@ export function DesktopSidebar() {
         </Tooltip>
       </div>
 
+      <RootContextIndicator variant="sidebar" collapsed={collapsed} />
+
       <TopLayerEntryButton
         label="Search"
         text="Search"
@@ -97,33 +106,31 @@ export function DesktopSidebar() {
         /* Static mode: simple nav list */
         <div className="flex flex-1 flex-col">
           <ul className="flex-1 space-y-1">
-            {navItems
-              .filter((item) => item.to !== '/stores' || storesVisible)
-              .map((item) => (
-                <li key={item.to}>
-                  <Tooltip content={collapsed ? item.label : undefined} sideOffset={12}>
-                    <VTLink
-                      to={item.to}
-                      aria-label={collapsed ? item.label : undefined}
-                      title={collapsed ? item.label : undefined}
-                      className={`hover:bg-muted [&.active]:bg-primary [&.active]:text-primary-foreground flex items-center gap-2 rounded-md py-2 ${
-                        collapsed ? 'justify-center px-2' : 'px-3'
-                      }`}
-                    >
-                      <span className="relative">
-                        <item.icon className="h-4 w-4 shrink-0" />
-                        {item.beta && collapsed ? <BetaCornerMark /> : null}
-                      </span>
-                      {!collapsed ? (
-                        <>
-                          <span className="font-nav text-base tracking-[0.04em]">{item.label}</span>
-                          {item.beta ? <BetaPill /> : null}
-                        </>
-                      ) : null}
-                    </VTLink>
-                  </Tooltip>
-                </li>
-              ))}
+            {navItems.map((item) => (
+              <li key={item.to}>
+                <Tooltip content={collapsed ? item.label : undefined} sideOffset={12}>
+                  <VTLink
+                    to={item.to}
+                    aria-label={collapsed ? item.label : undefined}
+                    title={collapsed ? item.label : undefined}
+                    className={`hover:bg-muted [&.active]:bg-primary [&.active]:text-primary-foreground flex items-center gap-2 rounded-md py-2 ${
+                      collapsed ? 'justify-center px-2' : 'px-3'
+                    }`}
+                  >
+                    <span className="relative">
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {item.beta && collapsed ? <BetaCornerMark /> : null}
+                    </span>
+                    {!collapsed ? (
+                      <>
+                        <span className="font-nav text-base tracking-[0.04em]">{item.label}</span>
+                        {item.beta ? <BetaPill /> : null}
+                      </>
+                    ) : null}
+                  </VTLink>
+                </Tooltip>
+              </li>
+            ))}
           </ul>
           <div className="border-border space-y-1 border-t pt-4">
             <Tooltip content={collapsed ? settingsItem.label : undefined} sideOffset={12}>
@@ -150,7 +157,7 @@ export function DesktopSidebar() {
           <div className="flex-1">
             <AreaNav
               area="main"
-              tabs={navLayout.mainTabs.filter((tab) => tab !== '/stores' || storesVisible)}
+              tabs={navLayout.mainTabs}
               className="h-full"
               collapsed={collapsed}
             />

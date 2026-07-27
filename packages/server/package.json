@@ -15,7 +15,11 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "typecheck": "tsc -p tsconfig.check.json --noEmit",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit && tsc -p tsconfig.search-tests.json --noEmit && tsc -p tsconfig.git-tests.json --noEmit && tsc -p tsconfig.transport-tests.json --noEmit && tsc -p tsconfig.pty-tests.json --noEmit",
+    "typecheck:git-tests": "tsc -p tsconfig.git-tests.json --noEmit",
+    "typecheck:pty-tests": "tsc -p tsconfig.pty-tests.json --noEmit",
+    "typecheck:search-tests": "tsc -p tsconfig.search-tests.json --noEmit",
+    "typecheck:transport-tests": "tsc -p tsconfig.transport-tests.json --noEmit",
     "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=development\" tsx watch --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -33,6 +37,7 @@
     "@trpc/server": "^11.0.0",
     "better-sqlite3": "^12.5.0",
     "hono": "^4.7.3",
+    "ts-pattern": "5.9.0",
     "undici": "^7.18.2",
     "ws": "^8.18.0",
     "zod": "^3.24.1"
@@ -49,6 +54,7 @@
     "@types/node": "^22.10.2",
     "@types/ws": "^8.5.13",
     "@types/yargs": "^17.0.35",
+    "openspec-cli-16": "npm:@fission-ai/openspec@1.6.0",
     "tsx": "^4.19.2",
     "tsdown": "^0.16.6",
     "typescript": "^5.7.2",
