@@ -127,6 +127,14 @@ recorded in `implementation.md`. Final-tree format, lint, all 15 package typeche
 and component browser fixtures passed locally. Another exact-head remote run remains required; manager
 browser/visual acceptance is still a separate fact.
 
+PR Quality run `30302005295` on head `025b3ab` also does not satisfy 3.6. Core and Server passed, but App exposed
+that explicit-refresh single-flight did not cover reconnect-created observation generations: two real transport
+cycles raised the suspended HostedShell health count from two to four. The replacement-observation owner,
+refresh-promotion contract, and two independent mutation proofs are recorded in `implementation.md`. Focused and
+complete App gates now pass locally. Final-tree formatting, lint, all 15 checked workspace packages, the serial
+workspace test lane, strict Change validation, and component browser fixtures also pass locally. Exact-head remote
+evidence remains required, so 3.6 stays open and manager browser/visual acceptance remains a separate fact.
+
 ## 4. Merge Readiness
 
 - [ ] 4.1 Confirm all P1-P5 work is complete, all strict/OpenSpec validation is green, no loopback trigger remains unresolved, and implementation notes match the checked source.

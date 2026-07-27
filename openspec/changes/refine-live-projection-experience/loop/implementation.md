@@ -742,6 +742,34 @@ until all five packages receive focused review. No Agent-run fixture is final br
   Strict Change validation and `git diff --check` are rerun after this evidence edit. A new exact-head remote run
   remains required, checkpoint 3.6 stays open, and no Agent-run browser/visual/end-to-end acceptance is claimed.
 
+### P7 fourth remote CI correction (2026-07-28 Asia/Shanghai)
+
+- PR Quality run `30302005295` tested exact head `025b3abdb1d2c09946b629edd03021614ffc9d50`. Changeset Gate and
+  CI Scope passed. Fast Gate passed Core and Server, then failed App 205/206 in the same HostedShell background
+  refresh fixture with four health requests where the contract permits the initial request plus one pending
+  replacement. Browser shards were skipped and Browser Gate failed only as a consequence.
+- The third correction joined overlapping explicit `refresh()` calls, but reconnect still invoked a separate
+  `observe(false)` generation. While the focus health request was suspended, each real transport
+  `connecting -> pending` cycle could therefore retire it and start another probe. This was one owner with two
+  replacement causes, not multiple React providers. The component fixture correctly crossed the real owner and
+  exposed the incomplete owner boundary; its count assertion was not relaxed or replaced with a passive transport.
+- The production owner now separates initial admission from a same-identity replacement-observation single-flight.
+  Explicit refresh and reconnect join one replacement run; repeated reconnect cycles cannot allocate additional
+  generations while it is pending. A refresh that joins a reconnect during health probing promotes that run to
+  execute `refreshRootProjection`; a later refresh after an unpromoted reconnect has crossed probing starts a new
+  generation, preserving explicit mutation-refresh semantics. Removal, session/API/creation identity replacement,
+  and ordinary generation guards still retire late work.
+- The first direct owner red extends the suspended focus refresh through two `connecting -> pending` cycles and
+  failed pre-fix at `expected 3 to be 2`. The second starts a reconnect observation, then submits explicit refresh;
+  pre-fix allocated a fourth probe and failed `expected 4 to be 3`. Green passed both plus the real HostedShell
+  fixture. Mutation bypassing only reconnect join reproduced `3 -> 2`; separately bypassing only probing-phase
+  refresh promotion reproduced `4 -> 3`.
+- Final focused Connection Observation plus HostedShell evidence passed 30/30, App checked TypeScript passed, and
+  the complete App suite passed 207/207. Final-tree `pnpm format:check`, `pnpm lint:ci`, all 15 checked workspace
+  packages, serial `pnpm test:ci`, strict Change validation, and `git diff --check` passed. Component browser
+  fixtures passed xterm 60/60 with one skipped and Web Storybook 12/12. A new exact-head remote run remains
+  required. Checkpoint 3.6 stays open; no merge, archive, release, or Agent browser/visual acceptance is authorized.
+
 ## Loopback Triggers
 
 Return to `research-plan.md` and obtain an explicit owner decision before progressing when any of the following occurs:

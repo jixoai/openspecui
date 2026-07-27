@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Prove multi-source health/Root collection, initial Pull, and same-identity refresh single-flight without timers or duplicate requests.
+ * 1. Prove multi-source health/Root collection, initial Pull, and same-identity replacement-observation single-flight.
  * 2. Prove exact-tab generations retire late removed/replaced results.
  * 3. Preserve per-source authentication and event-driven disconnect states without cross-source fallback.
  * 4. Keep retained evidence and renderable health separate from replacement observation authority.
@@ -529,7 +529,7 @@ describe('connection observation owner', () => {
     await refresh
   })
 
-  it('reuses a pending refresh probe when the established transport disconnects', async () => {
+  it('reuses a pending refresh observation across disconnect and reconnect', async () => {
     const replacementProbe = deferred<HostedBackendProbeResult>()
     const callbackCapture: ProjectionCallbackCapture = { current: null }
     let probeCount = 0
@@ -562,11 +562,62 @@ describe('connection observation owner', () => {
     const refresh = owner.refresh(['a'])
     await vi.waitFor(() => expect(probeCount).toBe(2))
     callbacks.onConnectionState('connecting')
+    callbacks.onConnectionState('pending')
+    callbacks.onConnectionState('connecting')
+    callbacks.onConnectionState('pending')
 
     expect(probeCount).toBe(2)
 
     replacementProbe.resolve(online(health(API_A, 'replacement-generation')))
     await refresh
+  })
+
+  it('promotes a pending reconnect observation when an explicit refresh arrives', async () => {
+    const disconnectProbe = deferred<HostedBackendProbeResult>()
+    const reconnectProbe = deferred<HostedBackendProbeResult>()
+    const callbackCapture: ProjectionCallbackCapture = { current: null }
+    let probeCount = 0
+    const refreshRootProjection = vi.fn(async () => {})
+    const owner = createConnectionObservationOwner({
+      projectionTransportFactory: {
+        connect(_apiBaseUrl, _selector, nextCallbacks) {
+          callbackCapture.current = nextCallbacks
+          return { unsubscribe() {} }
+        },
+      },
+      probe: async () => {
+        probeCount += 1
+        if (probeCount === 1) return online(health(API_A, 'initial-generation'))
+        if (probeCount === 2) return disconnectProbe.promise
+        return reconnectProbe.promise
+      },
+      fetchRootProjection: async () =>
+        rootProjection(readyRoot('project-a', probeCount), probeCount),
+      refreshRootProjection,
+      now: () => probeCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
+    const callbacks = requireProjectionCallbacks(callbackCapture)
+    callbacks.onConnectionState('pending')
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+
+    callbacks.onConnectionState('connecting')
+    callbacks.onConnectionState('pending')
+    await vi.waitFor(() => expect(probeCount).toBe(3))
+    const refresh = owner.refresh(['a'])
+
+    expect(probeCount).toBe(3)
+
+    reconnectProbe.resolve(online(health(API_A, 'reconnect-generation')))
+    await refresh
+    expect(refreshRootProjection).toHaveBeenCalledTimes(1)
+
+    disconnectProbe.resolve(online(health(API_A, 'retired-disconnect-generation')))
+    await Promise.resolve()
   })
 
   it('joins overlapping explicit refreshes for the same tab identity', async () => {
