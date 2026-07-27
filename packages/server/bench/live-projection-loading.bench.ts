@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Measure real WebSocket wake-to-pull first-renderable latency for Root Context, Dashboard, Changes, and selector-exact OPSX projections.
  * 2. Compare fresh-server cold starts with a fresh-client Dashboard reload on the same Server.
  * 3. Reproduce route admission order by starting lower-priority OPSX work after primary content.
  * 4. Emit bounded, machine-readable phase evidence without mutating project data.
- * 5. Keep lifecycle wake subscriptions alive until their typed Pull yields renderable data or exact error evidence.
+ * 5. Keep lifecycle wake subscriptions alive until their typed Pull yields retained/current renderable data or exact error evidence.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
@@ -13,7 +13,7 @@ import type {
   CliProjectionNotice,
   CliProjectionState,
   DashboardSummaryInvalidation,
-  DashboardSummaryRead,
+  DashboardSummaryProjectionState,
   PlanningCliProjectionSelector,
   PlanningCliProjectionState,
   RootContextResolvedState,
@@ -26,7 +26,7 @@ import WebSocket from 'ws'
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
 import { startServer, type AppRouter, type RunningServer } from '../src/server.js'
-import { assertMatchingDashboardSummaryRead } from './live-projection-loading-summary.js'
+import { assertMatchingDashboardSummaryState } from './live-projection-loading-summary.js'
 
 interface BenchArgs {
   dir: string
@@ -194,13 +194,15 @@ function firstPayload<T>(
   })
 }
 
-function summarizeSummaryRead(read: DashboardSummaryRead): Measurement['result'] {
+function summarizeSummaryState(state: DashboardSummaryProjectionState): Measurement['result'] {
   return {
     firstRenderable: 'dashboard.getSummary',
-    identity: read.identity,
-    workGeneration: read.workGeneration,
-    freshness: read.freshness,
-    ...summarizeResult(read.data),
+    identity: state.identity,
+    workGeneration: state.workGeneration,
+    snapshotGeneration: state.snapshotGeneration,
+    state: state.state,
+    freshness: state.freshness,
+    ...(state.data ? summarizeResult(state.data) : {}),
   }
 }
 
@@ -209,19 +211,19 @@ function firstSummaryRead(
   phase: string,
   timeoutMs: number,
   subscribe: (callbacks: SubscriptionCallbacks<DashboardSummaryInvalidation>) => Unsubscribable,
-  pull: () => Promise<DashboardSummaryRead>
-): Promise<DashboardSummaryRead> {
+  pull: () => Promise<DashboardSummaryProjectionState>
+): Promise<DashboardSummaryProjectionState> {
   const startedAtMs = elapsedMs()
   const started = performance.now()
 
-  return new Promise<DashboardSummaryRead>((resolvePromise, rejectPromise) => {
+  return new Promise<DashboardSummaryProjectionState>((resolvePromise, rejectPromise) => {
     let settled = false
     let pulling = false
     let subscription: Unsubscribable | null = null
     const settle = (
       outcome: Measurement['outcome'],
       result: Measurement['result'],
-      read?: DashboardSummaryRead,
+      state?: DashboardSummaryProjectionState,
       error?: Error
     ) => {
       if (settled) return
@@ -230,7 +232,7 @@ function firstSummaryRead(
       subscription?.unsubscribe()
       record(phase, 'dashboard.getSummary.first-renderable', startedAtMs, started, outcome, result)
       if (error) rejectPromise(error)
-      else if (read) resolvePromise(read)
+      else if (state) resolvePromise(state)
       else rejectPromise(new Error('Dashboard Summary pull settled without a read.'))
     }
     const timeout = setTimeout(() => {
@@ -249,12 +251,14 @@ function firstSummaryRead(
         record(phase, 'dashboard.subscribeSummary.wake', startedAtMs, started, 'ok', {
           identity: wake.identity,
           workGeneration: wake.workGeneration,
+          snapshotGeneration: wake.snapshotGeneration,
+          state: wake.state,
           cause: wake.cause,
         })
         void pull()
-          .then((read) => {
+          .then((state) => {
             try {
-              assertMatchingDashboardSummaryRead(wake, read)
+              assertMatchingDashboardSummaryState(wake, state)
             } catch (error: unknown) {
               const normalized = error instanceof Error ? error : new Error(String(error))
               settle(
@@ -262,15 +266,19 @@ function firstSummaryRead(
                 {
                   wakeIdentity: wake.identity,
                   wakeGeneration: wake.workGeneration,
-                  readIdentity: read.identity,
-                  readGeneration: read.workGeneration,
+                  readIdentity: state.identity,
+                  readGeneration: state.workGeneration,
                 },
                 undefined,
                 normalized
               )
               return
             }
-            settle('ok', summarizeSummaryRead(read), read)
+            if (!state.data) {
+              pulling = false
+              return
+            }
+            settle('ok', summarizeSummaryState(state), state)
           })
           .catch((error: unknown) => {
             const normalized = error instanceof Error ? error : new Error(String(error))

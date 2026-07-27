@@ -1,16 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
- * 1. Prove equivalent raw locator formatting cannot retire an admitted Store request.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Prove equivalent raw locator formatting cannot retire an admitted Store record.
  * 2. Drive the real mutation-observation provider through its transport callback and React rerender.
- * 3. Preserve one Store pull and one exact-tab Root refresh/Pull for the correlated terminal snapshot.
+ * 3. Distinguish the initial Root admission Pull from one exact-tab mutation refresh/Pull.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Review correction (2026-07-25): raw `http://host` -> `http://host/` must preserve lifecycle identity.
  * Original request (2026-07-26): "推送变更，然后让多端基于订阅拉取更新。"
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  */
 // @vitest-environment jsdom
 
 import { buildBackendHealthPayload } from '@openspecui/core/hosted-app'
+import type { StoreMutationEnvelope } from '@openspecui/core/store-mutation-protocol'
 import { act, waitFor } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -48,7 +50,7 @@ vi.mock('../lib/mutation-observation-transport', () => ({
 }))
 
 interface LifecycleApi {
-  registerAdmission(apiBaseUrl: string, requestId: string): void
+  registerAdmission(apiBaseUrl: string, admission: StoreMutationEnvelope): void
 }
 
 interface LifecycleSnapshot {
@@ -197,11 +199,19 @@ describe('Store mutation lifecycle equivalent locator identity', () => {
     try {
       await waitFor(() => transportProbe.callbacks())
       const admittedLifecycle = await lifecycleReady
+      await waitFor(() => expect(contextPulls).toBe(1))
 
       await act(async () => {
-        admittedLifecycle.registerAdmission(API, REQUEST_ID)
+        admittedLifecycle.registerAdmission(API, {
+          requestId: REQUEST_ID,
+          envUri: 'openspecui-env://1/equivalent-locator',
+          kind: 'register',
+          status: 'accepted',
+          observedAt: 1,
+        })
       })
       await rendered.rerender(`${API}/`)
+      expect(contextPulls).toBe(1)
       await act(async () => {
         transportProbe.callbacks().onData({
           type: 'snapshot',
@@ -223,7 +233,7 @@ describe('Store mutation lifecycle equivalent locator identity', () => {
         expect(snapshot).toEqual({ current: true, recordCount: 1, mutationLifecycle: 'current' })
         expect(refreshStore).toHaveBeenCalledTimes(1)
         expect(contextRefreshes).toBe(1)
-        expect(contextPulls).toBe(1)
+        expect(contextPulls).toBe(2)
       })
     } finally {
       await act(async () => rendered.root.unmount())

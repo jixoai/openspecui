@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
- * 1. Derive Store authority from one atomically correlated full tab identity and generation.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Keep the selected read locator separate from generation-bound Store mutation authority.
  * 2. Refuse offline, stale, incompatible, or missing selections without first-online fallback.
  * 3. Capture exact tab identity and generation for synchronous Store dispatch revalidation.
  * 4. Carry selected backend health and Root Context from the shared observation owner.
@@ -25,6 +25,8 @@ export interface ActiveBackend extends StoreActionAuthority {
 }
 
 export interface UseActiveBackendResult {
+  /** Stable selected read locator; it carries no mutation authority. */
+  selectedApiBaseUrl: string | null
   /** The exact selected current backend, or null when that selection is unavailable. */
   active: ActiveBackend | null
   /** Whether any backend connection exists. */
@@ -103,6 +105,7 @@ export function useActiveBackend(): UseActiveBackendResult {
           : selected.reachability
 
   return {
+    selectedApiBaseUrl: selectedTab?.apiBaseUrl ?? null,
     active,
     hasConnections: connections.tabs.length > 0,
     unavailableReason,

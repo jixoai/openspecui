@@ -1,15 +1,19 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove the App router renders every first-party product surface.
  * 2. Prove launch ownership remains active outside the Sessions route.
+ * 3. Prove route round-trips preserve the AppLayout-owned iframe Document identity.
+ * 4. Prove persistent Sessions consumes the App shell's remaining mobile viewport budget.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Owner-reported defect (2026-07-26): opening B or C eventually makes older tabs lose authentication.
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  */
 // @vitest-environment jsdom
 
+import { buildBackendHealthPayload } from '@openspecui/core/hosted-app'
 import { RouterProvider } from '@tanstack/react-router'
-import { act } from '@testing-library/react'
+import { act, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -26,6 +30,7 @@ const EMPTY_CONTEXT: AppRouterContext = {
 const renderedRoots = new Set<Root>()
 const originalBroadcastChannel = globalThis.BroadcastChannel
 const originalMatchMedia = window.matchMedia
+const originalFetch = global.fetch
 
 class TestBroadcastChannel {
   static readonly channels = new Map<string, Set<TestBroadcastChannel>>()
@@ -119,6 +124,7 @@ describe('app-router', () => {
       configurable: true,
       value: originalMatchMedia,
     })
+    global.fetch = originalFetch
     document.body.innerHTML = ''
   })
 
@@ -184,6 +190,80 @@ describe('app-router', () => {
     expect(container.textContent).toContain(
       'The launch credential requires a valid backend locator.'
     )
+  })
+
+  it('preserves the hosted iframe identity across Sessions route round-trips', async () => {
+    localStorage.setItem(
+      getHostedShellStorageKey(),
+      JSON.stringify({
+        activeTabId: 'tab-a',
+        tabs: [
+          {
+            id: 'tab-a',
+            sessionId: 'session-a',
+            apiBaseUrl: 'http://localhost:3100',
+            createdAt: 1,
+          },
+        ],
+      })
+    )
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (url.endsWith('/api/health')) {
+        return new Response(
+          JSON.stringify(
+            buildBackendHealthPayload({
+              projectDir: '/tmp/project-a',
+              projectName: 'project-a',
+              watcherEnabled: true,
+              openspecuiVersion: '6.0.0',
+              embeddedUiUrl: 'http://localhost:3100/dashboard',
+              apiBaseUrl: 'http://localhost:3100',
+              envUri: 'env:a',
+            })
+          ),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      }
+      return new Response(JSON.stringify({ error: { message: 'fixture unavailable' } }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as typeof fetch
+
+    const router = routerFor(EMPTY_CONTEXT, '/sessions')
+    const { container } = await renderAt(<RouterProvider router={router} />)
+    await waitFor(() => {
+      expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBeTruthy()
+    })
+    const iframe = container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')
+    expect(iframe).toBeTruthy()
+    expect(container.querySelector('[data-testid="app-layout"]')?.className).toContain('h-dvh')
+    expect(container.querySelector('[data-testid="app-main"]')?.className).toContain(
+      'overflow-hidden'
+    )
+    expect(container.querySelector('[data-testid="hosted-sessions-surface"]')?.className).toContain(
+      'h-full'
+    )
+    expect(container.querySelector('.hosted-shell-root')?.className).toContain('h-full')
+    expect(container.querySelector('.hosted-shell-tabs')?.className).toContain('h-full')
+
+    await act(async () => {
+      await router.navigate({ to: '/environment' })
+    })
+    expect(
+      container.querySelector<HTMLElement>('[data-testid="hosted-sessions-surface"]')?.hidden
+    ).toBe(true)
+    expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBe(iframe)
+
+    await act(async () => {
+      await router.navigate({ to: '/sessions' })
+    })
+    expect(
+      container.querySelector<HTMLElement>('[data-testid="hosted-sessions-surface"]')?.hidden
+    ).toBe(false)
+    expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBe(iframe)
   })
 
   it('redirects Store Manager root to Inspector', async () => {

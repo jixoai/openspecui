@@ -1,12 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Render backend connection discovery and retained entry actions.
  * 2. Keep credentials outside persisted connection state.
  * 3. Consume shared authentication and reachability observations.
+ * 4. Keep each retained row visible with a local realtime revalidation cue.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  */
 import { Dialog } from '@openspecui/web-src/components/dialog'
+import { RealtimeRevalidateCue } from '@openspecui/web-src/components/realtime/realtime-cue'
 import { Link } from '@tanstack/react-router'
 import { Home, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -42,8 +45,6 @@ export function ConnectionsRoute() {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
 
   const tabs = state.tabs
-  const isLoading = tabs.some((tab) => reachability[tab.id] === 'checking')
-
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex items-center justify-between gap-4">
@@ -72,24 +73,21 @@ export function ConnectionsRoute() {
       ) : (
         <div className="border-border divide-border divide-y overflow-hidden rounded-lg border">
           {tabs.map((tab) => (
-            <ConnectionRow
+            <RealtimeRevalidateCue
               key={tab.id}
-              tab={tab}
-              reachability={reachability[tab.id]}
-              onRemove={() => {
-                actions.setState(removeHostedTab(state, tab.id))
-              }}
-            />
+              active={reachability[tab.id] === undefined || reachability[tab.id] === 'checking'}
+            >
+              <ConnectionRow
+                tab={tab}
+                reachability={reachability[tab.id]}
+                onRemove={() => {
+                  actions.setState(removeHostedTab(state, tab.id))
+                }}
+              />
+            </RealtimeRevalidateCue>
           ))}
         </div>
       )}
-
-      {isLoading && tabs.length > 0 ? (
-        <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Checking reachability...
-        </div>
-      ) : null}
 
       {addDialogOpen ? (
         <AddBackendDialog

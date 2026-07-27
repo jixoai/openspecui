@@ -1,17 +1,21 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
- * 1. Provide the persistent App navigation and routed content layout.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Provide persistent App navigation and a mobile-safe viewport budget for routed content.
  * 2. Keep project Sessions separate from environment-scoped administration.
  * 3. Install shared connection and Store-mutation observation owners above every route.
  * 4. Keep the launch relay alive independently of the selected product route.
+ * 5. Preserve the stateful HostedShell and its iframe Documents across route changes.
  *
  * Original request (2026-07-15): "在没有后端的基础上，先把前端的初步工作先完成。"
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  */
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import { Boxes, Home, MonitorSmartphone, Settings, Store, type LucideIcon } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { ConnectionObservationProvider } from '../lib/connection-observation'
 import { MutationObservationProvider } from '../lib/mutation-observation-provider'
 import { AppLaunchOwner } from './app-launch-owner'
+import { HostedShell } from './hosted-shell'
 
 interface AppNavItem {
   to: string
@@ -35,6 +39,11 @@ const SETTINGS_ITEM: AppNavItem = { to: '/settings', icon: Settings, label: 'Set
 /** Render the persistent App navigation around the current child route. */
 export function AppLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const sessionsVisible = pathname === '/sessions'
+  const [sessionsMounted, setSessionsMounted] = useState(sessionsVisible)
+  useEffect(() => {
+    if (sessionsVisible) setSessionsMounted(true)
+  }, [sessionsVisible])
   // /environment/stores 下的任意子路由都高亮 Environment。
   const isActive = (to: string) =>
     pathname === to || (to === '/environment' && pathname.startsWith('/environment'))
@@ -43,7 +52,10 @@ export function AppLayout() {
     <AppLaunchOwner>
       <MutationObservationProvider>
         <ConnectionObservationProvider>
-          <div className="bg-background text-foreground flex min-h-screen">
+          <div
+            className="bg-background text-foreground flex h-dvh min-h-0 overflow-hidden"
+            data-testid="app-layout"
+          >
             <aside className="border-border bg-muted/30 hidden w-56 shrink-0 flex-col gap-1 border-r p-3 md:flex">
               <div className="text-muted-foreground mb-4 flex items-center gap-2 px-2 text-xs font-semibold uppercase tracking-wide">
                 <Store className="h-4 w-4" />
@@ -61,7 +73,7 @@ export function AppLayout() {
             </aside>
 
             {/* 移动端顶栏 */}
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <header className="border-border bg-background/80 sticky top-0 z-10 flex items-center gap-1 border-b px-2 py-2 backdrop-blur md:hidden">
                 {APP_NAV_ITEMS.concat(SETTINGS_ITEM).map((item) => {
                   const Icon = item.icon
@@ -81,8 +93,25 @@ export function AppLayout() {
                   )
                 })}
               </header>
-              <main className="min-w-0 flex-1">
-                <Outlet />
+              <main
+                className={`min-h-0 min-w-0 flex-1 ${sessionsVisible ? 'overflow-hidden' : 'overflow-auto'}`}
+                data-testid="app-main"
+              >
+                {sessionsMounted ? (
+                  <div
+                    data-testid="hosted-sessions-surface"
+                    hidden={!sessionsVisible}
+                    aria-hidden={!sessionsVisible}
+                    className="h-full min-h-0"
+                  >
+                    <HostedShell
+                      initialLaunchRequest={null}
+                      fallbackLaunchRequest={null}
+                      initialError={null}
+                    />
+                  </div>
+                ) : null}
+                {sessionsVisible ? null : <Outlet />}
               </main>
             </div>
           </div>

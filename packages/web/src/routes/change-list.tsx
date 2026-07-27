@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. List only active Changes from the current writable Planning root.
  * 2. Derive workflow state and terminal evidence from CLI Status and formal tracked-task progress.
  * 3. Preserve ChangeList row continuity and stale display together with collision-safe detail navigation.
@@ -8,12 +8,18 @@
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-23): "List mutations and route changes preserve physical continuity through existing motion/View Transition patterns."
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
  */
 import { Badge } from '@/components/badge'
-import { ChangeListSkeleton, RealtimeProgress } from '@/components/realtime'
+import {
+  ChangeListSkeleton,
+  RealtimeProgress,
+  RealtimeRevalidateCue,
+  RealtimeSkeletonLine,
+} from '@/components/realtime'
 import {
   classifyChangeWorkflowPhase,
   inferTrackedArtifactStatus,
@@ -138,12 +144,6 @@ export function ChangeList() {
         </div>
       ) : null}
 
-      {isUpdating && changes ? (
-        <div className="text-muted-foreground text-sm" role="status">
-          Refreshing changes...
-        </div>
-      ) : null}
-
       {statusError ? (
         <div
           role="alert"
@@ -155,138 +155,141 @@ export function ChangeList() {
       ) : null}
 
       {showChangesFrame ? (
-        <div
-          ref={listRef}
-          data-change-list-continuity
-          className="border-border divide-border divide-y rounded-lg border"
-        >
-          {displayedChanges?.map((change) => {
-            const status = statusMap.get(change.id)
-            const doneArtifacts =
-              status?.artifacts.filter((artifact) => artifact.status === 'done').length ?? 0
-            const totalArtifacts = status?.artifacts.length ?? 0
-            const phase = classifyChangeWorkflowPhase({
-              hasStatus: Boolean(status),
-              isComplete: status?.isComplete ?? false,
-              trackedTaskPhase: change.trackedTaskProgress.phase,
-              trackedArtifactStatus: inferTrackedArtifactStatus(
-                status?.artifacts.map((artifact) => artifact.status) ?? []
-              ),
-            })
-            const taskPercent =
-              change.trackedTaskProgress.total > 0
-                ? Math.round(
-                    (change.trackedTaskProgress.completed / change.trackedTaskProgress.total) * 100
-                  )
-                : 0
-            const sharedDescriptor = { family: 'changes', entityId: change.id } as const
-            return (
-              <VTLink
-                key={change.id}
-                to="/changes/$changeId"
-                params={{ changeId: change.id }}
-                state={(prev) => ({
-                  ...prev,
-                  __vtHandoff: {
-                    family: 'changes',
-                    entityId: change.id,
-                    title: change.name,
-                    subtitle: change.id,
-                  },
-                })}
-                vt={{ sharedElements: sharedDescriptor }}
-                {...getSharedElementBinding(sharedDescriptor, 'container')}
-                className="hover:bg-muted/50 block px-4 py-3"
-              >
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <GitBranch
-                      {...getSharedElementBinding(sharedDescriptor, 'icon')}
-                      className="text-muted-foreground mt-0.5 h-5 w-5 shrink-0"
+        <RealtimeRevalidateCue active={isUpdating && Boolean(changes)}>
+          <div
+            ref={listRef}
+            data-change-list-continuity
+            className="border-border divide-border divide-y rounded-lg border"
+          >
+            {displayedChanges?.map((change) => {
+              const status = statusMap.get(change.id)
+              const doneArtifacts =
+                status?.artifacts.filter((artifact) => artifact.status === 'done').length ?? 0
+              const totalArtifacts = status?.artifacts.length ?? 0
+              const phase = classifyChangeWorkflowPhase({
+                hasStatus: Boolean(status),
+                isComplete: status?.isComplete ?? false,
+                trackedTaskPhase: change.trackedTaskProgress.phase,
+                trackedArtifactStatus: inferTrackedArtifactStatus(
+                  status?.artifacts.map((artifact) => artifact.status) ?? []
+                ),
+              })
+              const taskPercent =
+                change.trackedTaskProgress.total > 0
+                  ? Math.round(
+                      (change.trackedTaskProgress.completed / change.trackedTaskProgress.total) *
+                        100
+                    )
+                  : 0
+              const sharedDescriptor = { family: 'changes', entityId: change.id } as const
+              return (
+                <VTLink
+                  key={change.id}
+                  to="/changes/$changeId"
+                  params={{ changeId: change.id }}
+                  state={(prev) => ({
+                    ...prev,
+                    __vtHandoff: {
+                      family: 'changes',
+                      entityId: change.id,
+                      title: change.name,
+                      subtitle: change.id,
+                    },
+                  })}
+                  vt={{ sharedElements: sharedDescriptor }}
+                  {...getSharedElementBinding(sharedDescriptor, 'container')}
+                  className="hover:bg-muted/50 block px-4 py-3"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <GitBranch
+                        {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                        className="text-muted-foreground mt-0.5 h-5 w-5 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div
+                          {...getSharedElementBinding(sharedDescriptor, 'title')}
+                          className="truncate font-medium"
+                        >
+                          {change.name}
+                        </div>
+                        <div className="text-muted-foreground truncate text-sm">
+                          {change.id}
+                          {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col items-end gap-1 text-right text-sm">
+                        <Badge
+                          tone="custom"
+                          size="sm"
+                          shape="box"
+                          className={`border ${phase.toneClass}`}
+                        >
+                          {phase.label}
+                        </Badge>
+                        <div className="font-medium">
+                          {change.trackedTaskProgress.completed}/{change.trackedTaskProgress.total}
+                        </div>
+                        <div className="text-muted-foreground text-xs">tasks</div>
+                      </div>
+                      <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
+                    </div>
+                  </div>
+
+                  <div className="bg-muted h-1.5 rounded-full">
+                    <div
+                      className="bg-primary h-full rounded-full transition-all"
+                      style={{ width: `${taskPercent}%` }}
                     />
-                    <div className="min-w-0">
-                      <div
-                        {...getSharedElementBinding(sharedDescriptor, 'title')}
-                        className="truncate font-medium"
-                      >
-                        {change.name}
-                      </div>
-                      <div className="text-muted-foreground truncate text-sm">
-                        {change.id}
-                        {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
-                      </div>
-                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex flex-col items-end gap-1 text-right text-sm">
-                      <Badge
-                        tone="custom"
-                        size="sm"
-                        shape="box"
-                        className={`border ${phase.toneClass}`}
-                      >
-                        {phase.label}
-                      </Badge>
-                      <div className="font-medium">
-                        {change.trackedTaskProgress.completed}/{change.trackedTaskProgress.total}
-                      </div>
-                      <div className="text-muted-foreground text-xs">tasks</div>
-                    </div>
-                    <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
-                  </div>
-                </div>
 
-                <div className="bg-muted h-1.5 rounded-full">
-                  <div
-                    className="bg-primary h-full rounded-full transition-all"
-                    style={{ width: `${taskPercent}%` }}
-                  />
-                </div>
-
-                <div className="text-muted-foreground mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <span>
-                    {change.trackedTaskProgress.phase === 'no-tasks'
-                      ? 'No tracked tasks'
-                      : `${taskPercent}% task completion`}
-                  </span>
-                  {!statusError && status ? (
-                    <span className="truncate">
-                      {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
+                  <div className="text-muted-foreground mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span>
+                      {change.trackedTaskProgress.phase === 'no-tasks'
+                        ? 'No tracked tasks'
+                        : `${taskPercent}% task completion`}
                     </span>
-                  ) : !statusError && statuses === undefined && isStatusLoading ? (
-                    <span>Loading workflow status…</span>
-                  ) : (
-                    <span>Workflow status unavailable</span>
-                  )}
-                </div>
-              </VTLink>
-            )
-          })}
-          {hasCurrentEmptyChanges && (
-            <div className="text-muted-foreground p-4 text-center">
-              <div>No active changes.</div>
-              <div className="mt-1 text-xs">Recommended workflow start: Quick Propose</div>
-              <button
-                type="button"
-                onClick={() => vtNavController.activatePop('/opsx-propose')}
-                className="text-primary m-2 inline-flex items-center gap-1 hover:underline"
-                title="Open Quick Propose"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                Start Propose
-              </button>
-              <button
-                type="button"
-                onClick={() => vtNavController.activatePop('/opsx-new')}
-                className="text-primary m-2 inline-flex items-center gap-1 hover:underline"
-                title="Open the advanced /opsx:new form"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                Open advanced /opsx:new form
-              </button>
-            </div>
-          )}
-        </div>
+                    {!statusError && status ? (
+                      <span className="truncate">
+                        {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
+                      </span>
+                    ) : !statusError && statuses === undefined && isStatusLoading ? (
+                      <RealtimeSkeletonLine className="w-28" />
+                    ) : (
+                      <span>Workflow status unavailable</span>
+                    )}
+                  </div>
+                </VTLink>
+              )
+            })}
+            {hasCurrentEmptyChanges && (
+              <div className="text-muted-foreground p-4 text-center">
+                <div>No active changes.</div>
+                <div className="mt-1 text-xs">Recommended workflow start: Quick Propose</div>
+                <button
+                  type="button"
+                  onClick={() => vtNavController.activatePop('/opsx-propose')}
+                  className="text-primary m-2 inline-flex items-center gap-1 hover:underline"
+                  title="Open Quick Propose"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Start Propose
+                </button>
+                <button
+                  type="button"
+                  onClick={() => vtNavController.activatePop('/opsx-new')}
+                  className="text-primary m-2 inline-flex items-center gap-1 hover:underline"
+                  title="Open the advanced /opsx:new form"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Open advanced /opsx:new form
+                </button>
+              </div>
+            )}
+          </div>
+        </RealtimeRevalidateCue>
       ) : null}
     </div>
   )

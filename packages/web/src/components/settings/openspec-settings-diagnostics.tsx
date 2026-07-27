@@ -1,11 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Present read-only Root Context compatibility, selection, and failed-attempt evidence.
  * 2. Present the independent Environment Global profile, delivery, drift, and data-scope lifecycle.
+ * 3. Preserve settled diagnostic facts during revalidation and use stable skeleton geometry on admission.
  *
  * Original request (2026-07-20): "Settings diagnostics are read-only."
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import { CopyablePath } from '@/components/copyable-path'
+import { DetailPanelSkeleton, RealtimeRevalidateCue } from '@/components/realtime'
 import { TocSection } from '@/components/toc'
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
@@ -15,7 +18,7 @@ import {
   OPENSPEC_CLI_TARGET_SERIES,
   OPENSPECUI_TARGET_MAJOR,
 } from '@openspecui/core/openspec-compat'
-import { AlertCircle, ExternalLink, Loader2 } from 'lucide-react'
+import { AlertCircle, ExternalLink } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { SettingsStatusLabel } from './settings-status-label'
 
@@ -217,13 +220,12 @@ function RootDiagnostics() {
         </div>
       ) : null}
 
-      {selectedContext ? <RootFacts context={selectedContext} /> : null}
-      {!selectedContext && lifecycle === 'loading' ? (
-        <div className="text-muted-foreground flex items-center gap-2 text-sm" role="status">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Resolving launch and planning roots...
-        </div>
+      {selectedContext ? (
+        <RealtimeRevalidateCue active={lifecycle === 'refreshing'}>
+          <RootFacts context={selectedContext} />
+        </RealtimeRevalidateCue>
       ) : null}
+      {!selectedContext && lifecycle === 'loading' ? <DetailPanelSkeleton count={3} /> : null}
       {failedState ? <FailedAttemptEvidence state={failedState} /> : null}
     </div>
   )
@@ -285,7 +287,7 @@ function EnvironmentDiagnostics({ environment }: { environment: SettingsEnvironm
       ) : null}
 
       {config ? (
-        <>
+        <RealtimeRevalidateCue active={lifecycle === 'refreshing'}>
           <dl className="grid min-w-0 border-y sm:grid-cols-2 lg:grid-cols-4">
             <DiagnosticField label="Profile">
               {profile?.available ? profile.profile : 'Unavailable'}
@@ -329,12 +331,9 @@ function EnvironmentDiagnostics({ environment }: { environment: SettingsEnvironm
               <p className="text-muted-foreground mt-2 text-xs">{profile.warningText}</p>
             ) : null}
           </div>
-        </>
+        </RealtimeRevalidateCue>
       ) : lifecycle === 'loading' ? (
-        <div className="text-muted-foreground flex items-center gap-2 text-sm" role="status">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Loading Environment Global projection...
-        </div>
+        <DetailPanelSkeleton count={3} />
       ) : null}
     </div>
   )

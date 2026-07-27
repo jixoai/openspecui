@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Dispatch sanitized payloads to existing or newly created terminal sessions.
  * 2. Keep Copy, Save, target selection, and Send under one external readiness lock.
  * 3. Preserve per-action loading state and terminal foreground-process behavior.
  * 4. Reuse Launch Agents or Planning terminals from the workflow's current Root generation.
+ * 5. Preserve stable command labels while pending and settled feedback remains visual.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Owner-reported defect (2026-07-21): Pre-created Codex/Gemini terminals are absent from Compose Send.
  * Owner clarification (2026-07-22): Successful Create and Send must activate and reveal Terminal.
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
 import { Select, type SelectOptionGroup } from '@/components/select'
 import { revealTerminalSession } from '@/lib/reveal-terminal-session'
@@ -340,6 +342,7 @@ export function TerminalDispatchActions({
           <button
             type="button"
             disabled={interactionDisabled || isCopying}
+            aria-busy={isCopying || undefined}
             title={interactionDisabled ? disabledReason : undefined}
             onClick={() => void handleCopy()}
             className={buttonClassName(size, copySuccess)}
@@ -351,11 +354,12 @@ export function TerminalDispatchActions({
             ) : (
               <Copy className="h-4 w-4" />
             )}
-            {copySuccess ? 'Copied' : 'Copy'}
+            Copy
           </button>
           <button
             type="button"
             disabled={interactionDisabled || isSavingHistory}
+            aria-busy={isSavingHistory || undefined}
             title={interactionDisabled ? disabledReason : undefined}
             onClick={() => void handleSave()}
             className={buttonClassName(size, saveSuccess)}
@@ -367,7 +371,7 @@ export function TerminalDispatchActions({
             ) : (
               <Save className="h-4 w-4" />
             )}
-            {saveSuccess ? 'Saved' : 'Save'}
+            Save
           </button>
         </div>
 
@@ -389,6 +393,7 @@ export function TerminalDispatchActions({
           <button
             type="button"
             disabled={interactionDisabled || isSending || target === null}
+            aria-busy={isSending || undefined}
             title={interactionDisabled ? disabledReason : undefined}
             onClick={() => void handleSend()}
             className={primaryButtonClassName(size)}
@@ -398,7 +403,7 @@ export function TerminalDispatchActions({
             ) : (
               <Send className="h-4 w-4" />
             )}
-            {isSending ? 'Sending...' : parseCreateTarget(target) ? createLabel : sendLabel}
+            {parseCreateTarget(target) ? createLabel : sendLabel}
           </button>
         </div>
       </div>

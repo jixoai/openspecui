@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify Context projects CLI-selected root, Store, launch, and inherited data-scope facts.
  * 2. Verify direct Reference diagnostics remain neutral, read-only, and incomplete-by-design.
  * 3. Verify loading, refreshing, terminal-error, stale-error, and command-evidence states stay distinct.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import type { RootContext, RootContextState } from '@openspecui/core'
 import { cleanup, render, screen, within } from '@testing-library/react'
@@ -121,9 +122,11 @@ describe('ContextView', () => {
       } satisfies RootContextState,
     })
 
-    render(<ContextView />)
+    const { container } = render(<ContextView />)
 
-    expect(screen.getByText('Updating')).toBeTruthy()
+    expect(container.querySelector('.rt-revalidate-cue')).not.toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('updating')
+    expect(screen.queryByText('Updating')).toBeNull()
     expect(screen.getByText('/tmp/planning')).toBeTruthy()
   })
 

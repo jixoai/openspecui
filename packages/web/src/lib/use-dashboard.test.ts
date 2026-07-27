@@ -1,20 +1,21 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove Summary admission precedes lower-priority Trends and Git subscriptions.
  * 2. Prove a later backend binding cannot relabel an already captured refresh or removal intent.
  * 3. Prove a stale Dashboard region is display-only while its current replacement is pending.
  * 4. Prove a late Summary A pull cannot overwrite the matching root-rebind B pull.
- * 5. Prove cached Summary A becomes display-only on the first B wake through a typed mocked callback boundary.
+ * 5. Prove cached or Server-retained Summary data becomes display-only before matching current convergence.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 binds Dashboard mutations to snapshot provenance.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
+ * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
  */
 import type { DashboardSummaryProjection } from '@openspecui/core'
 import type {
   DashboardSummaryInvalidation,
-  DashboardSummaryRead,
+  DashboardSummaryProjectionState,
 } from '@openspecui/core/dashboard-summary-transport'
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -63,20 +64,43 @@ function createSummary(specifications: number): DashboardSummaryProjection {
   }
 }
 
-function createSummaryRead(
+function createSummaryState(
   data: DashboardSummaryProjection,
   identity: string,
-  workGeneration: number
-): DashboardSummaryRead {
-  return { identity, workGeneration, freshness: 'current', data }
+  workGeneration: number,
+  freshness: 'current' | 'stale-display-only' = 'current'
+): DashboardSummaryProjectionState {
+  return freshness === 'current'
+    ? {
+        state: 'ready',
+        identity,
+        workGeneration,
+        invalidationCause: 'initial',
+        data,
+        freshness,
+        snapshotGeneration: workGeneration,
+        error: null,
+      }
+    : {
+        state: 'revalidating',
+        identity,
+        workGeneration,
+        invalidationCause: 'subscriber-resume',
+        data,
+        freshness,
+        snapshotGeneration: Math.max(0, workGeneration - 1),
+        error: null,
+      }
 }
 
 function createSummaryWake(
   identity: DashboardSummaryInvalidation['identity'],
   workGeneration: number,
-  cause: DashboardSummaryInvalidation['cause']
+  cause: DashboardSummaryInvalidation['cause'],
+  state: DashboardSummaryInvalidation['state'] = 'loading',
+  snapshotGeneration: number | null = null
 ): DashboardSummaryInvalidation {
-  return { identity, workGeneration, cause }
+  return { identity, workGeneration, snapshotGeneration, state, cause }
 }
 
 const {
@@ -161,8 +185,8 @@ describe('Dashboard Git mutation provenance', () => {
     const summaryB = createSummary(2)
     const identityA = 'dashboard-summary-v2:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
     const identityB = 'dashboard-summary-v2:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
-    const pullA = createDeferred<DashboardSummaryRead>()
-    const pullB = createDeferred<DashboardSummaryRead>()
+    const pullA = createDeferred<DashboardSummaryProjectionState>()
+    const pullB = createDeferred<DashboardSummaryProjectionState>()
     getSummaryQueryMock.mockImplementationOnce(() => pullA.promise)
     getSummaryQueryMock.mockImplementationOnce(() => pullB.promise)
     const { result } = renderHook(() => useDashboardOverviewSubscription())
@@ -182,7 +206,7 @@ describe('Dashboard Git mutation provenance', () => {
     await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledTimes(2))
 
     await act(async () => {
-      pullB.resolve(createSummaryRead(summaryB, identityB, 1))
+      pullB.resolve(createSummaryState(summaryB, identityB, 1))
     })
     await vi.waitFor(() => expect(result.current.regions.summary.data).toEqual(summaryB))
     expect(result.current.regions.summary).toEqual({
@@ -193,7 +217,7 @@ describe('Dashboard Git mutation provenance', () => {
     })
 
     await act(async () => {
-      pullA.resolve(createSummaryRead(summaryA, identityA, 1))
+      pullA.resolve(createSummaryState(summaryA, identityA, 1))
     })
     await vi.waitFor(() => expect(result.current.regions.summary.data).toEqual(summaryB))
     expect(subscribeTrendsMock).toHaveBeenCalledOnce()
@@ -204,8 +228,8 @@ describe('Dashboard Git mutation provenance', () => {
     const summaryB = createSummary(2)
     const identityA = 'dashboard-summary-v2:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
     const identityB = 'dashboard-summary-v2:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
-    const pullA = createDeferred<DashboardSummaryRead>()
-    const pullB = createDeferred<DashboardSummaryRead>()
+    const pullA = createDeferred<DashboardSummaryProjectionState>()
+    const pullB = createDeferred<DashboardSummaryProjectionState>()
     getSummaryQueryMock.mockImplementationOnce(() => pullA.promise)
     getSummaryQueryMock.mockImplementationOnce(() => pullB.promise)
     const { result } = renderHook(() => useDashboardOverviewSubscription())
@@ -217,7 +241,7 @@ describe('Dashboard Git mutation provenance', () => {
     await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledTimes(2))
 
     await act(async () => {
-      pullB.resolve(createSummaryRead(summaryB, identityB, 1))
+      pullB.resolve(createSummaryState(summaryB, identityB, 1))
     })
     await vi.waitFor(() => expect(result.current.regions.summary.data).toEqual(summaryB))
 
@@ -268,7 +292,7 @@ describe('Dashboard Git mutation provenance', () => {
     const summaryA = createSummary(1)
     const summaryB = createSummary(2)
     const identityB = 'dashboard-summary-v2:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
-    const pullB = createDeferred<DashboardSummaryRead>()
+    const pullB = createDeferred<DashboardSummaryProjectionState>()
     getSummaryQueryMock.mockImplementationOnce(() => pullB.promise)
     primeSubscriptionCache('dashboard.subscribeSummary.v2', summaryA)
     const { result } = renderHook(() => useDashboardOverviewSubscription())
@@ -292,11 +316,47 @@ describe('Dashboard Git mutation provenance', () => {
     })
 
     await act(async () => {
-      pullB.resolve(createSummaryRead(summaryB, identityB, 1))
+      pullB.resolve(createSummaryState(summaryB, identityB, 1))
     })
     await vi.waitFor(() =>
       expect(result.current.regions.summary).toEqual({
         data: summaryB,
+        isLoading: false,
+        isUpdating: false,
+        error: null,
+      })
+    )
+  })
+
+  it('renders a Server-retained Summary in a fresh client before matching current convergence', async () => {
+    const retained = createSummary(1)
+    const current = createSummary(2)
+    const identity = 'dashboard-summary-v2:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
+    getSummaryQueryMock
+      .mockResolvedValueOnce(createSummaryState(retained, identity, 2, 'stale-display-only'))
+      .mockResolvedValueOnce(createSummaryState(current, identity, 2))
+    const { result } = renderHook(() => useDashboardOverviewSubscription())
+
+    act(() => {
+      summarySubscribers[0]?.onData(createSummaryWake(identity, 2, 'initial', 'revalidating', 1))
+    })
+    await vi.waitFor(() =>
+      expect(result.current.regions.summary).toEqual({
+        data: retained,
+        isLoading: false,
+        isUpdating: true,
+        error: null,
+      })
+    )
+    expect(subscribeTrendsMock).toHaveBeenCalledOnce()
+    expect(subscribeGitMock).toHaveBeenCalledOnce()
+
+    act(() => {
+      summarySubscribers[0]?.onData(createSummaryWake(identity, 2, 'initial', 'ready', 2))
+    })
+    await vi.waitFor(() =>
+      expect(result.current.regions.summary).toEqual({
+        data: current,
         isLoading: false,
         isUpdating: false,
         error: null,

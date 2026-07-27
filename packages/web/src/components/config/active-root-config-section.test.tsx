@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify Active Root presence, empty content, owner provenance, and static projection states.
  * 2. Verify loading/error topology without conflating transport failure and file absence.
  * 3. Verify save pending/failure locks, dirty-draft retention, and the real mutation boundary.
  *
  * Original request (2026-07-17): "An existing empty Active Root file remains editable."
  * Original request (2026-07-18): "Stale or transport-error Active Root data must remain read-only."
+ * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -304,11 +305,12 @@ describe('ActiveRootConfigSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
     })
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('aria-busy', 'true')
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
     expect(screen.getByLabelText('Active Root config editor')).toHaveAttribute('readonly')
-    fireEvent.click(screen.getByRole('button', { name: 'Saving...' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(writeActiveRootMock).toHaveBeenCalledTimes(1)
 
     pending.resolve()

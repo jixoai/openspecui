@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Edit only launch-project Store and Reference declarations.
  * 2. Preserve Root Context preview and declaration diagnostics without treating them as registry truth.
  * 3. Bind mutation controls and execution to loading/error/dirty lifecycle states.
@@ -8,14 +8,14 @@
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Project Binding must show direct Reference Store, root, and Doctor diagnostics."
  * Derived requirement (2026-07-19): "A binding mutation must not relabel its returned preview as current Root Context."
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
-import { Button } from '@/components/button'
-import { ConfigFormSkeleton } from '@/components/realtime'
+import { AsyncAction, ConfigFormSkeleton } from '@/components/realtime'
 import { trpcClient } from '@/lib/trpc'
 import { useProjectBindingSubscription } from '@/lib/use-planning-config'
 import type { PlanningConfigReference, ProjectBindingConfig } from '@openspecui/core'
 import { useMutation } from '@tanstack/react-query'
-import { AlertCircle, Link2, Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import { AlertCircle, Link2, Plus, Save, Trash2 } from 'lucide-react'
 import { useProjectBindingSettlement } from './use-project-binding-settlement'
 
 function currentRootPreview(config: ProjectBindingConfig) {
@@ -92,19 +92,16 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
             Launch project: {config.owner.path}
           </p>
         </div>
-        <Button
+        <AsyncAction
           size="sm"
+          pending={saveMutation.isPending}
+          settled={!dirty}
           onClick={() => saveMutation.mutate()}
           disabled={!dirty || saveMutation.isPending}
-          activity={!dirty && saveMutation.isSuccess}
         >
-          {saveMutation.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Save className="h-3.5 w-3.5" />
-          )}
-          {saveMutation.isPending ? 'Saving…' : dirty ? 'Save binding' : 'Saved'}
-        </Button>
+          <Save className="h-3.5 w-3.5" />
+          Save binding
+        </AsyncAction>
       </header>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(16rem,0.75fr)_minmax(0,1.25fr)]">

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Build one typed OpenSpec new-change command from user input.
  * 2. Dispatch creation through a dedicated terminal session.
  * 3. Lock preparation and dispatch until Root Context is ready.
@@ -7,9 +7,11 @@
  * 5. Keep the public submit guard independent from the disabled-control projection.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
+import { AsyncAction } from '@/components/realtime'
 import { RootActionNotice } from '@/components/root-action-notice'
 import { navController } from '@/lib/nav-controller'
 import { CHANGE_NAME_PATTERN, buildNewChangeArgs, quoteShellToken } from '@/lib/opsx-new-command'
@@ -107,7 +109,7 @@ export function OpsxNewRoute() {
       className="flex h-full min-h-0 min-w-0 flex-col"
       onSubmit={(event) => {
         event.preventDefault()
-        if (!formSubmissionReady) return
+        if (!formSubmissionReady || isSubmitting) return
 
         const submit = async () => {
           setSubmitError(null)
@@ -307,13 +309,14 @@ export function OpsxNewRoute() {
         >
           Cancel
         </button>
-        <button
+        <AsyncAction
           type="submit"
           disabled={!canSubmit || isSubmitting}
-          className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          pending={isSubmitting}
+          size="sm"
         >
-          {isSubmitting ? 'Creating...' : 'Create'}
-        </button>
+          Create
+        </AsyncAction>
       </div>
     </form>
   )

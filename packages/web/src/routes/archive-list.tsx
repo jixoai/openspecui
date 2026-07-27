@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. List only archives projected from the current writable Planning root.
  * 2. Preserve Archive detail navigation and physical row continuity across reactive list changes.
  * 3. Render resolved Archive data and empty/loading states without an artificial first-frame gate.
@@ -8,14 +8,15 @@
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
-import { ArchiveListSkeleton } from '@/components/realtime'
+import { ArchiveListSkeleton, RealtimeRevalidateCue } from '@/components/realtime'
 import { formatRelativeTime } from '@/lib/format-time'
 import { useArchivesSubscription } from '@/lib/use-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
 import { useArchiveListContinuity } from '@/routes/archive-list-continuity'
-import { AlertCircle, Archive, ChevronRight, RefreshCw } from 'lucide-react'
+import { AlertCircle, Archive, ChevronRight } from 'lucide-react'
 import { useRef } from 'react'
 
 export function ArchiveList() {
@@ -60,77 +61,68 @@ export function ArchiveList() {
         </div>
       ) : null}
 
-      {isUpdating && archived ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="text-muted-foreground flex items-center gap-2 text-sm"
-        >
-          <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
-          <span>Updating</span>
-        </div>
-      ) : null}
-
       {archived && (!error || archived.length > 0) ? (
-        <div
-          ref={listRef}
-          data-archive-list-continuity
-          className="border-border divide-border divide-y rounded-lg border"
-        >
-          {displayedArchives?.map((change) => {
-            const sharedDescriptor = { family: 'archive', entityId: change.id } as const
+        <RealtimeRevalidateCue active={isUpdating}>
+          <div
+            ref={listRef}
+            data-archive-list-continuity
+            className="border-border divide-border divide-y rounded-lg border"
+          >
+            {displayedArchives?.map((change) => {
+              const sharedDescriptor = { family: 'archive', entityId: change.id } as const
 
-            return (
-              <VTLink
-                key={change.id}
-                to="/archive/$changeId"
-                params={{ changeId: change.id }}
-                state={(prev) => ({
-                  ...prev,
-                  __vtHandoff: {
-                    family: 'archive',
-                    entityId: change.id,
-                    title: change.name,
-                    subtitle: change.id,
-                  },
-                })}
-                vt={{ sharedElements: sharedDescriptor }}
-                {...getSharedElementBinding(sharedDescriptor, 'container')}
-                className="hover:bg-muted/50 flex items-center justify-between p-4"
-              >
-                <div className="flex items-center gap-3">
-                  <Archive
-                    {...getSharedElementBinding(sharedDescriptor, 'icon')}
-                    className="text-muted-foreground h-5 w-5"
-                  />
-                  <div>
-                    <div
-                      {...getSharedElementBinding(sharedDescriptor, 'title')}
-                      className="font-medium"
-                    >
-                      {change.name}
-                    </div>
-                    <div className="text-muted-foreground text-sm">
-                      {change.id}
-                      {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
+              return (
+                <VTLink
+                  key={change.id}
+                  to="/archive/$changeId"
+                  params={{ changeId: change.id }}
+                  state={(prev) => ({
+                    ...prev,
+                    __vtHandoff: {
+                      family: 'archive',
+                      entityId: change.id,
+                      title: change.name,
+                      subtitle: change.id,
+                    },
+                  })}
+                  vt={{ sharedElements: sharedDescriptor }}
+                  {...getSharedElementBinding(sharedDescriptor, 'container')}
+                  className="hover:bg-muted/50 flex items-center justify-between p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <Archive
+                      {...getSharedElementBinding(sharedDescriptor, 'icon')}
+                      className="text-muted-foreground h-5 w-5"
+                    />
+                    <div>
+                      <div
+                        {...getSharedElementBinding(sharedDescriptor, 'title')}
+                        className="font-medium"
+                      >
+                        {change.name}
+                      </div>
+                      <div className="text-muted-foreground text-sm">
+                        {change.id}
+                        {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <ChevronRight className="text-muted-foreground h-4 w-4" />
-              </VTLink>
-            )
-          })}
-          {displayedArchives?.length === 0 && !isUpdating && (
-            <div className="text-muted-foreground p-8 text-center">
-              <Archive className="mx-auto mb-4 h-12 w-12 opacity-50" />
-              <p>No archived changes yet.</p>
-              <p className="mt-2 text-sm">
-                Changes in this Planning root are archived using{' '}
-                <code className="bg-muted rounded px-1">openspec archive</code>
-              </p>
-            </div>
-          )}
-        </div>
+                  <ChevronRight className="text-muted-foreground h-4 w-4" />
+                </VTLink>
+              )
+            })}
+            {displayedArchives?.length === 0 && !isUpdating && (
+              <div className="text-muted-foreground p-8 text-center">
+                <Archive className="mx-auto mb-4 h-12 w-12 opacity-50" />
+                <p>No archived changes yet.</p>
+                <p className="mt-2 text-sm">
+                  Changes in this Planning root are archived using{' '}
+                  <code className="bg-muted rounded px-1">openspec archive</code>
+                </p>
+              </div>
+            )}
+          </div>
+        </RealtimeRevalidateCue>
       ) : null}
     </div>
   )

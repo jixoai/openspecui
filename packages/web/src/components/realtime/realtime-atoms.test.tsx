@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove RealtimeProjectionRoot publishes data-state/data-authority/data-cause and no layout chrome.
- * 2. Prove AsyncAction keeps the command label unchanged while pending (aria-busy + activity lock).
+ * 2. Prove AsyncAction keeps the command label unchanged while pending and settled (aria-busy + activity lock).
  * 3. Prove RealtimeProgress renders indeterminate for unknown totals and determinate only for known.
  * 4. Prove the accessible status mirrors the topology for reduced-motion / screen readers.
+ * 5. Prove the retained-content cue supplies hidden status and can preserve child DOM identity.
  *
  * Original request (2026-07-23): "保持命令标签不变（Save 仍为 Save）。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Evidence type: unit (focused Vitest lane). Mutation-resistance: remove the label/activity/progress branch.
  */
 import { render, screen } from '@testing-library/react'
@@ -17,6 +19,7 @@ import {
   RealtimeAccessibleStatus,
   RealtimeProgress,
   RealtimeProjectionRoot,
+  RealtimeRevalidateCue,
 } from './index'
 
 describe('RealtimeProjectionRoot', () => {
@@ -74,10 +77,15 @@ describe('AsyncAction', () => {
   })
 
   it('does not set aria-busy when not pending', () => {
-    const { container } = render(<AsyncAction pending={false}>Save</AsyncAction>)
+    const { container } = render(
+      <AsyncAction pending={false} settled={true}>
+        Save
+      </AsyncAction>
+    )
     const button = container.querySelector('button') as HTMLButtonElement
     expect(button).not.toBeNull()
     expect(button).not.toHaveAttribute('aria-busy')
+    expect(button).toHaveAttribute('data-activity', 'true')
   })
 })
 
@@ -118,5 +126,38 @@ describe('RealtimeAccessibleStatus', () => {
     const status = screen.getByRole('status')
     expect(status).toHaveTextContent('updating')
     expect(status).toHaveClass('rt-sr-status')
+  })
+})
+
+describe('RealtimeRevalidateCue', () => {
+  it('keeps retained content visible and supplies a hidden accessible update state', () => {
+    const { container } = render(
+      <RealtimeRevalidateCue>
+        <span>retained</span>
+      </RealtimeRevalidateCue>
+    )
+
+    expect(screen.getByText('retained')).toBeTruthy()
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('updating')
+    expect(container.querySelector('.rt-revalidate-cue')).toHaveAttribute('aria-busy', 'true')
+  })
+
+  it('preserves a stateful child DOM node when a persistent cue settles', () => {
+    const view = render(
+      <RealtimeRevalidateCue active persistent>
+        <textarea aria-label="draft" />
+      </RealtimeRevalidateCue>
+    )
+    const draft = screen.getByLabelText('draft')
+
+    view.rerender(
+      <RealtimeRevalidateCue active={false} persistent>
+        <textarea aria-label="draft" />
+      </RealtimeRevalidateCue>
+    )
+
+    expect(screen.getByLabelText('draft')).toBe(draft)
+    expect(view.container.querySelector('.rt-revalidate-cue')).toBeNull()
+    expect(view.container.querySelector('[aria-busy="true"]')).toBeNull()
   })
 })

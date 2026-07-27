@@ -1,15 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Project observed project-to-Root and Reference relationships by environment.
  * 2. Avoid machine-wide completeness claims.
  * 3. Preserve each source's Root lifecycle, typed failure, and direct Reference provenance.
  * 4. Render retained evidence and current attempts without hybrid attribution.
+ * 5. Use shared realtime atoms for unresolved and retained-refresh presentation.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Correction request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  */
+import { RealtimeRevalidateCue } from '@openspecui/web-src/components/realtime/realtime-cue'
+import {
+  RealtimeSkeletonInventory,
+  RealtimeSkeletonLine,
+} from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { Columns3 } from 'lucide-react'
-import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
+import { EmptyView, ErrorView } from '../components/state-views'
 import { StoreManagerShell } from '../components/store-manager-shell'
 import { useConnectionObservations } from '../lib/connection-observation'
 import { projectRootObservation, useEnvironmentObservation } from '../lib/use-environment'
@@ -71,7 +78,7 @@ export function ContextMatrixRoute() {
 
   let body
   if (isLoading && projectContexts.length === 0) {
-    body = <LoadingView label="Loading project contexts..." />
+    body = <RealtimeSkeletonInventory mode="list-divide" count={4} rowClassName="h-16" />
   } else if (error && projectContexts.length === 0) {
     body = <ErrorView message={error.message} />
   } else if (projectContexts.length === 0) {
@@ -86,7 +93,13 @@ export function ContextMatrixRoute() {
     body = renderContextMatrixBody(projectContexts)
   }
 
-  return <StoreManagerShell>{body}</StoreManagerShell>
+  return (
+    <StoreManagerShell>
+      <RealtimeRevalidateCue active={isLoading && projectContexts.length > 0}>
+        {body}
+      </RealtimeRevalidateCue>
+    </StoreManagerShell>
+  )
 }
 
 function renderContextMatrixBody(projectContexts: ProjectContextObservation[]) {
@@ -217,7 +230,10 @@ function RootAttempt({
   if (attempt.status === 'loading' || attempt.status === 'idle' || isReplacement) {
     return (
       <div className="text-muted-foreground space-y-1 text-xs">
-        <div>Root {attempt.status}</div>
+        <RealtimeSkeletonLine className="w-20" />
+        <span className="rt-sr-status" role="status">
+          Root {attempt.status}
+        </span>
         {isReplacement ? <RootAttemptSource attempt={attempt} /> : null}
       </div>
     )

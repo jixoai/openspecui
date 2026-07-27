@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Present backend, CLI execution, terminal, notification, and appearance settings.
  * 2. Compose the extracted OpenSpec diagnostics and initialization owner.
  * 3. Bind network-triggered settings actions to visible loading and failure state.
@@ -9,6 +9,7 @@
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -16,7 +17,7 @@ import { CliTerminal } from '@/components/cli-terminal'
 import { CopyablePath } from '@/components/copyable-path'
 import { Dialog } from '@/components/dialog'
 import { NotificationSettings } from '@/components/notifications/notification-settings'
-import { RealtimeSkeletonLine } from '@/components/realtime'
+import { AsyncAction, RealtimeSkeletonLine } from '@/components/realtime'
 import { Select, type SelectOption } from '@/components/select'
 import { OpenSpecSettingsSections } from '@/components/settings/openspec-settings-section'
 import { SoundSettingControl } from '@/components/sound-setting-control'
@@ -965,7 +966,9 @@ export function Settings() {
 
                   {/* Save Button */}
                   <div className="flex justify-end">
-                    <Button
+                    <AsyncAction
+                      pending={saveTerminalConfigMutation.isPending}
+                      settled={terminalConfigSaved && isRendererEngineValid}
                       onClick={() => {
                         saveTerminalConfigMutation.mutate({
                           fontSize: termFontSize,
@@ -982,19 +985,14 @@ export function Settings() {
                         })
                       }}
                       disabled={saveTerminalConfigMutation.isPending || !isRendererEngineValid}
-                      activity={terminalConfigSaved && isRendererEngineValid}
                     >
                       {saveTerminalConfigMutation.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : terminalConfigSaved ? (
                         <Check className="h-4 w-4" />
                       ) : null}
-                      {saveTerminalConfigMutation.isPending
-                        ? 'Saving...'
-                        : terminalConfigSaved
-                          ? 'Saved'
-                          : 'Save'}
-                    </Button>
+                      Save
+                    </AsyncAction>
                   </div>
                 </div>
               </TocSection>
@@ -1045,7 +1043,9 @@ export function Settings() {
                         }}
                         className="bg-background border-border text-foreground focus:ring-primary w-36 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
                       />
-                      <Button
+                      <AsyncAction
+                        pending={saveDashboardConfigMutation.isPending}
+                        settled={dashboardTrendPointLimitSaved}
                         onClick={() => {
                           const next = Math.max(
                             20,
@@ -1055,14 +1055,9 @@ export function Settings() {
                           saveDashboardConfigMutation.mutate(next)
                         }}
                         disabled={saveDashboardConfigMutation.isPending}
-                        activity={dashboardTrendPointLimitSaved}
                       >
-                        {saveDashboardConfigMutation.isPending
-                          ? 'Saving...'
-                          : dashboardTrendPointLimitSaved
-                            ? 'Saved'
-                            : 'Save'}
-                      </Button>
+                        Save
+                      </AsyncAction>
                     </div>
                     <p className="text-muted-foreground mt-2 text-xs">
                       Allowed range: 20-500. Lower values reduce memory and increase visual
@@ -1105,7 +1100,9 @@ export function Settings() {
                         }}
                         className="bg-background border-border text-foreground focus:ring-primary w-40 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
                       />
-                      <Button
+                      <AsyncAction
+                        pending={saveGitConfigMutation.isPending}
+                        settled={gitDiffEagerLineBudgetSaved}
                         onClick={() => {
                           const next = Math.max(
                             0,
@@ -1115,14 +1112,9 @@ export function Settings() {
                           saveGitConfigMutation.mutate(next)
                         }}
                         disabled={saveGitConfigMutation.isPending}
-                        activity={gitDiffEagerLineBudgetSaved}
                       >
-                        {saveGitConfigMutation.isPending
-                          ? 'Saving...'
-                          : gitDiffEagerLineBudgetSaved
-                            ? 'Saved'
-                            : 'Save'}
-                      </Button>
+                        Save
+                      </AsyncAction>
                     </div>
                     <p className="text-muted-foreground mt-2 text-xs">
                       Set to `0` to force fully lazy patch loading. Default is `1000`.
@@ -1163,9 +1155,15 @@ export function Settings() {
                     <label className="mb-2 block text-sm font-medium">Global CLI Detection</label>
                     <div className="mb-2 flex items-center gap-2">
                       {isSniffingCli ? (
-                        <span className="text-muted-foreground flex items-center gap-2 text-sm">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Detecting global openspec command...
+                        <span
+                          className="inline-flex min-w-40 items-center"
+                          aria-busy="true"
+                          data-testid="global-cli-detection-loading"
+                        >
+                          <span className="rt-sr-status" role="status" aria-live="polite">
+                            Detecting global openspec command
+                          </span>
+                          <RealtimeSkeletonLine className="w-40" />
                         </span>
                       ) : cliSniffResult?.hasGlobal ? (
                         <div className="flex flex-col gap-1">
@@ -1253,17 +1251,14 @@ export function Settings() {
                         placeholder={cliPlaceholder}
                         className="border-border bg-background text-foreground flex-1 rounded-md border px-3 py-2 font-mono text-sm"
                       />
-                      <Button
+                      <AsyncAction
+                        pending={saveCliCommandMutation.isPending}
+                        settled={cliCommandSaved}
                         onClick={() => saveCliCommandMutation.mutate(cliCommand)}
                         disabled={saveCliCommandMutation.isPending}
-                        activity={cliCommandSaved}
                       >
-                        {saveCliCommandMutation.isPending
-                          ? 'Saving...'
-                          : cliCommandSaved
-                            ? 'Saved'
-                            : 'Save'}
-                      </Button>
+                        Save
+                      </AsyncAction>
                     </div>
                     {config?.cli?.command && (
                       <p className="text-muted-foreground mt-2 text-xs">
@@ -1311,7 +1306,7 @@ export function Settings() {
                         className="border-border bg-background text-foreground flex-1 rounded-md border px-3 py-2"
                       />
                       <Button onClick={handleApiUrlChange} activity={apiUrlApplied}>
-                        {apiUrlApplied ? 'Applied' : 'Apply'}
+                        Apply
                       </Button>
                     </div>
                     {getApiBaseUrl() && (
@@ -1346,17 +1341,14 @@ export function Settings() {
                         placeholder={OFFICIAL_APP_BASE_URL}
                         className="border-border bg-background text-foreground flex-1 rounded-md border px-3 py-2"
                       />
-                      <Button
+                      <AsyncAction
+                        pending={saveAppBaseUrlMutation.isPending}
+                        settled={appBaseUrlSaved}
                         onClick={() => saveAppBaseUrlMutation.mutate(appBaseUrl)}
                         disabled={saveAppBaseUrlMutation.isPending}
-                        activity={appBaseUrlSaved}
                       >
-                        {saveAppBaseUrlMutation.isPending
-                          ? 'Saving...'
-                          : appBaseUrlSaved
-                            ? 'Saved'
-                            : 'Save'}
-                      </Button>
+                        Save
+                      </AsyncAction>
                     </div>
                     <p className="text-muted-foreground mt-2 text-sm">
                       Effective default:{' '}

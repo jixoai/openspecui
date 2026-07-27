@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
- * 1. Prove every Store mutation kind registers only a resolved HTTP admission.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Prove every Store mutation kind registers only its resolved HTTP admission record.
  * 2. Preserve exact normalized-locator correlation ownership outside lifecycle evidence.
  * 3. Prove rejection and missing authority register nothing.
  *
@@ -52,7 +52,10 @@ describe('Store admission correlation dispatcher', () => {
       requestId: input.requestId,
       status: 'accepted',
     })
-    expect(register).toHaveBeenCalledExactlyOnceWith(AUTHORITY.apiBaseUrl, input.requestId)
+    expect(register).toHaveBeenCalledExactlyOnceWith(
+      AUTHORITY.apiBaseUrl,
+      expect.objectContaining({ requestId: input.requestId, status: 'accepted' })
+    )
   })
 
   it('does not register a rejected request or an authority-retired null result', async () => {

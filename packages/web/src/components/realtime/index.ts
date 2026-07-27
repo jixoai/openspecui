@@ -41,5 +41,6 @@ export {
   DashboardTrendsSkeleton,
   DetailPanelSkeleton,
   GitWorktreeSkeleton,
+  RoutePendingSkeleton,
   SpecListSkeleton,
 } from './route-skeletons'

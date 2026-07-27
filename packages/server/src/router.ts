@@ -20,6 +20,7 @@
  * Derived requirement (2026-07-22): Archive retains its current rows while a reactive replacement is running.
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
  */
 import type {
   ChangeFile,
@@ -53,7 +54,7 @@ import {
   DashboardConfigSchema,
   DashboardGitSnapshotSchema,
   DashboardSummaryInvalidationSchema,
-  DashboardSummaryReadSchema,
+  DashboardSummaryProjectionStateSchema,
   DashboardTrendsProjectionSchema,
   DocumentTranslationConfigUpdateSchema,
   EnvironmentGlobalConfigValueSchema,
@@ -2768,9 +2769,11 @@ export const dashboardRouter = router({
   }),
 
   getSummary: publicProcedure.query(async ({ ctx }) =>
-    DashboardSummaryReadSchema.parse(
-      await runPlanningRoot(ctx, ({ dashboardProjectionService }) =>
-        dashboardProjectionService.getSummary()
+    DashboardSummaryProjectionStateSchema.parse(
+      await runPlanningRoot(
+        ctx,
+        ({ dashboardProjectionService }) => dashboardProjectionService.getSummary(),
+        { reactive: true }
       )
     )
   ),

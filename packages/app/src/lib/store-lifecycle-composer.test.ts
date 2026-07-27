@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove the current, terminal, and once gates at the production lifecycle composer.
  * 2. Prove settlement refreshes Store plus only exact-locator Context tabs.
  * 3. Prove reconnect can settle a previously observed active request without replaying history.
- * 4. Prove admitted identity survives until the first current ledger snapshot.
+ * 4. Prove admitted evidence stays visible until the first current ledger snapshot.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
@@ -130,7 +130,7 @@ describe('Store lifecycle composer', () => {
 
     composer.setLocator(API_A)
     composer.observe(null, TABS)
-    composer.registerAdmission(`${API_A}/`, 'current-session')
+    composer.registerAdmission(`${API_A}/`, record('current-session', 'accepted'))
     composer.observe(
       projection(true, [record('historical', 'succeeded'), record('current-session', 'succeeded')]),
       TABS
@@ -150,8 +150,8 @@ describe('Store lifecycle composer', () => {
       projection(true, [record('historical', 'succeeded'), record('late-admission', 'succeeded')]),
       TABS
     )
-    composer.registerAdmission(API_A, 'late-admission')
-    composer.registerAdmission(API_A, 'late-admission')
+    composer.registerAdmission(API_A, record('late-admission', 'accepted'))
+    composer.registerAdmission(API_A, record('late-admission', 'accepted'))
 
     expect(refreshStore).toHaveBeenCalledTimes(1)
     expect(refreshContexts).toHaveBeenCalledWith(['a-1', 'a-2'])
@@ -167,7 +167,7 @@ describe('Store lifecycle composer', () => {
       projection(false, [record('late-disconnected', 'succeeded')], 'reconnecting'),
       TABS
     )
-    composer.registerAdmission(API_A, 'late-disconnected')
+    composer.registerAdmission(API_A, record('late-disconnected', 'accepted'))
     expect(refreshStore).not.toHaveBeenCalled()
 
     composer.observe(projection(true, [record('late-disconnected', 'succeeded')]), TABS)
@@ -180,9 +180,9 @@ describe('Store lifecycle composer', () => {
     const refreshContexts = vi.fn()
     const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
     composer.setLocator(API_A)
-    composer.registerAdmission(API_A, 'retired')
+    composer.registerAdmission(API_A, record('retired', 'accepted'))
     composer.setLocator(null)
-    composer.registerAdmission(API_A, 'retired')
+    composer.registerAdmission(API_A, record('retired', 'accepted'))
     composer.observe(projection(true, [record('retired', 'succeeded')]), TABS)
 
     expect(refreshStore).not.toHaveBeenCalled()
@@ -194,7 +194,7 @@ describe('Store lifecycle composer', () => {
     const refreshContexts = vi.fn()
     const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
     composer.setLocator(API_A)
-    composer.registerAdmission(API_A, 'shared-id')
+    composer.registerAdmission(API_A, record('shared-id', 'accepted'))
     composer.setLocator(API_B)
     composer.observe(
       { ...projection(true, [record('shared-id', 'succeeded')]), apiBaseUrl: API_B },
@@ -210,7 +210,7 @@ describe('Store lifecycle composer', () => {
     const refreshContexts = vi.fn()
     const composer = createStoreLifecycleComposer({ refreshStore, refreshContexts })
     composer.setLocator(API_A)
-    composer.registerAdmission(API_B, 'other-locator')
+    composer.registerAdmission(API_B, record('other-locator', 'accepted'))
     composer.observe(
       projection(true, [
         record('rejected-before-admission', 'indeterminate'),
@@ -221,5 +221,21 @@ describe('Store lifecycle composer', () => {
 
     expect(refreshStore).not.toHaveBeenCalled()
     expect(refreshContexts).not.toHaveBeenCalled()
+  })
+
+  it('projects a resolved admission until the current ledger carries the request', () => {
+    const composer = createStoreLifecycleComposer({
+      refreshStore: vi.fn(),
+      refreshContexts: vi.fn(),
+    })
+    composer.setLocator(API_A)
+    composer.observe(projection(true, []), TABS)
+
+    composer.registerAdmission(API_A, record('admitted', 'accepted'))
+    expect(composer.project(projection(true, [])).active).toEqual([record('admitted', 'accepted')])
+
+    const ledger = projection(true, [record('admitted', 'running')])
+    expect(composer.observe(ledger, TABS).active).toEqual([record('admitted', 'running')])
+    expect(composer.project(ledger).active).toEqual([record('admitted', 'running')])
   })
 })

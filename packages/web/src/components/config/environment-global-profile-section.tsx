@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Project the reactive environment-global profile, delivery, workflow, and drift facts.
  * 2. Own profile drafts and the typed environment-global save handoff.
  * 3. Own Planning-root Update, Apply auto-Update, runner output, and readiness gating.
+ * 4. Preserve command labels while pending and settled feedback remains visual.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Environment Global profile/drift must remain reactive and Update must use the Root action gate."
  * Original request (2026-07-18): "Environment Global Profile Apply remains valid when Root Context is blocked; only Update is root-owned."
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
@@ -407,7 +409,7 @@ export function EnvironmentGlobalProfileSection({
               activity={profileApplySaved}
             >
               <Check className="h-3.5 w-3.5" />
-              {profileApplySaved ? 'Applied' : 'Apply'}
+              Apply
             </Button>
             <button
               type="button"
@@ -480,7 +482,7 @@ export function EnvironmentGlobalProfileSection({
               ) : (
                 <Check className="h-3.5 w-3.5" />
               )}
-              {isPendingCommandRunning ? 'Running...' : pendingCommandActionLabel}
+              {pendingCommandActionLabel}
             </button>
           </>
         }

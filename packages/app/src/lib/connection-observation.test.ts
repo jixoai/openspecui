@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Prove multi-source health/Root collection and reconnect re-probe without healthy-path timers.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Prove multi-source health/Root collection, initial Pull, and reconnect re-probe without healthy-path timers.
  * 2. Prove exact-tab generations retire late removed/replaced results.
- * 3. Preserve per-source authentication and error states without cross-source fallback.
+ * 3. Preserve per-source authentication and event-driven disconnect states without cross-source fallback.
  * 4. Keep retained evidence and renderable health separate from replacement observation authority.
  * 5. Reject old-observation/new-tab hybrid authority.
  *
@@ -172,17 +172,8 @@ function rootProjection(
   })
 }
 
-const immediateProjectionTransportFactory: CliProjectionTransportFactory = {
-  connect(_apiBaseUrl, _selector, callbacks) {
-    queueMicrotask(() => {
-      callbacks.onNotice({
-        identity: 'root-context:test',
-        workGeneration: 1,
-        snapshotGeneration: 1,
-        state: 'ready',
-        invalidationCause: 'initial',
-      })
-    })
+const passiveProjectionTransportFactory: CliProjectionTransportFactory = {
+  connect() {
     return { unsubscribe() {} }
   },
 }
@@ -191,7 +182,7 @@ function createConnectionObservationOwner(
   overrides: Parameters<typeof createProductionConnectionObservationOwner>[0]
 ) {
   return createProductionConnectionObservationOwner({
-    projectionTransportFactory: immediateProjectionTransportFactory,
+    projectionTransportFactory: passiveProjectionTransportFactory,
     refreshRootProjection: async () => {},
     ...overrides,
   })
@@ -230,6 +221,27 @@ function requireProjectionCallbacks(
 }
 
 describe('connection observation owner', () => {
+  it('pulls Root Context immediately after health settles without waiting for a lifecycle notice', async () => {
+    const fetchRootProjection = vi.fn(async () => rootProjection(readyRoot('project-a', 2)))
+    const owner = createConnectionObservationOwner({
+      probe: async () => online(health(API_A, 'project-a')),
+      fetchRootProjection,
+      projectionTransportFactory: {
+        connect() {
+          return { unsubscribe() {} }
+        },
+      },
+      now: () => 2,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+
+    await vi.waitFor(() => {
+      expect(fetchRootProjection).toHaveBeenCalledWith(API_A)
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+  })
+
   it('has no healthy timer and refreshes only for explicit focus or visible lifecycle events', async () => {
     vi.useFakeTimers()
     const refresh = vi.fn(async () => {})
@@ -652,6 +664,9 @@ describe('connection observation owner', () => {
     owner.setTabs([tab('a', API_A)])
     await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
     const callbacks = requireProjectionCallbacks(callbackCapture)
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
     callbacks.onConnectionState('pending')
     callbacks.onNotice({
       identity: 'root-context:test',
@@ -677,7 +692,7 @@ describe('connection observation owner', () => {
     callbacks.onConnectionState('pending')
 
     await vi.waitFor(() => {
-      expect(probeCount).toBe(2)
+      expect(probeCount).toBe(3)
       expect(owner.getSnapshot().observations[0]).toMatchObject({
         reachability: 'online',
         current: true,
@@ -686,6 +701,43 @@ describe('connection observation owner', () => {
       })
     })
     expect(rootFetchCount).toBe(2)
+  })
+
+  it('publishes objective Offline from an established transport disconnect before reconnect', async () => {
+    const callbackCapture: ProjectionCallbackCapture = { current: null }
+    let probeCount = 0
+    const owner = createConnectionObservationOwner({
+      projectionTransportFactory: {
+        connect(_apiBaseUrl, _selector, nextCallbacks) {
+          callbackCapture.current = nextCallbacks
+          return { unsubscribe() {} }
+        },
+      },
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1
+          ? online(health(API_A, 'project-a'))
+          : { reachability: 'offline', health: null, errorMessage: 'backend offline' }
+      },
+      fetchRootProjection: async () => rootProjection(readyRoot('project-a', 1)),
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
+    await vi.waitFor(() => expect(owner.getSnapshot().observations[0]?.current).toBe(true))
+    const callbacks = requireProjectionCallbacks(callbackCapture)
+    callbacks.onConnectionState('pending')
+    callbacks.onConnectionState('connecting')
+
+    await vi.waitFor(() => {
+      expect(probeCount).toBe(2)
+      expect(owner.getSnapshot().observations[0]).toMatchObject({
+        reachability: 'offline',
+        healthError: 'backend offline',
+        current: false,
+        stale: true,
+      })
+    })
   })
 
   it('keeps retained Root display-only when reconnect health loses its credential', async () => {
@@ -718,6 +770,9 @@ describe('connection observation owner', () => {
     owner.setTabs([tab('a', API_A)])
     await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
     const callbacks = requireProjectionCallbacks(callbackCapture)
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
     callbacks.onConnectionState('pending')
     callbacks.onNotice({
       identity: 'root-context:test',

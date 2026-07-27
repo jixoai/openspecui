@@ -20,6 +20,7 @@ import {
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveSsgServerEntryPath } from './server-entry'
 import { resolveSsgTemplatePath } from './template-path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -95,7 +96,7 @@ async function prerender(opts: {
   const snapshot = JSON.parse(readFileSync(opts.dataPath, 'utf-8'))
   const template = readFileSync(resolveSsgTemplatePath(opts.clientDir), 'utf-8')
 
-  const serverPath = join(opts.serverDir, 'entry-server.js')
+  const serverPath = resolveSsgServerEntryPath(opts.serverDir)
   const { render, getRoutes, getTitle } = await import(serverPath)
 
   const routes = getRoutes(snapshot)

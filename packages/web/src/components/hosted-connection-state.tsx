@@ -1,11 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Render actionable hosted bootstrap configuration errors.
  * 2. Render protected-resource bootstrap failures without fabricating backend availability.
+ * 3. Offer an explicit retry only for recoverable connection admission failures.
  *
  * Original request (2026-07-24): "missing/invalid credentials are rejected rather than reported offline/current."
  */
-export function HostedConnectionState(props: { title?: string; message?: string }) {
+export function HostedConnectionState(props: {
+  title?: string
+  message?: string
+  onRetry?: () => void
+}) {
   return (
     <main className="bg-background text-foreground flex min-h-screen items-center justify-center p-6">
       <section className="bg-card flex w-full max-w-lg flex-col gap-3 border p-6">
@@ -23,6 +28,15 @@ export function HostedConnectionState(props: { title?: string; message?: string 
             </>
           )}
         </p>
+        {props.onRetry ? (
+          <button
+            type="button"
+            onClick={props.onRetry}
+            className="border-border hover:bg-muted self-start border px-3 py-1.5 text-sm transition-colors"
+          >
+            Retry
+          </button>
+        ) : null}
       </section>
     </main>
   )

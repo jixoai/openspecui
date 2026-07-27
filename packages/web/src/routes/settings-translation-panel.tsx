@@ -1,6 +1,23 @@
+/**
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Own document-translation preferences and engine selection.
+ * 2. Project browser, remote, and local translation-engine availability.
+ * 3. Manage local model discovery, download, deletion, and objective progress evidence.
+ * 4. Run translation smoke tests and preserve their raw result/error lifecycle.
+ * 5. Keep routine preference saves visual while retaining explicit engine/download progress.
+ *
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Compromise: engine catalogs, model asset management, preferences, and smoke tests remain co-located because
+ * their current state machine shares one settings draft and mutation graph. Splitting it is a separate refactor.
+ */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
 import { Dialog } from '@/components/dialog'
+import {
+  RealtimeRevalidateCue,
+  RealtimeSkeletonInventory,
+  RealtimeSkeletonLine,
+} from '@/components/realtime'
 import { Select, type SelectOption } from '@/components/select'
 import { Switch } from '@/components/switch'
 import { TocSection } from '@/components/toc'
@@ -1724,46 +1741,25 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
         <Languages className="h-5 w-5" />
         Translation
       </h2>
-      <div className="border-border @container space-y-4 rounded-lg border p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <label className="block text-sm font-medium">Enable document translation</label>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Select a translator engine for Markdown document views.
-            </p>
-          </div>
-          <Switch
-            checked={translationEnabled}
-            onCheckedChange={(checked) => {
-              setTranslationEnabled(checked)
-              saveTranslationPreferencePatch({ enabled: checked })
-              if (checked && effectiveTranslationEngineId === 'browser') {
-                void refreshBrowserSupportTable(translationTargetLanguage)
-              }
-            }}
-            ariaLabel="Enable document translation"
-            disabled={
-              saveTranslationConfigMutation.isPending ||
-              saveGlobalSettingsMutation.isPending ||
-              inStaticMode
-            }
-          />
-        </div>
-
-        <div className="@[42rem]:grid-cols-2 grid gap-4">
-          <div>
-            <label className="mb-2 block text-sm font-medium">Target Language</label>
-            <TranslationLanguageCombobox
-              value={translationTargetLanguage}
-              onChange={(targetLanguage) => {
-                setTranslationTargetLanguage(targetLanguage)
-                saveTranslationPreferencePatch({ targetLanguage })
-                if (effectiveTranslationEngineId === 'browser') {
-                  setBrowserSupportTable(null)
-                  setBrowserSelectedPairKey(null)
-                  void refreshBrowserSupportTable(targetLanguage)
+      <RealtimeRevalidateCue active={isSaving}>
+        <div className="border-border @container space-y-4 rounded-lg border p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <label className="block text-sm font-medium">Enable document translation</label>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Select a translator engine for Markdown document views.
+              </p>
+            </div>
+            <Switch
+              checked={translationEnabled}
+              onCheckedChange={(checked) => {
+                setTranslationEnabled(checked)
+                saveTranslationPreferencePatch({ enabled: checked })
+                if (checked && effectiveTranslationEngineId === 'browser') {
+                  void refreshBrowserSupportTable(translationTargetLanguage)
                 }
               }}
+              ariaLabel="Enable document translation"
               disabled={
                 saveTranslationConfigMutation.isPending ||
                 saveGlobalSettingsMutation.isPending ||
@@ -1771,95 +1767,148 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
               }
             />
           </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium">Display Mode</label>
-            <ButtonGroup<DocumentTranslationDisplayMode>
-              value={translationDisplayMode}
-              onChange={(displayMode) => {
-                setTranslationDisplayMode(displayMode)
-                saveTranslationPreferencePatch({ displayMode })
-              }}
-              options={TRANSLATION_DISPLAY_MODE_OPTIONS}
-            />
-          </div>
-        </div>
 
-        <div className="border-border/60 space-y-3 border-t pt-3">
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Engine</label>
-              <div className="@[42rem]:grid-cols-[minmax(15rem,17rem)_minmax(0,1fr)_auto] grid gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  {effectiveTranslationEngineId ? (
-                    <Select<TranslationEngineId>
-                      value={effectiveTranslationEngineId}
-                      onValueChange={(engineId) => {
-                        setTranslationEngineId(engineId)
-                        saveTranslationEngineMutation.mutate(engineId)
-                        if (engineId === 'browser' && !inStaticMode) {
-                          const cached = getBrowserSupportTableState(translationTargetLanguage)
-                          if (cached) {
-                            setBrowserSupportTable(cached)
-                            const cachedRows = getBrowserSupportRows(cached)
-                            setBrowserSelectedPairKey((current) =>
-                              getPreferredBrowserPairKey(cachedRows, current)
-                            )
-                          } else {
-                            void refreshBrowserSupportTable(translationTargetLanguage)
+          <div className="@[42rem]:grid-cols-2 grid gap-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium">Target Language</label>
+              <TranslationLanguageCombobox
+                value={translationTargetLanguage}
+                onChange={(targetLanguage) => {
+                  setTranslationTargetLanguage(targetLanguage)
+                  saveTranslationPreferencePatch({ targetLanguage })
+                  if (effectiveTranslationEngineId === 'browser') {
+                    setBrowserSupportTable(null)
+                    setBrowserSelectedPairKey(null)
+                    void refreshBrowserSupportTable(targetLanguage)
+                  }
+                }}
+                disabled={
+                  saveTranslationConfigMutation.isPending ||
+                  saveGlobalSettingsMutation.isPending ||
+                  inStaticMode
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium">Display Mode</label>
+              <ButtonGroup<DocumentTranslationDisplayMode>
+                value={translationDisplayMode}
+                onChange={(displayMode) => {
+                  setTranslationDisplayMode(displayMode)
+                  saveTranslationPreferencePatch({ displayMode })
+                }}
+                options={TRANSLATION_DISPLAY_MODE_OPTIONS}
+              />
+            </div>
+          </div>
+
+          <div className="border-border/60 space-y-3 border-t pt-3">
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">Engine</label>
+                <div className="@[42rem]:grid-cols-[minmax(15rem,17rem)_minmax(0,1fr)_auto] grid gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {effectiveTranslationEngineId ? (
+                      <Select<TranslationEngineId>
+                        value={effectiveTranslationEngineId}
+                        onValueChange={(engineId) => {
+                          setTranslationEngineId(engineId)
+                          saveTranslationEngineMutation.mutate(engineId)
+                          if (engineId === 'browser' && !inStaticMode) {
+                            const cached = getBrowserSupportTableState(translationTargetLanguage)
+                            if (cached) {
+                              setBrowserSupportTable(cached)
+                              const cachedRows = getBrowserSupportRows(cached)
+                              setBrowserSelectedPairKey((current) =>
+                                getPreferredBrowserPairKey(cachedRows, current)
+                              )
+                            } else {
+                              void refreshBrowserSupportTable(translationTargetLanguage)
+                            }
                           }
+                        }}
+                        options={engineOptions}
+                        ariaLabel="Engine"
+                        className="min-w-[12rem]"
+                        disabled={
+                          !engineConfigReady ||
+                          saveTranslationEngineMutation.isPending ||
+                          inStaticMode
                         }
-                      }}
-                      options={engineOptions}
-                      ariaLabel="Engine"
-                      className="min-w-[12rem]"
-                      disabled={
-                        !engineConfigReady ||
-                        saveTranslationEngineMutation.isPending ||
-                        inStaticMode
-                      }
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      aria-label="Engine"
-                      className="border-border bg-background text-muted-foreground inline-flex h-9 min-w-[12rem] items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
-                      disabled
-                    >
-                      <span>
-                        {configLoading || configPresenceLoading || globalSettingsLoading
-                          ? 'Loading engine...'
-                          : 'Select engine'}
-                      </span>
-                      <ChevronDown className="h-4 w-4 shrink-0" />
-                    </button>
-                  )}
-                  <Tooltip content="Open translation test" delay={0}>
-                    <Button
-                      variant="primary"
-                      size="icon-md"
-                      aria-label="Open translation test"
-                      onClick={() => setTranslationTestOpen(true)}
-                      className="bg-primary text-primary-foreground hover:bg-primary/90"
-                    >
-                      <FlaskConical className="h-4 w-4" />
-                    </Button>
-                  </Tooltip>
-                </div>
-                <div className="min-w-0 space-y-1.5 text-sm">
-                  {selectedEngine?.technicalSummary ? (
-                    <div className="text-muted-foreground whitespace-normal text-xs leading-5 [overflow-wrap:anywhere]">
-                      {selectedEngine.technicalSummary}
-                    </div>
-                  ) : null}
-                  <div className="text-muted-foreground whitespace-normal text-xs leading-5 [overflow-wrap:anywhere]">
-                    Switching engines only checks installation state. Run Test Translate manually to
-                    validate runtime errors and latency.
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label="Engine"
+                        className="border-border bg-background text-muted-foreground inline-flex h-9 min-w-[12rem] items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+                        disabled
+                      >
+                        {configLoading || configPresenceLoading || globalSettingsLoading ? (
+                          <>
+                            <span className="rt-sr-status" role="status">
+                              Loading translation engine
+                            </span>
+                            <RealtimeSkeletonLine className="w-24" />
+                          </>
+                        ) : (
+                          <span>Select engine</span>
+                        )}
+                        <ChevronDown className="h-4 w-4 shrink-0" />
+                      </button>
+                    )}
+                    <Tooltip content="Open translation test" delay={0}>
+                      <Button
+                        variant="primary"
+                        size="icon-md"
+                        aria-label="Open translation test"
+                        onClick={() => setTranslationTestOpen(true)}
+                        className="bg-primary text-primary-foreground hover:bg-primary/90"
+                      >
+                        <FlaskConical className="h-4 w-4" />
+                      </Button>
+                    </Tooltip>
                   </div>
-                  <div className="text-muted-foreground flex min-w-0 items-center gap-2 leading-5">
-                    {effectiveTranslationEngineId === 'browser' ? (
-                      browserStatusIconState === 'checking' ? (
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                      ) : browserStatusIconState === 'available' ? (
+                  <div className="min-w-0 space-y-1.5 text-sm">
+                    {selectedEngine?.technicalSummary ? (
+                      <div className="text-muted-foreground whitespace-normal text-xs leading-5 [overflow-wrap:anywhere]">
+                        {selectedEngine.technicalSummary}
+                      </div>
+                    ) : null}
+                    <div className="text-muted-foreground whitespace-normal text-xs leading-5 [overflow-wrap:anywhere]">
+                      Switching engines only checks installation state. Run Test Translate manually
+                      to validate runtime errors and latency.
+                    </div>
+                    <div className="text-muted-foreground flex min-w-0 items-center gap-2 leading-5">
+                      {effectiveTranslationEngineId === 'browser' ? (
+                        browserStatusIconState === 'checking' ? (
+                          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                        ) : browserStatusIconState === 'available' ? (
+                          <Tooltip content="Installed" delay={0}>
+                            <button
+                              type="button"
+                              aria-label="Installed"
+                              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-emerald-500"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </button>
+                          </Tooltip>
+                        ) : browserStatusIconState === 'downloadable' ? (
+                          <Download className="h-4 w-4 shrink-0 text-sky-500" />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                        )
+                      ) : engineMetadataPending ? (
+                        <Tooltip content="Loading translation engine metadata" delay={0}>
+                          <button
+                            type="button"
+                            aria-label="Loading translation engine metadata"
+                            className="text-muted-foreground inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                            disabled
+                          >
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          </button>
+                        </Tooltip>
+                      ) : !shouldShowTranslationEngineInstallGate(resolvedLifecycle) ? (
                         <Tooltip content="Installed" delay={0}>
                           <button
                             type="button"
@@ -1869,563 +1918,536 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                             <CheckCircle className="h-4 w-4" />
                           </button>
                         </Tooltip>
-                      ) : browserStatusIconState === 'downloadable' ? (
-                        <Download className="h-4 w-4 shrink-0 text-sky-500" />
-                      ) : (
-                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
-                      )
-                    ) : engineMetadataPending ? (
-                      <Tooltip content="Loading translation engine metadata" delay={0}>
-                        <button
+                      ) : resolvedLifecycle?.dependency.state === 'installing' ? (
+                        <Button
                           type="button"
-                          aria-label="Loading translation engine metadata"
-                          className="text-muted-foreground inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                          size="icon-sm"
+                          variant="primary"
+                          aria-label="Installing translation engine"
+                          className="bg-primary text-primary-foreground hover:bg-primary/90 h-7 w-7 shrink-0 rounded-full"
                           disabled
                         >
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        </button>
-                      </Tooltip>
-                    ) : !shouldShowTranslationEngineInstallGate(resolvedLifecycle) ? (
-                      <Tooltip content="Installed" delay={0}>
-                        <button
-                          type="button"
-                          aria-label="Installed"
-                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-emerald-500"
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                        </button>
-                      </Tooltip>
-                    ) : resolvedLifecycle?.dependency.state === 'installing' ? (
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="primary"
-                        aria-label="Installing translation engine"
-                        className="bg-primary text-primary-foreground hover:bg-primary/90 h-7 w-7 shrink-0 rounded-full"
-                        disabled
-                      >
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      </Button>
-                    ) : resolvedLifecycle?.runtime.state === 'probing' ? (
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="primary"
-                        aria-label="Checking translation engine status"
-                        className="bg-primary text-primary-foreground hover:bg-primary/90 h-7 w-7 shrink-0 rounded-full"
-                        disabled
-                      >
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="primary"
-                        aria-label="Install translation engine"
-                        className="bg-primary text-primary-foreground hover:bg-primary/90 h-7 w-7 shrink-0 rounded-full"
-                        onClick={() => {
-                          if (!effectiveTranslationEngineId) return
-                          const label =
-                            selectedEngine?.label ??
-                            selectedEngineManifest?.label ??
-                            effectiveTranslationEngineId
-                          setEngineLifecycle(
-                            createTranslationEngineLifecycleStatus({
-                              dependency: {
-                                state: 'installing',
-                                message: `Installing ${label}.`,
-                              },
-                              summary: `Installing ${label}.`,
-                            })
-                          )
-                          installTranslationEngineMutation.mutate(effectiveTranslationEngineId)
-                        }}
-                        disabled={
-                          !effectiveTranslationEngineId ||
-                          installTranslationEngineMutation.isPending
-                        }
-                      >
-                        {installTranslationEngineMutation.isPending ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Download className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                    )}
-                    <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
-                      {shouldShowEngineInstallLogs ? (
-                        <pre
-                          ref={engineInstallLogRef}
-                          className="bg-muted/40 border-border scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border px-3 py-2 font-mono text-[11px] leading-5"
-                        >
-                          <code>{engineInstallLogs}</code>
-                        </pre>
-                      ) : (
-                        engineStatusMessage
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {shouldHideEngineSpecificCards ? null : effectiveTranslationEngineId === 'openai' ? (
-          <div className="border-border/60 @[56rem]:grid-cols-3 grid gap-3 border-t pt-3">
-            <label className="block text-sm font-medium">
-              API Base URL
-              <input
-                value={aiBaseUrl}
-                onChange={(event) => setAiBaseUrl(event.currentTarget.value)}
-                onBlur={() =>
-                  saveGlobalSettingsMutation.mutate({
-                    translationEngines: { openai: { baseUrl: aiBaseUrl.trim() } },
-                  })
-                }
-                className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
-                placeholder="https://api.openai.com/v1"
-              />
-            </label>
-            <label className="block text-sm font-medium">
-              Token
-              <input
-                value={aiToken}
-                type="password"
-                onChange={(event) => setAiToken(event.currentTarget.value)}
-                onBlur={() =>
-                  saveGlobalSettingsMutation.mutate({
-                    translationEngines: { openai: { token: aiToken } },
-                  })
-                }
-                className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
-                placeholder="sk-..."
-              />
-            </label>
-            <label className="block text-sm font-medium">
-              Model
-              <input
-                value={aiModel}
-                onChange={(event) => setAiModel(event.currentTarget.value)}
-                onBlur={() => {
-                  const model = aiModel.trim()
-                  if (configPresence?.translation.engines.openai) {
-                    saveTranslationConfigMutation.mutate({ engines: { openai: { model } } })
-                    return
-                  }
-                  saveGlobalSettingsMutation.mutate({
-                    translationEngines: { openai: { model } },
-                  })
-                }}
-                className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
-              />
-            </label>
-          </div>
-        ) : null}
-        {shouldHideEngineSpecificCards ? null : effectiveTranslationEngineId === 'browser' ? (
-          <div className="border-border/60 border-t pt-3">
-            <div className="space-y-3 text-xs">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 space-y-1">
-                    <label className="block text-sm font-medium">Browser language pairs</label>
-                    <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-[11px] leading-5">
-                      {browserSupportTable?.state === 'checking' ? (
-                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                      ) : null}
-                      <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
-                        {browserSupportMessage}
-                      </span>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => void refreshBrowserSupportTable(translationTargetLanguage)}
-                    disabled={browserCheckLoading}
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Check
-                  </Button>
-                </div>
-                {browserRows.length > 0 ? (
-                  <div
-                    className="flex flex-wrap gap-1.5 pt-1"
-                    aria-label="Browser translation language pairs"
-                  >
-                    {browserRows.map((row) => {
-                      const selected = getBrowserPairKey(row) === selectedBrowserPairKey
-                      return (
-                        <button
-                          key={getBrowserPairKey(row)}
+                        </Button>
+                      ) : resolvedLifecycle?.runtime.state === 'probing' ? (
+                        <Button
                           type="button"
-                          onClick={() => setBrowserSelectedPairKey(getBrowserPairKey(row))}
-                          className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] leading-none transition-colors ${getDownloadStateChipClasses(
-                            {
-                              tone: getBrowserAvailabilityChipTone(row.availability),
-                              selected,
-                            }
-                          )}`}
-                          title={getBrowserPairDescription(row)}
+                          size="icon-sm"
+                          variant="primary"
+                          aria-label="Checking translation engine status"
+                          className="bg-primary text-primary-foreground hover:bg-primary/90 h-7 w-7 shrink-0 rounded-full"
+                          disabled
                         >
-                          <span className="font-medium">{getBrowserPairLabel(row)}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : null}
-              </div>
-              {selectedBrowserRow ? (
-                <div className="border-border bg-muted/30 rounded-md border px-3 py-2 text-xs">
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                    <div className="text-foreground flex min-w-0 items-center gap-2 font-medium">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="primary"
+                          aria-label="Install translation engine"
+                          className="bg-primary text-primary-foreground hover:bg-primary/90 h-7 w-7 shrink-0 rounded-full"
+                          onClick={() => {
+                            if (!effectiveTranslationEngineId) return
+                            const label =
+                              selectedEngine?.label ??
+                              selectedEngineManifest?.label ??
+                              effectiveTranslationEngineId
+                            setEngineLifecycle(
+                              createTranslationEngineLifecycleStatus({
+                                dependency: {
+                                  state: 'installing',
+                                  message: `Installing ${label}.`,
+                                },
+                                summary: `Installing ${label}.`,
+                              })
+                            )
+                            installTranslationEngineMutation.mutate(effectiveTranslationEngineId)
+                          }}
+                          disabled={
+                            !effectiveTranslationEngineId ||
+                            installTranslationEngineMutation.isPending
+                          }
+                        >
+                          {installTranslationEngineMutation.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      )}
                       <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
-                        {getBrowserPairDescription(selectedBrowserRow)}
+                        {shouldShowEngineInstallLogs ? (
+                          <pre
+                            ref={engineInstallLogRef}
+                            className="bg-muted/40 border-border scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border px-3 py-2 font-mono text-[11px] leading-5"
+                          >
+                            <code>{engineInstallLogs}</code>
+                          </pre>
+                        ) : engineMetadataPending ? (
+                          <RealtimeSkeletonLine className="w-56" />
+                        ) : (
+                          engineStatusMessage
+                        )}
                       </span>
                     </div>
-                    <div className="relative inline-flex h-10 w-10 items-center justify-center">
-                      <svg viewBox="0 0 40 40" className="h-10 w-10 -rotate-90">
-                        <circle
-                          cx="20"
-                          cy="20"
-                          r="16"
-                          className="stroke-border fill-none"
-                          strokeWidth="3"
-                        />
-                        <circle
-                          cx="20"
-                          cy="20"
-                          r="16"
-                          className={`fill-none transition-all ${
-                            browserRowActionKind === 'downloaded'
-                              ? 'stroke-emerald-500'
-                              : 'stroke-primary'
-                          }`}
-                          strokeWidth="3"
-                          strokeDasharray={100.531}
-                          strokeDashoffset={100.531 * (1 - browserProgressPercent / 100)}
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      {browserRowActionKind === 'download' ? (
-                        <Tooltip content="Download language pair" delay={0}>
-                          <button
-                            type="button"
-                            aria-label="Download browser language pair"
-                            onClick={() => void startBrowserPairPreparation(selectedBrowserRow)}
-                            className="text-foreground focus-visible:ring-primary absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent outline-none transition-[background-color,transform] hover:scale-105 focus-visible:ring-1"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </button>
-                        </Tooltip>
-                      ) : browserRowActionKind === 'cancel' ? (
-                        <Tooltip content="Cancel download" delay={0}>
-                          <button
-                            type="button"
-                            aria-label="Cancel browser language pair download"
-                            onClick={cancelBrowserPairPreparation}
-                            className="text-foreground focus-visible:ring-primary group absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent outline-none transition-[background-color,transform] hover:scale-105 focus-visible:ring-1"
-                          >
-                            <span className="text-[10px] font-medium group-hover:hidden">
-                              {`${browserProgressPercent}%`}
-                            </span>
-                            <X className="hidden h-3.5 w-3.5 group-hover:block" />
-                          </button>
-                        </Tooltip>
-                      ) : browserRowActionKind === 'downloaded' ? (
-                        <Tooltip content="Downloaded" delay={0}>
-                          <span
-                            aria-label="Downloaded"
-                            className="absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent text-emerald-500"
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                          </span>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-foreground absolute text-[10px] font-medium">
-                          {browserCheckLoading ? '...' : `${browserProgressPercent}%`}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-muted-foreground mt-2 leading-5">
-                    {selectedBrowserRow.message ??
-                      (selectedBrowserRow.availability === 'available'
-                        ? 'This language pair is ready in the browser.'
-                        : selectedBrowserRow.availability === 'downloading'
-                          ? 'Chrome is downloading this language pair.'
-                          : 'This language pair can be downloaded by Chrome.')}
                   </div>
                 </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-        {shouldHideEngineSpecificCards ? null : effectiveManagedLocalEngineId ? (
-          <div className="border-border/60 border-t pt-3">
-            <div className="space-y-3 text-xs">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="block text-sm font-medium">{managedLocalModelLabel}</label>
-                  <div className="flex items-center gap-1">
-                    <Tooltip content={managedLocalRefreshTooltip} delay={0}>
-                      <button
-                        type="button"
-                        aria-label={managedLocalRefreshTooltip}
-                        onClick={() => {
-                          if (!nmtModelId) return
-                          refreshLocalProfilesMutation.mutate({ modelId: nmtModelId })
-                        }}
-                        disabled={!nmtModelId || refreshLocalProfilesMutation.isPending}
-                        className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-primary inline-flex h-8 w-8 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <RefreshCw
-                          className={`h-4 w-4 ${
-                            refreshLocalProfilesMutation.isPending ? 'animate-spin' : ''
-                          }`}
-                        />
-                      </button>
-                    </Tooltip>
-                    <LocalProviderSettingsPopover
-                      value={nmtHfEndpoint}
-                      memoryBudgetPercent={nmtMemoryBudgetPercent}
-                      resolvedEndpoint={nmtResolvedHfEndpoint}
-                      onValueChange={setNmtHfEndpoint}
-                      onMemoryBudgetPercentChange={setNmtMemoryBudgetPercent}
-                      onCommit={(endpoint) => {
-                        saveGlobalSettingsMutation.mutate({
-                          translationEngines: createManagedLocalGlobalSettingsPatch(
-                            effectiveManagedLocalEngineId,
-                            {
-                              hfEndpoint: endpoint,
-                              memoryBudgetPercent: nmtMemoryBudgetPercent,
-                            }
-                          ),
-                        })
-                        setNmtRemoteOptions([])
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="@[42rem]:grid-cols-[minmax(0,1fr)_auto] grid gap-2">
-                  <LocalModelCombobox
-                    value={nmtModel}
-                    query={nmtModelQuery}
-                    options={nmtCatalogOptions}
-                    remoteLoading={nmtRemoteLoading}
-                    onQueryChange={setNmtModelQuery}
-                    onOpenChange={(open) => {
-                      setNmtSearchOpen(open)
-                      if (open) {
-                        setNmtRemoteOptions([])
-                        setNmtModelQuery('')
-                        setNmtDebouncedQuery('')
-                      }
-                    }}
-                    onChange={(nextModel) => {
-                      setNmtModel(nextModel)
-                      setNmtModelQuery(nextModel)
-                    }}
-                    onCommit={async (model) => {
-                      const panelState = await markManagedLocalModelSelected(
-                        effectiveManagedLocalEngineId,
-                        model
-                      )
-                      cacheManagedLocalPanelState({
-                        engineId: effectiveManagedLocalEngineId,
-                        panelState,
-                        queryClient,
-                        requestedSelectedGroupId: preferredLocalSelectedGroupId,
-                      })
-                      lastLocalPanelStateRef.current = panelState
-                      saveManagedLocalSelectionSettings(effectiveManagedLocalEngineId, {
-                        model,
-                        selectedGroupId: null,
-                      })
-                      setNmtSelectedGroupId(panelState.selectedGroupId)
-                    }}
-                    ariaLabel={managedLocalModelLabel}
-                  />
-                  <div className="text-muted-foreground inline-flex min-w-0 items-center text-[11px] leading-5 [overflow-wrap:anywhere]">
-                    HF: {nmtResolvedHfEndpoint}
-                  </div>
-                </div>
-                <LocalDownloadGroupSelector
-                  ariaLabel={managedLocalDownloadGroupsLabel}
-                  groups={nmtDownloadGroups}
-                  loading={localPlanLoading}
-                  disabled={nmtGroupSelectionDisabled}
-                  onSelectGroup={(groupId) => {
-                    setNmtSelectedGroupId(groupId)
-                    saveManagedLocalSelectionSettings(effectiveManagedLocalEngineId, {
-                      selectedGroupId: groupId,
-                    })
-                  }}
-                />
               </div>
-              <LocalDownloadFilesCard
-                plan={displayedLocalAsset?.plan ?? resolvedLocalDownloadPlan}
-                groups={nmtDownloadGroups}
-                state={displayedLocalAsset}
-                progressPercent={nmtProgressPercent}
-                loading={localPlanLoading}
-                error={
-                  localPanelError ??
-                  (selectedLocalAsset?.status === 'error'
-                    ? (selectedLocalAsset.error ?? null)
-                    : null)
-                }
-                onDownload={() => {
-                  downloadLocalModelMutation.mutate({
-                    modelId: nmtModelId,
-                    groupId: effectiveLocalSelectedGroupId,
-                  })
-                }}
-                onPause={() => {
-                  pauseLocalModelMutation.mutate({
-                    modelId: nmtModelId,
-                    groupId: effectiveLocalSelectedGroupId,
-                  })
-                }}
-                onResume={() => {
-                  resumeLocalModelMutation.mutate({
-                    modelId: nmtModelId,
-                    groupId: effectiveLocalSelectedGroupId,
-                  })
-                }}
-                onDelete={() => {
-                  deleteLocalModelMutation.mutate({
-                    modelId: nmtModelId,
-                    groupId: effectiveLocalSelectedGroupId,
-                  })
-                }}
-                knownSize={nmtKnownSize}
-                modelId={nmtModelId}
-              />
             </div>
           </div>
-        ) : null}
 
-        <div className="border-border/60 space-y-3 border-t pt-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <label className="block text-sm font-medium">Translation cache</label>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Stores validated translation projections in the shared user cache.
-              </p>
-            </div>
-            <Switch
-              checked={translationCacheEnabled}
-              onCheckedChange={(checked) => {
-                setTranslationCacheEnabled(checked)
-                saveTranslationPreferencePatch({ cacheEnabled: checked })
-                if (checked) void refetchTranslationCacheStats()
-              }}
-              ariaLabel="Enable translation cache"
-              disabled={
-                saveTranslationConfigMutation.isPending ||
-                saveGlobalSettingsMutation.isPending ||
-                inStaticMode
-              }
-            />
-          </div>
-
-          {translationCacheEnabled ? (
-            <div className="@[42rem]:grid-cols-[minmax(12rem,1fr)_auto] grid gap-3">
+          {shouldHideEngineSpecificCards ? null : effectiveTranslationEngineId === 'openai' ? (
+            <div className="border-border/60 @[56rem]:grid-cols-3 grid gap-3 border-t pt-3">
               <label className="block text-sm font-medium">
-                Entry limit
+                API Base URL
                 <input
-                  type="number"
-                  min={100}
-                  max={200000}
-                  step={100}
-                  value={translationCacheEntryLimit}
-                  onChange={(event) =>
-                    setTranslationCacheEntryLimit(Number(event.currentTarget.value))
-                  }
-                  onBlur={() => {
-                    const nextLimit = Math.round(translationCacheEntryLimit)
-                    setTranslationCacheEntryLimit(nextLimit)
+                  value={aiBaseUrl}
+                  onChange={(event) => setAiBaseUrl(event.currentTarget.value)}
+                  onBlur={() =>
                     saveGlobalSettingsMutation.mutate({
-                      translationCache: { entryLimit: nextLimit },
+                      translationEngines: { openai: { baseUrl: aiBaseUrl.trim() } },
+                    })
+                  }
+                  className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
+                  placeholder="https://api.openai.com/v1"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Token
+                <input
+                  value={aiToken}
+                  type="password"
+                  onChange={(event) => setAiToken(event.currentTarget.value)}
+                  onBlur={() =>
+                    saveGlobalSettingsMutation.mutate({
+                      translationEngines: { openai: { token: aiToken } },
+                    })
+                  }
+                  className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
+                  placeholder="sk-..."
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Model
+                <input
+                  value={aiModel}
+                  onChange={(event) => setAiModel(event.currentTarget.value)}
+                  onBlur={() => {
+                    const model = aiModel.trim()
+                    if (configPresence?.translation.engines.openai) {
+                      saveTranslationConfigMutation.mutate({ engines: { openai: { model } } })
+                      return
+                    }
+                    saveGlobalSettingsMutation.mutate({
+                      translationEngines: { openai: { model } },
                     })
                   }}
                   className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
                 />
               </label>
-              <div className="flex flex-wrap items-end gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() =>
-                    cleanTranslationCacheMutation.mutate(undefined, {
-                      onSuccess: () => void refetchTranslationCacheStats(),
-                    })
-                  }
-                  disabled={cleanTranslationCacheMutation.isPending}
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  Clean
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() =>
-                    clearTranslationCacheMutation.mutate(undefined, {
-                      onSuccess: () => void refetchTranslationCacheStats(),
-                    })
-                  }
-                  disabled={clearTranslationCacheMutation.isPending}
-                >
-                  <XCircle className="h-3.5 w-3.5" />
-                  Clear
-                </Button>
-              </div>
-              <p className="text-muted-foreground @[42rem]:col-span-2 text-xs">
-                {translationCacheStats
-                  ? `${translationCacheStats.entries} / ${translationCacheStats.entryLimit} entries`
-                  : 'Cache stats unavailable.'}
-              </p>
             </div>
           ) : null}
+          {shouldHideEngineSpecificCards ? null : effectiveTranslationEngineId === 'browser' ? (
+            <div className="border-border/60 border-t pt-3">
+              <div className="space-y-3 text-xs">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 space-y-1">
+                      <label className="block text-sm font-medium">Browser language pairs</label>
+                      <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-[11px] leading-5">
+                        {browserSupportTable?.state === 'checking' ? (
+                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                        ) : null}
+                        <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+                          {browserSupportMessage}
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void refreshBrowserSupportTable(translationTargetLanguage)}
+                      disabled={browserCheckLoading}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Check
+                    </Button>
+                  </div>
+                  {browserRows.length > 0 ? (
+                    <div
+                      className="flex flex-wrap gap-1.5 pt-1"
+                      aria-label="Browser translation language pairs"
+                    >
+                      {browserRows.map((row) => {
+                        const selected = getBrowserPairKey(row) === selectedBrowserPairKey
+                        return (
+                          <button
+                            key={getBrowserPairKey(row)}
+                            type="button"
+                            onClick={() => setBrowserSelectedPairKey(getBrowserPairKey(row))}
+                            className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] leading-none transition-colors ${getDownloadStateChipClasses(
+                              {
+                                tone: getBrowserAvailabilityChipTone(row.availability),
+                                selected,
+                              }
+                            )}`}
+                            title={getBrowserPairDescription(row)}
+                          >
+                            <span className="font-medium">{getBrowserPairLabel(row)}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+                {selectedBrowserRow ? (
+                  <div className="border-border bg-muted/30 rounded-md border px-3 py-2 text-xs">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                      <div className="text-foreground flex min-w-0 items-center gap-2 font-medium">
+                        <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+                          {getBrowserPairDescription(selectedBrowserRow)}
+                        </span>
+                      </div>
+                      <div className="relative inline-flex h-10 w-10 items-center justify-center">
+                        <svg viewBox="0 0 40 40" className="h-10 w-10 -rotate-90">
+                          <circle
+                            cx="20"
+                            cy="20"
+                            r="16"
+                            className="stroke-border fill-none"
+                            strokeWidth="3"
+                          />
+                          <circle
+                            cx="20"
+                            cy="20"
+                            r="16"
+                            className={`fill-none transition-all ${
+                              browserRowActionKind === 'downloaded'
+                                ? 'stroke-emerald-500'
+                                : 'stroke-primary'
+                            }`}
+                            strokeWidth="3"
+                            strokeDasharray={100.531}
+                            strokeDashoffset={100.531 * (1 - browserProgressPercent / 100)}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        {browserRowActionKind === 'download' ? (
+                          <Tooltip content="Download language pair" delay={0}>
+                            <button
+                              type="button"
+                              aria-label="Download browser language pair"
+                              onClick={() => void startBrowserPairPreparation(selectedBrowserRow)}
+                              className="text-foreground focus-visible:ring-primary absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent outline-none transition-[background-color,transform] hover:scale-105 focus-visible:ring-1"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
+                        ) : browserRowActionKind === 'cancel' ? (
+                          <Tooltip content="Cancel download" delay={0}>
+                            <button
+                              type="button"
+                              aria-label="Cancel browser language pair download"
+                              onClick={cancelBrowserPairPreparation}
+                              className="text-foreground focus-visible:ring-primary group absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent outline-none transition-[background-color,transform] hover:scale-105 focus-visible:ring-1"
+                            >
+                              <span className="text-[10px] font-medium group-hover:hidden">
+                                {`${browserProgressPercent}%`}
+                              </span>
+                              <X className="hidden h-3.5 w-3.5 group-hover:block" />
+                            </button>
+                          </Tooltip>
+                        ) : browserRowActionKind === 'downloaded' ? (
+                          <Tooltip content="Downloaded" delay={0}>
+                            <span
+                              aria-label="Downloaded"
+                              className="absolute inline-flex h-8 w-8 items-center justify-center rounded-full bg-transparent text-emerald-500"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </span>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-foreground absolute text-[10px] font-medium">
+                            {browserCheckLoading ? '...' : `${browserProgressPercent}%`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground mt-2 leading-5">
+                      {selectedBrowserRow.message ??
+                        (selectedBrowserRow.availability === 'available'
+                          ? 'This language pair is ready in the browser.'
+                          : selectedBrowserRow.availability === 'downloading'
+                            ? 'Chrome is downloading this language pair.'
+                            : 'This language pair can be downloaded by Chrome.')}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {shouldHideEngineSpecificCards ? null : effectiveManagedLocalEngineId ? (
+            <div className="border-border/60 border-t pt-3">
+              <div className="space-y-3 text-xs">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block text-sm font-medium">{managedLocalModelLabel}</label>
+                    <div className="flex items-center gap-1">
+                      <Tooltip content={managedLocalRefreshTooltip} delay={0}>
+                        <button
+                          type="button"
+                          aria-label={managedLocalRefreshTooltip}
+                          onClick={() => {
+                            if (!nmtModelId) return
+                            refreshLocalProfilesMutation.mutate({ modelId: nmtModelId })
+                          }}
+                          disabled={!nmtModelId || refreshLocalProfilesMutation.isPending}
+                          className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-primary inline-flex h-8 w-8 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            className={`h-4 w-4 ${
+                              refreshLocalProfilesMutation.isPending ? 'animate-spin' : ''
+                            }`}
+                          />
+                        </button>
+                      </Tooltip>
+                      <LocalProviderSettingsPopover
+                        value={nmtHfEndpoint}
+                        memoryBudgetPercent={nmtMemoryBudgetPercent}
+                        resolvedEndpoint={nmtResolvedHfEndpoint}
+                        onValueChange={setNmtHfEndpoint}
+                        onMemoryBudgetPercentChange={setNmtMemoryBudgetPercent}
+                        onCommit={(endpoint) => {
+                          saveGlobalSettingsMutation.mutate({
+                            translationEngines: createManagedLocalGlobalSettingsPatch(
+                              effectiveManagedLocalEngineId,
+                              {
+                                hfEndpoint: endpoint,
+                                memoryBudgetPercent: nmtMemoryBudgetPercent,
+                              }
+                            ),
+                          })
+                          setNmtRemoteOptions([])
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="@[42rem]:grid-cols-[minmax(0,1fr)_auto] grid gap-2">
+                    <LocalModelCombobox
+                      value={nmtModel}
+                      query={nmtModelQuery}
+                      options={nmtCatalogOptions}
+                      remoteLoading={nmtRemoteLoading}
+                      onQueryChange={setNmtModelQuery}
+                      onOpenChange={(open) => {
+                        setNmtSearchOpen(open)
+                        if (open) {
+                          setNmtRemoteOptions([])
+                          setNmtModelQuery('')
+                          setNmtDebouncedQuery('')
+                        }
+                      }}
+                      onChange={(nextModel) => {
+                        setNmtModel(nextModel)
+                        setNmtModelQuery(nextModel)
+                      }}
+                      onCommit={async (model) => {
+                        const panelState = await markManagedLocalModelSelected(
+                          effectiveManagedLocalEngineId,
+                          model
+                        )
+                        cacheManagedLocalPanelState({
+                          engineId: effectiveManagedLocalEngineId,
+                          panelState,
+                          queryClient,
+                          requestedSelectedGroupId: preferredLocalSelectedGroupId,
+                        })
+                        lastLocalPanelStateRef.current = panelState
+                        saveManagedLocalSelectionSettings(effectiveManagedLocalEngineId, {
+                          model,
+                          selectedGroupId: null,
+                        })
+                        setNmtSelectedGroupId(panelState.selectedGroupId)
+                      }}
+                      ariaLabel={managedLocalModelLabel}
+                    />
+                    <div className="text-muted-foreground inline-flex min-w-0 items-center text-[11px] leading-5 [overflow-wrap:anywhere]">
+                      HF: {nmtResolvedHfEndpoint}
+                    </div>
+                  </div>
+                  <LocalDownloadGroupSelector
+                    ariaLabel={managedLocalDownloadGroupsLabel}
+                    groups={nmtDownloadGroups}
+                    loading={localPlanLoading}
+                    disabled={nmtGroupSelectionDisabled}
+                    onSelectGroup={(groupId) => {
+                      setNmtSelectedGroupId(groupId)
+                      saveManagedLocalSelectionSettings(effectiveManagedLocalEngineId, {
+                        selectedGroupId: groupId,
+                      })
+                    }}
+                  />
+                </div>
+                <LocalDownloadFilesCard
+                  plan={displayedLocalAsset?.plan ?? resolvedLocalDownloadPlan}
+                  groups={nmtDownloadGroups}
+                  state={displayedLocalAsset}
+                  progressPercent={nmtProgressPercent}
+                  loading={localPlanLoading}
+                  error={
+                    localPanelError ??
+                    (selectedLocalAsset?.status === 'error'
+                      ? (selectedLocalAsset.error ?? null)
+                      : null)
+                  }
+                  onDownload={() => {
+                    downloadLocalModelMutation.mutate({
+                      modelId: nmtModelId,
+                      groupId: effectiveLocalSelectedGroupId,
+                    })
+                  }}
+                  onPause={() => {
+                    pauseLocalModelMutation.mutate({
+                      modelId: nmtModelId,
+                      groupId: effectiveLocalSelectedGroupId,
+                    })
+                  }}
+                  onResume={() => {
+                    resumeLocalModelMutation.mutate({
+                      modelId: nmtModelId,
+                      groupId: effectiveLocalSelectedGroupId,
+                    })
+                  }}
+                  onDelete={() => {
+                    deleteLocalModelMutation.mutate({
+                      modelId: nmtModelId,
+                      groupId: effectiveLocalSelectedGroupId,
+                    })
+                  }}
+                  knownSize={nmtKnownSize}
+                  modelId={nmtModelId}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <div className="border-border/60 space-y-3 border-t pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <label className="block text-sm font-medium">Translation cache</label>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Stores validated translation projections in the shared user cache.
+                </p>
+              </div>
+              <Switch
+                checked={translationCacheEnabled}
+                onCheckedChange={(checked) => {
+                  setTranslationCacheEnabled(checked)
+                  saveTranslationPreferencePatch({ cacheEnabled: checked })
+                  if (checked) void refetchTranslationCacheStats()
+                }}
+                ariaLabel="Enable translation cache"
+                disabled={
+                  saveTranslationConfigMutation.isPending ||
+                  saveGlobalSettingsMutation.isPending ||
+                  inStaticMode
+                }
+              />
+            </div>
+
+            {translationCacheEnabled ? (
+              <div className="@[42rem]:grid-cols-[minmax(12rem,1fr)_auto] grid gap-3">
+                <label className="block text-sm font-medium">
+                  Entry limit
+                  <input
+                    type="number"
+                    min={100}
+                    max={200000}
+                    step={100}
+                    value={translationCacheEntryLimit}
+                    onChange={(event) =>
+                      setTranslationCacheEntryLimit(Number(event.currentTarget.value))
+                    }
+                    onBlur={() => {
+                      const nextLimit = Math.round(translationCacheEntryLimit)
+                      setTranslationCacheEntryLimit(nextLimit)
+                      saveGlobalSettingsMutation.mutate({
+                        translationCache: { entryLimit: nextLimit },
+                      })
+                    }}
+                    className="border-input bg-background mt-2 h-9 w-full rounded-md border px-3 text-sm"
+                  />
+                </label>
+                <div className="flex flex-wrap items-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      cleanTranslationCacheMutation.mutate(undefined, {
+                        onSuccess: () => void refetchTranslationCacheStats(),
+                      })
+                    }
+                    disabled={cleanTranslationCacheMutation.isPending}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Clean
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      clearTranslationCacheMutation.mutate(undefined, {
+                        onSuccess: () => void refetchTranslationCacheStats(),
+                      })
+                    }
+                    disabled={clearTranslationCacheMutation.isPending}
+                  >
+                    <XCircle className="h-3.5 w-3.5" />
+                    Clear
+                  </Button>
+                </div>
+                <p className="text-muted-foreground @[42rem]:col-span-2 text-xs">
+                  {translationCacheStats
+                    ? `${translationCacheStats.entries} / ${translationCacheStats.entryLimit} entries`
+                    : 'Cache stats unavailable.'}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          <TranslationTestDialog
+            open={translationTestOpen}
+            onClose={() => setTranslationTestOpen(false)}
+            engineId={effectiveTranslationEngineId}
+            sourceLanguage={smokeSourceLanguage}
+            sourceText={smokeSourceText}
+            timeoutSeconds={smokeTimeoutSeconds}
+            result={smokeResult}
+            error={smokeError}
+            running={smokeRunning}
+            onSample={() => {
+              const preset = getTranslationSmokePreset()
+              setSmokeSourceLanguage(preset.sourceLanguage)
+              setSmokeSourceText(preset.sourceText)
+              setSmokeResult('')
+              setSmokeError(null)
+              setSmokeElapsedMs(null)
+            }}
+            onRun={() => void runSmokeTest()}
+            targetLanguage={translationTargetLanguage}
+            onSourceLanguageChange={(sourceLanguage) => {
+              setSmokeSourceLanguage(sourceLanguage)
+              setSmokeResult('')
+              setSmokeError(null)
+              setSmokeElapsedMs(null)
+            }}
+            onSourceTextChange={setSmokeSourceText}
+            onTimeoutSecondsChange={setSmokeTimeoutSeconds}
+            elapsedMs={smokeElapsedMs}
+          />
         </div>
-
-        {isSaving ? (
-          <p className="text-muted-foreground text-xs">Saving translation settings...</p>
-        ) : null}
-
-        <TranslationTestDialog
-          open={translationTestOpen}
-          onClose={() => setTranslationTestOpen(false)}
-          engineId={effectiveTranslationEngineId}
-          sourceLanguage={smokeSourceLanguage}
-          sourceText={smokeSourceText}
-          timeoutSeconds={smokeTimeoutSeconds}
-          result={smokeResult}
-          error={smokeError}
-          running={smokeRunning}
-          onSample={() => {
-            const preset = getTranslationSmokePreset()
-            setSmokeSourceLanguage(preset.sourceLanguage)
-            setSmokeSourceText(preset.sourceText)
-            setSmokeResult('')
-            setSmokeError(null)
-            setSmokeElapsedMs(null)
-          }}
-          onRun={() => void runSmokeTest()}
-          targetLanguage={translationTargetLanguage}
-          onSourceLanguageChange={(sourceLanguage) => {
-            setSmokeSourceLanguage(sourceLanguage)
-            setSmokeResult('')
-            setSmokeError(null)
-            setSmokeElapsedMs(null)
-          }}
-          onSourceTextChange={setSmokeSourceText}
-          onTimeoutSecondsChange={setSmokeTimeoutSeconds}
-          elapsedMs={smokeElapsedMs}
-        />
-      </div>
+      </RealtimeRevalidateCue>
     </TocSection>
   )
 }
@@ -2648,9 +2670,11 @@ function LocalModelCombobox({
             <div className="text-muted-foreground px-2 py-2 text-sm">No matching models</div>
           )}
           {remoteLoading ? (
-            <div className="text-muted-foreground flex items-center gap-2 px-2 py-2 text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading remote models…
+            <div className="space-y-2 px-2 py-2" aria-busy="true">
+              <span className="rt-sr-status" role="status">
+                Loading remote models
+              </span>
+              <RealtimeSkeletonInventory count={2} rowClassName="h-14" />
             </div>
           ) : null}
         </div>

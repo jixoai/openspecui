@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-21 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove late Root A preparation cannot overwrite a B-current target or A-owned dirty draft.
  * 2. Prove same-generation observations preserve the real editor and spawn-dialog instances.
+ * 3. Prove pending preparation uses the shared visual cue without routine visible copy.
  *
  * Original request (2026-07-21): "Compose 需要先建模 pending A -> B 的 generation；不要用假按钮、手动 downstream 调用或同时绕过两层保护。"
  * Owner correction (2026-07-21): "每项先明确一个生产 owner、一个精准红例、一个绿例。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
 import { EditorView } from '@codemirror/view'
 import type { RunWorkflowResultV2, WorkflowInvocationTargetV2 } from '@openspecui/core'
@@ -331,6 +333,8 @@ describe('OpsxComposeRoute generation ownership', () => {
 
     const view = render(<OpsxComposeRoute />)
     await waitFor(() => expect(prepareWorkflowInvocationMock).toHaveBeenCalledTimes(1))
+    expect(view.container.querySelector('.rt-revalidate-cue')).not.toBeNull()
+    expect(screen.queryByText('Generating prompt...')).toBeNull()
     const editor = getComposeEditorView()
     replaceComposeDraft(editor, 'edited while Root A is pending')
     expect(editor.state.doc.toString()).toBe('edited while Root A is pending')
@@ -346,6 +350,7 @@ describe('OpsxComposeRoute generation ownership', () => {
     await waitFor(() =>
       expect(within(getWorkflowTargetNotice()).getByText('/stores/next')).toBeInTheDocument()
     )
+    expect(getComposeEditorView()).toBe(editor)
     expect(editor.state.doc.toString()).toBe('edited while Root A is pending')
     expect(screen.getByRole('button', { name: 'Use edited prompt for current root' })).toBeVisible()
 
@@ -368,7 +373,9 @@ describe('OpsxComposeRoute generation ownership', () => {
     )
 
     const view = render(<OpsxComposeRoute />)
-    await waitFor(() => expect(screen.getByText('/stores/shared')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(within(getWorkflowTargetNotice()).getByText('/stores/shared')).toBeInTheDocument()
+    )
     const editor = getComposeEditorView()
     replaceComposeDraft(editor, 'same-generation dirty draft')
 

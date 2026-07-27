@@ -1,14 +1,15 @@
 <!--
-Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 1. Record the executable baseline for the owner's all-surface realtime waiting-experience Change.
 2. Keep actual source progress, scope, decisions, and evidence boundaries synchronized during application.
 3. Preserve the push-to-pull, authority, draft-protection, and visual-language decisions approved in research.
 4. Define the concrete conditions that require a return to research before implementation can proceed.
-5. Record the independently requested P1-A correction evidence without closing its review-owned checkpoints.
+5. Record P1-A/P1-B and all-surface implementation evidence without closing owner-only acceptance.
 
 Original request (2026-07-23): "布局方面暂时不需要改动，后续社区有一个PR我会合并进来，那是关于kanban 的一个pr。所以本次change的主要优化点，在于更友好的UIUX，优化用户等待信息的时间感知。"
 Original request (2026-07-23): "一次性把现有的页面都统一整改，因为这涉及到统一组件的封装和开发。全部改动，才能在中途暴露出所有隐含的可能、状态。这对于我们组件化的封装和开发非常重要。"
 Original request (2026-07-23): "不用显示文字，可以用光影来替代，将它做成一种视觉语言，其实包括加载中等状态也是，尽量不要使用文字，而是使用视觉语言（动画、光影）等技术。"
+Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
 -->
 
 ## Implementation State
@@ -22,7 +23,7 @@ bounded P1-A public-boundary red case recorded in the current worker Goal.
 
 The implementation scope is frozen as follows:
 
-- In scope: every current Web route, detail surface, settings section, dialog, popover, drawer, editor-adjacent control, and asynchronous command presentation listed in `research-plan.md`.
+- In scope: every current Web/App route, detail surface, settings section, dialog, popover, drawer, editor-adjacent control, and asynchronous command presentation listed in `research-plan.md`.
 - In scope: the explicitly approved Server-to-Web push-to-pull projection contract needed to make those visual states truthful.
 - Out of scope: page layout, information architecture, navigation, Kanban design, the pending community Kanban PR, a global second data store, optimistic business-data writes, raw Terminal/CLI/log/editor content changes, and owner-only final browser acceptance.
 
@@ -34,11 +35,32 @@ The implementation scope is frozen as follows:
 
 | Order | Phase                              | Current state                                                           | Implementation owner                                                                         | Mandatory evidence before moving on                                                                                                                                         |
 | ----- | ---------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Phase 2, P1-A                      | Implemented; pending independent review                                 | Dashboard Summary Projection Work boundary and its real Web adapter                          | The v2-after-implementation acceptance fixed point is green. No historical pre-fix red was obtained; the same Web fixture fails after bypassing the exact active-wake gate. |
+| 1     | Phase 2, P1-A                      | Runtime accepted; historical pre-v2 red unavailable                     | Dashboard Summary Projection Work boundary and its real Web adapter                          | The v2-after-implementation acceptance fixed point is green. No historical pre-fix red was obtained; the same Web fixture fails after bypassing the exact active-wake gate. |
 | 2     | Phase 1                            | **Implemented (Slice 2A+2B)**                                           | Web realtime component module, shared `Button`, and CSS token ownership                      | A focused visual/state fixture proves stable geometry, reduced-motion equivalence, hidden accessible status, and no changing command label.                                 |
 | 3     | Phase 1                            | **Migrated (9/9 routes)**                                               | Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search owners | Each route has a current/partial/revalidating/refresh-error fixture where applicable; no route-wide wait branch hides a stable sibling.                                     |
-| 4     | Phase 1                            | **Migrated (detail + Config + Settings loading)**                       | OPSX, planning-config, Settings/translation, dialog/editor, and terminal-control owners      | A real draft/editor/overlay red case proves a late remote update cannot overwrite local interaction; authority locks hit the mutation owner.                                |
+| 4     | Phase 1                            | **Migrated/audited across current Web surfaces**                        | OPSX, planning-config, Settings/translation, dialog/editor, and terminal-control owners      | Existing draft/authority fixtures stay green; ordinary waits use local atoms while raw evidence, errors, blocks, empty conclusions, PDF parsing, and downloads keep text.   |
 | 5     | Phase 1 static/a11y; Phase 2 gates | **Static truthfulness proven; reduced-motion/mobile/Storybook pending** | Static provider, route/component tests, and Storybook fixtures                               | Static truthfulness, reduced motion, mobile geometry, and SSG evidence are green before full repository gates.                                                              |
+| 6     | Phase 2, P1-B                      | **Implemented; focused evidence green**                                 | Dashboard retained typed read and fresh-document Web adapter                                 | Dormant retained data renders immediately as display-only; matching current convergence, A/B retirement, and reactive Root reuse are focused-green.                         |
+| 7     | Phase 3, P6                        | **Implemented; focused evidence green**                                 | App Store/Root admission, route lifecycle visuals, persistent Sessions host                  | Notice-free initial Pull, unresolved-not-empty, retained siblings, and iframe identity round-trip fixtures are focused-green.                                               |
+
+### 2026-07-27 fresh-document/App loopback red evidence
+
+- **Dashboard dormant retained read**: after one current Summary became dormant, a replacement subscriber
+  started Work generation 2 while its loader remained pending. The real `DashboardProjectionService.getSummary()`
+  failed the 50ms first-renderable boundary by returning `{ kind: 'timeout' }` instead of the retained Summary
+  with `freshness: 'stale-display-only'`. Focused result: 1 failed, 6 passed.
+- **App Store admission**: `useStoreData` mounted against a valid locator while both transport callbacks stayed
+  silent. `fetchBackendStoreInventoryProjection` and `fetchBackendStoreInspectorProjection` were each called
+  zero times; the named initial-Pull fixture failed. Focused result: 1 failed, 6 passed.
+- **App Root admission**: the production `ConnectionObservationOwner` completed a current health probe while
+  its Root lifecycle transport stayed silent. `fetchRootProjection` was called zero times and the named fixture
+  failed. Focused result: 1 failed, 16 passed.
+- Commands:
+  `pnpm --filter @openspecui/server exec vitest run src/dashboard-projection-service.test.ts --pool=threads --maxWorkers=1 --testTimeout=10000 --hookTimeout=10000`
+  and
+  `pnpm --filter @openspecui/app exec vitest run src/lib/use-store-data.test.tsx src/lib/connection-observation.test.ts --pool=threads --maxWorkers=1 --testTimeout=10000 --hookTimeout=10000`.
+- These are real owner-boundary reds. They do not mock a downstream handler, bypass a UI guard, or claim final
+  browser acceptance.
 
 ### P1-A Dashboard Summary v2 applied evidence (2026-07-25 Asia/Shanghai)
 
@@ -164,6 +186,66 @@ Every Summary pair carried the same opaque identity and work generation, `freshn
 The correction candidate is accepted for downstream dependency review. Checkpoints 2.1-2.3 remain open because
 this review cannot manufacture checkpoint 2.2's missing historical pre-v2 red; that truthful ledger limitation
 does not invalidate the current runtime contract or the downstream loading-regression confirmation.
+
+### P1-B retained Pull and reactive Root admission (2026-07-27 Asia/Shanghai)
+
+- **Server retained-state owner**: `DashboardProjectionService.getSummary()` now returns the complete typed
+  `DashboardSummaryProjectionState`. It reads bounded retained data immediately as
+  `stale-display-only`; when no display data exists, it waits for the first current Summary. Invalidations carry
+  state and snapshot generation without carrying business content.
+- **Web convergence owner**: `use-dashboard.ts` accepts retained or current Pull state only for the active opaque
+  Summary identity/work generation. Retained data is readable with updating/display-only presentation;
+  secondary regions admit independently; late A resolution or rejection cannot overwrite B.
+- **Public Router performance red**: after the Summary subscription resolved Root Context once, the production
+  `dashboard.getSummary` Router path used imperative `runPlanningRoot` and called OpenSpec Doctor/Context again.
+  `dashboard-summary-router.test.ts` observed the CLI call count increase from one to two on the Pull.
+- **Green and mutation resistance**: `dashboard.getSummary` is now a reactive display operation via
+  `runPlanningRoot(..., { reactive: true })`. The same public Router fixture proves Doctor/Context counts do not
+  increase during retained Pull. Temporarily removing the reactive option made that exact fixture fail again at
+  the 1 -> 2 call transition; the option was restored before final verification. Mutation/PTY/workflow paths are
+  unchanged and continue to re-confirm Root authority.
+- **Measured distinction**: before this correction, same-Server fresh-Document Summary admission was about
+  4.68s; after correction it was about 0.36s. Fresh-Server cold computation still measured about 10.48s (the
+  earlier cold samples ranged roughly 6.16s-14.54s). This closes duplicate Root admission for reloads; it does
+  not claim cold OpenSpec CLI computation is solved.
+
+### App projection admission and persistent Sessions host (2026-07-27 Asia/Shanghai)
+
+- `use-store-data.ts` performs one typed Store inventory/inspector Pull when a current backend locator is
+  admitted, before the first lifecycle notice. Locator generation retirement and mutation authority remain
+  unchanged.
+- `ConnectionObservationOwner` performs one typed Root Context Pull after current health admission without
+  waiting for a WebSocket notice. Late locator/generation callbacks remain retired.
+- Connections, Environment, Store Inventory, Store Inspector, and Context Matrix distinguish unresolved from
+  settled empty, preserve settled siblings during revalidation, and use shared skeleton/revalidation atoms.
+- `HostedShell` is owned by persistent `AppLayout`; `/sessions` changes visibility rather than ownership. The
+  router fixture proves route round-trips retain the same iframe DOM node and tab session. Waiting for backend
+  metadata or iframe readiness uses stable local geometry.
+
+### Full-surface visual lifecycle audit (2026-07-27 Asia/Shanghai)
+
+- First-load surfaces use geometry-matched skeletons; retained data uses local `RealtimeRevalidateCue`; command
+  controls preserve labels and expose `activity`/`aria-busy`. The audit covers Web/App root gates, Dashboard,
+  Changes, Archives, Specs, Schemas, Context, Git list/detail/patches, Config, Settings/translation, file preview,
+  artifact output, Connections, Environment, Store Inventory/Inspector, Context Matrix, and Sessions.
+- The final residual routine-copy audit migrated Git lazy patch admission, translation engine metadata, and
+  remote model search to local skeletons. Text remains intentionally visible for terminal errors, permissions,
+  empty conclusions, Root action blocks, raw Terminal/CLI/log evidence, PDF parsing, and concrete translation
+  model install/download/removal progress.
+- Focused evidence before the final residual audit was green: Web Config/realtime/Settings/CLI 140/140, Web
+  pages/local components 142/142, App 47/47, and Server Dashboard 10/10. Web, App, and Server typechecks passed;
+  `dashboard` and `dashboard-page` benchmark runs both reported `fatalError: null`. Final repository gates are
+  recorded separately after the residual audit.
+- Final residual-audit replay: Web Settings/realtime/Git patch 81/81, Server Dashboard 10/10, and App
+  admission/routes/HostedShell 47/47 passed. The changed-file header audit found no missing timestamped
+  orthogonal-intent or original-request provenance, and `git diff --check` passed.
+- The final command-surface replay found four remaining label/structure gaps after the route inventory was
+  otherwise green: OPSX New and Propose replaced their command label while preparing, Compose inserted visible
+  `Generating prompt...` copy, and shared Terminal dispatch replaced Copy/Save/Send labels. New/Propose now use
+  `AsyncAction`; Terminal dispatch retains its command labels with visual/`aria-busy` evidence; Compose uses a
+  persistent revalidation wrapper so settling the cue cannot remount the CodeEditor or discard its draft. The
+  precise Web replay passed 49/49 tests across six files, and checked Web TypeScript passed. The persistent cue
+  fixture and Compose generation fixture directly preserve child/editor DOM identity across settlement.
 
 ### P0 Server-emission revalidation (2026-07-25 Asia/Shanghai)
 
@@ -292,19 +374,96 @@ Owner feedback: skeleton 之间需要有 gap，结构需符合客观布局情况
 - `openspec validate refine-live-projection-experience --strict`: **valid** (unchanged — no delta-spec edits).
 - Static SSG: `rm -rf packages/web/dist-ssg packages/web/.vite && pnpm --filter @openspecui/web build:ssg` **succeeds**; rendered static HTML contains no fabricated loading/skeleton.
 
+### Full-surface loopback audit and owner command tools (2026-07-27 Asia/Shanghai)
+
+The owner asked for every similar page-loading defect to be checked, with special attention to the new App
+pages. The audit separated visible routine waiting copy from hidden accessibility equivalents and real command,
+download, CLI, terminal, or document evidence:
+
+- App Connections, Environment, Store Inventory, Store Inspector, Context Matrix, and Sessions now use
+  admission geometry or retained-content revalidation. Their remaining `Loading runtime environments` and
+  `Loading hosted project` strings are inside `rt-sr-status`; they are screen-reader equivalents rather than
+  visible waiting copy. App Settings owns no remote projection.
+- Web inventory/detail/Config/Settings/OPSX/Terminal surfaces use the shared skeleton, revalidation, or
+  label-stable command primitives recorded above. Translation installation/download progress, streamed CLI
+  validation, raw Terminal output, and PDF document progress remain textual because they are objective operation
+  or content evidence, not generic projection waiting.
+- One genuine routine-query omission remained in Settings: Global CLI Detection visibly rendered
+  `Detecting global openspec command...`. It now renders `RealtimeSkeletonLine` with `aria-busy` and a hidden
+  accessible status. `settings.test.tsx` reaches the real Settings render with a pending `cli.sniffGlobalCli`
+  query and proves stable geometry plus the hidden status. The focused file passed 61/61.
+- No second Dashboard-Summary-style fresh-Document protocol gap was found. Summary is the sole data-free v2
+  invalidation stream and therefore needs the typed retained Pull. Dashboard Trends/Git and Changes still carry
+  Server Projection Work snapshots on their existing transports; App Store/Root projections use the new typed
+  admission Pull. Expanding every route to a second v2 protocol would be unmeasured churn, not a loading fix.
+
+Added owner-only command helpers under `walkthrough/`:
+
+```text
+walkthrough/
+|- README.md       exact preparation, route matrix, evidence, and cleanup commands
+|- shared.ts       pinned CLI, isolated XDG data home, topology, and marker guard
+|- lab.sh.ts       prepare/describe/clean a two-project plus shared-Store lab
+|- run.sh.ts       foreground App/backends, status, focused tests, and benchmark
+`- mutate.sh.ts    independent Project config/Spec/Store triggers plus reset/status
+```
+
+The scripts do not inspect the browser or check an owner acceptance box. All three `--help` commands and the
+non-mutating `lab describe` command passed. A real marker-owned `/tmp` smoke lab completed Store setup, two
+project inits, Doctor/Context for A and B, independent config/Spec/Store mutations, mtime status, deterministic
+reset, and guarded cleanup. The focused wrapper passed App 38/38 and Web 85/85. Its isolated Dashboard benchmark
+returned `fatalError: null`; on this intentionally tiny fixture cold first-renderable Summary was about 1.54s
+and same-Server reload was about 8ms. Those numbers validate the helper and wake-to-Pull boundary only. The
+larger-project fresh-Server sample below remains about 10.48s and is not reclassified as solved.
+The four TypeScript command files also pass an explicit strict/no-unused `tsc --noEmit` lane; their yargs
+runtime is loaded from the workspace CLI package through one typed shared boundary rather than untyped internal
+`.mjs` imports.
+
+### Final automated gate evidence (2026-07-27 Asia/Shanghai)
+
+- **Stale-test correction exposed by the broad gate**: the first complete `test:ci` run found the old
+  `store-mutation-lifecycle.test.tsx` total-Pull assertion expected one Root Pull. Under the approved initial-Pull
+  contract, the correct phases are: health admission Pull = 1; equivalent `http://host` -> `http://host/`
+  rerender remains 1; correlated terminal mutation performs one `refreshProjection + Pull`, producing total 2.
+  The exact test was strengthened to assert all three boundaries, then passed alone and in the full App suite
+  (200/200). No production count was suppressed.
+- `openspec validate refine-live-projection-experience --strict`: valid.
+- `pnpm format:check`: all 96 changed files matched project formatting after the final command-surface replay.
+- `pnpm lint:ci`: 0 warnings, 0 errors across 1,021 files.
+- `pnpm typecheck`: all 15 checked workspace packages passed, including checked Core/Server/Web/App fixtures.
+- `pnpm test:ci`: passed from root through all workspace packages. Key affected-package totals were Core
+  479/479, Server 542/542, App 200/200, Web 1005/1005, and CLI 68/68. jsdom printed its existing Canvas
+  not-implemented diagnostics while Web tests remained green.
+- Static verification rebuilt from deleted generated output: the static test invocation completed Web 1001/1001
+  and `pnpm --filter @openspecui/web build:ssg` produced fresh client/server output. Existing CSS
+  `scroll-button` and ineffective-dynamic-import warnings remained non-fatal.
+- `pnpm test:browser:ci`: xterm component fixtures 60 passed/1 skipped; Web Storybook fixtures 12/12 passed.
+  These are basic component-level Playwright results, not final browser or visual acceptance.
+- The latest command-surface correction also completed an SSG client/server build. The current tool policy
+  rejected deleting generated output in that invocation; the earlier candidate's clean-from-deleted-output SSG
+  evidence remains recorded above, while this latest build proves the correction still compiles through both
+  SSG targets.
+- Changed-file timestamped intent/request header audit and final `git diff --check`: passed. No PR, merge,
+  archive, release, or owner browser walkthrough was performed.
+
 ### Residual risk / open items
 
-- P1 is no longer blocked by P0. P1-A is intentionally limited to the Dashboard Summary v2 vertical slice;
-  Trends, Git, Changes, P1 coalescing, and user-action bypass remain separate unchecked work.
-- P3 is complete (9/9 routes). P4 is partially done (detail routes + Config loading sections). Remaining P4: settings/translation panels, overlay/dialog/editor bodies, terminal-command controls (`AsyncAction`), file-preview/artifact-output. P5 static/a11y fixtures + Storybook + `build:ssg` + full `pnpm test:ci` remain open (Phase 1/2).
-- The inline `Loader2 animate-spin` / section-copy idiom persists in the remaining P4 surfaces; those migrate to atoms in the next pass.
+- Checkpoint 2.2's historical pre-v2 red cannot be recreated honestly. Current runtime acceptance and exact
+  mutation evidence exist, but the ledger remains open rather than relabeling post-implementation evidence.
+- Fresh-Server cold Summary computation remains about 10.48s in the latest sample. The same-Server fresh
+  Document path is now fast because it avoids duplicate Doctor/Context and can consume retained state; this is
+  not a cold-computation cache claim.
+- P5's dedicated mobile and emulated reduced-motion fixture remains open; the existing component-level
+  Storybook/Playwright gate passed but does not prove those two named variants. PR checks and owner-only final
+  browser/visual acceptance also remain open. Trends, Git, and Changes keep their existing transport versions;
+  generic v2 coalescing/user-action bypass was not expanded incidentally.
 
 ### Completed planning evidence
 
 - Added delta specs for `realtime-projection-experience`, `live-projection-work`, `web-rendering`, `opsx-ui-views`, `opsx-config-center`, and `opsx-terminal-panel`.
 - Ran `openspec validate refine-live-projection-experience --strict` successfully on 2026-07-23 Asia/Shanghai.
-- The recorded Web-first candidate is not checkbox-complete until independent review accepts its named
-  evidence. P1-A is the next authorized applied-code package.
+- The applied candidate is locally gate-green. Historical P1-A red evidence, the dedicated P5 variants, PR
+  delivery, and owner acceptance remain explicitly separate.
 
 Every TypeScript/TSX production and test file created by these packages must have its timestamped orthogonal-intent/original-request header. Each package starts with its named red case at the real public or mutation boundary, records its actual failure, then adds the green and mutation-resistance proof. A passing transpile-only fixture, a disabled-control assertion, or a manually invoked downstream callback does not satisfy that evidence requirement.
 
@@ -342,10 +501,127 @@ commit                + local failure/recovery evidence
 
 ## Divergence Notes
 
-- No divergence from `research-plan.md` has occurred at artifact creation time.
-- No frontend or backend implementation has been started, so there is no source/test evidence to report yet.
-- Delta specifications are now present and `openspec validate refine-live-projection-experience --strict` passes. This is Change-document validity only; it is not a claim that source implementation, tests, CI, or browser acceptance has passed.
+- The fresh-Document/App loopback expanded the implementation with `hosted-app-distribution` delta requirements;
+  the intake and research plan were updated before implementation continued.
+- The Dashboard retained Pull exposed one additional production boundary: a display-only typed Pull must reuse
+  the current reactive Root snapshot instead of reacquiring an imperative Root lease. This is now recorded in
+  `AGENTS.md` and `i18n.zh.md` and protected by the public Router mutation fixture.
+- Delta specifications are present and strict validation is rerun after each artifact correction. Automated
+  evidence is not owner browser acceptance.
 - The completed `accelerate-live-projection-loading` Change remains archived and its durable `live-projection-work` specification remains the baseline. This Change extends that baseline rather than reopening the archived work.
+
+## P7 Manager Walkthrough Transfer: 2026-07-27 Asia/Shanghai
+
+The manager accepted the CLI 1.6 correctness baseline and transferred six runtime-experience observations from
+`close-openspec-cli16-delivery-gaps`. Current source inspection establishes the following fixed points before any P7
+production edit:
+
+| Package                       | Verified production boundary                                                   | Current objective evidence                                                                                                                                                                                                                                                                             | Required outcome                                                                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P7-A Authentication admission | `packages/web/src/entry-client.tsx` before dynamic `App` import                | The entry consumes/strips credential and initializes the resource worker, but after static detection imports `App` without a protected health admission. Manager-observed 401 health/tRPC and PTY `UNAUTHORIZED` therefore leave downstream projections Loading and repeatedly reconnecting.           | 401/403 becomes one explicit terminal `Authentication Required` document before transport owners exist; valid, static, and recoverable network paths stay distinct.                   |
+| P7-B Static output contract   | `packages/web/src/ssg/cli.ts` plus Vite SSR build                              | A fresh `pnpm --filter @openspecui/web build:ssg` passed and emitted `dist-ssg/server/assets/entry-server-IoFG1Olv.js`; `dist-ssg/server/entry-server.js` does not exist, yet the SSG CLI imports that exact filename.                                                                                 | The build publishes one machine-readable/deterministic server-entry contract consumed by dev and packaged export.                                                                     |
+| P7-C iframe capability        | App-owned iframe in `HostedShellTabContent`                                    | The iframe has `title`, `src`, load/error callbacks, and classes but no `allow`; Terminal keybindings call `navigator.clipboard.readText/writeText`.                                                                                                                                                   | Delegate only Clipboard read/write to the actual Project Web iframe and prove the exact surface.                                                                                      |
+| P7-D Session convergence      | `ConnectionObservationOwner` -> `HostedShell` -> `TerminalTabs` plus AppLayout | A refresh publishes `checking` immediately and later publishes `offline`; both tab label and iframe content are derived from `tabRuntime`, but the manager observed one tab-icon lag. HostedShell and its tab surface each declare `min-h-screen` inside an App layout that also owns a mobile header. | Characterize the intermittent render boundary, then make one accepted generation drive both views; budget Sessions against the parent block size without remounting iframe Documents. |
+| P7-E Inspector continuity     | Store projection/lifecycle hooks plus `StoreInspectorRoute`                    | Focus/visibility explicitly triggers connection refresh. Inspector retains projection data during update, but the manager observed delayed abrupt settlement, apparent reconstruction on blur/focus, and long mobile content overflow.                                                                 | Determine remount versus revalidation first; preserve settled selection/content and show objective lifecycle activity immediately; contain long facts within the mobile inline size.  |
+
+Execution is strictly package-local: P7-A, P7-B, P7-C, P7-D, then P7-E. Each package first records a real-owner red,
+then the smallest production change, a green fixture, and an exact mutation failure. No broad repository gate runs
+until all five packages receive focused review. No Agent-run fixture is final browser or visual acceptance.
+
+### P7-A through P7-C implementation evidence (2026-07-28 Asia/Shanghai)
+
+- **Authentication admission**: `entry-client.tsx` now performs one credential-aware protected health request
+  after static detection and before the dynamic `App` import. A 401/403 renders terminal `Authentication Required`;
+  network and non-auth HTTP failures render `Project Web Unavailable` with Retry; static mode performs no admission
+  request. `entry-client-admission.test.tsx` reaches the real entry side effect and asserts the `App` module factory is
+  never evaluated for missing/invalid credentials. Removing or moving the early return makes that same assertion fail.
+- **Static server entry**: Vite now emits `dist-ssg/server/ssr-entry-manifest.json` and
+  `resolveSsgServerEntryPath()` accepts only the manifest's exact `src/ssg/entry-server.tsx` entry. Missing,
+  non-entry, escaping, and absent artifacts fail explicitly; there is no directory scan or handwritten filename
+  fallback. The hashed-entry unit fixture fails if the resolver is bypassed.
+- **Clipboard delegation**: the backend-owned Project Web iframe declares exactly
+  `allow="clipboard-read; clipboard-write"`. The existing real HostedShell fixture asserts that exact string, so
+  removing a capability or widening the surface fails at the rendered iframe.
+- Focused Web command passed 3 files / 11 tests:
+  `pnpm --filter @openspecui/web exec vitest run --project unit src/entry-client-admission.test.tsx src/entry-client-access-gate.test.tsx src/ssg/server-entry.test.ts`.
+- Focused App command passed `hosted-shell.test.tsx` 9/9.
+- Fresh `pnpm --filter @openspecui/web build:ssg` emitted
+  `assets/entry-server-IoFG1Olv.js` plus the new manifest; `build:ssg-cli` passed. A real source CLI export with the
+  isolated walkthrough `XDG_DATA_HOME` and `--references include` completed 8 routes, including
+  `/specs/referenced/shared-reference/shared-contract`. No browser was opened and no visual acceptance is claimed.
+- The archived walkthrough `inspect.sh.ts` itself no longer runs from its deeper archive directory because its
+  historical relative yargs import moved one level. Verification therefore invoked the same production export
+  command directly; archived evidence was not edited.
+
+### P7-D Session convergence and viewport evidence (2026-07-28 Asia/Shanghai)
+
+- **Root cause and owner**: the Project Web iframe observed its own socket loss immediately, while the App
+  `ConnectionObservationOwner` published only `checking` on an established Root transport failure and deferred
+  objective offline classification until the later reconnect `pending` path. Focus/visibility did not own the
+  lag. The owner now performs one deduplicated health probe for the active tab generation when the established
+  transport disconnects, stops, completes, or errors. Only an objective offline/authentication result is
+  published immediately; a successful HTTP probe while WebSocket reconnects leaves the accepted state
+  `checking`, so HTTP reachability cannot fabricate a connected transport.
+- **One presentation fact**: SessionTabs and `HostedShellTabContent` both consume the same `tabRuntime` produced
+  from the accepted connection observation. Their matching `data-hosted-reachability` evidence proves one
+  offline transition reaches both branches; no polling, iframe callback state, or tab-local connection store was
+  added.
+- **Viewport owner**: `AppLayout` owns one `h-dvh` block budget. Its fixed mobile header and `min-h-0` main leave
+  the remainder to the persistent Sessions surface; HostedShell and TerminalTabs use `h-full min-h-0` instead of
+  nested `min-h-screen`. The router fixture keeps the exact iframe DOM node through Sessions -> Environment ->
+  Sessions while checking the shell budget classes.
+- **Mutation resistance**: removing the event-driven `probeTransportFailure(tab, generation)` transition made
+  the exact Offline fixture fail (`probeCount` remained 1 instead of 2). Removing AppLayout's `h-dvh` owner made
+  the route/iframe continuity fixture fail on the missing viewport contract. Both mutations were restored before
+  the final focused green.
+
+### P7-E Inspector continuity, operation feedback, and containment evidence (2026-07-28 Asia/Shanghai)
+
+- **Read versus write provenance**: `useActiveBackend` now exposes the stable selected locator separately from
+  its current generation-bound mutation authority. Store Inspector and Inventory keep reading the same locator's
+  retained projection while focus refresh revokes `active`; Store mutations, dialogs, and `canMutate` still
+  require the exact current tab/generation. The focus fixture proves the selected Inspector `<article>` remains
+  the same DOM node and the local filter draft survives replacement Root work.
+- **Immediate objective activity**: a resolved Store mutation HTTP response now registers the full backend-owned
+  `accepted` envelope. `StoreLifecycleComposer` projects that record until the WebSocket ledger carries the same
+  request, then uses ledger `accepted/running/terminal` truth and performs one Store plus matching Context Pull on
+  terminal settlement. It never changes Store Inventory optimistically and never turns HTTP success into a
+  terminal result.
+- **Inline containment**: Store Manager owns `min-w-0` plus horizontal containment; Inspector uses
+  `minmax(0,1fr)`, and long Store ids, roots, metadata paths, remotes, and diagnostics use explicit arbitrary
+  wrapping. This changes containment only, not Store Manager navigation or information architecture.
+- **Mutation resistance**: rebinding `useStoreData` to transient `active?.apiBaseUrl` made the focus fixture fail
+  because the replacement Inspector `<article>` was structurally equal but not the same DOM node. Removing
+  admission records from `StoreLifecycleComposer.project()` made the accepted-operation fixture receive no
+  active record. Removing Store Manager's inline containment made the long-fact fixture fail to find its
+  `overflow-x-hidden` owner. All mutations were restored before the final focused green.
+- **Focused verification**: App and Web package typechecks passed. The combined P7-D/E App lane passed 8 files / 84
+  tests: connection observation, HostedShell, App router, Store lifecycle composer, Store mutation lifecycle,
+  Store Pull adapter, real connection/Inspector route, and realtime App surfaces. These are unit/component
+  preparation results only; final browser and visual acceptance remain manager-owned.
+
+### P7 package and repository gate evidence (2026-07-28 Asia/Shanghai)
+
+- Focused P7-A/B Web passed 3 files / 11 tests; P7-C HostedShell passed 9/9; the combined P7-D/E App lane passed
+  8 files / 84 tests. App and Web typechecks passed before package gates.
+- Running App and Web package suites concurrently produced fixed-threshold timeouts rather than assertion
+  differences: App had 1/204 fail and Web had 4/1016 fail. The exact App transport fixture then passed 2/2
+  serially, and the three exact Web files passed 15/15 with one worker. The required workspace-serial
+  `pnpm test:ci` subsequently passed App 204/204 and Web 1016/1016, confirming resource competition rather than
+  a reproducible product failure.
+- `pnpm format:check` passed for 112 changed files after formatting six reported candidates. `pnpm lint:ci`
+  reported 0 warnings/errors across 1,024 files. `pnpm typecheck` passed all 15 checked workspace packages.
+  `pnpm test:ci` passed all workspace lanes, including Core 479/479, Server 542/542, App 204/204, Web 1016/1016,
+  and CLI 68/68; existing jsdom Canvas diagnostics remained non-fatal.
+- `pnpm test:browser:ci` passed xterm 60/60 with 1 skipped and Web Storybook 12/12. These are component fixtures,
+  not final browser acceptance.
+- Generated SSG output and Vite cache were removed through the filesystem API, then
+  `pnpm --filter @openspecui/web build:ssg` and `build:ssg-cli` passed from clean artifacts. The real source CLI
+  export used isolated `XDG_DATA_HOME`, included References, and emitted 8 routes, including
+  `/specs/referenced/shared-reference/shared-contract`, to
+  `/tmp/openspecui-cli16-walkthrough/static-a-final-20260728`.
+- `openspec validate refine-live-projection-experience --strict` and `git diff --check` passed before this final
+  evidence update. No Agent-run visual or end-to-end browser walkthrough is claimed.
 
 ## Loopback Triggers
 

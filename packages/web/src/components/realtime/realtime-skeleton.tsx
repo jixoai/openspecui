@@ -1,15 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Stable skeleton geometry atoms (line/row/card) that do not flash per-chunk.
  * 2. Layout-aware inventory skeleton mirroring the project's real list/grid conventions.
+ * 3. Stay package-neutral so App and Web surfaces share the same visual atom.
  *
  * Original request (2026-07-23): "可以用光影来替代，将它做成一种视觉语言。"
  * Owner direction (2026-07-24): skeleton 之间需要有 gap，结构需符合客观布局；参考 shadcn 组合思想，项目化定制。
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  *
  * The shimmer is a CSS luminance sweep (styles/realtime.css); reduced-motion keeps a static band.
  */
-import { cn } from '@/lib/utils'
 import { Fragment, type CSSProperties, type ReactNode } from 'react'
+import { cn } from '../../lib/utils'
 
 export interface RealtimeSkeletonProps {
   className?: string

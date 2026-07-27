@@ -1,19 +1,21 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Own Dashboard Summary, trends, and Code Git regional Projection Work requests.
  * 2. Bind every regional snapshot to Planning-root and Code Git provenance before reuse.
  * 3. Retain reusable display snapshots without allowing a retired root service to keep subscribers alive.
  * 4. Keep explicit Git invalidation separate from broad Dashboard aggregate reloads.
- * 5. Issue data-free Dashboard Summary v2 invalidations and correlated opaque typed pulls.
+ * 5. Issue data-free Dashboard Summary v2 invalidations and correlated opaque retained/current typed pulls.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
+ * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
  */
 import type {
+  CliProjectionState,
   DashboardGitSnapshot,
   DashboardSummaryInvalidation,
   DashboardSummaryProjection,
-  DashboardSummaryRead,
+  DashboardSummaryProjectionState,
   DashboardTrendsProjection,
 } from '@openspecui/core'
 import { Buffer } from 'node:buffer'
@@ -68,7 +70,7 @@ export interface DashboardProjectionServiceContract {
   subscribeGit(
     listener: DashboardProjectionSubscription<DashboardGitSnapshot>
   ): ProjectionWorkSubscription
-  getSummary(): Promise<DashboardSummaryRead>
+  getSummary(): Promise<DashboardSummaryProjectionState>
   getTrends(): Promise<DashboardTrendsProjection>
   getGit(): Promise<DashboardGitSnapshot>
   invalidateGit(): void
@@ -113,11 +115,13 @@ export class DashboardProjectionService implements DashboardProjectionServiceCon
   subscribeSummaryInvalidation(
     listener: (event: DashboardSummaryInvalidation) => void
   ): ProjectionWorkSubscription {
-    let lastWakeGeneration: number | null = null
+    let lastNoticeKey: string | null = null
     return this.subscribeSummaryWork((event) => {
-      const invalidation = this.toSummaryInvalidation(event, lastWakeGeneration)
+      const invalidation = this.toSummaryInvalidation(event)
       if (!invalidation) return
-      lastWakeGeneration = invalidation.workGeneration
+      const noticeKey = JSON.stringify(invalidation)
+      if (noticeKey === lastNoticeKey) return
+      lastNoticeKey = noticeKey
       listener(invalidation)
     })
   }
@@ -136,17 +140,24 @@ export class DashboardProjectionService implements DashboardProjectionServiceCon
     return this.subscribeRegistry(this.options.workOwner.git, this.gitRequest(), listener)
   }
 
-  /** Pull one current Summary snapshot through the same bounded work identity as invalidations. */
-  async getSummary(): Promise<DashboardSummaryRead> {
+  /** Pull retained state immediately, or await the first current snapshot when no display data exists. */
+  async getSummary(): Promise<DashboardSummaryProjectionState> {
+    const retained = this.options.workOwner.summary.read(this.identity('summary'))
+    if (retained?.data) return this.toSummaryProjectionState(retained)
+
     const snapshot = await this.getCurrentSnapshot<DashboardSummaryProjection>((listener) =>
       this.subscribeSummaryWork(listener)
     )
-    return {
-      identity: this.summaryIdentity(),
+    return this.toSummaryProjectionState({
+      state: 'ready',
+      identity: projectionWorkIdentityKey(this.identity('summary')),
       workGeneration: snapshot.workGeneration,
-      freshness: 'current',
+      invalidationCause: 'initial',
       data: snapshot.data,
-    }
+      freshness: 'current',
+      snapshotGeneration: snapshot.workGeneration,
+      error: null,
+    })
   }
 
   /** Query one current trends snapshot through the same bounded work identity as subscriptions. */
@@ -218,29 +229,31 @@ export class DashboardProjectionService implements DashboardProjectionServiceCon
   }
 
   private toSummaryInvalidation(
-    event: ProjectionWorkEvent<DashboardSummaryProjection, never>,
-    lastWakeGeneration: number | null
+    event: ProjectionWorkEvent<DashboardSummaryProjection, never>
   ): DashboardSummaryInvalidation | null {
-    if (event.type === 'snapshot') {
-      if (event.snapshot.freshness !== 'current' || lastWakeGeneration !== null) return null
-      return {
-        identity: this.summaryIdentity(),
-        workGeneration: event.snapshot.workGeneration,
-        cause: 'initial',
-      }
+    const isLifecycleBoundary =
+      (event.type === 'stage' && event.phase === 'start') ||
+      (event.type === 'snapshot' && event.snapshot.freshness === 'current') ||
+      event.type === 'failed'
+    if (!isLifecycleBoundary) return null
+    const state = this.options.workOwner.summary.read(this.identity('summary'))
+    if (!state) return null
+    return {
+      identity: this.summaryIdentity(),
+      workGeneration: state.workGeneration,
+      snapshotGeneration: state.snapshotGeneration,
+      state: state.state,
+      cause:
+        state.invalidationCause === 'initial' || state.invalidationCause === 'subscriber-resume'
+          ? 'initial'
+          : 'server-push',
     }
-    if (
-      event.type === 'stage' &&
-      event.phase === 'start' &&
-      event.workGeneration !== lastWakeGeneration
-    ) {
-      return {
-        identity: this.summaryIdentity(),
-        workGeneration: event.workGeneration,
-        cause: lastWakeGeneration === null ? 'initial' : 'server-push',
-      }
-    }
-    return null
+  }
+
+  private toSummaryProjectionState(
+    state: CliProjectionState<DashboardSummaryProjection>
+  ): DashboardSummaryProjectionState {
+    return { ...state, identity: this.summaryIdentity() }
   }
 
   private trendsRequest(): ProjectionWorkRequest<DashboardTrendsProjection, never> {

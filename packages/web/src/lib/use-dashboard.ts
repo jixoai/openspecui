@@ -1,15 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Admit Dashboard Summary first, then independently deliver trends and Code Git projections.
  * 2. Execute Dashboard Git mutations against the stable Launch-owned Code binding.
  * 3. Translate current and stale Projection Work snapshots into honest region display and updating state.
  * 4. Commit Dashboard Summary v2 pulls only when their wake-up identity and generation remain current.
- * 5. Demote a remounted cached Summary to display-only when its first replacement wake arrives.
+ * 5. Render Server-retained Summary data as display-only in a fresh browser Document.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git bindings.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
+ * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
  */
 import type {
   DashboardGitSnapshot,
@@ -19,7 +20,7 @@ import type {
 } from '@openspecui/core'
 import type {
   DashboardSummaryInvalidation,
-  DashboardSummaryRead,
+  DashboardSummaryProjectionState,
 } from '@openspecui/core/dashboard-summary-transport'
 import { useCallback, useMemo } from 'react'
 import * as StaticProvider from './static-data-provider'
@@ -134,11 +135,13 @@ function useDashboardProjectionRegion<T>(
   return useReactiveProjectionSubscription(adaptedSubscribe, staticLoader, [enabled], cacheKey)
 }
 
-function isCurrentSummaryRead(
+function isCurrentSummaryState(
   activeWake: DashboardSummaryInvalidation,
-  read: DashboardSummaryRead
+  state: DashboardSummaryProjectionState
 ): boolean {
-  return read.identity === activeWake.identity && read.workGeneration === activeWake.workGeneration
+  return (
+    state.identity === activeWake.identity && state.workGeneration === activeWake.workGeneration
+  )
 }
 
 /**
@@ -161,13 +164,21 @@ function useDashboardSummaryProjectionRegion(
         active &&
         activeWake !== null &&
         activeWake.identity === wake.identity &&
-        activeWake.workGeneration === wake.workGeneration
+        activeWake.workGeneration === wake.workGeneration &&
+        activeWake.snapshotGeneration === wake.snapshotGeneration &&
+        activeWake.state === wake.state
       const pull = async (wake: DashboardSummaryInvalidation) => {
         try {
-          const read = await trpcClient.dashboard.getSummary.query()
-          if (!isActiveWake(wake) || !isCurrentSummaryRead(wake, read)) return
-          hasDisplayData = true
-          callbacks.onEvent({ type: 'data', data: read.data })
+          const state = await trpcClient.dashboard.getSummary.query()
+          if (!isActiveWake(wake) || !isCurrentSummaryState(wake, state)) return
+          if (state.data) {
+            hasDisplayData = true
+            callbacks.onEvent({
+              type: state.freshness === 'current' ? 'data' : 'display-stale',
+              data: state.data,
+            })
+          }
+          if (state.error) callbacks.onError(normalizeProjectionError(state.error))
         } catch (cause: unknown) {
           if (!isActiveWake(wake)) return
           callbacks.onError(normalizeProjectionError(cause))
@@ -177,7 +188,9 @@ function useDashboardSummaryProjectionRegion(
         onData(wake) {
           const wasDisplaying = hasDisplayData
           activeWake = wake
-          if (wasDisplaying) callbacks.onEvent({ type: 'recompute-started' })
+          if (wasDisplaying && wake.state !== 'ready') {
+            callbacks.onEvent({ type: 'recompute-started' })
+          }
           void pull(wake)
         },
         onError: callbacks.onError,

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify Project Binding presents launch/root ownership without registry inference.
  * 2. Verify Store/Reference edits submit one structured, loading-locked mutation.
  * 3. Verify only an active write locks controls while stale/error evidence retains a repair path.
@@ -10,6 +10,7 @@
  * Original request (2026-07-17): "Lock every mutation control while save is pending; preserve dirty input on failure."
  * Original request (2026-07-18): "Project Binding must show direct Reference Store, root, and Doctor diagnostics."
  * Derived requirement (2026-07-19): "A converging binding write must retain the submitted draft until subscription convergence."
+ * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
  */
 import type { ProjectBindingConfig, ProjectBindingUpdateResult } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -257,12 +258,16 @@ describe('ProjectBindingSection', () => {
     fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'design-system' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
+    expect(screen.getByRole('button', { name: 'Save binding' })).toHaveAttribute(
+      'aria-busy',
+      'true'
+    )
     expect(screen.getByLabelText('Store')).toBeDisabled()
     expect(screen.getByLabelText('Reference Store id')).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Remove Reference platform' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Saving…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
     expect(updateProjectBindingMock).toHaveBeenCalledTimes(1)
 
     pending.resolve(bindingUpdateResult())
@@ -538,7 +543,7 @@ describe('ProjectBindingSection', () => {
     })
     rendered.rerender(<ProjectBindingSection isStatic={false} />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Saved' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled())
     expect(screen.getByLabelText('Store')).toHaveValue('design-system')
     expect(screen.getByText('/stores/design-system')).toBeTruthy()
     expect(
@@ -610,7 +615,7 @@ describe('ProjectBindingSection', () => {
     expect(screen.getByLabelText('Reference Store id')).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Remove Reference platform' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Saved' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save binding' })).toBeDisabled()
     expect(updateProjectBindingMock).not.toHaveBeenCalled()
   })
 

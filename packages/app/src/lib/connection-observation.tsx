@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Own health and Root Context observation, including reconnect re-probe, for every retained backend tab identity.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Own health and Root Context admission Pull/reconnect/disconnect re-probe for every retained backend tab identity.
  * 2. Retire late results when a locator is removed, replaced, or refreshed.
  * 3. Correlate mutation authority with the full tab identity and observation generation.
  * 4. Keep retained renderable health/Root evidence separate from the current attempt and authority.
@@ -9,6 +9,7 @@
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Owner-reported defect (2026-07-26): "Dashboard加载完成的一瞬间开始reload。"
  * Owner requirement (2026-07-27): reconnect must refresh objective health/CLI/credential facts.
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  */
 import type {
   HostedBackendHealthResponse,
@@ -206,6 +207,12 @@ export function createConnectionObservationOwner(
     { tab: HostedShellTab; epoch: number; transport: CliProjectionTransport }
   >()
   const rootPullSequences = new Map<string, number>()
+  const rootAdmissionPulls = new Map<string, { generation: number }>()
+  const rootProjectionStates = new Map<
+    string,
+    { generation: number; state: HostedRootContextProjectionState }
+  >()
+  const transportFailureProbes = new Map<string, { generation: number; promise: Promise<void> }>()
   let nextGeneration = 0
   let nextTransportEpoch = 0
   let revision = 0
@@ -267,6 +274,7 @@ export function createConnectionObservationOwner(
   }
 
   const retireRootPull = (tabId: string): void => {
+    rootAdmissionPulls.delete(tabId)
     rootPullSequences.set(tabId, (rootPullSequences.get(tabId) ?? 0) + 1)
   }
 
@@ -296,6 +304,7 @@ export function createConnectionObservationOwner(
       ) {
         return
       }
+      rootProjectionStates.set(tabId, { generation, state: projection })
       update(tabId, generation, (observation) => {
         const health = observation.health
         const resolved = projection.data
@@ -369,16 +378,42 @@ export function createConnectionObservationOwner(
 
   const retireProjectionTransport = (tabId: string): void => {
     retireRootPull(tabId)
+    transportFailureProbes.delete(tabId)
     const existing = projectionTransports.get(tabId)
     if (!existing) return
     projectionTransports.delete(tabId)
     existing.transport.unsubscribe()
   }
 
+  const probeTransportFailure = (tab: HostedShellTab, generation: number): void => {
+    const existing = transportFailureProbes.get(tab.id)
+    if (existing?.generation === generation) return
+    const promise = dependencies
+      .probe(tab.apiBaseUrl)
+      .then((probe) => {
+        if (probe.reachability === 'online' || !isCurrentGeneration(tab.id, generation)) return
+        update(tab.id, generation, (current) => ({
+          ...current,
+          reachability: probe.reachability,
+          healthError: probe.errorMessage,
+          current: false,
+          stale: Boolean(current.health || current.rootEvidence),
+          observedAt: dependencies.now(),
+        }))
+      })
+      .finally(() => {
+        const current = transportFailureProbes.get(tab.id)
+        if (current?.generation === generation && current.promise === promise) {
+          transportFailureProbes.delete(tab.id)
+        }
+      })
+    transportFailureProbes.set(tab.id, { generation, promise })
+  }
+
   const ensureProjectionTransport = (tab: HostedShellTab): void => {
     const existing = projectionTransports.get(tab.id)
     if (existing && isSameTab(existing.tab, tab)) return
-    retireProjectionTransport(tab.id)
+    if (existing) retireProjectionTransport(tab.id)
 
     const epoch = ++nextTransportEpoch
     const isActive = (): boolean => {
@@ -401,6 +436,17 @@ export function createConnectionObservationOwner(
         onNotice(notice) {
           const generation = currentGeneration()
           if (generation === null) return
+          const latest = rootProjectionStates.get(tab.id)
+          if (
+            latest?.generation === generation &&
+            latest.state.identity === notice.identity &&
+            latest.state.workGeneration === notice.workGeneration &&
+            latest.state.snapshotGeneration === notice.snapshotGeneration &&
+            latest.state.state === notice.state
+          ) {
+            return
+          }
+          const admission = rootAdmissionPulls.get(tab.id)
           update(tab.id, generation, (current) => ({
             ...current,
             rootAttempt: {
@@ -412,6 +458,10 @@ export function createConnectionObservationOwner(
             stale: Boolean(current.rootEvidence),
             observedAt: dependencies.now(),
           }))
+          if (admission?.generation === generation && notice.invalidationCause === 'initial') {
+            return
+          }
+          if (admission?.generation === generation) rootAdmissionPulls.delete(tab.id)
           void pullRootProjection(tab.id, generation, notice)
         },
         onConnectionState(state) {
@@ -424,20 +474,11 @@ export function createConnectionObservationOwner(
             }
             if (!needsReconnectProbe) return
             needsReconnectProbe = false
-            void observe(tab.id, false).then(() => {
-              const replacementGeneration = currentGeneration()
-              const replacement = observations.get(tab.id)
-              if (
-                replacementGeneration === null ||
-                !replacement?.current ||
-                replacement.generation !== replacementGeneration
-              ) {
-                return
-              }
-              void pullRootProjection(tab.id, replacementGeneration)
-            })
+            transportFailureProbes.delete(tab.id)
+            void observe(tab.id, false)
             return
           }
+          if (!transportReady) return
           if (transportReady) needsReconnectProbe = true
           retireRootPull(tab.id)
           update(tab.id, generation, (current) => ({
@@ -453,6 +494,7 @@ export function createConnectionObservationOwner(
             stale: Boolean(current.rootEvidence),
             observedAt: dependencies.now(),
           }))
+          probeTransportFailure(tab, generation)
         },
         onError(error) {
           const generation = currentGeneration()
@@ -460,6 +502,7 @@ export function createConnectionObservationOwner(
             if (transportReady) needsReconnectProbe = true
             retireRootPull(tab.id)
             updateRootFailure(tab.id, generation, error)
+            probeTransportFailure(tab, generation)
           }
         },
         onStopped() {
@@ -468,6 +511,7 @@ export function createConnectionObservationOwner(
             if (transportReady) needsReconnectProbe = true
             retireRootPull(tab.id)
             updateRootFailure(tab.id, generation, new Error('Root Context subscription stopped.'))
+            probeTransportFailure(tab, generation)
           }
         },
         onComplete() {
@@ -476,6 +520,7 @@ export function createConnectionObservationOwner(
             if (transportReady) needsReconnectProbe = true
             retireRootPull(tab.id)
             updateRootFailure(tab.id, generation, new Error('Root Context subscription completed.'))
+            probeTransportFailure(tab, generation)
           }
         },
       }
@@ -550,12 +595,17 @@ export function createConnectionObservationOwner(
     ) {
       return
     }
-    ensureProjectionTransport(tab)
-    if (!invalidateProjection) return
     try {
-      await dependencies.refreshRootProjection(tab.apiBaseUrl)
-      await pullRootProjection(tabId, generation)
+      if (invalidateProjection) await dependencies.refreshRootProjection(tab.apiBaseUrl)
+      const admission = { generation }
+      rootAdmissionPulls.set(tabId, admission)
+      const admissionPull = pullRootProjection(tabId, generation)
+      ensureProjectionTransport(tab)
+      await admissionPull
+      if (rootAdmissionPulls.get(tabId) === admission) rootAdmissionPulls.delete(tabId)
     } catch (error) {
+      const admission = rootAdmissionPulls.get(tabId)
+      if (admission?.generation === generation) rootAdmissionPulls.delete(tabId)
       updateRootFailure(tabId, generation, error)
     }
   }
@@ -576,6 +626,7 @@ export function createConnectionObservationOwner(
         if (nextTabs.has(tabId)) continue
         retireProjectionTransport(tabId)
         observations.delete(tabId)
+        rootProjectionStates.delete(tabId)
       }
 
       for (const [tabId, tab] of nextTabs) {

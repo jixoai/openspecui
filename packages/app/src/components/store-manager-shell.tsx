@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Compose the selected backend, Inspector, Context Matrix, and Inventory as one Store workspace.
  * 2. Keep Store Manager explicitly experimental.
+ * 3. Contain child Store facts within the available mobile inline size.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Owner-reported acceptance gap (2026-07-26): Store Manager did not expose how to select B while retaining A.
@@ -26,7 +27,7 @@ export function StoreManagerShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="min-w-0 space-y-6 overflow-x-hidden p-4 md:p-6">
       <header className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Project CLI-owned environment-global config, data-scope provenance, and raw evidence.
  * 2. Own the JSON draft and preserve unknown fields through the typed global-config write.
  * 3. Compose the focused Profile/Update lifecycle without a second reactive projection.
@@ -8,12 +8,12 @@
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Environment Global profile/drift must remain reactive and Update must use the Root action gate."
  * Original request (2026-07-26): "缓存更新期间仍可读，但不能授权写入。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
-import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
 import { CodeEditor } from '@/components/code-editor'
 import { EnvironmentGlobalProfileSection } from '@/components/config/environment-global-profile-section'
-import { DetailPanelSkeleton } from '@/components/realtime'
+import { AsyncAction, DetailPanelSkeleton } from '@/components/realtime'
 import { trpcClient } from '@/lib/trpc'
 import { useEnvironmentGlobalConfigSubscription } from '@/lib/use-planning-config'
 import type { CliJsonValue } from '@openspecui/core'
@@ -426,8 +426,10 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
             >
               Revert
             </button>
-            <Button
+            <AsyncAction
               size="sm"
+              pending={saveMutation.isPending}
+              settled={!globalConfigDraftDirty}
               disabled={
                 projectionLocked ||
                 saveMutation.isPending ||
@@ -435,11 +437,10 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
                 !isRecordObject(globalConfigData)
               }
               onClick={handleSaveEditor}
-              activity={!globalConfigDraftDirty && isRecordObject(globalConfigData)}
             >
               <Save className="h-3.5 w-3.5" />
-              {saveMutation.isPending ? 'Saving...' : globalConfigDraftDirty ? 'Save' : 'Saved'}
-            </Button>
+              Save
+            </AsyncAction>
           </div>
         </div>
       ) : isRecordObject(globalConfigData) ? (

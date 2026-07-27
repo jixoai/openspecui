@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify Settings preference, translation, terminal, and asset-management interactions.
  * 2. Verify the route-level responsive ToC and static/dynamic composition boundaries.
  * 3. Keep extracted OpenSpec diagnostics and initialization behavior in focused component tests.
@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-20): "Split OpenSpec diagnostics/initialization out of the oversized Settings route."
  * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
 import type {
   LocalModelAssetLog,
@@ -2685,6 +2686,24 @@ describe('Settings', () => {
     expect(readInputValue('Eager Patch Line Budget')).toBe('6400')
   })
 
+  it('renders global CLI detection as visual admission geometry instead of routine visible copy', () => {
+    reactQueryMockStore.setQueryData(['cli.sniffGlobalCli'], {
+      data: undefined,
+      isLoading: true,
+      refetch: vi.fn(),
+    })
+    useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
+
+    const { container } = render(<Settings />)
+    const loadingRegion = screen.getByTestId('global-cli-detection-loading')
+
+    expect(loadingRegion.getAttribute('aria-busy')).toBe('true')
+    expect(loadingRegion.querySelector('.rt-skeleton')).not.toBeNull()
+    expect(container.querySelector('.rt-sr-status')?.textContent).toContain(
+      'Detecting global openspec command'
+    )
+  })
+
   it('preserves cached Terminal drafts after mount effects', () => {
     vi.stubGlobal(
       'matchMedia',
@@ -4099,12 +4118,13 @@ describe('Settings', () => {
       refetch: vi.fn(),
     })
 
-    render(<Settings />)
+    const { container } = render(<Settings />)
 
     await waitFor(() => expect(screen.queryByText('Loading settings...')).toBeNull())
     expect(screen.getByRole('combobox', { name: 'Engine' })).toHaveTextContent('Local-Transformers')
     expect(screen.getByRole('button', { name: 'Loading translation engine metadata' })).toBeTruthy()
-    expect(screen.getByText('Loading translation engine metadata.')).toBeTruthy()
+    expect(screen.queryByText('Loading translation engine metadata.')).toBeNull()
+    expect(container.querySelector('.rt-skeleton-line')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Checking translation engine status' })).toBeNull()
     expect(screen.queryByText('Checking translation engine status.')).toBeNull()
     expect(screen.queryByLabelText('Local download profiles')).toBeNull()

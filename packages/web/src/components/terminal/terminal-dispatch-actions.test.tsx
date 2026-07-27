@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove disabled and actionsDisabled independently block payload preparation and history writes.
  * 2. Prove workflow dispatch keeps Launch Agents plus same-generation Planning terminals available.
  * 3. Prove successful Send activates its target and reveals the owning Terminal area.
+ * 4. Prove pending terminal actions keep stable command labels and expose busy semantics.
  *
  * Owner correction (2026-07-21): "每项先明确一个生产 owner、一个精准红例、一个绿例。"
  * Owner-reported defect (2026-07-21): Pre-created Codex/Gemini terminals are absent from Send.
  * Owner clarification (2026-07-22): The target appears while loading, then disappears when ready.
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -104,6 +106,20 @@ function clickButton(name: string): void {
   fireEvent.click(button)
 }
 
+function deferred<T>() {
+  let resolvePromise: ((value: T) => void) | null = null
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve
+  })
+  return {
+    promise,
+    resolve(value: T) {
+      if (!resolvePromise) throw new Error('Deferred promise resolver is not ready.')
+      resolvePromise(value)
+    },
+  }
+}
+
 describe('TerminalDispatchActions payload owner', () => {
   beforeEach(() => {
     addInputHistoryMock.mockReset().mockResolvedValue(undefined)
@@ -146,6 +162,44 @@ describe('TerminalDispatchActions payload owner', () => {
     clickButton('Save')
     expect(preparePayload).not.toHaveBeenCalled()
     expect(addInputHistoryMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps Send as the accessible command label while dispatch is pending', async () => {
+    const payload = deferred<string>()
+    useTerminalContextMock.mockReturnValue({
+      sessions: [
+        {
+          id: 'launch-session',
+          displayTitle: 'Launch Codex',
+          cwdTarget: 'launch-project',
+          rootGeneration: 'root-generation-a',
+          isExited: false,
+          processTitle: 'codex',
+        },
+      ],
+      activeSessionId: 'launch-session',
+      createShellSession: vi.fn(),
+      setActiveSession: setActiveSessionMock,
+    })
+
+    render(
+      <TerminalDispatchActions
+        preparePayload={() => payload.promise}
+        requiredCwdTarget="planning-root"
+        expectedRootGeneration="root-generation-a"
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await vi.waitFor(() => {
+      const sendButton = screen.getByRole('button', { name: 'Send' })
+      expect(sendButton).toBeDisabled()
+      expect(sendButton).toHaveAttribute('aria-busy', 'true')
+    })
+    expect(screen.queryByText('Sending...')).toBeNull()
+
+    payload.resolve('retained prompt')
+    await vi.waitFor(() => expect(writeWorkflowToSessionMock).toHaveBeenCalledTimes(1))
   })
 
   it('keeps a Launch Agent and current Planning terminal while excluding stale Planning sessions', async () => {

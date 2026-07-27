@@ -1,10 +1,12 @@
 /**
  * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove the public Dashboard Summary v2 Router serializes a real Server-owned wake-up.
- * 2. Prove the public typed pull correlates to that wake without exposing Planning-root paths.
+ * 2. Prove the public typed pull correlates retained/current state without exposing Planning-root paths.
  * 3. Keep the fixture fully typed through createServer, createContext, and the tRPC caller.
+ * 4. Prove a typed retained Pull reuses the current reactive Root snapshot instead of rerunning CLI resolution.
  *
  * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
+ * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
  */
 import {
   CliContextSchema,
@@ -41,18 +43,20 @@ async function createSummaryRouterFixture() {
     available: true,
     version: '1.6.0',
   })
-  vi.spyOn(server.cliExecutor.contracts, 'doctorRoot').mockImplementation(async () =>
-    commandResult(
-      {
-        root: { path: projectDir, source: 'nearest', healthy: true, status: [] },
-        store: null,
-        references: [],
-        status: [],
-      },
-      CliDoctorSchema
+  const doctorRoot = vi
+    .spyOn(server.cliExecutor.contracts, 'doctorRoot')
+    .mockImplementation(async () =>
+      commandResult(
+        {
+          root: { path: projectDir, source: 'nearest', healthy: true, status: [] },
+          store: null,
+          references: [],
+          status: [],
+        },
+        CliDoctorSchema
+      )
     )
-  )
-  vi.spyOn(server.cliExecutor.contracts, 'context').mockImplementation(async () =>
+  const context = vi.spyOn(server.cliExecutor.contracts, 'context').mockImplementation(async () =>
     commandResult(
       {
         root: { path: projectDir, source: 'nearest', role: 'openspec_root' },
@@ -66,6 +70,8 @@ async function createSummaryRouterFixture() {
   return {
     projectDir,
     server,
+    doctorRoot,
+    context,
     async dispose() {
       vi.restoreAllMocks()
       await server.storeObservationFallback.dispose()
@@ -92,14 +98,18 @@ describe('public Dashboard Summary v2 Router', () => {
       const wakes: DashboardSummaryInvalidation[] = []
       subscription = observable.subscribe({ next: (wake) => wakes.push(wake) })
 
-      await vi.waitFor(() => expect(wakes).toHaveLength(1))
-      const wake = wakes[0]
+      await vi.waitFor(() => expect(wakes.some((wake) => wake.state === 'ready')).toBe(true))
+      const wake = wakes.find((candidate) => candidate.state === 'ready')
       if (!wake) throw new Error('Expected the initial Dashboard Summary wake.')
+      const doctorCallsBeforePull = fixture.doctorRoot.mock.calls.length
+      const contextCallsBeforePull = fixture.context.mock.calls.length
       const read = await caller.dashboard.getSummary()
 
       expect(wake).toEqual({
         identity: read.identity,
         workGeneration: read.workGeneration,
+        snapshotGeneration: read.snapshotGeneration,
+        state: read.state,
         cause: 'initial',
       })
       expect(wake).not.toHaveProperty('data')
@@ -108,6 +118,8 @@ describe('public Dashboard Summary v2 Router', () => {
       expect(wake).not.toHaveProperty('progress')
       expect(read.identity).not.toContain(fixture.projectDir)
       expect(read.freshness).toBe('current')
+      expect(fixture.doctorRoot).toHaveBeenCalledTimes(doctorCallsBeforePull)
+      expect(fixture.context).toHaveBeenCalledTimes(contextCallsBeforePull)
     } finally {
       subscription?.unsubscribe()
       await fixture.dispose()

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Render independent Dashboard Summary, trends, workflow, and Code Git projections.
  * 2. Keep Dashboard-owned Code Git actions separate from Planning-root readiness.
  * 3. Carry the Code Git binding token through dashboard detail handoff navigation.
@@ -9,6 +9,7 @@
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff and action provenance.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import { Badge } from '@/components/badge'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'
@@ -26,6 +27,8 @@ import {
   ChangeListSkeleton,
   DashboardSummarySkeleton,
   DashboardTrendsSkeleton,
+  GitWorktreeSkeleton,
+  RealtimeRevalidateCue,
 } from '@/components/realtime'
 import type { SelectOption } from '@/components/select'
 import {
@@ -699,10 +702,6 @@ export function Dashboard() {
         <div aria-busy="true">
           <DashboardTrendsSkeleton count={2} />
         </div>
-      ) : trendsIsUpdating ? (
-        <div className="text-muted-foreground text-xs" role="status">
-          Updating dashboard trends...
-        </div>
       ) : null}
       {trendsError ? (
         <div
@@ -713,28 +712,30 @@ export function Dashboard() {
           <span>Dashboard trends failed: {trendsError.message}</span>
         </div>
       ) : null}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <DashboardMetricCard
-          label="Specifications / Requirements"
-          value={`${summary.specifications} / ${summary.requirements}`}
-          icon={FileText}
-          availability={cardAvailability.specifications}
-          trendKind={trendKinds.specifications}
-          points={trendsProjection?.trends.specifications ?? []}
-          triColorPoints={[]}
-          className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
-        />
-        <DashboardMetricCard
-          label="Archived Changes / Completed Tasks"
-          value={`${summary.completedChanges} / ${summary.archivedTasksCompleted}`}
-          icon={Archive}
-          availability={cardAvailability.completedChanges}
-          trendKind={trendKinds.completedChanges}
-          points={trendsProjection?.trends.completedChanges ?? []}
-          triColorPoints={[]}
-          className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
-        />
-      </div>
+      <RealtimeRevalidateCue active={trendsIsUpdating && Boolean(trendsProjection)}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <DashboardMetricCard
+            label="Specifications / Requirements"
+            value={`${summary.specifications} / ${summary.requirements}`}
+            icon={FileText}
+            availability={cardAvailability.specifications}
+            trendKind={trendKinds.specifications}
+            points={trendsProjection?.trends.specifications ?? []}
+            triColorPoints={[]}
+            className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
+          />
+          <DashboardMetricCard
+            label="Archived Changes / Completed Tasks"
+            value={`${summary.completedChanges} / ${summary.archivedTasksCompleted}`}
+            icon={Archive}
+            availability={cardAvailability.completedChanges}
+            trendKind={trendKinds.completedChanges}
+            points={trendsProjection?.trends.completedChanges ?? []}
+            triColorPoints={[]}
+            className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
+          />
+        </div>
+      </RealtimeRevalidateCue>
     </div>
   )
 
@@ -849,19 +850,7 @@ export function Dashboard() {
               />
             ) : null}
           </div>
-          {gitIsLoading && !dashboardGit ? (
-            <div
-              className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm"
-              role="status"
-            >
-              Loading Code Git snapshot...
-            </div>
-          ) : null}
-          {gitIsUpdating && dashboardGit ? (
-            <div className="text-muted-foreground text-xs" role="status">
-              Updating Code Git snapshot...
-            </div>
-          ) : null}
+          {gitIsLoading && !dashboardGit ? <GitWorktreeSkeleton count={3} /> : null}
           {gitError ? (
             <div
               role="alert"
@@ -877,77 +866,81 @@ export function Dashboard() {
             </div>
           ) : null}
           {showGitSnapshot ? (
-            <div className="border-border/80 bg-card min-w-0 rounded-lg border p-3">
-              <div className="mb-2 flex items-center gap-1.5">
-                <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" />
-                <span className="text-muted-foreground truncate text-xs">
-                  Default branch: {git.defaultBranch}
-                </span>
-              </div>
+            <RealtimeRevalidateCue active={gitIsUpdating && Boolean(dashboardGit)}>
+              <div className="border-border/80 bg-card min-w-0 rounded-lg border p-3">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" />
+                  <span className="text-muted-foreground truncate text-xs">
+                    Default branch: {git.defaultBranch}
+                  </span>
+                </div>
 
-              {currentWorktree ? (
-                <div className="space-y-0">
-                  <WorktreeRow
-                    worktree={currentWorktree}
-                    emphasize
-                    removing={removingWorktreePath === currentWorktree.path}
-                    onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
-                  />
-                  <div className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}>
-                    {sortDashboardGitEntries(currentWorktree.entries).map((entry) => (
-                      <GitEntryRow
-                        key={
-                          entry.type === 'commit'
-                            ? entry.hash
-                            : `${entry.type}:${entry.updatedAt ?? 'none'}`
-                        }
-                        entry={entry}
-                        onSelect={
-                          staticMode
-                            ? undefined
-                            : (selectedEntry, sourceElement) => {
-                                if (git.bindingToken === null) return
-                                void vtNavController.push(
-                                  'bottom',
-                                  buildGitEntryHrefFromEntry(selectedEntry),
-                                  withSharedElementHandoffState(
-                                    undefined,
-                                    getGitEntrySharedHandoff(selectedEntry, git.bindingToken)
-                                  ),
-                                  {
-                                    source: sourceElement,
-                                    sharedElements: getGitEntrySharedDescriptor(selectedEntry),
-                                  }
-                                )
-                              }
-                        }
+                {currentWorktree ? (
+                  <div className="space-y-0">
+                    <WorktreeRow
+                      worktree={currentWorktree}
+                      emphasize
+                      removing={removingWorktreePath === currentWorktree.path}
+                      onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
+                    />
+                    <div
+                      className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}
+                    >
+                      {sortDashboardGitEntries(currentWorktree.entries).map((entry) => (
+                        <GitEntryRow
+                          key={
+                            entry.type === 'commit'
+                              ? entry.hash
+                              : `${entry.type}:${entry.updatedAt ?? 'none'}`
+                          }
+                          entry={entry}
+                          onSelect={
+                            staticMode
+                              ? undefined
+                              : (selectedEntry, sourceElement) => {
+                                  if (git.bindingToken === null) return
+                                  void vtNavController.push(
+                                    'bottom',
+                                    buildGitEntryHrefFromEntry(selectedEntry),
+                                    withSharedElementHandoffState(
+                                      undefined,
+                                      getGitEntrySharedHandoff(selectedEntry, git.bindingToken)
+                                    ),
+                                    {
+                                      source: sourceElement,
+                                      sharedElements: getGitEntrySharedDescriptor(selectedEntry),
+                                    }
+                                  )
+                                }
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground rounded-md border border-dashed px-2.5 py-2 text-xs">
+                    No worktree snapshot available.
+                  </div>
+                )}
+
+                {otherWorktrees.length > 0 && (
+                  <div className="border-border/70 mt-3 space-y-1 border-t pt-2">
+                    <div className="text-muted-foreground text-xs uppercase tracking-wide">
+                      Other Worktrees
+                    </div>
+                    {otherWorktrees.map((worktree) => (
+                      <WorktreeRow
+                        key={worktree.path}
+                        worktree={worktree}
+                        emphasize={false}
+                        removing={removingWorktreePath === worktree.path}
+                        onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
                       />
                     ))}
                   </div>
-                </div>
-              ) : (
-                <div className="text-muted-foreground rounded-md border border-dashed px-2.5 py-2 text-xs">
-                  No worktree snapshot available.
-                </div>
-              )}
-
-              {otherWorktrees.length > 0 && (
-                <div className="border-border/70 mt-3 space-y-1 border-t pt-2">
-                  <div className="text-muted-foreground text-xs uppercase tracking-wide">
-                    Other Worktrees
-                  </div>
-                  {otherWorktrees.map((worktree) => (
-                    <WorktreeRow
-                      key={worktree.path}
-                      worktree={worktree}
-                      emphasize={false}
-                      removing={removingWorktreePath === worktree.path}
-                      onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            </RealtimeRevalidateCue>
           ) : null}
         </section>
       ) : null}
@@ -1157,13 +1150,9 @@ export function Dashboard() {
         </button>
       </div>
 
-      <DashboardContextSummary staticMode={staticMode} />
-
-      {summaryIsUpdating && summaryProjection ? (
-        <div className="text-muted-foreground text-sm" role="status">
-          Updating dashboard summary...
-        </div>
-      ) : null}
+      <RealtimeRevalidateCue active={summaryIsUpdating && Boolean(summaryProjection)}>
+        <DashboardContextSummary staticMode={staticMode} />
+      </RealtimeRevalidateCue>
 
       {summaryError ? (
         <div

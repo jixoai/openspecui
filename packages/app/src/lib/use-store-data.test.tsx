@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (created 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove Store display provenance retires immediately across backend locator replacement.
  * 2. Preserve same-locator settled Store data as display-only during revalidation.
  * 3. Prove stale, pending, and refresh-error Store lifecycle states cannot retain mutation authority.
+ * 4. Prove a fresh owner performs its typed Pull before the first lifecycle notice.
  *
  * Original request (2026-07-26): "真正基于文件、甚至是文件内容结构的变更去拉取更新。"
  * Owner architecture clarification (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
@@ -186,8 +187,24 @@ afterEach(() => {
 })
 
 describe('useStoreData locator provenance', () => {
-  it('keeps Inspector loading while Store list settles independently', async () => {
+  it('pulls Store list and Doctor immediately before the first lifecycle notice', async () => {
     vi.mocked(fetchBackendStoreInventoryProjection).mockResolvedValue(listState(API_A))
+    vi.mocked(fetchBackendStoreInspectorProjection).mockResolvedValue(doctorState(API_A))
+    const view = renderHook(() => useStoreData({ apiBaseUrl: API_A }))
+
+    await waitFor(() => {
+      expect(view.result.current.inventory?.stores[0]?.id).toBe(`${API_A}-inventory`)
+      expect(view.result.current.inspector?.stores[0]?.id).toBe(`${API_A}-doctor`)
+    })
+    expect(fetchBackendStoreInventoryProjection).toHaveBeenCalledWith({ apiBaseUrl: API_A })
+    expect(fetchBackendStoreInspectorProjection).toHaveBeenCalledWith({ apiBaseUrl: API_A })
+    expect(view.result.current.canMutate).toBe(false)
+  })
+
+  it('keeps Inspector loading while Store list settles independently', async () => {
+    const pendingDoctor = createDeferred<HostedStoreDoctorProjectionState>()
+    vi.mocked(fetchBackendStoreInventoryProjection).mockResolvedValue(listState(API_A))
+    vi.mocked(fetchBackendStoreInspectorProjection).mockReturnValue(pendingDoctor.promise)
     const view = renderHook(() => useStoreData({ apiBaseUrl: API_A }))
 
     await waitFor(() => transport.get(API_A, 'store-list'))
