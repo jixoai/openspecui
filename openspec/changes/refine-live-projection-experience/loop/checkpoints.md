@@ -135,6 +135,15 @@ complete App gates now pass locally. Final-tree formatting, lint, all 15 checked
 workspace test lane, strict Change validation, and component browser fixtures also pass locally. Exact-head remote
 evidence remains required, so 3.6 stays open and manager browser/visual acceptance remains a separate fact.
 
+PR Quality run `30303576786` on head `6f1034a` passed Changeset Gate, CI Scope, Core 483/483, and Server 542/542,
+then failed the same HostedShell fixture at three health requests instead of two. The prior correction joined
+refresh with reconnect replacement work, but a terminal transport callback could first start a generation-local
+disconnect-confirmation probe. A later explicit refresh then allocated a replacement generation and could not join
+that still-pending request. The complete-tab health owner, direct terminal-error red, and exact join mutation proof
+are recorded in `implementation.md`. Focused evidence, App 208/208, final-tree formatting, lint, all 15 checked
+workspace packages, serial workspace tests, strict Change validation, and component browser fixtures pass locally.
+A new exact-head remote gate remains required, so 3.6 stays open.
+
 ## 4. Merge Readiness
 
 - [ ] 4.1 Confirm all P1-P5 work is complete, all strict/OpenSpec validation is green, no loopback trigger remains unresolved, and implementation notes match the checked source.

@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Own same-identity replacement-observation single-flight across explicit refresh and reconnect health/Root admission.
+ * 1. Own same-identity health-probe and replacement-observation single-flight across failure, refresh, and reconnect.
  * 2. Retire late results when a locator is removed, replaced, or refreshed.
  * 3. Correlate mutation authority with the full tab identity and observation generation.
  * 4. Keep retained renderable health/Root evidence separate from the current attempt and authority.
@@ -221,7 +221,7 @@ export function createConnectionObservationOwner(
   >()
   const healthProbes = new Map<
     string,
-    { generation: number; promise: Promise<HostedBackendProbeResult> }
+    { tab: HostedShellTab; promise: Promise<HostedBackendProbeResult> }
   >()
   const replacementObservations = new Map<string, ConnectionObservationReplacement>()
   let nextGeneration = 0
@@ -397,26 +397,23 @@ export function createConnectionObservationOwner(
     existing.transport.unsubscribe()
   }
 
-  const probeHealth = (
-    tab: HostedShellTab,
-    generation: number
-  ): Promise<HostedBackendProbeResult> => {
+  const probeHealth = (tab: HostedShellTab): Promise<HostedBackendProbeResult> => {
     const existing = healthProbes.get(tab.id)
-    if (existing?.generation === generation) return existing.promise
+    if (existing && isSameTab(existing.tab, tab)) return existing.promise
     const promise = dependencies.probe(tab.apiBaseUrl)
     const release = () => {
       const current = healthProbes.get(tab.id)
-      if (current?.generation === generation && current.promise === promise) {
+      if (current?.promise === promise && isSameTab(current.tab, tab)) {
         healthProbes.delete(tab.id)
       }
     }
-    healthProbes.set(tab.id, { generation, promise })
+    healthProbes.set(tab.id, { tab, promise })
     void promise.then(release, release)
     return promise
   }
 
   const probeTransportFailure = (tab: HostedShellTab, generation: number): void => {
-    void probeHealth(tab, generation).then((probe) => {
+    void probeHealth(tab).then((probe) => {
       if (probe.reachability === 'online' || !isCurrentGeneration(tab.id, generation)) return
       update(tab.id, generation, (current) => ({
         ...current,
@@ -582,7 +579,7 @@ export function createConnectionObservationOwner(
     })
     publish()
 
-    const probe = await probeHealth(tab, generation)
+    const probe = await probeHealth(tab)
     if (replacement) replacement.phase = 'settling'
     if (probe.reachability !== 'online' || !probe.health) {
       update(tabId, generation, (current) => ({

@@ -770,6 +770,32 @@ until all five packages receive focused review. No Agent-run fixture is final br
   fixtures passed xterm 60/60 with one skipped and Web Storybook 12/12. A new exact-head remote run remains
   required. Checkpoint 3.6 stays open; no merge, archive, release, or Agent browser/visual acceptance is authorized.
 
+### P7 fifth remote CI correction (2026-07-28 Asia/Shanghai)
+
+- PR Quality run `30303576786` tested exact head `6f1034af3777d5027327d058b30aa3565807e91d`. Changeset Gate and
+  CI Scope passed. Fast Gate passed Core 483/483 and Server 542/542, then failed App 206/207 in the same real
+  HostedShell fixture at `expected 3 to be 2`; Browser shards were skipped only because Fast Gate failed.
+- The fourth correction covered explicit refresh overlapping a replacement observation created by
+  `connecting -> pending`, but the real tRPC transport may emit a terminal error first. That callback starts a
+  disconnect-confirmation health probe for the current generation. A focus refresh arriving while that request is
+  unresolved allocated the next generation, and the generation-keyed health owner could not reuse the request.
+  This was the remaining third-request source; it was not a second Provider or test-store contamination.
+- A new direct owner fixture establishes the transport, emits terminal error, suspends its confirmation probe,
+  and then calls the public `refresh()`. Before correction it deterministically failed in 497ms at
+  `expected 3 to be 2`, matching remote evidence. Health-probe ownership now uses the complete tab identity while
+  each consumer independently retains its generation guard. Removal or identity replacement clears the owner, so
+  a shared health result cannot authorize a retired generation or cross into a replacement tab.
+- Green passed the exact red. Mutation bypassing only the same-identity health join reproduced `3 -> 2`, then the
+  restored Connection Observation plus HostedShell lane passed 31/31. Overlapping connecting, pending reconnect,
+  terminal confirmation, and explicit refresh now share one unresolved health observation; if the earlier probe
+  has already settled, the later lifecycle naturally starts a new request. Root-refresh promotion remains owned by
+  the replacement observation and still occurs exactly once.
+- App checked TypeScript and the complete App suite passed 208/208. Final-tree `pnpm format:check`,
+  `pnpm lint:ci`, all 15 checked workspace packages, serial `pnpm test:ci`, strict Change validation, and
+  `git diff --check` passed. Component browser fixtures passed xterm 60/60 with one skipped and Web Storybook
+  12/12. A new exact-head remote run remains required. Checkpoint 3.6 stays open; no merge, archive, release, or
+  Agent browser/visual acceptance is authorized.
+
 ## Loopback Triggers
 
 Return to `research-plan.md` and obtain an explicit owner decision before progressing when any of the following occurs:
