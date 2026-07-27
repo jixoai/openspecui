@@ -13,8 +13,9 @@ Original request (2026-07-26): "更新 change，展开全面的接口升级和�
 
 ## Checkpoint State
 
-Planning and P6 automated implementation are complete. Checkmarks prove only their named package and review
-boundary; P6 has passed local broad gates, while owner walkthrough, merge, archive, and release remain open.
+Planning and P6 automated implementation are complete. The manager accepted the core CLI 1.6 delivery and explicitly
+transferred the remaining runtime-experience defects to `refine-live-projection-experience`. Protected merge,
+delta-spec sync, archive, and release remain separate boundaries.
 
 The worker must update `loop/implementation.md` after every accepted package with the actual changed owner,
 pre-fix red result, green result, mutation-resistance result, commands, output summary, and divergence.
@@ -27,7 +28,7 @@ Focused reviewer acceptance is a hard predecessor of the next package and every 
 - [x] 1.3 Recorded that existing owner decisions resolve ordinary design questions; loopback conditions are explicit in `implementation.md`.
 - [x] 1.4 Created the manager-owned final walkthrough ledger in Section 5; agent automation is preparation only.
 - [x] 1.5 Added `hosted-environment-delivery` and `projection-contract-truth` delta specifications; strict OpenSpec validation passed after the artifacts were complete.
-- [ ] 1.6 If a loopback trigger occurs, return to intake/research-plan and obtain the specific manager decision before more implementation.
+- [x] 1.6 The final walkthrough triggered a loopback; the manager chose to close this delivery baseline and transfer the named experience defects to `refine-live-projection-experience` instead of expanding this Change.
 
 ## 2. P1 Hosted Identity and Access Gate
 
@@ -111,12 +112,15 @@ OpenSpec CLI result with raw evidence, diagnostics, and exit status.
 
 Execution steps and result fields are in `loop/manager-walkthrough.md`. The manager owns every checkbox below.
 
-- [ ] 6.7 Gated auto-launch: fragment credential binds to its launch backend, reaches health/RPC/WS, and is removed from visible URL/persisted tabs.
-- [ ] 6.8 Gate rejection: missing/invalid credential is visibly authentication-required, not offline/current/success; WS reconnect behaves equivalently.
-- [ ] 6.9 Multi-environment App: selected B remains operation target while A is online; same host/data home projects group by one opaque `envUri`, while a distinct environment does not.
-- [ ] 6.10 Store lifecycle: observe accepted/running/terminal, then disconnect/rejoin; a rejected destructive request does not claim indeterminate completion.
-- [ ] 6.11 Context Matrix: multiple connected projects show observed Root/Reference relationships only, with no completeness claim.
-- [ ] 6.12 Static and responsive App: referenced static output has no invented live evidence; desktop/mobile layouts are readable and non-overlapping.
+- [x] 6.7 Gated auto-launch passed. The missing iframe Clipboard permission is accepted follow-up debt in `refine-live-projection-experience`.
+- [ ] 6.8 Gate rejection remains open: invalid/missing credentials are rejected but presented as endless Loading; intermittent SessionTabs Offline convergence is transferred with it.
+- [x] 6.9 Multi-environment App passed: targeting, `envUri` grouping, and retained-tab authority were accepted by the manager.
+- [x] 6.10 Store lifecycle passed. Delayed/abrupt feedback and blur/focus reconstruction are accepted follow-up debt in `refine-live-projection-experience`.
+- [x] 6.11 Context Matrix passed with observed-only Root/Reference provenance and no completeness claim.
+- [ ] 6.12 Static and responsive App remains open: export cannot resolve the SSG server entry; Inspector and Sessions overflow at mobile widths.
+
+Final manager result: `63/66`. The three intentionally open items are `6.8`, `6.12`, and `8.4`; archive is
+manager-authorized with those warnings after protected merge and delta-spec reconciliation.
 
 ## 8. Old Change Reconciliation and Delivery
 

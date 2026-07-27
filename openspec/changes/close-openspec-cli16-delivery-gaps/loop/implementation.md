@@ -3028,3 +3028,39 @@ Tailwind `scroll-button` optimizer warning and ineffective dynamic-import adviso
 all named tests passing, so these are recorded as non-blocking diagnostics rather than hidden or relabeled as
 product success. This closes P6 `7.9` at the automated local-gate boundary only. The manager-owned final browser,
 visual, responsive, and multi-tab walkthrough remains open; no merge, archive, or release follows from this entry.
+
+#### Manager walkthrough reconciliation and successor transfer: 2026-07-27 Asia/Shanghai
+
+The manager completed the final browser walkthrough against PR #207 candidate `5a4d2d0` and accepted the core
+OpenSpec CLI 1.6 delivery. The result is not an all-green rewrite:
+
+```text
+6.7   passed, with iframe Clipboard permission follow-up
+6.8   failed: missing/invalid credential remains Loading; SessionTabs Offline can lag
+6.9   passed
+6.10  passed, with Inspector feedback/focus continuity follow-up
+6.11  passed
+6.12  failed: static SSG server entry import plus two mobile overflow defects
+```
+
+The owner chose closure over expanding this already large delivery Change. `refine-live-projection-experience` is the
+single successor because it already owns the all-surface realtime/error presentation, persistent App Sessions host,
+Store Inspector lifecycle visuals, mobile/static evidence, and manager-only final acceptance. A third overlapping
+runtime-experience Change would create competing task and specification truth.
+
+The successor must keep four independently reviewable production packages:
+
+1. **Embedded Project Web**: declare the minimum iframe Permissions Policy needed by real Terminal clipboard
+   behavior; make rejected credentials converge to a terminal `authentication-required` presentation and stop
+   repeated unauthorized PTY/API work.
+2. **App session observation and shell**: prove the observation-to-SessionTabs Offline transition under disconnect/
+   reconnect generations, and make the persistent Sessions host consume the App shell's remaining block size on
+   mobile rather than stacking another viewport height.
+3. **Store Inspector**: preserve route/document identity across blur/focus, expose immediate accepted/running/current
+   feedback without optimistic Store truth, and constrain long paths/diagnostics to the mobile inline size.
+4. **Static export**: resolve the SSG Server entry from the actual build manifest/output contract instead of assuming
+   one unverified filename; prove a clean build followed by the real CLI export command.
+
+Each package requires one real owner-boundary red, green, and exact mutation-resistance result before broad gates.
+Vitest and basic component Playwright remain agent-owned preparation; the manager retains final browser and visual
+acceptance. PR merge, spec sync, archive, and release remain separate actions after this documentation commit.
