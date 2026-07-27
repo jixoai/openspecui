@@ -144,6 +144,11 @@ are recorded in `implementation.md`. Focused evidence, App 208/208, final-tree f
 workspace packages, serial workspace tests, strict Change validation, and component browser fixtures pass locally.
 A new exact-head remote gate remains required, so 3.6 stays open.
 
+Replacement PR Quality run `30304787975` tested implementation head `5cc3187` and passed Changeset Gate, CI Scope,
+Fast Gate, the Web Browser shard, and aggregate Browser Gate. This accepts the fifth correction's automated remote
+evidence. Checkpoint 3.6 remains open because the manager's final browser/visual acceptance of the delivered head
+is a separate, still-unrecorded fact; no merge, archive, or release is authorized.
+
 ## 4. Merge Readiness
 
 - [ ] 4.1 Confirm all P1-P5 work is complete, all strict/OpenSpec validation is green, no loopback trigger remains unresolved, and implementation notes match the checked source.
