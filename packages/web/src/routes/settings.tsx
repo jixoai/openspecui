@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Present backend, CLI execution, terminal, notification, and appearance settings.
  * 2. Compose the extracted OpenSpec diagnostics and initialization owner.
  * 3. Bind network-triggered settings actions to visible loading and failure state.
@@ -10,6 +10,7 @@
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -17,7 +18,7 @@ import { CliTerminal } from '@/components/cli-terminal'
 import { CopyablePath } from '@/components/copyable-path'
 import { Dialog } from '@/components/dialog'
 import { NotificationSettings } from '@/components/notifications/notification-settings'
-import { AsyncAction, RealtimeSkeletonLine } from '@/components/realtime'
+import { AccessibleStatus, AsyncAction, RealtimeSkeletonLine } from '@/components/realtime'
 import { Select, type SelectOption } from '@/components/select'
 import { OpenSpecSettingsSections } from '@/components/settings/openspec-settings-section'
 import { SoundSettingControl } from '@/components/sound-setting-control'
@@ -1160,9 +1161,7 @@ export function Settings() {
                           aria-busy="true"
                           data-testid="global-cli-detection-loading"
                         >
-                          <span className="rt-sr-status" role="status" aria-live="polite">
-                            Detecting global openspec command
-                          </span>
+                          <AccessibleStatus>Detecting global openspec command</AccessibleStatus>
                           <RealtimeSkeletonLine className="w-40" />
                         </span>
                       ) : cliSniffResult?.hasGlobal ? (

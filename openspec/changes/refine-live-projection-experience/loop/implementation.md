@@ -804,11 +804,11 @@ until all five packages receive focused review. No Agent-run fixture is final br
 
 ### Owner acceptance tooling (2026-07-28 Asia/Shanghai)
 
-- `walkthrough/ACCEPTANCE.md` now isolates eight owner-only browser cases: authentication rejection, embedded
+- `walkthrough/ACCEPTANCE.md` now isolates nine owner-only browser cases: authentication rejection, embedded
   Clipboard, same-Server retained reload, disconnect/reconnect convergence, Inspector operation/focus continuity,
-  Sessions Document/viewport continuity, Inspector mobile containment, and clean static export. Each case names
-  exact commands, browser evidence, PASS/FAIL criteria, a 30-second non-settlement boundary where applicable, and
-  a restoration path.
+  Sessions Document/viewport continuity, Inspector mobile containment, clean static export, and existing-surface
+  host presentation. Each case names exact commands, browser evidence, PASS/FAIL criteria, a 30-second
+  non-settlement boundary where applicable, and a restoration path.
 - `run.sh.ts open` creates exact missing/invalid credential pages. `inspect.sh.ts` prints pinned Store/Doctor/Context
   facts, restores the disposable responsive Store after UI unregister, and rebuilds SSG before static export.
   `lab.sh.ts prepare` now creates a long-id/deep-root Store and an owner result ledger at
@@ -843,6 +843,49 @@ until all five packages receive focused review. No Agent-run fixture is final br
 - **Evidence boundary**: one checked CLI fixture must fail when start coordination bypasses semantic presentation;
   one App unit must fail when `forwarded` no longer selects source retirement. Focused tests and typechecks may
   close 2.31-2.33. Actual foreground-window behavior remains owner-only browser acceptance under 3.6.
+
+### P8 host-neutral App presentation evidence (2026-07-28 Asia/Shanghai)
+
+- **Physical owners**: `start-command-presentation.ts` now owns Server readiness and the discriminated
+  `project-web | hosted-app` semantic request. `browser-start-command-presenter.ts` alone materializes the private
+  URL and invokes the external URL opener. `cli.ts` selects that Browser adapter; a future OpenTray adapter can
+  implement the same presenter without changing Server startup. The deleted `start-command-browser-target.ts`
+  raw `openBrowser(string)` contract has no compatibility alias.
+- **Ordinary-browser red and green**: the source-retirement predicate initially preserved the old
+  `forwarded-to-pwa`-only behavior. `app-launch-owner.test.ts` failed exactly 1/4 because `forwarded` returned
+  `false`; after correction, browser and PWA acknowledgements retire best-effort while `applied` and
+  `fallback-applied` remain mounted. The production relay still requests leader focus before acknowledgement.
+- **Semantic presenter green**: the checked start-owner fixture proves the real Server credential callback becomes
+  a typed Direct Web or hosted App request, public readiness evidence excludes the credential, and `--no-open`
+  performs no presentation. The Browser fixture proves URL query/fragment placement only after adapter selection.
+  CLI focused result: 2 files / 5 tests passed.
+- **Exact mutation resistance**: forcing the coordinator's hosted App request into a `project-web` request made
+  the hosted case fail 1/3 with the received discriminant and fields shown explicitly. Restoring the old
+  PWA-only retirement predicate independently made the App case fail 1/4 at `false -> true`. Both exact mutations
+  were restored; final CLI tests passed 5/5 and App predicate plus real relay tests passed 10/10.
+- **Checked evidence**: CLI and App package typechecks passed, including the new App test in
+  `tsconfig.p3c-tests.json`; the Web P1 checked-fixture config now includes both CLI presenter tests and passed.
+  Credentials remain runtime-only, no OpenTray dependency/protocol was invented, and normal browser focus/close
+  remains best-effort. `AT-09` now gives the owner exact PWA and ordinary-browser commands and PASS/FAIL criteria.
+  Final real-window behavior is still owner acceptance under checkpoint 3.6.
+
+### 2026-07-28 shared accessibility/static correction
+
+- **Red evidence**: the first complete `test:ci` run reached the Web unit lane at `157 passed / 1 failed`.
+  `archive-list.test.tsx` proved a resolved static projection still exposed an empty `role="status"`, even
+  though it had no update message. This was a real static-truthfulness regression from the new shared
+  `AccessibleStatus` primitive, not a browser or jsdom-only assertion.
+- **Correction**: `AccessibleStatus` keeps its stable visually-hidden host for DOM identity, but only applies
+  `role="status"`, `aria-live`, and `aria-atomic` when a non-empty message exists. Revalidation transitions retain
+  the same `.sr-only` node and gain live-region semantics only while active. The primitive imports the pure
+  `realtime/state` type directly so App reuse does not pull Web static globals or CLI adapter modules into App's
+  checked type graph.
+- **Green evidence**: the focused Web lane passed `158 files / 1018 tests`; App passed `212/212`; fresh
+  `pnpm --filter @openspecui/web build:ssg` passed. The corrected full `pnpm test:ci` then passed Root `43/43`,
+  Core `483/483`, Server `542/542`, App `212/212`, Web `158 files / 1018 tests`, CLI `71`, and all remaining
+  workspace packages. `pnpm test:browser:ci` passed xterm `60` with `1` expected skip and Web Storybook `12/12`.
+  The jsdom canvas warnings and existing Lightning CSS `scroll-button` warning remained non-fatal. These are
+  automated preparation evidence; final real-window presentation remains owner acceptance under checkpoint 3.6.
 
 ## Loopback Triggers
 

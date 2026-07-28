@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Render one lazy Git file patch with objective diff and file-state evidence.
  * 2. Preserve stable card identity and registration across ordinary rerenders.
  * 3. Present ordinary patch admission through local visual geometry instead of routine loading copy.
  *
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
  */
-import { RealtimeSkeletonLine } from '@/components/realtime'
+import { AccessibleStatus, RealtimeSkeletonLine } from '@/components/realtime'
 import { cn } from '@/lib/utils'
 import type { GitEntryFilePatch, GitEntryFileSummary } from '@openspecui/core'
 import { FileCode2, FileWarning } from 'lucide-react'
@@ -137,9 +138,9 @@ function GitPatchCardImpl({
           aria-busy={status === 'loading'}
           data-testid="git-patch-loading"
         >
-          <span className="rt-sr-status" role="status" aria-live="polite">
+          <AccessibleStatus>
             {status === 'loading' ? 'Loading patch preview' : 'Patch preview queued'}
-          </span>
+          </AccessibleStatus>
           <RealtimeSkeletonLine className="w-11/12" />
           <RealtimeSkeletonLine className="w-4/5" />
           <RealtimeSkeletonLine className="w-2/3" />

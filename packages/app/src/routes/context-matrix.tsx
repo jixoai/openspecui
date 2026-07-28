@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Project observed project-to-Root and Reference relationships by environment.
  * 2. Avoid machine-wide completeness claims.
  * 3. Preserve each source's Root lifecycle, typed failure, and direct Reference provenance.
@@ -9,8 +9,10 @@
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Correction request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
  */
 import { RealtimeRevalidateCue } from '@openspecui/web-src/components/realtime/realtime-cue'
+import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
 import {
   RealtimeSkeletonInventory,
   RealtimeSkeletonLine,
@@ -231,9 +233,7 @@ function RootAttempt({
     return (
       <div className="text-muted-foreground space-y-1 text-xs">
         <RealtimeSkeletonLine className="w-20" />
-        <span className="rt-sr-status" role="status">
-          Root {attempt.status}
-        </span>
+        <AccessibleStatus>Root {attempt.status}</AccessibleStatus>
         {isReplacement ? <RootAttemptSource attempt={attempt} /> : null}
       </div>
     )

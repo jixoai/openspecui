@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Group online backends by opaque backend-issued environment identity.
  * 2. Expose capabilities as compatibility facts rather than permissions.
  * 3. Present every grouped connected project without a representative-locator collapse.
@@ -7,8 +7,10 @@
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
  */
 import { RealtimeRevalidateCue } from '@openspecui/web-src/components/realtime/realtime-cue'
+import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
 import { RealtimeSkeletonInventory } from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { Link } from '@tanstack/react-router'
 import { Boxes, FlaskConical, MonitorSmartphone, Store } from 'lucide-react'
@@ -76,9 +78,7 @@ export function EnvironmentRoute() {
       {hasPendingObservations && environments.length === 0 ? (
         <>
           <RealtimeSkeletonInventory mode="list-divide" count={3} rowClassName="h-24" />
-          <span className="rt-sr-status" role="status">
-            Loading runtime environments
-          </span>
+          <AccessibleStatus>Loading runtime environments</AccessibleStatus>
         </>
       ) : environments.length === 0 ? (
         <EmptyView title="No runtime environments observed">

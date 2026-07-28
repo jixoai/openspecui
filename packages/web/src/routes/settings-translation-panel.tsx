@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Own document-translation preferences and engine selection.
  * 2. Project browser, remote, and local translation-engine availability.
  * 3. Manage local model discovery, download, deletion, and objective progress evidence.
@@ -7,6 +7,7 @@
  * 5. Keep routine preference saves visual while retaining explicit engine/download progress.
  *
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): "数据已经是旧的，即将会发生更新。"
  * Compromise: engine catalogs, model asset management, preferences, and smoke tests remain co-located because
  * their current state machine shares one settings draft and mutation graph. Splitting it is a separate refactor.
  */
@@ -14,7 +15,8 @@ import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
 import { Dialog } from '@/components/dialog'
 import {
-  RealtimeRevalidateCue,
+  AccessibleStatus,
+  AsyncActivityRegion,
   RealtimeSkeletonInventory,
   RealtimeSkeletonLine,
 } from '@/components/realtime'
@@ -1741,7 +1743,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
         <Languages className="h-5 w-5" />
         Translation
       </h2>
-      <RealtimeRevalidateCue active={isSaving}>
+      <AsyncActivityRegion active={isSaving} statusLabel="Saving translation settings">
         <div className="border-border @container space-y-4 rounded-lg border p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1845,9 +1847,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
                       >
                         {configLoading || configPresenceLoading || globalSettingsLoading ? (
                           <>
-                            <span className="rt-sr-status" role="status">
-                              Loading translation engine
-                            </span>
+                            <AccessibleStatus>Loading translation engine</AccessibleStatus>
                             <RealtimeSkeletonLine className="w-24" />
                           </>
                         ) : (
@@ -2447,7 +2447,7 @@ export function SettingsTranslationPanel({ index }: { index: number }) {
             elapsedMs={smokeElapsedMs}
           />
         </div>
-      </RealtimeRevalidateCue>
+      </AsyncActivityRegion>
     </TocSection>
   )
 }
@@ -2671,9 +2671,7 @@ function LocalModelCombobox({
           )}
           {remoteLoading ? (
             <div className="space-y-2 px-2 py-2" aria-busy="true">
-              <span className="rt-sr-status" role="status">
-                Loading remote models
-              </span>
+              <AccessibleStatus>Loading remote models</AccessibleStatus>
               <RealtimeSkeletonInventory count={2} rowClassName="h-14" />
             </div>
           ) : null}

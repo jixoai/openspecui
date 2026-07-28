@@ -1,11 +1,12 @@
 <!--
-Orthogonal intents (created 2026-07-28 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 1. Give the owner a numbered, command-exact browser acceptance procedure.
-2. Isolate authentication, Clipboard, retained loading, reconnect, Inspector, viewport, and static boundaries.
+2. Isolate authentication, Clipboard, retained loading, reconnect, Inspector, viewport, static, and host-presentation boundaries.
 3. Define PASS/FAIL observations without treating automated fixtures as final acceptance.
 4. Keep credentials and disposable mutation scope out of durable evidence.
 
 Original request (2026-07-28): "我需要非常具体的验收工具和验收流程"
+Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口。"
 -->
 
 # Owner Acceptance Procedure
@@ -241,6 +242,42 @@ PASS：
 - Static 页面不显示 `Live`、revalidating、reconnect 或当前 mutation authority；无 WebSocket/PTY 请求。
 - 页面仍使用和 live 相同的内容映射，窄屏无新增横向溢出。
 
+## AT-09 Existing App Surface Presentation
+
+先关闭 T2/T3，只保留 T1 的 App dev Server。关闭此前遗留的 App 页面或 PWA 窗口，确保起点唯一。
+
+1. 在 T2 执行：
+
+```bash
+bun "$WALK/run.sh.ts" backend a --lab "$LAB"
+```
+
+2. 等 A 出现在 App 的 Sessions tab 后，不关闭该 App 表面；在 T3 执行：
+
+```bash
+bun "$WALK/run.sh.ts" backend b --lab "$LAB"
+```
+
+3. 分别在两种宿主形态执行一次：
+
+- 已安装同 scope PWA：由 manifest `focus-existing` 与 `launchQueue` 处理。
+- 普通 Chrome 页面：允许 CLI 临时打开一个来源 Document，由 same-origin relay 转发给既有 leader。
+
+PASS：
+
+- 原有 App 表面获得前台焦点，且同一 App 中同时存在 A/B Sessions tab。
+- 已安装 PWA 不创建第二个持久 PWA 窗口。
+- 普通浏览器的临时来源 Document 在 leader acknowledgement 后自动退场；不得留下第二个空 App 页面。
+- A/B credential 都可用，且 URL、Console、结果文件中不保留 credential fragment。
+
+FAIL：
+
+- B 出现在新建的持久 App 窗口而原窗口未收到 tab。
+- 临时普通浏览器来源页稳定留在前台，或关闭了实际承载 A/B 的 leader。
+- 为实现聚焦而引入轮询、持久化 credential，或把 Browser opener 重新写回 start coordinator。
+
+说明：普通浏览器是否允许脚本 `focus()`/`close()` 属于浏览器策略，产品路径是 best-effort；若策略明确阻止退场，记录浏览器版本、Console 拒绝信息与 leader 是否正确收到 B，不要将自动化单测记为 PASS。
+
 ## 1. 收尾与判定
 
 全部用例结束后：
@@ -253,7 +290,7 @@ git diff --check
 
 判定规则：
 
-- AT-01 至 AT-08 任一 FAIL，则 owner acceptance 不成立；只回报对应 ID、最短复现和去敏证据。
+- AT-01 至 AT-09 任一 FAIL，则 owner acceptance 不成立；只回报对应 ID、最短复现和去敏证据。
 - 全部 PASS 后，`$LAB/acceptance-results.md` 才可作为 checkpoint `3.6` 的 Owner 证据输入。
 - 不在验收阶段 merge、archive、release。
 

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Orchestrate persistent credential-free project tabs and the embedded frame's visual lifecycle.
  * 2. Coordinate PWA install, display, and update ownership.
  * 3. Publish shell state once and consume exact-tab reachability from the shared observation owner.
@@ -8,11 +8,13 @@
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
  * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
  * Compromise: tab, frame, and PWA display lifecycles remain co-located because they settle in one mounted
  * shell; launch, health, and Root observation are physically extracted into App-lifetime owners.
  */
 import { Dialog } from '@openspecui/web-src/components/dialog'
+import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
 import { RealtimeSkeleton } from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { type Tab } from '@openspecui/web-src/components/tabs'
 import { TerminalTabs } from '@openspecui/web-src/components/terminal/terminal-tabs'
@@ -315,9 +317,7 @@ export function HostedShellTabContent({
         <div className="relative flex min-h-0 flex-1" aria-busy={isFrameLoading}>
           {isFrameLoading && (
             <div className="bg-background/85 pointer-events-none absolute inset-0 z-10 grid content-start gap-3 p-4 backdrop-blur-[1px]">
-              <span className="rt-sr-status" role="status">
-                Loading hosted project
-              </span>
+              <AccessibleStatus>Loading hosted project</AccessibleStatus>
               <RealtimeSkeleton className="h-8 w-48" />
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <RealtimeSkeleton className="h-24" />
@@ -358,9 +358,7 @@ export function HostedShellTabContent({
         <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6 text-center">
           {runtime.reachability === 'checking' ? (
             <div className="w-full max-w-lg space-y-3 text-left" aria-busy="true">
-              <span className="rt-sr-status" role="status" aria-live="polite">
-                connecting backend
-              </span>
+              <AccessibleStatus>connecting backend</AccessibleStatus>
               <RealtimeSkeleton className="h-7 w-44" />
               <RealtimeSkeleton className="h-3 w-3/4" />
               <RealtimeSkeleton className="h-32 w-full" />

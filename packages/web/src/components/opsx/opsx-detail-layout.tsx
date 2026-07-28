@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Compose reusable OPSX detail headers, pages, tabs, diagnostics, and state panels.
  * 2. Preserve shared-element navigation and geometry-stable loading presentation.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
  */
-import { DetailPanelSkeleton } from '@/components/realtime'
+import { AccessibleStatus, DetailPanelSkeleton } from '@/components/realtime'
 import { Tabs, type Tab } from '@/components/tabs'
 import { cn } from '@/lib/utils'
 import { VTLink, type VTLinkProps } from '@/lib/view-transitions/navigation'
@@ -127,9 +128,7 @@ export function OpsxDetailLoadingPage({
           The shared-element header stays mounted so the detail View Transition does not snap. The hidden
           accessible equivalent preserves the loading semantic for assistive tech / reduced motion. */}
       <div className="vt-detail-content flex min-h-[240px] flex-1 flex-col" aria-busy="true">
-        <span className="rt-sr-status" role="status" aria-live="polite">
-          {loadingMessage ?? 'loading'}
-        </span>
+        <AccessibleStatus>{loadingMessage ?? 'loading'}</AccessibleStatus>
         <DetailPanelSkeleton count={6} />
       </div>
     </OpsxDetailPage>

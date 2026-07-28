@@ -4,6 +4,7 @@ Orthogonal intents (created 2026-07-28 Asia/Shanghai):
 2. Keep credentials and sensitive URLs out of durable evidence.
 
 Original request (2026-07-28): "我需要非常具体的验收工具和验收流程"
+Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口。"
 -->
 
 # Owner Acceptance Results
@@ -25,6 +26,7 @@ Original request (2026-07-28): "我需要非常具体的验收工具和验收流
 | AT-06 | `<PASS/FAIL/TODO>` |                 |                      |
 | AT-07 | `<PASS/FAIL/TODO>` |                 |                      |
 | AT-08 | `<PASS/FAIL/TODO>` |                 |                      |
+| AT-09 | `<PASS/FAIL/TODO>` |                 |                      |
 
 ## Decision
 

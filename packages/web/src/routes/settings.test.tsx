@@ -9,6 +9,7 @@
  * Original request (2026-07-20): "Split OpenSpec diagnostics/initialization out of the oversized Settings route."
  * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
  */
 import type {
   LocalModelAssetLog,
@@ -2694,12 +2695,12 @@ describe('Settings', { timeout: 10_000 }, () => {
     })
     useServerStatusMock.mockReturnValue({ projectDir: '/tmp/project' })
 
-    const { container } = render(<Settings />)
+    render(<Settings />)
     const loadingRegion = screen.getByTestId('global-cli-detection-loading')
 
     expect(loadingRegion.getAttribute('aria-busy')).toBe('true')
     expect(loadingRegion.querySelector('.rt-skeleton')).not.toBeNull()
-    expect(container.querySelector('.rt-sr-status')?.textContent).toContain(
+    expect(loadingRegion.querySelector('[role="status"]')?.textContent).toContain(
       'Detecting global openspec command'
     )
   })

@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Render shared loading, empty, error, and stale-data states.
  * 2. Preserve accessible live-region semantics for asynchronous views.
  * 3. Use shared visual lifecycle geometry for first-load states.
  *
  * Original request (2026-07-15): "前端缺少的东西你可以通过注释补充。"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
  */
+import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
 import { RealtimeSkeletonInventory } from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { AlertCircle, Inbox } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -16,9 +18,7 @@ import type { DataState } from '../lib/data-state'
 export function LoadingView({ label = 'Loading...' }: { label?: string }) {
   return (
     <div className="space-y-3 p-4" aria-busy="true">
-      <span className="rt-sr-status" role="status" aria-live="polite">
-        {label}
-      </span>
+      <AccessibleStatus>{label}</AccessibleStatus>
       <RealtimeSkeletonInventory mode="list-divide" count={4} rowClassName="h-14" />
     </div>
   )

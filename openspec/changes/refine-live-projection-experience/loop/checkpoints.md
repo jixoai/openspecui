@@ -101,9 +101,9 @@ missing historical pre-v2 red.
 
 ### P8 Host-neutral App presentation
 
-- [ ] 2.31 Replace the raw `openBrowser(string)` start-command dependency with a typed `project-web | hosted-app` presenter request. Browser URL construction belongs to the Browser presenter; future OpenTray presentation requires no Server-start rewrite.
-- [ ] 2.32 Retire a transient ordinary-browser source best-effort after either browser or PWA leader acknowledgement. Keep `applied` and `fallback-applied` sources mounted; do not claim portable guaranteed browser focus.
-- [ ] 2.33 Add checked CLI presenter and App source-retirement unit evidence, including exact mutation failures. Final real-window focus/retirement behavior remains owner browser acceptance.
+- [x] 2.31 Replace the raw `openBrowser(string)` start-command dependency with a typed `project-web | hosted-app` presenter request. Browser URL construction belongs to the Browser presenter; future OpenTray presentation requires no Server-start rewrite.
+- [x] 2.32 Retire a transient ordinary-browser source best-effort after either browser or PWA leader acknowledgement. Keep `applied` and `fallback-applied` sources mounted; do not claim portable guaranteed browser focus.
+- [x] 2.33 Add checked CLI presenter and App source-retirement unit evidence, including exact mutation failures. Final real-window focus/retirement behavior remains owner browser acceptance.
 
 ## 3. PR and Release Gates
 
@@ -156,7 +156,7 @@ Fast Gate, the Web Browser shard, and aggregate Browser Gate. This accepts the f
 evidence. Checkpoint 3.6 remains open because the manager's final browser/visual acceptance of the delivered head
 is a separate, still-unrecorded fact; no merge, archive, or release is authorized.
 
-The owner walkthrough is now executable through `walkthrough/ACCEPTANCE.md`. Its eight isolated cases use the
+The owner walkthrough is now executable through `walkthrough/ACCEPTANCE.md`. Its nine isolated cases use the
 disposable lab, exact trigger/restoration commands, sanitized PASS/FAIL evidence, and the generated
 `$LAB/acceptance-results.md` ledger. Providing those tools does not complete 3.6; only the owner's recorded result
 against the exact delivered head can do so.

@@ -809,9 +809,11 @@ describe('App connection selection and observation routes', () => {
 
     await waitFor(() => {
       expect(getConnectionsSnapshot().activeTabId).toBe('tab-a')
-      expect(screen.getByRole('status').textContent).toContain(
-        'This draft belongs to a previous environment observation.'
-      )
+      expect(
+        screen.getByText(/This draft belongs to a previous environment observation\./, {
+          selector: '[role="status"]',
+        })
+      ).toBeTruthy()
       expect(
         screen.getByRole<HTMLButtonElement>('button', { name: 'Register Store' }).disabled
       ).toBe(false)

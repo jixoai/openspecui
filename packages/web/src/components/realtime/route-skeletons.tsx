@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Mirror the real row/card/panel/form geometry of each route so the loading skeleton matches settled content.
  * 2. Keep each skeleton composable and layout-agnostic (no Card/border/page-wrapper beyond the mirrored row).
  * 3. Provide one chrome-neutral router fallback for route code admission.
@@ -7,18 +7,18 @@
  * Owner direction (2026-07-24): skeleton 结构需符合客观布局情况。每个组件复刻对应路由真实渲染结构，
  * 用 RealtimeSkeleton 块填充，shimmer 光影语言一致。
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
  */
 import { cn } from '@/lib/utils'
 
+import { AccessibleStatus } from './realtime-primitives'
 import { RealtimeSkeleton, RealtimeSkeletonInventory } from './realtime-skeleton'
 
 /** Root-router fallback: preserve page-sized geometry without inventing route-specific content. */
 export function RoutePendingSkeleton() {
   return (
     <div className="space-y-4 p-4 md:p-6" aria-busy="true">
-      <span className="rt-sr-status" role="status" aria-live="polite">
-        loading route
-      </span>
+      <AccessibleStatus>loading route</AccessibleStatus>
       <RealtimeSkeleton className="h-8 w-48" />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <RealtimeSkeleton className="h-24" />

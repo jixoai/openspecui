@@ -1,20 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Revalidation luminance cue over retained content (low-noise edge luminance).
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Revalidation veil over retained content (stale wash plus skeleton-like luminance sweep).
  * 2. Changed-item settling cue (brief luminance wash on a newly-committed item).
  * 3. Stay package-neutral so App and Web surfaces share the same lifecycle cue.
  * 4. Optionally preserve child DOM identity across active/inactive transitions.
  *
  * Original request (2026-07-23): "可以用光影来替代……尽量不要使用文字，而是使用视觉语言（动画、光影）。"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-28): "让用户知道这部分区域的数据已经是旧的，即将会发生更新。"
  */
 import { type CSSProperties, type ReactNode } from 'react'
 import { cn } from '../../lib/utils'
+import { AccessibleStatus } from './realtime-primitives'
 
 export interface RealtimeRevalidateCueProps {
   children: ReactNode
   className?: string
-  /** When false, the cue is removed (e.g. when content is current). */
+  /** When false, the stale veil is removed while the host remains mounted. */
   active?: boolean
   /** Hidden accessible equivalent for the visual luminance cue. */
   statusLabel?: string
@@ -22,7 +24,7 @@ export interface RealtimeRevalidateCueProps {
   persistent?: boolean
 }
 
-/** A wrapper that applies the revalidation luminance cue while a region is display-only/revalidating. */
+/** A stable host that veils retained content while its replacement projection is pending. */
 export function RealtimeRevalidateCue({
   children,
   className,
@@ -30,16 +32,12 @@ export function RealtimeRevalidateCue({
   statusLabel = 'updating',
   persistent = false,
 }: RealtimeRevalidateCueProps) {
-  if (!active && !persistent) return <>{children}</>
   return (
-    <div className={cn(active && 'rt-revalidate-cue', className)} aria-busy={active || undefined}>
-      <span
-        className="rt-sr-status"
-        role={active ? 'status' : undefined}
-        aria-live={active ? 'polite' : undefined}
-      >
-        {active ? statusLabel : null}
-      </span>
+    <div
+      className={cn(!active && !persistent && 'contents', active && 'rt-revalidate-cue', className)}
+      aria-busy={active || undefined}
+    >
+      <AccessibleStatus>{active ? statusLabel : null}</AccessibleStatus>
       {children}
     </div>
   )

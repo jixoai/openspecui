@@ -2,6 +2,7 @@
 '@openspecui/core': major
 '@openspecui/server': major
 '@openspecui/web': major
+openspecui: major
 ---
 
 Migrate Dashboard Summary live delivery to a version-2 data-free invalidation
@@ -25,3 +26,9 @@ terminal document instead of an indefinite loading/retry loop.
 Effective OpenSpec data-home observation now settles initially missing Store,
 Workset, and Schema targets from bounded ancestor creation events without
 introducing generic missing-path polling.
+
+CLI startup now emits a host-neutral Direct Web or hosted App presentation
+request. The Browser adapter owns private URL materialization today, while a
+future native host can present the same backend intent without impersonating a
+browser opener. Successfully forwarded browser and PWA launch sources retire
+best-effort so the existing App surface can remain foreground.
