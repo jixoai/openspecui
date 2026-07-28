@@ -5,6 +5,7 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 3. Preserve CI, owner acceptance, archive, and merge as separate boundaries.
 
 Owner decision (2026-07-28): implement the reviewed rewrite now.
+Owner acceptance (2026-07-28): "验收通过" at PR #208 head `8edb6a5`.
 -->
 
 ## 1. Research and Specification
@@ -45,7 +46,7 @@ Owner decision (2026-07-28): implement the reviewed rewrite now.
 - [x] 5.8 Lock the live layout owners with focused tests, then implement the route/grid/lane flex chain
 - [x] 5.9 Pass focused unit, Web typecheck, clean SSG, strict OpenSpec, and repository delivery gates
 - [x] 5.10 Push the corrected PR and record remote checks
-- [ ] 5.11 Owner completes final visual and real browser walkthrough
+- [x] 5.11 Owner completes final visual and real browser walkthrough
 
 ## 6. Finalization
 

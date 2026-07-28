@@ -5,11 +5,12 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 3. Keep superseded evidence and final owner acceptance explicit.
 
 Owner decision (2026-07-28): implement the reviewed Kanban rewrite.
+Owner acceptance (2026-07-28): "验收通过" at PR #208 head `8edb6a5`.
 -->
 
 ## Current State
 
-Status: **live Board scroll correction delivered; owner visual acceptance pending**.
+Status: **owner accepted; merge approval, archive/sync, and merge remain pending**.
 
 The contributor implementation at commits `5def094` and `9763458` is characterization input only. Its old
 frontend-only completion claims, lifecycle names, helper tests, SSG registration evidence, and green-gate counts
@@ -42,7 +43,7 @@ are superseded by the 2026-07-28 fixed-point review.
 - [x] Focused typed tests and component fixture tests pass.
 - [x] Clean SSG build and strict Change validation pass.
 - [x] Full repository gates pass and PR #208 is pushed for owner acceptance.
-- [ ] Owner visual acceptance recorded before archive or merge.
+- [x] Owner visual acceptance recorded before archive or merge.
 
 ### E. Container-responsive correction
 
@@ -108,7 +109,21 @@ aggregate Browser Gate                  passed
 
 The implementation and local-evidence head was fast-forwarded to both the maintainer branch and contributor fork.
 GitHub completed all required checks successfully. These checks close checkpoint 5.10 only; final visual and
-real-browser acceptance remains owner checkpoint 5.11.
+real-browser acceptance was subsequently supplied by the owner and is recorded below.
+
+## Owner Acceptance (2026-07-28)
+
+```text
+owner result                            验收通过
+accepted PR                             #208
+accepted head                           8edb6a5644e8160e948aac88ea8255605cdb2d84
+accepted head workflow                  30368555245
+required checks                         6 / 6 passed
+```
+
+The owner completed the final visual and real-browser walkthrough and accepted the delivered result. This closes
+checkpoint 5.11 only. Merge approval, Change archive/sync, and PR merge remain separate checkpoints 6.1-6.3 and
+are not implied by acceptance.
 
 Updated delivery evidence:
 
