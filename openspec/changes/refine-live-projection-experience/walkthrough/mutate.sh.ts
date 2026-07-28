@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Trigger Project config, Project Spec, and shared Store invalidations independently.
  * 2. Restore deterministic valid fixtures after repeated walkthrough mutations.
  * 3. Report mutation-source timestamps without interpreting browser acceptance.
  *
  * Original request (2026-07-27): "现在你辅助我完成走查，我需要一套脚本（你直接放在change文件夹中）来辅助我完成走查所需的命令执行工具"
+ * Original request (2026-07-28): "我需要非常具体的验收工具和验收流程"
  */
 import { appendFile, mkdir, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -17,6 +18,7 @@ import {
   referenceSpecPath,
   requirePreparedLab,
   resolveLab,
+  responsiveSpecPath,
   sampleSpec,
   targetFor,
   walkthroughYargs,
@@ -46,6 +48,7 @@ async function reset(lab: WalkthroughLab): Promise<void> {
       writeFixture(projectSpecPath(target), sampleSpec(`Project ${target.id.toUpperCase()}`)),
     ]),
     writeFixture(referenceSpecPath(lab), sampleSpec('Shared Reference')),
+    writeFixture(responsiveSpecPath(lab), sampleSpec('Responsive Containment Evidence')),
   ])
   console.log('Restored deterministic Project and Store fixtures.')
 }
@@ -58,6 +61,7 @@ async function reportStatus(lab: WalkthroughLab): Promise<void> {
       projectSpecPath(target),
     ]),
     referenceSpecPath(lab),
+    responsiveSpecPath(lab),
   ]
   for (const path of paths) {
     const metadata = await stat(path)

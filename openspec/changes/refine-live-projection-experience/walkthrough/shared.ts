@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Resolve one disposable two-project loading walkthrough topology.
  * 2. Run pinned OpenSpec and workspace commands under one isolated XDG data home.
  * 3. Guard every destructive lab operation with an owned marker.
  * 4. Provide deterministic Project and Store fixtures for invalidation exercises.
  *
  * Original request (2026-07-27): "现在你辅助我完成走查，我需要一套脚本（你直接放在change文件夹中）来辅助我完成走查所需的命令执行工具"
+ * Original request (2026-07-28): "我需要非常具体的验收工具和验收流程"
  */
 import { spawn } from 'node:child_process'
 import { access, mkdir, readFile } from 'node:fs/promises'
@@ -21,6 +22,7 @@ export const defaultLabDirectory = '/tmp/openspecui-live-projection-walkthrough'
 export const labMarkerName = '.openspecui-live-projection-walkthrough.json'
 export const labMarkerKind = 'openspecui-live-projection-walkthrough'
 export const referenceStoreId = 'shared-reference'
+export const responsiveStoreId = 'responsive-containment-evidence-with-a-long-store-identity'
 export const openSpecCliBin = join(
   repositoryRoot,
   'packages/core/node_modules/openspec-cli-16/bin/openspec.js'
@@ -51,6 +53,7 @@ export interface WalkthroughLab {
   appUrl: string
   dataHome: string
   referenceStoreDir: string
+  responsiveStoreDir: string
   targets: Record<BackendId, WalkthroughTarget>
 }
 
@@ -64,6 +67,13 @@ export function resolveLab(root: string): WalkthroughLab {
     appUrl: 'http://127.0.0.1:13105',
     dataHome,
     referenceStoreDir: join(labRoot, 'stores', referenceStoreId),
+    responsiveStoreDir: join(
+      labRoot,
+      'stores',
+      'responsive-containment',
+      'nested-location-evidence',
+      responsiveStoreId
+    ),
     targets: {
       a: {
         id: 'a',
@@ -208,4 +218,8 @@ export function projectConfigPath(target: WalkthroughTarget): string {
 
 export function referenceSpecPath(lab: WalkthroughLab): string {
   return join(lab.referenceStoreDir, 'openspec', 'specs', 'shared-contract', 'spec.md')
+}
+
+export function responsiveSpecPath(lab: WalkthroughLab): string {
+  return join(lab.responsiveStoreDir, 'openspec', 'specs', 'responsive-contract', 'spec.md')
 }

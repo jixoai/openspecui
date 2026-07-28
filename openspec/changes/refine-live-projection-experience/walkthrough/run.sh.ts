@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Start App and project backends in explicit foreground terminals.
  * 2. Report reachability and run objective loading benchmarks without browser automation.
  * 3. Replay focused unit/component evidence for the full-surface loading contract.
+ * 4. Open exact missing/invalid credential pages for terminal authentication acceptance.
  *
  * Original request (2026-07-27): "现在你辅助我完成走查，我需要一套脚本（你直接放在change文件夹中）来辅助我完成走查所需的命令执行工具"
+ * Original request (2026-07-28): "我需要非常具体的验收工具和验收流程"
  */
 import {
   defaultLabDirectory,
@@ -55,6 +57,22 @@ async function startBackend(labDirectory: string, rawId: string): Promise<void> 
     cwd: repositoryRoot,
     env: openSpecEnvironment(target.dataHome),
   })
+}
+
+async function openPage(input: {
+  labDirectory: string
+  rawId: string
+  credential: 'missing' | 'invalid'
+  printOnly: boolean
+}): Promise<void> {
+  const lab = resolveLab(input.labDirectory)
+  await requirePreparedLab(lab)
+  const target = targetFor(lab, input.rawId)
+  const url = new URL(`http://127.0.0.1:${String(target.port)}/dashboard`)
+  if (input.credential === 'invalid') url.hash = 'credential=invalid'
+  console.log(url.href)
+  if (input.printOnly) return
+  await runCommand({ command: 'open', args: [url.href], cwd: repositoryRoot })
 }
 
 async function status(labDirectory: string): Promise<void> {
@@ -167,6 +185,29 @@ await walkthroughYargs(hideWalkthroughBin(process.argv))
     'Run backend A or B with generated Access Gate credentials.',
     (command) => command.positional('id', { choices: ['a', 'b'] as const }),
     async (argv) => startBackend(String(argv.lab), String(argv.id))
+  )
+  .command(
+    'open <id>',
+    'Open an exact missing- or invalid-credential Project Web acceptance page.',
+    (command) =>
+      command
+        .positional('id', { choices: ['a', 'b'] as const })
+        .option('credential', {
+          choices: ['missing', 'invalid'] as const,
+          default: 'missing' as const,
+        })
+        .option('print-only', {
+          type: 'boolean',
+          default: false,
+          describe: 'Print the URL without invoking macOS open.',
+        }),
+    async (argv) =>
+      openPage({
+        labDirectory: String(argv.lab),
+        rawId: String(argv.id),
+        credential: argv.credential,
+        printOnly: Boolean(argv.printOnly),
+      })
   )
   .command(
     'status',

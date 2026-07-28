@@ -801,6 +801,32 @@ until all five packages receive focused review. No Agent-run fixture is final br
   browser/visual acceptance remains outstanding, so checkpoint 3.6 stays open and no merge, archive, or release is
   authorized.
 
+### Owner acceptance tooling (2026-07-28 Asia/Shanghai)
+
+- `walkthrough/ACCEPTANCE.md` now isolates eight owner-only browser cases: authentication rejection, embedded
+  Clipboard, same-Server retained reload, disconnect/reconnect convergence, Inspector operation/focus continuity,
+  Sessions Document/viewport continuity, Inspector mobile containment, and clean static export. Each case names
+  exact commands, browser evidence, PASS/FAIL criteria, a 30-second non-settlement boundary where applicable, and
+  a restoration path.
+- `run.sh.ts open` creates exact missing/invalid credential pages. `inspect.sh.ts` prints pinned Store/Doctor/Context
+  facts, restores the disposable responsive Store after UI unregister, and rebuilds SSG before static export.
+  `lab.sh.ts prepare` now creates a long-id/deep-root Store and an owner result ledger at
+  `$LAB/acceptance-results.md` without persisting Access Gate credentials.
+- These files are acceptance preparation only. No Agent-run browser walkthrough occurred, no owner result has been
+  recorded, and checkpoint 3.6 remains open.
+- Tool smoke evidence passed against a marker-owned temporary lab: all four CLI help surfaces parsed; prepare seeded
+  both Stores plus A/B Doctor/Context; invalid credential URL printing and mutation-source reporting succeeded;
+  unregister then `restore-responsive-store` restored the exact long Store. Focused App tests passed 43/43 and Web
+  tests passed 85/85. Independent bundler-resolution TypeScript checking passed all five walkthrough scripts.
+- The real static helper rebuilt fresh client/server SSG output, resolved the hashed Server entry, and exported 8
+  routes including `/specs/referenced/shared-reference/shared-contract`. `pnpm format:check`, strict Change
+  validation, and `git diff --check` passed. The known Lightning CSS `scroll-button` warning remained non-fatal and
+  unrelated to this tooling. The temporary lab was removed through its marker guard.
+- The commit hook could not run because the repository root Vite config has no Vite+ `staged` configuration. This
+  is the same environment-level hook gap recorded earlier, not a walkthrough failure. The scoped lint/type/format,
+  focused tests, real static export, strict validation, and diff checks above were completed before committing with
+  `--no-verify`.
+
 ## Loopback Triggers
 
 Return to `research-plan.md` and obtain an explicit owner decision before progressing when any of the following occurs:

@@ -1,16 +1,21 @@
 <!--
-Orthogonal intents (created 2026-07-27 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 1. Give the owner reproducible commands for Web/App loading and retained-content walkthroughs.
 2. Separate same-Server refresh, fresh-Server cold computation, and filesystem invalidation evidence.
 3. Preserve owner-only final browser, visual, responsive, and multi-tab acceptance.
+4. Route the owner to command-exact acceptance cases and a disposable result ledger.
 
 Original request (2026-07-27): "现在你辅助我完成走查，我需要一套脚本（你直接放在change文件夹中）来辅助我完成走查所需的命令执行工具"
+Original request (2026-07-28): "我需要非常具体的验收工具和验收流程"
 -->
 
 # Live Projection Walkthrough Tools
 
 These tools prepare a disposable two-project environment and objective command evidence. They do not automate,
 interpret, or replace the owner's browser and visual acceptance.
+
+The numbered PASS/FAIL procedure is [`ACCEPTANCE.md`](./ACCEPTANCE.md). `prepare` also creates the owner-owned
+result ledger at `$LAB/acceptance-results.md` from [`RESULTS.template.md`](./RESULTS.template.md).
 
 ## Prepare
 
@@ -22,6 +27,7 @@ export LAB=/tmp/openspecui-live-projection-walkthrough
 
 bun "$WALK/lab.sh.ts" prepare --lab "$LAB"
 bun "$WALK/lab.sh.ts" describe --lab "$LAB"
+bun "$WALK/inspect.sh.ts" stores --lab "$LAB"
 ```
 
 Open three foreground terminals. The backend commands generate Access Gate credentials and open their App targets;
@@ -59,6 +65,15 @@ bun "$WALK/run.sh.ts" status --lab "$LAB"
 
 The owner performs the actual browser and multi-tab observations. Record a failure as the shortest surface/trigger
 pair; do not infer acceptance from a successful mutation command.
+
+Exact helpers used by the numbered procedure:
+
+```bash
+bun "$WALK/run.sh.ts" open a --credential missing --lab "$LAB"
+bun "$WALK/run.sh.ts" open a --credential invalid --lab "$LAB"
+bun "$WALK/inspect.sh.ts" restore-responsive-store --lab "$LAB"
+bun "$WALK/inspect.sh.ts" export-static a --open --lab "$LAB"
+```
 
 ## Objective Checks
 

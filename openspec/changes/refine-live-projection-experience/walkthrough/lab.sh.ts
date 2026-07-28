@@ -1,13 +1,17 @@
 /**
- * Orthogonal intents (created 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prepare and reset a disposable two-project App/Web walkthrough lab.
  * 2. Seed a shared Store and valid OpenSpec facts for retained-projection exercises.
  * 3. Delete only a marker-owned lab on explicit clean/reset commands.
+ * 4. Seed a long Store fixture and owner-owned result ledger for responsive acceptance.
  *
  * Original request (2026-07-27): "现在你辅助我完成走查，我需要一套脚本（你直接放在change文件夹中）来辅助我完成走查所需的命令执行工具"
+ * Original request (2026-07-28): "我需要非常具体的验收工具和验收流程"
  */
-import { mkdir, rm, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { execFile } from 'node:child_process'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { promisify } from 'node:util'
 import {
   defaultLabDirectory,
   ensureDirectory,
@@ -20,8 +24,11 @@ import {
   projectSpecPath,
   referenceSpecPath,
   referenceStoreId,
+  repositoryRoot,
   requirePreparedLab,
   resolveLab,
+  responsiveSpecPath,
+  responsiveStoreId,
   runOpenSpec,
   sampleSpec,
   walkthroughYargs,
@@ -29,9 +36,29 @@ import {
   type WalkthroughTarget,
 } from './shared.ts'
 
+const execFileAsync = promisify(execFile)
+
 async function writeFixture(path: string, content: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, content, 'utf8')
+}
+
+async function writeAcceptanceLedger(lab: WalkthroughLab): Promise<void> {
+  const [template, revision] = await Promise.all([
+    readFile(new URL('./RESULTS.template.md', import.meta.url), 'utf8'),
+    execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: repositoryRoot, encoding: 'utf8' }),
+  ])
+  const timestamp = new Date().toLocaleString('sv-SE', {
+    timeZone: 'Asia/Shanghai',
+    hour12: false,
+  })
+  await writeFile(
+    join(lab.root, 'acceptance-results.md'),
+    template
+      .replace('<git rev-parse HEAD>', String(revision.stdout).trim())
+      .replace('<Asia/Shanghai>', `${timestamp} Asia/Shanghai`),
+    'utf8'
+  )
 }
 
 async function initializeProject(lab: WalkthroughLab, target: WalkthroughTarget): Promise<void> {
@@ -66,6 +93,7 @@ async function prepare(lab: WalkthroughLab, reset: boolean): Promise<void> {
     'utf8'
   )
   await Promise.all([ensureDirectory(lab.dataHome), ensureDirectory(lab.referenceStoreDir)])
+  await ensureDirectory(lab.responsiveStoreDir)
 
   await runOpenSpec(
     [
@@ -79,8 +107,22 @@ async function prepare(lab: WalkthroughLab, reset: boolean): Promise<void> {
     ],
     { cwd: lab.root, dataHome: lab.dataHome }
   )
+  await runOpenSpec(
+    [
+      'store',
+      'setup',
+      responsiveStoreId,
+      '--path',
+      lab.responsiveStoreDir,
+      '--no-init-git',
+      '--json',
+    ],
+    { cwd: lab.root, dataHome: lab.dataHome }
+  )
   await writeFixture(referenceSpecPath(lab), sampleSpec('Shared Reference'))
+  await writeFixture(responsiveSpecPath(lab), sampleSpec('Responsive Containment Evidence'))
   await Promise.all(Object.values(lab.targets).map((target) => initializeProject(lab, target)))
+  await writeAcceptanceLedger(lab)
 
   for (const target of Object.values(lab.targets)) {
     await runOpenSpec(['doctor', '--json'], { cwd: target.projectDir, dataHome: target.dataHome })
@@ -100,6 +142,8 @@ function describe(lab: WalkthroughLab): void {
         app: lab.appUrl,
         dataHome: lab.dataHome,
         referenceStore: { id: referenceStoreId, root: lab.referenceStoreDir },
+        responsiveStore: { id: responsiveStoreId, root: lab.responsiveStoreDir },
+        results: join(lab.root, 'acceptance-results.md'),
         targets: lab.targets,
       },
       null,
