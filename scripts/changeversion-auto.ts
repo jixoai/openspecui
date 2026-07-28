@@ -1,7 +1,24 @@
 #!/usr/bin/env bun
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Generate and deliver a protected changeset version PR.
+ * 2. Enter, continue, or exit an explicit Changesets prerelease channel.
+ * 3. Wait for the exact merged-head release workflow before reporting completion.
+ *
+ * Original request (2026-07-28): "我想先发布一个beta版本"
+ */
+
 import { spawnSync } from 'node:child_process'
+import process from 'node:process'
+
+import yargs from 'yargs'
+import { hideBin } from 'yargs/helpers'
 
 import { loadGhPrMergeability, waitForPrMergeability } from './lib/changeversion/pr-mergeability'
+import {
+  planPrereleaseMode,
+  readChangesetsPrereleaseState,
+} from './lib/changeversion/prerelease-mode'
 import {
   type InheritRunResult,
   waitForWorkflowRunToAppear,
@@ -15,6 +32,7 @@ const PR_TITLE = 'chore(release): apply changeset version'
 const PR_BODY = [
   'Automated by `pnpm changeversion`.',
   '',
+  '- Enter, continue, or exit the requested Changesets prerelease mode',
   '- Run `changeset version`',
   '- Commit version/changelog updates',
   '- Create PR and wait for required checks',
@@ -34,6 +52,11 @@ type CaptureRunResult = {
   status: number
   stdout: string
   stderr: string
+}
+
+type ChangeversionOptions = {
+  exitPre: boolean
+  preTag: null | string
 }
 
 function commandFor(bin: 'pnpm' | 'git' | 'gh'): string {
@@ -209,7 +232,7 @@ function findOpenPrByHeadBranch(branch: string): { number: number; url: string }
   return parsed[0] ?? null
 }
 
-function closePrAndDeleteBranch(prNumber: number, branch: string, reason: string): void {
+function closePrAndDeleteBranch(prNumber: number, reason: string): void {
   runInheritAllowFailure(commandFor('gh'), [
     'pr',
     'close',
@@ -297,7 +320,7 @@ function waitForReleaseWorkflow(headCommit: string): void {
   }
 }
 
-function main(): void {
+function main(options: ChangeversionOptions): void {
   ensureOnMainBranch()
   ensureMainIsSyncedWithRemote()
   ensureGhAuthAvailable()
@@ -318,6 +341,14 @@ function main(): void {
       stashRef = createStash(stashMessage)
     }
 
+    const prereleaseAction = planPrereleaseMode({
+      exitPre: options.exitPre,
+      preTag: options.preTag,
+      state: readChangesetsPrereleaseState(process.cwd()),
+    })
+    if (prereleaseAction) {
+      runInheritOrThrow(commandFor('pnpm'), ['exec', 'changeset', ...prereleaseAction.args])
+    }
     runInheritOrThrow(commandFor('pnpm'), ['exec', 'changeset', 'version'])
 
     const changedFiles = runCapture(commandFor('git'), ['diff', '--name-only'])
@@ -371,7 +402,7 @@ function main(): void {
           const reason = checks.timedOut
             ? 'Closed automatically: CI checks timed out in changeversion automation.'
             : 'Closed automatically: CI checks failed in changeversion automation.'
-          closePrAndDeleteBranch(prNumber, releaseBranch, reason)
+          closePrAndDeleteBranch(prNumber, reason)
           throw new Error(
             checks.timedOut
               ? 'PR checks timed out; PR was auto-closed.'
@@ -414,7 +445,6 @@ function main(): void {
     if (!prMerged && prNumber !== null && releaseBranch !== null) {
       closePrAndDeleteBranch(
         prNumber,
-        releaseBranch,
         'Closed automatically due to changeversion automation failure.'
       )
     } else if (!prMerged && releaseBranch !== null) {
@@ -422,7 +452,6 @@ function main(): void {
       if (existingPr) {
         closePrAndDeleteBranch(
           existingPr.number,
-          releaseBranch,
           'Closed automatically due to changeversion automation failure.'
         )
       } else {
@@ -446,8 +475,27 @@ function main(): void {
   if (stashError) throw stashError
 }
 
+const argv = yargs(hideBin(process.argv))
+  .scriptName('changeversion')
+  .option('pre', {
+    description: 'Enter or continue a named Changesets prerelease channel.',
+    type: 'string',
+  })
+  .option('exit-pre', {
+    default: false,
+    description: 'Exit the current Changesets prerelease channel before versioning.',
+    type: 'boolean',
+  })
+  .conflicts('pre', 'exit-pre')
+  .strict()
+  .help()
+  .parseSync()
+
 try {
-  main()
+  main({
+    exitPre: argv['exit-pre'],
+    preTag: argv.pre ?? null,
+  })
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error)
   console.error(`[changeversion] ${message}`)

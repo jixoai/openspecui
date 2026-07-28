@@ -52,6 +52,7 @@ Owner presentation direction (2026-07-28): "backend a 会重新打开一个浏�
 Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间需要 gap 或分割线；Static 导出后的 /context 页面没数据。"
 Owner-reported defect (2026-07-28): "pnpm openspecui export -o ./tmp --open 导出的数据好像逃逸到 html 去了。"
 Original request (2026-07-28): "把残留的工作先完成"
+Original request (2026-07-28): "我想先发布一个beta版本"
 Review correction (2026-07-20): Terminal cwd evidence must cross the production Server owner instead of injecting a hand-authored downstream callback.
 Review correction (2026-07-20): Settings tool delivery must preserve upstream physical artifact scope, render-time subscription provenance, and CLI-runner cache retirement.
 -->
@@ -115,11 +116,13 @@ MUST READ: CLAUDE.md
 - After required PR checks pass, auto-merge to `main`.
 - After merge to `main`, ask manager whether to release.
 - If manager confirms release:
-  1. run `pnpm changeversion`
+  1. run `pnpm changeversion` for stable or `pnpm changeversion --pre <channel>` for an explicitly requested prerelease
   2. wait for the changeversion PR checks to pass
   3. auto-merge the changeversion PR
   4. wait for GitHub Actions `release.yml` on `main` to publish packages and push tags
   5. notify manager only after the GitHub release automation succeeds
+
+- Prerelease delivery law (2026-07-28): A requested beta release enters or continues explicit Changesets prerelease mode and derives npm dist-tag plus GitHub prerelease state from the generated SemVer version; caller-authored parallel channel flags are forbidden. `6.0.0-beta.0` publishes under `beta` and cannot move `latest`. Registry publication and package-tag delivery are independent facts: a rerun must recover missing tags after packages already exist, while a true registry-and-tag no-op must not rewrite an old GitHub Release. Release automation pushes tag refs only, never its potentially stale checked-out `main`. Completion requires the exact-head workflow, npm channel state, remote tags, and GitHub prerelease as separate evidence.
 
 ## OpenSpec 1.6 Adaptation Baseline
 

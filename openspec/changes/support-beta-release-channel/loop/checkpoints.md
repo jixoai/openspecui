@@ -15,22 +15,22 @@ Original request (2026-07-28): "我想先发布一个beta版本"
 
 ## 2. Prerelease Contract
 
-- [ ] 2.1 Add explicit `--pre <channel>` entry/continuation and `--exit-pre` planning.
-- [ ] 2.2 Derive npm dist-tag and GitHub prerelease state from validated SemVer versions.
-- [ ] 2.3 Reject conflicting prerelease state instead of silently changing channel.
+- [x] 2.1 Add explicit `--pre <channel>` entry/continuation and `--exit-pre` planning.
+- [x] 2.2 Derive npm dist-tag and GitHub prerelease state from validated SemVer versions.
+- [x] 2.3 Reject conflicting prerelease state instead of silently changing channel.
 
 ## 3. Retry-safe Publication
 
-- [ ] 3.1 Publish only registry-missing package versions with their derived channel.
-- [ ] 3.2 Treat missing package tags as remaining release work after registry success.
-- [ ] 3.3 Emit an objective workflow output and skip tag/release steps for a true no-op.
-- [ ] 3.4 Push tag refs only so a concurrent `main` merge cannot reject delivery.
+- [x] 3.1 Publish only registry-missing package versions with their derived channel.
+- [x] 3.2 Treat missing package tags as remaining release work after registry success.
+- [x] 3.3 Emit an objective workflow output and skip tag/release steps for a true no-op.
+- [x] 3.4 Push tag refs only so a concurrent `main` merge cannot reject delivery.
 
 ## 4. Infrastructure PR Gates
 
-- [ ] 4.1 Add focused unit/mutation-resistant evidence for release-channel and prerelease planning.
-- [ ] 4.2 Update repository architecture law and canonical Chinese vocabulary.
-- [ ] 4.3 Pass CI-equivalent local checks and OpenSpec strict validation.
+- [x] 4.1 Add focused unit/mutation-resistant evidence for release-channel and prerelease planning.
+- [x] 4.2 Update repository architecture law and canonical Chinese vocabulary.
+- [x] 4.3 Pass CI-equivalent local checks and OpenSpec strict validation.
 - [ ] 4.4 Merge the infrastructure PR after required checks pass; no package changeset is required for CI-only behavior.
 
 ## 5. Beta Version and Release
