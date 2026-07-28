@@ -9,7 +9,7 @@ Owner decision (2026-07-28): implement the reviewed Kanban rewrite.
 
 ## Current State
 
-Status: **container-responsive correction delivered; owner visual acceptance pending**.
+Status: **live Board scroll correction specified; implementation pending**.
 
 The contributor implementation at commits `5def094` and `9763458` is characterization input only. Its old
 frontend-only completion claims, lifecycle names, helper tests, SSG registration evidence, and green-gate counts
@@ -55,6 +55,15 @@ passed`). The implementation then introduced a self-owned container plus `grid-c
 `@[32rem]:grid-cols-2`, and `@[64rem]:grid-cols-4`; the same focused file passed `2/2`. The grid no longer contains
 `overflow-x-auto`, auto-column sizing, column flow, or viewport breakpoint classes. Explicit test cleanup was added
 because the new second case exposed retained DOM from this file's prior single-test setup.
+
+### F. Live Board scroll ownership correction
+
+- [x] The production boundary is split between the bounded live route, the single inline-scrolling lane grid, and
+      four independently block-scrolling lane bodies.
+- [ ] Focused tests fail against the old unbounded route/grid/lane structure for the named ownership reason.
+- [ ] The live flex/min-size chain and scrollbar presentation are implemented without changing static
+      `ReadonlyKanban`.
+- [ ] Focused and delivery evidence is recorded before the owner repeats final visual acceptance.
 
 Updated delivery evidence:
 

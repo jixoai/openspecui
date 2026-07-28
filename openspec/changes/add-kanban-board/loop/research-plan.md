@@ -2,12 +2,14 @@
 Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 1. Record fixed-point evidence from PR #208 and OpenSpec 1.6.
 2. Define the approved projection and Operator architecture.
-3. Preserve exact responsive risks, verification order, and owner acceptance boundary.
+3. Preserve exact responsive and scroll-ownership risks, verification order, and owner acceptance boundary.
 
 Owner request (2026-07-28): deeply investigate whether PR #208 conflicts with OPSX's open design.
 Owner decision (2026-07-28): implement the reviewed rewrite.
 Owner layout correction (2026-07-28): ReadonlyKanban responds to its own container as `4x1`, `2x2`, or `1x4`
 without horizontal scrolling.
+Owner live-layout correction (2026-07-28): narrow `/board` has one horizontal scroll owner and independently
+scrolling lane bodies.
 -->
 
 ## Fixed-Point Findings
@@ -50,6 +52,9 @@ Web shared model
                     own inline-size container
                     1 column -> 2 columns -> 4 columns
              +--> InteractiveKanban
+                    bounded by Board block-size
+                    lane grid owns inline scrolling
+                    each lane body owns block scrolling
 
 Operation owner
   useChangeOperatorLauncher({ changeId, changeName })
@@ -80,6 +85,9 @@ Operation owner
 - `ReadonlyKanban` accepts data and navigation only, never action callbacks.
 - `ReadonlyKanban` owns the nearest inline-size container for its grid. It uses container thresholds, not viewport
   breakpoints, and contains no horizontal-scroll, auto-column, or column-flow fallback.
+- Live `Board` terminates shell/page overflow with an `h-full min-h-0` flex chain. `InteractiveKanban` gives
+  horizontal overflow only to its lane grid and vertical overflow only to each lane body; neither the route nor a
+  lane section may become a competing scroll owner.
 - Every changed TS/TSX file has a current intent/original-request header.
 
 ## Verification Order

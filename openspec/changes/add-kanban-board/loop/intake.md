@@ -2,13 +2,15 @@
 Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 1. Preserve the contributor's Kanban intent without inventing OpenSpec lifecycle phases.
 2. Record the owner-approved full Board and Dashboard readonly projection boundary.
-3. Fix Operator, realtime, static, container-responsive layout, and final-acceptance ownership before implementation.
+3. Fix Operator, realtime, static, container-responsive layout, live scroll ownership, and final-acceptance ownership before implementation.
 
 Contributor request (2026-07-18): "Add a Kanban-style board to visualise changes."
 Owner request (2026-07-28): "这个PR自身是否符合OPSX的开放式设计，是否会冲突？"
 Owner decision (2026-07-28): implement the reviewed rewrite and replace Dashboard Workflow Progress with ReadonlyKanban.
 Owner layout correction (2026-07-28): ReadonlyKanban must use container queries, never scroll horizontally, and
 converge through `4x1`, `2x2`, and `1x4` layouts as its own available width shrinks.
+Owner live-layout correction (2026-07-28): `/board` must expose one horizontal scroll owner when narrow, while
+each lane owns its vertical scrolling independently.
 -->
 
 ## Objective
@@ -30,6 +32,8 @@ or ready to archive.
 ## Product Boundary
 
 - `/board` is the full interactive Kanban surface and is labelled `Kanban` in project navigation.
+- The live Board consumes the shell's remaining block-size, contains page-level overflow, gives its lane grid the
+  only horizontal scrollbar, and gives every lane body an independent vertical scrollbar.
 - Dashboard receives a compact `ReadonlyKanban` and replaces only the existing Workflow Progress region.
 - `ReadonlyKanban` owns its responsive container. Spacious containers render `4x1`, constrained containers render
   `2x2`, and crowded containers render `1x4`; viewport breakpoints and horizontal scrolling are forbidden.
@@ -74,7 +78,8 @@ Root authority --------> operation gate only
 - Dashboard and static `ReadonlyKanban` instances use the same self-owned container-query topology and cannot
   create horizontal scrolling at any supported container width.
 - Full Board has independent active/archive lifecycle states, progressive rows, row errors, retained refresh data,
-  motion continuity, accessible explicit actions, and archive drag as an Operator launcher.
+  motion continuity, accessible explicit actions, archive drag as an Operator launcher, one inline scroll owner,
+  and independently scrolling lane bodies.
 - Change Detail and Board consume one shared `useChangeOperatorLauncher` owner.
 - Focused typed Vitest and basic component-level browser fixtures pass; owner visual acceptance remains outstanding.
 - Changeset, strict OpenSpec validation, SSG build, and repository gates pass before PR delivery.

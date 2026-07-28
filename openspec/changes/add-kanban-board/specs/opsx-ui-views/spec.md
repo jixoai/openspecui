@@ -6,6 +6,8 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 
 Contributor request (2026-07-18): add a Kanban-style Change view.
 Owner decision (2026-07-28): use objective OPSX semantics and replace Dashboard Workflow Progress with ReadonlyKanban.
+Owner live-layout correction (2026-07-28): `/board` must have one horizontal scrollbar and independently
+scrolling lane bodies.
 -->
 
 # opsx-ui-views Specification Delta
@@ -92,6 +94,15 @@ The live `/board` route SHALL add commands around the objective projection witho
 - **THEN** it MAY remain visible as display evidence
 - **BUT** Apply, Archive, and archive drop SHALL be disabled
 - **AND** a drop SHALL resolve its Change id against current rows before opening an Operator
+
+#### Scenario: Own live Board scrolling explicitly
+
+- **GIVEN** the live Board has more inline content than its available width and lanes may have different row counts
+- **WHEN** `/board` renders within the application shell
+- **THEN** the route SHALL consume and contain the shell's remaining block-size
+- **AND** the lane grid SHALL be the only horizontal scrolling owner
+- **AND** every lane header SHALL remain outside its lane's vertical scrolling region
+- **AND** every lane body SHALL scroll vertically and independently without growing or scrolling the page
 
 ### Requirement: Regional Kanban Realtime Lifecycle
 
