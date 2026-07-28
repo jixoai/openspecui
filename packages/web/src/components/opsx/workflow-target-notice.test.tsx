@@ -1,14 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-21 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove WorkflowTargetNotice renders the Server-owned planning target.
- * 2. Prove direct Reference diagnostic counts remain typed, objective evidence.
+ * 2. Prove direct Reference counts remain keyboard-retrievable while errors stay direct.
  * 3. Prove same-target rerenders refresh the displayed evidence without local state.
  * 4. Prove static target absence does not fabricate planning or Reference data.
  *
  * Original request (2026-07-20): "WorkflowTargetNotice must include direct-Reference diagnostic counts."
+ * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip while OPSX stays primary.
  */
 import type { WorkflowInvocationTargetV2 } from '@openspecui/core'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorkflowTargetNotice } from './workflow-target-notice'
 
@@ -37,18 +38,23 @@ function target(
 describe('WorkflowTargetNotice', () => {
   afterEach(() => cleanup())
 
-  it('renders zero direct Reference diagnostics from the prepared target', () => {
+  it('keeps target path direct and zero Reference diagnostics keyboard-retrievable', async () => {
     render(<WorkflowTargetNotice target={target([{ store_id: 'shared', status: [] }])} />)
 
-    expect(screen.getByText('Direct Reference diagnostics')).toBeTruthy()
-    expect(
-      screen.getByText('1 direct Reference · 0 errors · 0 warnings · 0 infos · 0 total')
-    ).toBeTruthy()
     expect(screen.getByText('/workspace/planning')).toBeTruthy()
-    expect(screen.getByText('declared · Store platform')).toBeTruthy()
+    expect(screen.getByText('declared')).toBeTruthy()
+    expect(screen.getByText('Store platform')).toBeTruthy()
+    const references = screen.getByRole('note', {
+      name: '1 direct Reference · 0 errors · 0 warnings · 0 infos · 0 total',
+    })
+    expect(references.textContent).toBe('References 1')
+    fireEvent.focus(references)
+    expect(
+      await screen.findByText('1 direct Reference · 0 errors · 0 warnings · 0 infos · 0 total')
+    ).toBeTruthy()
   })
 
-  it('renders aggregate severity counts without inferring Reference health or completeness', () => {
+  it('keeps Reference errors direct and aggregate counts objective', async () => {
     render(
       <WorkflowTargetNotice
         target={target([
@@ -67,10 +73,14 @@ describe('WorkflowTargetNotice', () => {
       />
     )
 
+    expect(screen.getByText('Reference errors: shared (1)')).toBeTruthy()
+    const references = screen.getByRole('note', {
+      name: '2 direct References · 1 error · 1 warning · 1 info · 3 total',
+    })
+    fireEvent.focus(references)
     expect(
-      screen.getByText('2 direct References · 1 error · 1 warning · 1 info · 3 total')
+      await screen.findByText('2 direct References · 1 error · 1 warning · 1 info · 3 total')
     ).toBeTruthy()
-    expect(screen.getByText('Direct Reference diagnostics')).toBeTruthy()
     expect(screen.queryByText(/healthy|unhealthy|complete|completeness|coverage/i)).toBeNull()
   })
 
@@ -79,7 +89,9 @@ describe('WorkflowTargetNotice', () => {
       <WorkflowTargetNotice target={target([{ store_id: 'shared', status: [] }])} />
     )
     expect(
-      screen.getByText('1 direct Reference · 0 errors · 0 warnings · 0 infos · 0 total')
+      screen.getByRole('note', {
+        name: '1 direct Reference · 0 errors · 0 warnings · 0 infos · 0 total',
+      })
     ).toBeTruthy()
 
     view.rerender(
@@ -94,9 +106,19 @@ describe('WorkflowTargetNotice', () => {
     )
 
     expect(
-      screen.getByText('1 direct Reference · 0 errors · 1 warning · 0 infos · 1 total')
+      screen.getByRole('note', {
+        name: '1 direct Reference · 0 errors · 1 warning · 0 infos · 1 total',
+      })
     ).toBeTruthy()
     expect(screen.getByText('/workspace/planning')).toBeTruthy()
+  })
+
+  it('keeps stale dispatch authority directly visible', () => {
+    render(<WorkflowTargetNotice target={target()} stale />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Planning target is stale; dispatch is locked.'
+    )
   })
 
   it('renders no target in static mode', () => {

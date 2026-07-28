@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Project CLI-resolved Change, artifact, and planning-home paths without reconstruction.
- * 2. Preserve repo-local action-context facts and constraints.
- * 3. Show direct Reference diagnostics without inferred health or completeness.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Preserve CLI-authored Change paths, action context, and raw Status evidence on demand.
+ * 2. Compress Root source, Store, and Reference scan facts without inferred health.
+ * 3. Keep direct Reference errors visible outside the collapsed evidence region.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
  */
+import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import type { ChangeStatus, CliReferenceIndexEntry } from '@openspecui/core'
-import { FileCode2, Network } from 'lucide-react'
+import { AlertCircle, FileCode2 } from 'lucide-react'
 
 /** Root/Reference and raw command evidence rendered beside one Change. */
 export interface ChangeContextEvidenceProps {
@@ -18,112 +20,210 @@ export interface ChangeContextEvidenceProps {
 /** Read-only OpenSpec Status and Root Context evidence for one Change. */
 export function ChangeContextEvidence({ status, references }: ChangeContextEvidenceProps) {
   const provenance = status.provenance
+  const referenceCounts = summarizeReferences(references)
+  const referenceErrors = references
+    .map((reference) => ({
+      storeId: reference.store_id,
+      errors: reference.status.filter((diagnostic) => diagnostic.severity === 'error').length,
+    }))
+    .filter((entry) => entry.errors > 0)
+
+  if (provenance.kind === 'static') {
+    return (
+      <section
+        aria-label="Change CLI paths and context"
+        className="border-border flex min-w-0 flex-wrap items-center gap-2 border-y py-2 text-xs"
+      >
+        <FileCode2 className="text-muted-foreground h-4 w-4" aria-hidden />
+        <span className="font-medium">Change context</span>
+        <InformationBadge
+          ariaLabel="Static Change context has no live backend provenance"
+          tooltip="CLI Change context is unavailable in this static snapshot."
+        >
+          Static snapshot
+        </InformationBadge>
+      </section>
+    )
+  }
 
   return (
-    <section aria-label="Change CLI paths and context" className="border-border border-y py-3">
-      <div className="grid min-w-0 gap-3 text-xs md:grid-cols-2">
-        <div className="min-w-0 space-y-1">
-          <h3 className="flex items-center gap-1.5 font-semibold">
-            <FileCode2 className="h-3.5 w-3.5" aria-hidden />
-            CLI Change context
-          </h3>
-          {provenance.kind === 'cli' ? (
-            <dl className="grid min-w-0 grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-              <dt className="text-muted-foreground">Change root</dt>
-              <dd className="min-w-0 break-all font-mono">{provenance.changeRoot}</dd>
-              <dt className="text-muted-foreground">Planning home</dt>
-              <dd className="min-w-0 break-all font-mono">{provenance.planningHome.root}</dd>
-              <dt className="text-muted-foreground">Root source</dt>
-              <dd>
-                {provenance.root.source}
-                {provenance.root.store_id ? ` · Store ${provenance.root.store_id}` : ''}
-              </dd>
-              <dt className="text-muted-foreground">Action context</dt>
-              <dd>
-                {provenance.actionContext.mode} · {provenance.actionContext.sourceOfTruth}
-              </dd>
-            </dl>
-          ) : (
-            <p className="text-muted-foreground">Unavailable in this static snapshot.</p>
-          )}
-        </div>
-
-        <div className="min-w-0 space-y-1">
-          <h3 className="flex items-center gap-1.5 font-semibold">
-            <Network className="h-3.5 w-3.5" aria-hidden />
-            Observed References
-          </h3>
-          {references.length === 0 ? (
-            <p className="text-muted-foreground">No reference currently observed.</p>
-          ) : (
-            <ul className="space-y-1">
-              {references.map((reference) => (
-                <li
-                  key={reference.store_id}
-                  className="flex min-w-0 items-baseline justify-between gap-2"
-                >
-                  <span className="truncate font-mono" title={reference.store_id}>
-                    {reference.store_id}
-                  </span>
-                  <span className="text-muted-foreground shrink-0">
-                    {formatReferenceEvidence(reference)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+    <section aria-label="Change CLI paths and context" className="space-y-2">
+      <div className="border-border flex min-w-0 flex-wrap items-center gap-2 border-y py-2 text-xs">
+        <FileCode2 className="text-muted-foreground h-4 w-4" aria-hidden />
+        <span className="font-medium">Change context</span>
+        <InformationBadge
+          ariaLabel={`Change Root source ${provenance.root.source}${provenance.root.store_id ? `, Store ${provenance.root.store_id}` : ''}`}
+          tooltip={
+            <div className="space-y-1">
+              <div>Change root: {provenance.changeRoot}</div>
+              <div>Planning home: {provenance.planningHome.root}</div>
+              <div>Root source: {provenance.root.source}</div>
+              <div>Store: {provenance.root.store_id ?? 'none'}</div>
+            </div>
+          }
+        >
+          {provenance.root.store_id ? `Store ${provenance.root.store_id}` : provenance.root.source}
+        </InformationBadge>
+        <InformationBadge
+          ariaLabel={`${references.length} observed References, ${referenceCounts.errors} errors, ${referenceCounts.warnings} warnings`}
+          tooltip={formatReferenceSummary(references.length, referenceCounts)}
+          tone={referenceCounts.errors > 0 ? 'custom' : 'muted'}
+          className={
+            referenceCounts.errors > 0
+              ? 'border-destructive/40 bg-destructive/10 text-destructive'
+              : undefined
+          }
+        >
+          References {references.length}
+        </InformationBadge>
       </div>
 
-      {provenance.kind === 'cli' ? (
-        <details className="mt-3 text-xs">
-          <summary className="cursor-pointer font-medium">
-            Artifact paths and action context
-          </summary>
-          <div className="mt-2 space-y-3">
-            <dl className="space-y-2">
-              {Object.entries(provenance.artifactPaths).map(([artifactId, artifact]) => (
-                <div key={artifactId}>
-                  <dt className="font-medium">{artifactId}</dt>
-                  <dd className="text-muted-foreground break-all font-mono">
-                    {artifact.outputPath} {'->'} {artifact.resolvedOutputPath}
-                  </dd>
-                  <dd className="text-muted-foreground break-all">
-                    Existing:{' '}
-                    {artifact.existingOutputPaths.length > 0
-                      ? artifact.existingOutputPaths.join(', ')
-                      : 'none observed'}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <EvidenceList
-              label="Allowed edit roots"
-              values={provenance.actionContext.allowedEditRoots}
-            />
-            <EvidenceList
-              label="Planning artifacts"
-              values={provenance.actionContext.planningArtifacts}
-            />
-            <EvidenceList
-              label="Linked context"
-              values={provenance.actionContext.linkedContext.map((entry) => entry.name)}
-            />
-            <EvidenceList label="Constraints" values={provenance.actionContext.constraints} />
-            <EvidenceList label="Next steps" values={provenance.nextSteps} />
-          </div>
-        </details>
+      {referenceErrors.length > 0 ? (
+        <div className="text-destructive flex items-start gap-2 text-xs" role="alert">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>
+            Reference errors:{' '}
+            {referenceErrors.map(({ storeId, errors }) => `${storeId} (${errors})`).join(', ')}
+          </span>
+        </div>
       ) : null}
+
+      <EvidenceDisclosure
+        title="Paths and CLI evidence"
+        summary={`${Object.keys(provenance.artifactPaths).length} artifacts · ${references.length} References`}
+      >
+        <div className="space-y-4">
+          <dl className="grid min-w-0 gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
+            <dt className="text-muted-foreground">Change root</dt>
+            <dd className="break-all font-mono">{provenance.changeRoot}</dd>
+            <dt className="text-muted-foreground">Planning home</dt>
+            <dd className="break-all font-mono">{provenance.planningHome.root}</dd>
+            <dt className="text-muted-foreground">Root source</dt>
+            <dd>
+              {provenance.root.source}
+              {provenance.root.store_id ? ` · Store ${provenance.root.store_id}` : ''}
+            </dd>
+            <dt className="text-muted-foreground">Action context</dt>
+            <dd>
+              {provenance.actionContext.mode} · {provenance.actionContext.sourceOfTruth}
+            </dd>
+          </dl>
+
+          <ReferenceEvidence references={references} />
+
+          <dl className="space-y-2">
+            {Object.entries(provenance.artifactPaths).map(([artifactId, artifact]) => (
+              <div key={artifactId}>
+                <dt className="font-medium">{artifactId}</dt>
+                <dd className="text-muted-foreground break-all font-mono">
+                  {artifact.outputPath} {'->'} {artifact.resolvedOutputPath}
+                </dd>
+                <dd className="text-muted-foreground break-all">
+                  Existing:{' '}
+                  {artifact.existingOutputPaths.length > 0
+                    ? artifact.existingOutputPaths.join(', ')
+                    : 'none observed'}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <EvidenceList
+            label="Allowed edit roots"
+            values={provenance.actionContext.allowedEditRoots}
+          />
+          <EvidenceList
+            label="Planning artifacts"
+            values={provenance.actionContext.planningArtifacts}
+          />
+          <EvidenceList
+            label="Linked context"
+            values={provenance.actionContext.linkedContext.map((entry) => entry.name)}
+          />
+          <EvidenceList label="Constraints" values={provenance.actionContext.constraints} />
+          <EvidenceList label="Next steps" values={provenance.nextSteps} />
+
+          <div className="space-y-2">
+            <div className="font-medium">Status command evidence</div>
+            <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
+              <dt className="text-muted-foreground">Command</dt>
+              <dd>{provenance.evidence.command}</dd>
+              <dt className="text-muted-foreground">Exit</dt>
+              <dd>{provenance.evidence.exitCode ?? 'unknown'}</dd>
+              <dt className="text-muted-foreground">Selector</dt>
+              <dd>{provenance.evidence.selector.store ?? 'none'}</dd>
+              <dt className="text-muted-foreground">Contract</dt>
+              <dd>{provenance.evidence.contractError ?? 'compatible'}</dd>
+            </dl>
+            <pre className="bg-muted/40 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded p-2 font-mono">
+              {JSON.stringify(
+                {
+                  stdout: provenance.evidence.stdout,
+                  stderr: provenance.evidence.stderr,
+                  diagnostics: provenance.evidence.diagnostics,
+                  payload: provenance.evidence.payload,
+                },
+                null,
+                2
+              )}
+            </pre>
+          </div>
+        </div>
+      </EvidenceDisclosure>
     </section>
   )
 }
 
-function formatReferenceEvidence(reference: CliReferenceIndexEntry): string {
-  const errors = reference.status.filter((diagnostic) => diagnostic.severity === 'error').length
-  const warnings = reference.status.filter((diagnostic) => diagnostic.severity === 'warning').length
-  return reference.status.length === 0
-    ? 'No CLI diagnostic'
-    : `${errors} error · ${warnings} warning · ${reference.status.length} total`
+function summarizeReferences(references: CliReferenceIndexEntry[]) {
+  return references.reduce(
+    (counts, reference) => {
+      counts.total += reference.status.length
+      counts.errors += reference.status.filter(
+        (diagnostic) => diagnostic.severity === 'error'
+      ).length
+      counts.warnings += reference.status.filter(
+        (diagnostic) => diagnostic.severity === 'warning'
+      ).length
+      return counts
+    },
+    { errors: 0, warnings: 0, total: 0 }
+  )
+}
+
+function formatReferenceSummary(
+  references: number,
+  counts: ReturnType<typeof summarizeReferences>
+): string {
+  return `${references} References · ${counts.errors} errors · ${counts.warnings} warnings · ${counts.total} diagnostics`
+}
+
+function ReferenceEvidence({ references }: { references: CliReferenceIndexEntry[] }) {
+  return (
+    <div>
+      <div className="font-medium">Observed References</div>
+      {references.length === 0 ? (
+        <div className="text-muted-foreground mt-1">No reference currently observed.</div>
+      ) : (
+        <div className="mt-1 space-y-2">
+          {references.map((reference) => (
+            <div key={reference.store_id}>
+              <div className="font-mono">{reference.store_id}</div>
+              {reference.status.length === 0 ? (
+                <div className="text-muted-foreground">No CLI diagnostic.</div>
+              ) : (
+                <ul className="text-muted-foreground space-y-0.5">
+                  {reference.status.map((diagnostic) => (
+                    <li key={`${diagnostic.severity}:${diagnostic.code}:${diagnostic.message}`}>
+                      {diagnostic.severity} · {diagnostic.code} · {diagnostic.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function EvidenceList({ label, values }: { label: string; values: string[] }) {

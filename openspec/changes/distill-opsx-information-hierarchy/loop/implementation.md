@@ -9,7 +9,7 @@ Original request (2026-07-28): implement the information-hierarchy optimization,
 
 ## Implementation State
 
-Status: **implementation active; shared presentation primitives complete**.
+Status: **implementation active; Change and OPSX workflow distillation complete**.
 
 ```text
 spec artifacts -> shared primitives -> owner groups -> focused evidence -> delivery -> owner acceptance
@@ -58,6 +58,23 @@ Shell / Dashboard unit               2 files / 12 tests
 Web typecheck                         passed
 Focused oxlint                       0 warnings / 0 errors
 Focused format                       passed
+```
+
+### Change and OPSX Workflow
+
+- Workflow targets keep the Planning path direct while Root source, Store, and direct Reference counts use
+  keyboard-reachable `InformationBadge` instances.
+- A stale target and Reference errors remain direct alerts outside Tooltip content.
+- Change paths, artifact paths, action context, Reference diagnostics, and the complete Status command envelope
+  now share one collapsed `EvidenceDisclosure`; static snapshots retain an explicit compact source condition.
+- Propose, Compose, and Verify reuse one pure `WorkflowEvidenceDisclosure`; New's Advanced Arguments remains a
+  real form disclosure rather than being mislabeled as evidence.
+- Root blocker title/message and Apply progress divergence remain direct. Their verbose CLI evidence and objective
+  source counts move into disclosure/badge space without changing mutation ownership.
+
+```text
+Change / OPSX focused unit           7 files / 38 tests
+Web typecheck + checked P6 tests     passed
 ```
 
 ## Divergence Notes

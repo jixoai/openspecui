@@ -1,5 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Prove Apply/tracked divergence remains direct and source-attributed.
+ * 2. Prove compact source counts retain keyboard-reachable explanations.
+ *
+ * Original request (2026-07-15): "与 tracked glob 进度分歧时各自归因展示。"
+ * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
+ */
 import type { ApplyInstructionProgress } from '@openspecui/core'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { ApplyProgressNotice } from './apply-progress-notice'
 
@@ -22,11 +30,20 @@ function progress(divergent: boolean): ApplyInstructionProgress {
 }
 
 describe('ApplyProgressNotice', () => {
-  it('attributes both sources when Apply and tracked progress diverge', () => {
+  it('keeps divergence direct and attributes both compact sources', async () => {
     render(<ApplyProgressNotice applyInstructionProgress={progress(true)} />)
 
-    expect(screen.getByText('Apply instructions: 0/0')).toBeTruthy()
-    expect(screen.getByText('Tracked artifact glob: 1/3')).toBeTruthy()
+    expect(screen.getByText('Upstream task progress divergence')).toBeVisible()
+    expect(screen.getByText('different')).toBeVisible()
+    const apply = screen.getByRole('note', { name: 'Apply instructions progress 0 of 0' })
+    expect(apply).toHaveTextContent('Apply 0/0')
+    expect(
+      screen.getByRole('note', { name: 'Tracked artifact glob progress 1 of 3' })
+    ).toHaveTextContent('Tracked 1/3')
+    fireEvent.focus(apply)
+    expect(
+      await screen.findByText('Progress reported by openspec instructions apply.')
+    ).toBeTruthy()
   })
 
   it('stays absent when both sources agree', () => {

@@ -1,12 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-21 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Render the Server-owned planning-root target shared by OPSX workflow surfaces.
- * 2. Keep Store identity and root source visible without reconstructing client paths.
- * 3. Show objective direct-Reference diagnostic counts from the prepared target.
+ * 2. Keep the target path direct while compacting Store, source, and Reference scan facts.
+ * 3. Promote stale dispatch authority and direct-Reference errors to visible blockers.
  *
  * Original request (2026-07-20): "New/Propose/Compose/Verify must show the returned target before dispatch."
+ * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip while OPSX stays primary.
  */
+import { InformationBadge } from '@/components/information-disclosure'
 import type { WorkflowInvocationTargetV2 } from '@openspecui/core'
+import { AlertCircle, GitBranch } from 'lucide-react'
 
 interface ReferenceDiagnosticCounts {
   references: number
@@ -57,19 +60,63 @@ export function WorkflowTargetNotice({
 }) {
   if (!target) return null
   const referenceDiagnostics = summarizeReferenceDiagnostics(target.references)
+  const referenceErrors = target.references
+    .map((reference) => ({
+      storeId: reference.store_id,
+      errors: reference.status.filter((diagnostic) => diagnostic.severity === 'error').length,
+    }))
+    .filter((entry) => entry.errors > 0)
   return (
-    <div className="border-border bg-muted/30 grid min-w-0 gap-1 rounded-md border p-2 text-xs sm:grid-cols-[auto_1fr] sm:gap-x-3">
-      <span className="text-muted-foreground">
-        Planning root{stale ? ' (stale, dispatch locked)' : ''}
-      </span>
-      <span className="min-w-0 break-all font-mono">{target.planningRoot.path}</span>
-      <span className="text-muted-foreground">Root source</span>
-      <span>
-        {target.planningRoot.source}
-        {target.storeId ? ` · Store ${target.storeId}` : ''}
-      </span>
-      <span className="text-muted-foreground">Direct Reference diagnostics</span>
-      <span>{formatReferenceDiagnosticCounts(referenceDiagnostics)}</span>
+    <div className="border-border min-w-0 border-y py-2 text-xs">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden />
+        <span className="text-muted-foreground">Planning</span>
+        <span className="min-w-0 flex-1 break-all font-mono">{target.planningRoot.path}</span>
+        <InformationBadge
+          ariaLabel={`Planning root source ${target.planningRoot.source}`}
+          tooltip={`Root source: ${target.planningRoot.source}`}
+        >
+          {target.planningRoot.source}
+        </InformationBadge>
+        {target.storeId ? (
+          <InformationBadge
+            ariaLabel={`Planning Store ${target.storeId}`}
+            tooltip={`The prepared workflow target selected Store ${target.storeId}.`}
+          >
+            Store {target.storeId}
+          </InformationBadge>
+        ) : null}
+        <InformationBadge
+          ariaLabel={formatReferenceDiagnosticCounts(referenceDiagnostics)}
+          tooltip={formatReferenceDiagnosticCounts(referenceDiagnostics)}
+          tone={referenceDiagnostics.errors > 0 ? 'custom' : 'muted'}
+          className={
+            referenceDiagnostics.errors > 0
+              ? 'border-destructive/40 bg-destructive/10 text-destructive'
+              : undefined
+          }
+        >
+          References {referenceDiagnostics.references}
+        </InformationBadge>
+      </div>
+      {stale ? (
+        <div
+          className="mt-2 flex items-start gap-2 text-amber-700 dark:text-amber-300"
+          role="alert"
+        >
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>Planning target is stale; dispatch is locked.</span>
+        </div>
+      ) : null}
+      {referenceErrors.length > 0 ? (
+        <div className="text-destructive mt-2 flex items-start gap-2" role="alert">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>
+            Reference errors:{' '}
+            {referenceErrors.map(({ storeId, errors }) => `${storeId} (${errors})`).join(', ')}
+          </span>
+        </div>
+      ) : null}
     </div>
   )
 }

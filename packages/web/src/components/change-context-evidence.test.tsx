@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
- * 1. Prove Change path and action context remain CLI-authored.
- * 2. Prove Reference diagnostics remain neutral evidence.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Prove Change path, action context, and raw evidence remain CLI-authored on demand.
+ * 2. Prove Reference summaries stay neutral while Reference errors remain direct.
  * 3. Prove static mode does not fabricate backend provenance.
  * 4. Keep checked live Status fixtures complete with their CLI evidence envelope.
  *
  * Original request (2026-07-15): "保持客观中立很重要。"
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
+ * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
  */
 import type { ChangeStatus } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -64,7 +65,7 @@ function cliStatus(): ChangeStatus {
 describe('ChangeContextEvidence', () => {
   afterEach(() => cleanup())
 
-  it('renders exact CLI paths, action context, and direct Reference evidence', () => {
+  it('keeps exact CLI paths, action context, and Reference evidence in one disclosure', () => {
     const { container } = render(
       <ChangeContextEvidence
         status={cliStatus()}
@@ -77,19 +78,43 @@ describe('ChangeContextEvidence', () => {
       />
     )
 
-    expect(screen.getByText('/planning/openspec/changes/add-auth')).toBeTruthy()
-    expect(screen.getByText('store · Store platform')).toBeTruthy()
-    expect(screen.getByText('repo-local · repo')).toBeTruthy()
-    expect(screen.getAllByText('design-system')).toHaveLength(2)
-    expect(screen.getByText('0 error · 1 warning · 1 total')).toBeTruthy()
+    expect(screen.getByText('Store platform')).toBeTruthy()
+    expect(screen.getByText('References 1')).toBeTruthy()
+    expect(screen.getByText('/planning/openspec/changes/add-auth')).not.toBeVisible()
 
-    fireEvent.click(screen.getByText('Artifact paths and action context'))
+    fireEvent.click(screen.getByRole('button', { name: /Paths and CLI evidence/ }))
     expect(container.textContent).toContain('/planning/openspec/changes/add-auth/tasks.md')
     expect(container.textContent).toContain('Repo-local edits only.')
+    expect(container.textContent).toContain('warning · reference_unresolved · Missing.')
+    expect(container.textContent).toContain('Status command evidence')
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === 'PRE' &&
+          element.textContent?.includes('\\"changeName\\":\\"add-auth\\"') === true
+      )
+    ).toBeVisible()
     expect(container.textContent).not.toMatch(/healthy|all references|unreferenced/i)
   })
 
-  it('keeps static provenance explicitly unavailable', () => {
+  it('keeps Reference errors outside the collapsed evidence region', () => {
+    render(
+      <ChangeContextEvidence
+        status={cliStatus()}
+        references={[
+          {
+            store_id: 'design-system',
+            status: [{ severity: 'error', code: 'missing', message: 'Missing Store.' }],
+          },
+        ]}
+      />
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Reference errors: design-system (1)')
+    expect(screen.getByText(/Missing Store/)).not.toBeVisible()
+  })
+
+  it('keeps static provenance explicitly available through compact status', async () => {
     render(
       <ChangeContextEvidence
         status={{ ...cliStatus(), provenance: { kind: 'static' } }}
@@ -97,8 +122,14 @@ describe('ChangeContextEvidence', () => {
       />
     )
 
-    expect(screen.getByText('Unavailable in this static snapshot.')).toBeTruthy()
-    expect(screen.getByText('No reference currently observed.')).toBeTruthy()
-    expect(screen.queryByText('Artifact paths and action context')).toBeNull()
+    const badge = screen.getByRole('note', {
+      name: 'Static Change context has no live backend provenance',
+    })
+    expect(badge.textContent).toBe('Static snapshot')
+    fireEvent.focus(badge)
+    expect(
+      await screen.findByText('CLI Change context is unavailable in this static snapshot.')
+    ).toBeTruthy()
+    expect(screen.queryByText('Paths and CLI evidence')).toBeNull()
   })
 })

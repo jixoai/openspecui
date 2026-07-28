@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify new-change execution remains locked until Root Context succeeds.
- * 2. Verify prepared planning-root targets render before terminal creation.
+ * 2. Verify prepared planning-root targets render while verbose Root evidence remains on demand.
  * 3. Verify Root A to B replacement locks stale Create dispatch.
  * 4. Verify Store selector arguments shown in the prepared command are the dispatched arguments.
  * 5. Verify pending submission keeps the Create command label stable.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -96,7 +97,10 @@ describe('OpsxNewRoute', () => {
     })
 
     expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled()
-    expect(screen.getByRole('alert')).toHaveTextContent('Doctor exit: 1')
+    expect(screen.getByText('Root selection failed.')).toBeVisible()
+    expect(screen.getByText('Doctor exit: 1')).not.toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: /Root command evidence/ }))
+    expect(screen.getByText('Doctor exit: 1')).toBeVisible()
     expect(prepareWorkflowInvocationMock).not.toHaveBeenCalled()
     expect(createDedicatedSessionMock).not.toHaveBeenCalled()
   })
@@ -181,7 +185,7 @@ describe('OpsxNewRoute', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
 
-    await waitFor(() => expect(screen.getByText('/planning-a')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('/planning-a').length).toBeGreaterThan(0))
     expect(createDedicatedSessionMock).not.toHaveBeenCalled()
 
     rootActionMock.mockReturnValue({

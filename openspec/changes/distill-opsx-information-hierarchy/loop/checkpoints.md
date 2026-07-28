@@ -30,10 +30,10 @@ Original request (2026-07-28): implement the UI simplification autonomously, the
 
 ## 4. Change and OPSX Workflow
 
-- [ ] 4.1 Keep workflow target path and actions direct while compressing source/Store/Reference facts into badges
-- [ ] 4.2 Move Change CLI paths, artifact paths, action context, and raw evidence into shared disclosures
-- [ ] 4.3 Keep progress divergence, Root blockers, and workflow errors direct; collapse only supporting evidence
-- [ ] 4.4 Add focused Change/New/Propose/Compose/Verify tests for action visibility and evidence retrieval
+- [x] 4.1 Keep workflow target path and actions direct while compressing source/Store/Reference facts into badges
+- [x] 4.2 Move Change CLI paths, artifact paths, action context, and raw evidence into shared disclosures
+- [x] 4.3 Keep progress divergence, Root blockers, and workflow errors direct; collapse only supporting evidence
+- [x] 4.4 Add focused Change/New/Propose/Compose/Verify tests for action visibility and evidence retrieval
 
 ## 5. Config, Settings, and Context
 

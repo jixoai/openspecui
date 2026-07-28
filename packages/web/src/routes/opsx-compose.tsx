@@ -8,9 +8,11 @@
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): supporting workflow evidence should remain available on demand.
  */
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { WorkflowEvidenceDisclosure } from '@/components/opsx/workflow-evidence-disclosure'
 import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
 import { RealtimeRevalidateCue } from '@/components/realtime'
 import { RootActionNotice } from '@/components/root-action-notice'
@@ -327,14 +329,7 @@ export function OpsxComposeRoute() {
 
         <WorkflowTargetNotice target={workflowTarget} stale={!workflowTargetCurrent} />
 
-        {workflowEvidence ? (
-          <details className="border-border bg-muted/20 max-h-40 min-w-0 overflow-auto rounded-md border p-2 text-xs">
-            <summary className="cursor-pointer font-medium">CLI evidence</summary>
-            <pre className="text-muted-foreground mt-2 whitespace-pre-wrap break-all font-mono">
-              {JSON.stringify(workflowEvidence, null, 2)}
-            </pre>
-          </details>
-        ) : null}
+        <WorkflowEvidenceDisclosure evidence={workflowEvidence} />
 
         {draftError && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700">

@@ -8,10 +8,12 @@
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): supporting workflow evidence should remain available on demand.
  */
 import { ButtonGroup } from '@/components/button-group'
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { WorkflowEvidenceDisclosure } from '@/components/opsx/workflow-evidence-disclosure'
 import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
 import { AsyncAction } from '@/components/realtime'
 import { RootActionNotice } from '@/components/root-action-notice'
@@ -171,14 +173,7 @@ export function OpsxProposeRoute() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 p-4">
         <RootActionNotice state={rootAction} />
         <WorkflowTargetNotice target={workflowTarget} stale={!workflowTargetCurrent} />
-        {workflowEvidence ? (
-          <details className="border-border bg-muted/20 max-h-40 overflow-auto rounded-md border p-2 text-xs">
-            <summary className="cursor-pointer font-medium">CLI evidence</summary>
-            <pre className="text-muted-foreground mt-2 whitespace-pre-wrap break-all font-mono">
-              {JSON.stringify(workflowEvidence, null, 2)}
-            </pre>
-          </details>
-        ) : null}
+        <WorkflowEvidenceDisclosure evidence={workflowEvidence} />
 
         <p className="text-muted-foreground text-sm">
           Enter your idea, then send it to the selected terminal.
