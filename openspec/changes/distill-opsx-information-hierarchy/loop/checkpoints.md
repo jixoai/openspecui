@@ -23,10 +23,10 @@ Original request (2026-07-28): implement the UI simplification autonomously, the
 
 ## 3. Shell and Dashboard
 
-- [ ] 3.1 Make Planning identity primary in the shell and move Launch/source/Store detail into indirect space
-- [ ] 3.2 Replace the Dashboard three-column Data scopes band with a compact context strip
-- [ ] 3.3 Keep Root/Reference/Git failures direct and preserve navigation to `/context`
-- [ ] 3.4 Add focused shell and Dashboard tests for compact summaries and direct failures
+- [x] 3.1 Make Planning identity primary in the shell and move Launch/source/Store detail into indirect space
+- [x] 3.2 Replace the Dashboard three-column Data scopes band with a compact context strip
+- [x] 3.3 Keep Root/Reference/Git failures direct and preserve navigation to `/context`
+- [x] 3.4 Add focused shell and Dashboard tests for compact summaries and direct failures
 
 ## 4. Change and OPSX Workflow
 

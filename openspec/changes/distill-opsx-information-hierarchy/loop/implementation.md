@@ -44,6 +44,22 @@ Focused format                       passed
 The unit test focuses the real Tooltip trigger and activates the real Base UI Accordion trigger. It separately
 proves a direct alert remains visible while supporting evidence is collapsed.
 
+### Shell and Dashboard
+
+- Expanded and mobile shell variants now keep Planning identity direct; Launch path, full Planning path, Root
+  source, and Store remain in the Context link's accessible Tooltip.
+- Dashboard Data scopes is a single compact strip. Planning path remains direct; Store, Reference, and Code versus
+  Planning Git facts use `InformationBadge`.
+- Root resolution failures, Reference error counts, Git subscription failures, and Planning Git identity failures
+  remain direct alert content.
+
+```text
+Shell / Dashboard unit               2 files / 12 tests
+Web typecheck                         passed
+Focused oxlint                       0 warnings / 0 errors
+Focused format                       passed
+```
+
 ## Divergence Notes
 
 - None.

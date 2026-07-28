@@ -1,15 +1,17 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Keep launch-project and active planning-root identity visible in the global shell.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Keep active Planning identity direct while preserving Launch identity in accessible detail.
  * 2. Preserve loading, refreshing, stale, and error status without unlocking root actions.
- * 3. Link to the full project Context projection without introducing a root switcher.
+ * 3. Compress Root source and Store provenance without introducing a root switcher.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
+ * Original request (2026-07-28): restore 5.x-like clarity while keeping 6.x context facts retrievable.
  */
+import { Badge } from '@/components/badge'
 import { isStaticMode } from '@/lib/static-mode'
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
-import { AlertCircle, Folder, GitBranch, RefreshCw } from 'lucide-react'
+import { AlertCircle, GitBranch, RefreshCw } from 'lucide-react'
 import { Tooltip } from '../tooltip'
 
 /** Compact shell projection for launch-project and active Planning-root identity. */
@@ -47,28 +49,35 @@ export function RootContextIndicator({
   const refreshing = projection?.state === 'refreshing'
   const failed = transportError !== null || projection?.state === 'error'
   const accessibleLabel = `Open Root Context. Launch: ${launchLabel}. Planning: ${planningLabel}.`
-  const tooltip = `Launch: ${launchLabel} · Planning: ${planningLabel}`
+  const tooltip = (
+    <div className="space-y-1">
+      <div>Planning: {context?.planningRoot?.path ?? planningLabel}</div>
+      <div>Launch: {context?.launchProject.path ?? launchLabel}</div>
+      <div>
+        Source: {context?.planningRoot?.source ?? 'unresolved'}
+        {context?.storeId ? ` · Store ${context.storeId}` : ''}
+      </div>
+    </div>
+  )
 
   if (variant === 'mobile') {
     return (
-      <VTLink
-        to="/context"
-        onClick={onNavigate}
-        aria-label={accessibleLabel}
-        className="hover:bg-muted flex min-w-0 max-w-[min(52vw,18rem)] items-center gap-2 rounded-md px-1.5 py-1"
-      >
-        <RootStateIcon refreshing={refreshing || (isLoading && !context)} failed={failed} />
-        <span className="leading-3.5 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-1 text-[10px]">
-          <span className="text-muted-foreground">Launch</span>
-          <span className="truncate" title={context?.launchProject.path}>
-            {launchLabel}
+      <Tooltip content={tooltip}>
+        <VTLink
+          to="/context"
+          onClick={onNavigate}
+          aria-label={accessibleLabel}
+          className="hover:bg-muted flex min-w-0 max-w-[min(52vw,18rem)] items-center gap-2 rounded-md px-1.5 py-1"
+        >
+          <RootStateIcon refreshing={refreshing || (isLoading && !context)} failed={failed} />
+          <span className="leading-3.5 min-w-0 text-[10px]">
+            <span className="text-muted-foreground block">Planning</span>
+            <span className="block truncate font-medium" title={context?.planningRoot?.path}>
+              {planningLabel}
+            </span>
           </span>
-          <span className="text-muted-foreground">Planning</span>
-          <span className="truncate" title={context?.planningRoot?.path}>
-            {planningLabel}
-          </span>
-        </span>
-      </VTLink>
+        </VTLink>
+      </Tooltip>
     )
   }
 
@@ -88,35 +97,28 @@ export function RootContextIndicator({
   }
 
   return (
-    <VTLink
-      to="/context"
-      onClick={onNavigate}
-      aria-label={accessibleLabel}
-      className="border-border hover:bg-muted/70 mb-4 block min-w-0 border-y py-2"
-    >
-      <span className="grid min-w-0 grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-1.5 gap-y-1 text-xs">
-        <Folder className="text-muted-foreground h-3.5 w-3.5" aria-hidden />
-        <span className="text-muted-foreground">Launch</span>
-        <span className="truncate font-medium" title={context?.launchProject.path}>
-          {launchLabel}
+    <Tooltip content={tooltip} sideOffset={12}>
+      <VTLink
+        to="/context"
+        onClick={onNavigate}
+        aria-label={accessibleLabel}
+        className="border-border hover:bg-muted/70 mb-4 flex min-w-0 items-center gap-2 border-y py-2"
+      >
+        <RootStateIcon refreshing={refreshing || (isLoading && !context)} failed={failed} />
+        <span className="min-w-0 flex-1 text-xs">
+          <span className="text-muted-foreground block text-[10px]">Planning</span>
+          <span className="block truncate font-medium" title={context?.planningRoot?.path}>
+            {planningLabel}
+          </span>
         </span>
-        <GitBranch className="text-muted-foreground h-3.5 w-3.5" aria-hidden />
-        <span className="text-muted-foreground">Planning</span>
-        <span
-          className="flex min-w-0 items-center gap-1 font-medium"
-          title={context?.planningRoot?.path}
-        >
-          <span className="truncate">{planningLabel}</span>
-          <RootStateIcon refreshing={refreshing || (isLoading && !context)} failed={failed} />
-        </span>
-      </span>
-      {context?.planningRoot ? (
-        <span className="text-muted-foreground mt-1 block truncate pl-5 text-[10px]">
-          {context.planningRoot.source}
-          {context.storeId ? ` · ${context.storeId}` : ''}
-        </span>
-      ) : null}
-    </VTLink>
+        {context?.planningRoot ? (
+          <Badge tone="muted" size="xs" shape="box" className="max-w-20 truncate">
+            {context.planningRoot.source}
+            {context.storeId ? ` · ${context.storeId}` : ''}
+          </Badge>
+        ) : null}
+      </VTLink>
+    </Tooltip>
   )
 }
 

@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Prove the global shell keeps Launch and Planning identities distinct at every density.
- * 2. Prove loading, refresh, and failure remain visible while full detail stays on Context.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Prove the global shell keeps Planning direct and Launch identity in accessible detail.
+ * 2. Prove loading, refresh, and failure remain visible while provenance stays compact.
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
+ * Original request (2026-07-28): restore 5.x-like clarity while keeping 6.x context facts retrievable.
  */
 import { cleanup, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -81,15 +82,19 @@ describe('RootContextIndicator', () => {
   })
   afterEach(() => cleanup())
 
-  it('shows distinct Launch and Planning identities in the expanded sidebar', () => {
+  it('keeps Planning direct while Launch stays in the expanded link accessible name', () => {
     render(<RootContextIndicator variant="sidebar" />)
 
-    expect(screen.getByText('Launch')).toBeTruthy()
-    expect(screen.getByText('code-app')).toBeTruthy()
     expect(screen.getByText('Planning')).toBeTruthy()
     expect(screen.getByText('shared-planning')).toBeTruthy()
     expect(screen.getByText('store · shared')).toBeTruthy()
-    expect(screen.getByRole('link').getAttribute('href')).toBe('/context')
+    expect(
+      screen.getByRole('link', {
+        name: 'Open Root Context. Launch: code-app. Planning: shared-planning.',
+      })
+    ).toHaveAttribute('href', '/context')
+    expect(screen.queryByText('Launch')).toBeNull()
+    expect(screen.queryByText('code-app')).toBeNull()
   })
 
   it('keeps the full identity in the collapsed link accessible name', () => {
@@ -103,11 +108,16 @@ describe('RootContextIndicator', () => {
     expect(screen.queryByText('Launch')).toBeNull()
   })
 
-  it('keeps both identities visible in the mobile header', () => {
+  it('keeps Planning direct and Launch accessible in the mobile header', () => {
     render(<RootContextIndicator variant="mobile" />)
 
-    expect(screen.getByText('code-app')).toBeTruthy()
     expect(screen.getByText('shared-planning')).toBeTruthy()
+    expect(screen.queryByText('code-app')).toBeNull()
+    expect(
+      screen.getByRole('link', {
+        name: 'Open Root Context. Launch: code-app. Planning: shared-planning.',
+      })
+    ).toBeTruthy()
   })
 
   it('shows the failed attempt identity without treating it as ready', () => {

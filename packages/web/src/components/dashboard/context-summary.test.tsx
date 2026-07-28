@@ -1,17 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove Dashboard attributes planning facts to Root Context provenance.
- * 2. Preserve direct Reference diagnostics without inferred health or completeness.
- * 3. Keep Code and distinct Planning Git repositories independently visible.
+ * 2. Preserve Reference diagnostics through compact scan status without inferred health.
+ * 3. Keep Git detail retrievable while binding failures remain directly visible.
  * 4. Cover static, loading, stale-error, and Git failure states.
  * 5. Preserve explicit Planning Git identity failure instead of rendering collapse.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git binding provenance in Dashboard fixtures.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Original request (2026-07-28): restore 5.x-like clarity while keeping 6.x context facts retrievable.
  */
 import type { GitRepositoryScopes, RootContext, RootContextState } from '@openspecui/core'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DashboardContextSummary } from './context-summary'
@@ -135,16 +136,27 @@ describe('DashboardContextSummary', () => {
 
   afterEach(() => cleanup())
 
-  it('shows planning path, root source, Store id, and separately scoped Git repositories', () => {
+  it('keeps the planning path direct and makes source and Git detail keyboard-retrievable', async () => {
     render(<DashboardContextSummary staticMode={false} />)
 
     expect(screen.getByText('/workspace/planning')).toBeTruthy()
-    expect(screen.getByText('source: store · Store platform')).toBeTruthy()
-    expect(screen.getByText('/repos/code')).toBeTruthy()
-    expect(screen.getByText(/Distinct Planning repository: \/repos\/planning/)).toBeTruthy()
+    expect(screen.getByText('Store platform')).toBeTruthy()
+    expect(screen.getByText('Git 2 repos')).toBeTruthy()
+    expect(screen.queryByText('/repos/code')).toBeNull()
+
+    fireEvent.focus(
+      screen.getByRole('note', { name: 'Planning root source store, Store platform' })
+    )
+    expect(await screen.findByText('Source: store')).toBeTruthy()
+
+    fireEvent.focus(
+      screen.getByRole('note', { name: 'Code and distinct Planning Git repositories' })
+    )
+    expect(await screen.findByText('Code repository: /repos/code')).toBeTruthy()
+    expect(await screen.findByText('Distinct Planning repository: /repos/planning')).toBeTruthy()
   })
 
-  it('does not claim Planning is collapsed while its binding is resolving', () => {
+  it('does not claim Planning is collapsed while its binding is resolving', async () => {
     const settled = gitScopes(false)
     const resolving: GitRepositoryScopes = {
       defaultScope: settled.defaultScope,
@@ -156,11 +168,14 @@ describe('DashboardContextSummary', () => {
 
     render(<DashboardContextSummary staticMode={false} />)
 
-    expect(screen.getByText('Resolving Planning Git repository...')).toBeTruthy()
+    const badge = screen.getByRole('note', { name: 'Code Git current, Planning Git resolving' })
+    expect(badge.textContent).toBe('Git resolving')
     expect(screen.queryByText('No distinct Planning Git repository.')).toBeNull()
+    fireEvent.focus(badge)
+    expect(await screen.findByText('Resolving Planning Git repository.')).toBeTruthy()
   })
 
-  it('renders raw direct Reference diagnostic counts without health or completeness claims', () => {
+  it('keeps Reference errors direct and full objective counts keyboard-retrievable', async () => {
     setContext({
       data: readyState(
         rootContext({
@@ -182,10 +197,14 @@ describe('DashboardContextSummary', () => {
     const { container } = render(<DashboardContextSummary staticMode={false} />)
     const text = container.textContent ?? ''
 
-    expect(text).toContain('design-system')
-    expect(text).toContain('1 error · 1 warning · 3 total')
-    expect(text).toContain('shared')
-    expect(text).toContain('No CLI diagnostic')
+    expect(text).toContain('Reference errors: design-system (1)')
+    expect(text).not.toContain('shared: 0 error')
+    const badge = screen.getByRole('note', {
+      name: '2 direct References, 1 errors, 1 warnings',
+    })
+    fireEvent.focus(badge)
+    expect(await screen.findByText(/design-system: 1 error · 1 warning · 3 total/)).toBeTruthy()
+    expect(await screen.findByText(/shared: 0 error · 0 warning · 0 total/)).toBeTruthy()
     expect(text).not.toMatch(/healthy|unhealthy|all references|unreferenced/i)
   })
 
@@ -215,9 +234,9 @@ describe('DashboardContextSummary', () => {
     setGit({ data: undefined, error: gitError, authority: { state: 'failed', error: gitError } })
     view.rerender(<DashboardContextSummary staticMode={false} />)
 
-    expect(screen.getByRole('alert').textContent).toContain('Planning root unresolved.')
+    expect(screen.getByText('Planning root unresolved.')).toBeTruthy()
     expect(screen.getByText('/workspace/planning')).toBeTruthy()
-    expect(screen.getByText('Git scope lookup failed.')).toBeTruthy()
+    expect(screen.getByText('Git scope binding failed: Git scope lookup failed.')).toBeTruthy()
   })
 
   it('does not subscribe or render in static mode', () => {
@@ -228,10 +247,14 @@ describe('DashboardContextSummary', () => {
     expect(gitScopesMock).not.toHaveBeenCalled()
   })
 
-  it('states when Planning and Code resolve to one Git repository', () => {
+  it('states on demand when Planning and Code resolve to one Git repository', async () => {
     setGit({ data: gitScopes(false) })
     render(<DashboardContextSummary staticMode={false} />)
-    expect(screen.getByText('No distinct Planning Git repository.')).toBeTruthy()
+    const badge = screen.getByRole('note', { name: 'Code Git repository' })
+    expect(badge.textContent).toBe('Git 1 repo')
+    expect(screen.queryByText('No distinct Planning Git repository.')).toBeNull()
+    fireEvent.focus(badge)
+    expect(await screen.findByText('No distinct Planning Git repository.')).toBeTruthy()
   })
 
   it('does not render settled-collapse copy when Planning Git identity resolution fails', () => {
@@ -248,9 +271,9 @@ describe('DashboardContextSummary', () => {
 
     render(<DashboardContextSummary staticMode={false} />)
 
-    const gitSection = screen.getByRole('heading', { name: 'Code Git snapshot' }).parentElement
-    expect(gitSection?.textContent).toContain('Planning Git repository binding failed:')
-    expect(gitSection?.textContent).toContain('Planning Git identity resolution failed.')
+    expect(
+      screen.getByText('Git scope binding failed: Planning Git identity resolution failed.')
+    ).toBeTruthy()
     expect(screen.queryByText('No distinct Planning Git repository.')).toBeNull()
   })
 
@@ -260,7 +283,9 @@ describe('DashboardContextSummary', () => {
 
     render(<DashboardContextSummary staticMode={false} />)
 
-    expect(screen.getByText('Git scope subscription disconnected.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Git scope binding failed: Git scope subscription disconnected.')
+    ).toBeInTheDocument()
     expect(screen.queryByText('Distinct Planning repository: /repos/planning')).toBeNull()
   })
 })
