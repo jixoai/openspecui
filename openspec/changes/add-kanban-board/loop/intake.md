@@ -2,11 +2,13 @@
 Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 1. Preserve the contributor's Kanban intent without inventing OpenSpec lifecycle phases.
 2. Record the owner-approved full Board and Dashboard readonly projection boundary.
-3. Fix Operator, realtime, static, and final-acceptance ownership before implementation.
+3. Fix Operator, realtime, static, container-responsive layout, and final-acceptance ownership before implementation.
 
 Contributor request (2026-07-18): "Add a Kanban-style board to visualise changes."
 Owner request (2026-07-28): "这个PR自身是否符合OPSX的开放式设计，是否会冲突？"
 Owner decision (2026-07-28): implement the reviewed rewrite and replace Dashboard Workflow Progress with ReadonlyKanban.
+Owner layout correction (2026-07-28): ReadonlyKanban must use container queries, never scroll horizontally, and
+converge through `4x1`, `2x2`, and `1x4` layouts as its own available width shrinks.
 -->
 
 ## Objective
@@ -29,6 +31,8 @@ or ready to archive.
 
 - `/board` is the full interactive Kanban surface and is labelled `Kanban` in project navigation.
 - Dashboard receives a compact `ReadonlyKanban` and replaces only the existing Workflow Progress region.
+- `ReadonlyKanban` owns its responsive container. Spacious containers render `4x1`, constrained containers render
+  `2x2`, and crowded containers render `1x4`; viewport breakpoints and horizontal scrolling are forbidden.
 - Dashboard Active Changes remains unchanged.
 - Active rows use the exact `TrackedTaskProgress.phase` emitted by the OpenSpec projection.
 - Archived rows are structurally archived facts and default to a bounded `30d` range; `7d`, `30d`, `90d`,
@@ -67,6 +71,8 @@ Root authority --------> operation gate only
 - Core/Server/static Dashboard Summary exposes exact active phase counts plus bounded archive summaries.
 - Shared browser-safe helpers classify lanes and archive ranges identically in live and static projections.
 - Dashboard and static surfaces use `ReadonlyKanban` without operation controls.
+- Dashboard and static `ReadonlyKanban` instances use the same self-owned container-query topology and cannot
+  create horizontal scrolling at any supported container width.
 - Full Board has independent active/archive lifecycle states, progressive rows, row errors, retained refresh data,
   motion continuity, accessible explicit actions, and archive drag as an Operator launcher.
 - Change Detail and Board consume one shared `useChangeOperatorLauncher` owner.

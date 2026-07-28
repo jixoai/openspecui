@@ -4,11 +4,12 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 2. Enforce protected-branch, PR, CI, and release delivery policy.
 3. Protect static/SSG behavior and shared live/static projections.
 4. Preserve the OpenSpec adaptation baseline, source-distinct projections, and independent-review corrections.
-5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, live-projection loading, real-time visual lifecycle, objective Kanban projection, and delivery-correction boundaries for the 1.6 adaptation.
+5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, live-projection loading, real-time visual lifecycle, container-responsive objective Kanban projection, and delivery-correction boundaries for the 1.6 adaptation.
 
 Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配，目前我们的进度有点落后。你先了解项目，然后更新 references/openspec，然后使用 $wayfinder 和我讨论具体的适配计划。我们最终使用openspec来管理 wayfinder 产出的文档。"
 Original request (2026-07-28): "这个PR自身是否符合OPSX的开放式设计，是否会冲突？都需要进行深入的调查。"
 Owner decision (2026-07-28): implement the objective Kanban rewrite and replace Dashboard Workflow Progress with ReadonlyKanban.
+Owner layout correction (2026-07-28): "ReadonlyKanban必须是通过容器查询支持响应式。不允许发生横向滚动。空间足够的情况下就是 4*1，不是很够的情况下就是 2*2，拥挤的情况下就是 1*4。"
 Original request (2026-07-15): "我个人的想法，是把 --app 模式提上日程。因为 app 模式提供了多标签管理。它天生适合多项目管理的这种场景。"
 Original request (2026-07-15): "我们可以在 cli 上新增一个 --auth 或者 --password。这样后端接口就必须带上这个 http header。"
 Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
@@ -138,7 +139,10 @@ Apply opens the existing Compose Operator and Archive opens the existing Archive
 another launcher for that Operator and never mutates lane/task state. Board and Change Detail must consume the same
 Operator hook, and live commands remain disabled whenever Root or the relevant projection is not current. Changes
 and Archives settle as independent realtime regions; preserve progressive rows, row errors, retained revalidation,
-and regional failures rather than restoring a combined full-page loading gate.
+and regional failures rather than restoring a combined full-page loading gate. `ReadonlyKanban` owns an inline-size
+container-query boundary: it renders four columns in one row when spacious, two columns in two rows when constrained,
+and one column in four rows when crowded. Viewport breakpoints and horizontal scrolling are forbidden for this
+readonly projection; compact/full variants may change content density but never this responsive topology.
 
 ### 6.11 execution-scope law (2026-07-19)
 

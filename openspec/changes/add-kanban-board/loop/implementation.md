@@ -9,7 +9,7 @@ Owner decision (2026-07-28): implement the reviewed Kanban rewrite.
 
 ## Current State
 
-Status: **implementation and automated delivery evidence complete; owner acceptance pending**.
+Status: **objective projection delivered; owner-requested container-responsive correction pending**.
 
 The contributor implementation at commits `5def094` and `9763458` is characterization input only. Its old
 frontend-only completion claims, lifecycle names, helper tests, SSG registration evidence, and green-gate counts
@@ -43,6 +43,12 @@ are superseded by the 2026-07-28 fixed-point review.
 - [x] Clean SSG build and strict Change validation pass.
 - [x] Full repository gates pass and PR #208 is pushed for owner acceptance.
 - [ ] Owner visual acceptance recorded before archive or merge.
+
+### E. Container-responsive correction
+
+- [ ] `ReadonlyKanban` owns its inline-size container and renders `1`, `2`, or `4` columns from container width.
+- [ ] Horizontal scrolling, auto-column flow, and viewport-responsive layout are absent from the readonly surface.
+- [ ] Focused component tests lock the topology before updated package gates and PR delivery are recorded.
 
 ## Focused Evidence (2026-07-28)
 
