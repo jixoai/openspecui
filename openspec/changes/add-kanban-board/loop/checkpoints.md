@@ -37,7 +37,7 @@ Owner decision (2026-07-28): implement the reviewed rewrite now.
 
 - [x] 5.1 Update grouped package changeset and pass focused typed/component tests
 - [x] 5.2 Pass clean SSG, strict OpenSpec validation, and all CI-equivalent local gates
-- [ ] 5.3 Push PR #208 and record remote checks
+- [x] 5.3 Push PR #208 and record remote checks
 - [ ] 5.4 Owner completes final visual and real browser walkthrough
 
 ## 6. Finalization

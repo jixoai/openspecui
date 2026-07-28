@@ -9,7 +9,7 @@ Owner decision (2026-07-28): implement the reviewed Kanban rewrite.
 
 ## Current State
 
-Status: **implementation complete through focused evidence; delivery gates pending**.
+Status: **implementation and automated delivery evidence complete; owner acceptance pending**.
 
 The contributor implementation at commits `5def094` and `9763458` is characterization input only. Its old
 frontend-only completion claims, lifecycle names, helper tests, SSG registration evidence, and green-gate counts
@@ -41,7 +41,7 @@ are superseded by the 2026-07-28 fixed-point review.
 
 - [x] Focused typed tests and component fixture tests pass.
 - [x] Clean SSG build and strict Change validation pass.
-- [ ] Full repository gates pass and PR #208 is pushed for owner acceptance.
+- [x] Full repository gates pass and PR #208 is pushed for owner acceptance.
 - [ ] Owner visual acceptance recorded before archive or merge.
 
 ## Focused Evidence (2026-07-28)
@@ -78,6 +78,24 @@ git diff --check                       passed
 The clean SSG build retained two pre-existing non-fatal warnings: Tailwind/Lightning CSS does not recognize the
 experimental `::scroll-button(*)` selector, and Vite reports an ineffective dynamic import for the shared tRPC
 module. Web unit tests retained the pre-existing jsdom Canvas warning; all affected test processes exited zero.
+
+## Remote Delivery Evidence (2026-07-28)
+
+```text
+PR                                      #208 (open)
+implementation head                     f601d838d292a85ae370c4973677e4d759784540
+workflow run                            30359973780
+Changeset Gate                          passed
+CI Scope                                passed
+Fast Gate                               passed
+Browser Gate (@openspecui/web)          passed
+Browser Gate (xterm-input-panel)        passed
+aggregate Browser Gate                  passed
+```
+
+The implementation head was fast-forwarded to both the maintainer branch and the contributor fork branch. GitHub
+completed every required check successfully. This automated evidence closes delivery checkpoint 5.3 only; it does
+not replace the owner's final visual and real-browser walkthrough in checkpoint 5.4.
 
 ## Loopback Triggers
 
