@@ -40,7 +40,7 @@ Owner decision (2026-07-28): implement the reviewed rewrite now.
 - [x] 5.3 Push PR #208 and record remote checks
 - [x] 5.4 Make `ReadonlyKanban` self-owned container-responsive as `4x1`, `2x2`, or `1x4` with no horizontal scroll
 - [x] 5.5 Prove the correction with focused unit/type/SSG evidence and updated delivery gates
-- [ ] 5.6 Push the updated PR and record remote checks
+- [x] 5.6 Push the updated PR and record remote checks
 - [ ] 5.7 Owner completes final visual and real browser walkthrough
 
 ## 6. Finalization

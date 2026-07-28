@@ -9,7 +9,7 @@ Owner decision (2026-07-28): implement the reviewed Kanban rewrite.
 
 ## Current State
 
-Status: **container-responsive correction and local gates complete; updated PR delivery pending**.
+Status: **container-responsive correction delivered; owner visual acceptance pending**.
 
 The contributor implementation at commits `5def094` and `9763458` is characterization input only. Its old
 frontend-only completion claims, lifecycle names, helper tests, SSG registration evidence, and green-gate counts
@@ -126,7 +126,24 @@ aggregate Browser Gate                  passed
 
 The implementation head was fast-forwarded to both the maintainer branch and the contributor fork branch. GitHub
 completed every required check successfully. This automated evidence closes delivery checkpoint 5.3 only; it does
-not replace the owner's final visual and real-browser walkthrough in checkpoint 5.4.
+not replace the owner's final visual and real-browser walkthrough.
+
+## Container-responsive Remote Evidence (2026-07-28)
+
+```text
+PR                                      #208 (open)
+responsive implementation head          d7dd472c4b68f59602ef469c8d28591480e3a289
+workflow run                            30363350067
+Changeset Gate                          passed
+CI Scope                                passed
+Fast Gate                               passed
+Browser Gate (@openspecui/web)          passed
+Browser Gate (xterm-input-panel)        passed
+aggregate Browser Gate                  passed
+```
+
+The responsive implementation head was fast-forwarded to both the maintainer branch and contributor fork. These
+checks close checkpoint 5.6 only; final visual and real-browser acceptance remains owner checkpoint 5.7.
 
 ## Loopback Triggers
 
