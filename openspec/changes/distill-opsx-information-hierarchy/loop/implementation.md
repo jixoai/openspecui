@@ -133,6 +133,29 @@ Focused format                      passed
 Clean SSG build                     passed
 ```
 
+### Repository Delivery Gate
+
+```text
+Repository format check             passed
+Repository lint                     0 warnings / 0 errors
+Workspace typecheck                 15 projects passed
+Root unit                           15 files / 64 tests
+Core unit                           52 files / 486 tests
+Server unit                         84 files / 543 tests
+App unit                            32 files / 212 tests
+Web unit                            165 files / 1047 tests
+CLI unit                            14 files / 71 tests
+xterm browser fixture               60 passed / 1 skipped
+Web realtime browser fixture        2 passed
+Web Storybook fixture               12 passed
+Strict OpenSpec validation          passed
+git diff --check                    passed
+```
+
+Web unit retained the existing jsdom Canvas `getContext` not-implemented diagnostics while all tests passed;
+that non-failing environment log is not evidence of a presentation regression. Automated browser evidence remains
+component/fixture preparation only and does not close the Owner walkthrough.
+
 ## Divergence Notes
 
 - None.
