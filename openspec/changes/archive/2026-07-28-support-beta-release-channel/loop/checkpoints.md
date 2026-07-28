@@ -36,13 +36,13 @@ Original request (2026-07-28): "我想先发布一个beta版本"
 
 ## 5. Beta Version and Release
 
-- [ ] 5.1 Run `pnpm changeversion --pre beta` from clean synchronized `main`.
-- [ ] 5.2 Confirm the version PR contains `6.0.0-beta.0`, prerelease state, changelogs, and consumed changesets.
-- [ ] 5.3 Merge the version PR only after required checks pass and wait for the exact-head Release workflow.
-- [ ] 5.4 Verify public packages at `6.0.0-beta.0` under `beta` while `latest` remains `5.0.0`.
-- [ ] 5.5 Verify remote package tags and the `openspecui@6.0.0-beta.0` GitHub prerelease.
+- [x] 5.1 Run `pnpm changeversion --pre beta` from clean synchronized `main`.
+- [x] 5.2 Confirm the version PR contains `6.0.0-beta.0`, prerelease state, changelogs, and consumed changesets.
+- [x] 5.3 Merge the version PR only after required checks pass and wait for the exact-head Release workflow.
+- [x] 5.4 Verify public packages at `6.0.0-beta.0` under `beta` while `latest` remains `5.0.0`.
+- [x] 5.5 Verify remote package tags and the `openspecui@6.0.0-beta.0` GitHub prerelease.
 
 ## 6. Closure
 
-- [ ] 6.1 Synchronize final workflow, registry, tag, and release evidence into implementation notes.
-- [ ] 6.2 Archive this Change through the official OpenSpec flow and merge the archive PR.
+- [x] 6.1 Synchronize final workflow, registry, tag, and release evidence into implementation notes.
+- [x] 6.2 Archive this Change through the official OpenSpec flow and merge the archive PR.
