@@ -9,7 +9,7 @@ Owner decision (2026-07-28): implement the reviewed Kanban rewrite.
 
 ## Current State
 
-Status: **live Board scroll correction implemented; delivery gates pending**.
+Status: **live Board scroll correction passes local delivery gates; remote delivery pending**.
 
 The contributor implementation at commits `5def094` and `9763458` is characterization input only. Its old
 frontend-only completion claims, lifecycle names, helper tests, SSG registration evidence, and green-gate counts
@@ -63,7 +63,7 @@ because the new second case exposed retained DOM from this file's prior single-t
 - [x] Focused tests fail against the old unbounded route/grid/lane structure for the named ownership reason.
 - [x] The live flex/min-size chain and scrollbar presentation are implemented without changing static
       `ReadonlyKanban`.
-- [ ] Focused and delivery evidence is recorded before the owner repeats final visual acceptance.
+- [x] Focused and delivery evidence is recorded before the owner repeats final visual acceptance.
 
 The route red case failed with the old `min-w-0 space-y-4 p-4` root because it lacked the required
 `flex h-full min-h-0 flex-col overflow-hidden` shell chain. Interactive mutation evidence then removed the new root
@@ -71,6 +71,26 @@ chain and failed on those exact classes, added a second `overflow-x-auto` owner 
 removed `overflow-y-auto` from the lane body and failed on that exact missing class. Restoring the implementation
 passed both focused files (`2 files / 9 tests`). `RealtimeRevalidateCue` remains inside the row body and owns no
 overflow, so its active wrapper cannot compete with the lane scroller.
+
+Local delivery evidence for this correction:
+
+```text
+focused Board/Interactive unit          2 files / 9 tests
+focused Web typecheck                   passed
+focused lint                            0 warnings / 0 errors
+format:check                            passed
+lint:ci                                passed (1051 files, 0 warnings/errors)
+typecheck                              passed (15 workspace projects)
+test:ci                                passed (378 files / 2488 tests)
+test:browser:ci                        passed (74 passed / 1 skipped)
+clean Web SSG                          passed
+changeset:check against origin/main    passed
+OpenSpec strict validation             passed
+git diff --check                       passed
+```
+
+The clean SSG and unit lanes retained the previously recorded non-fatal `scroll-button(*)`, ineffective dynamic
+import, and jsdom Canvas warnings. No Agent visual or end-to-end browser walkthrough was performed.
 
 Updated delivery evidence:
 
