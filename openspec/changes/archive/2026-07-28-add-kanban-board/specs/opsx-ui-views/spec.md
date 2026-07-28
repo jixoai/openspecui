@@ -68,6 +68,15 @@ OpenSpecUI SHALL provide one readonly Kanban presentation for Dashboard and stat
 - **THEN** it SHALL use the shared objective lane model and readonly presentation
 - **AND** it SHALL expose no Apply, Archive, or drag capability
 
+#### Scenario: Respond to the owned container without horizontal scrolling
+
+- **GIVEN** `ReadonlyKanban` is embedded in Dashboard or a static surface
+- **WHEN** its own available inline size changes
+- **THEN** spacious containers SHALL render the four lanes as `4x1`
+- **AND** constrained containers SHALL render them as `2x2`
+- **AND** crowded containers SHALL render them as `1x4`
+- **AND** the readonly surface SHALL NOT create horizontal scrolling
+
 ### Requirement: Interactive Kanban Operator Surface
 
 The live `/board` route SHALL add commands around the objective projection without mutating lane state directly.

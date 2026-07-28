@@ -6,11 +6,12 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 
 Owner decision (2026-07-28): implement the reviewed Kanban rewrite.
 Owner acceptance (2026-07-28): "验收通过" at PR #208 head `8edb6a5`.
+Owner merge approval (2026-07-28): "同意" after acceptance commit `0e25a55` passed all PR checks.
 -->
 
 ## Current State
 
-Status: **owner accepted; merge approval, archive/sync, and merge remain pending**.
+Status: **owner accepted, merge-approved, synced, and archived; PR merge remains pending**.
 
 The contributor implementation at commits `5def094` and `9763458` is characterization input only. Its old
 frontend-only completion claims, lifecycle names, helper tests, SSG registration evidence, and green-gate counts
@@ -124,6 +125,19 @@ required checks                         6 / 6 passed
 The owner completed the final visual and real-browser walkthrough and accepted the delivered result. This closes
 checkpoint 5.11 only. Merge approval, Change archive/sync, and PR merge remain separate checkpoints 6.1-6.3 and
 are not implied by acceptance.
+
+## Merge Approval (2026-07-28)
+
+The owner replied `同意` to the explicit request to archive/sync and merge PR #208 without publishing. This closes
+checkpoint 6.1. Archive/sync remains an independent commit, and PR merge remains contingent on that final head's
+required checks.
+
+## Archive Completion (2026-07-28)
+
+The accepted Kanban delta was synced into `openspec/specs/opsx-ui-views/spec.md`, including the previously omitted
+but implemented and owner-accepted `ReadonlyKanban` container-response scenario. The Change was then moved to
+`openspec/changes/archive/2026-07-28-add-kanban-board/`, closing checkpoint 6.2. Checkpoint 6.3 intentionally remains
+open in this archive snapshot until GitHub merges the final PR head.
 
 Updated delivery evidence:
 

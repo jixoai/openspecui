@@ -6,6 +6,7 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 
 Owner decision (2026-07-28): implement the reviewed rewrite now.
 Owner acceptance (2026-07-28): "验收通过" at PR #208 head `8edb6a5`.
+Owner merge approval (2026-07-28): "同意" after acceptance commit `0e25a55` passed all PR checks.
 -->
 
 ## 1. Research and Specification
@@ -50,6 +51,6 @@ Owner acceptance (2026-07-28): "验收通过" at PR #208 head `8edb6a5`.
 
 ## 6. Finalization
 
-- [ ] 6.1 Owner approves merge
-- [ ] 6.2 Archive/sync this Change in a dedicated commit
+- [x] 6.1 Owner approves merge
+- [x] 6.2 Archive/sync this Change in a dedicated commit
 - [ ] 6.3 Merge PR #208; do not publish without a separate owner decision
