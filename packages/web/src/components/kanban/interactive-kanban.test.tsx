@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove live card commands respect Root and projection authority.
  * 2. Prove Apply/Archive remain Operator callbacks rather than lane mutations.
  * 3. Prove archive drop resolves DataTransfer identity against current active rows.
+ * 4. Prove one inline scroll owner and independent lane block-scroll owners.
  *
  * Original request (2026-07-28): implement accessible commands and current-row archive drag.
+ * Owner correction (2026-07-28): remove double horizontal scrolling and let each lane scroll vertically.
  */
 import { createTrackedTaskProgress } from '@openspecui/core/task-progress'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -80,6 +82,30 @@ function props(overrides: Partial<InteractiveKanbanProps> = {}): InteractiveKanb
 
 describe('InteractiveKanban', () => {
   afterEach(cleanup)
+
+  it('owns horizontal overflow once and gives every lane an independent vertical row scroller', () => {
+    const { container } = render(<InteractiveKanban {...props()} />)
+
+    const root = container.firstElementChild
+    expect(root).toHaveClass('flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-hidden')
+
+    const horizontalOwners = container.querySelectorAll('.overflow-x-auto')
+    expect(horizontalOwners).toHaveLength(1)
+    const grid = container.querySelector('[data-kanban-grid]')
+    expect(grid).toBe(horizontalOwners.item(0))
+    expect(grid).toHaveClass('min-h-0', 'flex-1', 'overflow-x-auto', 'overflow-y-hidden')
+
+    const lanes = container.querySelectorAll('[data-lane]')
+    const rowScrollers = container.querySelectorAll('[data-lane-scroll]')
+    expect(lanes).toHaveLength(4)
+    expect(rowScrollers).toHaveLength(4)
+    lanes.forEach((lane) => {
+      expect(lane).toHaveClass('flex', 'min-h-0', 'flex-col', 'overflow-hidden')
+      const rowScroller = lane.querySelector('[data-lane-scroll]')
+      expect(rowScroller).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto', 'overflow-x-hidden')
+      expect(rowScroller?.contains(lane.querySelector('header'))).toBe(false)
+    })
+  })
 
   it('launches explicit Apply and Archive callbacks for a current row', () => {
     const input = props()

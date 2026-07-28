@@ -2,8 +2,10 @@
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove Board selects readonly/static and interactive/live presentation owners.
  * 2. Prove a pending active projection does not hide current archive rows.
+ * 3. Prove the live route consumes shell height and contains page-level overflow.
  *
  * Original request (2026-07-28): implement regional Board lifecycle and static ReadonlyKanban.
+ * Owner correction (2026-07-28): prevent competing horizontal scrollbars on narrow `/board`.
  */
 import type { ArchiveMeta, ChangeMeta } from '@openspecui/core'
 import type { TrackedTaskProgress } from '@openspecui/core/task-progress'
@@ -110,6 +112,14 @@ describe('Board route composition', () => {
       'archives:1;active-loading:true'
     )
     expect(screen.queryByTestId('readonly-kanban')).toBeNull()
+  })
+
+  it('bounds the live Board to the shell block-size and contains route overflow', () => {
+    const { container } = render(<Board />)
+
+    const route = container.firstElementChild
+    expect(route).toHaveClass('flex', 'h-full', 'min-h-0', 'min-w-0', 'flex-col', 'overflow-hidden')
+    expect(route).not.toHaveClass('overflow-x-auto', 'overflow-y-auto')
   })
 
   it('uses the callback-free ReadonlyKanban in static mode', () => {

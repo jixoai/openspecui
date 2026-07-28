@@ -3,9 +3,11 @@
  * 1. Compose live Changes and Archives as independent objective Kanban regions.
  * 2. Bind live commands to shared Change Operators and current projection authority.
  * 3. Render static Board through the shared readonly presentation and archive range policy.
+ * 4. Bound the live route to the shell block-size and contain competing page overflow.
  *
  * Contributor request (2026-07-18): add a Kanban-style Change view.
  * Owner decision (2026-07-28): implement objective OPSX lanes and shared Operator ownership.
+ * Owner correction (2026-07-28): prevent competing horizontal scrollbars on narrow `/board`.
  */
 import { InteractiveKanban } from '@/components/kanban/interactive-kanban'
 import { countActiveKanbanPhases, filterKanbanArchives } from '@/components/kanban/kanban-model'
@@ -57,7 +59,7 @@ export function Board() {
   })
 
   const header = (
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+    <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-3">
       <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
         <SquareKanban className="h-6 w-6 shrink-0" />
         Kanban
@@ -111,7 +113,7 @@ export function Board() {
   }
 
   return (
-    <div className="min-w-0 space-y-4 p-4">
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-hidden p-4">
       {header}
       <InteractiveKanban
         activeItems={activeItems}
