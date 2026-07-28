@@ -17,9 +17,9 @@ Original request (2026-07-28): implement the UI simplification autonomously, the
 
 ## 2. Shared Presentation Primitives
 
-- [ ] 2.1 Add a keyboard-accessible `InformationBadge` backed by existing Badge and Tooltip owners
-- [ ] 2.2 Add a Base UI-backed `EvidenceDisclosure` with compact trigger and on-demand panel
-- [ ] 2.3 Prove default-collapsed, focus, accessible naming, Tooltip, open/close, and error-separation behavior
+- [x] 2.1 Add a keyboard-accessible `InformationBadge` backed by existing Badge and Tooltip owners
+- [x] 2.2 Add a Base UI-backed `EvidenceDisclosure` with compact trigger and on-demand panel
+- [x] 2.3 Prove default-collapsed, focus, accessible naming, Tooltip, open/close, and error-separation behavior
 
 ## 3. Shell and Dashboard
 

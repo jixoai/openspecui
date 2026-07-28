@@ -9,7 +9,7 @@ Original request (2026-07-28): implement the information-hierarchy optimization,
 
 ## Implementation State
 
-Status: **apply-ready; specification complete and production code not yet changed**.
+Status: **implementation active; shared presentation primitives complete**.
 
 ```text
 spec artifacts -> shared primitives -> owner groups -> focused evidence -> delivery -> owner acceptance
@@ -27,6 +27,22 @@ Change.
 - Existing route/subscription/mutation owners remain intact; this is a presentation architecture change.
 - The `opsx-ui-views` delta and canonical Chinese terminology encode the three-tier hierarchy; strict OpenSpec
   validation passes.
+- `InformationBadge` composes the existing Badge and Tooltip with a focusable `note` role and explicit accessible
+  identity; it adds no data ownership.
+- `EvidenceDisclosure` composes the installed Base UI Accordion with browser-findable collapsed content and a
+  reduced-motion-safe height transition.
+
+## Focused Evidence
+
+```text
+Information disclosure unit          1 file / 3 tests
+Web typecheck                         passed
+Focused oxlint                       0 warnings / 0 errors
+Focused format                       passed
+```
+
+The unit test focuses the real Tooltip trigger and activates the real Base UI Accordion trigger. It separately
+proves a direct alert remains visible while supporting evidence is collapsed.
 
 ## Divergence Notes
 
