@@ -159,8 +159,9 @@ component/fixture preparation only and does not close the Owner walkthrough.
 ### Pull Request Evidence
 
 - PR: https://github.com/jixoai/openspecui/pull/219
-- HEAD: `01445cd4841bc17f8a67d396942aa09eb57d3d4c`
-- Remote checks: Changeset Gate, CI Scope, Fast Gate, Browser Gate, and Browser Gate (@openspecui/web) all passed.
+- Code-bearing HEAD verified by remote checks: `01445cd4841bc17f8a67d396942aa09eb57d3d4c`
+- Final PR HEAD: `f3af76c779996154596598d16d22389ca5d9f0e4` (documentation-only evidence update).
+- Remote checks for both HEADs: Changeset Gate, CI Scope, Fast Gate, Browser Gate, and Browser Gate (@openspecui/web) all passed.
 - PR remains open and unmerged. Owner visual/real-browser acceptance is the next boundary; no archive, merge, or
   additional beta release is authorized by this Change.
 
