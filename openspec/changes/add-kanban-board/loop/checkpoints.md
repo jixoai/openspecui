@@ -1,35 +1,47 @@
-## 1. Research and Planning
+<!--
+Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+1. Provide executable apply-change checkpoints for the PR #208 rewrite.
+2. Bind each implementation checkbox to code and focused evidence.
+3. Preserve CI, owner acceptance, archive, and merge as separate boundaries.
 
-- [x] 1.1 Intake captured objectively
-- [x] 1.2 Research facts recorded (derived-state model; synced state undetectable; existing phase taxonomy; reuse points)
-- [x] 1.3 Plan reviewed and approved (four columns, two-axes model, drag-to-archive only)
-- [x] 1.4 Spec delta authored and validated (`opsx-ui-views` ADD: Change Kanban Board)
+Owner decision (2026-07-28): implement the reviewed rewrite now.
+-->
 
-## 2. Implementation
+## 1. Research and Specification
 
-- [x] 2.1 Implementation started from approved plan
-  - [x] A. Register `/board` route in `packages/web/src/lib/route-tree.ts` (and `route-tree-static.ts` for SSG)
-  - [x] B. Add `Board` nav item in `packages/web/src/components/layout/nav-items.ts` + `nav-controller.ts` TabId/ALL_TABS/DEFAULT_MAIN_TABS (lucide `SquareKanban`; `defaultArea: 'main'`)
-  - [x] C. Create `packages/web/src/routes/board.tsx`: subscribe to `useChangesSubscription`, `useOpsxStatusListSubscription`, `useArchivesSubscription`
-  - [x] D. Add pure `classifyBoardColumn(progress)` helper: `completed===0 → todo`; `0<completed<total → in-progress`; `total>0 && completed===total → qa`; archived → done
-  - [x] E. Reusable change card (name, id, `formatRelativeTime`, `completed/total`, progress bar, phase `Badge` via `classifyChangeWorkflowPhase` joined with `ChangeStatus`); active → `/changes/$id`, done → `/archive/$id`
-  - [x] F. Render four columns as bordered `bg-card` lanes matching the design language (monospace, `font-nav`, container-friendly horizontal scroll)
-  - [x] G. Time-range filter on the Done column: `Select` presets `7d/30d/90d/all`, default `30d`; parse archive date from the `YYYY-MM-DD-` prefix of `id` (fallback `updatedAt`); filter client-side
-  - [x] H. Kind-aware drag (native HTML5 DnD per `area-nav.tsx`, module payload `{kind,id,name}`): QA card → Done = `openArchiveModal(id, name)`; apply-ready TODO card → In Progress = `vtNavController.activatePop(buildOpsxComposeHref({action:'apply',changeId}))`. Each column accepts only its matching kind; mismatched drops rejected; both disabled in static mode
-  - [x] I. `isApplyReady(status)` helper gating the apply drag (every `applyRequires` artifact done), mirroring `change-command-bar.tsx`
-  - [x] J. Loading / empty-column / static-mode read-only states
-  - [x] K. Unit tests for `classifyBoardColumn` + `archiveTimestamp` + `isApplyReady`; prerender routes wired (`ssg/entry-server.tsx` getRoutes/getTitle)
-- [x] 2.2 Progress synchronized with implementation artifact
-- [x] 2.3 Unexpected issues loop back to intake/research-plan (none required; only a minor local type-narrowing fix)
+- [x] 1.1 Audit PR #208 against current main, OpenSpec 1.6, realtime, static, and frontend standards
+- [x] 1.2 Approve objective lanes: no tracked tasks / tasks remaining / tasks complete / archived
+- [x] 1.3 Approve interactive `/board`, Dashboard `ReadonlyKanban`, and shared Operator ownership
+- [x] 1.4 Supersede old completion evidence and validate the revised delta
 
-## 3. PR and Release Gates
+## 2. Projection Contract
 
-- [x] 3.1 Changeset included (`.changeset/add-kanban-board.md`, `@openspecui/web` minor)
-- [x] 3.2 CI-equivalent local checks passed (`lint:ci`, `format:check`, `typecheck`, web unit 543 incl. board 9, `test:root` 43, `test:browser:ci` 12)
-- [x] 3.3 SSG guard passed (`build:ssg` builds SSR-safe with the apply hand-off imports; `/board` in static route tree and prerender list; renders read-only without CLI)
-- [ ] 3.4 PR checks passed
+- [ ] 2.1 Add shared archive timestamp/range helpers with malformed-date fallback tests
+- [ ] 2.2 Extend Dashboard Summary with exact phase counts and bounded recent archive summaries
+- [ ] 2.3 Derive the same contract in Server and static providers with typed tests
 
-## 4. Merge Readiness
+## 3. Shared Presentation
 
-- [ ] 4.1 OpenSpec archive flow completed
-- [ ] 4.2 PR merge approved
+- [ ] 3.1 Implement objective lane model and motion-enabled `ReadonlyKanban`
+- [ ] 3.2 Replace Dashboard Workflow Progress while retaining Active Changes
+- [ ] 3.3 Register static/live Kanban routes through current route owners
+
+## 4. Interactive Board
+
+- [ ] 4.1 Extract `useChangeOperatorLauncher` and migrate Change Detail
+- [ ] 4.2 Implement independent active/archive lifecycle regions and progressive/error evidence
+- [ ] 4.3 Add Apply/Archive icon actions plus archive drag using `DataTransfer` identity
+- [ ] 4.4 Prove Root/projection locks, current-row drop lookup, static readonly behavior, and launcher ownership
+
+## 5. Delivery
+
+- [ ] 5.1 Update grouped package changeset and pass focused typed/component tests
+- [ ] 5.2 Pass clean SSG, strict OpenSpec validation, and all CI-equivalent local gates
+- [ ] 5.3 Push PR #208 and record remote checks
+- [ ] 5.4 Owner completes final visual and real browser walkthrough
+
+## 6. Finalization
+
+- [ ] 6.1 Owner approves merge
+- [ ] 6.2 Archive/sync this Change in a dedicated commit
+- [ ] 6.3 Merge PR #208; do not publish without a separate owner decision

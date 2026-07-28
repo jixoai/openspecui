@@ -1,81 +1,113 @@
+<!--
+Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+1. Specify an objective Kanban projection over OpenSpec task and archive facts.
+2. Separate readonly presentation from live Operator capabilities.
+3. Require regional realtime/static parity and accessible interaction paths.
+
+Contributor request (2026-07-18): add a Kanban-style Change view.
+Owner decision (2026-07-28): use objective OPSX semantics and replace Dashboard Workflow Progress with ReadonlyKanban.
+-->
+
 # opsx-ui-views Specification Delta
 
 ## ADDED Requirements
 
-### Requirement: Change Kanban Board
+### Requirement: Objective Change Kanban Projection
 
-OpenSpecUI SHALL provide a Kanban board view that visualises changes across their lifecycle in four columns — **TODO**, **In Progress**, **QA**, and **Done** — driven entirely by observable state (task-completion counts and archive location). A change's column SHALL be derived, not stored:
+OpenSpecUI SHALL project Changes into four fact-based lanes and SHALL NOT treat those lanes as a persisted or
+prescriptive workflow.
 
-- **TODO** — an active change with `completed === 0` tasks (including a change with no tasks defined).
-- **In Progress** — an active change with `0 < completed < total` tasks.
-- **QA** — an active change with `total > 0 && completed === total` tasks.
-- **Done** — a change located under `changes/archive/`.
+```text
+active + no-tasks     -> No tracked tasks
+active + in-progress  -> Tasks remaining
+active + complete     -> Tasks complete
+archive               -> Archived
+```
 
-The board SHALL keep the existing per-change workflow-phase badge on each card as a distinct axis from the column (column = task progress; badge = artifact readiness). The board SHALL NOT introduce a "synced but not archived" column or any new persisted change-status field. The board SHALL match the existing design language and SHALL reuse existing data subscriptions, the workflow-phase classifier, the global archive flow, and the existing apply compose hand-off. Every drag on the board SHALL map to a real operation (archive or apply); a drag SHALL NEVER silently change a change's task state.
+#### Scenario: Preserve upstream task semantics
 
-#### Scenario: Group active changes into lifecycle columns
+- **GIVEN** active Changes carry OpenSpec `TrackedTaskProgress`
+- **WHEN** a Kanban projection is derived
+- **THEN** each active Change SHALL be placed by its exact `phase`
+- **AND** `no-tasks` SHALL remain distinct from `complete`
+- **AND** the UI SHALL NOT infer TODO, QA, verification, validation, sync, or archive readiness
 
-- **GIVEN** active changes exist with varying task progress
-- **WHEN** the user opens the board view
-- **THEN** each active change SHALL appear in exactly one of TODO, In Progress, or QA
-- **AND** placement SHALL follow the derivation rules (TODO `completed===0`, In Progress `0<completed<total`, QA `total>0 && completed===total`)
+#### Scenario: Present archived structure objectively
 
-#### Scenario: Change with no tasks defined lands in TODO
+- **GIVEN** a Change exists under the archive stage
+- **WHEN** the Kanban projection is derived
+- **THEN** the Change SHALL appear in Archived
+- **AND** Archived SHALL state structural location only, not quality or task completion
 
-- **GIVEN** an active change whose task total is `0`
-- **WHEN** the board renders
-- **THEN** the change SHALL appear in the TODO column
-- **AND** SHALL NOT appear in the QA column
+#### Scenario: Filter archived history by objective time
 
-#### Scenario: Archived changes appear in Done
+- **GIVEN** archived history may be unbounded
+- **WHEN** the full Board opens
+- **THEN** it SHALL default to `30d` and offer `7d`, `30d`, `90d`, and `all`
+- **AND** the timestamp SHALL use a valid dated archive id before falling back to `updatedAt`
 
-- **GIVEN** archived changes exist under `changes/archive/`
-- **WHEN** the board renders
-- **THEN** those changes SHALL appear in the Done column
+### Requirement: Shared Readonly Kanban
 
-#### Scenario: Card shows change summary and workflow-phase badge
+OpenSpecUI SHALL provide one readonly Kanban presentation for Dashboard and static publication.
 
-- **GIVEN** a change is rendered as a card
-- **WHEN** the user views it
-- **THEN** the card SHALL show the change name, id, relative time, task count (`completed/total`), and a progress bar
-- **AND** SHALL show the existing workflow-phase badge from the change status classifier
-- **AND** SHALL link to the change detail (`/changes/$id` for active, `/archive/$id` for archived)
+#### Scenario: Replace only Dashboard Workflow Progress
 
-#### Scenario: Filter the Done column by time range
+- **GIVEN** Dashboard Summary has current Change phase counts and bounded archived summaries
+- **WHEN** Dashboard renders
+- **THEN** `ReadonlyKanban` SHALL replace Workflow Progress
+- **AND** Dashboard Active Changes SHALL remain
+- **AND** cards SHALL navigate to their Change or Archive detail
+- **AND** the readonly component SHALL accept no mutation or drag callbacks
 
-- **GIVEN** the Done column may contain many archived changes
-- **WHEN** the user selects a time-range preset (for example `7d`, `30d`, `90d`, or `all`)
-- **THEN** the Done column SHALL show only archived changes within the selected range
-- **AND** the archive date SHALL be taken from the `YYYY-MM-DD-` prefix of the archive id, falling back to the change's updated time
-- **AND** the board SHALL default to a bounded range rather than showing every archived change
+#### Scenario: Render static Board from the same model
 
-#### Scenario: Drag a QA card to Done to archive with confirmation
+- **GIVEN** a static export contains active and archived Change facts
+- **WHEN** `/board` renders without a backend
+- **THEN** it SHALL use the shared objective lane model and readonly presentation
+- **AND** it SHALL expose no Apply, Archive, or drag capability
 
-- **GIVEN** a change is in the QA column
-- **WHEN** the user drags its card onto the Done column
-- **THEN** the UI SHALL open the existing global archive modal for that change
-- **AND** the change SHALL be archived only after the user confirms in that modal
-- **AND** no archive SHALL occur from the drag gesture alone
+### Requirement: Interactive Kanban Operator Surface
 
-#### Scenario: Drag an apply-ready TODO card to In Progress to apply
+The live `/board` route SHALL add commands around the objective projection without mutating lane state directly.
 
-- **GIVEN** a change is in the TODO column and is apply-ready (every artifact its schema requires for apply is done)
-- **WHEN** the user drags its card onto the In Progress column
-- **THEN** the UI SHALL open the existing apply compose overlay for that change (the same hand-off as the change page's Apply button)
-- **AND** the apply SHALL run only after the user dispatches it from that overlay
-- **AND** no task state SHALL be changed by the drag gesture itself
+#### Scenario: Launch Apply through the production owner
 
-#### Scenario: Apply drag is offered only on apply-ready TODO cards
+- **GIVEN** an active Change and current Root and Change projections
+- **WHEN** the user chooses Apply from its explicit card command
+- **THEN** the Board SHALL open the same Compose Operator used by Change Detail
+- **AND** the Board SHALL NOT execute Apply or mutate task state directly
 
-- **GIVEN** a TODO change that is not apply-ready (a required apply artifact is missing)
-- **WHEN** the board renders that card
-- **THEN** the UI SHALL NOT offer an apply drag for it
-- **AND** In Progress SHALL accept only apply drags and Done SHALL accept only archive drags
-- **AND** a drop whose kind does not match the target column SHALL be rejected without changing state
+#### Scenario: Launch Archive through the production owner
 
-#### Scenario: Read-only in static mode
+- **GIVEN** any active Change and current Root and Change projections
+- **WHEN** the user chooses Archive or drags the card to Archived
+- **THEN** the Board SHALL open the same Archive Operator used by Change Detail
+- **AND** the drag SHALL NOT archive or mutate the card directly
+- **AND** the explicit command SHALL remain available to keyboard and touch users
 
-- **GIVEN** OpenSpecUI runs in static/SSG mode (no CLI available)
-- **WHEN** the board renders
-- **THEN** the board SHALL still list active and archived changes in their columns
-- **AND** SHALL NOT offer drag-to-archive, drag-to-apply, or any archive/apply action
+#### Scenario: Reject stale operation authority
+
+- **GIVEN** Root authority or the corresponding live projection is loading, revalidating, failed, or retained-only
+- **WHEN** a card is displayed
+- **THEN** it MAY remain visible as display evidence
+- **BUT** Apply, Archive, and archive drop SHALL be disabled
+- **AND** a drop SHALL resolve its Change id against current rows before opening an Operator
+
+### Requirement: Regional Kanban Realtime Lifecycle
+
+The interactive Board SHALL preserve Changes and Archives as independently settling regions.
+
+#### Scenario: Render one region while its sibling waits
+
+- **GIVEN** one projection has current rows and the other is loading or revalidating
+- **WHEN** the Board renders
+- **THEN** the current lanes SHALL remain visible
+- **AND** only the affected region SHALL show its local lifecycle state
+
+#### Scenario: Preserve progressive and failed evidence
+
+- **GIVEN** Changes emit progressive batches, row errors, or a failed refresh with retained rows
+- **WHEN** the Board updates
+- **THEN** delivered rows SHALL remain visible in their objective lanes
+- **AND** progress, row errors, refresh activity, and terminal region errors SHALL remain attributable
+- **AND** list movement SHALL preserve visual continuity instead of flashing or replacing the full Board

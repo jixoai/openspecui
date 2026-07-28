@@ -1,50 +1,74 @@
-## User Input
+<!--
+Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+1. Preserve the contributor's Kanban intent without inventing OpenSpec lifecycle phases.
+2. Record the owner-approved full Board and Dashboard readonly projection boundary.
+3. Fix Operator, realtime, static, and final-acceptance ownership before implementation.
 
-> I want to add a Kanban-style board to the web UI to visualise changes. It should show changes in TODO (change active, but no tasks started), in progress (some tasks completed), in QA (all tasks completed but change not synced), and done (change synced), and archived (self explanatory). It should allow us to set a time range (time back) so we don't show _every_ archived change.
->
-> We should keep with the same design language and visual and UX style of the existing web UI.
+Contributor request (2026-07-18): "Add a Kanban-style board to visualise changes."
+Owner request (2026-07-28): "这个PR自身是否符合OPSX的开放式设计，是否会冲突？"
+Owner decision (2026-07-28): implement the reviewed rewrite and replace Dashboard Workflow Progress with ReadonlyKanban.
+-->
 
-Refinements agreed during exploration:
+## Objective
 
-- The original QA/Done/Archived split assumed a detectable "synced but not archived" state. Investigation confirmed that state is **not detectable** (there is no `openspec sync` CLI command, no persisted marker, and no delta-vs-main comparison in the codebase). The board therefore collapses to four columns: **QA = all tasks complete (still active)**, **Done = archived**. This also matches upstream OpenSpec semantics, where archiving is the step that merges deltas into the main specs.
-- A change with **no tasks defined** (`0 of 0`) belongs in **TODO**, not QA.
-- Cards may be **dragged**, but dragging a QA card to Done triggers the existing archive flow **with the current confirmation dialog** before any transition happens. This is the only drag that maps to a real operation.
-- The time-range filter applies to the **Done (archived) column only**, using presets.
+Add an objective Kanban projection without turning OpenSpec's action graph into a fixed workflow.
 
-## Objective Scope
+```text
+OpenSpec facts                          Presentation
 
-- Add a new `/board` view to the web UI (nav entry mirroring `/changes`).
-- Render active and archived changes as cards laid out in lifecycle columns: **TODO → In Progress → QA → Done (archived)**.
-- Derive a card's column purely from observable state:
-  - **TODO** — active change with `completed === 0` (covers "no tasks defined" and "tasks defined, none done").
-  - **In Progress** — active change with `0 < completed < total`.
-  - **QA** — active change with `total > 0 && completed === total`.
-  - **Done** — change present under `changes/archive/`.
-- Keep the existing per-change workflow-phase badge on each card (a separate axis from the column: column = task progress, badge = artifact readiness / blocked).
-- Support drag-to-archive: a QA card dragged to Done opens the existing global archive modal (confirmation + `validate → archive` CLI run).
-- Support drag-to-apply: an apply-ready TODO card dragged to In Progress opens the existing apply compose overlay (the same hand-off as the change page's Apply button — it resolves the invocation mode and dispatches to a terminal session). Each column accepts only its matching drag (Done ← archive, In Progress ← apply).
-- Add a time-range filter (presets: `7d / 30d / 90d / all`) to the Done column; default to a bounded range so the archive is not shown in full.
-- Match the existing design language (Tailwind v4, Base UI primitives, monospace / neobrutalist styling, existing badge and progress-bar patterns).
+stage=change + phase=no-tasks      ->  No tracked tasks
+stage=change + phase=in-progress   ->  Tasks remaining
+stage=change + phase=complete      ->  Tasks complete
+stage=archive                      ->  Archived
+```
+
+These columns describe observable facts only. They do not mean TODO, QA, Done, verified, synced, valid,
+or ready to archive.
+
+## Product Boundary
+
+- `/board` is the full interactive Kanban surface and is labelled `Kanban` in project navigation.
+- Dashboard receives a compact `ReadonlyKanban` and replaces only the existing Workflow Progress region.
+- Dashboard Active Changes remains unchanged.
+- Active rows use the exact `TrackedTaskProgress.phase` emitted by the OpenSpec projection.
+- Archived rows are structurally archived facts and default to a bounded `30d` range; `7d`, `30d`, `90d`,
+  and `all` remain available on the full Board.
+- Apply and Archive are explicit commands, not card state mutations.
+- Apply opens the existing Compose Operator; Archive opens the existing Archive Operator.
+- Any active card may request Archive. A drag to Archived opens the same Archive Operator and never archives
+  directly.
+- Keyboard and touch users receive explicit icon actions equivalent to drag.
+- Static/SSG uses the same readonly model and navigation, with no drag or operation controls.
+
+## Realtime Boundary
+
+```text
+Changes projection ----> active lanes ----> local loading/update/error state
+Archives projection ---> archive lane ----> local loading/update/error state
+Root authority --------> operation gate only
+```
+
+- One slow projection must not block the other lanes.
+- Retained rows remain visible during revalidation or failure.
+- A failed region exposes its error beside retained content.
+- Progressive Change batches and row errors remain observable.
+- Apply/Archive/drop are disabled whenever the corresponding projection or Root authority is not current.
 
 ## Non-Goals
 
-- **No "synced but not archived" column.** That state is not observable from the filesystem; the board will not invent or persist it.
-- **No drag-to-complete-tasks.** A drag never ticks checkboxes directly — those boundaries are derived from task state and must not be falsified by a gesture. The two drags that exist trigger real operations (archive, apply) that legitimately do the work; TODO→In Progress opens the apply hand-off, it does not mark tasks done.
-- **No drag-to-apply from In Progress or backward drags.** Apply-by-drag is offered only from apply-ready TODO cards onto In Progress (the "start applying" gesture); continuing an in-progress change uses the change page's Apply button.
-- **No un-archive** (Done → any) and no backward drags.
-- **No new persisted change status field** and no new backend "phase" concept.
-- **No changes** to task toggling, change creation, or the archive CLI flow itself — the board consumes existing procedures only.
-- **No backend/core changes** are expected; the board is a frontend addition over existing subscriptions and the client-visible date-prefixed archive `id`.
+- No persisted board status, phase mutation, task mutation, ordering, assignee, WIP limit, or package graph.
+- No `TODO`, `QA`, or `Done` inference.
+- No claim that completed tracked tasks imply validation, verification, sync, or archive readiness.
+- No new Board-specific RPC when the existing Dashboard Summary and reactive list projections can carry the facts.
+- No final browser or visual acceptance by an Agent; the owner performs that walkthrough.
 
 ## Acceptance Boundary
 
-- A `/board` route exists, is registered in navigation (desktop sidebar + mobile tab bar), and renders in both live and static/SSG modes.
-- Active changes appear in exactly one of TODO / In Progress / QA per the derivation rules above; a `0 of 0` change appears in TODO.
-- Archived changes appear in Done, filtered by the selected time range (parsed from the `YYYY-MM-DD-` prefix of the archive `id`, falling back to `updatedAt`).
-- Each card shows: change name, id, relative time, task count `completed/total`, a progress bar, and the existing workflow-phase badge — reusing the current change-list row visuals.
-- Dragging a QA card onto Done opens the existing global archive modal (confirmation before any change is archived).
-- Dragging an apply-ready TODO card onto In Progress opens the existing apply compose overlay; a non-apply-ready TODO card offers no apply drag; drops whose kind does not match the target column are rejected without changing state.
-- In static/SSG mode the board renders read-only (no archive or apply action, since the CLI/terminal is unavailable).
-- The board matches the existing design language and passes local CI-equivalent checks, the SSG build guard, and `openspec validate --strict`.
-- A changeset is included for the release-impacting package(s) changed (`@openspecui/web`).
-- Loop artifacts and the `opsx-ui-views` spec delta stay synchronized with the implementation and validate.
+- Core/Server/static Dashboard Summary exposes exact active phase counts plus bounded archive summaries.
+- Shared browser-safe helpers classify lanes and archive ranges identically in live and static projections.
+- Dashboard and static surfaces use `ReadonlyKanban` without operation controls.
+- Full Board has independent active/archive lifecycle states, progressive rows, row errors, retained refresh data,
+  motion continuity, accessible explicit actions, and archive drag as an Operator launcher.
+- Change Detail and Board consume one shared `useChangeOperatorLauncher` owner.
+- Focused typed Vitest and basic component-level browser fixtures pass; owner visual acceptance remains outstanding.
+- Changeset, strict OpenSpec validation, SSG build, and repository gates pass before PR delivery.

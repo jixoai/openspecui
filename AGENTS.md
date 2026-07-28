@@ -4,9 +4,11 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 2. Enforce protected-branch, PR, CI, and release delivery policy.
 3. Protect static/SSG behavior and shared live/static projections.
 4. Preserve the OpenSpec adaptation baseline, source-distinct projections, and independent-review corrections.
-5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, live-projection loading, real-time visual lifecycle, and delivery-correction boundaries for the 1.6 adaptation.
+5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, live-projection loading, real-time visual lifecycle, objective Kanban projection, and delivery-correction boundaries for the 1.6 adaptation.
 
 Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配，目前我们的进度有点落后。你先了解项目，然后更新 references/openspec，然后使用 $wayfinder 和我讨论具体的适配计划。我们最终使用openspec来管理 wayfinder 产出的文档。"
+Original request (2026-07-28): "这个PR自身是否符合OPSX的开放式设计，是否会冲突？都需要进行深入的调查。"
+Owner decision (2026-07-28): implement the objective Kanban rewrite and replace Dashboard Workflow Progress with ReadonlyKanban.
 Original request (2026-07-15): "我个人的想法，是把 --app 模式提上日程。因为 app 模式提供了多标签管理。它天生适合多项目管理的这种场景。"
 Original request (2026-07-15): "我们可以在 cli 上新增一个 --auth 或者 --password。这样后端接口就必须带上这个 http header。"
 Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
@@ -125,6 +127,18 @@ MUST READ: CLAUDE.md
 - Prerelease delivery law (2026-07-28): A requested beta release enters or continues explicit Changesets prerelease mode and derives npm dist-tag plus GitHub prerelease state from the generated SemVer version; caller-authored parallel channel flags are forbidden. `6.0.0-beta.0` publishes under `beta` and cannot move `latest`. Semantic flag conflicts belong to the typed prerelease planner because a CLI parser may materialize absent boolean flags as `false`; direct production-parser evidence is required. Registry publication and package-tag delivery are independent facts: a rerun must recover missing tags after packages already exist, while a true registry-and-tag no-op must not rewrite an old GitHub Release. Release automation pushes tag refs only, never its potentially stale checked-out `main`. Completion requires the exact-head workflow, npm channel state, remote tags, and GitHub prerelease as separate evidence.
 
 ## OpenSpec 1.6 Adaptation Baseline
+
+### Objective Kanban projection law (2026-07-28)
+
+Kanban is a visual projection over OpenSpec facts, never a persisted workflow. Its four lanes are exactly active
+`TrackedTaskPhase` (`no-tasks`, `in-progress`, `complete`) plus structural `archive`; do not rename them TODO, QA,
+Done, verified, synced, valid, or archive-ready. Dashboard and static publication consume a shared
+`ReadonlyKanban` with navigation but no operation callbacks. Live Board operations are explicit capabilities:
+Apply opens the existing Compose Operator and Archive opens the existing Archive Operator; drag-to-archive is only
+another launcher for that Operator and never mutates lane/task state. Board and Change Detail must consume the same
+Operator hook, and live commands remain disabled whenever Root or the relevant projection is not current. Changes
+and Archives settle as independent realtime regions; preserve progressive rows, row errors, retained revalidation,
+and regional failures rather than restoring a combined full-page loading gate.
 
 ### 6.11 execution-scope law (2026-07-19)
 
