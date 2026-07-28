@@ -20,6 +20,7 @@
   },
   "changesets": [
     "accelerate-live-projection-loading",
+    "add-kanban-board",
     "config-ownership-sections",
     "openspec-16-frontend-skeleton",
     "refine-live-projection-experience-p1a",
