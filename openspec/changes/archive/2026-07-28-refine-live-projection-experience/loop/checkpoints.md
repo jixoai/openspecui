@@ -18,6 +18,7 @@ replays; P1 may begin only through the bounded P1-A Dashboard Summary slice.
 Owner loopback (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）".
 Owner walkthrough transfer (2026-07-27): "绝大部分功能基本都通过了，更多的问题是在一些 UI/UX 的问题上，这属于后续需要打磨的问题。"
 Owner final acceptance (2026-07-28): "验收通过。"
+Owner merge authorization (2026-07-28): "授权 merge PR #211，最终可以合并到main分支，但不用急着发布。"
 -->
 
 ## Checkpoint State
@@ -193,12 +194,22 @@ merge, archive, or release.
 ## 4. Merge Readiness
 
 - [x] 4.1 Confirm all P1-P5 work is complete, all strict/OpenSpec validation is green, no loopback trigger remains unresolved, and implementation notes match the checked source.
-- [ ] 4.2 Obtain owner approval for merge after the final browser walkthrough. Do not treat automated checks as that approval.
-- [ ] 4.3 Merge through the protected-branch PR workflow only after required checks and approval; follow Manager Mode release sequencing only if the manager explicitly authorizes release.
-- [ ] 4.4 Archive this OpenSpec Change only after the merged implementation and durable specification sync are complete; archive status must not be used as a substitute for release evidence.
+- [x] 4.2 Obtain owner approval for merge after the final browser walkthrough. Do not treat automated checks as that approval.
+- [x] 4.3 Merge through the protected-branch PR workflow only after required checks and approval; follow Manager Mode release sequencing only if the manager explicitly authorizes release.
+- [x] 4.4 Archive this OpenSpec Change only after the merged implementation and durable specification sync are complete; archive status must not be used as a substitute for release evidence.
 
 Final source/artifact audit passed on 2026-07-28: P1 implementation and evidence correction are explicit, P2-P5
 owners are complete, the dedicated reduced-motion/mobile Chromium fixture and Storybook gate are green, Web
 checked TypeScript passes, strict Change validation succeeds, and implementation notes match the checked source.
-No loopback trigger remains unresolved. Checkpoint 4.2 stays open because owner acceptance is not implicit merge
-authorization.
+No loopback trigger remains unresolved. At that audit boundary, checkpoint 4.2 remained open because owner
+acceptance was not implicit merge authorization.
+
+The owner explicitly authorized PR #211 for merge on 2026-07-28 while withholding release authorization. All
+five required PR Quality checks passed on exact head `797abab`. GitHub merged PR #211 through the protected
+branch workflow as merge commit `66b3be9`, and `origin/main` contains the implementation head. No
+`changeversion`, release workflow, package publication, or tag operation was started.
+
+After `main` containment was verified, OpenSpec CLI archived the Change on 2026-07-28 and synchronized 17
+additive requirements across seven durable capabilities. The archive is
+`openspec/changes/archive/2026-07-28-refine-live-projection-experience/`. This closes delivery bookkeeping only;
+the merged changeset remains unreleased by explicit owner direction.

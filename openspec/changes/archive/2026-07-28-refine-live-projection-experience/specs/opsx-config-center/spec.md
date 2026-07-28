@@ -28,4 +28,3 @@ The Config view SHALL retain local drafts and editable overlay state across remo
 - **WHEN** a newer remote projection arrives
 - **THEN** the UI SHALL preserve the local draft and open editing interaction
 - **AND** SHALL expose local update availability rather than replacing the draft or silently saving stale data
-

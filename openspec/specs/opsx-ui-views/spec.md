@@ -3,7 +3,9 @@
 ## Purpose
 
 Define the OpenSpecUI screens and navigation model for OPSX workflows, driven entirely by supported OpenSpec CLI outputs.
+
 ## Requirements
+
 ### Requirement: Dashboard Status Overview
 
 The UI SHALL render a dashboard status overview using CLI-driven status data.
@@ -504,3 +506,27 @@ OpenSpecUI SHALL provide a read-only Stores panel, gated behind a visible Beta b
 - **THEN** the UI SHALL only show details (no setup/register/unregister/remove actions in this phase)
 - **AND** SHALL NOT change the active project directory
 
+### Requirement: Regional Realtime Projection Composition
+
+The UI SHALL migrate current OPSX route, detail, and overlay projection surfaces to the shared realtime presentation model without changing their navigation, information architecture, or layout ownership.
+
+#### Scenario: A Dashboard sibling remains current while another region waits
+
+- **GIVEN** Dashboard Summary has a current projection and Trends or Code Git is loading, revalidating, or failed
+- **WHEN** the Dashboard renders
+- **THEN** the current Summary SHALL remain visible
+- **AND** only the affected sibling region SHALL render its local lifecycle state
+
+#### Scenario: A Change list receives progressive rows
+
+- **GIVEN** the Changes projection emits batches and row errors
+- **WHEN** the list renders before completion
+- **THEN** received rows and row-level errors SHALL remain visible through `partial` presentation
+- **AND** the UI SHALL not replace the list with a route-wide loading surface
+
+#### Scenario: A detail or search surface waits locally
+
+- **GIVEN** a detail pane, artifact output, file preview, or demand-driven Search result is pending
+- **WHEN** its parent route already has readable content
+- **THEN** only that local pane or result region SHALL show its lifecycle atom
+- **AND** the parent route SHALL retain its existing content and layout
