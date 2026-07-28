@@ -4,7 +4,7 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 2. Enforce protected-branch, PR, CI, and release delivery policy.
 3. Protect static/SSG behavior and shared live/static projections.
 4. Preserve the OpenSpec adaptation baseline, source-distinct projections, and independent-review corrections.
-5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, live-projection loading, real-time visual lifecycle, container-responsive objective Kanban projection, live Board scroll ownership, and delivery-correction boundaries for the 1.6 adaptation.
+5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, live-projection loading, real-time visual lifecycle, OPSX-first information hierarchy, container-responsive objective Kanban projection, live Board scroll ownership, and delivery-correction boundaries for the 1.6 adaptation.
 
 Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配，目前我们的进度有点落后。你先了解项目，然后更新 references/openspec，然后使用 $wayfinder 和我讨论具体的适配计划。我们最终使用openspec来管理 wayfinder 产出的文档。"
 Original request (2026-07-28): "这个PR自身是否符合OPSX的开放式设计，是否会冲突？都需要进行深入的调查。"
@@ -57,6 +57,7 @@ Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间
 Owner-reported defect (2026-07-28): "pnpm openspecui export -o ./tmp --open 导出的数据好像逃逸到 html 去了。"
 Original request (2026-07-28): "把残留的工作先完成"
 Original request (2026-07-28): "我想先发布一个beta版本"
+Original request (2026-07-28): "让界面像5.x那样清爽的同时，仍然保证6.x新增的信息可以被Get到。因为我们openspecui最关键的是OPSX这套流程，其它都是服务于这套流程的。"
 Review correction (2026-07-20): Terminal cwd evidence must cross the production Server owner instead of injecting a hand-authored downstream callback.
 Review correction (2026-07-20): Settings tool delivery must preserve upstream physical artifact scope, render-time subscription provenance, and CLI-runner cache retirement.
 -->
@@ -129,6 +130,18 @@ MUST READ: CLAUDE.md
 - Prerelease delivery law (2026-07-28): A requested beta release enters or continues explicit Changesets prerelease mode and derives npm dist-tag plus GitHub prerelease state from the generated SemVer version; caller-authored parallel channel flags are forbidden. `6.0.0-beta.0` publishes under `beta` and cannot move `latest`. Semantic flag conflicts belong to the typed prerelease planner because a CLI parser may materialize absent boolean flags as `false`; direct production-parser evidence is required. Registry publication and package-tag delivery are independent facts: a rerun must recover missing tags after packages already exist, while a true registry-and-tag no-op must not rewrite an old GitHub Release. Release automation pushes tag refs only, never its potentially stale checked-out `main`. Completion requires the exact-head workflow, npm channel state, remote tags, and GitHub prerelease as separate evidence.
 
 ## OpenSpec 1.6 Adaptation Baseline
+
+### OPSX-first information hierarchy law (2026-07-28)
+
+OPSX decisions own the direct visual plane: current task, next action, mutation state, authority loss, errors, and
+blockers remain visible without hover or expansion. Secondary scan facts such as Root source, Store, References,
+schema, freshness, and counts use compact, keyboard-reachable `Badge + Tooltip` presentation. Verbose paths, raw
+CLI envelopes, provenance, successful settlement history, and low-frequency diagnostics belong to a collapsed
+Accordion or equivalent evidence disclosure. A failure is always promoted to the direct plane; Tooltip-only error
+or stale-authority presentation is forbidden. Shared information components are pure presentation owners and must
+not acquire subscriptions, infer aggregate health, authorize operations, or fork static/live semantics. Settings
+summarizes and links to the owning Context/Config surfaces instead of duplicating them; Context retains complete
+objective evidence but keeps raw command envelopes collapsed by default.
 
 ### Objective Kanban projection law (2026-07-28)
 
