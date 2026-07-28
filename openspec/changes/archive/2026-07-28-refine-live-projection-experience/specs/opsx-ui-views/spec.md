@@ -35,4 +35,3 @@ The UI SHALL migrate current OPSX route, detail, and overlay projection surfaces
 - **WHEN** its parent route already has readable content
 - **THEN** only that local pane or result region SHALL show its lifecycle atom
 - **AND** the parent route SHALL retain its existing content and layout
-

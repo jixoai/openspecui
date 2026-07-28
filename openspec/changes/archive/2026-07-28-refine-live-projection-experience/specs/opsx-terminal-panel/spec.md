@@ -28,4 +28,3 @@ The Terminal panel and its creation/send dialogs SHALL show pending command acti
 - **WHEN** it completes or fails
 - **THEN** the UI SHALL remove the pending lock at the correct terminal state transition
 - **AND** SHALL retain raw CLI, stream, and error evidence as textual content with actionable recovery where applicable
-
