@@ -2,13 +2,14 @@
 Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 1. Admit App Store and Root projections without waiting for the first lifecycle notice.
 2. Distinguish unresolved App observations from authoritative empty conclusions.
-3. Preserve stateful project iframe Documents across ordinary App route transitions.
+3. Preserve stateful project iframe Documents and reuse an existing host surface across launch transitions.
 4. Make embedded authentication and capability delegation explicit before Project Web starts.
 5. Preserve session and Inspector continuity within narrow App viewports.
 
 Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
 Original request (2026-07-27): "iframe 需要明确声明支持一些 permission，否则会有一些功能上被限制。"
 Original request (2026-07-27): "移动端模式下 Inspector 横向溢出了；sessions 纵向溢出了。"
+Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
 -->
 
 # Delta for Hosted App Distribution
@@ -108,3 +109,31 @@ persistent Sessions and Store Inspector surfaces SHALL remain contained within t
 - **AND** the stable selected locator SHALL grant no mutation authority while its current generation is retired
 - **AND** accepted/running/terminal activity SHALL be visible without inventing optimistic Store inventory
 - **AND** long Store facts and controls SHALL wrap, truncate, or reflow within the available inline size
+
+### Requirement: Host-Neutral App Presentation
+
+The CLI start owner SHALL submit a semantic presentation request after the backend Server is ready. The selected
+host presenter SHALL own how that request becomes a browser/PWA or native surface; Server startup SHALL NOT depend
+on a browser-only opener contract.
+
+#### Scenario: Browser presents a hosted App request
+
+- **GIVEN** the start owner resolved a hosted App base, backend locator, and runtime-only credential
+- **WHEN** the Browser presenter receives the semantic request
+- **THEN** it SHALL build the private launch URL only at the presentation boundary
+- **AND** an installed same-scope PWA MAY use its declared `focus-existing` launch handling
+- **AND** the credential SHALL NOT enter the public hosted URL, logs, or persisted shell state
+
+#### Scenario: An ordinary browser launch reaches an existing App leader
+
+- **GIVEN** a newly opened App Document forwards its launch to an existing same-origin browser or PWA leader
+- **WHEN** the leader acknowledges and applies the request
+- **THEN** the leader SHALL request focus
+- **AND** the transient source Document SHALL retire best-effort whether the leader is a browser or PWA
+- **AND** a source that applies locally or becomes the fallback leader SHALL remain mounted
+
+#### Scenario: A native host presenter is selected in the future
+
+- **WHEN** a native host such as OpenTray implements the presentation contract
+- **THEN** it SHALL consume the same semantic backend presentation intent
+- **AND** it MAY show or focus its native window without requiring the start owner to construct a browser URL

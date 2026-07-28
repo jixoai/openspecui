@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 1. Capture the owner's full-surface Web and App waiting-experience request without changing the pending Kanban layout work.
 2. Define the real-time push-to-pull lifecycle and authority boundary that the visual experience must project.
 3. Bound reusable, composable frontend state atoms and their migration across existing pages and overlays.
@@ -9,6 +9,7 @@ Original request (2026-07-23): "布局方面暂时不需要改动，后续社区
 Original request (2026-07-23): "一次性把现有的页面都统一整改，因为这涉及到统一组件的封装和开发。全部改动，才能在中途暴露出所有隐含的可能、状态。这对于我们组件化的封装和开发非常重要。"
 Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
 Original request (2026-07-27): "我已经全面走查了，结果是指的肯定的，绝大部分功能基本都通过了，更多的问题是在一些 UI/UX 的问题上，这属于后续需要打磨的问题，我个人觉得可以收尾 change，然后另外开 change 来专门打磨。"
+Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
 -->
 
 ## User Input
@@ -39,12 +40,18 @@ accepted follow-up polish
 ├─ Hosted iframe: Clipboard capability is not delegated
 ├─ SessionTabs: Offline presentation occasionally lags the iframe's disconnect state
 ├─ Sessions: mobile App header plus a viewport-sized hosted surface overflows vertically
-└─ Store Inspector: delayed/abrupt operation feedback, focus refresh discontinuity, mobile inline overflow
+├─ Store Inspector: delayed/abrupt operation feedback, focus refresh discontinuity, mobile inline overflow
+└─ Hosted launch: browser fallback opens a transient App document instead of presenting the existing surface
 ```
 
-These are five separate implementation packages with distinct owners and tests. They do not reopen Store, Root,
+These are seven separate implementation packages with distinct owners and tests. They do not reopen Store, Root,
 Reference, `envUri`, or mutation-ledger correctness. Authentication and Static export are P0 because they prevent a
 correct terminal state or output; the remaining packages are accepted functionality with follow-up UX debt.
+
+The hosted-launch follow-up is optional release polish, but its architecture is durable. The CLI owns one semantic
+presentation request after Server readiness; a host adapter decides how to present it. The browser adapter may use
+PWA `focus-existing` or a same-origin relay plus best-effort source retirement. A future OpenTray adapter may show
+or focus a native window without changing Server startup or reconstructing a browser-only URL contract.
 
 ## Objective Scope
 

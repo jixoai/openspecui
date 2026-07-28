@@ -9,6 +9,7 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 Original request (2026-07-23): "布局方面暂时不需要改动，后续社区有一个PR我会合并进来，那是关于kanban 的一个pr。所以本次change的主要优化点，在于更友好的UIUX，优化用户等待信息的时间感知。"
 Original request (2026-07-23): "一次性把现有的页面都统一整改，因为这涉及到统一组件的封装和开发。全部改动，才能在中途暴露出所有隐含的可能、状态。这对于我们组件化的封装和开发非常重要。"
 Original request (2026-07-23): "不用显示文字，可以用光影来替代，将它做成一种视觉语言，其实包括加载中等状态也是，尽量不要使用文字，而是使用视觉语言（动画、光影）等技术。"
+Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
 Reviewer replan decision (2026-07-24): "先做 Web 侧(P2/3/4)，我会同步去修复 P0，等完成后你再看看能不能做 P1".
 P0 revalidation (2026-07-25): the asserted watcher/snapshot failure is stale. Current Manager cache-hit
 dependency tracking plus invalidation-key retirement passes the Root Snapshot 3/3 and real Git Router 7/7
@@ -97,6 +98,12 @@ missing historical pre-v2 red.
 - [x] 2.29 Constrain long Store ids, roots, metadata paths, diagnostics, and controls to the mobile inline size with wrapping/truncation and `min-width: 0`; add narrow component fixtures without redesigning Store Manager layout.
 
 - [x] 2.30 Obtain focused review for P7-A through P7-E independently. Run package-level tests only after each owner is accepted, then run the existing broad gates once; agent fixtures remain preparation and the manager owns final visual/end-to-end acceptance.
+
+### P8 Host-neutral App presentation
+
+- [ ] 2.31 Replace the raw `openBrowser(string)` start-command dependency with a typed `project-web | hosted-app` presenter request. Browser URL construction belongs to the Browser presenter; future OpenTray presentation requires no Server-start rewrite.
+- [ ] 2.32 Retire a transient ordinary-browser source best-effort after either browser or PWA leader acknowledgement. Keep `applied` and `fallback-applied` sources mounted; do not claim portable guaranteed browser focus.
+- [ ] 2.33 Add checked CLI presenter and App source-retirement unit evidence, including exact mutation failures. Final real-window focus/retirement behavior remains owner browser acceptance.
 
 ## 3. PR and Release Gates
 

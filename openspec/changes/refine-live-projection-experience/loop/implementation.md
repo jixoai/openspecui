@@ -10,6 +10,7 @@ Original request (2026-07-23): "布局方面暂时不需要改动，后续社区
 Original request (2026-07-23): "一次性把现有的页面都统一整改，因为这涉及到统一组件的封装和开发。全部改动，才能在中途暴露出所有隐含的可能、状态。这对于我们组件化的封装和开发非常重要。"
 Original request (2026-07-23): "不用显示文字，可以用光影来替代，将它做成一种视觉语言，其实包括加载中等状态也是，尽量不要使用文字，而是使用视觉语言（动画、光影）等技术。"
 Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
 -->
 
 ## Implementation State
@@ -826,6 +827,22 @@ until all five packages receive focused review. No Agent-run fixture is final br
   is the same environment-level hook gap recorded earlier, not a walkthrough failure. The scoped lint/type/format,
   focused tests, real static export, strict validation, and diff checks above were completed before committing with
   `--no-verify`.
+
+### P8 host-neutral App presentation plan (2026-07-28 Asia/Shanghai)
+
+- **Observed production boundary**: `coordinateStartCommandBrowserTarget` currently accepts only
+  `openBrowser(target: string)`. It constructs the credential-bearing URL before host selection, so a native host
+  would have to impersonate a browser opener. The Browser/PWA App relay already focuses its elected leader, but
+  `AppLaunchOwner` retires the source only for `forwarded-to-pwa`; ordinary browser `forwarded` leaves the newly
+  opened Document in front.
+- **Approved correction**: replace the raw callback with a typed semantic presenter request. The Browser adapter
+  owns private URL construction and external opening; a future OpenTray adapter may instead show/focus a native
+  window. After a successful browser or PWA forward, the transient source calls `window.close()` best-effort.
+  Browser security policy may reject focus/close, so only installed PWA `focus-existing` is standards-backed; the
+  ordinary browser path is explicitly best-effort.
+- **Evidence boundary**: one checked CLI fixture must fail when start coordination bypasses semantic presentation;
+  one App unit must fail when `forwarded` no longer selects source retirement. Focused tests and typechecks may
+  close 2.31-2.33. Actual foreground-window behavior remains owner-only browser acceptance under 3.6.
 
 ## Loopback Triggers
 
