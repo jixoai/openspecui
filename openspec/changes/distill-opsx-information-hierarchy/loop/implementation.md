@@ -1,10 +1,11 @@
 <!--
-Orthogonal intents (created 2026-07-28 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 1. Synchronize implementation reality with the approved distillation plan.
 2. Record production-owner decisions and focused evidence.
 3. Preserve divergence and loopback triggers without rewriting history.
 
 Original request (2026-07-28): implement the information-hierarchy optimization, then hand final acceptance to the Owner.
+Owner correction (2026-07-29): reorganize the rejected shell, Config, Context, Settings, and Change evidence surfaces before acceptance.
 -->
 
 ## Implementation State
@@ -168,6 +169,27 @@ component/fixture preparation only and does not close the Owner walkthrough.
 ## Divergence Notes
 
 - None.
+
+## Owner Follow-up (2026-07-29)
+
+The first visual review accepted the objective facts but rejected the information architecture in five concrete
+places. This is a presentation correction inside the same Change, not a new data contract:
+
+```text
+shell navigation       -> route-only; Context owns Planning identity
+Project Binding         -> editable declarations first; registry-backed freeform Store Combobox
+Context                 -> root / launch / Store+References / action readiness first; evidence deeper
+Settings                -> one scroll owner (.main-content)
+Change evidence         -> summary -> readable facts -> raw CLI envelope; mobile-safe wrapping
+```
+
+The Store Combobox may consume the existing Server Store list projection for suggestions, but the typed Store id
+input remains authoritative and freeform. Registry/list failure is secondary suggestion evidence and must not block
+editing, repair, or saving an explicitly entered id. No product surface may infer Store health, completeness, or
+cross-project ownership from the suggestion list.
+
+The owner will perform the final visual walkthrough. Agent evidence is limited to focused Vitest and basic
+`agent-browser` mobile checks; it does not close the owner acceptance checkpoint.
 
 ## Loopback Triggers
 

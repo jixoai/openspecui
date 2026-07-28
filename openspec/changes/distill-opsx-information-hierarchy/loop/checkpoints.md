@@ -1,10 +1,11 @@
 <!--
-Orthogonal intents (created 2026-07-28 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 1. Provide executable apply-change checkpoints for information-hierarchy distillation.
 2. Bind each production-owner migration to focused evidence.
 3. Keep automated delivery, owner visual acceptance, archive, merge, and later release separate.
 
 Original request (2026-07-28): implement the UI simplification autonomously, then hand final acceptance to the Owner.
+Owner correction (2026-07-29): navigation, Project Binding, Context, Settings scroll ownership, and Change evidence require a focused product-information pass before acceptance.
 -->
 
 ## 1. Research and Specification
@@ -50,6 +51,10 @@ Original request (2026-07-28): implement the UI simplification autonomously, the
 - [x] 6.4 Pass repository CI-equivalent gates, strict OpenSpec validation, and `git diff --check`
 - [x] 6.5 Open the PR and record successful remote checks
 - [ ] 6.6 Owner completes final visual and real-browser walkthrough
+- [ ] 6.7 Remove the redundant shell Planning/Context entry and prove navigation ownership stays route-only
+- [ ] 6.8 Reorganize Project Binding around editable declarations and a freeform registry-backed Store Combobox
+- [ ] 6.9 Reorganize Context around root identity, launch project, Store/References, and action readiness
+- [ ] 6.10 Enforce one Settings scroll owner and no competing Change evidence overflow on mobile
 
 ## 7. Finalization
 

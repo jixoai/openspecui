@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 1. Bootstrap repository agents through CLAUDE.md.
 2. Enforce protected-branch, PR, CI, and release delivery policy.
 3. Protect static/SSG behavior and shared live/static projections.
@@ -52,6 +52,10 @@ Owner-reported defect (2026-07-27): SessionTabs Offline presentation can lag an 
 Owner-reported defect (2026-07-27): A clean SSG build emits a hashed Server entry while export assumes `dist-ssg/server/entry-server.js`.
 Owner-reported defect (2026-07-27): Mobile Store Inspector overflows inline; AppHeader plus viewport-sized SessionTabs/iframe overflows the block axis.
 Owner acceptance request (2026-07-28): "我需要非常具体的验收工具和验收流程"
+Owner information-hierarchy correction (2026-07-29): "左侧导航栏的上方没必要放 Planning 信息，这和左侧导航栏的作用冲突了；点击等同于点击 Context。"
+Owner information-hierarchy correction (2026-07-29): "Config > Project Binding 的 Store 使用 Combobox；其它卡片从产品价值重新组织，并用 Tooltip 提供解释。"
+Owner information-hierarchy correction (2026-07-29): "Context 页面同理，从产品经理的角度重新组织有价值的信息。"
+Owner layout correction (2026-07-29): "Settings 页面只能保留一个滚动 owner；ChangeDetail 的 Paths and CLI evidence 需要拆分可读摘要、artifact、References、CLI 结果，移动端不得横向溢出。"
 Owner presentation direction (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
 Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间需要 gap 或分割线；Static 导出后的 /context 页面没数据。"
 Owner-reported defect (2026-07-28): "pnpm openspecui export -o ./tmp --open 导出的数据好像逃逸到 html 去了。"
@@ -60,6 +64,7 @@ Original request (2026-07-28): "我想先发布一个beta版本"
 Original request (2026-07-28): "让界面像5.x那样清爽的同时，仍然保证6.x新增的信息可以被Get到。因为我们openspecui最关键的是OPSX这套流程，其它都是服务于这套流程的。"
 Review correction (2026-07-20): Terminal cwd evidence must cross the production Server owner instead of injecting a hand-authored downstream callback.
 Review correction (2026-07-20): Settings tool delivery must preserve upstream physical artifact scope, render-time subscription provenance, and CLI-runner cache retirement.
+Product information architecture law (2026-07-29): Project navigation must not render a clickable Planning summary that duplicates `/context`; the shell may expose only route navigation, while Context owns root identity and explanation. Project Binding owns launch `store:`/`references:` editing and should present registry Store suggestions through a freeform Combobox without making registry lookup a save prerequisite. Context answers root, launch project, Store/References, and action readiness first; timestamps, raw command envelopes, data-scope paths, and diagnostics remain deeper evidence. Settings has one page-level scroll owner. Change evidence is layered as human summary -> readable paths/artifacts/references -> raw CLI payload/stdout/stderr, with no path or JSON block forcing horizontal overflow.
 -->
 
 MUST READ: CLAUDE.md
