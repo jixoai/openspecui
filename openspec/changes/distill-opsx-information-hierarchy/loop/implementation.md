@@ -156,6 +156,14 @@ Web unit retained the existing jsdom Canvas `getContext` not-implemented diagnos
 that non-failing environment log is not evidence of a presentation regression. Automated browser evidence remains
 component/fixture preparation only and does not close the Owner walkthrough.
 
+### Pull Request Evidence
+
+- PR: https://github.com/jixoai/openspecui/pull/219
+- HEAD: `01445cd4841bc17f8a67d396942aa09eb57d3d4c`
+- Remote checks: Changeset Gate, CI Scope, Fast Gate, Browser Gate, and Browser Gate (@openspecui/web) all passed.
+- PR remains open and unmerged. Owner visual/real-browser acceptance is the next boundary; no archive, merge, or
+  additional beta release is authorized by this Change.
+
 ## Divergence Notes
 
 - None.

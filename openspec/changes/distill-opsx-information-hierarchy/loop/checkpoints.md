@@ -48,7 +48,7 @@ Original request (2026-07-28): implement the UI simplification autonomously, the
 - [x] 6.2 Add a Web package changeset and synchronize implementation evidence
 - [x] 6.3 Pass focused Vitest, Web typecheck/lint/format, static tests, and a clean SSG build
 - [x] 6.4 Pass repository CI-equivalent gates, strict OpenSpec validation, and `git diff --check`
-- [ ] 6.5 Open the PR and record successful remote checks
+- [x] 6.5 Open the PR and record successful remote checks
 - [ ] 6.6 Owner completes final visual and real-browser walkthrough
 
 ## 7. Finalization
