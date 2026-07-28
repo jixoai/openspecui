@@ -19,6 +19,7 @@ Current facts on `main@ef36400`:
 - `scripts/create-github-release.ts` creates an ordinary GitHub Release and does not project SemVer prerelease state.
 - `.github/workflows/release.yml` always runs tag/release steps and uses `git push --follow-tags`.
 - Release runs `30273200732` and `30341874768` built successfully, found no unpublished package, then failed because the long-running checkout tried to push its stale `main` branch. No registry version changed.
+- The first real beta command after PR #214 exposed a Yargs 18 boundary: `.conflicts()` considers the default `false` boolean present, so conflict ownership must remain in the typed planner and production parsing requires direct evidence.
 
 Current release topology:
 

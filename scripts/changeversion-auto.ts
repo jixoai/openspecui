@@ -11,11 +11,10 @@
 import { spawnSync } from 'node:child_process'
 import process from 'node:process'
 
-import yargs from 'yargs'
-import { hideBin } from 'yargs/helpers'
-
 import { loadGhPrMergeability, waitForPrMergeability } from './lib/changeversion/pr-mergeability'
 import {
+  type ChangeversionOptions,
+  parseChangeversionOptions,
   planPrereleaseMode,
   readChangesetsPrereleaseState,
 } from './lib/changeversion/prerelease-mode'
@@ -52,11 +51,6 @@ type CaptureRunResult = {
   status: number
   stdout: string
   stderr: string
-}
-
-type ChangeversionOptions = {
-  exitPre: boolean
-  preTag: null | string
 }
 
 function commandFor(bin: 'pnpm' | 'git' | 'gh'): string {
@@ -475,27 +469,8 @@ function main(options: ChangeversionOptions): void {
   if (stashError) throw stashError
 }
 
-const argv = yargs(hideBin(process.argv))
-  .scriptName('changeversion')
-  .option('pre', {
-    description: 'Enter or continue a named Changesets prerelease channel.',
-    type: 'string',
-  })
-  .option('exit-pre', {
-    default: false,
-    description: 'Exit the current Changesets prerelease channel before versioning.',
-    type: 'boolean',
-  })
-  .conflicts('pre', 'exit-pre')
-  .strict()
-  .help()
-  .parseSync()
-
 try {
-  main({
-    exitPre: argv['exit-pre'],
-    preTag: argv.pre ?? null,
-  })
+  main(parseChangeversionOptions(process.argv))
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error)
   console.error(`[changeversion] ${message}`)

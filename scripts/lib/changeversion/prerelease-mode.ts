@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Read the persisted Changesets prerelease mode as typed runtime evidence.
- * 2. Plan explicit prerelease entry, continuation, and exit commands.
+ * 1. Parse explicit prerelease CLI intent and persisted Changesets state.
+ * 2. Plan prerelease entry, continuation, and exit commands.
  * 3. Reject ambiguous or conflicting channel changes.
  *
  * Original request (2026-07-28): "我想先发布一个beta版本"
@@ -10,7 +10,15 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import yargs from 'yargs'
+import { hideBin } from 'yargs/helpers'
+
 const PRERELEASE_TAG_PATTERN = /^[a-z][a-z0-9-]*$/
+
+export type ChangeversionOptions = {
+  exitPre: boolean
+  preTag: null | string
+}
 
 export type ChangesetsPrereleaseState = {
   mode: 'exit' | 'pre'
@@ -36,6 +44,28 @@ function validatePrereleaseTag(tag: string): string {
     throw new Error(`Invalid prerelease channel '${tag}'. Use a lowercase npm tag such as 'beta'.`)
   }
   return tag
+}
+
+export function parseChangeversionOptions(processArgs: readonly string[]): ChangeversionOptions {
+  const argv = yargs(hideBin([...processArgs]))
+    .scriptName('changeversion')
+    .option('pre', {
+      description: 'Enter or continue a named Changesets prerelease channel.',
+      type: 'string',
+    })
+    .option('exit-pre', {
+      default: false,
+      description: 'Exit the current Changesets prerelease channel before versioning.',
+      type: 'boolean',
+    })
+    .strict()
+    .help()
+    .parseSync()
+
+  return {
+    exitPre: argv['exit-pre'],
+    preTag: argv.pre ?? null,
+  }
 }
 
 export function readChangesetsPrereleaseState(rootDir: string): ChangesetsPrereleaseState | null {
