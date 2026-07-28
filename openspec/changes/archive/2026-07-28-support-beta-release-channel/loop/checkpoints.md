@@ -45,4 +45,4 @@ Original request (2026-07-28): "我想先发布一个beta版本"
 ## 6. Closure
 
 - [x] 6.1 Synchronize final workflow, registry, tag, and release evidence into implementation notes.
-- [ ] 6.2 Archive this Change through the official OpenSpec flow and merge the archive PR.
+- [x] 6.2 Archive this Change through the official OpenSpec flow and merge the archive PR.

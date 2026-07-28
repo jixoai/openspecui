@@ -9,7 +9,7 @@ Original request (2026-07-28): "我想先发布一个beta版本"
 
 ## Implementation State
 
-Status: `6.0.0-beta.0` published and independently verified; formal spec sync and archive remain.
+Status: `6.0.0-beta.0` published and independently verified; main spec synchronized and Change archived at `2026-07-28-support-beta-release-channel`.
 
 ```text
 release-channel projection   implemented
