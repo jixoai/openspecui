@@ -11,6 +11,7 @@ Original request (2026-07-23): "不用显示文字，可以用光影来替代，
 Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
 Original request (2026-07-27): "我已经全面走查了，结果是指的肯定的，绝大部分功能基本都通过了，更多的问题是在一些 UI/UX 的问题上，这属于后续需要打磨的问题。"
 Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
+Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间需要 gap 或分割线；Static 导出后的 /context 页面没数据。"
 -->
 
 ## Research Findings
@@ -248,6 +249,32 @@ host presenter
   the public hosted URL, logs, persisted shell state, nor leader storage may contain it.
 - OpenTray is not implemented in this Change. The only approved future-facing work is the typed presenter seam;
   no OpenTray package dependency, protocol guess, feature detection, or browser fallback alias is introduced.
+
+## 2026-07-28 Owner Acceptance Closure Addendum
+
+```text
+published ExportSnapshot
+|- meta.projectName / observedAt / version
+|- meta.root: display-safe path / source / writable Store id
+`- meta.referencePolicy: none | omit(count) | include(Store summaries)
+                 |
+                 v
+Static /context: published facts only
+                 X no CLI availability/raw evidence
+                 X no registry/data-home/envUri
+                 X no inferred Reference health
+```
+
+- `RealtimeSkeletonInventory(mode="list-divide")` currently depends on `divide-y`; the owner observed that the
+  default `rt-skeleton-row h-14` surfaces still read as one clumped block. The physical owner is the shared mode
+  container. It must create an explicit one-pixel separator without page-local margins or route-specific patches.
+- Static `/context` is registered in the static router but is absent from the SSG route manifest, and
+  `useContextSubscription` deliberately resolves to a permanent pending placeholder in static mode. The published
+  snapshot already contains sufficient redacted facts. No `ExportSnapshot` expansion or fabricated `RootContext`
+  is required.
+- Static Context keeps the route because deleting it would fork live/static information architecture. It projects
+  only the redacted root provenance, Reference export policy, project label, snapshot version, and observation time;
+  unavailable runtime facts are stated explicitly rather than synthesized.
 
 ## 2026-07-27 Manager Walkthrough Research Addendum
 

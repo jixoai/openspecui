@@ -10,6 +10,7 @@ Original request (2026-07-23): "一次性把现有的页面都统一整改，因
 Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
 Original request (2026-07-27): "我已经全面走查了，结果是指的肯定的，绝大部分功能基本都通过了，更多的问题是在一些 UI/UX 的问题上，这属于后续需要打磨的问题，我个人觉得可以收尾 change，然后另外开 change 来专门打磨。"
 Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
+Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间需要 gap 或分割线；Static 导出后的 /context 页面没数据。"
 -->
 
 ## User Input
@@ -47,6 +48,12 @@ accepted follow-up polish
 These are seven separate implementation packages with distinct owners and tests. They do not reopen Store, Root,
 Reference, `envUri`, or mutation-ledger correctness. Authentication and Static export are P0 because they prevent a
 correct terminal state or output; the remaining packages are accepted functionality with follow-up UX debt.
+
+The owner's final walkthrough accepted the delivered runtime behavior except for two bounded P5 presentation gaps:
+`list-divide` skeleton rows did not expose a sufficiently visible physical separator, and Static `/context` had no
+published projection. Context remains part of the shared live/static information architecture. Its static form may
+project only publication-safe snapshot metadata; it must not reconstruct live CLI, registry, data-scope, diagnostic,
+or mutation-authority facts.
 
 The hosted-launch follow-up is optional release polish, but its architecture is durable. The CLI owns one semantic
 presentation request after Server readiness; a host adapter decides how to present it. The browser adapter may use

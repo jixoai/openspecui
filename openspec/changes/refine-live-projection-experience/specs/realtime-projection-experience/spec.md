@@ -7,6 +7,7 @@ Orthogonal intents (created 2026-07-23 Asia/Shanghai):
 
 Original request (2026-07-23): "这个只能说初步可用吧，但不够完善。记得全局系统提示词中跟你说到的ui相关的最佳实践吗？你这套设计没有考虑到在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
 Original request (2026-07-23): "不用显示文字，可以用光影来替代，将它做成一种视觉语言，其实包括加载中等状态也是，尽量不要使用文字，而是使用视觉语言（动画、光影）等技术。"
+Owner acceptance feedback (2026-07-28): "列表骨架之间需要 gap，要么得有分割线。"
 -->
 
 # Delta for Realtime Projection Experience
@@ -56,6 +57,13 @@ The Web application SHALL expose headless realtime state and independently compo
 - **THEN** the UI SHALL communicate the lifecycle through stable geometry, luminance, and short native motion rather than persistent status copy
 - **AND** SHALL expose an equivalent hidden accessibility status without replacing raw evidence content
 
+#### Scenario: Repeating list skeleton rows remain physically distinct
+
+- **GIVEN** a list surface renders repeated skeleton rows
+- **WHEN** adjacent rows use the shared list inventory mode
+- **THEN** the inventory SHALL expose a stable gap or visible separator owned by the shared primitive
+- **AND** SHALL NOT depend on route-local margins to prevent the rows from appearing as one block
+
 ### Requirement: Retained Interaction And Draft Protection
 
 The Web application SHALL keep display-only content readable, selectable, and copyable while locking mutations that require a current projection. A remote update SHALL NOT overwrite a dirty draft, pending save, or open editable overlay.
@@ -91,4 +99,3 @@ The Web application SHALL use existing theme tokens, native CSS, stable DOM iden
 - **WHEN** the shared lifecycle atoms render
 - **THEN** they SHALL present only the actual snapshot state
 - **AND** SHALL NOT synthesize server-push, reconnect, or revalidation activity
-

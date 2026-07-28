@@ -7,6 +7,7 @@ Orthogonal intents (created 2026-07-23 Asia/Shanghai):
 
 Original request (2026-07-23): "使用原生的能力去做就好，比如 `overflow-anchor: auto;`。"
 Original request (2026-07-27): "Static 执行 export-static 报错：Cannot find module dist-ssg/server/entry-server.js。"
+Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据；如果保留 Context，就应该支持导出。"
 -->
 
 # Delta for Web Rendering
@@ -23,6 +24,14 @@ The web application SHALL reuse the realtime presentation model for static snaps
 - **WHEN** the corresponding route renders through the shared presentation atoms
 - **THEN** it SHALL display that snapshot through the same content mapping as live mode
 - **AND** SHALL not render a synthetic revalidation cue or Live connection claim
+
+#### Scenario: Static Context projects published provenance
+
+- **GIVEN** a static snapshot records display-safe Planning-root provenance and a Reference export policy
+- **WHEN** the exported `/context` route renders
+- **THEN** it SHALL display the published project, root, Store, Reference-policy, version, and observation facts
+- **AND** SHALL NOT synthesize live CLI evidence, registry/data-scope paths, diagnostics, or mutation authority
+- **AND** an omitted Reference policy SHALL expose only its published aggregate count, never hidden Store identities
 
 #### Scenario: Reduced motion is requested
 
