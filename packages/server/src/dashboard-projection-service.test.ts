@@ -57,6 +57,8 @@ function createSummary(specifications: number): DashboardSummaryProjection {
     },
     specifications: [],
     activeChanges: [],
+    trackedTaskPhaseCounts: { 'no-tasks': 0, 'in-progress': 0, complete: 0 },
+    recentArchives: [],
   }
 }
 

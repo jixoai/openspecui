@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Own main, bottom, and pop navigation as one deterministic state machine.
  * 2. Preserve hosted URL/base-path/session semantics across area navigation.
- * 3. Persist project-scoped tab layouts while rejecting retired route identities.
+ * 3. Persist project-scoped tab layouts while admitting the objective Kanban identity and rejecting retired routes.
  * 4. Synchronize local/backend layout state through authenticated health and typed mutation owners.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ * Original request (2026-07-28): add the objective Kanban project surface.
  *
  * Compromise: URL, persistence, and area transitions stay together because one atomic state
  * machine must normalize all three before exposing a navigation snapshot.

@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove Dashboard overview warming, refresh, and watcher-driven notification behavior.
- * 2. Keep service fixtures aligned with the live Code Git snapshot binding contract.
+ * 2. Keep service fixtures aligned with live Code Git and objective Kanban summary contracts.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 carries Code binding provenance in Dashboard snapshots.
+ * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  */
 import type { DashboardOverview, OpenSpecWatcher } from '@openspecui/core'
 import { EventEmitter } from 'node:events'
@@ -62,6 +63,8 @@ function createOverview(specifications: number): DashboardOverview {
     },
     specifications: [],
     activeChanges: [],
+    trackedTaskPhaseCounts: { 'no-tasks': 0, 'in-progress': 0, complete: 0 },
+    recentArchives: [],
     git: {
       bindingToken: 'code-binding',
       defaultBranch: 'main',

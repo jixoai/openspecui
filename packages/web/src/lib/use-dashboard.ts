@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Admit Dashboard Summary first, then independently deliver trends and Code Git projections.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Admit Dashboard Summary and objective Kanban facts first, then independently deliver trends and Code Git projections.
  * 2. Execute Dashboard Git mutations against the stable Launch-owned Code binding.
  * 3. Translate current and stale Projection Work snapshots into honest region display and updating state.
  * 4. Commit Dashboard Summary v2 pulls only when their wake-up identity and generation remain current.
@@ -11,6 +11,7 @@
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
  * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
+ * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  */
 import type {
   DashboardGitSnapshot,
@@ -219,6 +220,8 @@ async function loadStaticDashboardSummary(): Promise<DashboardSummaryProjection>
     summary: overview.summary,
     specifications: overview.specifications,
     activeChanges: overview.activeChanges,
+    trackedTaskPhaseCounts: overview.trackedTaskPhaseCounts,
+    recentArchives: overview.recentArchives,
   }
 }
 

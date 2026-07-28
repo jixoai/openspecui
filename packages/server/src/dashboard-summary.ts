@@ -3,8 +3,10 @@
  * 1. Load stable Dashboard Summary facts required for the first useful Dashboard render.
  * 2. Keep Summary independent from Git, trend configuration, and OPSX workflow work.
  * 3. Preserve exact tracked-task facts while selecting bounded recent lists.
+ * 4. Derive objective Kanban phase counts and recent archives from the same Adapter read.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  */
 import type {
   ArchiveMeta,
@@ -12,7 +14,11 @@ import type {
   OpenSpecAdapter,
   SpecMeta,
 } from '@openspecui/core'
-import { selectRecentDashboardItems } from '../../core/src/dashboard-display.js'
+import {
+  resolveArchiveTimestamp,
+  selectRecentDashboardArchives,
+  selectRecentDashboardItems,
+} from '../../core/src/dashboard-display.js'
 
 /** Raw planning facts shared by Summary and optional trend calculations inside one loader invocation. */
 export interface DashboardPlanningFacts {
@@ -82,6 +88,21 @@ export function buildDashboardSummaryProjection(
   const inProgressChanges = facts.allActiveChanges.filter(
     (change) => change.trackedTaskProgress.phase === 'in-progress'
   ).length
+  const trackedTaskPhaseCounts: DashboardSummaryProjection['trackedTaskPhaseCounts'] = {
+    'no-tasks': 0,
+    'in-progress': 0,
+    complete: 0,
+  }
+  for (const change of facts.allActiveChanges) {
+    trackedTaskPhaseCounts[change.trackedTaskProgress.phase] += 1
+  }
+  const recentArchives = selectRecentDashboardArchives(facts.archiveMetas).map((archive) => ({
+    id: archive.id,
+    name: archive.name,
+    trackedTaskProgress: archive.trackedTaskProgress,
+    archivedAt: resolveArchiveTimestamp(archive),
+    updatedAt: archive.updatedAt,
+  }))
 
   return {
     summary: {
@@ -97,6 +118,8 @@ export function buildDashboardSummaryProjection(
     },
     specifications: selectRecentDashboardItems(facts.allSpecifications),
     activeChanges: selectRecentDashboardItems(facts.allActiveChanges),
+    trackedTaskPhaseCounts,
+    recentArchives,
   }
 }
 

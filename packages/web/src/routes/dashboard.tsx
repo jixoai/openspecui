@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Render independent Dashboard Summary, trends, workflow, and Code Git projections.
+ * 1. Render independent Dashboard Summary, objective Kanban, trends, and Code Git projections.
  * 2. Keep Dashboard-owned Code Git actions separate from Planning-root readiness.
  * 3. Carry the Code Git binding token through dashboard detail handoff navigation.
  * 4. Bind refresh and detached-worktree removal to the rendered Code snapshot generation.
@@ -10,6 +10,7 @@
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff and action provenance.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  */
 import { Badge } from '@/components/badge'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'
@@ -23,6 +24,7 @@ import {
   isHttpUrl,
   WorktreeRow,
 } from '@/components/git/git-shared'
+import { ReadonlyKanban } from '@/components/kanban/readonly-kanban'
 import {
   ChangeListSkeleton,
   DashboardSummarySkeleton,
@@ -61,7 +63,6 @@ import {
   withSharedElementHandoffState,
 } from '@/lib/view-transitions/shared-elements'
 import type {
-  ChangeStatus,
   DashboardCardAvailability,
   DashboardGitWorktree,
   DashboardMetricKey,
@@ -71,15 +72,14 @@ import { specIdentityKey } from '@openspecui/core/spec-catalog'
 import {
   AlertCircle,
   Archive,
-  ArrowRight,
   FileText,
   GitBranch,
   LayoutDashboard,
   Sparkles,
+  SquareKanban,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-const SPEC_DRIVEN_ORDER = ['proposal', 'design', 'specs', 'tasks'] as const
 const GIT_AUTO_REFRESH_OPTIONS: SelectOption<DashboardGitAutoRefreshPreset>[] = [
   { value: '30s', label: '30s' },
   { value: '5min', label: '5min' },
@@ -133,148 +133,6 @@ function createDefaultTrendKinds(): Record<DashboardMetricKey, DashboardTrendKin
   }
 }
 
-function formatArtifactLabel(id: string): string {
-  if (!id) return 'Unknown'
-  return id
-    .split(/[-_]/g)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
-}
-
-function sortArtifactIdsForSchema(schemaName: string, artifactIds: string[]): string[] {
-  if (schemaName !== 'spec-driven') return artifactIds
-
-  const rank = new Map<string, number>()
-  for (const [index, id] of SPEC_DRIVEN_ORDER.entries()) {
-    rank.set(id, index)
-  }
-
-  return [...artifactIds].sort((a, b) => {
-    const rankA = rank.get(a)
-    const rankB = rank.get(b)
-    if (rankA !== undefined && rankB !== undefined) return rankA - rankB
-    if (rankA !== undefined) return -1
-    if (rankB !== undefined) return 1
-    return a.localeCompare(b)
-  })
-}
-
-function buildWorkflowSchemaCards(
-  statuses: ChangeStatus[],
-  schemaCatalog: Array<{ schemaName: string; artifactIds: string[] }>,
-  taskCompleteChangeIds: ReadonlySet<string>
-): Array<{
-  schemaName: string
-  workflowComplete: number
-  steps: Array<{
-    id: string
-    label: string
-    draft: number
-    ready: number
-    blocked: number
-  }>
-}> {
-  const groups = new Map<string, ChangeStatus[]>()
-  for (const status of statuses) {
-    const key = status.schemaName || 'unknown'
-    const list = groups.get(key)
-    if (list) {
-      list.push(status)
-    } else {
-      groups.set(key, [status])
-    }
-  }
-
-  const catalogMap = new Map<string, string[]>()
-  for (const item of schemaCatalog) {
-    catalogMap.set(item.schemaName, item.artifactIds)
-  }
-
-  const schemaNames = new Set<string>([
-    ...schemaCatalog.map((item) => item.schemaName),
-    ...groups.keys(),
-  ])
-
-  return [...schemaNames]
-    .map((schemaName) => {
-      const schemaStatuses = groups.get(schemaName) ?? []
-      const orderedArtifactIds: string[] = [...(catalogMap.get(schemaName) ?? [])]
-      const seen = new Set<string>()
-      for (const artifactId of orderedArtifactIds) {
-        seen.add(artifactId)
-      }
-      for (const status of schemaStatuses) {
-        for (const artifact of status.artifacts) {
-          if (seen.has(artifact.id)) continue
-          seen.add(artifact.id)
-          orderedArtifactIds.push(artifact.id)
-        }
-      }
-
-      const sequence = sortArtifactIdsForSchema(schemaName, orderedArtifactIds)
-      const steps = sequence.map((id) => {
-        let draft = 0
-        let ready = 0
-        let blocked = 0
-
-        for (const status of schemaStatuses) {
-          const artifact = status.artifacts.find((item) => item.id === id)
-          if (!artifact) continue
-          if (artifact.status === 'done') draft += 1
-          if (artifact.status === 'ready') ready += 1
-          if (artifact.status === 'blocked') blocked += 1
-        }
-
-        return {
-          id,
-          label: formatArtifactLabel(id),
-          draft,
-          ready,
-          blocked,
-        }
-      })
-
-      return {
-        schemaName,
-        workflowComplete: schemaStatuses.filter(
-          (status) => status.isComplete && taskCompleteChangeIds.has(status.changeName)
-        ).length,
-        steps,
-      }
-    })
-    .sort((a, b) => {
-      if (a.schemaName === 'spec-driven') return -1
-      if (b.schemaName === 'spec-driven') return 1
-      return a.schemaName.localeCompare(b.schemaName)
-    })
-}
-
-function getStableHue(input: string): number {
-  let hash = 0
-  for (const ch of input) {
-    hash = (hash * 31 + ch.charCodeAt(0)) | 0
-  }
-  return Math.abs(hash) % 360
-}
-
-function getStepPalette(stepName: string): {
-  border: string
-  background: string
-  text: string
-  arrow: string
-} {
-  const hue = getStableHue(stepName)
-  const background = `oklch(0.97 0.016 ${hue})`
-  const text = `oklch(0.44 0.1 ${hue})`
-  return {
-    border: `oklch(0.84 0.06 ${hue})`,
-    background,
-    text,
-    arrow: `color-mix(in oklab, ${background} 90%, ${text})`,
-  }
-}
-
 export function Dashboard() {
   const staticMode = isStaticMode()
   const dashboardState = useDashboardOverviewSubscription()
@@ -289,6 +147,8 @@ export function Dashboard() {
           summary: overview.summary,
           specifications: overview.specifications,
           activeChanges: overview.activeChanges,
+          trackedTaskPhaseCounts: overview.trackedTaskPhaseCounts,
+          recentArchives: overview.recentArchives,
         }
       : undefined)
   const trendsProjection =
@@ -580,31 +440,6 @@ export function Dashboard() {
   const activeStatuses = useMemo(() => {
     return (statuses ?? []).filter((status) => activeChangeIdSet.has(status.changeName))
   }, [statuses, activeChangeIdSet])
-  const workflowSchemaCatalog = useMemo(() => {
-    const schemas = configBundle?.schemas ?? []
-    const details = configBundle?.schemaDetails ?? {}
-    return schemas.map((schema) => {
-      const detailArtifacts = details[schema.name]?.artifacts.map((artifact) => artifact.id) ?? []
-      const artifactIds = detailArtifacts.length > 0 ? detailArtifacts : schema.artifacts
-      return {
-        schemaName: schema.name,
-        artifactIds,
-      }
-    })
-  }, [configBundle])
-  const taskCompleteChangeIds = useMemo(
-    () =>
-      new Set(
-        activeChanges
-          .filter((change) => change.trackedTaskProgress.phase === 'complete')
-          .map((change) => change.id)
-      ),
-    [activeChanges]
-  )
-  const workflowSchemaCards = useMemo(
-    () => buildWorkflowSchemaCards(activeStatuses, workflowSchemaCatalog, taskCompleteChangeIds),
-    [activeStatuses, taskCompleteChangeIds, workflowSchemaCatalog]
-  )
   const applyTrackedArtifactBySchema = useMemo(() => {
     const details = configBundle?.schemaDetails ?? {}
     const tracked = new Map<string, string>()
@@ -742,88 +577,30 @@ export function Dashboard() {
   const renderExecutionSnapshot = () => (
     <div className={`grid min-w-0 gap-3 ${showGitRegion ? 'xl:grid-cols-2' : 'xl:grid-cols-1'}`}>
       <section className="@container min-w-0 space-y-2">
-        <div>
-          <h2 className="font-medium">Workflow Progress</h2>
-          <p className="text-muted-foreground text-xs">
-            Status coverage: {activeStatuses.length}/{activeChanges.length} active changes have
-            workflow status snapshots.
-          </p>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-medium">Kanban</h2>
+          <VTLink
+            to="/board"
+            aria-label="Open Kanban"
+            title="Open Kanban"
+            className="text-muted-foreground hover:text-foreground inline-flex h-8 w-8 items-center justify-center rounded-md"
+          >
+            <SquareKanban className="h-4 w-4" />
+          </VTLink>
         </div>
-
-        {workflowSchemaCards.length === 0 ? (
-          <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
-            No workflow status available.
-          </div>
-        ) : (
-          <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-2">
-            {workflowSchemaCards.map((schema) => (
-              <section
-                key={schema.schemaName}
-                className="border-border/70 bg-card min-w-0 rounded-md border p-2"
-              >
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3 className="text-xs font-semibold">{schema.schemaName}</h3>
-                  </div>
-                  {schema.workflowComplete > 0 ? (
-                    <Badge
-                      tone="custom"
-                      size="xs"
-                      shape="box"
-                      className="text-muted-foreground border"
-                    >
-                      workflow-complete {schema.workflowComplete}
-                    </Badge>
-                  ) : null}
-                </div>
-                <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-2">
-                  {schema.steps.length === 0 ? (
-                    <div className="text-muted-foreground border-border/70 rounded-md border border-dashed px-2 py-1.5 text-[11px]">
-                      No artifacts in schema.
-                    </div>
-                  ) : (
-                    schema.steps.map((step) => {
-                      const palette = getStepPalette(step.id)
-                      return (
-                        <article
-                          key={`${schema.schemaName}:${step.id}`}
-                          className="relative min-w-0 overflow-hidden rounded-md border px-1.5 py-1"
-                          style={{
-                            borderColor: palette.border,
-                            backgroundColor: palette.background,
-                            color: palette.text,
-                          }}
-                        >
-                          <ArrowRight
-                            className="pointer-events-none absolute right-[10%] top-1/2 h-12 w-12 -translate-y-1/2"
-                            style={{ color: palette.arrow }}
-                          />
-                          <div className="relative mb-0.5 pr-6 text-xs font-semibold">
-                            {step.label}
-                          </div>
-                          <div className="relative space-y-0 text-[10px]">
-                            <div className="flex items-center justify-between">
-                              <span className="text-current/75">Draft</span>
-                              <span className="font-mono">{step.draft}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-current/75">Ready</span>
-                              <span className="font-mono">{step.ready}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-current/75">Blocked</span>
-                              <span className="font-mono">{step.blocked}</span>
-                            </div>
-                          </div>
-                        </article>
-                      )
-                    })
-                  )}
-                </div>
-              </section>
-            ))}
-          </div>
-        )}
+        <ReadonlyKanban
+          variant="compact"
+          activeItems={activeChanges}
+          archivedItems={summaryProjection?.recentArchives ?? []}
+          activeCounts={
+            summaryProjection?.trackedTaskPhaseCounts ?? {
+              'no-tasks': 0,
+              'in-progress': 0,
+              complete: 0,
+            }
+          }
+          archivedCount={summary.completedChanges}
+        />
       </section>
 
       {showGitRegion ? (

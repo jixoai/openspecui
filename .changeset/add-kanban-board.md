@@ -1,5 +1,9 @@
 ---
 '@openspecui/web': minor
+'@openspecui/core': minor
+'@openspecui/server': minor
 ---
 
-Add a Kanban board view (`/board`) that visualises changes across their lifecycle — TODO, In Progress, QA, and Done (archived). Columns are derived from task-completion counts and archive location; each card keeps the existing workflow-phase badge. QA cards can be dragged onto Done to archive them (with the existing confirmation flow), and the Done column has a time-range filter (7d/30d/90d/all). Read-only in static mode.
+Add an objective Kanban projection over exact tracked-task phases and structural archives.
+
+Core and Server now expose exact phase counts plus bounded recent archive summaries through the shared Dashboard Summary contract. Web adds an interactive `/board`, replaces Dashboard Workflow Progress with the callback-free `ReadonlyKanban`, and publishes the same readonly Board in static exports. Apply and Archive remain explicit existing Operator flows; drag-to-archive only opens Archive, and stale Root or projection data cannot authorize commands.

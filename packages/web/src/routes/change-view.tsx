@@ -1,23 +1,23 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Render schema-aware change artifacts and source files while retaining terminal status errors.
- * 2. Dispatch change workflows through routed compose/verify surfaces.
+ * 2. Dispatch change workflows through routed compose/verify surfaces and the shared Operator launcher.
  * 3. Lock every change workflow action behind current Root Context readiness.
  * 4. Attribute Apply instruction divergence without replacing tracked task truth.
  * 5. Preserve CLI path/action context, Reference evidence, and strict archive diagnostics.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ * Original request (2026-07-28): Board and Change Detail must use the same Operator owners.
  */
 import { ApplyProgressNotice } from '@/components/apply-progress-notice'
 import { ChangeContextEvidence } from '@/components/change-context-evidence'
 import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
 import { OpsxEntityDetailView } from '@/components/opsx/opsx-entity-detail-view'
 import { RootActionNotice } from '@/components/root-action-notice'
-import { useArchiveModal } from '@/lib/archive-modal-context'
 import { buildOpsxComposeHref, type OpsxComposeActionId } from '@/lib/opsx-compose'
+import { useChangeOperatorLauncher } from '@/lib/use-change-operator-launcher'
 import { useOpsxApplyInstructionsSubscription, useOpsxStatusSubscription } from '@/lib/use-opsx'
-import { useRootActionState } from '@/lib/use-root-action-state'
 import { useChangeFilesSubscription } from '@/lib/use-subscription'
 import { vtNavController } from '@/lib/view-transitions/navigation'
 import { readSharedElementHandoffState } from '@/lib/view-transitions/shared-elements'
@@ -29,8 +29,7 @@ export function ChangeView() {
   const { changeId } = useParams({ from: '/changes/$changeId' })
   const location = useLocation()
   const handoff = readSharedElementHandoffState(location.state)
-  const rootAction = useRootActionState()
-  const { openArchiveModal } = useArchiveModal()
+  const { rootAction, launchApply, launchArchive } = useChangeOperatorLauncher()
 
   const { data: status, isLoading, error } = useOpsxStatusSubscription({ change: changeId })
   const { data: applyInstructions } = useOpsxApplyInstructionsSubscription({ change: changeId })
@@ -38,6 +37,10 @@ export function ChangeView() {
 
   const handleComposeAction = useCallback(
     (actionId: OpsxComposeActionId, artifactId?: string) => {
+      if (actionId === 'apply') {
+        launchApply({ changeId, changeName: status?.changeName ?? changeId })
+        return
+      }
       const href = buildOpsxComposeHref({
         action: actionId,
         changeId,
@@ -45,7 +48,7 @@ export function ChangeView() {
       })
       vtNavController.activatePop(href)
     },
-    [changeId]
+    [changeId, launchApply, status?.changeName]
   )
 
   const handleVerify = useCallback(() => {
@@ -53,8 +56,8 @@ export function ChangeView() {
   }, [changeId])
 
   const handleArchive = useCallback(() => {
-    openArchiveModal(changeId, status?.changeName ?? changeId)
-  }, [changeId, openArchiveModal, status?.changeName])
+    launchArchive({ changeId, changeName: status?.changeName ?? changeId })
+  }, [changeId, launchArchive, status?.changeName])
 
   const selectedArtifactId = useMemo(() => {
     if (!status) return undefined

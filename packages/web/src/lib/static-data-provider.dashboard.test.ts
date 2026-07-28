@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Prove static Dashboard metrics, trends, Git, and objective Kanban facts derive from one snapshot.
+ * 2. Prove bounded recent lists preserve full summary totals and shared archive-date ordering.
+ *
+ * Original request (2026-07-28): static and live Dashboard Kanban use the same projection contract.
+ */
 import {
   createDocumentChecklistSummary,
   createTrackedTaskProgress,
@@ -197,6 +204,18 @@ describe('static-data-provider dashboard overview', () => {
 
     expect(overview.specifications.map((spec) => spec.id)).toEqual(['ui', 'cli'])
     expect(overview.activeChanges.map((change) => change.id)).toEqual(['change-a', 'change-b'])
+    expect(overview.trackedTaskPhaseCounts).toEqual({
+      'no-tasks': 0,
+      'in-progress': 1,
+      complete: 1,
+    })
+    expect(overview.recentArchives).toEqual([
+      expect.objectContaining({
+        id: 'archived-x',
+        archivedAt: 1,
+        updatedAt: 1,
+      }),
+    ])
     expect(overview.trends.specifications.length).toBeGreaterThan(0)
     expect(overview.trends.requirements.length).toBeGreaterThan(0)
     expect(overview.trends.completedChanges.length).toBeGreaterThan(0)
@@ -226,8 +245,11 @@ describe('static-data-provider dashboard overview', () => {
   })
 
   it('limits dashboard lists to the 10 most recent items while keeping summary totals intact', async () => {
+    const snapshot = createSnapshot()
+    const archiveTemplate = snapshot.archives[0]
+    if (!archiveTemplate) throw new Error('Expected an archive fixture.')
     staticState.snapshot = {
-      ...createSnapshot(),
+      ...snapshot,
       specs: Array.from({ length: 12 }, (_, index) => ({
         identity: { kind: 'owned' as const, specId: `spec-${index}` },
         source: 'owned' as const,
@@ -261,6 +283,12 @@ describe('static-data-provider dashboard overview', () => {
         createdAt: 1,
         updatedAt: index + 1,
       })),
+      archives: Array.from({ length: 12 }, (_, index) => ({
+        ...archiveTemplate,
+        id: `2026-07-${String(index + 1).padStart(2, '0')}-archive-${index}`,
+        name: `Archive ${index}`,
+        updatedAt: index + 1,
+      })),
     }
 
     const provider = await import('./static-data-provider')
@@ -268,6 +296,7 @@ describe('static-data-provider dashboard overview', () => {
 
     expect(overview.summary.specifications).toBe(12)
     expect(overview.summary.activeChanges).toBe(12)
+    expect(overview.summary.completedChanges).toBe(12)
     expect(overview.specifications).toHaveLength(10)
     expect(overview.activeChanges).toHaveLength(10)
     expect(overview.specifications.map((spec) => spec.id)).toEqual([
@@ -293,6 +322,23 @@ describe('static-data-provider dashboard overview', () => {
       'change-4',
       'change-3',
       'change-2',
+    ])
+    expect(overview.trackedTaskPhaseCounts).toEqual({
+      'no-tasks': 0,
+      'in-progress': 6,
+      complete: 6,
+    })
+    expect(overview.recentArchives.map((archive) => archive.id)).toEqual([
+      '2026-07-12-archive-11',
+      '2026-07-11-archive-10',
+      '2026-07-10-archive-9',
+      '2026-07-09-archive-8',
+      '2026-07-08-archive-7',
+      '2026-07-07-archive-6',
+      '2026-07-06-archive-5',
+      '2026-07-05-archive-4',
+      '2026-07-04-archive-3',
+      '2026-07-03-archive-2',
     ])
   })
 

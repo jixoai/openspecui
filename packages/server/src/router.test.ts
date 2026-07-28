@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove public Router owner boundaries and Planning-root stream settlement.
  * 2. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
@@ -13,6 +13,7 @@
  * Derived requirement (2026-07-19): Project Binding mutation exposes launch-write and convergence evidence.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  */
 import {
   CliExecutor,
@@ -779,6 +780,8 @@ artifacts:
         summary: overview.summary,
         specifications: overview.specifications,
         activeChanges: overview.activeChanges,
+        trackedTaskPhaseCounts: overview.trackedTaskPhaseCounts,
+        recentArchives: overview.recentArchives,
       },
       error: null,
     }

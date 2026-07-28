@@ -16,27 +16,27 @@ Owner decision (2026-07-28): implement the reviewed rewrite now.
 
 ## 2. Projection Contract
 
-- [ ] 2.1 Add shared archive timestamp/range helpers with malformed-date fallback tests
-- [ ] 2.2 Extend Dashboard Summary with exact phase counts and bounded recent archive summaries
-- [ ] 2.3 Derive the same contract in Server and static providers with typed tests
+- [x] 2.1 Add shared archive timestamp/range helpers with malformed-date fallback tests
+- [x] 2.2 Extend Dashboard Summary with exact phase counts and bounded recent archive summaries
+- [x] 2.3 Derive the same contract in Server and static providers with typed tests
 
 ## 3. Shared Presentation
 
-- [ ] 3.1 Implement objective lane model and motion-enabled `ReadonlyKanban`
-- [ ] 3.2 Replace Dashboard Workflow Progress while retaining Active Changes
-- [ ] 3.3 Register static/live Kanban routes through current route owners
+- [x] 3.1 Implement objective lane model and motion-enabled `ReadonlyKanban`
+- [x] 3.2 Replace Dashboard Workflow Progress while retaining Active Changes
+- [x] 3.3 Register static/live Kanban routes through current route owners
 
 ## 4. Interactive Board
 
-- [ ] 4.1 Extract `useChangeOperatorLauncher` and migrate Change Detail
-- [ ] 4.2 Implement independent active/archive lifecycle regions and progressive/error evidence
-- [ ] 4.3 Add Apply/Archive icon actions plus archive drag using `DataTransfer` identity
-- [ ] 4.4 Prove Root/projection locks, current-row drop lookup, static readonly behavior, and launcher ownership
+- [x] 4.1 Extract `useChangeOperatorLauncher` and migrate Change Detail
+- [x] 4.2 Implement independent active/archive lifecycle regions and progressive/error evidence
+- [x] 4.3 Add Apply/Archive icon actions plus archive drag using `DataTransfer` identity
+- [x] 4.4 Prove Root/projection locks, current-row drop lookup, static readonly behavior, and launcher ownership
 
 ## 5. Delivery
 
-- [ ] 5.1 Update grouped package changeset and pass focused typed/component tests
-- [ ] 5.2 Pass clean SSG, strict OpenSpec validation, and all CI-equivalent local gates
+- [x] 5.1 Update grouped package changeset and pass focused typed/component tests
+- [x] 5.2 Pass clean SSG, strict OpenSpec validation, and all CI-equivalent local gates
 - [ ] 5.3 Push PR #208 and record remote checks
 - [ ] 5.4 Owner completes final visual and real browser walkthrough
 
