@@ -1,4 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Render single-file and glob artifact output from the current OPSX projection.
+ * 2. Preserve schema-provided artifact fallbacks and document translation configuration.
+ * 3. Distinguish initial output admission from the committed not-yet-generated empty conclusion.
+ *
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ */
 import { MarkdownViewer } from '@/components/markdown-viewer'
+import { DetailPanelSkeleton } from '@/components/realtime'
 import { resolveDocumentTranslationConfig } from '@/lib/resolve-document-translation-config'
 import {
   useOpsxArtifactOutputSubscription,
@@ -7,7 +16,6 @@ import {
 import { useConfigSubscription, useGlobalSettingsSubscription } from '@/lib/use-subscription'
 import type { ArtifactStatus, OpsxEntityArtifactFile, OpsxEntityFile } from '@openspecui/core'
 import type { DocumentTranslationConfigInput } from '@openspecui/core/document-translation'
-import { Loader2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { OpsxArtifactDocumentShell } from './artifact-document-shell'
 import { MarkdownFilesContent, fileCountLabel } from './opsx-markdown-files-viewer'
@@ -138,8 +146,8 @@ function SingleFileContent({
 
   if (isLoading) {
     return (
-      <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-        Loading output...
+      <div className="h-full p-4" aria-busy="true">
+        <DetailPanelSkeleton count={6} />
       </div>
     )
   }
@@ -182,8 +190,8 @@ function GlobContent({
 
   if (isLoading) {
     return (
-      <div className="flex h-[400px] items-center justify-center">
-        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+      <div className="h-[400px] p-4" aria-busy="true">
+        <DetailPanelSkeleton count={7} />
       </div>
     )
   }

@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify registry, Workset, and schema paths invalidate only their objective facets.
  * 2. Verify the observer owns and releases its data-home root lease.
  * 3. Verify observer teardown stops filesystem-driven invalidation.
  * 4. Prove unrelated data-home content does not create broad projection invalidation.
  *
  * Original request (2026-07-15): "有效 OpenSpec data home 的变化要让所有端拉取最新投影。"
+ * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
  */
 import { realpathSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -49,6 +50,8 @@ describe('OpenSpecDataHomeObserver', () => {
     expect(listener).not.toHaveBeenCalled()
 
     await mkdir(join(dataHome, 'stores'), { recursive: true })
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(listener).not.toHaveBeenCalled()
     await writeFile(join(dataHome, 'stores', 'registry.yaml'), 'version: 1\nstores: {}\n', 'utf8')
 
     await waitFor(() => listener.mock.calls.length > 0, { timeout: 2500, interval: 50 })

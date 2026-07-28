@@ -5,7 +5,8 @@
     "src/types/global.d.ts",
     "src/access-gate-resource-worker.test.ts",
     "src/lib/server-handoff.test.ts",
-    "../cli/src/start-command-browser-target.test.ts",
+    "../cli/src/browser-start-command-presenter.test.ts",
+    "../cli/src/start-command-presentation.test.ts",
     "../cli/src/worktree-instance-manager.test.ts",
     "../server/src/browser-access-gate-product-chain.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts"

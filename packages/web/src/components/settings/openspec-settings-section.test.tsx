@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify Settings projects shared CLI, Root, Environment, and launch-tool lifecycle truth.
  * 2. Verify Init mode, repair, pending, cancellation, terminal, and convergence behavior.
  *
  * Original request (2026-07-20): "Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics."
  * Owner acceptance boundary (2026-07-20): final end-to-end browser walkthroughs remain owner-owned.
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import type { CliRunnerLine, CliStreamTransport, OverallStatus } from '@/lib/use-cli-runner'
 import type { SubscriptionState } from '@/lib/use-subscription'
@@ -436,11 +437,12 @@ describe('OpenSpecSettingsSections', () => {
       )
     )
 
-    renderSection()
+    const { container } = renderSection()
 
     expect(screen.getByText('Root loading')).toBeTruthy()
     expect(screen.getByText('CLI evidence pending')).toBeTruthy()
-    expect(screen.getByText('Resolving launch and planning roots...')).toBeTruthy()
+    expect(container.querySelector('.rt-skeleton')).not.toBeNull()
+    expect(screen.queryByText('Resolving launch and planning roots...')).toBeNull()
     expect(screen.queryByText('CLI unavailable')).toBeNull()
   })
 

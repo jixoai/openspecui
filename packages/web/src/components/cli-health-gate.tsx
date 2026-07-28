@@ -6,6 +6,7 @@
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
+ * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
@@ -125,9 +126,10 @@ export function CliHealthGate() {
             <button
               onClick={() => saveCliCommandMutation.mutate(cliCommand)}
               disabled={saveCliCommandMutation.isPending || cliCommand.trim() === savedCliCommand}
+              aria-busy={saveCliCommandMutation.isPending || undefined}
               className="bg-primary text-primary-foreground rounded-md px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
             >
-              {saveCliCommandMutation.isPending ? 'Saving...' : 'Save'}
+              Save
             </button>
           </div>
         </div>
@@ -139,6 +141,7 @@ export function CliHealthGate() {
           <button
             onClick={() => recheckCliMutation.mutate()}
             disabled={checking}
+            aria-busy={checking || undefined}
             className="border-border hover:bg-muted flex items-center gap-2 rounded-md border px-3 py-1.5 disabled:opacity-50"
           >
             {checking ? (
@@ -146,7 +149,7 @@ export function CliHealthGate() {
             ) : (
               <Terminal className="h-4 w-4" />
             )}
-            {checking ? 'Checking...' : 'Recheck'}
+            Recheck
           </button>
           {data?.available && (
             <button

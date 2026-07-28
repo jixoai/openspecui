@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Prove real Inspector/Register/Remove lifecycle rendering through the production route, dispatcher, and providers.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Prove immediate admission plus Inspector/Register/Remove lifecycle rendering through production owners.
  * 2. Prove exact selected-tab and generation retirement at the real Store action owner.
  * 3. Prove grouped projects and two-source Root/Reference provenance remain visible.
  * 4. Preserve checked two-backend hosted fixtures and locator-scoped credentials.
- * 5. Retain rejection repair paths without fabricating backend lifecycle records.
+ * 5. Retain rejection, focus-refresh, and mobile-containment paths without fabricating backend facts.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * P3-D evidence (2026-07-25): render all Server-owned Store mutation lifecycle states through real form/dialog actions.
@@ -522,6 +522,7 @@ describe('App connection selection and observation routes', () => {
         const request = mutationRequests[0]
         if (!request) throw new Error('Register route did not submit a Store mutation request.')
         expect(request.kind).toBe('register')
+        expect((await screen.findAllByText('Queued')).length).toBeGreaterThan(0)
         await act(async () => {
           callbacks.onData({
             type: 'changed',
@@ -587,6 +588,69 @@ describe('App connection selection and observation routes', () => {
 
     await waitFor(() => expect(mutations).toEqual([API_B]))
     await unmount(rendered)
+  })
+
+  it('preserves Inspector component identity and local filter across a focus Root refresh', async () => {
+    const requests: Array<{ url: string; authorization: string | null }> = []
+    vi.stubGlobal('fetch', createBackendFetch([], { requests, stores: [STORE] }))
+    const rendered = await renderRoute('/environment/stores/inspector')
+    try {
+      const identityHeading = await screen.findByText('Identity and location')
+      const originalArticle = identityHeading.closest('article')
+      const filter = screen.getByRole<HTMLInputElement>('searchbox', { name: 'Filter stores' })
+      fireEvent.change(filter, { target: { value: 'design' } })
+
+      await act(async () => {
+        window.dispatchEvent(new Event('focus'))
+      })
+      await waitFor(() => {
+        expect(
+          requests.filter((request) =>
+            request.url.includes(`${API_B}/trpc/rootContext.readProjection`)
+          ).length
+        ).toBeGreaterThanOrEqual(2)
+      })
+
+      expect(screen.getByText('Identity and location').closest('article')).toBe(originalArticle)
+      expect(filter.value).toBe('design')
+    } finally {
+      await unmount(rendered)
+    }
+  })
+
+  it('contains long Inspector facts within the narrow Store workspace', async () => {
+    const longStore: StoreDoctorStore = {
+      ...STORE,
+      id: `design-system-${'segment'.repeat(12)}`,
+      root: `/stores/${'nested-path/'.repeat(12)}design-system`,
+      metadata_path: `/metadata/${'nested-path/'.repeat(12)}store.json`,
+      git: {
+        ...STORE.git,
+        origin_url: `https://example.test/${'nested-path/'.repeat(12)}repository.git`,
+      },
+      status: [
+        {
+          severity: 'warning',
+          code: 'long-diagnostic',
+          message: `Diagnostic ${'without-break-opportunity'.repeat(12)}`,
+        },
+      ],
+    }
+    vi.stubGlobal('fetch', createBackendFetch([], { stores: [longStore] }))
+    const rendered = await renderRoute('/environment/stores/inspector')
+    try {
+      const metadata = await screen.findByText(longStore.metadata_path ?? '')
+      expect(metadata.className).toContain('[overflow-wrap:anywhere]')
+      expect(metadata.closest('.overflow-x-hidden')).toBeTruthy()
+      expect(screen.getByText(longStore.git?.origin_url ?? '').className).toContain(
+        '[overflow-wrap:anywhere]'
+      )
+      expect(
+        screen.getByText(/Diagnostic without-break-opportunity/).closest('li')?.className
+      ).toContain('[overflow-wrap:anywhere]')
+    } finally {
+      await unmount(rendered)
+    }
   })
 
   it('does not pull Store projections from HTTP admission before ledger terminal settlement', async () => {
@@ -745,9 +809,11 @@ describe('App connection selection and observation routes', () => {
 
     await waitFor(() => {
       expect(getConnectionsSnapshot().activeTabId).toBe('tab-a')
-      expect(screen.getByRole('status').textContent).toContain(
-        'This draft belongs to a previous environment observation.'
-      )
+      expect(
+        screen.getByText(/This draft belongs to a previous environment observation\./, {
+          selector: '[role="status"]',
+        })
+      ).toBeTruthy()
       expect(
         screen.getByRole<HTMLButtonElement>('button', { name: 'Register Store' }).disabled
       ).toBe(false)

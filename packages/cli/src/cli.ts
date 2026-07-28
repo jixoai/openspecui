@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Parse and dispatch start/export CLI commands through yargs.
  * 2. Coordinate local/hosted App and consumed worktree runtime bootstrap with protected shutdown.
- * 3. Delegate one credential-safe Direct/App target request to the start-command browser owner.
+ * 3. Delegate one credential-safe Direct/App intent to the selected start-command presenter.
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
  * Delivery correction (2026-07-26): process children consume the parent's resolved Web asset root.
+ * Original request (2026-07-28): "从底层上封装，后续可能对接 OpenTray 原生窗口。"
  */
 
 import { ConfigManager } from '@openspecui/core'
@@ -17,6 +18,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import yargs from 'yargs'
 import { getCliArgs } from './argv.js'
+import { createBrowserStartCommandPresenter } from './browser-start-command-presenter.js'
 import type { ExportFormat } from './export.js'
 import { exportStaticSite } from './export.js'
 import { resolveEffectiveHostedAppBaseUrl } from './hosted-app.js'
@@ -27,7 +29,7 @@ import {
   startLocalHostedAppDev,
   type LocalHostedAppDevSession,
 } from './local-hosted-app-dev.js'
-import { coordinateStartCommandBrowserTarget } from './start-command-browser-target.js'
+import { coordinateStartCommandPresentation } from './start-command-presentation.js'
 import { buildStartupBanner } from './startup-banner.js'
 import {
   consumeWorktreeProcessAccessGateCredential,
@@ -138,7 +140,7 @@ async function main(): Promise<void> {
             }
           }
 
-          server = await coordinateStartCommandBrowserTarget(
+          server = await coordinateStartCommandPresentation(
             {
               serverOptions: {
                 projectDir,
@@ -177,10 +179,10 @@ async function main(): Promise<void> {
             },
             {
               startServer,
-              openBrowser: async (target) => {
+              presenter: createBrowserStartCommandPresenter(async (target) => {
                 const open = await import('open')
                 await open.default(target)
-              },
+              }),
             }
           )
 

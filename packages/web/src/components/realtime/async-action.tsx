@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
- * 1. Async command composition over the existing Button.activity behavior.
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Compose pending and settled command feedback over the existing Button.activity behavior.
  *
  * Original request (2026-07-23): "加载状态机……任何触发网络请求的交互元必须默认绑定 Loading 状态锁。"
  * Owner direction (2026-07-23): "保持命令标签不变（Save 仍为 Save，不是 Saving...）。"
@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils'
 export interface AsyncActionProps extends Omit<ButtonProps, 'activity'> {
   /** True while the command is pending; activates the visual lock + aria-busy + duplicate-action prevention. */
   pending: boolean
+  /** True after the current input has settled to its committed value. */
+  settled?: boolean
 }
 
 /**
@@ -23,6 +25,7 @@ export interface AsyncActionProps extends Omit<ButtonProps, 'activity'> {
  */
 export function AsyncAction({
   pending,
+  settled = false,
   disabled,
   children,
   className,
@@ -31,7 +34,7 @@ export function AsyncAction({
   return (
     <Button
       {...props}
-      activity={pending}
+      activity={pending || settled}
       disabled={disabled ?? false}
       aria-busy={pending || undefined}
       className={cn(className)}

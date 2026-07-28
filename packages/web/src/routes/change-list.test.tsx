@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove Changes render a primary row before admitting the lower-priority aggregate Status projection.
  * 2. Prove no-tasks and incomplete tasks cannot become workflow-complete.
  * 3. Prove completed tracked tasks and CLI Status converge on workflow completion.
@@ -9,6 +9,7 @@
  * Original request (2026-07-15): "0/0 means no-tasks, never complete."
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -132,7 +133,8 @@ describe('ChangeList', () => {
     expect(screen.getByText('chat-channel-token-admin')).toBeTruthy()
     expect(screen.getByText('0/9')).toBeTruthy()
     expect(screen.getByText('0% task completion')).toBeTruthy()
-    expect(screen.getByText('Loading workflow status…')).toBeTruthy()
+    expect(container.querySelector('.rt-skeleton-line')).not.toBeNull()
+    expect(screen.queryByText('Loading workflow status…')).toBeNull()
     expect(container.querySelector('[style="width: 0%;"]')).toBeTruthy()
   })
 
@@ -218,10 +220,12 @@ describe('ChangeList', () => {
       error: null,
     })
 
-    render(<ChangeList />)
+    const { container } = render(<ChangeList />)
 
     expect(screen.getByText('Stale Change')).toBeTruthy()
-    expect(screen.getByRole('status')).toHaveTextContent('Refreshing changes...')
+    expect(container.querySelector('.rt-revalidate-cue')).not.toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('updating')
+    expect(screen.queryByText('Refreshing changes...')).toBeNull()
     expect(screen.queryByText('Loading changes...')).toBeNull()
   })
 

@@ -1,18 +1,18 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Join one Store Inspector locator to the shared mutation ledger and settlement composer.
- * 2. Render active, recent terminal, and connection evidence without inventing lifecycle state.
+ * 2. Render admitted, active, recent terminal, and connection evidence without inventing lifecycle state.
  * 3. Register locator-scoped HTTP admissions for first-snapshot settlement correlation.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { StoreMutationEnvelope } from '@openspecui/core/store-mutation-protocol'
+import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import { useConnectionObservationOwner } from '../lib/connection-observation'
 import { useMutationObservations } from '../lib/mutation-observation-provider'
 import { normalizeHostedApiBaseUrl } from '../lib/shell-state'
 import {
   createStoreLifecycleComposer,
-  projectStoreLifecycle,
   selectStoreMutationLocator,
   type StoreLifecycleProjection,
 } from '../lib/store-lifecycle-composer'
@@ -23,7 +23,9 @@ import { MutationStatusBadge } from './mutation-status'
 export function useStoreMutationLifecycle(
   apiBaseUrl: string | null | undefined,
   refreshStore: () => void | Promise<void>
-): StoreLifecycleProjection & { registerAdmission(apiBaseUrl: string, requestId: string): void } {
+): StoreLifecycleProjection & {
+  registerAdmission(apiBaseUrl: string, admission: StoreMutationEnvelope): void
+} {
   const mutationSnapshot = useMutationObservations()
   const connections = useConnections()
   const connectionOwner = useConnectionObservationOwner()
@@ -31,10 +33,12 @@ export function useStoreMutationLifecycle(
   refreshStoreRef.current = refreshStore
   const connectionOwnerRef = useRef(connectionOwner)
   connectionOwnerRef.current = connectionOwner
+  const [, publishAdmission] = useReducer((revision: number) => revision + 1, 0)
   const [composer] = useState(() =>
     createStoreLifecycleComposer({
       refreshStore: () => refreshStoreRef.current(),
       refreshContexts: (tabIds) => connectionOwnerRef.current.refresh(tabIds),
+      onAdmissionChange: publishAdmission,
     })
   )
   const locatorIdentity = apiBaseUrl ? normalizeHostedApiBaseUrl(apiBaseUrl) : null
@@ -50,7 +54,7 @@ export function useStoreMutationLifecycle(
   }, [composer, connections.tabs, locator, mutationSnapshot.revision])
 
   return {
-    ...projectStoreLifecycle(locator),
+    ...composer.project(locator),
     registerAdmission: composer.registerAdmission,
   }
 }

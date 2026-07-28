@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove Dashboard Summary emits a data-free v2 wake while Git remains slow.
- * 2. Prove the typed Summary pull retains opaque identity and current work generation.
+ * 2. Prove the typed Summary pull retains opaque identity and exposes dormant retained state immediately.
  * 3. Prove a changed Code Git binding cannot reuse the previous Git snapshot.
  * 4. Prove one-shot Dashboard queries retire their listener before later invalidation.
  * 5. Prove Summary v2 emits exactly one data-free wake for each work generation.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
+ * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
  */
 import type {
   DashboardGitSnapshot,
@@ -161,11 +162,13 @@ describe('DashboardProjectionService', () => {
     expect(summaryInvalidations[0]).toEqual({
       identity: expect.stringMatching(/^dashboard-summary-v2:/),
       workGeneration: 1,
+      snapshotGeneration: null,
+      state: 'loading',
       cause: 'initial',
     })
     expect(summaryInvalidations[0]).not.toHaveProperty('data')
     summaryData.resolve(createSummary(7))
-    await vi.waitFor(() => expect(summaryInvalidations).toHaveLength(1))
+    await vi.waitFor(() => expect(summaryInvalidations).toHaveLength(2))
     expect(gitSnapshots).toEqual([])
 
     slowGit.resolve(createGit('code-binding-a'))
@@ -189,7 +192,12 @@ describe('DashboardProjectionService', () => {
     const subscription = service.subscribeSummaryInvalidation((event) => invalidations.push(event))
 
     await vi.waitFor(() => expect(invalidations).toHaveLength(1))
-    expect(invalidations[0]).toMatchObject({ cause: 'initial', workGeneration: 1 })
+    expect(invalidations[0]).toMatchObject({
+      cause: 'initial',
+      state: 'ready',
+      workGeneration: 1,
+      snapshotGeneration: 1,
+    })
     expect(loadSummary).toHaveBeenCalledOnce()
 
     subscription.unsubscribe()
@@ -206,11 +214,29 @@ describe('DashboardProjectionService', () => {
     const invalidations: Array<{ cause: string; workGeneration: number }> = []
     const subscription = service.subscribeSummaryInvalidation((event) => invalidations.push(event))
 
-    await vi.waitFor(() => expect(invalidations).toHaveLength(1))
-    owner.summary.invalidate(createSummaryIdentity())
     await vi.waitFor(() => expect(invalidations).toHaveLength(2))
-    expect(invalidations[0]).toMatchObject({ cause: 'initial', workGeneration: 1 })
-    expect(invalidations[1]).toMatchObject({ cause: 'server-push', workGeneration: 2 })
+    owner.summary.invalidate(createSummaryIdentity())
+    await vi.waitFor(() => expect(invalidations).toHaveLength(4))
+    expect(invalidations[0]).toMatchObject({
+      cause: 'initial',
+      state: 'loading',
+      workGeneration: 1,
+    })
+    expect(invalidations[1]).toMatchObject({
+      cause: 'initial',
+      state: 'ready',
+      workGeneration: 1,
+    })
+    expect(invalidations[2]).toMatchObject({
+      cause: 'server-push',
+      state: 'revalidating',
+      workGeneration: 2,
+    })
+    expect(invalidations[3]).toMatchObject({
+      cause: 'server-push',
+      state: 'ready',
+      workGeneration: 2,
+    })
 
     subscription.unsubscribe()
     service.dispose()
@@ -226,8 +252,10 @@ describe('DashboardProjectionService', () => {
     const read = await service.getSummary()
 
     expect(read).toMatchObject({
+      state: 'ready',
       identity: expect.stringMatching(/^dashboard-summary-v2:/),
       workGeneration: 1,
+      snapshotGeneration: 1,
       freshness: 'current',
       data: createSummary(3),
     })
@@ -235,6 +263,46 @@ describe('DashboardProjectionService', () => {
     expect(loadSummary).toHaveBeenCalledOnce()
     service.dispose()
     runtime.clear()
+  })
+
+  it('returns a dormant retained Summary before its replacement Work settles', async () => {
+    const runtime = createServerProjectionWorkRuntime()
+    const owner = createDashboardProjectionWorkOwner(runtime)
+    const replacement = createDeferred<DashboardSummaryProjection>()
+    const loadSummary = vi
+      .fn<() => Promise<DashboardSummaryProjection>>()
+      .mockResolvedValueOnce(createSummary(3))
+      .mockReturnValueOnce(replacement.promise)
+    const service = createService({ owner, loadSummary })
+    const initialSubscription = service.subscribeSummaryInvalidation(() => {})
+
+    try {
+      const initial = await service.getSummary()
+      expect(initial).toMatchObject({ freshness: 'current', data: createSummary(3) })
+      initialSubscription.unsubscribe()
+
+      const replacementSubscription = service.subscribeSummaryInvalidation(() => {})
+      await vi.waitFor(() => expect(loadSummary).toHaveBeenCalledTimes(2))
+      const outcome = await Promise.race([
+        service.getSummary().then((read) => ({ kind: 'read' as const, read })),
+        new Promise<{ kind: 'timeout' }>((resolvePromise) => {
+          setTimeout(() => resolvePromise({ kind: 'timeout' }), 50)
+        }),
+      ])
+
+      expect(outcome).toMatchObject({
+        kind: 'read',
+        read: {
+          freshness: 'stale-display-only',
+          data: createSummary(3),
+        },
+      })
+      replacementSubscription.unsubscribe()
+    } finally {
+      replacement.resolve(createSummary(4))
+      service.dispose()
+      runtime.clear()
+    }
   })
 
   it('retires a one-shot Summary query before later invalidation', async () => {

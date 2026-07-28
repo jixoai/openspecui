@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Map official OPSX workflows to generated skill and command locations.
  * 2. Project launch-local skills and physically scoped tool command initialization state.
  * 3. Provide the runtime owner with the same external Codex command root used by command projection.
- * 4. Bound reactive observation by physical artifact inventories while preserving fresh one-shot reads.
+ * 4. Bound reactive observation through existing parent inventories while preserving fresh one-shot reads.
  *
  * Original request (2026-07-15): "sync、update、Oh My Pi、Trae 的完整交付链。"
+ * Remote CI fixed point (2026-07-28): Launch-local skill creation must converge when its tool root was absent at initial projection.
  */
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -223,7 +224,7 @@ function getCommandArtifacts(projectDir: string, toolId: string): ArtifactEntry[
 }
 
 function invalidateToolInitCaches(projectDir: string): void {
-  const cacheRoots = new Set<string>()
+  const cacheRoots = new Set<string>([resolve(projectDir)])
 
   for (const tool of AI_TOOLS) {
     if (tool.skillsDir) {
@@ -250,9 +251,16 @@ async function readArtifactDirectory(dir: string): Promise<ReadonlySet<string>> 
 async function getExistingSkillPaths(
   projectDir: string,
   skillsDir: string,
-  entries: readonly ArtifactEntry[]
+  entries: readonly ArtifactEntry[],
+  projectRootEntries: ReadonlySet<string>
 ): Promise<Set<string>> {
-  const inventoryRoot = resolve(projectDir, skillsDir, 'skills')
+  const toolRoot = resolve(projectDir, skillsDir)
+  if (!projectRootEntries.has(basename(toolRoot))) return new Set()
+
+  const toolRootEntries = await readArtifactDirectory(toolRoot)
+  if (!toolRootEntries.has('skills')) return new Set()
+
+  const inventoryRoot = resolve(toolRoot, 'skills')
   const rootEntries = await readArtifactDirectory(inventoryRoot)
   const presentEntries = entries.filter((entry) => rootEntries.has(basename(dirname(entry.path))))
   const directoryEntries = await Promise.all(
@@ -354,6 +362,7 @@ async function projectToolInitStates(
   const desiredWorkflowSet = new Set(desiredWorkflows)
   const shouldGenerateSkills = options.delivery !== 'commands'
   const shouldGenerateCommands = options.delivery !== 'skills'
+  const projectRootEntries = await readArtifactDirectory(projectDir)
 
   return Promise.all(
     AI_TOOLS.filter((tool) => tool.skillsDir).map(async (tool) => {
@@ -362,7 +371,8 @@ async function projectToolInitStates(
       const existingSkillPaths = await getExistingSkillPaths(
         projectDir,
         tool.skillsDir!,
-        skillArtifacts
+        skillArtifacts,
+        projectRootEntries
       )
       const existingCommandPaths = await getExistingCommandPaths(commandArtifacts)
 

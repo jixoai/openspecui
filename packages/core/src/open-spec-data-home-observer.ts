@@ -1,14 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Own the effective OpenSpec data-home observation lease for one runtime environment.
  * 2. Map registry, Workset, and schema paths to their objective invalidation facets.
  * 3. Keep Store, Workset, schema, and Context projections responsible for fresh pulls.
  * 4. Release the path subscription and root lease deterministically.
- * 5. Ignore unrelated data-home content instead of creating broad projection invalidation.
+ * 5. Settle initially missing official targets from bounded ancestor creation without invalidating unrelated content.
  *
  * Original request (2026-07-15): "有效 OpenSpec data home 的变化要让所有端拉取最新投影。"
  * Original request (2026-07-26): "真正基于文件、甚至是文件内容结构的变更去拉取更新。"
+ * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
  */
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ObservationRootOwner } from './reactive-fs/observation-environment.js'
 import { acquireWatcher } from './reactive-fs/watcher-pool.js'
@@ -71,13 +73,21 @@ export class OpenSpecDataHomeObserver {
     if (this.startPromise) return this.startPromise
 
     this.state = 'starting'
-    this.releasePathSubscriptions = OPEN_SPEC_DATA_HOME_OBSERVATION_TARGETS.map((target) =>
-      acquireWatcher(
-        join(this.dataHomePath, target.relativePath),
-        () => this.invalidation.invalidate(target.facets),
-        { recursive: target.recursive }
+    this.releasePathSubscriptions = OPEN_SPEC_DATA_HOME_OBSERVATION_TARGETS.map((target) => {
+      const targetPath = join(this.dataHomePath, target.relativePath)
+      let wasPresent = existsSync(targetPath)
+      return acquireWatcher(
+        targetPath,
+        () => {
+          const isPresent = existsSync(targetPath)
+          if (wasPresent || isPresent) {
+            this.invalidation.invalidate(target.facets)
+          }
+          wasPresent = isPresent
+        },
+        { recursive: target.recursive, watchAncestorsWhileMissing: true }
       )
-    )
+    })
     const startPromise = this.environment
       .acquireRoot(this.dataHomePath)
       .then(async (releaseRoot) => {

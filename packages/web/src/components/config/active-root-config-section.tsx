@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Project the CLI-selected Planning-root config with exact owner and file-presence evidence.
  * 2. Own Active Root draft, mutation, loading, error, and pending-lock state.
  * 3. Preserve a read-only static snapshot without inventing live owner provenance.
@@ -7,10 +7,10 @@
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-17): "An existing empty Active Root file remains editable."
  * Original request (2026-07-18): "Stale or transport-error Active Root data must remain read-only."
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
-import { Button } from '@/components/button'
 import { CodeEditor } from '@/components/code-editor'
-import { ConfigFormSkeleton } from '@/components/realtime'
+import { AsyncAction, ConfigFormSkeleton } from '@/components/realtime'
 import { RootActionNotice } from '@/components/root-action-notice'
 import { useViewportConstrainedHeight } from '@/components/scroll-spy'
 import { trpcClient } from '@/lib/trpc'
@@ -155,15 +155,16 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
                 <X className="h-3.5 w-3.5" />
                 Cancel
               </button>
-              <Button
+              <AsyncAction
                 size="sm"
+                pending={saveMutation.isPending}
+                settled={!dirty}
                 onClick={() => saveMutation.mutate()}
                 disabled={saveMutation.isPending || actionLocked || !dirty}
-                activity={!dirty}
               >
                 <Save className="h-3.5 w-3.5" />
-                {saveMutation.isPending ? 'Saving...' : dirty ? 'Save' : 'Saved'}
-              </Button>
+                Save
+              </AsyncAction>
             </div>
           ) : null}
         </header>

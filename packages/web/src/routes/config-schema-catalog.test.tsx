@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove the Config-owned Schema catalog status host remains available outside dynamic Schema tabs.
  * 2. Distinguish catalog loading, terminal errors, retained data, and a settled empty catalog.
  * 3. Keep the selected-Schema files projection current so this fixture proves only catalog/tab ownership.
  *
  * Original owner report (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import { cleanup, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -157,10 +158,11 @@ describe('Config Schema catalog/tab inventory topology', () => {
   it('shows catalog loading from the mounted status host without inventing a Schema tab or empty state', () => {
     configBundleMock.mockReturnValue({ data: undefined, isLoading: true, error: null })
 
-    renderConfigAt()
+    const { container } = renderConfigAt()
 
     expectFixedConfigTabs()
-    expect(screen.getByRole('status')).toHaveTextContent('Loading schemas...')
+    expect(container.querySelector('.rt-skeleton')).not.toBeNull()
+    expect(screen.queryByText('Loading schemas...')).toBeNull()
     expect(screen.queryByRole('button', { name: /Schema\(/ })).toBeNull()
     expect(screen.queryByText('No schemas available.')).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()

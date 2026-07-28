@@ -771,11 +771,11 @@ export {
   DashboardSummaryIdentitySchema,
   DashboardSummaryInvalidationCauseSchema,
   DashboardSummaryInvalidationSchema,
-  DashboardSummaryReadSchema,
+  DashboardSummaryProjectionStateSchema,
   type DashboardSummaryIdentity,
   type DashboardSummaryInvalidation,
   type DashboardSummaryInvalidationCause,
-  type DashboardSummaryRead,
+  type DashboardSummaryProjectionState,
 } from './dashboard-summary-transport.js'
 export {
   DASHBOARD_METRIC_KEYS,

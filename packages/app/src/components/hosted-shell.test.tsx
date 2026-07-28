@@ -1,12 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove health metadata creates the canonical authenticated Project Web iframe.
  * 2. Prove explicit refresh, tab switching, and dialog interactions target the intended tab.
  * 3. Preserve per-tab iframe sessions and runtime identity across ordinary shell updates.
- * 4. Keep a rendered iframe mounted while backend health is revalidated or temporarily offline.
+ * 4. Keep a rendered iframe mounted while backend health is revalidated or temporarily offline, with
+ *    distinct visual loading and terminal frame-error evidence.
+ * 5. Prove the Project Web iframe receives only the Clipboard capabilities Terminal requires.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Owner-reported defect (2026-07-26): "Dashboard加载完成的一瞬间开始reload。"
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  */
 // @vitest-environment jsdom
 
@@ -16,7 +19,7 @@ import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getHostedShellStorageKey } from '../lib/shell-state'
-import { HostedShell } from './hosted-shell'
+import { HostedShell, HostedShellTabContent } from './hosted-shell'
 
 const originalFetch = global.fetch
 const originalMatchMedia = window.matchMedia
@@ -176,7 +179,8 @@ describe('HostedShell', () => {
     expect(iframe?.getAttribute('src')).toContain(
       'http://localhost:3100/dashboard?api=http%3A%2F%2Flocalhost%3A3100&session='
     )
-    expect(screen.getByText('Loading view...')).toBeTruthy()
+    expect(iframe?.getAttribute('allow')).toBe('clipboard-read; clipboard-write')
+    expect(container.querySelector('.rt-skeleton')).toBeTruthy()
 
     await act(async () => {
       if (iframe) {
@@ -184,7 +188,69 @@ describe('HostedShell', () => {
       }
     })
 
-    expect(screen.queryByText('Loading view...')).toBeNull()
+    expect(container.querySelector('.rt-skeleton')).toBeNull()
+  })
+
+  it('renders frame-error evidence without classifying the error state as loading', async () => {
+    const { container } = await renderShell(
+      <HostedShellTabContent
+        tab={{
+          id: 'tab-a',
+          sessionId: 'session-a',
+          apiBaseUrl: 'http://localhost:3100',
+          createdAt: 1,
+        }}
+        runtime={{
+          reachability: 'online',
+          projectName: 'opsx-project',
+          openspecuiVersion: '2.0.2',
+          embeddedUiUrl: 'http://localhost:3100/dashboard',
+          errorMessage: null,
+        }}
+        frameState={{
+          src: 'http://localhost:3100/dashboard',
+          status: 'error',
+        }}
+        onRetry={vi.fn()}
+        onSetIframeRef={vi.fn()}
+        onFrameLoad={vi.fn()}
+        onFrameError={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Reload did not finish. Try refresh again.')).toBeTruthy()
+    expect(container.querySelector('.rt-skeleton')).toBeNull()
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull()
+  })
+
+  it('uses stable visual geometry while backend metadata is unresolved', async () => {
+    const { container } = await renderShell(
+      <HostedShellTabContent
+        tab={{
+          id: 'tab-a',
+          sessionId: 'session-a',
+          apiBaseUrl: 'http://localhost:3100',
+          createdAt: 1,
+        }}
+        runtime={{
+          reachability: 'checking',
+          projectName: null,
+          openspecuiVersion: null,
+          embeddedUiUrl: null,
+          errorMessage: null,
+        }}
+        frameState={{ src: null, status: 'idle' }}
+        onRetry={vi.fn()}
+        onSetIframeRef={vi.fn()}
+        onFrameLoad={vi.fn()}
+        onFrameError={vi.fn()}
+      />
+    )
+
+    expect(container.querySelectorAll('.rt-skeleton')).toHaveLength(3)
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull()
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('connecting backend')
+    expect(screen.queryByText('Connecting Backend')).toBeNull()
   })
 
   it('keeps the iframe mounted while a background health refresh is pending', async () => {
@@ -336,7 +402,7 @@ describe('HostedShell', () => {
 
     expect(alphaReload).not.toHaveBeenCalled()
     expect(betaReload).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('Loading view...')).toBeTruthy()
+    expect(betaFrame?.closest('[data-tab-panel-state]')?.querySelector('.rt-skeleton')).toBeTruthy()
   })
 
   it('keeps each project tab bound to its own iframe session and runtime when switching tabs', async () => {
@@ -424,5 +490,6 @@ describe('HostedShell', () => {
 
     expect(container.textContent ?? '').toContain('Backend unreachable')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    expect(container.querySelectorAll('[data-hosted-reachability="offline"]')).toHaveLength(2)
   })
 })

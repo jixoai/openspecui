@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Render commit and uncommitted detail from an explicit repository scope.
  * 2. Preserve scope and binding across metadata/files/patch requests and cache keys.
  * 3. Preserve shared-element handoff and long-diff document flow.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import { GitEntryDetailPanel } from '@/components/git/git-panel-detail'
 import {
@@ -15,7 +16,11 @@ import {
   getGitEntrySharedDescriptor,
   GitFilesBadge,
 } from '@/components/git/git-shared'
-import { DetailPanelSkeleton, GitWorktreeSkeleton } from '@/components/realtime'
+import {
+  DetailPanelSkeleton,
+  GitWorktreeSkeleton,
+  RealtimeSkeletonLine,
+} from '@/components/realtime'
 import {
   buildGitRepositoryHref,
   getGitEntryFilesQueryKey,
@@ -152,9 +157,9 @@ function GitEntryView({ selector }: { selector: GitEntrySelector }) {
                   {handoff.title ?? (selector.type === 'commit' ? selector.hash : 'working tree')}
                 </span>
               </h1>
-              <p className="text-muted-foreground whitespace-normal text-sm [overflow-wrap:anywhere]">
-                {handoff.subtitle ?? 'Loading git entry…'}
-              </p>
+              <div className="text-muted-foreground whitespace-normal text-sm [overflow-wrap:anywhere]">
+                {handoff.subtitle ?? <RealtimeSkeletonLine className="w-48" />}
+              </div>
             </div>
           </div>
           <div className="vt-detail-content rounded-lg border p-4" aria-busy="true">

@@ -10,6 +10,7 @@
  * Original request (2026-07-18): "Update and auto-Update must use useRootActionState."
  * Original request (2026-07-18): "Environment Global Profile Apply remains valid when Root Context is blocked; only Update is root-owned."
  * Original request (2026-07-26): "缓存更新期间仍可读，但不能授权写入。"
+ * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -284,7 +285,7 @@ describe('EnvironmentGlobalConfigSection', () => {
     await waitFor(() =>
       expect(screen.getByText(`selected: [${coreWorkflows.join(', ')}]`)).toBeTruthy()
     )
-    expect(screen.getByRole('button', { name: 'Applied' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Apply' })).toHaveAttribute('data-activity', 'true')
   })
 
   it('dispatches auto-Update exactly once after a successful profile refresh', async () => {
@@ -392,10 +393,11 @@ describe('EnvironmentGlobalConfigSection', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled())
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('aria-busy', 'true')
     expect(screen.getByRole('button', { name: 'Revert' })).toBeDisabled()
     expect(screen.getByLabelText('Environment Global config editor')).toHaveAttribute('readonly')
-    fireEvent.click(screen.getByRole('button', { name: 'Saving...' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(writeEnvironmentGlobalMock).toHaveBeenCalledTimes(1)
 
     pending.resolve()

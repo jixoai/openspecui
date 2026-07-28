@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Make Code versus distinct Planning repository scope explicit in URL and UI.
  * 2. Render scoped status, history, worktrees, pagination, and refresh lifecycles.
  * 3. Execute worktree removal and handoff only against the selected repository.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import {
   getGitEntrySharedDescriptor,
@@ -621,9 +622,10 @@ export function GitRoute() {
                 void entriesQuery.fetchNextPage()
               }}
               disabled={scopeNonAuthoritative || entriesQuery.isFetchingNextPage}
+              aria-busy={entriesQuery.isFetchingNextPage || undefined}
               className="hover:bg-muted w-full rounded-md border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {entriesQuery.isFetchingNextPage ? 'Loading more…' : 'Load older commits'}
+              Load older commits
             </button>
           ) : gitEntries.length === 0 ? (
             <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">

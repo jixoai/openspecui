@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Own the final selected-tab and observation-generation check for every App-native Store mutation.
  * 2. Recheck full tab identity and generation against one observation owner snapshot.
  * 3. Dispatch accepted inputs through the locator-scoped backend client.
- * 4. Correlate resolved admissions without changing request, rejection, or lifecycle evidence.
+ * 4. Correlate the exact resolved admission record without changing request or rejection evidence.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
@@ -33,11 +33,11 @@ export type StoreMutationDispatcher = (
 /** Register only successfully resolved admissions against the exact authority locator. */
 export function correlateStoreMutationAdmissions(
   dispatch: StoreMutationDispatcher,
-  register: (apiBaseUrl: string, requestId: string) => void
+  register: (apiBaseUrl: string, admission: BackendStoreMutationRecord) => void
 ): StoreMutationDispatcher {
   return async (authority, input) => {
     const admission = await dispatch(authority, input)
-    if (admission && authority) register(authority.apiBaseUrl, admission.requestId)
+    if (admission && authority) register(authority.apiBaseUrl, admission)
     return admission
   }
 }

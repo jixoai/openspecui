@@ -1,15 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Stable skeleton geometry atoms (line/row/card) that do not flash per-chunk.
  * 2. Layout-aware inventory skeleton mirroring the project's real list/grid conventions.
+ * 3. Stay package-neutral so App and Web surfaces share the same visual atom.
  *
  * Original request (2026-07-23): "可以用光影来替代，将它做成一种视觉语言。"
  * Owner direction (2026-07-24): skeleton 之间需要有 gap，结构需符合客观布局；参考 shadcn 组合思想，项目化定制。
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Owner acceptance feedback (2026-07-28): "列表骨架之间需要 gap，要么得有分割线。"
  *
  * The shimmer is a CSS luminance sweep (styles/realtime.css); reduced-motion keeps a static band.
  */
-import { cn } from '@/lib/utils'
 import { Fragment, type CSSProperties, type ReactNode } from 'react'
+import { cn } from '../../lib/utils'
 
 export interface RealtimeSkeletonProps {
   className?: string
@@ -40,7 +43,7 @@ export function RealtimeSkeletonCard({ className, style }: RealtimeSkeletonProps
  * Layout mode mirrors the project's real list/grid conventions so the skeleton geometry matches the settled
  * content rather than a generic gray stack.
  *
- * - `list-divide`: `border + divide-y + rounded-lg` — rows touch, separated by divider lines (mirrors
+ * - `list-divide`: `border + 1px grid gap + rounded-lg` — rows touch, separated by an explicit line (mirrors
  *   change-list / archive-list / spec-list / git worktree lists).
  * - `grid-cards`: `grid gap-3` — cards with spacing (mirrors dashboard metric/trend grids).
  * - `plain`: `space-y-2` — stacked rows with a default gap (fallback, never clumped).
@@ -48,7 +51,7 @@ export function RealtimeSkeletonCard({ className, style }: RealtimeSkeletonProps
 export type RealtimeSkeletonMode = 'list-divide' | 'grid-cards' | 'plain'
 
 const MODE_CONTAINER_CLASS: Record<RealtimeSkeletonMode, string> = {
-  'list-divide': 'rt-anchor border-border divide-border divide-y rounded-lg border',
+  'list-divide': 'rt-anchor border-border bg-border grid gap-px overflow-hidden rounded-lg border',
   'grid-cards': 'rt-anchor grid gap-3',
   plain: 'rt-anchor space-y-2',
 }

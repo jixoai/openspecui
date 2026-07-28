@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Compose ownership-specific Config sections with routed Schema tabs.
  * 2. Orchestrate Schema discovery, inspection, creation, and file editing.
  * 3. Preserve Schema source-specific read-only behavior and shared Root action gating.
@@ -11,6 +11,7 @@
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  * Original request (2026-07-18): "Schema and Template mutations must use useRootActionState."
  * Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
@@ -32,6 +33,7 @@ import {
   type FileExplorerEntry,
 } from '@/components/file-explorer'
 import { MarkdownViewer } from '@/components/markdown-viewer'
+import { DetailPanelSkeleton, RealtimeSkeletonLine } from '@/components/realtime'
 import { RootActionNotice } from '@/components/root-action-notice'
 import { useViewportConstrainedHeight } from '@/components/scroll-spy'
 import { Select, type SelectOption } from '@/components/select'
@@ -1060,9 +1062,7 @@ export function Config() {
                   </div>
                 )}
                 {schemaFilesInitialLoading ? (
-                  <div role="status" className="text-muted-foreground text-sm">
-                    Loading schema files...
-                  </div>
+                  <DetailPanelSkeleton count={6} />
                 ) : shouldRenderSchemaFileExplorer ? (
                   <div className="min-h-0 flex-1">
                     <FileExplorer
@@ -1196,14 +1196,10 @@ export function Config() {
                                     size="sm"
                                     onClick={handleFileSave}
                                     disabled={saveSchemaFileMutation.isPending || !schemaCanEdit}
-                                    activity={!activeSchemaDirty && schemaCanEdit}
+                                    activity={saveSchemaFileMutation.isPending}
                                   >
                                     <Save className="h-3.5 w-3.5" />
-                                    {saveSchemaFileMutation.isPending
-                                      ? 'Saving...'
-                                      : activeSchemaDirty
-                                        ? 'Save'
-                                        : 'Saved'}
+                                    Save
                                   </Button>
                                 </div>
                               </div>
@@ -1348,10 +1344,11 @@ export function Config() {
               type="button"
               onClick={handleConfirmAddSchema}
               disabled={!schemaCanEdit || !newSchemaName.trim() || createSchemaMutation.isPending}
+              aria-busy={createSchemaMutation.isPending || undefined}
               className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" />
-              {createSchemaMutation.isPending ? 'Creating…' : 'Create'}
+              Create
             </button>
           </>
         }
@@ -1424,10 +1421,11 @@ export function Config() {
               type="button"
               onClick={handleConfirmDeleteSchema}
               disabled={!schemaCanEdit || deleteSchemaMutation.isPending}
+              aria-busy={deleteSchemaMutation.isPending || undefined}
               className="bg-destructive text-destructive-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              {deleteSchemaMutation.isPending ? 'Deleting…' : 'Delete'}
+              Delete
             </button>
           </>
         }
@@ -1479,6 +1477,11 @@ export function Config() {
                 createSchemaFileMutation.isPending ||
                 createSchemaDirectoryMutation.isPending
               }
+              aria-busy={
+                createSchemaFileMutation.isPending ||
+                createSchemaDirectoryMutation.isPending ||
+                undefined
+              }
               className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               {createEntryType === 'file' ? (
@@ -1486,9 +1489,7 @@ export function Config() {
               ) : (
                 <FolderPlus className="h-3.5 w-3.5" />
               )}
-              {createSchemaFileMutation.isPending || createSchemaDirectoryMutation.isPending
-                ? 'Creating…'
-                : 'Create'}
+              Create
             </button>
           </>
         }
@@ -1546,10 +1547,11 @@ export function Config() {
               type="button"
               onClick={handleConfirmDeleteEntry}
               disabled={!canManageEntries || !activeEntry || deleteSchemaEntryMutation.isPending}
+              aria-busy={deleteSchemaEntryMutation.isPending || undefined}
               className="bg-destructive text-destructive-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              {deleteSchemaEntryMutation.isPending ? 'Deleting…' : 'Delete'}
+              Delete
             </button>
           </>
         }
@@ -1638,11 +1640,7 @@ export function Config() {
             Failed to load schemas: {schemasError.message}
           </div>
         )}
-        {schemaCatalogInitialLoading && (
-          <div role="status" className="text-muted-foreground text-sm">
-            Loading schemas...
-          </div>
-        )}
+        {schemaCatalogInitialLoading && <RealtimeSkeletonLine className="w-40" />}
         {hasCurrentEmptySchemaCatalog && (
           <div className="text-muted-foreground text-sm">No schemas available.</div>
         )}

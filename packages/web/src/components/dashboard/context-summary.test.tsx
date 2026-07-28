@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove Dashboard attributes planning facts to Root Context provenance.
  * 2. Preserve direct Reference diagnostics without inferred health or completeness.
  * 3. Keep Code and distinct Planning Git repositories independently visible.
@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git binding provenance in Dashboard fixtures.
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import type { GitRepositoryScopes, RootContext, RootContextState } from '@openspecui/core'
 import { cleanup, render, screen } from '@testing-library/react'
@@ -197,7 +198,8 @@ describe('DashboardContextSummary', () => {
       authority: { state: 'waiting', reason: 'rebind' },
     })
     const view = render(<DashboardContextSummary staticMode={false} />)
-    expect(screen.getByRole('status').textContent).toContain('Resolving planning root')
+    expect(view.container.querySelector('.rt-skeleton')).not.toBeNull()
+    expect(screen.queryByText('Resolving planning root...')).toBeNull()
 
     setContext({
       data: {

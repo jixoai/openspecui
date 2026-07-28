@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove responsive Git file-tree, patch loading, and scroll continuity.
  * 2. Prove on-demand patch requests retain repository binding provenance.
  * 3. Prove a replacement Planning binding reaches the real getEntryPatch owner.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git patch bindings.
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -425,7 +426,7 @@ beforeEach(() => {
 
 describe('GitEntryDetailPanel', () => {
   it('keeps the detail area in loading state instead of flashing empty state', () => {
-    renderWithQueryClient(
+    const { container } = renderWithQueryClient(
       <GitEntryDetailPanel
         selector={{ type: 'commit', hash: baseEntry.hash }}
         entry={baseEntry}
@@ -435,7 +436,8 @@ describe('GitEntryDetailPanel', () => {
       />
     )
 
-    expect(screen.getAllByText('Loading changed files…')).toHaveLength(2)
+    expect(container.querySelectorAll('.rt-skeleton').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Loading changed files…')).toBeNull()
     expect(screen.queryByText('No changed files found for this entry.')).toBeNull()
   })
 

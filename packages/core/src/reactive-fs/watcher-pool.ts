@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Own a reference-counted dynamic set of physical watcher roots, including missing logical roots
  *    through their nearest existing ancestor.
  * 2. Bind shared path subscriptions to the deepest active containing root.
  * 3. Rebind pending subscriptions when roots appear, disappear, or recover.
  * 4. Expose aggregate and per-root runtime status for server diagnostics.
- * 5. Release subscriptions, timers, roots, and status listeners deterministically.
+ * 5. Keep missing-path ancestor settlement explicit in subscription identity and release all leases deterministically.
  *
  * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
+ * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
  */
 import { existsSync } from 'node:fs'
 import { dirname, isAbsolute, relative } from 'node:path'
@@ -54,6 +55,7 @@ interface WatcherRootRecord {
 interface PathSubscription {
   path: string
   recursive: boolean
+  watchAncestorsWhileMissing: boolean
   debounceMs: number
   callbacks: Set<() => void>
   rootPath: string | null
@@ -144,7 +146,10 @@ function rebindSubscription(cacheKey: string, subscription: PathSubscription): v
     subscription.unsubscribe = root.watcher.subscribeSync(
       subscription.path,
       () => dispatchSubscription(cacheKey, subscription),
-      { watchChildren: subscription.recursive }
+      {
+        watchChildren: subscription.recursive,
+        watchAncestorsWhileMissing: subscription.watchAncestorsWhileMissing,
+      }
     )
     subscription.rootPath = root.rootPath
   } catch (error) {
@@ -268,17 +273,24 @@ export async function acquireWatcherRoot(rootPath: string): Promise<WatcherRootR
 export function acquireWatcher(
   path: string,
   onChange: () => void,
-  options: { recursive?: boolean; debounceMs?: number; onError?: () => void } = {}
+  options: {
+    recursive?: boolean
+    debounceMs?: number
+    onError?: () => void
+    watchAncestorsWhileMissing?: boolean
+  } = {}
 ): () => void {
   const normalizedPath = getRealPath(path)
   const recursive = options.recursive ?? false
-  const cacheKey = `${normalizedPath}:${recursive}`
+  const watchAncestorsWhileMissing = options.watchAncestorsWhileMissing ?? false
+  const cacheKey = `${normalizedPath}:${recursive}:${watchAncestorsWhileMissing}`
   let subscription = subscriptionCache.get(cacheKey)
 
   if (!subscription) {
     subscription = {
       path: normalizedPath,
       recursive,
+      watchAncestorsWhileMissing,
       debounceMs: options.debounceMs ?? DEBOUNCE_MS,
       callbacks: new Set(),
       rootPath: null,

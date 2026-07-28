@@ -1,17 +1,20 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Make Store Doctor evidence the primary Store Manager interaction.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Keep Store Doctor evidence, local selection, and realtime lifecycle continuous across Root refreshes.
  * 2. Reserve backend-owned mutation controls without inferring applicability.
  * 3. Keep Access Gate credentials outside route/component props.
  * 4. Bind form/dialog intent to its full origin identity and revalidate it at dispatch.
  * 5. Compose backend ledger evidence and terminal-driven Store/Context refreshes.
  *
  * Original request (2026-07-15): "Store Manager uses the Store Inspector as its primary interaction."
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  */
 import type { StoreDoctorStore } from '@openspecui/core/store-types'
-import { RefreshCw, Search, Trash2 } from 'lucide-react'
+import { RealtimeRevalidateCue } from '@openspecui/web-src/components/realtime/realtime-cue'
+import { RealtimeSkeletonInventory } from '@openspecui/web-src/components/realtime/realtime-skeleton'
+import { Search, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
-import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
+import { EmptyView, ErrorView } from '../components/state-views'
 import { StatusBadge, StatusDot, type StatusVariant } from '../components/status-badge'
 import { StoreManagerShell } from '../components/store-manager-shell'
 import {
@@ -55,10 +58,10 @@ interface StoreSetupRegisterDraft {
  * TODO(kernel): stores.inspect 能力决定本视图是否渲染；stores.mutate 能力决定控件是否可操作。
  */
 export function StoreInspectorRoute() {
-  const { active } = useActiveBackend()
+  const { active, selectedApiBaseUrl } = useActiveBackend()
   const { inspector, isInspectorLoading, isInspectorUpdating, inspectorError, canMutate, refresh } =
-    useStoreData({ apiBaseUrl: active?.apiBaseUrl })
-  const mutationLifecycle = useStoreMutationLifecycle(active?.apiBaseUrl, refresh)
+    useStoreData({ apiBaseUrl: selectedApiBaseUrl })
+  const mutationLifecycle = useStoreMutationLifecycle(selectedApiBaseUrl, refresh)
   const mutationSnapshot = useMutationObservations()
   const stores = inspector?.stores ?? []
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -114,7 +117,7 @@ export function StoreInspectorRoute() {
 
   let body
   if (isInspectorLoading && !inspector) {
-    body = <LoadingView label="Loading store diagnostics..." />
+    body = <RealtimeSkeletonInventory mode="list-divide" count={5} rowClassName="h-14" />
   } else if (inspectorError && !inspector) {
     body = <ErrorView message={inspectorError.message} />
   } else if (stores.length === 0) {
@@ -141,8 +144,8 @@ export function StoreInspectorRoute() {
     )
   } else {
     body = (
-      <div className="grid gap-4 md:grid-cols-[280px_1fr]">
-        <aside className="border-border flex flex-col rounded-lg border">
+      <div className="grid min-w-0 gap-4 md:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="border-border flex min-w-0 flex-col rounded-lg border">
           <div className="border-border flex items-center gap-2 border-b p-2">
             <Search className="text-muted-foreground h-4 w-4" />
             <input
@@ -165,7 +168,7 @@ export function StoreInspectorRoute() {
                     type="button"
                     onClick={() => setSelectedId(store.id ?? null)}
                     aria-current={isSelected}
-                    className={`hover:bg-muted/50 flex w-full items-center justify-between gap-2 border-b px-3 py-2 text-left text-sm ${
+                    className={`hover:bg-muted/50 flex w-full min-w-0 items-center justify-between gap-2 border-b px-3 py-2 text-left text-sm ${
                       isSelected ? 'bg-muted' : ''
                     }`}
                   >
@@ -201,7 +204,7 @@ export function StoreInspectorRoute() {
                 setMutationError(err instanceof Error ? err.message : String(err))
               })
             }}
-            mutationDisabled={!canMutate}
+            mutationDisabled={!active || !canMutate}
           />
         ) : (
           <EmptyView title="Select a Store to inspect" />
@@ -234,17 +237,10 @@ export function StoreInspectorRoute() {
 
   return (
     <StoreManagerShell>
-      {isInspectorUpdating && inspector ? (
-        <span
-          role="status"
-          aria-label="Refreshing store diagnostics"
-          className="text-muted-foreground inline-flex self-start"
-        >
-          <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden />
-        </span>
-      ) : null}
       {inspectorError && inspector ? <ErrorView message={inspectorError.message} /> : null}
-      {body}
+      <RealtimeRevalidateCue active={isInspectorUpdating && Boolean(inspector)}>
+        {body}
+      </RealtimeRevalidateCue>
       {mutationError ? (
         <p
           className="border-destructive/40 text-destructive bg-destructive/5 rounded-md border px-3 py-2 text-xs"
@@ -271,31 +267,44 @@ function StoreInspectorDetail({
 }) {
   const health = deriveHealthFromDiagnostics(store.status)
   return (
-    <article className="border-border space-y-4 rounded-lg border p-4">
-      <header className="flex items-start justify-between gap-3">
+    <article className="border-border min-w-0 space-y-4 rounded-lg border p-4">
+      <header className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-muted-foreground text-xs uppercase tracking-wide">
             Selected Store
           </div>
-          <h2 className="truncate text-xl font-semibold">{store.id}</h2>
-          <p className="text-muted-foreground truncate text-xs" title={store.root}>
+          <h2 className="break-words text-xl font-semibold [overflow-wrap:anywhere]">{store.id}</h2>
+          <p
+            className="text-muted-foreground break-words text-xs [overflow-wrap:anywhere]"
+            title={store.root}
+          >
             {store.root}
           </p>
         </div>
-        <StatusBadge variant={healthVariant(health)} label={health.label} />
+        <span className="shrink-0">
+          <StatusBadge variant={healthVariant(health)} label={health.label} />
+        </span>
       </header>
 
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Identity and location</h3>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+        <dl className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
           <dt className="text-muted-foreground">Store id</dt>
-          <dd className="font-mono">{store.id ?? '—'}</dd>
+          <dd className="min-w-0 break-words font-mono [overflow-wrap:anywhere]">
+            {store.id ?? '—'}
+          </dd>
           <dt className="text-muted-foreground">Checkout root</dt>
-          <dd className="font-mono">{store.root ?? '—'}</dd>
+          <dd className="min-w-0 break-words font-mono [overflow-wrap:anywhere]">
+            {store.root ?? '—'}
+          </dd>
           <dt className="text-muted-foreground">Metadata</dt>
-          <dd className="font-mono">{store.metadata_path ?? '—'}</dd>
+          <dd className="min-w-0 break-words font-mono [overflow-wrap:anywhere]">
+            {store.metadata_path ?? '—'}
+          </dd>
           <dt className="text-muted-foreground">Git remote</dt>
-          <dd className="font-mono">{store.git?.origin_url ?? '—'}</dd>
+          <dd className="min-w-0 break-words font-mono [overflow-wrap:anywhere]">
+            {store.git?.origin_url ?? '—'}
+          </dd>
         </dl>
       </section>
 
@@ -306,7 +315,7 @@ function StoreInspectorDetail({
           {(store.status ?? []).map((diagnostic, index) => (
             <li
               key={`${diagnostic.code ?? ''}-${index}`}
-              className="border-border text-muted-foreground rounded border px-2 py-1 text-xs"
+              className="border-border text-muted-foreground min-w-0 break-words rounded border px-2 py-1 text-xs [overflow-wrap:anywhere]"
             >
               <span className="text-foreground">{diagnostic.message ?? diagnostic.code}</span>
               {diagnostic.fix ? <span className="block">↳ {diagnostic.fix}</span> : null}

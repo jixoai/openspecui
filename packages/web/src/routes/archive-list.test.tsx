@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify Archive copy and rows stay scoped to the writable Planning root projection.
  * 2. Verify the Planning-root empty state does not imply environment-wide completeness.
  * 3. Prove resolved and unknown Archive data render their real first-frame topology before effects.
@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Owner report (2026-07-22): "整个过程中，几乎都在 Loading。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -159,7 +160,7 @@ describe('ArchiveList', () => {
 
     render(<ArchiveList />)
 
-    expect(screen.getByRole('status').textContent).toContain('Updating')
+    expect(screen.getByRole('status')).toHaveTextContent('updating')
     expect(screen.getByText('Updating archive')).toBeTruthy()
     expect(screen.getByRole('link', { name: /Updating archive/i }).getAttribute('href')).toBe(
       '/archive/2026-07-22-updating'
@@ -178,7 +179,7 @@ describe('ArchiveList', () => {
 
     render(<ArchiveList />)
 
-    expect(screen.getByRole('status').textContent).toContain('Updating')
+    expect(screen.getByRole('status')).toHaveTextContent('updating')
     expect(screen.queryByText('No archived changes yet.')).toBeNull()
     expect(screen.queryByText(/Changes in this Planning root are archived/i)).toBeNull()
   })

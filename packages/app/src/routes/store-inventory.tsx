@@ -1,15 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Render a dense wide-screen projection of Store list facts.
  * 2. Keep Inventory secondary to Inspector and Context navigation.
- * 3. Read only from the exact selected current backend.
+ * 3. Read from the stable selected locator while keeping current authority separate.
+ * 4. Render initial and retained-refresh states through shared realtime visual atoms.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Original request (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  */
 import type { StoreListEntry } from '@openspecui/core/store-types'
-import { RefreshCw } from 'lucide-react'
-import { EmptyView, ErrorView, LoadingView } from '../components/state-views'
+import { RealtimeRevalidateCue } from '@openspecui/web-src/components/realtime/realtime-cue'
+import { RealtimeSkeletonInventory } from '@openspecui/web-src/components/realtime/realtime-skeleton'
+import { EmptyView, ErrorView } from '../components/state-views'
 import { StatusBadge } from '../components/status-badge'
 import { StoreManagerShell } from '../components/store-manager-shell'
 import { useActiveBackend } from '../lib/use-active-backend'
@@ -29,15 +32,15 @@ import { useStoreData } from '../lib/use-store-data'
  *               (id + root) 渲染骨架，doctor 细节待 Inspector 视图承载。
  */
 export function StoreInventoryRoute() {
-  const { active } = useActiveBackend()
+  const { selectedApiBaseUrl } = useActiveBackend()
   const { inventory, isInventoryLoading, isInventoryUpdating, inventoryError } = useStoreData({
-    apiBaseUrl: active?.apiBaseUrl,
+    apiBaseUrl: selectedApiBaseUrl,
   })
   const stores = inventory?.stores ?? []
 
   let body
   if (isInventoryLoading && !inventory) {
-    body = <LoadingView label="Loading store registry..." />
+    body = <RealtimeSkeletonInventory mode="list-divide" count={5} rowClassName="h-12" />
   } else if (inventoryError && !inventory) {
     body = <ErrorView message={inventoryError.message} />
   } else if (stores.length === 0) {
@@ -53,17 +56,10 @@ export function StoreInventoryRoute() {
 
   return (
     <StoreManagerShell>
-      {isInventoryUpdating && inventory ? (
-        <span
-          role="status"
-          aria-label="Refreshing store registry"
-          className="text-muted-foreground inline-flex self-start"
-        >
-          <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden />
-        </span>
-      ) : null}
       {inventoryError && inventory ? <ErrorView message={inventoryError.message} /> : null}
-      {body}
+      <RealtimeRevalidateCue active={isInventoryUpdating && Boolean(inventory)}>
+        {body}
+      </RealtimeRevalidateCue>
     </StoreManagerShell>
   )
 }

@@ -1,17 +1,21 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
- * 1. Orchestrate persisted credential-free project tabs and embedded frame lifecycle.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Orchestrate persistent credential-free project tabs and the embedded frame's visual lifecycle.
  * 2. Coordinate PWA install, display, and update ownership.
  * 3. Publish shell state once and consume exact-tab reachability from the shared observation owner.
  * 4. Keep refresh/retry feedback attached to the affected tab runtime.
  * 5. Preserve cross-window shell-state convergence.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
  * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
  * Compromise: tab, frame, and PWA display lifecycles remain co-located because they settle in one mounted
  * shell; launch, health, and Root observation are physically extracted into App-lifetime owners.
  */
 import { Dialog } from '@openspecui/web-src/components/dialog'
+import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
+import { RealtimeSkeleton } from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { type Tab } from '@openspecui/web-src/components/tabs'
 import { TerminalTabs } from '@openspecui/web-src/components/terminal/terminal-tabs'
 import { AlertCircle, Download, Link2, LoaderCircle, Plus, RefreshCw, Unlink2 } from 'lucide-react'
@@ -258,7 +262,7 @@ function HostedShellActions(props: {
   )
 }
 
-function HostedShellTabContent({
+export function HostedShellTabContent({
   tab,
   runtime,
   frameState,
@@ -274,11 +278,12 @@ function HostedShellTabContent({
     runtime.reachability !== 'checking' &&
     runtime.reachability !== 'offline' &&
     runtime.errorMessage
-  const isFrameLoading = iframeSrc !== null && frameState.status !== 'loaded'
+  const isFrameLoading =
+    iframeSrc !== null && (frameState.status === 'idle' || frameState.status === 'loading')
   const showFrameError = iframeSrc !== null && frameState.status === 'error'
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" data-hosted-reachability={runtime.reachability}>
       {runtime.reachability === 'offline' && (
         <div className="border-border bg-muted/40 text-muted-foreground flex items-center justify-between gap-3 border-b px-3 py-2 text-xs">
           <span>
@@ -311,11 +316,15 @@ function HostedShellTabContent({
       {iframeSrc ? (
         <div className="relative flex min-h-0 flex-1" aria-busy={isFrameLoading}>
           {isFrameLoading && (
-            <div className="bg-background/70 pointer-events-none absolute inset-0 z-10 flex items-center justify-center backdrop-blur-[1px]">
-              <div className="border-border bg-background/90 text-foreground inline-flex items-center gap-2 border px-3 py-2 text-xs shadow-sm">
-                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                <span>Loading view...</span>
+            <div className="bg-background/85 pointer-events-none absolute inset-0 z-10 grid content-start gap-3 p-4 backdrop-blur-[1px]">
+              <AccessibleStatus>Loading hosted project</AccessibleStatus>
+              <RealtimeSkeleton className="h-8 w-48" />
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <RealtimeSkeleton className="h-24" />
+                <RealtimeSkeleton className="h-24" />
+                <RealtimeSkeleton className="h-24" />
               </div>
+              <RealtimeSkeleton className="h-48" />
             </div>
           )}
           {showFrameError && !isFrameLoading && (
@@ -332,6 +341,7 @@ function HostedShellTabContent({
             }}
             title={iframeTitle}
             src={iframeSrc}
+            allow="clipboard-read; clipboard-write"
             onLoad={() => {
               onFrameLoad(tab.id)
             }}
@@ -346,29 +356,30 @@ function HostedShellTabContent({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6 text-center">
-          <div className="max-w-sm space-y-2 text-sm">
-            {runtime.reachability === 'checking' && (
-              <>
-                <p className="font-nav text-xs uppercase tracking-[0.16em]">Connecting Backend</p>
+          {runtime.reachability === 'checking' ? (
+            <div className="w-full max-w-lg space-y-3 text-left" aria-busy="true">
+              <AccessibleStatus>connecting backend</AccessibleStatus>
+              <RealtimeSkeleton className="h-7 w-44" />
+              <RealtimeSkeleton className="h-3 w-3/4" />
+              <RealtimeSkeleton className="h-32 w-full" />
+            </div>
+          ) : (
+            <div className="max-w-sm space-y-2 text-sm">
+              {runtime.reachability === 'offline' && !iframeSrc && (
                 <p className="text-muted-foreground text-xs">
-                  Querying backend metadata and waiting for an embedded UI entrypoint.
+                  Waiting for this backend to come online.
                 </p>
-              </>
-            )}
-            {runtime.reachability === 'offline' && !iframeSrc && (
-              <p className="text-muted-foreground text-xs">
-                Waiting for this backend to come online.
-              </p>
-            )}
-            {runtime.reachability === 'authentication-required' && runtime.errorMessage && (
-              <p className="text-muted-foreground text-xs">{runtime.errorMessage}</p>
-            )}
-            {runtime.reachability === 'online' && runtime.errorMessage && (
-              <p className="text-muted-foreground text-xs">
-                This backend is reachable, but it does not expose a compatible embedded UI yet.
-              </p>
-            )}
-          </div>
+              )}
+              {runtime.reachability === 'authentication-required' && runtime.errorMessage && (
+                <p className="text-muted-foreground text-xs">{runtime.errorMessage}</p>
+              )}
+              {runtime.reachability === 'online' && runtime.errorMessage && (
+                <p className="text-muted-foreground text-xs">
+                  This backend is reachable, but it does not expose a compatible embedded UI yet.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -396,6 +407,7 @@ function createHostedShellTab(props: {
           'flex min-w-0 flex-col py-0.5 text-left transition',
           props.runtime.reachability === 'offline' && 'opacity-60 grayscale'
         )}
+        data-hosted-reachability={props.runtime.reachability}
       >
         <span className="flex min-w-0 items-center gap-1.5">
           {props.runtime.reachability === 'checking' && (
@@ -973,7 +985,7 @@ function HostedShellRuntime({
 
   return (
     <div
-      className="hosted-shell-root bg-background text-foreground flex min-h-screen min-w-0 flex-col"
+      className="hosted-shell-root bg-background text-foreground flex h-full min-h-0 min-w-0 flex-col"
       data-titlebar-overlay={pwaState.displayMode === 'window-controls-overlay'}
       style={rootStyle}
     >
@@ -986,7 +998,7 @@ function HostedShellRuntime({
       )}
 
       {tabs.length === 0 ? (
-        <div className="flex min-h-screen min-w-0 flex-col">
+        <div className="flex h-full min-h-0 min-w-0 flex-col">
           <div className="tabs-header border-border bg-terminal text-terminal-foreground flex min-w-0 items-stretch border-b">
             <div
               className="tabs-strip bg-terminal min-w-0 flex-1 px-4 py-3"
@@ -1054,7 +1066,7 @@ function HostedShellRuntime({
               updateStatus={updateState.status}
             />
           }
-          className="hosted-shell-tabs min-h-screen"
+          className="hosted-shell-tabs h-full min-h-0"
         />
       )}
 

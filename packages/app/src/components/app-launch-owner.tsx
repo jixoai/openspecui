@@ -1,17 +1,18 @@
 /**
- * Orthogonal intents (created 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Own browser/PWA launch relay for the complete App route lifetime.
  * 2. Apply credential-free launch targets through the shared connection store.
  * 3. Consume PWA launchQueue targets while keeping credentials in runtime memory.
- * 4. Preserve PWA-leader forwarding and best-effort source-window retirement.
+ * 4. Preserve browser/PWA-leader forwarding and best-effort source-window retirement.
  * 5. Preserve launch configuration errors for the Sessions presentation surface.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Owner-reported defect (2026-07-26): opening B or C eventually makes older tabs lose authentication.
+ * Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口。"
  */
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { consumeHostedLaunchUrl } from '../lib/bootstrap'
-import { createHostedLaunchRelay } from '../lib/launch-relay'
+import { createHostedLaunchRelay, type HostedLaunchDispatchResult } from '../lib/launch-relay'
 import { applyHostedLaunchRequest, type HostedShellLaunchRequest } from '../lib/shell-state'
 import { useConnectionsActions } from '../lib/use-connections'
 import { useRouterContext } from '../lib/use-router-context'
@@ -25,6 +26,16 @@ interface LaunchNavigator extends Navigator {
 }
 
 const AppLaunchErrorContext = createContext<string | null | undefined>(undefined)
+
+/** Retire a transient source after another browser/PWA App surface acknowledges the launch. */
+export function retireHostedLaunchSourceBestEffort(
+  result: HostedLaunchDispatchResult,
+  closeSource: () => void
+): void {
+  if (result === 'forwarded' || result === 'forwarded-to-pwa') {
+    closeSource()
+  }
+}
 
 function closeCurrentWindowBestEffort(): void {
   try {
@@ -55,9 +66,7 @@ export function AppLaunchOwner({ children }: { children: ReactNode }) {
     const dispatchLaunch = async (request: HostedShellLaunchRequest) => {
       setLaunchError(null)
       const result = await relay.dispatch(request)
-      if (result === 'forwarded-to-pwa') {
-        closeCurrentWindowBestEffort()
-      }
+      retireHostedLaunchSourceBestEffort(result, closeCurrentWindowBestEffort)
     }
     const stop = relay.start(applyLaunch)
 

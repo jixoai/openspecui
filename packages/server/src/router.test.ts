@@ -769,14 +769,18 @@ artifacts:
   const getDashboardSummary: DashboardProjectionServiceContract['getSummary'] = async () => {
     const overview = await dashboardOverviewService.getCurrent()
     return {
+      state: 'ready',
       identity: 'dashboard-summary-v2:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
       workGeneration: 1,
+      invalidationCause: 'initial',
       freshness: 'current',
+      snapshotGeneration: 1,
       data: {
         summary: overview.summary,
         specifications: overview.specifications,
         activeChanges: overview.activeChanges,
       },
+      error: null,
     }
   }
   const getDashboardTrends: DashboardProjectionServiceContract['getTrends'] = async () => {
@@ -802,6 +806,8 @@ artifacts:
         listener({
           identity: summary.identity,
           workGeneration: summary.workGeneration,
+          snapshotGeneration: summary.snapshotGeneration,
+          state: summary.state,
           cause: 'initial',
         })
       })

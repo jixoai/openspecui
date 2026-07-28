@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Define the normal-lifecycle visual language (shape, luminance, native motion) for realtime atoms.
  * 2. Preserve reduced-motion + hidden accessible equivalents without inventing progress/ETA.
  * 3. Keep list/scroll containers physically stable with native overflow anchoring.
  *
  * Original request (2026-07-23): "不用显示文字，可以用光影来替代，将它做成一种视觉语言，其实包括加载中等状态也是。"
+ * Original request (2026-07-28): "即将发生变更的区域应该发生一种类似 skeleton 的效果…让用户知道这部分区域的数据已经是旧的。"
  *
  * Compromise: these styles only extend existing theme tokens + native transitions. No global overlay,
- * persistent status label, fake percentage/ETA, hand-written scroll ledger, or infinite animation loop.
+ * persistent status label, fake percentage/ETA, hand-written scroll ledger, or hand-written JS animation loop.
  */
 
 /* Changing list/stream containers anchor physically so appended/prepended rows don't jump the viewport. */
@@ -55,13 +56,45 @@
   border-radius: var(--radius, 0px);
 }
 
-/* ---- Revalidation luminance cue: low-noise edge luminance over retained content ---- */
+/* ---- Revalidation veil: retained content stays readable while a skeleton-like sweep marks it stale ---- */
 [data-authority='display-only'] {
   position: relative;
 }
 .rt-revalidate-cue {
-  border-inline-start: 0.18rem solid color-mix(in oklab, var(--primary) 55%, transparent);
-  box-shadow: inset 0.12rem 0 0 0 color-mix(in oklab, var(--primary) 12%, transparent);
+  position: relative;
+  isolation: isolate;
+}
+.rt-revalidate-cue::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      105deg,
+      transparent 24%,
+      color-mix(in oklab, var(--foreground) 4%, transparent) 40%,
+      color-mix(in oklab, var(--primary) 10%, transparent) 50%,
+      color-mix(in oklab, var(--foreground) 4%, transparent) 60%,
+      transparent 76%
+    ),
+    color-mix(in oklab, var(--muted) 10%, transparent);
+  background-position:
+    140% 0,
+    0 0;
+  background-size:
+    220% 100%,
+    100% 100%;
+  animation: rt-revalidate-sweep 1.6s ease-in-out infinite;
+}
+@keyframes rt-revalidate-sweep {
+  100% {
+    background-position:
+      -140% 0,
+      0 0;
+  }
 }
 
 /* Changed-item settling cue: a brief luminance wash on a newly-committed item. */
@@ -115,22 +148,10 @@
   transition: inline-size 0.25s ease-out;
 }
 
-/* ---- Hidden accessible status equivalent (visible text is the exception, not the norm) ---- */
-.rt-sr-status {
-  position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 /* ---- Reduced motion: preserve contrast, disable nonessential motion, keep semantic state ---- */
 @media (prefers-reduced-motion: reduce) {
   .rt-skeleton::after,
+  .rt-revalidate-cue::after,
   .rt-settle,
   .rt-progress-indeterminate::after,
   .rt-progress-fill {
@@ -140,6 +161,10 @@
   /* A static luminance band replaces the shimmer so the loading state stays perceivable. */
   .rt-skeleton {
     background: color-mix(in oklab, var(--muted) 85%, transparent);
+  }
+  .rt-revalidate-cue::after {
+    background: color-mix(in oklab, var(--muted) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 5%, transparent);
   }
   .rt-progress-indeterminate::after {
     inset-inline-start: 0;

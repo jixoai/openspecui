@@ -1,20 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify the real Propose Create -> TerminalSpawnCommandDialog -> dedicated argv owner chain.
  * 2. Verify Root Context locks all terminal dispatch actions before payload preparation.
  * 3. Verify prepared planning-root targets become stale across Root replacement.
  * 4. Verify typed command, cwd, prompt, and generation evidence at the process owner.
+ * 5. Verify pending preparation keeps the Prepare command label stable.
  *
  * Original request (2026-07-21): "Propose: only traverse the real TerminalSpawnCommandDialog -> createShellSession chain."
  * Owner correction (2026-07-21): "Each item must have one production owner, one precise red case, and one green case."
  * Owner clarification (2026-07-22): Existing Launch Agent terminals remain valid workflow Send targets.
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
 import type {
   TerminalShellProfile,
   TerminalSpawnCommand,
 } from '@openspecui/core/terminal-invocation'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxProposeRoute } from './opsx-propose'
 
@@ -169,6 +171,20 @@ vi.mock('@/lib/opsx-workflow-invocation', async (importOriginal) => {
   }
 })
 
+function deferred<T>() {
+  let resolvePromise: ((value: T) => void) | null = null
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve
+  })
+  return {
+    promise,
+    resolve(value: T) {
+      if (!resolvePromise) throw new Error('Deferred promise resolver is not ready.')
+      resolvePromise(value)
+    },
+  }
+}
+
 describe('OpsxProposeRoute terminal target', () => {
   let queryClient: QueryClient
 
@@ -240,6 +256,37 @@ describe('OpsxProposeRoute terminal target', () => {
     )
 
     expect(setConfigMock).toHaveBeenCalledWith(expect.objectContaining({ onDismissRequest: null }))
+  })
+
+  it('keeps Prepare as the accessible command label while preparation is pending', async () => {
+    const preparation = deferred<unknown>()
+    prepareWorkflowInvocationMock.mockReturnValue(preparation.promise)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <OpsxProposeRoute />
+      </QueryClientProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare' }))
+    await waitFor(() => expect(prepareWorkflowInvocationMock).toHaveBeenCalledTimes(1))
+
+    const prepareButton = screen.getByRole('button', { name: 'Prepare' })
+    expect(prepareButton).toBeDisabled()
+    expect(prepareButton).toHaveAttribute('aria-busy', 'true')
+    expect(screen.queryByText('Preparing...')).toBeNull()
+
+    await act(async () => {
+      preparation.resolve({
+        kind: 'agent-prompt',
+        text: 'prepared proposal prompt',
+        format: 'markdown',
+        mode: { requestedMode: 'compose', actualMode: 'compose', fallbackReason: null },
+        target: null,
+        evidence: null,
+      })
+      await preparation.promise
+    })
   })
 
   it('opens the shared spawn dialog with prepared payload when target is create', async () => {

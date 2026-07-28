@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Pull typed Store list/Doctor Projection Work state after lifecycle-only Push.
+ * 1. Pull typed Store list/Doctor state on admission and after lifecycle-only Push.
  * 2. Retain same-locator Store data during revalidation, but mask it before a replacement locator's first render.
  * 3. Revoke Store mutation authority unless the Doctor projection and transport are current.
  * 4. Resolve hosted credentials only inside locator-scoped HTTP/WS clients.
@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  */
 import type {
   HostedCliProjectionNotice,
@@ -52,6 +53,10 @@ interface StoreProjectionNotices {
 interface StoreProjectionTransportCurrent {
   list: string | null
   doctor: string | null
+}
+
+interface StoreAdmissionPull {
+  epoch: number
 }
 
 /** A transport notice/error is meaningful only for the locator that delivered it. */
@@ -101,6 +106,19 @@ function noticeMatchesReadyState(
   )
 }
 
+function noticeMatchesProjectionState(
+  notice: HostedCliProjectionNotice,
+  state: HostedStoreListProjectionState | HostedStoreDoctorProjectionState | undefined
+): boolean {
+  return Boolean(
+    state &&
+      notice.identity === state.identity &&
+      notice.workGeneration === state.workGeneration &&
+      notice.snapshotGeneration === state.snapshotGeneration &&
+      notice.state === state.state
+  )
+}
+
 /** Observe Store Inventory/Doctor as lifecycle Push followed by typed HTTP Pull. */
 export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState {
   const { apiBaseUrl } = options
@@ -116,6 +134,14 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
   const [transportError, setTransportError] = useState<LocatorProjectionError | null>(null)
   const requestEpoch = useRef(0)
   const pullSequence = useRef({ list: 0, doctor: 0 })
+  const admissionPulls = useRef<Record<'list' | 'doctor', StoreAdmissionPull | null>>({
+    list: null,
+    doctor: null,
+  })
+  const latestProjectionState = useRef<{
+    list: HostedStoreListProjectionState | undefined
+    doctor: HostedStoreDoctorProjectionState | undefined
+  }>({ list: undefined, doctor: undefined })
   const transportFactory = useMemo(createTRPCCliProjectionTransportFactory, [])
 
   const pull = useCallback(
@@ -139,6 +165,7 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
           ) {
             return
           }
+          latestProjectionState.current.list = state
           setInventoryProjectionState({ apiBaseUrl, state })
         } else {
           const state = await fetchBackendStoreInspectorProjection({ apiBaseUrl })
@@ -150,6 +177,7 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
           ) {
             return
           }
+          latestProjectionState.current.doctor = state
           setInspectorProjectionState({ apiBaseUrl, state })
         }
       } catch (caught) {
@@ -181,6 +209,7 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
     setNotices({ list: null, doctor: null })
     setTransportCurrent({ list: null, doctor: null })
     setTransportError(null)
+    latestProjectionState.current = { list: undefined, doctor: undefined }
     if (!apiBaseUrl) return
 
     const transports: CliProjectionTransport[] = []
@@ -194,6 +223,10 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
             setNotices((current) => ({ ...current, [kind]: { apiBaseUrl, value: notice } }))
             setTransportCurrent((current) => ({ ...current, [kind]: apiBaseUrl }))
             setTransportError(null)
+            if (noticeMatchesProjectionState(notice, latestProjectionState.current[kind])) return
+            const admission = admissionPulls.current[kind]
+            if (admission?.epoch === epoch && notice.invalidationCause === 'initial') return
+            if (admission?.epoch === epoch) admissionPulls.current[kind] = null
             void pull(kind, epoch, notice)
           },
           onConnectionState() {
@@ -223,10 +256,21 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
           },
         }
       )
-    transports.push(connect('list'), connect('doctor'))
+    const admit = (kind: 'list' | 'doctor') => {
+      const admission = { epoch }
+      admissionPulls.current[kind] = admission
+      const admissionPull = pull(kind, epoch)
+      transports.push(connect(kind))
+      void admissionPull.finally(() => {
+        if (admissionPulls.current[kind] === admission) admissionPulls.current[kind] = null
+      })
+    }
+    admit('list')
+    admit('doctor')
 
     return () => {
       requestEpoch.current += 1
+      admissionPulls.current = { list: null, doctor: null }
       transports.forEach((transport) => transport.unsubscribe())
     }
   }, [apiBaseUrl, pull, transportFactory])

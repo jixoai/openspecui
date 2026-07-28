@@ -1,11 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Group online backends by opaque backend-issued environment identity.
  * 2. Expose capabilities as compatibility facts rather than permissions.
  * 3. Present every grouped connected project without a representative-locator collapse.
+ * 4. Distinguish unresolved observation from committed empty and retain groups during refresh.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
  */
+import { RealtimeRevalidateCue } from '@openspecui/web-src/components/realtime/realtime-cue'
+import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
+import { RealtimeSkeletonInventory } from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { Link } from '@tanstack/react-router'
 import { Boxes, FlaskConical, MonitorSmartphone, Store } from 'lucide-react'
 import { EmptyView } from '../components/state-views'
@@ -27,8 +33,13 @@ import { useEnvironmentObservation } from '../lib/use-environment'
  */
 export function EnvironmentRoute() {
   const { observations: connectionObservations } = useConnectionObservations()
+  const hasPendingObservations = connectionObservations.some(
+    (observation) => observation.reachability === 'checking'
+  )
   const observations = connectionObservations.flatMap((observation) =>
-    observation.current && observation.reachability === 'online' && observation.health
+    observation.health &&
+    ((observation.current && observation.reachability === 'online') ||
+      observation.reachability === 'checking')
       ? [
           {
             tabId: observation.tabId,
@@ -64,61 +75,68 @@ export function EnvironmentRoute() {
         reflects backend host identity plus the effective OpenSpec data home.
       </p>
 
-      {environments.length === 0 ? (
+      {hasPendingObservations && environments.length === 0 ? (
+        <>
+          <RealtimeSkeletonInventory mode="list-divide" count={3} rowClassName="h-24" />
+          <AccessibleStatus>Loading runtime environments</AccessibleStatus>
+        </>
+      ) : environments.length === 0 ? (
         <EmptyView title="No runtime environments observed">
           {/* TODO(kernel): 连接 backend 后，其 health 响应将携带 envUri，此处按 envUri 分组展示。 */}
           Connect a backend to observe its runtime environment.
         </EmptyView>
       ) : (
-        <div className="space-y-3">
-          {environments.map((env) => (
-            <article key={env.envUri} className="border-border space-y-3 rounded-lg border p-4">
-              <header className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Boxes className="text-muted-foreground h-4 w-4" />
-                  <span className="font-mono text-sm">{maskEnvUri(env.envUri)}</span>
-                </div>
-                <span className="text-muted-foreground text-xs">
-                  {env.connectedProjects.length} connected{' '}
-                  {env.connectedProjects.length === 1 ? 'project' : 'projects'}
-                </span>
-              </header>
-              <div className="border-border divide-border divide-y rounded-md border">
-                {env.connectedProjects.map((project) => (
-                  <div key={project.tabId} className="space-y-2 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">
-                          {project.projectName ?? project.apiBaseUrl}
+        <RealtimeRevalidateCue active={hasPendingObservations}>
+          <div className="space-y-3">
+            {environments.map((env) => (
+              <article key={env.envUri} className="border-border space-y-3 rounded-lg border p-4">
+                <header className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Boxes className="text-muted-foreground h-4 w-4" />
+                    <span className="font-mono text-sm">{maskEnvUri(env.envUri)}</span>
+                  </div>
+                  <span className="text-muted-foreground text-xs">
+                    {env.connectedProjects.length} connected{' '}
+                    {env.connectedProjects.length === 1 ? 'project' : 'projects'}
+                  </span>
+                </header>
+                <div className="border-border divide-border divide-y rounded-md border">
+                  {env.connectedProjects.map((project) => (
+                    <div key={project.tabId} className="space-y-2 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">
+                            {project.projectName ?? project.apiBaseUrl}
+                          </div>
+                          <div className="text-muted-foreground truncate font-mono text-xs">
+                            {project.apiBaseUrl}
+                          </div>
                         </div>
-                        <div className="text-muted-foreground truncate font-mono text-xs">
-                          {project.apiBaseUrl}
-                        </div>
+                        {project.cliVersion ? (
+                          <span className="text-muted-foreground shrink-0 text-xs">
+                            CLI {project.cliVersion}
+                          </span>
+                        ) : null}
                       </div>
-                      {project.cliVersion ? (
-                        <span className="text-muted-foreground shrink-0 text-xs">
-                          CLI {project.cliVersion}
-                        </span>
+                      {project.capabilities && project.capabilities.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {project.capabilities.map((capability) => (
+                            <span
+                              key={capability}
+                              className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
+                            >
+                              {capability}
+                            </span>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
-                    {project.capabilities && project.capabilities.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {project.capabilities.map((capability) => (
-                          <span
-                            key={capability}
-                            className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
-                          >
-                            {capability}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </article>
-          ))}
-        </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </RealtimeRevalidateCue>
       )}
     </div>
   )

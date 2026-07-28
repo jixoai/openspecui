@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Prove multi-source health/Root collection and reconnect re-probe without healthy-path timers.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Prove multi-source health/Root collection, initial Pull, and same-identity health/replacement single-flight.
  * 2. Prove exact-tab generations retire late removed/replaced results.
- * 3. Preserve per-source authentication and error states without cross-source fallback.
+ * 3. Preserve per-source authentication and event-driven disconnect states without cross-source fallback.
  * 4. Keep retained evidence and renderable health separate from replacement observation authority.
  * 5. Reject old-observation/new-tab hybrid authority.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Owner-reported defect (2026-07-26): "Dashboard加载完成的一瞬间开始reload。"
+ * Owner-reported defect (2026-07-27): "SessionTabs 的样式没有立刻更新成 Offline 的 icon。"
  */
 import { buildBackendHealthPayload, type HostedBackendHealthResponse } from '@openspecui/core'
 import {
@@ -172,17 +173,8 @@ function rootProjection(
   })
 }
 
-const immediateProjectionTransportFactory: CliProjectionTransportFactory = {
-  connect(_apiBaseUrl, _selector, callbacks) {
-    queueMicrotask(() => {
-      callbacks.onNotice({
-        identity: 'root-context:test',
-        workGeneration: 1,
-        snapshotGeneration: 1,
-        state: 'ready',
-        invalidationCause: 'initial',
-      })
-    })
+const passiveProjectionTransportFactory: CliProjectionTransportFactory = {
+  connect() {
     return { unsubscribe() {} }
   },
 }
@@ -191,7 +183,7 @@ function createConnectionObservationOwner(
   overrides: Parameters<typeof createProductionConnectionObservationOwner>[0]
 ) {
   return createProductionConnectionObservationOwner({
-    projectionTransportFactory: immediateProjectionTransportFactory,
+    projectionTransportFactory: passiveProjectionTransportFactory,
     refreshRootProjection: async () => {},
     ...overrides,
   })
@@ -230,6 +222,27 @@ function requireProjectionCallbacks(
 }
 
 describe('connection observation owner', () => {
+  it('pulls Root Context immediately after health settles without waiting for a lifecycle notice', async () => {
+    const fetchRootProjection = vi.fn(async () => rootProjection(readyRoot('project-a', 2)))
+    const owner = createConnectionObservationOwner({
+      probe: async () => online(health(API_A, 'project-a')),
+      fetchRootProjection,
+      projectionTransportFactory: {
+        connect() {
+          return { unsubscribe() {} }
+        },
+      },
+      now: () => 2,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+
+    await vi.waitFor(() => {
+      expect(fetchRootProjection).toHaveBeenCalledWith(API_A)
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+  })
+
   it('has no healthy timer and refreshes only for explicit focus or visible lifecycle events', async () => {
     vi.useFakeTimers()
     const refresh = vi.fn(async () => {})
@@ -516,6 +529,174 @@ describe('connection observation owner', () => {
     await refresh
   })
 
+  it('reuses a pending refresh observation across disconnect and reconnect', async () => {
+    const replacementProbe = deferred<HostedBackendProbeResult>()
+    const callbackCapture: ProjectionCallbackCapture = { current: null }
+    let probeCount = 0
+    const owner = createConnectionObservationOwner({
+      projectionTransportFactory: {
+        connect(_apiBaseUrl, _selector, nextCallbacks) {
+          callbackCapture.current = nextCallbacks
+          return { unsubscribe() {} }
+        },
+      },
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1
+          ? online(health(API_A, 'initial-generation'))
+          : replacementProbe.promise
+      },
+      fetchRootProjection: async () =>
+        rootProjection(readyRoot('project-a', probeCount), probeCount),
+      now: () => probeCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
+    const callbacks = requireProjectionCallbacks(callbackCapture)
+    callbacks.onConnectionState('pending')
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+
+    const refresh = owner.refresh(['a'])
+    await vi.waitFor(() => expect(probeCount).toBe(2))
+    callbacks.onConnectionState('connecting')
+    callbacks.onConnectionState('pending')
+    callbacks.onConnectionState('connecting')
+    callbacks.onConnectionState('pending')
+
+    expect(probeCount).toBe(2)
+
+    replacementProbe.resolve(online(health(API_A, 'replacement-generation')))
+    await refresh
+  })
+
+  it('reuses a pending terminal-failure probe when an explicit refresh starts', async () => {
+    const failureProbe = deferred<HostedBackendProbeResult>()
+    const callbackCapture: ProjectionCallbackCapture = { current: null }
+    let probeCount = 0
+    const refreshRootProjection = vi.fn(async () => {})
+    const owner = createConnectionObservationOwner({
+      projectionTransportFactory: {
+        connect(_apiBaseUrl, _selector, nextCallbacks) {
+          callbackCapture.current = nextCallbacks
+          return { unsubscribe() {} }
+        },
+      },
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1 ? online(health(API_A, 'initial-generation')) : failureProbe.promise
+      },
+      fetchRootProjection: async () =>
+        rootProjection(readyRoot('project-a', probeCount), probeCount),
+      refreshRootProjection,
+      now: () => probeCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
+    const callbacks = requireProjectionCallbacks(callbackCapture)
+    callbacks.onConnectionState('pending')
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+
+    callbacks.onError(new Error('transport failed'))
+    await vi.waitFor(() => expect(probeCount).toBe(2))
+    const refresh = owner.refresh(['a'])
+
+    expect(probeCount).toBe(2)
+
+    failureProbe.resolve(online(health(API_A, 'replacement-generation')))
+    await refresh
+    expect(refreshRootProjection).toHaveBeenCalledTimes(1)
+  })
+
+  it('promotes a pending reconnect observation when an explicit refresh arrives', async () => {
+    const reconnectProbe = deferred<HostedBackendProbeResult>()
+    const callbackCapture: ProjectionCallbackCapture = { current: null }
+    let probeCount = 0
+    const refreshRootProjection = vi.fn(async () => {})
+    const owner = createConnectionObservationOwner({
+      projectionTransportFactory: {
+        connect(_apiBaseUrl, _selector, nextCallbacks) {
+          callbackCapture.current = nextCallbacks
+          return { unsubscribe() {} }
+        },
+      },
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1
+          ? online(health(API_A, 'initial-generation'))
+          : reconnectProbe.promise
+      },
+      fetchRootProjection: async () =>
+        rootProjection(readyRoot('project-a', probeCount), probeCount),
+      refreshRootProjection,
+      now: () => probeCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
+    const callbacks = requireProjectionCallbacks(callbackCapture)
+    callbacks.onConnectionState('pending')
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+
+    callbacks.onConnectionState('connecting')
+    callbacks.onConnectionState('pending')
+    await vi.waitFor(() => expect(probeCount).toBe(2))
+    const refresh = owner.refresh(['a'])
+
+    expect(probeCount).toBe(2)
+
+    reconnectProbe.resolve(online(health(API_A, 'reconnect-generation')))
+    await refresh
+    expect(refreshRootProjection).toHaveBeenCalledTimes(1)
+  })
+
+  it('joins overlapping explicit refreshes for the same tab identity', async () => {
+    const replacementProbe = deferred<HostedBackendProbeResult>()
+    let probeCount = 0
+    const refreshRootProjection = vi.fn(async () => {})
+    const owner = createConnectionObservationOwner({
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1
+          ? online(health(API_A, 'initial-generation'))
+          : replacementProbe.promise
+      },
+      fetchRootProjection: async () =>
+        rootProjection(readyRoot('project-a', probeCount), probeCount),
+      refreshRootProjection,
+      now: () => probeCount + 1,
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
+    const initialGeneration = owner.getSnapshot().observations[0]?.generation
+
+    const firstRefresh = owner.refresh(['a'])
+    await vi.waitFor(() => expect(probeCount).toBe(2))
+    const replacementGeneration = owner.getSnapshot().observations[0]?.generation
+    const secondRefresh = owner.refresh(['a'])
+
+    expect(probeCount).toBe(2)
+    expect(replacementGeneration).not.toBe(initialGeneration)
+    expect(owner.getSnapshot().observations[0]?.generation).toBe(replacementGeneration)
+
+    replacementProbe.resolve(online(health(API_A, 'replacement-generation')))
+    await Promise.all([firstRefresh, secondRefresh])
+
+    expect(probeCount).toBe(2)
+    expect(refreshRootProjection).toHaveBeenCalledTimes(1)
+    expect(owner.getSnapshot().observations[0]?.generation).toBe(replacementGeneration)
+  })
+
   it('keeps retained Root and Reference evidence stale until replacement data commits', async () => {
     const replacementRoot = deferred<HostedRootContextState>()
     let rootFetchCount = 0
@@ -617,7 +798,7 @@ describe('connection observation owner', () => {
     })
   })
 
-  it('re-probes health and credential authority before recommitting Root after reconnect', async () => {
+  it('revalidates health and credential authority before recommitting Root after reconnect', async () => {
     const callbackCapture: ProjectionCallbackCapture = { current: null }
     let probeCount = 0
     let rootFetchCount = 0
@@ -652,6 +833,9 @@ describe('connection observation owner', () => {
     owner.setTabs([tab('a', API_A)])
     await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
     const callbacks = requireProjectionCallbacks(callbackCapture)
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
     callbacks.onConnectionState('pending')
     callbacks.onNotice({
       identity: 'root-context:test',
@@ -688,6 +872,43 @@ describe('connection observation owner', () => {
     expect(rootFetchCount).toBe(2)
   })
 
+  it('publishes objective Offline from an established transport disconnect before reconnect', async () => {
+    const callbackCapture: ProjectionCallbackCapture = { current: null }
+    let probeCount = 0
+    const owner = createConnectionObservationOwner({
+      projectionTransportFactory: {
+        connect(_apiBaseUrl, _selector, nextCallbacks) {
+          callbackCapture.current = nextCallbacks
+          return { unsubscribe() {} }
+        },
+      },
+      probe: async () => {
+        probeCount += 1
+        return probeCount === 1
+          ? online(health(API_A, 'project-a'))
+          : { reachability: 'offline', health: null, errorMessage: 'backend offline' }
+      },
+      fetchRootProjection: async () => rootProjection(readyRoot('project-a', 1)),
+    })
+
+    owner.setTabs([tab('a', API_A)])
+    await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
+    await vi.waitFor(() => expect(owner.getSnapshot().observations[0]?.current).toBe(true))
+    const callbacks = requireProjectionCallbacks(callbackCapture)
+    callbacks.onConnectionState('pending')
+    callbacks.onConnectionState('connecting')
+
+    await vi.waitFor(() => {
+      expect(probeCount).toBe(2)
+      expect(owner.getSnapshot().observations[0]).toMatchObject({
+        reachability: 'offline',
+        healthError: 'backend offline',
+        current: false,
+        stale: true,
+      })
+    })
+  })
+
   it('keeps retained Root display-only when reconnect health loses its credential', async () => {
     const callbackCapture: ProjectionCallbackCapture = { current: null }
     let probeCount = 0
@@ -718,6 +939,9 @@ describe('connection observation owner', () => {
     owner.setTabs([tab('a', API_A)])
     await vi.waitFor(() => expect(callbackCapture.current).not.toBeNull())
     const callbacks = requireProjectionCallbacks(callbackCapture)
+    await vi.waitFor(() => {
+      expect(owner.getSnapshot().observations[0]?.rootAttempt.status).toBe('ready')
+    })
     callbacks.onConnectionState('pending')
     callbacks.onNotice({
       identity: 'root-context:test',

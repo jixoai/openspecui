@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prove Dashboard planning metrics render before lower-priority workflow projections are admitted.
  * 2. Prove rendered A-to-B refresh/removal intents conflict visibly, settle, and resume on B.
  * 3. Prove live Code Git navigation carries the backend-issued binding token.
@@ -9,6 +9,7 @@
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Dashboard Git provenance.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
 import type { DashboardGitRefreshControlProps } from '@/components/dashboard/git-refresh-control'
 import type { DashboardGitWorktree, GitRepositoryScopes } from '@openspecui/core'
@@ -377,16 +378,17 @@ describe('Dashboard', () => {
       },
     })
 
-    render(<Dashboard />)
+    const { container } = render(<Dashboard />)
 
     expect(screen.getByTestId('metric-card:Specifications / Requirements')).toHaveTextContent(
       '12 / 24'
     )
     expect(screen.getByRole('heading', { name: 'Active Changes' })).toBeInTheDocument()
-    expect(screen.getByText('Updating dashboard summary...')).toBeInTheDocument()
-    // Trends loading is now a visual skeleton region (luminance language) rather than routine copy.
+    expect(container.querySelector('.rt-revalidate-cue')).not.toBeNull()
+    expect(screen.queryByText('Updating dashboard summary...')).toBeNull()
     expect(screen.getByText('Active Changes')).toBeInTheDocument()
-    expect(screen.getByText('Loading Code Git snapshot...')).toBeInTheDocument()
+    expect(container.querySelectorAll('.rt-skeleton').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Loading Code Git snapshot...')).toBeNull()
   })
 
   it('admits lower-priority workflow projections only after Summary is renderable', () => {

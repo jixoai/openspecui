@@ -1,16 +1,19 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Compose or generate the Quick Propose invocation payload.
  * 2. Persist invocation mode and dispatch to an existing or new terminal.
  * 3. Lock payload preparation and dispatch until Root Context is ready.
  * 4. Preserve and verify the Server-owned planning-root target before dispatch.
+ * 5. Keep the Prepare command label stable while visual activity reports pending work.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
 import { ButtonGroup } from '@/components/button-group'
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
+import { AsyncAction } from '@/components/realtime'
 import { RootActionNotice } from '@/components/root-action-notice'
 import { TerminalDispatchActions } from '@/components/terminal/terminal-dispatch-actions'
 import { navController } from '@/lib/nav-controller'
@@ -197,7 +200,7 @@ export function OpsxProposeRoute() {
           placeholder="e.g. add workspace kanban support for active changes"
           editorMinHeight="180px"
         />
-        <button
+        <AsyncAction
           type="button"
           onClick={() =>
             void prepareInvocation().catch((error: unknown) =>
@@ -205,10 +208,11 @@ export function OpsxProposeRoute() {
             )
           }
           disabled={rootAction.disabled || isPreparing}
-          className="bg-primary text-primary-foreground inline-flex h-9 items-center justify-center rounded-md px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          pending={isPreparing}
+          className="w-full"
         >
-          {isPreparing ? 'Preparing...' : 'Prepare'}
-        </button>
+          Prepare
+        </AsyncAction>
         <div className="bg-muted/30 border-border rounded-md border px-3 py-2 text-xs">
           <span className="text-muted-foreground mr-1">Invocation:</span>
           <code className="whitespace-pre-wrap break-words">

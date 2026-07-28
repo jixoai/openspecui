@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-21 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Verify new-change execution remains locked until Root Context succeeds.
  * 2. Verify prepared planning-root targets render before terminal creation.
  * 3. Verify Root A to B replacement locks stale Create dispatch.
  * 4. Verify Store selector arguments shown in the prepared command are the dispatched arguments.
+ * 5. Verify pending submission keeps the Create command label stable.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxNewRoute } from './opsx-new'
 
@@ -52,6 +54,20 @@ vi.mock('@/lib/view-transitions/navigation', () => ({
   vtNavController: { push: vi.fn() },
 }))
 
+function deferred<T>() {
+  let resolvePromise: ((value: T) => void) | null = null
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve
+  })
+  return {
+    promise,
+    resolve(value: T) {
+      if (!resolvePromise) throw new Error('Deferred promise resolver is not ready.')
+      resolvePromise(value)
+    },
+  }
+}
+
 describe('OpsxNewRoute', () => {
   afterEach(() => {
     cleanup()
@@ -83,6 +99,44 @@ describe('OpsxNewRoute', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Doctor exit: 1')
     expect(prepareWorkflowInvocationMock).not.toHaveBeenCalled()
     expect(createDedicatedSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps Create as the accessible command label while submission is pending', async () => {
+    rootActionMock.mockReturnValue({
+      status: 'ready',
+      disabled: false,
+      context: null,
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+    })
+    const preparation = deferred<unknown>()
+    prepareWorkflowInvocationMock.mockReturnValue(preparation.promise)
+
+    render(<OpsxNewRoute />)
+    fireEvent.change(screen.getByPlaceholderText('add-search-poparea'), {
+      target: { value: 'add-search' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    await waitFor(() => expect(prepareWorkflowInvocationMock).toHaveBeenCalledTimes(1))
+
+    const createButton = screen.getByRole('button', { name: 'Create' })
+    expect(createButton).toBeDisabled()
+    expect(createButton).toHaveAttribute('aria-busy', 'true')
+    expect(screen.queryByText('Creating...')).toBeNull()
+
+    await act(async () => {
+      preparation.resolve({
+        kind: 'cli-command',
+        command: 'openspec',
+        args: ['new', 'change', 'add-search'],
+        mode: { requestedMode: 'direct', actualMode: 'direct', fallbackReason: null },
+        target: null,
+        evidence: null,
+      })
+      await preparation.promise
+    })
   })
 
   it('locks an A command after same-path Root B replaces its generation', async () => {

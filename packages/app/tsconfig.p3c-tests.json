@@ -4,6 +4,7 @@
     "types": ["node", "vite/client"]
   },
   "include": [
+    "src/components/app-launch-owner.test.ts",
     "src/components/store-remove-dialog.test.tsx",
     "src/components/store-mutation-lifecycle.test.tsx",
     "src/lib/store-action-correlation.test.ts",

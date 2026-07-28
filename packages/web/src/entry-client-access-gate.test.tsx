@@ -1,6 +1,7 @@
 /**
- * Orthogonal intents (created 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove the real Project Web entry consumes a root-route launch credential before App-owned navigation and network owners initialize.
+ * 2. Prove admission completes before the App-owned root-route canonicalization runs.
  *
  * Original request (2026-07-26): "行，那你现在把要修复的代码和测试先写完，完成后我再测试。"
  * Defect evidence (2026-07-26): App-normalized `/dashboard` requests omitted Authorization after the
@@ -92,8 +93,8 @@ describe('Project Web entry Access Gate bootstrap', () => {
         url: 'http://localhost:3111/api/health',
         authorization: 'Bearer entry-secret',
       })
+      expect(window.location.pathname).toBe('/dashboard')
     })
-    expect(window.location.pathname).toBe('/dashboard')
     expect(window.location.hash).toBe('')
     expect(window.location.href).not.toContain('entry-secret')
   })

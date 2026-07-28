@@ -1,4 +1,5 @@
 @import '../../web/src/index.css';
+@import '../../web/src/styles/realtime.css';
 @source './';
 @source '../../web/src';
 

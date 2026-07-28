@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-21 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Prepare and dispatch change-scoped OPSX workflow prompts or commands.
  * 2. Preserve invocation diagnostics and action identity in the compose dialog.
  * 3. Verify the Server-owned planning-root target before terminal dispatch.
@@ -7,10 +7,12 @@
  * 5. Track dirty draft ownership by Root Context generation and require explicit recovery.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  */
 import { CodeEditor } from '@/components/code-editor'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
+import { RealtimeRevalidateCue } from '@/components/realtime'
 import { RootActionNotice } from '@/components/root-action-notice'
 import { TerminalDispatchActions } from '@/components/terminal/terminal-dispatch-actions'
 import {
@@ -38,7 +40,7 @@ import { useConfigSubscription } from '@/lib/use-subscription'
 import type { WorkflowActionEvidenceV2, WorkflowInvocationTargetV2 } from '@openspecui/core'
 import { OPSX_WORKFLOW_LABELS } from '@openspecui/core/opsx-workflows'
 import { useLocation } from '@tanstack/react-router'
-import { AlertCircle, Loader2 } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 const COMPOSE_DRAFT_RECOVERY_REASON =
@@ -334,13 +336,6 @@ export function OpsxComposeRoute() {
           </details>
         ) : null}
 
-        {isLoadingDraft && (
-          <div className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Generating prompt...
-          </div>
-        )}
-
         {draftError && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700">
             <div className="flex items-center gap-2 font-medium">
@@ -392,27 +387,34 @@ export function OpsxComposeRoute() {
           </div>
         )}
 
-        <label className="flex max-h-full min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-hidden">
-          <span className="text-sm font-medium">Prompt</span>
-          <CodeEditor
-            value={draft}
-            onChange={(value) => {
-              const nextOwnership = captureComposeDraftOwnership(
-                draftOwnershipRef.current,
-                currentRootIdentityRef.current
-              )
-              draftOwnershipRef.current = nextOwnership
-              setDraftOwnership(nextOwnership)
-              setDraft(value)
-            }}
-            language="markdown"
-            lineNumbers={false}
-            lineWrapping
-            className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto border"
-            editorMinHeight="0px"
-            placeholder="Compose prompt..."
-          />
-        </label>
+        <RealtimeRevalidateCue
+          active={isLoadingDraft}
+          statusLabel="preparing prompt"
+          persistent
+          className="flex max-h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+        >
+          <label className="flex max-h-full min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-hidden">
+            <span className="text-sm font-medium">Prompt</span>
+            <CodeEditor
+              value={draft}
+              onChange={(value) => {
+                const nextOwnership = captureComposeDraftOwnership(
+                  draftOwnershipRef.current,
+                  currentRootIdentityRef.current
+                )
+                draftOwnershipRef.current = nextOwnership
+                setDraftOwnership(nextOwnership)
+                setDraft(value)
+              }}
+              language="markdown"
+              lineNumbers={false}
+              lineWrapping
+              className="scrollbar-thin scrollbar-track-transparent min-h-0 flex-1 overflow-auto border"
+              editorMinHeight="0px"
+              placeholder="Compose prompt..."
+            />
+          </label>
+        </RealtimeRevalidateCue>
       </div>
       <div className="border-border mt-1 border-t p-4">
         <fieldset

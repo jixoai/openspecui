@@ -1,18 +1,28 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify Context projects CLI-selected root, Store, launch, and inherited data-scope facts.
  * 2. Verify direct Reference diagnostics remain neutral, read-only, and incomplete-by-design.
  * 3. Verify loading, refreshing, terminal-error, stale-error, and command-evidence states stay distinct.
+ * 4. Verify Static Context uses only publication-safe snapshot facts and starts no live owner.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
  */
-import type { RootContext, RootContextState } from '@openspecui/core'
+import type { ExportSnapshot, RootContext, RootContextState } from '@openspecui/core'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { StaticDataProvider } from '../ssg/static-data-context'
 import { ContextView } from './context'
 
 const useContextSubscriptionMock = vi.hoisted(() => vi.fn())
+const staticMode = vi.hoisted(() => ({ value: false }))
+
+vi.mock('@/lib/static-mode', () => ({
+  getInitialData: () => null,
+  isStaticMode: () => staticMode.value,
+}))
 
 vi.mock('@/lib/use-context-subscription', () => ({
   useContextSubscription: useContextSubscriptionMock,
@@ -69,6 +79,7 @@ function readyState(context: RootContext = rootContext()): RootContextState {
 
 describe('ContextView', () => {
   beforeEach(() => {
+    staticMode.value = false
     useContextSubscriptionMock.mockReset()
     setState({})
   })
@@ -121,9 +132,11 @@ describe('ContextView', () => {
       } satisfies RootContextState,
     })
 
-    render(<ContextView />)
+    const { container } = render(<ContextView />)
 
-    expect(screen.getByText('Updating')).toBeTruthy()
+    expect(container.querySelector('.rt-revalidate-cue')).not.toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('updating')
+    expect(screen.queryByText('Updating')).toBeNull()
     expect(screen.getByText('/tmp/planning')).toBeTruthy()
   })
 
@@ -346,5 +359,78 @@ describe('ContextView', () => {
     expect(screen.getByText('doctor failed')).toBeTruthy()
     expect(screen.getByText('root contract drift')).toBeTruthy()
     expect(screen.getByText('{"root":null}')).toBeTruthy()
+  })
+
+  it('renders publication-safe Static Context without starting the live subscription', () => {
+    staticMode.value = true
+    const snapshot: ExportSnapshot = {
+      meta: {
+        timestamp: '2026-07-28T00:00:00.000Z',
+        observedAt: 42,
+        version: '6.0.0',
+        projectName: 'project-a',
+        root: {
+          planningRootPath: 'store-a/openspec',
+          rootSource: 'store',
+          storeId: 'writable-a',
+        },
+        referencePolicy: {
+          kind: 'include',
+          referenceSources: [{ storeId: 'shared-reference', state: 'ready', specCount: 2 }],
+        },
+      },
+      dashboard: { specsCount: 2, changesCount: 0, archivesCount: 0 },
+      specs: [],
+      changes: [],
+      archives: [],
+    }
+
+    render(
+      <StaticDataProvider snapshot={snapshot}>
+        <ContextView />
+      </StaticDataProvider>
+    )
+
+    expect(useContextSubscriptionMock).not.toHaveBeenCalled()
+    expect(screen.getByText('project-a')).toBeTruthy()
+    expect(screen.getByText('store-a/openspec')).toBeTruthy()
+    expect(screen.getByText('writable-a')).toBeTruthy()
+    expect(screen.getByText('shared-reference')).toBeTruthy()
+    expect(screen.getByText(/2 published Specs/)).toBeTruthy()
+    expect(
+      screen.getByText(/Runtime CLI evidence, registry, and data scope are not published/)
+    ).toBeTruthy()
+    expect(document.body.textContent).not.toMatch(/envUri|XDG_DATA_HOME|stdout|stderr/)
+  })
+
+  it('does not leak Reference Store identities for an omitted static policy', () => {
+    staticMode.value = true
+    const snapshot: ExportSnapshot = {
+      meta: {
+        timestamp: '2026-07-28T00:00:00.000Z',
+        observedAt: 42,
+        version: '6.0.0',
+        projectName: 'project-a',
+        root: {
+          planningRootPath: 'project-a/openspec',
+          rootSource: 'nearest',
+          storeId: null,
+        },
+        referencePolicy: { kind: 'omit', referenceSourceCount: 2 },
+      },
+      dashboard: { specsCount: 0, changesCount: 0, archivesCount: 0 },
+      specs: [],
+      changes: [],
+      archives: [],
+    }
+
+    render(
+      <StaticDataProvider snapshot={snapshot}>
+        <ContextView />
+      </StaticDataProvider>
+    )
+
+    expect(screen.getByText(/2 Reference sources were observed and omitted/)).toBeTruthy()
+    expect(document.body.textContent).not.toContain('shared-reference')
   })
 })

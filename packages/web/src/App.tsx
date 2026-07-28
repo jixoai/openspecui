@@ -1,8 +1,21 @@
+/**
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Compose live Web providers and the main Router owner.
+ * 2. Bootstrap IDE main, bottom, and pop navigation histories.
+ * 3. Preserve static/live router selection and shared base-path behavior.
+ * 4. Install theme and View Transition runtime ownership.
+ * 5. Render route admission through the shared visual lifecycle geometry.
+ *
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Compromise: provider and router bootstrap remain co-located because TanStack Router registration and the
+ * main/bottom/pop singleton wiring are module-scoped runtime ownership.
+ */
 import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider, createRootRoute, createRouter } from '@tanstack/react-router'
 import { RootLayout } from './components/layout'
 import { BottomArea, setBottomRouter } from './components/layout/bottom-area'
 import { PopArea, setPopRouter } from './components/layout/pop-area'
+import { RoutePendingSkeleton } from './components/realtime'
 import { ThemeBootstrap } from './components/theme-bootstrap'
 import './index.css'
 import { ArchiveModalProvider } from './lib/archive-modal-context'
@@ -23,11 +36,7 @@ const isStatic = isStaticMode()
 // Root layout for main area
 const mainRoot = createRootRoute({
   component: RootLayout,
-  pendingComponent: () => (
-    <div className="route-loading text-muted-foreground animate-pulse p-6 text-center text-sm">
-      Loading...
-    </div>
-  ),
+  pendingComponent: RoutePendingSkeleton,
 })
 
 const basepath = getBasePath()
