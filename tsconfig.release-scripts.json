@@ -1,0 +1,20 @@
+{
+  // Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+  // 1. Typecheck release entrypoints and their transitive owners.
+  // 2. Typecheck focused release tests instead of relying on transpilation.
+  // Original request (2026-07-28): "我想先发布一个beta版本"
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [
+    "scripts/changeversion-auto.ts",
+    "scripts/create-github-release.ts",
+    "scripts/publish-packages.ts",
+    "scripts/lib/changeversion/**/*.ts",
+    "scripts/lib/publish-packages/**/*.ts",
+    "scripts/lib/release/channel*.ts",
+    "scripts/lib/release/github-release*.ts"
+  ]
+}

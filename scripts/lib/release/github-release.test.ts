@@ -1,8 +1,18 @@
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Prove changelog extraction and fallback notes.
+ * 2. Prove canonical release tag and title identity.
+ * 3. Prove prerelease GitHub flags follow version truth.
+ *
+ * Original request (2026-07-28): "我想先发布一个beta版本"
+ */
+
 import { describe, expect, it } from 'vitest'
 
 import {
   extractChangelogSection,
   formatGithubReleaseNotes,
+  getGithubReleaseChannelFlags,
   getGithubReleaseTag,
   getGithubReleaseTitle,
 } from './github-release'
@@ -58,5 +68,10 @@ describe('github release helpers', () => {
   it('builds the canonical release tag and title', () => {
     expect(getGithubReleaseTag('openspecui', '3.11.0')).toBe('openspecui@3.11.0')
     expect(getGithubReleaseTitle('openspecui', '3.11.0')).toBe('openspecui 3.11.0')
+  })
+
+  it('marks only SemVer prereleases as GitHub prereleases', () => {
+    expect(getGithubReleaseChannelFlags('6.0.0-beta.0')).toEqual(['--prerelease', '--latest=false'])
+    expect(getGithubReleaseChannelFlags('6.0.0')).toEqual([])
   })
 })

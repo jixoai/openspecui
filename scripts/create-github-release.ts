@@ -1,4 +1,13 @@
 #!/usr/bin/env bun
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Materialize the current CLI package tag as a GitHub Release.
+ * 2. Preserve changelog-derived notes across create and update.
+ * 3. Mark prerelease versions without making them latest.
+ *
+ * Original request (2026-07-28): "我想先发布一个beta版本"
+ */
+
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -7,6 +16,7 @@ import { join } from 'node:path'
 import {
   extractChangelogSection,
   formatGithubReleaseNotes,
+  getGithubReleaseChannelFlags,
   getGithubReleaseTag,
   getGithubReleaseTitle,
 } from './lib/release/github-release'
@@ -90,6 +100,7 @@ function main(): void {
   const { name, version } = readCliManifest(rootDir)
   const tag = getGithubReleaseTag(name, version)
   const title = getGithubReleaseTitle(name, version)
+  const channelFlags = getGithubReleaseChannelFlags(version)
   const changelogSection = extractChangelogSection(readCliChangelog(rootDir), version)
   const notes = formatGithubReleaseNotes({
     packageName: name,
@@ -113,14 +124,24 @@ function main(): void {
       console.log(`[release] updating GitHub release ${tag}`)
       runOrThrow(
         commandFor('gh'),
-        ['release', 'edit', tag, '--title', title, '--notes-file', notesPath],
+        ['release', 'edit', tag, '--title', title, '--notes-file', notesPath, ...channelFlags],
         rootDir
       )
     } else {
       console.log(`[release] creating GitHub release ${tag}`)
       runOrThrow(
         commandFor('gh'),
-        ['release', 'create', tag, '--verify-tag', '--title', title, '--notes-file', notesPath],
+        [
+          'release',
+          'create',
+          tag,
+          '--verify-tag',
+          '--title',
+          title,
+          '--notes-file',
+          notesPath,
+          ...channelFlags,
+        ],
         rootDir
       )
     }

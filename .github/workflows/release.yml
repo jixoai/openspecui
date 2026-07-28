@@ -1,3 +1,10 @@
+# Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+# 1. Build required native artifacts before package publication.
+# 2. Publish and recover one objective workspace release.
+# 3. Push release tags without pushing a stale branch ref.
+# 4. Synchronize GitHub release notes only after real release work.
+# Original request (2026-07-28): "我想先发布一个beta版本"
+
 name: Release
 
 on:
@@ -126,14 +133,17 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
 
       - name: Publish packages
+        id: publish
         env:
           NPM_CONFIG_PROVENANCE: 'true'
         run: pnpm release:packages
 
       - name: Push release tags
-        run: git push --follow-tags
+        if: steps.publish.outputs.release_created == 'true'
+        run: git push origin --tags
 
       - name: Sync GitHub Release notes
+        if: steps.publish.outputs.release_created == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: pnpm release:github
