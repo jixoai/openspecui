@@ -44,7 +44,7 @@ Owner decision (2026-07-28): implement the reviewed rewrite now.
 - [x] 5.7 Specify a bounded live Board with one horizontal scroll owner and independent lane vertical owners
 - [x] 5.8 Lock the live layout owners with focused tests, then implement the route/grid/lane flex chain
 - [x] 5.9 Pass focused unit, Web typecheck, clean SSG, strict OpenSpec, and repository delivery gates
-- [ ] 5.10 Push the corrected PR and record remote checks
+- [x] 5.10 Push the corrected PR and record remote checks
 - [ ] 5.11 Owner completes final visual and real browser walkthrough
 
 ## 6. Finalization

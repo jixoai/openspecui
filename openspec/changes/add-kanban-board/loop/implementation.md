@@ -9,7 +9,7 @@ Owner decision (2026-07-28): implement the reviewed Kanban rewrite.
 
 ## Current State
 
-Status: **live Board scroll correction passes local delivery gates; remote delivery pending**.
+Status: **live Board scroll correction delivered; owner visual acceptance pending**.
 
 The contributor implementation at commits `5def094` and `9763458` is characterization input only. Its old
 frontend-only completion claims, lifecycle names, helper tests, SSG registration evidence, and green-gate counts
@@ -91,6 +91,24 @@ git diff --check                       passed
 
 The clean SSG and unit lanes retained the previously recorded non-fatal `scroll-button(*)`, ineffective dynamic
 import, and jsdom Canvas warnings. No Agent visual or end-to-end browser walkthrough was performed.
+
+## Live Board Scroll Remote Evidence (2026-07-28)
+
+```text
+PR                                      #208 (open / clean)
+scroll delivery head                    5977efd7addd6bd278dff463df0460339059fff6
+workflow run                            30367543997
+Changeset Gate                          passed
+CI Scope                                passed
+Fast Gate                               passed
+Browser Gate (@openspecui/web)          passed
+Browser Gate (xterm-input-panel)        passed
+aggregate Browser Gate                  passed
+```
+
+The implementation and local-evidence head was fast-forwarded to both the maintainer branch and contributor fork.
+GitHub completed all required checks successfully. These checks close checkpoint 5.10 only; final visual and
+real-browser acceptance remains owner checkpoint 5.11.
 
 Updated delivery evidence:
 
