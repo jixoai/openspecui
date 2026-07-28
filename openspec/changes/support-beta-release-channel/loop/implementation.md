@@ -9,14 +9,14 @@ Original request (2026-07-28): "我想先发布一个beta版本"
 
 ## Implementation State
 
-Status: infrastructure PR #214 merged; the CLI-entry correction and focused evidence are complete, with correction PR delivery pending. No registry state has changed.
+Status: `6.0.0-beta.0` published and independently verified; formal spec sync and archive remain.
 
 ```text
 release-channel projection   implemented
 changeversion prerelease     implemented
 retry-safe publication       implemented
 workflow tag-only delivery   implemented
-real beta publication        pending
+real beta publication        published
 ```
 
 ## Decisions Taken
@@ -98,6 +98,32 @@ parsed the beta intent and reached the feature-branch safety guard
 ## Divergence Notes
 
 - The first `pnpm changeversion --pre beta` attempt failed before Changesets mutation because Yargs 18 treated the boolean option's default `false` as present for `.conflicts('pre', 'exit-pre')`. The typed prerelease planner already distinguishes a real `exitPre: true` conflict, but the production argument parser was not directly covered. The correction moved production parsing behind checked evidence and removed the duplicate Yargs-level conflict owner; the same real command now crosses parsing and stops at the expected non-main branch guard.
+- The first corrected retry hit a transient `LibreSSL SSL_ERROR_SYSCALL` during the initial `git fetch origin main`. It occurred before Changesets mutation, left `main` clean, and the unchanged retry succeeded.
+
+## Final Delivery Evidence
+
+```text
+Infrastructure PR   #214 -> 5240de2
+Parser fix PR       #215 -> 8ffc603
+Version PR          #216 -> b4c6b41
+Release workflow    30350027385, exact head b4c6b41, success
+GitHub prerelease   openspecui@6.0.0-beta.0, published 2026-07-28T10:40:08Z
+GitHub latest       openspecui@5.0.0
+```
+
+The version PR persisted `.changeset/pre.json` with `mode=pre`, `tag=beta`, and all seven accepted OpenSpec 6 changesets. It generated `6.0.0-beta.0` package versions and changelog sections for the fixed OpenSpecUI family while leaving unrelated `ctranslate2` and `xterm-input-panel` versions unchanged.
+
+Registry verification:
+
+```text
+openspecui          beta=6.0.0-beta.0  latest=5.0.0
+@openspecui/core    beta=6.0.0-beta.0  latest=5.0.0
+@openspecui/search  beta=6.0.0-beta.0  latest=5.0.0
+@openspecui/server  beta=6.0.0-beta.0  latest=5.0.0
+@openspecui/web     beta=6.0.0-beta.0  latest=5.0.0
+```
+
+The workflow log independently recorded `npm notice Publishing ... with tag beta` for all five packages, created the five corresponding Changesets tags, pushed tag refs only, and created the GitHub prerelease. Every annotated tag dereferences to exact release head `b4c6b41f4a695065a7d37fb5a6373d30d90e649d`.
 
 ## Loopback Triggers
 
