@@ -9,7 +9,7 @@ Original request (2026-07-28): "我想先发布一个beta版本"
 
 ## Implementation State
 
-Status: infrastructure PR #214 merged; the first real changeversion attempt stopped before mutation and its CLI-entry correction is pending. No registry state has changed.
+Status: infrastructure PR #214 merged; the CLI-entry correction and focused evidence are complete, with correction PR delivery pending. No registry state has changed.
 
 ```text
 release-channel projection   implemented
@@ -82,9 +82,22 @@ openspec validate support-beta-release-channel --strict
 
 The release script's real registry probe remained a safe no-op against the stable `5.0.0` state.
 
+Production parser correction evidence:
+
+```text
+pnpm exec vitest run scripts/lib/changeversion/prerelease-mode.test.ts
+1 file / 9 tests passed
+
+pnpm typecheck:scripts
+passed
+
+pnpm changeversion --pre beta
+parsed the beta intent and reached the feature-branch safety guard
+```
+
 ## Divergence Notes
 
-- The first `pnpm changeversion --pre beta` attempt failed before Changesets mutation because Yargs 18 treated the boolean option's default `false` as present for `.conflicts('pre', 'exit-pre')`. The typed prerelease planner already distinguishes a real `exitPre: true` conflict, but the production argument parser was not directly covered. The correction moves production parsing behind checked evidence and removes the duplicate Yargs-level conflict owner.
+- The first `pnpm changeversion --pre beta` attempt failed before Changesets mutation because Yargs 18 treated the boolean option's default `false` as present for `.conflicts('pre', 'exit-pre')`. The typed prerelease planner already distinguishes a real `exitPre: true` conflict, but the production argument parser was not directly covered. The correction moved production parsing behind checked evidence and removed the duplicate Yargs-level conflict owner; the same real command now crosses parsing and stops at the expected non-main branch guard.
 
 ## Loopback Triggers
 

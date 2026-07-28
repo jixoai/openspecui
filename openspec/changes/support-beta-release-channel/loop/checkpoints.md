@@ -32,7 +32,7 @@ Original request (2026-07-28): "我想先发布一个beta版本"
 - [x] 4.2 Update repository architecture law and canonical Chinese vocabulary.
 - [x] 4.3 Pass CI-equivalent local checks and OpenSpec strict validation.
 - [x] 4.4 Merge the infrastructure PR after required checks pass; no package changeset is required for CI-only behavior.
-- [ ] 4.5 Prove the real Yargs entry accepts `--pre beta` while preserving typed rejection of a truly supplied `--exit-pre` conflict.
+- [x] 4.5 Prove the real Yargs entry accepts `--pre beta` while preserving typed rejection of a truly supplied `--exit-pre` conflict.
 
 ## 5. Beta Version and Release
 

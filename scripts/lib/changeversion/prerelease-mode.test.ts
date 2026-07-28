@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Prove explicit prerelease entry and continuation.
+ * 1. Prove production argument parsing plus explicit prerelease entry and continuation.
  * 2. Prove explicit exit and interrupted-exit continuation.
  * 3. Prove ambiguous, unsafe, or conflicting modes fail closed.
  *
@@ -9,9 +9,28 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { planPrereleaseMode } from './prerelease-mode'
+import { parseChangeversionOptions, planPrereleaseMode } from './prerelease-mode'
 
 describe('changeversion prerelease mode', () => {
+  it('parses --pre beta without treating the default false exit flag as supplied', () => {
+    expect(
+      parseChangeversionOptions(['bun', 'scripts/changeversion-auto.ts', '--pre', 'beta'])
+    ).toEqual({ exitPre: false, preTag: 'beta' })
+  })
+
+  it('leaves a truly supplied conflicting flag for the typed planner to reject', () => {
+    const options = parseChangeversionOptions([
+      'bun',
+      'scripts/changeversion-auto.ts',
+      '--pre',
+      'beta',
+      '--exit-pre',
+    ])
+    expect(() => planPrereleaseMode({ ...options, state: null })).toThrow(
+      /either --pre <channel> or --exit-pre/
+    )
+  })
+
   it('enters beta when no prerelease state exists', () => {
     expect(planPrereleaseMode({ exitPre: false, preTag: 'beta', state: null })).toEqual({
       args: ['pre', 'enter', 'beta'],
