@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify Project Binding presents launch/root ownership without registry inference.
  * 2. Verify Store/Reference edits submit one structured, loading-locked mutation.
  * 3. Verify only an active write locks controls while stale/error evidence retains a repair path.
@@ -11,6 +11,7 @@
  * Original request (2026-07-18): "Project Binding must show direct Reference Store, root, and Doctor diagnostics."
  * Derived requirement (2026-07-19): "A converging binding write must retain the submitted draft until subscription convergence."
  * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
+ * Original request (2026-07-28): successful preview, Reference, and settlement evidence should be collapsed by default.
  */
 import type { ProjectBindingConfig, ProjectBindingUpdateResult } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -209,25 +210,40 @@ describe('ProjectBindingSection', () => {
 
   afterEach(() => cleanup())
 
-  it('shows launch owner, declared Store/Reference, and resolved root preview', () => {
+  it('shows launch declarations and keeps the resolved preview accessible on demand', () => {
     renderSection(<ProjectBindingSection isStatic={false} />)
 
     expect(screen.getByText(/Launch project: \/workspace\/launch-app/)).toBeTruthy()
     expect(screen.getByLabelText('Store')).toHaveValue('shared')
     expect(screen.getByLabelText('Reference Store id')).toHaveValue('platform')
-    expect(screen.getByText('/stores/shared')).toBeTruthy()
-    expect(screen.getByText('declared')).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Root preview source declared' })).toBeTruthy()
+
+    const evidenceTrigger = screen.getByRole('button', {
+      name: /Root preview and binding evidence/,
+    })
+    const resolvedRoot = screen.getByText('/stores/shared')
+    expect(evidenceTrigger).toHaveAttribute('aria-expanded', 'false')
+    expect(resolvedRoot).not.toBeVisible()
+    fireEvent.click(evidenceTrigger)
+    expect(resolvedRoot).toBeVisible()
   })
 
-  it('shows direct Reference Store, root, and Doctor diagnostics as observed evidence', () => {
+  it('discloses observed Reference warning evidence without claiming a direct failure', () => {
     renderSection(<ProjectBindingSection isStatic={false} />)
 
-    expect(screen.getByText('Observed References')).toBeTruthy()
-    expect(screen.getByText('Store: platform')).toBeTruthy()
-    expect(screen.getByText('Root: /stores/platform')).toBeTruthy()
     expect(
-      screen.getByText('warning · reference_unresolved · Reference is not registered.')
+      screen.getByRole('note', {
+        name: '1 observed References, 0 errors, 1 diagnostics',
+      })
     ).toBeTruthy()
+    const warning = screen.getByText(
+      'warning · reference_unresolved · Reference is not registered.'
+    )
+    expect(warning).not.toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: /Root preview and binding evidence/ }))
+    expect(screen.getByText('Store: platform')).toBeVisible()
+    expect(screen.getByText('Root: /stores/platform')).toBeVisible()
+    expect(warning).toBeVisible()
   })
 
   it('submits structured Store and Reference declarations', async () => {

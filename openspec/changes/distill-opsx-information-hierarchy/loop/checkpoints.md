@@ -37,10 +37,10 @@ Original request (2026-07-28): implement the UI simplification autonomously, the
 
 ## 5. Config, Settings, and Context
 
-- [ ] 5.1 Keep Config forms and validation direct; collapse successful Root preview, Reference, settlement, and CLI evidence
-- [ ] 5.2 Reduce Settings OpenSpec diagnostics to status summaries linked to Context and Config owners
-- [ ] 5.3 Apply the shared disclosure vocabulary to Context command and Reference evidence without deleting facts
-- [ ] 5.4 Preserve static unavailability/source attribution and add focused route/component tests
+- [x] 5.1 Keep Config forms and validation direct; collapse successful Root preview, Reference, settlement, and CLI evidence
+- [x] 5.2 Reduce Settings OpenSpec diagnostics to status summaries linked to Context and Config owners
+- [x] 5.3 Apply the shared disclosure vocabulary to Context command and Reference evidence without deleting facts
+- [x] 5.4 Preserve static unavailability/source attribution and add focused route/component tests
 
 ## 6. Catalog Metadata and Delivery
 

@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify Settings projects shared CLI, Root, Environment, and launch-tool lifecycle truth.
  * 2. Verify Init mode, repair, pending, cancellation, terminal, and convergence behavior.
  *
  * Original request (2026-07-20): "Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics."
  * Owner acceptance boundary (2026-07-20): final end-to-end browser walkthroughs remain owner-owned.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Original request (2026-07-28): Settings should summarize OpenSpec facts and defer evidence to Context and Config.
  */
 import type { CliRunnerLine, CliStreamTransport, OverallStatus } from '@/lib/use-cli-runner'
 import type { SubscriptionState } from '@/lib/use-subscription'
@@ -413,14 +414,16 @@ describe('OpenSpecSettingsSections', () => {
       label: 'Version unparseable',
       message: 'Unable to parse OpenSpec CLI version',
     },
-  ])('uses the shared compatibility classifier for $name', ({ cli, label, message }) => {
+  ])('uses the shared compatibility classifier for $name', async ({ cli, label, message }) => {
     contextSubscriptionMock.mockReturnValue(rootSubscription(readyRoot(rootContext({ cli }))))
 
     renderSection()
 
-    expect(screen.getByText('OpenSpecUI 6.x targets OpenSpec CLI 1.6.x')).toBeTruthy()
-    expect(screen.getByText(label)).toBeTruthy()
-    expect(screen.getByText(new RegExp(message))).toBeTruthy()
+    const compatibility = screen.getByRole('note', {
+      name: `OpenSpec CLI compatibility ${label}`,
+    })
+    fireEvent.focus(compatibility)
+    expect(await screen.findByText(new RegExp(message))).toBeVisible()
   })
 
   it('renders Root loading as pending without claiming the CLI is unavailable', () => {
@@ -446,11 +449,15 @@ describe('OpenSpecSettingsSections', () => {
     expect(screen.queryByText('CLI unavailable')).toBeNull()
   })
 
-  it('keeps ready, refreshing, stale failed-attempt, and transport-error Root states distinct', () => {
+  it('keeps ready, refreshing, stale failed-attempt, and transport-error Root states distinct', async () => {
     const view = renderSection()
     expect(screen.getByText('Root current')).toBeTruthy()
-    expect(screen.getByText('/workspace/launch')).toBeTruthy()
-    expect(screen.getByText('/workspace/planning')).toBeTruthy()
+    const launch = screen.getByRole('note', { name: 'Launch project path' })
+    fireEvent.focus(launch)
+    expect(await screen.findByText('/workspace/launch')).toBeVisible()
+    const planning = screen.getByRole('note', { name: 'Planning root selected' })
+    fireEvent.focus(planning)
+    await waitFor(() => expect(screen.getByText(/\/workspace\/planning/)).toBeVisible())
 
     const current = rootContext()
     contextSubscriptionMock.mockReturnValue(
@@ -502,11 +509,13 @@ describe('OpenSpecSettingsSections', () => {
     renderSection()
 
     expect(screen.getByText('Environment current')).toBeTruthy()
-    expect(screen.getByText('core', { selector: 'dd' })).toBeTruthy()
-    expect(screen.getByText('both', { selector: 'dd' })).toBeTruthy()
-    expect(screen.getByText('in-sync')).toBeTruthy()
-    expect(screen.getAllByText('/runtime/data/openspec')).toHaveLength(2)
-    expect(screen.getByText('sync')).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Environment profile core' })).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Environment delivery both' })).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Environment drift in-sync' })).toBeTruthy()
+    expect(screen.getByRole('note', { name: '6 effective workflows' })).toBeTruthy()
+    expect(
+      screen.getByRole('note', { name: 'Environment data scope source xdg-data-home' })
+    ).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Root / Doctor / Context details' })).toHaveAttribute(
       'href',
       '/context'
@@ -555,7 +564,7 @@ describe('OpenSpecSettingsSections', () => {
     expect(screen.getByText('Stale environment projection')).toBeTruthy()
     expect(screen.getByText('Environment subscription disconnected')).toBeTruthy()
     expect(screen.getByText('Initialization locked by stale Environment Global state')).toBeTruthy()
-    expect(screen.getByText('core')).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Environment profile core' })).toBeTruthy()
     expect(screen.queryByLabelText('Init Mode')).toBeNull()
     expect(toolInitStatesSubscriptionMock).not.toHaveBeenCalled()
   })

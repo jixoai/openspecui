@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Project one launch project's CLI-selected planning root and direct References.
- * 2. Present current, stale, terminal-error, and failed-attempt facts without collapsing them.
+ * 2. Present current, stale, terminal-error, and failed-attempt authority without hiding failures.
  * 3. Present the inherited Store registry/data scope as read-only environment evidence.
  * 4. Expose each Root Context command-evidence envelope through on-demand disclosure.
  * 5. Route static mode to publication-safe Context facts without starting the live owner.
@@ -10,12 +10,14 @@
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
+ * Original request (2026-07-28): Context remains the evidence owner but should default to a concise OPSX-first hierarchy.
  */
+import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import { DetailPanelSkeleton, RealtimeRevalidateCue } from '@/components/realtime'
 import { isStaticMode } from '@/lib/static-mode'
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import type { RootContext, RootContextCommandEvidence } from '@openspecui/core'
-import { AlertCircle, FileText, Network } from 'lucide-react'
+import { AlertCircle, Network } from 'lucide-react'
 import { StaticContextView } from './context-static'
 
 /** Render project Root, observed References, registry diagnostics, and raw CLI evidence. */
@@ -43,11 +45,6 @@ function LiveContextView() {
           Context
         </h1>
       </div>
-
-      <p className="text-muted-foreground text-sm">
-        The active planning root, its observed References, and read-only registry diagnostics for
-        this project backend.
-      </p>
 
       {loading ? <DetailPanelSkeleton count={4} /> : null}
 
@@ -129,54 +126,101 @@ function ContextBody({
     ...context.diagnostics.doctor,
     ...context.diagnostics.context,
   ]
+  const referenceErrors = context.references.flatMap((reference) =>
+    reference.status
+      .filter((diagnostic) => diagnostic.severity === 'error')
+      .map((diagnostic) => `${reference.store_id}: ${diagnostic.message}`)
+  )
+  const commandContractErrors = [
+    context.evidence.doctor?.contractError
+      ? `Doctor contract drift: ${context.evidence.doctor.contractError}`
+      : null,
+    context.evidence.context?.contractError
+      ? `Context contract drift: ${context.evidence.context.contractError}`
+      : null,
+  ].filter((error): error is string => error !== null)
 
   return (
     <div className="space-y-4">
-      <section className="border-border grid gap-4 rounded-lg border p-4 lg:grid-cols-2">
-        <div className="min-w-0 space-y-2">
-          <h2 className="text-sm font-semibold">{rootHeading}</h2>
-          <p className="text-muted-foreground break-all text-sm">
-            {planningRoot?.path ?? 'No planning root resolved.'}
-          </p>
-          {planningRoot ? (
-            <dl className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-              <dt>root source</dt>
-              <dd>{planningRoot.source}</dd>
-              {context.storeId ? (
-                <>
-                  <dt>store</dt>
-                  <dd>{context.storeId}</dd>
-                </>
-              ) : null}
-            </dl>
-          ) : null}
-        </div>
-        <div className="min-w-0 space-y-2">
-          <h2 className="text-sm font-semibold">Launch project</h2>
-          <p className="text-muted-foreground break-all text-sm">{context.launchProject.path}</p>
-          <p className="text-muted-foreground text-xs">
-            CLI {context.cli.version ?? 'version unavailable'}
-          </p>
-        </div>
+      <section className="border-border flex min-w-0 flex-wrap items-center gap-2 border-y py-3 text-xs">
+        <span className="font-medium">{rootHeading}</span>
+        <span className="min-w-0 flex-1 break-all font-mono text-sm">
+          {planningRoot?.path ?? 'No planning root resolved.'}
+        </span>
+        {planningRoot ? (
+          <InformationBadge
+            ariaLabel={`Planning root source ${planningRoot.source}`}
+            tooltip={`Root source: ${planningRoot.source}`}
+          >
+            {planningRoot.source}
+          </InformationBadge>
+        ) : null}
+        {context.storeId ? (
+          <InformationBadge
+            ariaLabel={`Planning Store ${context.storeId}`}
+            tooltip={`The CLI-selected Planning root uses Store ${context.storeId}.`}
+          >
+            Store {context.storeId}
+          </InformationBadge>
+        ) : null}
+        <InformationBadge ariaLabel="Launch project path" tooltip={context.launchProject.path}>
+          Launch
+        </InformationBadge>
+        <InformationBadge
+          ariaLabel={`Inherited data scope source ${context.dataScope.source}`}
+          tooltip={`${context.dataScope.path}${context.dataScope.environmentVariable ? ` · ${context.dataScope.environmentVariable}` : ''}. Registry access is read-only; this backend does not own a project-local registry.`}
+        >
+          Data {context.dataScope.source}
+        </InformationBadge>
+        <InformationBadge
+          ariaLabel={`OpenSpec CLI ${context.cli.version ?? 'unavailable'}`}
+          tooltip={`Effective command: ${context.cli.effectiveCommand ?? 'unavailable'}`}
+        >
+          CLI {context.cli.version ?? 'unavailable'}
+        </InformationBadge>
       </section>
 
-      <section className="border-border space-y-3 rounded-lg border p-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <FileText className="h-4 w-4" aria-hidden />
-          Observed References
-        </h2>
+      {context.cli.error ? (
+        <div className="text-destructive flex items-start gap-2 text-sm" role="alert">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          {context.cli.error}
+        </div>
+      ) : null}
+
+      {referenceErrors.length > 0 ? (
+        <div className="text-destructive flex items-start gap-2 text-sm" role="alert">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          {referenceErrors.join(' ')}
+        </div>
+      ) : null}
+
+      {commandContractErrors.length > 0 ? (
+        <div className="text-destructive flex items-start gap-2 text-sm" role="alert">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          {commandContractErrors.join(' ')}
+        </div>
+      ) : null}
+
+      <EvidenceDisclosure
+        title="Reference evidence"
+        summary={
+          context.references.length === 0
+            ? 'No reference currently observed'
+            : `${context.references.length} observed`
+        }
+      >
         {context.references.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No reference currently observed.</p>
+          <p className="text-muted-foreground">No reference currently observed.</p>
         ) : (
           <ul className="divide-border divide-y">
             {context.references.map((reference) => (
               <li key={reference.store_id} className="space-y-1 py-2 first:pt-0 last:pb-0">
-                <p className="font-mono text-sm">{reference.store_id}</p>
+                <p className="font-mono">{reference.store_id}</p>
                 {reference.status.length === 0 ? (
-                  <p className="text-muted-foreground text-xs">No CLI diagnostic reported.</p>
+                  <p className="text-muted-foreground">No CLI diagnostic reported.</p>
                 ) : (
                   reference.status.map((diagnostic) => (
-                    <p key={`${diagnostic.code}:${diagnostic.message}`} className="text-xs">
+                    <p key={`${diagnostic.code}:${diagnostic.message}`}>
                       <span className="font-medium">{diagnostic.code}</span>: {diagnostic.message}
                     </p>
                   ))
@@ -185,22 +229,7 @@ function ContextBody({
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="border-border space-y-2 rounded-lg border p-4">
-        <h2 className="text-sm font-semibold">Registry and data scope</h2>
-        <p className="text-muted-foreground break-all text-sm">{context.dataScope.path}</p>
-        <p className="text-muted-foreground text-xs">
-          source: {context.dataScope.source}
-          {context.dataScope.environmentVariable
-            ? ` (${context.dataScope.environmentVariable})`
-            : ''}
-        </p>
-        <p className="text-muted-foreground text-sm">
-          Registry is read-only at this scope. The project backend does not own a project-local
-          registry.
-        </p>
-      </section>
+      </EvidenceDisclosure>
 
       <RootContextEvidence context={context} summary={evidenceSummary} />
 
@@ -222,9 +251,8 @@ function ContextBody({
 
 function RootContextEvidence({ context, summary }: { context: RootContext; summary: string }) {
   return (
-    <details className="border-border rounded-lg border p-4">
-      <summary className="cursor-pointer text-sm font-semibold">{summary}</summary>
-      <div className="mt-4 space-y-5">
+    <EvidenceDisclosure title={summary} summary="doctor + context">
+      <div className="space-y-5">
         <dl className="text-muted-foreground grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
           <dt>observed at</dt>
           <dd>{new Date(context.observedAt).toISOString()}</dd>
@@ -246,7 +274,7 @@ function RootContextEvidence({ context, summary }: { context: RootContext; summa
         <CommandEvidence label="Doctor command" evidence={context.evidence.doctor} />
         <CommandEvidence label="Context command" evidence={context.evidence.context} />
       </div>
-    </details>
+    </EvidenceDisclosure>
   )
 }
 
@@ -279,8 +307,8 @@ function CommandEvidence({
   }
 
   return (
-    <details className="border-border border-t pt-3">
-      <summary className="cursor-pointer text-xs font-semibold">{label}</summary>
+    <section className="border-border border-t pt-3">
+      <h3 className="text-xs font-semibold">{label}</h3>
       <dl className="text-muted-foreground mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <dt>process success</dt>
         <dd>{String(evidence.success)}</dd>
@@ -296,6 +324,6 @@ function CommandEvidence({
       {evidence.stderr ? <EvidenceJson label="stderr" value={evidence.stderr} /> : null}
       <EvidenceJson label="diagnostics" value={evidence.diagnostics} />
       <EvidenceJson label="stdout" value={evidence.stdout} />
-    </details>
+    </section>
   )
 }

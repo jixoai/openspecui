@@ -9,7 +9,7 @@ Original request (2026-07-28): implement the information-hierarchy optimization,
 
 ## Implementation State
 
-Status: **implementation active; Change and OPSX workflow distillation complete**.
+Status: **implementation active; Config, Settings, and Context distillation complete**.
 
 ```text
 spec artifacts -> shared primitives -> owner groups -> focused evidence -> delivery -> owner acceptance
@@ -75,6 +75,27 @@ Focused format                       passed
 ```text
 Change / OPSX focused unit           7 files / 38 tests
 Web typecheck + checked P6 tests     passed
+```
+
+### Config, Settings, and Context
+
+- Project Binding keeps Store/Reference inputs, validation, convergence, and errors direct. Successful Root
+  preview, observed Reference warnings, and write settlement share one collapsed disclosure; duplicate direct
+  preview/subscription errors are deduplicated without suppressing the failure.
+- Active Root keeps the selected Planning path and the external-write consequence direct while source, Store,
+  external ownership, and file path use keyboard-reachable badges.
+- Environment Global keeps its JSON/Profile/Update mutations direct. Config/data-scope paths use badges and the
+  raw `config path`/`config list`/drift envelope uses the shared disclosure.
+- Settings now summarizes Root compatibility/selection and Environment profile/delivery/drift/workflows with
+  links to the owning Context and Config routes; lifecycle failures remain direct.
+- Live Context keeps the Planning path direct, promotes CLI/Reference/contract errors, and collapses Reference
+  plus Doctor/Context command evidence. Static Context retains published source/Store identity and the explicit
+  Reference export policy without inventing live authority.
+
+```text
+Config / Settings / Context unit     5 files / 80 tests
+Web typecheck + checked P6 tests     passed
+Focused oxlint                       0 warnings / 0 errors
 ```
 
 ## Divergence Notes

@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify Context projects CLI-selected root, Store, launch, and inherited data-scope facts.
- * 2. Verify direct Reference diagnostics remain neutral, read-only, and incomplete-by-design.
+ * 2. Verify Reference errors stay direct while neutral read-only evidence remains retrievable on demand.
  * 3. Verify loading, refreshing, terminal-error, stale-error, and command-evidence states stay distinct.
  * 4. Verify Static Context uses only publication-safe snapshot facts and starts no live owner.
  *
@@ -9,9 +9,10 @@
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
+ * Original request (2026-07-28): Context should stay concise without deleting source-attributed evidence.
  */
 import type { ExportSnapshot, RootContext, RootContextState } from '@openspecui/core'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StaticDataProvider } from '../ssg/static-data-context'
 import { ContextView } from './context'
@@ -211,7 +212,9 @@ describe('ContextView', () => {
 
     render(<ContextView />)
 
-    expect(screen.getByRole('alert').textContent).toContain('refresh failed')
+    expect(
+      screen.getAllByRole('alert').find((alert) => alert.textContent?.includes('refresh failed'))
+    ).toBeTruthy()
     expect(screen.getByText(/Showing the last successful observation/)).toBeTruthy()
     const staleRegion = screen.getByRole('region', { name: 'Last successful Context (stale)' })
     expect(within(staleRegion).getByText('/tmp/planning')).toBeTruthy()
@@ -271,24 +274,34 @@ describe('ContextView', () => {
     expect(text).toContain('No reference currently observed')
   })
 
-  it('shows planning root when context data is present', () => {
+  it('shows planning root directly and keeps launch and data paths in accessible badges', async () => {
     setState({ data: readyState() })
     const { container } = render(<ContextView />)
     const text = container.textContent ?? ''
     expect(text).toContain('/tmp/planning')
     expect(text).toContain('store')
     expect(text).toContain('platform')
-    expect(text).toContain('/tmp/launch')
-    expect(text).toContain('/tmp/data/openspec')
+
+    const launch = screen.getByRole('note', { name: 'Launch project path' })
+    fireEvent.focus(launch)
+    expect(await screen.findByText('/tmp/launch')).toBeVisible()
+    const dataScope = screen.getByRole('note', {
+      name: 'Inherited data scope source xdg-data-home',
+    })
+    fireEvent.focus(dataScope)
+    await waitFor(() => expect(screen.getByText(/\/tmp\/data\/openspec/)).toBeVisible())
   })
 
-  it('states registry is read-only without Store mutations or machine-wide claims', () => {
+  it('states registry is read-only without Store mutations or machine-wide claims', async () => {
     setState({ data: readyState() })
     const { container } = render(<ContextView />)
-    const text = container.textContent ?? ''
+    const dataScope = screen.getByRole('note', {
+      name: 'Inherited data scope source xdg-data-home',
+    })
+    fireEvent.focus(dataScope)
+    expect(await screen.findByText(/does not own a project-local registry/)).toBeVisible()
     // 绝不暗示项目级 registry（AGENTS.md：项目无 project-local registry）。
-    expect(text).toContain('does not own a project-local registry')
-    expect(text).not.toMatch(/all stores|unregistered stores|machine-wide/i)
+    expect(container.textContent).not.toMatch(/all stores|unregistered stores|machine-wide/i)
     expect(screen.queryByRole('button', { name: /setup|register|remove|unregister/i })).toBeNull()
   })
 
@@ -354,14 +367,20 @@ describe('ContextView', () => {
 
     render(<ContextView />)
 
-    expect(screen.getByText('Full Root Context evidence')).toBeTruthy()
-    expect(screen.getByText(/design-system/)).toBeTruthy()
-    expect(screen.getByText('doctor failed')).toBeTruthy()
-    expect(screen.getByText('root contract drift')).toBeTruthy()
-    expect(screen.getByText('{"root":null}')).toBeTruthy()
+    const trigger = screen.getByRole('button', { name: /Full Root Context evidence/ })
+    const member = screen.getByText(/design-system/)
+    const stderr = screen.getByText('doctor failed')
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(member).not.toBeVisible()
+    expect(stderr).not.toBeVisible()
+    fireEvent.click(trigger)
+    expect(member).toBeVisible()
+    expect(stderr).toBeVisible()
+    expect(screen.getByText('root contract drift')).toBeVisible()
+    expect(screen.getByText('{"root":null}')).toBeVisible()
   })
 
-  it('renders publication-safe Static Context without starting the live subscription', () => {
+  it('renders publication-safe Static Context without starting the live subscription', async () => {
     staticMode.value = true
     const snapshot: ExportSnapshot = {
       meta: {
@@ -394,12 +413,17 @@ describe('ContextView', () => {
     expect(useContextSubscriptionMock).not.toHaveBeenCalled()
     expect(screen.getByText('project-a')).toBeTruthy()
     expect(screen.getByText('store-a/openspec')).toBeTruthy()
-    expect(screen.getByText('writable-a')).toBeTruthy()
-    expect(screen.getByText('shared-reference')).toBeTruthy()
-    expect(screen.getByText(/2 published Specs/)).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Published Store writable-a' })).toBeTruthy()
+    const staticBoundary = screen.getByRole('note', { name: 'Static Context evidence boundary' })
+    fireEvent.focus(staticBoundary)
     expect(
-      screen.getByText(/Runtime CLI evidence, registry, and data scope are not published/)
-    ).toBeTruthy()
+      await screen.findByText(/Runtime CLI evidence, registry, and data scope are not published/)
+    ).toBeVisible()
+    const referencePolicy = screen.getByRole('button', { name: /Published Reference policy/ })
+    expect(referencePolicy).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(referencePolicy)
+    expect(screen.getByText('shared-reference')).toBeVisible()
+    expect(screen.getByText(/2 published Specs/)).toBeVisible()
     expect(document.body.textContent).not.toMatch(/envUri|XDG_DATA_HOME|stdout|stderr/)
   })
 

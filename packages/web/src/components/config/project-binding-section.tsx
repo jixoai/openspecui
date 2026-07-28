@@ -1,15 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Edit only launch-project Store and Reference declarations.
  * 2. Preserve Root Context preview and declaration diagnostics without treating them as registry truth.
  * 3. Bind mutation controls and execution to loading/error/dirty lifecycle states.
- * 4. Render launch-write and subscription evidence owned by the generation-safe settlement hook.
+ * 4. Keep failures and convergence direct while disclosing successful preview/write evidence on demand.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Project Binding must show direct Reference Store, root, and Doctor diagnostics."
  * Derived requirement (2026-07-19): "A binding mutation must not relabel its returned preview as current Root Context."
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): successful Config evidence should not outrank editable OPSX declarations.
  */
+import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import { AsyncAction, ConfigFormSkeleton } from '@/components/realtime'
 import { trpcClient } from '@/lib/trpc'
 import { useProjectBindingSubscription } from '@/lib/use-planning-config'
@@ -82,6 +84,20 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
 
   const preview = currentRootPreview(config)
   const visibleError = subscriptionError?.message ?? formError
+  const referenceDiagnostics = preview.context.references.flatMap((reference) => reference.status)
+  const referenceErrors = preview.context.references.flatMap((reference) =>
+    reference.status
+      .filter((diagnostic) => diagnostic.severity === 'error')
+      .map((diagnostic) => ({ storeId: reference.store_id, diagnostic }))
+  )
+  const mutationTransitionError =
+    mutationEvidence?.transition.state === 'preview-error'
+      ? mutationEvidence.transition.error.message
+      : convergenceError
+  const showMutationTransitionError =
+    mutationTransitionError !== null &&
+    mutationTransitionError !== visibleError &&
+    mutationTransitionError !== preview.error?.message
 
   return (
     <div className="space-y-5">
@@ -189,57 +205,53 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
         </section>
       </div>
 
-      <section className="border-border/70 bg-muted/20 space-y-2 rounded-md border px-3 py-2 text-xs">
-        <h3 className="font-medium">Root Context preview</h3>
-        <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
-          <dt className="text-muted-foreground">Planning root</dt>
-          <dd className="break-all font-mono">
-            {preview.context.planningRoot?.path ?? 'Not resolved'}
-          </dd>
-          <dt className="text-muted-foreground">Source</dt>
-          <dd>{preview.context.planningRoot?.source ?? 'unknown'}</dd>
-          <dt className="text-muted-foreground">Store</dt>
-          <dd>{preview.context.storeId ?? 'none'}</dd>
-        </dl>
-        {preview.error ? (
-          <div className="text-destructive flex items-start gap-2" role="alert">
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{preview.error.message}</span>
-          </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-muted-foreground">Current preview</span>
+        <InformationBadge
+          ariaLabel={`Root preview source ${preview.context.planningRoot?.source ?? 'unknown'}`}
+          tooltip={`Planning root: ${preview.context.planningRoot?.path ?? 'Not resolved'}`}
+        >
+          {preview.context.planningRoot?.source ?? 'unknown'}
+        </InformationBadge>
+        {preview.context.storeId ? (
+          <InformationBadge
+            ariaLabel={`Root preview Store ${preview.context.storeId}`}
+            tooltip={`The current Root Context preview selected Store ${preview.context.storeId}.`}
+          >
+            Store {preview.context.storeId}
+          </InformationBadge>
         ) : null}
-      </section>
+        <InformationBadge
+          ariaLabel={`${preview.context.references.length} observed References, ${referenceErrors.length} errors, ${referenceDiagnostics.length} diagnostics`}
+          tooltip={`${preview.context.references.length} observed References · ${referenceErrors.length} errors · ${referenceDiagnostics.length} diagnostics`}
+          tone={referenceErrors.length > 0 ? 'custom' : 'muted'}
+          className={
+            referenceErrors.length > 0
+              ? 'border-destructive/40 bg-destructive/10 text-destructive'
+              : undefined
+          }
+        >
+          References {preview.context.references.length}
+        </InformationBadge>
+      </div>
 
-      <section className="border-border/70 bg-muted/20 space-y-2 rounded-md border px-3 py-2 text-xs">
-        <h3 className="font-medium">Observed References</h3>
-        {preview.context.references.length > 0 ? (
-          <div className="space-y-2">
-            {preview.context.references.map((reference) => (
-              <div
-                key={reference.store_id}
-                className="border-border/60 rounded-md border px-2 py-1.5"
-              >
-                <div className="font-medium">Store: {reference.store_id}</div>
-                {reference.root ? <div>Root: {reference.root}</div> : null}
-                {reference.status.length > 0 ? (
-                  <div className="mt-1 space-y-0.5">
-                    {reference.status.map((diagnostic) => (
-                      <div key={`${diagnostic.code}:${diagnostic.message}`}>
-                        {diagnostic.severity} · {diagnostic.code} · {diagnostic.message}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground mt-1">
-                    No direct Doctor diagnostics observed.
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-muted-foreground">No Referenced Stores currently observed.</div>
-        )}
-      </section>
+      {preview.error ? (
+        <div className="text-destructive flex items-start gap-2 text-xs" role="alert">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{preview.error.message}</span>
+        </div>
+      ) : null}
+
+      {referenceErrors.length > 0 ? (
+        <div className="text-destructive flex items-start gap-2 text-xs" role="alert">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            {referenceErrors
+              .map(({ storeId, diagnostic }) => `${storeId}: ${diagnostic.message}`)
+              .join(' ')}
+          </span>
+        </div>
+      ) : null}
 
       {config.binding.diagnostics.length > 0 ? (
         <div className="space-y-1" role="alert">
@@ -263,30 +275,93 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
         </div>
       ) : null}
 
-      {mutationEvidence ? (
-        <section className="border-border/70 bg-muted/20 space-y-2 rounded-md border px-3 py-2 text-xs">
-          <h3 className="font-medium">Latest binding write</h3>
-          <div>
-            Launch write complete: {mutationEvidence.launchWrite.file.path ?? 'config file'}
-          </div>
-          <div>
-            Root preview from this mutation:{' '}
-            {mutationEvidence.rootPreview.state === 'ready'
-              ? (mutationEvidence.rootPreview.data.planningRoot?.path ?? 'Not resolved')
-              : (mutationEvidence.rootPreview.attempt.planningRoot?.path ?? 'Not resolved')}
-          </div>
-          <div>
-            Transition: {mutationEvidence.transition.state}
-            {mutationEvidence.transition.state === 'preview-error'
-              ? ` · ${mutationEvidence.transition.error.message}`
-              : pendingConvergence
-                ? ' · waiting for Root Context subscription'
-                : convergenceError
-                  ? ` · Root Context subscription error: ${convergenceError}`
-                  : ' · Root Context subscription matched the launch write'}
-          </div>
-        </section>
+      {pendingConvergence ? (
+        <div className="text-muted-foreground text-xs" role="status">
+          Binding saved; waiting for the Root Context subscription to converge.
+        </div>
       ) : null}
+
+      {showMutationTransitionError ? (
+        <div className="text-destructive flex items-start gap-2 text-xs" role="alert">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{mutationTransitionError}</span>
+        </div>
+      ) : null}
+
+      <EvidenceDisclosure
+        title="Root preview and binding evidence"
+        summary={`${preview.context.references.length} References${mutationEvidence ? ' · latest write' : ''}`}
+      >
+        <div className="space-y-4">
+          <section className="space-y-2">
+            <h3 className="font-medium">Root Context preview</h3>
+            <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
+              <dt className="text-muted-foreground">Planning root</dt>
+              <dd className="break-all font-mono">
+                {preview.context.planningRoot?.path ?? 'Not resolved'}
+              </dd>
+              <dt className="text-muted-foreground">Source</dt>
+              <dd>{preview.context.planningRoot?.source ?? 'unknown'}</dd>
+              <dt className="text-muted-foreground">Store</dt>
+              <dd>{preview.context.storeId ?? 'none'}</dd>
+            </dl>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="font-medium">Observed References</h3>
+            {preview.context.references.length > 0 ? (
+              <div className="space-y-2">
+                {preview.context.references.map((reference) => (
+                  <div key={reference.store_id}>
+                    <div className="font-medium">Store: {reference.store_id}</div>
+                    {reference.root ? <div>Root: {reference.root}</div> : null}
+                    {reference.status.length > 0 ? (
+                      <div className="text-muted-foreground mt-1 space-y-0.5">
+                        {reference.status.map((diagnostic) => (
+                          <div key={`${diagnostic.code}:${diagnostic.message}`}>
+                            {diagnostic.severity} · {diagnostic.code} · {diagnostic.message}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground mt-1">
+                        No direct Doctor diagnostics observed.
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-muted-foreground">No Referenced Stores currently observed.</div>
+            )}
+          </section>
+
+          {mutationEvidence ? (
+            <section className="space-y-2">
+              <h3 className="font-medium">Latest binding write</h3>
+              <div>
+                Launch write complete: {mutationEvidence.launchWrite.file.path ?? 'config file'}
+              </div>
+              <div>
+                Root preview from this mutation:{' '}
+                {mutationEvidence.rootPreview.state === 'ready'
+                  ? (mutationEvidence.rootPreview.data.planningRoot?.path ?? 'Not resolved')
+                  : (mutationEvidence.rootPreview.attempt.planningRoot?.path ?? 'Not resolved')}
+              </div>
+              <div>
+                Transition: {mutationEvidence.transition.state}
+                {mutationEvidence.transition.state === 'preview-error'
+                  ? ` · ${mutationEvidence.transition.error.message}`
+                  : pendingConvergence
+                    ? ' · waiting for Root Context subscription'
+                    : convergenceError
+                      ? ` · Root Context subscription error: ${convergenceError}`
+                      : ' · Root Context subscription matched the launch write'}
+              </div>
+            </section>
+          ) : null}
+        </div>
+      </EvidenceDisclosure>
     </div>
   )
 }
