@@ -9,7 +9,7 @@ Original request (2026-07-28): implement the information-hierarchy optimization,
 
 ## Implementation State
 
-Status: **implementation active; Config, Settings, and Context distillation complete**.
+Status: **implementation active; presentation migration and focused delivery gate complete**.
 
 ```text
 spec artifacts -> shared primitives -> owner groups -> focused evidence -> delivery -> owner acceptance
@@ -96,6 +96,41 @@ Web typecheck + checked P6 tests     passed
 Config / Settings / Context unit     5 files / 80 tests
 Web typecheck + checked P6 tests     passed
 Focused oxlint                       0 warnings / 0 errors
+```
+
+### Catalog Metadata
+
+- Referenced Spec Store headings remain the direct source identity. Their repeated count/read-only prose is one
+  keyboard-reachable lock badge whose Tooltip states the exact Store projection boundary.
+- Live enumeration failures, CLI diagnostics, static-source failure conditions, compound links, and neutral empty
+  states remain direct and source-specific.
+- The publishable presentation change carries a Web-only patch changeset; it does not alter Core or Server
+  contracts and does not authorize another release.
+
+```text
+Spec Catalog unit                    3 files / 20 tests
+Web typecheck + checked P6 tests     passed
+Focused oxlint                       0 warnings / 0 errors
+Focused format                       passed
+```
+
+### Focused Delivery Gate
+
+- The six stale layout-contract suites now locate the compact accessible owners instead of expecting Tier 2 or
+  Tier 3 evidence to remain expanded. `WorkflowTargetNotice` exposes a stable named region so Compose lifecycle
+  evidence crosses the real production owner.
+- Static Context SSR asserts the accessible evidence boundary and published Reference disclosure trigger; Tooltip
+  Portal copy is intentionally absent from server-rendered HTML.
+- A clean SSG build completed from absent `dist-ssg` and `.vite` outputs. It retained only the repository's
+  existing `scroll-button` CSS compatibility and ineffective dynamic-import warnings.
+
+```text
+Stale contract correction unit      6 files / 28 tests
+Static focused unit                 3 files / 23 tests
+Web typecheck + checked P6 tests    passed
+Focused oxlint                      0 warnings / 0 errors
+Focused format                      passed
+Clean SSG build                     passed
 ```
 
 ## Divergence Notes

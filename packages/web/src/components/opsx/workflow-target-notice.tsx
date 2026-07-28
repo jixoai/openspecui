@@ -67,7 +67,11 @@ export function WorkflowTargetNotice({
     }))
     .filter((entry) => entry.errors > 0)
   return (
-    <div className="border-border min-w-0 border-y py-2 text-xs">
+    <div
+      role="region"
+      aria-label="Workflow target"
+      className="border-border min-w-0 border-y py-2 text-xs"
+    >
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden />
         <span className="text-muted-foreground">Planning</span>

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Default the project Spec Catalog to writable Owned Specs.
  * 2. Group direct read-only Referenced Specs by Store identity and preserve source-distinct Catalog policy.
  * 3. Preserve compound routes, collision-safe View Transition identity, and local row continuity.
@@ -7,7 +7,9 @@
  * 5. Surface transport failure without hiding retained Catalog truth or claiming source emptiness.
  *
  * Original request (2026-07-15): "Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries."
+ * Original request (2026-07-28): compact Catalog source and read-only metadata without hiding enumeration failures.
  */
+import { InformationBadge } from '@/components/information-disclosure'
 import { SpecListSkeleton } from '@/components/realtime'
 import { formatRelativeTime } from '@/lib/format-time'
 import { useSpecsSubscription } from '@/lib/use-subscription'
@@ -171,13 +173,13 @@ export function SpecList() {
                 >
                   {source.storeId}
                 </h2>
-                <div className="text-muted-foreground flex items-center gap-2 text-xs">
-                  <span>{specs.length} Specs</span>
-                  <span className="inline-flex items-center gap-1">
-                    <LockKeyhole className="h-3.5 w-3.5" aria-hidden />
-                    Read-only
-                  </span>
-                </div>
+                <InformationBadge
+                  ariaLabel={`Reference Store ${source.storeId}: ${specs.length} Specs, read-only`}
+                  tooltip={`Specs from Reference Store ${source.storeId} are read-only projections.`}
+                >
+                  <LockKeyhole className="h-3 w-3" aria-hidden />
+                  {specs.length} Specs
+                </InformationBadge>
               </div>
               {source.state === 'error' ? (
                 <div role="alert" className="text-destructive space-y-1 px-4 py-3 text-sm">

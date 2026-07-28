@@ -10,6 +10,7 @@
  * Derived requirement (2026-07-18): Static HTML pre-render must not evaluate browser-only toolkit modules.
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
  * Original request (2026-07-28): static Board uses the shared ReadonlyKanban.
+ * Original request (2026-07-28): keep static provenance accessible after verbose evidence is collapsed.
  */
 import type { ExportSnapshot } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
@@ -75,7 +76,8 @@ describe('static Spec routes', () => {
 
     expect(html).toContain('workspace/openspec')
     expect(html).toContain('No effective References were recorded')
-    expect(html).toContain('Runtime CLI evidence, registry, and data scope are not published')
+    expect(html).toContain('aria-label="Static Context evidence boundary"')
+    expect(html).toContain('Published Reference policy')
     expect(html).not.toContain('XDG_DATA_HOME')
   }, 20_000)
 })

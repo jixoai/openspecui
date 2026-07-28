@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove duplicate Catalog ids navigate through source-distinct compound links.
  * 2. Prove Owned is the default and Referenced entries group by Store.
  * 3. Prove Referenced groups remain visibly read-only with a neutral empty state.
@@ -7,6 +7,7 @@
  * 5. Preserve whole-Catalog static Reference policy instead of claiming live/current emptiness.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
+ * Original request (2026-07-28): Catalog source and read-only metadata should remain keyboard-retrievable in compact badges.
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -72,7 +73,7 @@ describe('SpecList', () => {
     })
   }
 
-  it('defaults to Owned, then groups duplicate referenced ids by Store', () => {
+  it('defaults to Owned, then groups duplicate referenced ids by Store', async () => {
     setCatalog(
       [
         {
@@ -131,7 +132,13 @@ describe('SpecList', () => {
     expect(screen.queryByRole('link', { name: /Owned Auth/ })).toBeNull()
     expect(screen.getByRole('heading', { name: 'platform-a' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'platform-b' })).toBeTruthy()
-    expect(screen.getAllByText('Read-only')).toHaveLength(2)
+    const platformMetadata = screen.getByRole('note', {
+      name: 'Reference Store platform-a: 1 Specs, read-only',
+    })
+    fireEvent.focus(platformMetadata)
+    expect(
+      await screen.findByText('Specs from Reference Store platform-a are read-only projections.')
+    ).toBeVisible()
     expect(screen.getByRole('link', { name: /Platform A auth/ }).getAttribute('href')).toBe(
       '/specs/referenced/platform-a/auth'
     )

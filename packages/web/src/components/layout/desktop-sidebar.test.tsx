@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify the desktop sidebar remains accessible in expanded and collapsed layouts.
  * 2. Verify project Context remains reachable while retired Stores entries cannot render.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ * Original request (2026-07-28): make Planning identity primary while Launch remains accessible.
  */
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -113,8 +114,12 @@ describe('DesktopSidebar', () => {
     expect(screen.getByAltText('OpenSpec')).toBeTruthy()
     const expandedSearchButton = screen.getByRole('button', { name: 'Search' })
     expect(screen.getByText('Search')).toBeTruthy()
-    expect(screen.getByText('launch-app')).toBeTruthy()
     expect(screen.getByText('planning-root')).toBeTruthy()
+    expect(
+      screen.getByRole('link', {
+        name: 'Open Root Context. Launch: launch-app. Planning: planning-root.',
+      })
+    ).toBeTruthy()
     expect(expandedSearchButton.className).toContain('justify-start')
     expect(expandedSearchButton.className).not.toContain('justify-center')
     expect(screen.getByText('Dashboard')).toBeTruthy()

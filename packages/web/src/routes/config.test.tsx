@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify routed Config schema selection.
  * 2. Verify Project Binding, Active Root, and Environment Global ownership surfaces.
  * 3. Prove Active Root file presence is independent from empty content.
@@ -9,6 +9,7 @@
  * Original request (2026-07-17): "An existing empty Active Root file remains editable."
  * Original request (2026-07-18): "Schema and Template mutations must use useRootActionState."
  * Original request (2026-07-26): "缓存更新期间仍可读，但不能授权写入。"
+ * Original request (2026-07-28): preserve Config ownership facts through compact accessible evidence.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -324,18 +325,22 @@ describe('Config schema tabs', () => {
     window.history.replaceState(null, '', '/config?configTab=active-root')
     render(<Config />)
 
+    expect(screen.getByText('Planning root: /stores/shared')).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Active Root source declared' })).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Active Root Store shared' })).toBeTruthy()
     expect(
-      screen.getByText('Planning root: /stores/shared · declared · Store shared · external')
+      screen.getByRole('note', { name: 'Active Root is external to the launch project' })
     ).toBeTruthy()
-    expect(screen.getByText('File: /stores/shared/openspec/config.yaml')).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Active Root config file path' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Environment Global' }))
 
-    await waitFor(() => {
-      expect(screen.getByText('/runtime/openspec/config.json', { selector: 'code' })).toBeTruthy()
-    })
-    expect(screen.getByText('/runtime/openspec')).toBeTruthy()
-    expect(screen.getByText(/xdg-data-home/)).toBeTruthy()
+    await waitFor(() =>
+      expect(screen.getByRole('note', { name: 'Environment Global config file path' })).toBeTruthy()
+    )
+    expect(
+      screen.getByRole('note', { name: 'OpenSpec data scope source xdg-data-home' })
+    ).toBeTruthy()
   })
 
   it('keeps an existing empty Active Root config editable instead of rendering absence', () => {
