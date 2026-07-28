@@ -50,6 +50,7 @@ Owner-reported defect (2026-07-27): Mobile Store Inspector overflows inline; App
 Owner acceptance request (2026-07-28): "我需要非常具体的验收工具和验收流程"
 Owner presentation direction (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
 Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间需要 gap 或分割线；Static 导出后的 /context 页面没数据。"
+Owner-reported defect (2026-07-28): "pnpm openspecui export -o ./tmp --open 导出的数据好像逃逸到 html 去了。"
 Review correction (2026-07-20): Terminal cwd evidence must cross the production Server owner instead of injecting a hand-authored downstream callback.
 Review correction (2026-07-20): Settings tool delivery must preserve upstream physical artifact scope, render-time subscription provenance, and CLI-runner cache retirement.
 -->
@@ -94,6 +95,7 @@ MUST READ: CLAUDE.md
   - related tests in `packages/web/src/lib/static-data-provider*.test.ts`
 - Static and live modes must share the same display/mapping logic; do not introduce parallel implementations unless explicitly required.
 - Static Context publication law (2026-07-28): `/context` remains part of both live and static information architecture. Static Context is selected only from the publication-redacted `ExportSnapshot.meta`: project label, observation/version facts, display-safe Planning-root provenance, writable Store id, and the explicit Reference export policy. It must never fabricate `RootContext`, start a live subscription, or expose CLI availability/raw evidence, registry/data-home/`envUri`, diagnostics, or mutation authority. `omit` publishes only its aggregate Reference count; `include` may publish only the Store summaries already present in the snapshot. The SSG route manifest must generate `/context`, not merely register a client route.
+- Static document embedding law (2026-07-28): every dynamic value inserted into generated HTML must cross `packages/web/src/ssg/static-document.ts`. Never interpolate raw `JSON.stringify` output, base paths, route titles, or snapshot/file-preview content directly into a script or HTML text context. Inline-script JSON must preserve value round trips while escaping HTML-significant `<` plus JavaScript line separators; title text must be HTML-escaped. Regression evidence must parse a real generated document, prove `window.__INITIAL_DATA__` is available, and prove source text did not escape into visible DOM or executable markup.
 - Static-related completion check (minimum):
   - `pnpm --filter @openspecui/web test -- src/entry-client-static.test.tsx src/lib/static-data-provider.opsx.test.ts`
   - `pnpm --filter @openspecui/web build:ssg`

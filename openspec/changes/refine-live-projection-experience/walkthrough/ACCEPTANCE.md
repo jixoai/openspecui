@@ -316,3 +316,14 @@ P9 automated evidence may prepare a replacement head, but the owner performs the
 P9 now has focused unit/SSR and real non-browser export evidence. Recheck only these two observations on the
 replacement head; the already accepted functional walkthrough does not need to be repeated unless either fix
 changes adjacent behavior.
+
+## 3. Owner Result: static document escape
+
+The owner reported that `pnpm openspecui export -o ./tmp --open` rendered serialized snapshot/source-preview text
+as page content. P10 corrected the shared static document embedding boundary. After the replacement head is
+available, rerun only the same export command and confirm:
+
+1. No JSON or source-preview text overlays the application.
+2. Dashboard and `/context` render normally from the embedded snapshot.
+
+This follow-up does not require repeating unrelated live/App cases. Final visual confirmation remains owner-owned.
