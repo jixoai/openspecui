@@ -4,7 +4,7 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 2. Keep actual source progress, scope, decisions, and evidence boundaries synchronized during application.
 3. Preserve the push-to-pull, authority, draft-protection, and visual-language decisions approved in research.
 4. Define the concrete conditions that require a return to research before implementation can proceed.
-5. Record P1-A/P1-B and all-surface implementation evidence without closing owner-only acceptance.
+5. Record P1-A/P1-B, all-surface implementation evidence, and final owner-only acceptance.
 
 Original request (2026-07-23): "布局方面暂时不需要改动，后续社区有一个PR我会合并进来，那是关于kanban 的一个pr。所以本次change的主要优化点，在于更友好的UIUX，优化用户等待信息的时间感知。"
 Original request (2026-07-23): "一次性把现有的页面都统一整改，因为这涉及到统一组件的封装和开发。全部改动，才能在中途暴露出所有隐含的可能、状态。这对于我们组件化的封装和开发非常重要。"
@@ -12,6 +12,7 @@ Original request (2026-07-23): "不用显示文字，可以用光影来替代，
 Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
 Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
 Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间需要 gap 或分割线；Static 导出后的 /context 页面没数据。"
+Owner final acceptance (2026-07-28): "验收通过。"
 -->
 
 ## Implementation State
@@ -35,15 +36,15 @@ The implementation scope is frozen as follows:
 > Server-emission blocker was revalidated on 2026-07-25 and is stale in the current tree. Phase 2 is now
 > eligible, but begins with one bounded vertical slice, P1-A Dashboard Summary, before Trends, Git, or Changes.
 
-| Order | Phase                              | Current state                                                           | Implementation owner                                                                         | Mandatory evidence before moving on                                                                                                                                         |
-| ----- | ---------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Phase 2, P1-A                      | Runtime accepted; historical pre-v2 red unavailable                     | Dashboard Summary Projection Work boundary and its real Web adapter                          | The v2-after-implementation acceptance fixed point is green. No historical pre-fix red was obtained; the same Web fixture fails after bypassing the exact active-wake gate. |
-| 2     | Phase 1                            | **Implemented (Slice 2A+2B)**                                           | Web realtime component module, shared `Button`, and CSS token ownership                      | A focused visual/state fixture proves stable geometry, reduced-motion equivalence, hidden accessible status, and no changing command label.                                 |
-| 3     | Phase 1                            | **Migrated (9/9 routes)**                                               | Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search owners | Each route has a current/partial/revalidating/refresh-error fixture where applicable; no route-wide wait branch hides a stable sibling.                                     |
-| 4     | Phase 1                            | **Migrated/audited across current Web surfaces**                        | OPSX, planning-config, Settings/translation, dialog/editor, and terminal-control owners      | Existing draft/authority fixtures stay green; ordinary waits use local atoms while raw evidence, errors, blocks, empty conclusions, PDF parsing, and downloads keep text.   |
-| 5     | Phase 1 static/a11y; Phase 2 gates | **Static truthfulness proven; reduced-motion/mobile/Storybook pending** | Static provider, route/component tests, and Storybook fixtures                               | Static truthfulness, reduced motion, mobile geometry, and SSG evidence are green before full repository gates.                                                              |
-| 6     | Phase 2, P1-B                      | **Implemented; focused evidence green**                                 | Dashboard retained typed read and fresh-document Web adapter                                 | Dormant retained data renders immediately as display-only; matching current convergence, A/B retirement, and reactive Root reuse are focused-green.                         |
-| 7     | Phase 3, P6                        | **Implemented; focused evidence green**                                 | App Store/Root admission, route lifecycle visuals, persistent Sessions host                  | Notice-free initial Pull, unresolved-not-empty, retained siblings, and iframe identity round-trip fixtures are focused-green.                                               |
+| Order | Phase                              | Current state                                       | Implementation owner                                                                         | Mandatory evidence before moving on                                                                                                                                         |
+| ----- | ---------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Phase 2, P1-A                      | Runtime accepted; historical pre-v2 red unavailable | Dashboard Summary Projection Work boundary and its real Web adapter                          | The v2-after-implementation acceptance fixed point is green. No historical pre-fix red was obtained; the same Web fixture fails after bypassing the exact active-wake gate. |
+| 2     | Phase 1                            | **Implemented (Slice 2A+2B)**                       | Web realtime component module, shared `Button`, and CSS token ownership                      | A focused visual/state fixture proves stable geometry, reduced-motion equivalence, hidden accessible status, and no changing command label.                                 |
+| 3     | Phase 1                            | **Migrated (9/9 routes)**                           | Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search owners | Each route has a current/partial/revalidating/refresh-error fixture where applicable; no route-wide wait branch hides a stable sibling.                                     |
+| 4     | Phase 1                            | **Migrated/audited across current Web surfaces**    | OPSX, planning-config, Settings/translation, dialog/editor, and terminal-control owners      | Existing draft/authority fixtures stay green; ordinary waits use local atoms while raw evidence, errors, blocks, empty conclusions, PDF parsing, and downloads keep text.   |
+| 5     | Phase 1 static/a11y; Phase 2 gates | **Complete; browser component evidence green**      | Static provider, route/component tests, and Storybook fixtures                               | Static truthfulness, reduced motion, mobile geometry, and SSG evidence are green before full repository gates.                                                              |
+| 6     | Phase 2, P1-B                      | **Implemented; focused evidence green**             | Dashboard retained typed read and fresh-document Web adapter                                 | Dormant retained data renders immediately as display-only; matching current convergence, A/B retirement, and reactive Root reuse are focused-green.                         |
+| 7     | Phase 3, P6                        | **Implemented; focused evidence green**             | App Store/Root admission, route lifecycle visuals, persistent Sessions host                  | Notice-free initial Pull, unresolved-not-empty, retained siblings, and iframe identity round-trip fixtures are focused-green.                                               |
 
 ### 2026-07-27 fresh-document/App loopback red evidence
 
@@ -450,22 +451,21 @@ runtime is loaded from the workspace CLI package through one typed shared bounda
 
 ### Residual risk / open items
 
-- Checkpoint 2.2's historical pre-v2 red cannot be recreated honestly. Current runtime acceptance and exact
-  mutation evidence exist, but the ledger remains open rather than relabeling post-implementation evidence.
+- Checkpoint 2.2's historical pre-v2 red cannot be recreated honestly. Final audit records that absence as the
+  completed evidence correction rather than relabeling post-implementation acceptance or exact mutation evidence.
 - Fresh-Server cold Summary computation remains about 10.48s in the latest sample. The same-Server fresh
   Document path is now fast because it avoids duplicate Doctor/Context and can consume retained state; this is
   not a cold-computation cache claim.
-- P5's dedicated mobile and emulated reduced-motion fixture remains open; the existing component-level
-  Storybook/Playwright gate passed but does not prove those two named variants. PR checks and owner-only final
-  browser/visual acceptance also remain open. Trends, Git, and Changes keep their existing transport versions;
-  generic v2 coalescing/user-action bypass was not expanded incidentally.
+- Trends, Git, and Changes keep their existing transport versions; generic v2 coalescing/user-action bypass was
+  not expanded incidentally. Fresh-Server cold Summary latency remains measurable follow-up debt rather than a
+  blocker for the accepted retained-content experience.
 
 ### Completed planning evidence
 
 - Added delta specs for `realtime-projection-experience`, `live-projection-work`, `web-rendering`, `opsx-ui-views`, `opsx-config-center`, and `opsx-terminal-panel`.
 - Ran `openspec validate refine-live-projection-experience --strict` successfully on 2026-07-23 Asia/Shanghai.
-- The applied candidate is locally gate-green. Historical P1-A red evidence, the dedicated P5 variants, PR
-  delivery, and owner acceptance remain explicitly separate.
+- The applied candidate is locally and remotely gate-green. Historical P1-A red absence, automated P5 evidence,
+  PR delivery, and owner acceptance remain explicitly separate facts.
 
 Every TypeScript/TSX production and test file created by these packages must have its timestamped orthogonal-intent/original-request header. Each package starts with its named red case at the real public or mutation boundary, records its actual failure, then adds the green and mutation-resistance proof. A passing transpile-only fixture, a disabled-control assertion, or a manually invoked downstream callback does not satisfy that evidence requirement.
 
@@ -980,6 +980,29 @@ until all five packages receive focused review. No Agent-run fixture is final br
   final visual confirmation and checkpoint 3.6; no merge, archive, or release is authorized by this evidence.
 - **Delivery note**: the pre-commit hook again stopped before project checks because root `vite.config.ts` has no
   Vite+ `staged` configuration. The scoped commits use `--no-verify` only after the independent gates above.
+- **Exact-head remote evidence**: PR Quality run `30337338986` tested implementation head `7e7b6e9` and passed
+  Changeset Gate, CI Scope, Fast Gate, the Web Browser shard, and aggregate Browser Gate. PR #211 is open and
+  `CLEAN`. This resolves the remote full-workspace rerun left to CI after the two local App timing interruptions;
+  it does not replace the owner's final export/browser confirmation or authorize merge, archive, or release.
+
+### P5 and owner acceptance closure (2026-07-28 Asia/Shanghai)
+
+- **Dedicated browser component evidence**:
+  `realtime-atoms.browser.test.tsx` uses the configured Playwright/Chromium provider and CDP media emulation to
+  enable the real `prefers-reduced-motion: reduce` preference. It proves skeleton, revalidation, settle, and
+  indeterminate-progress animation names resolve to `none` while the hidden accessible update status remains.
+  Its independent `390 x 844` fixture proves list geometry stays within the component viewport and preserves
+  distinct list rows plus truthful unknown and 1/4 determinate progress.
+- **Durable gate**: Web `test:browser:ci` now runs this focused browser file before the existing Storybook project.
+  Final result: realtime Chromium `2/2`, Storybook `12/12`, and checked Web TypeScript passed. These remain
+  component preparation evidence and do not stand in for the owner's browser result.
+- **P1-A evidence correction**: checkpoints 2.1 and 2.3 close against the independently reviewed implementation
+  and exact acceptance-gate mutation. Checkpoint 2.2 closes only as an explicit record that no historical pre-v2
+  red was captured; no post-implementation fixture has been relabeled as historical proof.
+- **Owner evidence**: after PR Quality run `30337338986` passed on implementation head `7e7b6e9`, the owner reran
+  `pnpm openspecui export -o ./tmp --open` and confirmed `验收通过`. The exported document no longer exposes JSON
+  or source-preview text, and Dashboard plus `/context` render normally. Together with the earlier AT-01 through
+  AT-09 walkthrough, this closes checkpoint 3.6 while leaving merge, archive, and release unauthorized.
 
 ## Loopback Triggers
 

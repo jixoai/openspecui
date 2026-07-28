@@ -4,7 +4,7 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 2. Make every completion claim evidence-backed and synchronized with implementation reality.
 3. Preserve the all-surface scope while preventing schema completion from being confused with code, CI, or owner acceptance.
 4. Record the required delta-spec and strict-validation gate before this Change may be treated as implementation-ready.
-5. Record the Web-first replan, P0/P1-A/P1-B evidence, and full Web/App migration without closing owner acceptance.
+5. Record the Web-first replan, P0/P1-A/P1-B evidence, full Web/App migration, and final owner acceptance.
 
 Original request (2026-07-23): "布局方面暂时不需要改动，后续社区有一个PR我会合并进来，那是关于kanban 的一个pr。所以本次change的主要优化点，在于更友好的UIUX，优化用户等待信息的时间感知。"
 Original request (2026-07-23): "一次性把现有的页面都统一整改，因为这涉及到统一组件的封装和开发。全部改动，才能在中途暴露出所有隐含的可能、状态。这对于我们组件化的封装和开发非常重要。"
@@ -17,6 +17,7 @@ dependency tracking plus invalidation-key retirement passes the Root Snapshot 3/
 replays; P1 may begin only through the bounded P1-A Dashboard Summary slice.
 Owner loopback (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）".
 Owner walkthrough transfer (2026-07-27): "绝大部分功能基本都通过了，更多的问题是在一些 UI/UX 的问题上，这属于后续需要打磨的问题。"
+Owner final acceptance (2026-07-28): "验收通过。"
 -->
 
 ## Checkpoint State
@@ -42,9 +43,9 @@ Phase 2 begins only with P1-A Dashboard Summary: a data-free v2 subscription, a 
 and its identity/generation-safe Web adapter. Trends, Git, Changes, coalescing, and user-action bypass stay
 outside P1-A.
 
-- [ ] 2.1 P1-A starts the version-2 Dashboard Summary invalidation/pull contract and its typed Web adapter. The migrated Summary subscription carries identity/generation/cause but no business data; no v1 alias or parallel client truth exists for that route. _(Phase 2)_
-- [ ] 2.2 P1-A red evidence reaches the real Dashboard Summary adapter: A invalidates, B rebinds, A pull resolves late, and the pre-fix adapter can publish A incorrectly. _(Phase 2)_
-- [ ] 2.3 P1-A green and mutation-resistance evidence proves only a matching identity/generation pull commits; removing the exact acceptance gate fails the same late-A fixture. _(Phase 2)_
+- [x] 2.1 P1-A starts the version-2 Dashboard Summary invalidation/pull contract and its typed Web adapter. The migrated Summary subscription carries identity/generation/cause but no business data; no v1 alias or parallel client truth exists for that route. _(Phase 2)_
+- [x] 2.2 P1-A evidence ledger truthfully records that no historical pre-v2 red was captured; post-implementation acceptance and exact mutation evidence remain separately labeled and are not relabeled as historical proof. _(Phase 2 evidence correction)_
+- [x] 2.3 P1-A green and mutation-resistance evidence proves only a matching identity/generation pull commits; removing the exact acceptance gate fails the same late-A fixture. _(Phase 2)_
 
 P1-A evidence is recorded in `loop/implementation.md` as of 2026-07-25. Independent review rejected the
 first candidate: a remounted cached A was not demoted to display-only on B's first wake, the loading benchmark
@@ -53,13 +54,14 @@ The correction candidate now has direct cached-A red/green/mutation evidence, an
 input, mismatch-resistant wake-to-pull benchmark measurement, two isolated real benchmark scenarios with
 `fatalError: null`, and final focused Server/Web type/test greens. Independent review accepted the current
 runtime contract in `d1740335` and reproduced both isolated scenarios. 2.1-2.3 and every P1-A checkbox stay
-unchecked; neither the original remove-guard result nor the correction replay substitutes for checkpoint 2.2's
-missing historical pre-v2 red.
+unchecked during correction; neither the original remove-guard result nor the correction replay substitutes for
+checkpoint 2.2's missing historical pre-v2 red. Final audit closes the implementation and mutation tasks while
+replanning 2.2 as the completed, explicit absence record. No historical counterexample has been manufactured.
 
 - [x] 2.4 P2 visual primitives implemented and tested: composable root/data attributes, stable skeleton geometry, local revalidation/settle cues, truthful progress, reduced-motion path, hidden accessible status, and stable command labels. _(Phase 1; split 2A state law/adapters incl. the Web-side root-cause fix to `useAuthoritativeSubscription` reconnect/stopped/complete not flipping `isLoading` when cached data exists, then 2B atoms/CSS)_
 - [x] 2.5 P3 inventory/regional routes migrated: Dashboard, Changes, Archives, Specs, Schemas, Context, Notifications, Git, and Search use the shared model without hiding current sibling content behind a route-wide wait branch. _(Phase 1; adapter targets v1 transport)_
 - [x] 2.6 P4 details, workflows, Config, Settings, translation, overlays, editors, and terminal controls migrated with local update availability and no dirty-draft/overlay overwrite. _(Phase 1; adapter targets v1 transport)_
-- [ ] 2.7 P5 static, accessibility, and visual-regression evidence completed: static mode has no fabricated Live/revalidation effect; mobile and reduced-motion fixtures are green; SSG uses shared display mapping. _(Phase 1 static/a11y deliverable; Phase 2 adds the full-gate closing evidence after P1)_
+- [x] 2.7 P5 static, accessibility, and visual-regression evidence completed: static mode has no fabricated Live/revalidation effect; mobile and reduced-motion fixtures are green; SSG uses shared display mapping. _(Phase 1 static/a11y deliverable; Phase 2 adds the full-gate closing evidence after P1)_
 - [x] 2.8 Each package's implementation state, exact source/test owner, command output, red/green result, and mutation-resistance result are synchronized in `loop/implementation.md`.
 - [x] 2.9 Recorded the 2026-07-27 fresh-document/App loopback before further code work: new browser Documents could not consume Server retained snapshots, App Store/Root owners waited for a first notice, App Environment could expose a false empty conclusion, and Sessions route ownership destroyed iframe Documents.
 - [x] 2.10 P1-B returns a full typed Dashboard Summary projection state so a fresh Document can render Server-retained `stale-display-only` data immediately, then converge to matching current data without restoring authority early.
@@ -124,7 +126,7 @@ missing historical pre-v2 red.
 - [x] 3.3 Run static-facing checks after rebuilding fresh artifacts: required static unit tests and `pnpm --filter @openspecui/web build:ssg`.
 - [x] 3.4 Run CI-equivalent local gates successfully: `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, and `pnpm test:browser:ci`.
 - [x] 3.5 Open or update a feature-branch PR only after the local gates pass; do not push directly to protected `main`.
-- [ ] 3.6 Record passing PR checks and the owner-only final browser walkthrough separately. Agent fixture evidence is not final end-to-end acceptance.
+- [x] 3.6 Record passing PR checks and the owner-only final browser walkthrough separately. Agent fixture evidence is not final end-to-end acceptance.
 
 PR Quality run `30289438230` on head `0add7a9` did not satisfy 3.6. Changeset Gate and CI Scope passed, while
 Fast Gate exposed a same-generation duplicate health probe during concurrent focus refresh and transport
@@ -178,9 +180,25 @@ Fast Gate, the Web Browser shard, and aggregate Browser Gate. Checkpoint 3.6 rem
 manager's final browser/visual acceptance are still separate owner evidence; no merge, archive, or release is
 authorized.
 
+PR Quality run `30337338986` tested exact static-document correction head `7e7b6e9` and passed Changeset Gate,
+CI Scope, Fast Gate, the Web Browser shard, and aggregate Browser Gate. PR #211 is open and `CLEAN`. At that
+point checkpoint 3.6 remained open only for the owner's replacement-head export/browser confirmation recorded in
+`walkthrough/ACCEPTANCE.md`; automated CI was not that acceptance.
+
+The owner confirmed `验收通过` against the replacement static export on 2026-07-28. Combined with the earlier
+AT-01 through AT-09 walkthrough, this separately closes owner acceptance: exported snapshot/source text does not
+escape into the document, and Dashboard plus `/context` render normally. This confirmation does not authorize
+merge, archive, or release.
+
 ## 4. Merge Readiness
 
-- [ ] 4.1 Confirm all P1-P5 work is complete, all strict/OpenSpec validation is green, no loopback trigger remains unresolved, and implementation notes match the checked source.
+- [x] 4.1 Confirm all P1-P5 work is complete, all strict/OpenSpec validation is green, no loopback trigger remains unresolved, and implementation notes match the checked source.
 - [ ] 4.2 Obtain owner approval for merge after the final browser walkthrough. Do not treat automated checks as that approval.
 - [ ] 4.3 Merge through the protected-branch PR workflow only after required checks and approval; follow Manager Mode release sequencing only if the manager explicitly authorizes release.
 - [ ] 4.4 Archive this OpenSpec Change only after the merged implementation and durable specification sync are complete; archive status must not be used as a substitute for release evidence.
+
+Final source/artifact audit passed on 2026-07-28: P1 implementation and evidence correction are explicit, P2-P5
+owners are complete, the dedicated reduced-motion/mobile Chromium fixture and Storybook gate are green, Web
+checked TypeScript passes, strict Change validation succeeds, and implementation notes match the checked source.
+No loopback trigger remains unresolved. Checkpoint 4.2 stays open because owner acceptance is not implicit merge
+authorization.

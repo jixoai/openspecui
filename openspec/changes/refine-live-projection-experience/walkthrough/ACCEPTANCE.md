@@ -2,12 +2,13 @@
 Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 1. Give the owner a numbered, command-exact browser acceptance procedure.
 2. Isolate authentication, Clipboard, retained loading, reconnect, Inspector, viewport, static, and host-presentation boundaries.
-3. Define PASS/FAIL observations without treating automated fixtures as final acceptance.
+3. Define PASS/FAIL observations and preserve the owner's final acceptance separately from automated fixtures.
 4. Keep credentials and disposable mutation scope out of durable evidence.
 
 Original request (2026-07-28): "我需要非常具体的验收工具和验收流程"
 Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口。"
 Owner acceptance feedback (2026-07-28): "验收任务做完，基本全部通过；列表骨架分隔和 Static /context 仍需修复。"
+Owner final acceptance (2026-07-28): "验收通过。"
 -->
 
 # Owner Acceptance Procedure
@@ -327,3 +328,17 @@ available, rerun only the same export command and confirm:
 2. Dashboard and `/context` render normally from the embedded snapshot.
 
 This follow-up does not require repeating unrelated live/App cases. Final visual confirmation remains owner-owned.
+
+Replacement implementation head `7e7b6e9` passed PR Quality run `30337338986`, including Fast Gate and both Web
+and aggregate Browser Gates. Run the command against this head; those automated checks are preparation evidence,
+not the result of this owner confirmation.
+
+## 4. Owner Result: replacement head accepted
+
+The owner reran `pnpm openspecui export -o ./tmp --open` against the replacement implementation and confirmed
+`验收通过` on 2026-07-28. The generated document no longer exposes JSON or source-preview text over the
+application, and both Dashboard and `/context` render normally. Together with the earlier AT-01 through AT-09
+walkthrough, this closes checkpoint 3.6 against implementation head `7e7b6e9`.
+
+This is owner browser/visual evidence. PR checks remain separately recorded automated evidence; merge, archive,
+and release still require their own explicit authorization and workflow steps.
