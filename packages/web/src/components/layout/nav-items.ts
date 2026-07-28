@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Define the supported project navigation identity and default area for each route.
  * 2. Derive desktop and mobile navigation from one canonical item registry.
- * 3. Keep Context as the sole project surface for Root, Reference, and registry diagnostics.
+ * 3. Keep Context diagnostics and the objective Kanban projection as distinct project surfaces.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ * Original request (2026-07-28): add the objective Kanban project surface.
  */
 import {
   Archive,
@@ -16,6 +17,7 @@ import {
   Network,
   Settings,
   SlidersHorizontal,
+  SquareKanban,
   Terminal,
   type LucideIcon,
 } from 'lucide-react'
@@ -27,6 +29,7 @@ export type AppRoute =
   | '/git'
   | '/specs'
   | '/changes'
+  | '/board'
   | '/archive'
   | '/context'
   | '/settings'
@@ -53,6 +56,7 @@ export const allNavItems: NavItem[] = [
   { to: '/git', icon: GitBranch, label: 'Git', defaultArea: 'bottom' },
   { to: '/specs', icon: FileText, label: 'Specs', defaultArea: 'main' },
   { to: '/changes', icon: ListTodo, label: 'Changes', defaultArea: 'main' },
+  { to: '/board', icon: SquareKanban, label: 'Kanban', defaultArea: 'main' },
   { to: '/archive', icon: Archive, label: 'Archive', defaultArea: 'main' },
   // 6.9 Context 取代项目 Stores 页（root/Reference/registry 只读诊断）。
   { to: '/context', icon: Network, label: 'Context', defaultArea: 'main' },

@@ -1,14 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Project one immutable export snapshot through the live provider-shaped API.
  * 2. Preserve compound Spec identity and published snapshot policy/provenance without invented CLI evidence.
- * 3. Reconstruct Dashboard, workflow, schema, template, and entity reads without a backend.
+ * 3. Reconstruct Dashboard, objective Kanban, workflow, schema, template, and entity reads without a backend.
  * 4. Keep unsupported live mutations and provenance explicitly absent in static mode.
  * 5. Keep static Git snapshots ineligible for live backend binding authority.
  *
  * Original request (2026-07-15): "这是额外的工作还是可以和 live 版本保持尽可能的一致？"
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  */
 
 import type {
@@ -31,7 +32,12 @@ import type {
   Spec,
   TemplatesMap,
 } from '@openspecui/core'
-import { selectRecentDashboardItems } from '@openspecui/core/dashboard-display'
+import {
+  parseDatedArchiveIdTimestamp,
+  resolveArchiveTimestamp,
+  selectRecentDashboardArchives,
+  selectRecentDashboardItems,
+} from '@openspecui/core/dashboard-display'
 import { DocumentTranslationConfigSchema } from '@openspecui/core/document-translation'
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { isOpsxGlobPattern, opsxPathMatchesPattern } from '@openspecui/core/opsx-entity'
@@ -139,19 +145,6 @@ function resolveTrendTimestamp(
   return null
 }
 
-function parseDatedIdTimestamp(id: string): number | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})(?:-|$)/.exec(id)
-  if (!match) return null
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null
-  if (month < 1 || month > 12) return null
-  if (day < 1 || day > 31) return null
-  const ts = Date.UTC(year, month - 1, day)
-  return Number.isFinite(ts) ? ts : null
-}
-
 function normalizeTrendEvents(events: TrendEvent[], pointLimit: number): TrendEvent[] {
   return events
     .filter((event) => Number.isFinite(event.ts) && event.ts > 0 && Number.isFinite(event.value))
@@ -250,7 +243,7 @@ function buildStaticObjectiveTrends(
   trends.completedChanges = buildBucketedTrend(
     snapshot.archives.flatMap((archive) => {
       const ts =
-        parseDatedIdTimestamp(archive.id) ??
+        parseDatedArchiveIdTimestamp(archive.id) ??
         resolveTrendTimestamp(archive.updatedAt, archive.createdAt)
       return ts === null ? [] : [{ ts, value: 1 }]
     }),
@@ -671,6 +664,8 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       },
       specifications: [],
       activeChanges: [],
+      trackedTaskPhaseCounts: { 'no-tasks': 0, 'in-progress': 0, complete: 0 },
+      recentArchives: [],
       git: {
         bindingToken: null,
         defaultBranch: 'main',
@@ -722,6 +717,21 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const inProgressChanges = allActiveChanges.filter(
     (change) => change.trackedTaskProgress.phase === 'in-progress'
   ).length
+  const trackedTaskPhaseCounts: DashboardOverview['trackedTaskPhaseCounts'] = {
+    'no-tasks': 0,
+    'in-progress': 0,
+    complete: 0,
+  }
+  for (const change of allActiveChanges) {
+    trackedTaskPhaseCounts[change.trackedTaskProgress.phase] += 1
+  }
+  const recentArchives = selectRecentDashboardArchives(snapshot.archives).map((archive) => ({
+    id: archive.id,
+    name: archive.name,
+    trackedTaskProgress: archive.trackedTaskProgress,
+    archivedAt: resolveArchiveTimestamp(archive),
+    updatedAt: archive.updatedAt,
+  }))
 
   const trends = buildStaticObjectiveTrends(snapshot, trendPointLimit, rightEdgeTs)
   const hasObjectiveSpecificationTrend =
@@ -756,6 +766,8 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     },
     specifications,
     activeChanges,
+    trackedTaskPhaseCounts,
+    recentArchives,
     git: buildStaticGitSnapshot(snapshot),
   }
 }

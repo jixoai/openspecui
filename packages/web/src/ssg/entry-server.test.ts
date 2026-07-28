@@ -4,11 +4,12 @@
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove SSG enumerates and titles Owned Specs through compound identity.
  * 2. Prove the static server entry imports and renders without browser globals.
- * 3. Prove `/context` is generated with publication-safe snapshot provenance.
+ * 3. Prove `/context` and objective Kanban are generated through the static route manifest.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  * Derived requirement (2026-07-18): Static HTML pre-render must not evaluate browser-only toolkit modules.
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
+ * Original request (2026-07-28): static Board uses the shared ReadonlyKanban.
  */
 import type { ExportSnapshot } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
@@ -53,7 +54,9 @@ describe('static Spec routes', () => {
     const data = snapshot()
     expect(getRoutes(data)).toContain('/specs/owned/auth%2Fv2')
     expect(getRoutes(data)).toContain('/context')
+    expect(getRoutes(data)).toContain('/board')
     expect(getTitle('/context', data)).toBe('Context')
+    expect(getTitle('/board', data)).toBe('Kanban')
     expect(getTitle('/specs/owned/auth%2Fv2', data)).toBe('Auth V2')
     expect(getRoutes(data)).not.toContain('/specs/auth%2Fv2')
   })

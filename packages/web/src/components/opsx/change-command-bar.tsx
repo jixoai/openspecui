@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
- * 1. Project official change-scoped OPSX actions with objective applicability locks.
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Project official change-scoped OPSX actions with shared objective applicability locks.
  * 2. Delegate Archive applicability and diagnostics to the CLI-owned dialog.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
+ * Original request (2026-07-28): Board and Change Detail must expose the same Apply boundary.
  */
+import { getChangeApplyAvailability } from '@/lib/change-operator-availability'
 import type { OpsxComposeActionId } from '@/lib/opsx-compose'
 import type { ChangeStatus } from '@openspecui/core'
 import {
@@ -39,8 +41,7 @@ export function ChangeCommandBar({
   onVerify,
 }: ChangeCommandBarProps) {
   const readyArtifact = status.artifacts.find((a) => a.status === 'ready')
-  const doneSet = new Set(status.artifacts.filter((a) => a.status === 'done').map((a) => a.id))
-  const missingApply = status.applyRequires.filter((id) => !doneSet.has(id))
+  const applyAvailability = getChangeApplyAvailability(status)
 
   const buttons: Array<{
     id: ComposeActionId
@@ -72,8 +73,11 @@ export function ChangeCommandBar({
       id: 'apply',
       label: 'Apply',
       icon: CheckCircle,
-      disabled: missingApply.length > 0,
-      hint: missingApply.length > 0 ? `missing: ${missingApply.join(', ')}` : undefined,
+      disabled: !applyAvailability.available,
+      hint:
+        applyAvailability.missingArtifactIds.length > 0
+          ? `missing: ${applyAvailability.missingArtifactIds.join(', ')}`
+          : undefined,
     },
     {
       id: 'update',

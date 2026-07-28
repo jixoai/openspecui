@@ -3,14 +3,16 @@
  * 1. Define Dashboard metrics, trends, planning projections, and Git snapshot contracts.
  * 2. Preserve backend-issued Code binding provenance on live Git snapshots.
  * 3. Split independently refreshable Summary and Trends facts from the aggregate Dashboard compatibility view.
+ * 4. Carry objective Kanban phase counts and bounded archive summaries without workflow inference.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 binds Dashboard snapshots to their Code token.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  */
 import { z } from 'zod'
 import { TrackedTaskProgressSchema } from './schemas.js'
-import type { TrackedTaskProgress } from './task-progress.js'
+import type { TrackedTaskPhase, TrackedTaskProgress } from './task-progress.js'
 
 export const DASHBOARD_METRIC_KEYS = [
   'specifications',
@@ -119,6 +121,14 @@ export interface DashboardSummaryProjection {
     id: string
     name: string
     trackedTaskProgress: TrackedTaskProgress
+    updatedAt: number
+  }>
+  trackedTaskPhaseCounts: Record<TrackedTaskPhase, number>
+  recentArchives: Array<{
+    id: string
+    name: string
+    trackedTaskProgress: TrackedTaskProgress
+    archivedAt: number
     updatedAt: number
   }>
 }
@@ -263,6 +273,20 @@ export const DashboardSummaryProjectionSchema = z.object({
       id: z.string(),
       name: z.string(),
       trackedTaskProgress: TrackedTaskProgressSchema,
+      updatedAt: z.number(),
+    })
+  ),
+  trackedTaskPhaseCounts: z.object({
+    'no-tasks': z.number(),
+    'in-progress': z.number(),
+    complete: z.number(),
+  }),
+  recentArchives: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      trackedTaskProgress: TrackedTaskProgressSchema,
+      archivedAt: z.number(),
       updatedAt: z.number(),
     })
   ),

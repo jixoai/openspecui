@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Adapt typed OPSX lifecycle Push/Pull, file-native schema, and artifact projections to React.
  * 2. Let routes defer expensive aggregate Status and Config subscriptions until primary content is renderable.
  * 3. Keep browser cache identity equal to the typed CLI selector across prefetch and route remounts.
  * 4. Keep optional Change, Schema, and artifact selectors from issuing unrelated projection work.
+ * 5. Expose Status List authority when an operation surface must reject retained display data.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-07-28): live Kanban operations require current Status projection authority.
  *
  * Compromise: these OPSX hooks remain in one physical module because routes already consume this public
  * adapter surface; splitting every entity hook during the loading fix would create unrelated import churn.
@@ -25,7 +27,10 @@ import type { PlanningCliProjectionData } from '@openspecui/core/planning-cli-pr
 import { useCallback } from 'react'
 import * as StaticProvider from './static-data-provider'
 import { trpcClient } from './trpc'
-import { useCliProjectionSubscription } from './use-cli-projection'
+import {
+  useCliProjectionSubscription,
+  type CliProjectionSubscriptionState,
+} from './use-cli-projection'
 import { useSubscription, type SubscriptionState } from './use-subscription'
 
 export interface OpsxTemplateContent {
@@ -126,7 +131,9 @@ export function useOpsxConfigBundleSubscription(
 }
 
 /** Subscribe to all Change statuses only after the route's primary projection is renderable. */
-export function useOpsxStatusListSubscription(enabled = true): SubscriptionState<ChangeStatus[]> {
+export function useOpsxStatusListSubscription(
+  enabled = true
+): CliProjectionSubscriptionState<ChangeStatus[]> {
   return useCliProjectionSubscription<ChangeStatus[]>({
     selector: { kind: 'opsx-status-list' },
     selectData(data: PlanningCliProjectionData) {

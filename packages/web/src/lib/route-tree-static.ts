@@ -1,6 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Register publication-safe project routes without live terminal surfaces.
+ * 2. Preserve compound Spec, Context, and objective readonly Kanban navigation.
+ *
+ * Original request (2026-07-28): static Board uses the shared ReadonlyKanban.
+ */
 import { createRoute, type AnyRootRoute } from '@tanstack/react-router'
 import { ArchiveList } from '../routes/archive-list'
 import { ArchiveView } from '../routes/archive-view'
+import { Board } from '../routes/board'
 import { ChangeList } from '../routes/change-list'
 import { ChangeView } from '../routes/change-view'
 import { Config } from '../routes/config'
@@ -11,9 +19,7 @@ import { SettingsStatic } from '../routes/settings-static'
 import { SpecList } from '../routes/spec-list'
 import { SpecView } from '../routes/spec-view'
 
-/**
- * Static route tree (SSG/client-static) without terminal routes.
- */
+/** Static route tree (SSG/client-static) without terminal routes. */
 export function createStaticRouteTree(rootRoute: AnyRootRoute) {
   return rootRoute.addChildren([
     createRoute({
@@ -40,6 +46,7 @@ export function createStaticRouteTree(rootRoute: AnyRootRoute) {
       path: '/changes/$changeId',
       component: ChangeView,
     }),
+    createRoute({ getParentRoute: () => rootRoute, path: '/board', component: Board }),
     createRoute({ getParentRoute: () => rootRoute, path: '/archive', component: ArchiveList }),
     createRoute({
       getParentRoute: () => rootRoute,

@@ -3,6 +3,7 @@
  * 1. Load optional Dashboard historical trend facts independently from first-screen Summary.
  * 2. Preserve objective availability and tracked-artifact semantics for each metric.
  * 3. Keep trend configuration and timeline calculation outside Git snapshot delivery.
+ * 4. Reuse the shared archive-date parser used by Dashboard Kanban projections.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  */
@@ -13,6 +14,7 @@ import {
   type DashboardTriColorTrendPoint,
   type OpenSpecAdapter,
 } from '@openspecui/core'
+import { parseDatedArchiveIdTimestamp } from '../../core/src/dashboard-display.js'
 import { loadDashboardPlanningFacts } from './dashboard-summary.js'
 import { buildDashboardTimeTrends } from './dashboard-time-trends.js'
 
@@ -38,18 +40,6 @@ function resolveTrendTimestamp(
   return null
 }
 
-function parseDatedIdTimestamp(id: string): number | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})(?:-|$)/.exec(id)
-  if (!match) return null
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null
-  const timestamp = Date.UTC(year, month - 1, day)
-  return Number.isFinite(timestamp) ? timestamp : null
-}
-
 /** Load optional historical Dashboard facts without waiting for a Git snapshot. */
 export async function loadDashboardTrends(
   ctx: DashboardTrendsLoaderContext
@@ -64,7 +54,7 @@ export async function loadDashboardTrends(
   })
   const completedTrendEvents = facts.archiveMetas.flatMap((archive) => {
     const timestamp =
-      parseDatedIdTimestamp(archive.id) ??
+      parseDatedArchiveIdTimestamp(archive.id) ??
       resolveTrendTimestamp(archive.updatedAt, archive.createdAt)
     return timestamp === null ? [] : [{ ts: timestamp, value: 1 }]
   })
