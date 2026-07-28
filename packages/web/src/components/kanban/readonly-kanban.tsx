@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Render objective Change lanes with navigation and no operation callbacks.
  * 2. Share one compact/full presentation across Dashboard and static Board.
- * 3. Preserve list continuity through motion layout transitions and stable identities.
+ * 3. Own a 1/2/4-column container-responsive topology without horizontal scrolling.
+ * 4. Preserve list continuity through motion layout transitions and stable identities.
  *
  * Original request (2026-07-28): add ReadonlyKanban to Dashboard and keep static mode objective.
+ * Owner correction (2026-07-28): use container queries for 4x1, 2x2, and 1x4 without horizontal scrolling.
  */
 import { CountBadge } from '@/components/badge'
 import { formatDate, formatRelativeTime } from '@/lib/format-time'
@@ -47,58 +49,59 @@ export function ReadonlyKanban({
   return (
     <div
       data-testid="readonly-kanban"
-      className={cn(
-        'grid min-w-0 auto-cols-[minmax(14rem,1fr)] grid-flow-col gap-3 overflow-x-auto pb-1',
-        !compact && 'lg:grid-flow-row lg:grid-cols-4 lg:overflow-x-visible',
-        className
-      )}
+      className={cn('@container min-w-0 max-w-full overflow-x-clip', className)}
     >
-      {KANBAN_LANES.map((lane) => {
-        const rows = lane.id === 'archived' ? archivedItems : grouped[lane.id]
-        const visibleRows = rows.slice(0, maxItems)
-        const count = lane.id === 'archived' ? archivedCount : activeCounts[lane.id]
+      <div
+        data-testid="readonly-kanban-grid"
+        className="@[32rem]:grid-cols-2 @[64rem]:grid-cols-4 grid w-full min-w-0 max-w-full grid-cols-1 gap-3 overflow-x-clip pb-1"
+      >
+        {KANBAN_LANES.map((lane) => {
+          const rows = lane.id === 'archived' ? archivedItems : grouped[lane.id]
+          const visibleRows = rows.slice(0, maxItems)
+          const count = lane.id === 'archived' ? archivedCount : activeCounts[lane.id]
 
-        return (
-          <section key={lane.id} className="border-border/70 min-w-0 border-t">
-            <header className="flex h-10 min-w-0 items-center justify-between gap-2 px-1">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className={cn('h-2 w-2 shrink-0 rounded-full', lane.accentClass)} />
-                <h3 className="truncate text-xs font-semibold">
-                  {compact ? lane.shortLabel : lane.label}
-                </h3>
-              </div>
-              <CountBadge count={count} tone="muted" size="xs" shape="pill" />
-            </header>
-
-            <motion.div layout className="space-y-2" data-lane={lane.id}>
-              <AnimatePresence initial={false} mode="popLayout">
-                {visibleRows.map((item) => (
-                  <motion.div
-                    layout
-                    layoutId={`readonly-kanban:${item.id}`}
-                    key={`${lane.id}:${item.id}`}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.98 }}
-                    transition={{ duration: 0.16 }}
-                  >
-                    <ReadonlyKanbanRow item={item} laneId={lane.id} compact={compact} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-              {visibleRows.length === 0 && count === 0 ? (
-                <div className="border-border/60 text-muted-foreground flex h-16 items-center justify-center rounded-md border border-dashed">
-                  {lane.id === 'no-tasks' ? (
-                    <FileQuestion className="h-4 w-4" aria-label="No entries" />
-                  ) : (
-                    <ListChecks className="h-4 w-4" aria-label="No entries" />
-                  )}
+          return (
+            <section key={lane.id} className="border-border/70 min-w-0 border-t">
+              <header className="flex h-10 min-w-0 items-center justify-between gap-2 px-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className={cn('h-2 w-2 shrink-0 rounded-full', lane.accentClass)} />
+                  <h3 className="truncate text-xs font-semibold">
+                    {compact ? lane.shortLabel : lane.label}
+                  </h3>
                 </div>
-              ) : null}
-            </motion.div>
-          </section>
-        )
-      })}
+                <CountBadge count={count} tone="muted" size="xs" shape="pill" />
+              </header>
+
+              <motion.div layout className="space-y-2" data-lane={lane.id}>
+                <AnimatePresence initial={false} mode="popLayout">
+                  {visibleRows.map((item) => (
+                    <motion.div
+                      layout
+                      layoutId={`readonly-kanban:${item.id}`}
+                      key={`${lane.id}:${item.id}`}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.16 }}
+                    >
+                      <ReadonlyKanbanRow item={item} laneId={lane.id} compact={compact} />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                {visibleRows.length === 0 && count === 0 ? (
+                  <div className="border-border/60 text-muted-foreground flex h-16 items-center justify-center rounded-md border border-dashed">
+                    {lane.id === 'no-tasks' ? (
+                      <FileQuestion className="h-4 w-4" aria-label="No entries" />
+                    ) : (
+                      <ListChecks className="h-4 w-4" aria-label="No entries" />
+                    )}
+                  </div>
+                ) : null}
+              </motion.div>
+            </section>
+          )
+        })}
+      </div>
     </div>
   )
 }

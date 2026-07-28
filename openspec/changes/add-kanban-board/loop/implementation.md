@@ -9,7 +9,7 @@ Owner decision (2026-07-28): implement the reviewed Kanban rewrite.
 
 ## Current State
 
-Status: **objective projection delivered; owner-requested container-responsive correction pending**.
+Status: **container-responsive correction and local gates complete; updated PR delivery pending**.
 
 The contributor implementation at commits `5def094` and `9763458` is characterization input only. Its old
 frontend-only completion claims, lifecycle names, helper tests, SSG registration evidence, and green-gate counts
@@ -46,9 +46,34 @@ are superseded by the 2026-07-28 fixed-point review.
 
 ### E. Container-responsive correction
 
-- [ ] `ReadonlyKanban` owns its inline-size container and renders `1`, `2`, or `4` columns from container width.
-- [ ] Horizontal scrolling, auto-column flow, and viewport-responsive layout are absent from the readonly surface.
-- [ ] Focused component tests lock the topology before updated package gates and PR delivery are recorded.
+- [x] `ReadonlyKanban` owns its inline-size container and renders `1`, `2`, or `4` columns from container width.
+- [x] Horizontal scrolling, auto-column flow, and viewport-responsive layout are absent from the readonly surface.
+- [x] Focused component tests lock the topology before updated package gates and PR delivery are recorded.
+
+The fixed-point test first failed only because the production root did not contain `@container` (`1 failed / 1
+passed`). The implementation then introduced a self-owned container plus `grid-cols-1`,
+`@[32rem]:grid-cols-2`, and `@[64rem]:grid-cols-4`; the same focused file passed `2/2`. The grid no longer contains
+`overflow-x-auto`, auto-column sizing, column flow, or viewport breakpoint classes. Explicit test cleanup was added
+because the new second case exposed retained DOM from this file's prior single-test setup.
+
+Updated delivery evidence:
+
+```text
+focused ReadonlyKanban unit             1 file / 2 tests
+format:check                            passed (4 changed files)
+lint:ci                                passed (1051 files, 0 warnings/errors)
+typecheck                              passed (15 workspace projects)
+test:ci                                passed (378 files / 2486 tests)
+clean Web SSG                          passed
+compiled container CSS                 32rem two-column / 64rem four-column rules present
+changeset:check against origin/main    passed
+OpenSpec strict validation             passed
+git diff --check                       passed
+```
+
+The existing non-fatal jsdom Canvas, experimental `::scroll-button(*)`, and ineffective dynamic-import warnings
+remain unchanged. Per owner acceptance law, no Agent visual or end-to-end browser walkthrough was performed; the
+updated PR's remote browser gates remain delivery evidence rather than owner acceptance.
 
 ## Focused Evidence (2026-07-28)
 
