@@ -8,6 +8,7 @@
  * 用 RealtimeSkeleton 块填充，shimmer 光影语言一致。
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
+ * Owner acceptance feedback (2026-07-28): "列表骨架之间需要 gap，要么得有分割线。"
  */
 import { cn } from '@/lib/utils'
 
@@ -47,7 +48,9 @@ function IconTitleSubtitleRow({
   className,
 }: ListRowSkeletonProps) {
   return (
-    <div className={cn('flex items-center justify-between gap-3 px-4 py-3', className)}>
+    <div
+      className={cn('bg-background flex items-center justify-between gap-3 px-4 py-3', className)}
+    >
       <div className="flex min-w-0 items-start gap-3">
         {/* icon position: mirrors GitBranch/Archive/FileText h-5 w-5 */}
         <RealtimeSkeleton className="mt-0.5 size-5 shrink-0" />

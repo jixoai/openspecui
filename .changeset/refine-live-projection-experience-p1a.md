@@ -32,3 +32,8 @@ request. The Browser adapter owns private URL materialization today, while a
 future native host can present the same backend intent without impersonating a
 browser opener. Successfully forwarded browser and PWA launch sources retire
 best-effort so the existing App surface can remain foreground.
+
+Static export now generates a publication-safe Context route from redacted
+snapshot root and Reference-policy metadata, without synthesizing live CLI or
+environment evidence. Shared list skeletons use an explicit physical row
+separator across Web and App loading surfaces.

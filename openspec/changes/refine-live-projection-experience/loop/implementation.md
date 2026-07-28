@@ -11,6 +11,7 @@ Original request (2026-07-23): "一次性把现有的页面都统一整改，因
 Original request (2026-07-23): "不用显示文字，可以用光影来替代，将它做成一种视觉语言，其实包括加载中等状态也是，尽量不要使用文字，而是使用视觉语言（动画、光影）等技术。"
 Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
 Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
+Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间需要 gap 或分割线；Static 导出后的 /context 页面没数据。"
 -->
 
 ## Implementation State
@@ -890,6 +891,55 @@ until all five packages receive focused review. No Agent-run fixture is final br
   Changeset Gate, CI Scope, Fast Gate, the Web Browser shard, and aggregate Browser Gate. The only annotations
   were GitHub Actions' Node 20 deprecation notices. This accepts automated delivery of P8 and the shared
   accessibility correction; it does not complete owner-only checkpoint 3.6.
+
+### P9 owner acceptance closure plan (2026-07-28 Asia/Shanghai)
+
+- **Accepted baseline**: the owner reports the walkthrough as broadly passing. Checkpoint 3.6 remains open until
+  the two named observations are corrected and the owner confirms the resulting head; no prior automated evidence
+  is relabeled as that final acceptance.
+- **P9-A skeleton owner**: replace the visually weak `divide-y` mode at
+  `RealtimeSkeletonInventory(mode="list-divide")` with one explicit shared separator topology. The focused fixture
+  must fail on the old container class and prove default App-sized rows are distinct without route-local spacing.
+- **P9-B Static Context owner**: keep `/context`, add it to the generated SSG route manifest, and project only
+  publication-safe `ExportSnapshot.meta` facts. Static rendering must not call the live Root subscription or
+  invent CLI availability, raw evidence, registry/data scope, `envUri`, diagnostics, or Reference completeness.
+- **Verification boundary**: focused Web Vitest and a fresh SSG build are agent-owned preparation evidence. The
+  owner retains final visual confirmation of the separator and exported Context page.
+
+### P9 owner acceptance closure evidence (2026-07-28 Asia/Shanghai)
+
+- **Direct red evidence**: the focused pre-fix command failed 7/27 at the named owners. Three skeleton assertions
+  received the old `divide-y` class instead of `grid gap-px bg-border`; Static `ContextView` still called the live
+  subscription and rendered neither included nor omitted policy facts; the SSG manifest omitted `/context`, and
+  the real Server render emitted only its pending skeleton. These failures precede the production correction and
+  are counterexample evidence, not post-hoc mock behavior.
+- **P9-A correction**: shared `list-divide` now owns a clipped one-pixel grid separator. App's default
+  `rt-skeleton-row h-14` rows keep their skeleton fill, while mirrored Web rows own `bg-background` so the shared
+  separator remains visible without route-local margins. The corrected fixture passed all three former failures.
+- **P9-B correction**: `ContextView` dispatches static mode to a physically separate `StaticContextView` before
+  calling the live hook. `selectStaticContextSnapshot` consumes only publication-redacted snapshot metadata and
+  keeps `none | omit | include | unrecorded` distinct. Included Store summaries and omitted aggregate counts are
+  rendered exactly as published; CLI evidence, registry/data scope, `envUri`, diagnostics, and mutation authority
+  are neither selected nor inferred.
+- **P9-C SSG correction**: `/context` and its title are now part of the generated route manifest. The focused Web
+  lane passed 6 files / 43 tests, including SSR HTML with published root/Reference facts and no
+  `XDG_DATA_HOME`. Web checked TypeScript, repository lint, format, strict Change validation, and `git diff
+--check` passed. A clean-from-deleted-output `build:ssg` passed with only the existing non-fatal
+  `scroll-button` and ineffective-dynamic-import warnings.
+- **Real non-browser export evidence**: the source SSG CLI consumed the fresh hashed Server entry plus the owner's
+  existing redacted walkthrough snapshot and generated 9 routes under `/tmp/openspecui-static-context-p9`,
+  including `/context` and the included Reference Spec. `context/index.html` contains the published project,
+  Planning root, `shared-reference`, and static evidence-boundary copy; it contains no `XDG_DATA_HOME` or
+  `envUri`. This is output-contract evidence, not final visual acceptance.
+- **Final-tree gates**: `pnpm format:check`, `pnpm lint:ci`, all 15 workspace typechecks, and serial
+  `pnpm test:ci` passed. Affected totals were Root 43/43, Core 483/483, Server 542/542, App 212/212, Web
+  158 files / 1,022 tests, and CLI 71/71; existing jsdom Canvas diagnostics remained non-fatal.
+  `pnpm test:browser:ci` passed xterm 60 with one expected skip and Web Storybook 12/12. These browser fixtures
+  remain component preparation evidence. Strict Change validation and `git diff --check` passed before the final
+  evidence edit; owner visual confirmation of P9 remains open under checkpoint 3.6.
+- **Delivery note**: the root pre-commit hook again stopped before project checks because `vite.config.ts` has no
+  Vite+ `staged` configuration. The scoped spec and implementation commits use `--no-verify` only after the
+  complete final-tree gates above; hook configuration is not expanded inside this acceptance fix.
 
 ## Loopback Triggers
 

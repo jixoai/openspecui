@@ -7,6 +7,7 @@ Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
 
 Original request (2026-07-28): "我需要非常具体的验收工具和验收流程"
 Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口。"
+Owner acceptance feedback (2026-07-28): "验收任务做完，基本全部通过；列表骨架分隔和 Static /context 仍需修复。"
 -->
 
 # Owner Acceptance Procedure
@@ -301,3 +302,17 @@ bun "$WALK/lab.sh.ts" clean --lab "$LAB"
 ```
 
 脚本只会删除带正确 marker 的 disposable lab。
+
+## 2. Owner Result: pre-P9 head
+
+The owner completed the walkthrough against pre-P9 head `9ab565d` and reported the functional cases as broadly
+passing. Two presentation observations remain open and prevent final closure:
+
+1. Repeating `rt-skeleton rt-skeleton-row h-14` list rows need a visible shared gap or divider.
+2. Static `/context` renders no snapshot facts; the retained route must support publication-safe Context export.
+
+P9 automated evidence may prepare a replacement head, but the owner performs the final visual confirmation.
+
+P9 now has focused unit/SSR and real non-browser export evidence. Recheck only these two observations on the
+replacement head; the already accepted functional walkthrough does not need to be repeated unless either fix
+changes adjacent behavior.

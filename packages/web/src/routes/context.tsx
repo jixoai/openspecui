@@ -1,21 +1,29 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Project one launch project's CLI-selected planning root and direct References.
  * 2. Present current, stale, terminal-error, and failed-attempt facts without collapsing them.
  * 3. Present the inherited Store registry/data scope as read-only environment evidence.
  * 4. Expose each Root Context command-evidence envelope through on-demand disclosure.
+ * 5. Route static mode to publication-safe Context facts without starting the live owner.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
  */
 import { DetailPanelSkeleton, RealtimeRevalidateCue } from '@/components/realtime'
+import { isStaticMode } from '@/lib/static-mode'
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import type { RootContext, RootContextCommandEvidence } from '@openspecui/core'
 import { AlertCircle, FileText, Network } from 'lucide-react'
+import { StaticContextView } from './context-static'
 
 /** Render project Root, observed References, registry diagnostics, and raw CLI evidence. */
 export function ContextView() {
+  return isStaticMode() ? <StaticContextView /> : <LiveContextView />
+}
+
+function LiveContextView() {
   const { data: projection, isLoading, error: transportError } = useContextSubscription()
   const context = selectRootContextSnapshot(projection)
   const projectionError = projection?.state === 'error' ? projection.error : null
