@@ -1,5 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Select, preview, rename, delete, and upload notification sounds.
+ * 2. Keep custom sound mutations in typed tRPC while authenticating the raw upload transport.
+ * 3. Preserve compact picker/editor interaction and pending/error ownership.
+ *
+ * Original request (2026-07-24): "完整审计 Project Web 的 raw resource 网络路径。"
+ */
 import { Select, type SelectOption, type SelectOptionGroup } from '@/components/select'
 import { SoundInlineVolumeControl } from '@/components/sound-inline-volume-control'
+import { accessGateFetch } from '@/lib/access-gate-credential'
 import { getApiBaseUrl } from '@/lib/api-config'
 import { trpc, trpcClient } from '@/lib/trpc'
 import { cn } from '@/lib/utils'
@@ -134,7 +143,7 @@ export function SoundSettingControl({
     try {
       const baseUrl = getApiBaseUrl()
       const uploadUrl = baseUrl ? `${baseUrl}/api/sounds/custom` : '/api/sounds/custom'
-      const response = await fetch(uploadUrl, {
+      const response = await accessGateFetch(uploadUrl, {
         method: 'POST',
         body: formData,
       })

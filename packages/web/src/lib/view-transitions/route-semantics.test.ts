@@ -10,6 +10,17 @@ describe('describeRouteSemantic', () => {
       level: 'detail',
     })
   })
+
+  it('classifies owned and referenced compound Spec routes as one detail family', () => {
+    expect(describeRouteSemantic('/specs/owned/auth')).toMatchObject({
+      family: 'specs',
+      level: 'detail',
+    })
+    expect(describeRouteSemantic('/specs/referenced/platform/auth')).toMatchObject({
+      family: 'specs',
+      level: 'detail',
+    })
+  })
 })
 
 describe('resolveViewTransitionIntent', () => {
@@ -33,6 +44,20 @@ describe('resolveViewTransitionIntent', () => {
         area: 'main',
         fromPath: '/changes',
         toPath: '/changes/extract-svelte-components-layout-foundation',
+      })
+    ).toEqual({
+      area: 'main',
+      kind: 'route-detail',
+      direction: 'forward',
+    })
+  })
+
+  it('keeps compound Spec navigation in the detail transition family', () => {
+    expect(
+      resolveViewTransitionIntent({
+        area: 'main',
+        fromPath: '/specs',
+        toPath: '/specs/referenced/platform/auth',
       })
     ).toEqual({
       area: 'main',

@@ -1,18 +1,28 @@
+/**
+ * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * 1. Run one Server-owned strict-validate-then-archive stream with explicit user options.
+ * 2. Keep Root Context and Store selector derivation outside the browser command payload.
+ * 3. Lock execution until Root Context is ready and show failed-attempt evidence.
+ * 4. Queue Archive through one typed transport without independent command evidence.
+ *
+ * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
+ */
 import { useArchiveModal } from '@/lib/archive-modal-context'
 import { useCliRunner } from '@/lib/use-cli-runner'
+import { useRootActionState } from '@/lib/use-root-action-state'
 import { useVTHrefNavigate } from '@/lib/view-transitions/navigation'
 import { Archive, CheckCircle, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { CliTerminal } from './cli-terminal'
 import { Dialog } from './dialog'
+import { RootActionNotice } from './root-action-notice'
 import { Switch } from './switch'
 
-/**
- * 全局 Archive Modal（单一对话框，点击 Archive 后直接串行 validate -> archive）
- */
 export function GlobalArchiveModal() {
   const navigateByHref = useVTHrefNavigate()
   const { state, closeArchiveModal } = useArchiveModal()
+  const rootAction = useRootActionState()
   const { open, changeId, changeName } = state
 
   const [skipSpecs, setSkipSpecs] = useState(false)
@@ -51,17 +61,14 @@ export function GlobalArchiveModal() {
   }
 
   const buildQueue = useCallback(() => {
-    if (!changeId) return []
-    const queue: Array<{ command: string; args?: string[] }> = []
-    if (!noValidate) {
-      queue.push({ command: 'openspec', args: ['validate', changeId] })
-    }
-    const archiveArgs = ['archive', '-y', changeId]
-    if (skipSpecs) archiveArgs.push('--skip-specs')
-    archiveArgs.push('--no-validate')
-    queue.push({ command: 'openspec', args: archiveArgs })
-    return queue
-  }, [changeId, noValidate, skipSpecs])
+    if (!changeId || rootAction.disabled) return []
+    return [
+      {
+        type: 'archive-strict' as const,
+        input: { changeId, skipSpecs, noValidate },
+      },
+    ]
+  }, [changeId, noValidate, rootAction.disabled, skipSpecs])
 
   const isRunning = status === 'running'
   const isArchiveSuccess = status === 'success' && !!detectedArchiveId
@@ -71,7 +78,7 @@ export function GlobalArchiveModal() {
 
   // 开始执行 archive（若之前失败则自动重置并重跑）
   const handleStartArchive = () => {
-    if (!changeId) return
+    if (!changeId || rootAction.disabled) return
     commands.runAll()
   }
 
@@ -83,10 +90,10 @@ export function GlobalArchiveModal() {
   }
 
   useEffect(() => {
-    if (!open || !changeId || hasStarted) return
+    if (!open || !changeId || hasStarted || rootAction.disabled) return
     const queue = buildQueue()
     commands.replaceAll(queue)
-  }, [buildQueue, changeId, commands, hasStarted, open])
+  }, [buildQueue, changeId, commands, hasStarted, open, rootAction.disabled])
 
   if (!open || !changeId) return null
 
@@ -127,7 +134,7 @@ export function GlobalArchiveModal() {
         </button>
         <button
           onClick={archiveStatus === 'error' ? handleReset : handleStartArchive}
-          disabled={isRunning}
+          disabled={isRunning || rootAction.disabled}
           className="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isRunning ? (
@@ -159,10 +166,18 @@ export function GlobalArchiveModal() {
       borderVariant={borderVariant}
     >
       <div className="space-y-4">
+        <RootActionNotice state={rootAction} />
+
         <div className="bg-muted/50 rounded-lg p-3">
           <p className="text-muted-foreground text-sm">Change to archive:</p>
           <p className="font-medium">{changeName}</p>
           <p className="text-muted-foreground mt-1 text-xs">ID: {changeId}</p>
+          {rootAction.context?.planningRoot ? (
+            <p className="text-muted-foreground mt-1 break-all text-xs">
+              Root: {rootAction.context.planningRoot.path} ({rootAction.context.planningRoot.source}
+              {rootAction.context.storeId ? `, Store ${rootAction.context.storeId}` : ''})
+            </p>
+          ) : null}
         </div>
 
         <CliTerminal lines={lines} maxHeight="50vh" />
@@ -187,7 +202,7 @@ export function GlobalArchiveModal() {
               checked={skipSpecs}
               onCheckedChange={setSkipSpecs}
               ariaLabel="Skip specs update"
-              disabled={hasStarted}
+              disabled={hasStarted || rootAction.disabled}
             />
           </label>
 
@@ -202,7 +217,7 @@ export function GlobalArchiveModal() {
               checked={noValidate}
               onCheckedChange={setNoValidate}
               ariaLabel="Skip validation"
-              disabled={hasStarted}
+              disabled={hasStarted || rootAction.disabled}
             />
           </label>
         </div>

@@ -1,4 +1,10 @@
 /**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Mirror official OpenSpec AI tool metadata and generated skill names.
+ * 2. Detect configured project-local AI tool roots reactively.
+ *
+ * Original request (2026-07-15): "Oh My Pi、Trae 的完整交付链。"
+ *
  * 工具配置检测模块
  *
  * 对齐 @fission-ai/openspec 的 skills 体系，
@@ -41,6 +47,7 @@ export const SKILL_NAMES = [
   'openspec-new-change',
   'openspec-continue-change',
   'openspec-apply-change',
+  'openspec-update-change',
   'openspec-ff-change',
   'openspec-sync-specs',
   'openspec-archive-change',
@@ -176,15 +183,6 @@ export const AI_TOOLS: ToolConfig[] = [
   },
   { name: 'Kiro', value: 'kiro', available: true, successLabel: 'Kiro', skillsDir: '.kiro' },
   {
-    name: 'OpenCode',
-    value: 'opencode',
-    available: true,
-    successLabel: 'OpenCode',
-    skillsDir: '.opencode',
-  },
-  { name: 'Pi', value: 'pi', available: true, successLabel: 'Pi', skillsDir: '.pi' },
-  { name: 'Qoder', value: 'qoder', available: true, successLabel: 'Qoder', skillsDir: '.qoder' },
-  {
     name: 'Lingma',
     value: 'lingma',
     available: true,
@@ -198,6 +196,22 @@ export const AI_TOOLS: ToolConfig[] = [
     successLabel: 'Mistral Vibe',
     skillsDir: '.vibe',
   },
+  {
+    name: 'Oh My Pi',
+    value: 'oh-my-pi',
+    available: true,
+    successLabel: 'Oh My Pi',
+    skillsDir: '.omp',
+  },
+  {
+    name: 'OpenCode',
+    value: 'opencode',
+    available: true,
+    successLabel: 'OpenCode',
+    skillsDir: '.opencode',
+  },
+  { name: 'Pi', value: 'pi', available: true, successLabel: 'Pi', skillsDir: '.pi' },
+  { name: 'Qoder', value: 'qoder', available: true, successLabel: 'Qoder', skillsDir: '.qoder' },
   {
     name: 'Qwen Code',
     value: 'qwen',

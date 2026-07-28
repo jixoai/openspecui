@@ -1,8 +1,23 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Own main, bottom, and pop navigation as one deterministic state machine.
+ * 2. Preserve hosted URL/base-path/session semantics across area navigation.
+ * 3. Persist project-scoped tab layouts while rejecting retired route identities.
+ * 4. Synchronize local/backend layout state through authenticated health and typed mutation owners.
+ *
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ *
+ * Compromise: URL, persistence, and area transitions stay together because one atomic state
+ * machine must normalize all three before exposing a navigation snapshot.
+ */
 import type { HistoryLocation, RouterHistory } from '@tanstack/react-router'
+import { accessGateFetch } from './access-gate-credential'
 import { getHealthUrl } from './api-config'
 import { getHostedScopedStorageKey } from './hosted-session'
 import { getBasePath, isStaticMode } from './static-mode'
 
+/** Supported project workspace tab route identities. */
 export type TabId =
   | '/dashboard'
   | '/config'
@@ -11,10 +26,11 @@ export type TabId =
   | '/changes'
   | '/board'
   | '/archive'
-  | '/stores'
+  | '/context'
   | '/settings'
   | '/terminal'
 
+/** Persistable partition of project tabs between the main and bottom areas. */
 export interface NavLayout {
   mainTabs: TabId[]
   bottomTabs: TabId[]
@@ -24,6 +40,7 @@ interface PersistedNavLayout extends NavLayout {
   updatedAt: number
 }
 
+/** Current multi-area navigation snapshot exposed to project consumers. */
 export interface NavState extends NavLayout {
   mainLocation: HistoryLocation
   bottomLocation: HistoryLocation
@@ -91,7 +108,7 @@ const ALL_TABS: readonly TabId[] = [
   '/changes',
   '/board',
   '/archive',
-  '/stores',
+  '/context',
   '/settings',
   '/terminal',
 ]
@@ -102,7 +119,7 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/changes',
   '/board',
   '/archive',
-  '/stores',
+  '/context',
   '/settings',
 ]
 const DEFAULT_BOTTOM_TABS: TabId[] = isStaticMode() ? [] : ['/git', '/terminal']
@@ -1124,7 +1141,7 @@ export class NavController {
 
   private async resolveProjectScopedStorageKey(): Promise<string | null> {
     try {
-      const response = await fetch(getHealthUrl())
+      const response = await accessGateFetch(getHealthUrl())
       if (!response.ok) return null
       const payload = (await response.json()) as { projectDir?: unknown }
       if (typeof payload.projectDir !== 'string' || payload.projectDir.length === 0) return null

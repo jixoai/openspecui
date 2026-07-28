@@ -1,0 +1,41 @@
+{
+  "extends": "./tsconfig.check.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "bench/live-projection-loading.bench.ts",
+    "src/access-gate.test.ts",
+    "src/archive-router-subscription.test.ts",
+    "src/hosted-admission.test.ts",
+    "src/store-mutation-ledger-transport.test.ts",
+    "src/environment-global-projection-service.test.ts",
+    "src/planning-cli-schema-observation.integration.test.ts",
+    "src/planning-cli-reference-observation.integration.test.ts",
+    "src/planning-cli-projection-service.test.ts",
+    "src/planning-cli-projection-router.test.ts",
+    "src/store-doctor-dependency-observer.test.ts",
+    "src/store-observation-service.test.ts",
+    "src/store-projection-service.test.ts",
+    "src/planning-config-project-binding-write.test.ts",
+    "src/planning-config-router.test.ts",
+    "src/root-context-notification-bridge.test.ts",
+    "src/root-context-projection-service.test.ts",
+    "src/server-startup.test.ts",
+    "src/spec-catalog-service.test.ts",
+    "src/spec-catalog-service.integration.test.ts",
+    "src/root-context-cold-start.integration.test.ts",
+    "src/planning-root-service.current-snapshot.test.ts",
+    "src/projection-work/registry.test.ts",
+    "src/projection-work/runtime.test.ts",
+    "src/projection-work/scheduler.test.ts",
+    "src/reactive-subscription.test.ts",
+    "src/dashboard-projection-service.test.ts",
+    "src/live-projection-loading-summary.test.ts",
+    "src/tool-subscription-router.test.ts",
+    "src/translation-engine-worker.test.ts",
+    "src/worktree-web-assets-product-chain.test.ts",
+    "../local-translator/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

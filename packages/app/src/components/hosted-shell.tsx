@@ -1,4 +1,21 @@
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Orchestrate persistent credential-free project tabs and the embedded frame's visual lifecycle.
+ * 2. Coordinate PWA install, display, and update ownership.
+ * 3. Publish shell state once and consume exact-tab reachability from the shared observation owner.
+ * 4. Keep refresh/retry feedback attached to the affected tab runtime.
+ * 5. Preserve cross-window shell-state convergence.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
+ * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
+ * Compromise: tab, frame, and PWA display lifecycles remain co-located because they settle in one mounted
+ * shell; launch, health, and Root observation are physically extracted into App-lifetime owners.
+ */
 import { Dialog } from '@openspecui/web-src/components/dialog'
+import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
+import { RealtimeSkeleton } from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { type Tab } from '@openspecui/web-src/components/tabs'
 import { TerminalTabs } from '@openspecui/web-src/components/terminal/terminal-tabs'
 import { AlertCircle, Download, Link2, LoaderCircle, Plus, RefreshCw, Unlink2 } from 'lucide-react'
@@ -11,9 +28,11 @@ import {
   type CSSProperties,
   type FormEvent,
 } from 'react'
-import { parseHostedLaunchParams } from '../lib/bootstrap'
-import { createHostedShellSync } from '../lib/hosted-shell-sync'
-import { createHostedLaunchRelay } from '../lib/launch-relay'
+import {
+  ConnectionObservationBoundary,
+  useConnectionObservationOwner,
+  useConnectionObservations,
+} from '../lib/connection-observation'
 import {
   computeHostedAppDisplayMode,
   EMPTY_TITLEBAR_INSETS,
@@ -24,28 +43,23 @@ import {
   type HostedAppTitlebarInsets,
   type HostedAppWindowControlsOverlayLike,
 } from '../lib/pwa-runtime'
-import { probeHostedBackend, type HostedTabReachability } from '../lib/reachability'
+import type { HostedTabReachability } from '../lib/reachability'
 import {
   activateHostedTab,
   applyHostedLaunchRequest,
-  areHostedShellStatesEqual,
   buildHostedEmbeddedUiUrl,
   getHostedTabLabel,
-  hasHostedTabForApi,
   normalizeHostedApiBaseUrl,
   removeHostedTab,
   reorderHostedTabs,
   type HostedShellLaunchRequest,
-  type HostedShellState,
   type HostedShellTab,
 } from '../lib/shell-state'
+import { useConnections, useConnectionsActions } from '../lib/use-connections'
+import { useAppLaunchError } from './app-launch-owner'
 import { HostedShellThemeBootstrap } from './hosted-shell-theme'
 
-const PROBE_INTERVAL_MS = 15000
 const REFRESH_FEEDBACK_MS = 1200
-const FORWARDED_LAUNCH_MESSAGE = 'Launch forwarded to the active OpenSpec UI App window.'
-const FORWARDED_SYNC_TIMEOUT_MS = 1600
-const FORWARDED_SYNC_INTERVAL_MS = 120
 const UPDATE_CHECK_INTERVAL_MS = 60000
 const UPDATE_READY_MESSAGE = 'A newer OpenSpec UI App shell is ready.'
 
@@ -92,14 +106,9 @@ interface HostedShellRootStyle extends CSSProperties {
   '--hosted-pwa-titlebar-height': string
 }
 
-interface LaunchQueueLike {
-  setConsumer(consumer: (params: { targetURL?: URL | null }) => void): void
-}
-
 interface HostedNavigator extends Navigator {
   standalone?: boolean
   windowControlsOverlay?: HostedAppWindowControlsOverlayLike
-  launchQueue?: LaunchQueueLike
 }
 
 interface HostedShellTabContentProps {
@@ -184,18 +193,6 @@ function createBrowserPwaSnapshot(deferredPrompt: BeforeInstallPromptEventLike |
   } satisfies HostedShellPwaState
 }
 
-function closeCurrentWindowBestEffort(): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  try {
-    window.close()
-  } catch {
-    // Ignore best-effort close failures in regular browser tabs.
-  }
-}
-
 function HostedShellUpdateIcon() {
   return <RefreshCw className="h-3.5 w-3.5" />
 }
@@ -265,7 +262,7 @@ function HostedShellActions(props: {
   )
 }
 
-function HostedShellTabContent({
+export function HostedShellTabContent({
   tab,
   runtime,
   frameState,
@@ -277,12 +274,16 @@ function HostedShellTabContent({
   const title = runtime.projectName ?? getHostedTabLabel(tab)
   const iframeTitle = `Hosted OpenSpec UI ${title}`
   const iframeSrc = buildHostedTabIframeSrc(tab, runtime)
-  const showInlineError = runtime.reachability === 'online' && runtime.errorMessage
-  const isFrameLoading = iframeSrc !== null && frameState.status !== 'loaded'
+  const showInlineError =
+    runtime.reachability !== 'checking' &&
+    runtime.reachability !== 'offline' &&
+    runtime.errorMessage
+  const isFrameLoading =
+    iframeSrc !== null && (frameState.status === 'idle' || frameState.status === 'loading')
   const showFrameError = iframeSrc !== null && frameState.status === 'error'
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" data-hosted-reachability={runtime.reachability}>
       {runtime.reachability === 'offline' && (
         <div className="border-border bg-muted/40 text-muted-foreground flex items-center justify-between gap-3 border-b px-3 py-2 text-xs">
           <span>
@@ -315,11 +316,15 @@ function HostedShellTabContent({
       {iframeSrc ? (
         <div className="relative flex min-h-0 flex-1" aria-busy={isFrameLoading}>
           {isFrameLoading && (
-            <div className="bg-background/70 pointer-events-none absolute inset-0 z-10 flex items-center justify-center backdrop-blur-[1px]">
-              <div className="border-border bg-background/90 text-foreground inline-flex items-center gap-2 border px-3 py-2 text-xs shadow-sm">
-                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                <span>Loading view...</span>
+            <div className="bg-background/85 pointer-events-none absolute inset-0 z-10 grid content-start gap-3 p-4 backdrop-blur-[1px]">
+              <AccessibleStatus>Loading hosted project</AccessibleStatus>
+              <RealtimeSkeleton className="h-8 w-48" />
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <RealtimeSkeleton className="h-24" />
+                <RealtimeSkeleton className="h-24" />
+                <RealtimeSkeleton className="h-24" />
               </div>
+              <RealtimeSkeleton className="h-48" />
             </div>
           )}
           {showFrameError && !isFrameLoading && (
@@ -336,6 +341,7 @@ function HostedShellTabContent({
             }}
             title={iframeTitle}
             src={iframeSrc}
+            allow="clipboard-read; clipboard-write"
             onLoad={() => {
               onFrameLoad(tab.id)
             }}
@@ -350,26 +356,30 @@ function HostedShellTabContent({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6 text-center">
-          <div className="max-w-sm space-y-2 text-sm">
-            {runtime.reachability === 'checking' && (
-              <>
-                <p className="font-nav text-xs uppercase tracking-[0.16em]">Connecting Backend</p>
+          {runtime.reachability === 'checking' ? (
+            <div className="w-full max-w-lg space-y-3 text-left" aria-busy="true">
+              <AccessibleStatus>connecting backend</AccessibleStatus>
+              <RealtimeSkeleton className="h-7 w-44" />
+              <RealtimeSkeleton className="h-3 w-3/4" />
+              <RealtimeSkeleton className="h-32 w-full" />
+            </div>
+          ) : (
+            <div className="max-w-sm space-y-2 text-sm">
+              {runtime.reachability === 'offline' && !iframeSrc && (
                 <p className="text-muted-foreground text-xs">
-                  Querying backend metadata and waiting for an embedded UI entrypoint.
+                  Waiting for this backend to come online.
                 </p>
-              </>
-            )}
-            {runtime.reachability === 'offline' && !iframeSrc && (
-              <p className="text-muted-foreground text-xs">
-                Waiting for this backend to come online.
-              </p>
-            )}
-            {runtime.reachability === 'online' && runtime.errorMessage && (
-              <p className="text-muted-foreground text-xs">
-                This backend is reachable, but it does not expose a compatible embedded UI yet.
-              </p>
-            )}
-          </div>
+              )}
+              {runtime.reachability === 'authentication-required' && runtime.errorMessage && (
+                <p className="text-muted-foreground text-xs">{runtime.errorMessage}</p>
+              )}
+              {runtime.reachability === 'online' && runtime.errorMessage && (
+                <p className="text-muted-foreground text-xs">
+                  This backend is reachable, but it does not expose a compatible embedded UI yet.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -397,6 +407,7 @@ function createHostedShellTab(props: {
           'flex min-w-0 flex-col py-0.5 text-left transition',
           props.runtime.reachability === 'offline' && 'opacity-60 grayscale'
         )}
+        data-hosted-reachability={props.runtime.reachability}
       >
         <span className="flex min-w-0 items-center gap-1.5">
           {props.runtime.reachability === 'checking' && (
@@ -407,6 +418,9 @@ function createHostedShellTab(props: {
           )}
           {props.runtime.reachability === 'offline' && (
             <Unlink2 className="h-3 w-3 text-amber-500" />
+          )}
+          {props.runtime.reachability === 'authentication-required' && (
+            <AlertCircle className="h-3 w-3 text-amber-500" />
           )}
           <span className="font-nav min-w-0 truncate text-xs">{title}</span>
         </span>
@@ -419,27 +433,23 @@ function createHostedShellTab(props: {
   }
 }
 
-export function HostedShell({
+function HostedShellRuntime({
   initialLaunchRequest,
   fallbackLaunchRequest = null,
   initialError,
 }: HostedShellProps) {
-  const shellSync = useMemo(
-    () =>
-      createHostedShellSync({
-        storage: window.localStorage,
-      }),
-    []
-  )
+  const appLaunchError = useAppLaunchError()
   const [errorMessage, setErrorMessage] = useState(initialError)
-  const [shellState, setShellState] = useState(() => {
-    const persisted = shellSync.readCurrent()
-    if (persisted.tabs.length === 0 && fallbackLaunchRequest) {
-      return applyHostedLaunchRequest(persisted, fallbackLaunchRequest)
-    }
-    return persisted
-  })
-  const [tabRuntime, setTabRuntime] = useState<Record<string, HostedTabRuntimeState>>({})
+  const connectionOwner = useConnectionObservationOwner()
+  const connectionSnapshot = useConnectionObservations()
+  const connectionActions = useConnectionsActions()
+  const shellState = useConnections()
+  const setShellState = useCallback(
+    (resolveNext: (current: typeof shellState) => typeof shellState) => {
+      connectionActions.setState(resolveNext(connectionActions.getState()))
+    },
+    [connectionActions]
+  )
   const [tabFrames, setTabFrames] = useState<Record<string, HostedTabFrameState>>({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isRefreshFeedbackActive, setIsRefreshFeedbackActive] = useState(false)
@@ -448,13 +458,16 @@ export function HostedShell({
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
   const [pwaState, setPwaState] = useState<HostedShellPwaState>(DEFAULT_PWA_STATE)
   const [updateState, setUpdateState] = useState<HostedAppUpdateState>(DEFAULT_UPDATE_STATE)
-  const tabRuntimeRef = useRef<Record<string, HostedTabRuntimeState>>({})
   const installPromptRef = useRef<BeforeInstallPromptEventLike | null>(null)
-  const initialLaunchHandledRef = useRef(false)
+  const isolatedLaunchHandledRef = useRef(false)
   const refreshFeedbackTimerRef = useRef<number | null>(null)
   const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
   const serviceWorkerRegistrationRef = useRef<ServiceWorkerRegistration | null>(null)
   const shouldReloadForUpdateRef = useRef(false)
+
+  useEffect(() => {
+    if (appLaunchError !== undefined) setErrorMessage(appLaunchError)
+  }, [appLaunchError])
 
   const openAddDialog = useCallback(() => {
     setAddDialogError(null)
@@ -556,40 +569,44 @@ export function HostedShell({
     }, REFRESH_FEEDBACK_MS)
   }, [])
 
-  const applySyncedShellState = useCallback((nextState: HostedShellState) => {
-    setShellState((current) =>
-      areHostedShellStatesEqual(current, nextState) ? current : nextState
-    )
-    if (nextState.tabs.length > 0) {
-      setErrorMessage((current) => (current === FORWARDED_LAUNCH_MESSAGE ? null : current))
+  useEffect(() => {
+    if (isolatedLaunchHandledRef.current) return
+    isolatedLaunchHandledRef.current = true
+    const persisted = connectionActions.getState()
+    if (initialLaunchRequest) {
+      connectionActions.setState(applyHostedLaunchRequest(persisted, initialLaunchRequest))
+      return
     }
-  }, [])
+    if (persisted.tabs.length === 0 && fallbackLaunchRequest) {
+      connectionActions.setState(applyHostedLaunchRequest(persisted, fallbackLaunchRequest))
+    }
+  }, [connectionActions, fallbackLaunchRequest, initialLaunchRequest])
 
-  const waitForForwardedLaunch = useCallback(
-    async (apiBaseUrl: string) => {
-      const deadline = Date.now() + FORWARDED_SYNC_TIMEOUT_MS
-      while (Date.now() <= deadline) {
-        const syncedState = shellSync.syncNow(applySyncedShellState)
-        const currentState = syncedState ?? shellSync.readCurrent()
-        if (hasHostedTabForApi(currentState, apiBaseUrl)) {
-          setErrorMessage((current) => (current === FORWARDED_LAUNCH_MESSAGE ? null : current))
-          return
-        }
-        await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, FORWARDED_SYNC_INTERVAL_MS)
-        })
-      }
-    },
-    [applySyncedShellState, shellSync]
-  )
-
-  useEffect(() => {
-    shellSync.write(shellState)
-  }, [shellState, shellSync])
-
-  useEffect(() => {
-    tabRuntimeRef.current = tabRuntime
-  }, [tabRuntime])
+  const tabRuntime = useMemo(() => {
+    const byTabId = new Map(
+      connectionSnapshot.observations.map((observation) => [observation.tabId, observation])
+    )
+    return Object.fromEntries(
+      shellState.tabs.map((tab) => {
+        const observation = byTabId.get(tab.id)
+        const health = observation?.health ?? null
+        const reachability = observation?.reachability ?? 'checking'
+        return [
+          tab.id,
+          {
+            reachability,
+            projectName: health?.projectName ?? null,
+            openspecuiVersion: health?.openspecuiVersion ?? null,
+            embeddedUiUrl:
+              reachability !== 'unsupported' && reachability !== 'authentication-required'
+                ? (health?.embeddedUiUrl ?? null)
+                : null,
+            errorMessage: observation?.healthError ?? null,
+          } satisfies HostedTabRuntimeState,
+        ]
+      })
+    )
+  }, [connectionSnapshot.observations, shellState.tabs])
 
   useEffect(() => {
     return () => {
@@ -598,41 +615,6 @@ export function HostedShell({
       }
     }
   }, [])
-
-  useEffect(() => {
-    const syncNow = () => {
-      shellSync.syncNow(applySyncedShellState)
-    }
-
-    syncNow()
-    const stop = shellSync.start(applySyncedShellState)
-    const onFocus = () => {
-      syncNow()
-    }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        syncNow()
-      }
-    }
-
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => {
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      stop()
-    }
-  }, [applySyncedShellState, shellSync])
-
-  useEffect(() => {
-    setTabRuntime((current) => {
-      const next: Record<string, HostedTabRuntimeState> = {}
-      for (const tab of shellState.tabs) {
-        next[tab.id] = current[tab.id] ?? DEFAULT_RUNTIME_STATE
-      }
-      return next
-    })
-  }, [shellState.tabs])
 
   useEffect(() => {
     setTabFrames((current) => {
@@ -740,56 +722,6 @@ export function HostedShell({
     }
   }, [])
 
-  useEffect(() => {
-    const relay = createHostedLaunchRelay({
-      storage: window.localStorage,
-    })
-    const dispatchLaunch = async (request: HostedShellLaunchRequest) => {
-      const result = await relay.dispatch(request)
-      if (result === 'forwarded-to-pwa') {
-        await waitForForwardedLaunch(request.apiBaseUrl)
-        closeCurrentWindowBestEffort()
-        return
-      }
-      if (result === 'forwarded') {
-        setErrorMessage(FORWARDED_LAUNCH_MESSAGE)
-        await waitForForwardedLaunch(request.apiBaseUrl)
-        return
-      }
-      setErrorMessage(null)
-    }
-
-    const stop = relay.start((request) => {
-      submitApi(request.apiBaseUrl)
-    })
-
-    if (initialLaunchRequest && !initialLaunchHandledRef.current) {
-      initialLaunchHandledRef.current = true
-      void dispatchLaunch(initialLaunchRequest)
-    }
-
-    const hostedNavigator = navigator as HostedNavigator
-    hostedNavigator.launchQueue?.setConsumer((params) => {
-      const targetUrl = params.targetURL
-      if (!(targetUrl instanceof URL)) {
-        return
-      }
-      const launch = parseHostedLaunchParams(targetUrl.search)
-      if (launch.error) {
-        setErrorMessage(launch.error)
-        return
-      }
-      if (launch.request) {
-        void dispatchLaunch(launch.request)
-      }
-    })
-
-    return () => {
-      hostedNavigator.launchQueue?.setConsumer(() => {})
-      stop()
-    }
-  }, [initialLaunchRequest, submitApi, waitForForwardedLaunch])
-
   const probeTabs = useCallback(
     async (options?: { tabIds?: readonly string[]; visualFeedback?: boolean }) => {
       const targets = shellState.tabs.filter(
@@ -804,57 +736,15 @@ export function HostedShell({
         setIsRefreshing(true)
       }
 
-      setTabRuntime((current) => {
-        const next = { ...current }
-        for (const tab of targets) {
-          next[tab.id] = {
-            ...(current[tab.id] ?? DEFAULT_RUNTIME_STATE),
-            reachability: 'checking',
-            errorMessage: null,
-          }
-        }
-        return next
-      })
-
       try {
-        const probeResults = await Promise.all(
-          targets.map(async (tab) => ({
-            tab,
-            probe: await probeHostedBackend(tab.apiBaseUrl),
-          }))
-        )
-
-        setTabRuntime((current) => {
-          const next = { ...current }
-          for (const { tab, probe } of probeResults) {
-            const previous = current[tab.id] ?? DEFAULT_RUNTIME_STATE
-
-            if (probe.reachability === 'offline') {
-              next[tab.id] = {
-                ...previous,
-                reachability: 'offline',
-                errorMessage: null,
-              }
-              continue
-            }
-
-            next[tab.id] = {
-              reachability: 'online',
-              projectName: probe.health?.projectName ?? previous.projectName,
-              openspecuiVersion: probe.health?.openspecuiVersion ?? previous.openspecuiVersion,
-              embeddedUiUrl: probe.health?.embeddedUiUrl ?? previous.embeddedUiUrl,
-              errorMessage: probe.errorMessage,
-            }
-          }
-          return next
-        })
+        await connectionOwner.refresh(targets.map((tab) => tab.id))
       } finally {
         if (options?.visualFeedback) {
           setIsRefreshing(false)
         }
       }
     },
-    [shellState.tabs, startRefreshFeedback]
+    [connectionOwner, shellState.tabs, startRefreshFeedback]
   )
 
   const activateWaitingHostedAppUpdate = useCallback((registration: ServiceWorkerRegistration) => {
@@ -1003,34 +893,6 @@ export function HostedShell({
     syncUpdateStateFromRegistration,
   ])
 
-  useEffect(() => {
-    if (shellState.tabs.length === 0) {
-      return
-    }
-
-    void probeTabs()
-    const interval = window.setInterval(() => {
-      void probeTabs()
-    }, PROBE_INTERVAL_MS)
-
-    const onFocus = () => {
-      void probeTabs()
-    }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void probeTabs()
-      }
-    }
-
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => {
-      window.clearInterval(interval)
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    }
-  }, [probeTabs, shellState.tabs.length])
-
   const activeHostedTab =
     shellState.tabs.find((tab) => tab.id === shellState.activeTabId) ?? shellState.tabs[0] ?? null
   const activeRuntime = activeHostedTab
@@ -1123,7 +985,7 @@ export function HostedShell({
 
   return (
     <div
-      className="hosted-shell-root bg-background text-foreground flex min-h-screen min-w-0 flex-col"
+      className="hosted-shell-root bg-background text-foreground flex h-full min-h-0 min-w-0 flex-col"
       data-titlebar-overlay={pwaState.displayMode === 'window-controls-overlay'}
       style={rootStyle}
     >
@@ -1136,7 +998,7 @@ export function HostedShell({
       )}
 
       {tabs.length === 0 ? (
-        <div className="flex min-h-screen min-w-0 flex-col">
+        <div className="flex h-full min-h-0 min-w-0 flex-col">
           <div className="tabs-header border-border bg-terminal text-terminal-foreground flex min-w-0 items-stretch border-b">
             <div
               className="tabs-strip bg-terminal min-w-0 flex-1 px-4 py-3"
@@ -1204,7 +1066,7 @@ export function HostedShell({
               updateStatus={updateState.status}
             />
           }
-          className="hosted-shell-tabs min-h-screen"
+          className="hosted-shell-tabs h-full min-h-0"
         />
       )}
 
@@ -1257,5 +1119,14 @@ export function HostedShell({
         </form>
       </Dialog>
     </div>
+  )
+}
+
+/** Render Hosted Shell against the App owner, supplying one only for isolated component mounts. */
+export function HostedShell(props: HostedShellProps) {
+  return (
+    <ConnectionObservationBoundary>
+      <HostedShellRuntime {...props} />
+    </ConnectionObservationBoundary>
   )
 }

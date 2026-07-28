@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Prove Git patch cards preserve DOM registration across ordinary rerenders.
+ * 2. Prove ordinary lazy-patch admission uses stable local skeleton geometry without visible loading copy.
+ *
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ */
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -18,6 +25,16 @@ afterEach(() => {
 })
 
 describe('GitPatchCard', () => {
+  it('renders lazy patch admission as local skeleton geometry', () => {
+    const { container } = render(
+      <GitPatchCard file={baseFile} patch={null} status="loading" error={null} />
+    )
+
+    expect(container.querySelector('[data-testid="git-patch-loading"]')).toBeTruthy()
+    expect(container.querySelectorAll('.rt-skeleton')).toHaveLength(3)
+    expect(container.textContent).not.toContain('Loading patch…')
+  })
+
   it('does not re-register the same DOM node on ordinary rerenders', () => {
     const onRegisterCard = vi.fn<(fileId: string, node: HTMLElement | null) => void>()
 

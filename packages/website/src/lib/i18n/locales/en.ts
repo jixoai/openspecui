@@ -1,3 +1,9 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Provide the canonical English product-site copy.
+ *
+ * Original request (2026-07-15): "CLI 1.6 compatibility gate."
+ */
 import type { WebsiteContent } from '$lib/i18n/schema'
 
 export const en = {
@@ -52,7 +58,8 @@ export const en = {
     appOffSummary: 'Start the local backend and serve the local web UI from this machine.',
     exportLabel: 'Static export',
     exportSummary: 'Generate a deployable snapshot for docs hosting or offline review.',
-    compatibility: 'OpenSpecUI 4.x targets OpenSpec CLI 1.4.x and supports 1.3.x projects.',
+    compatibility:
+      'OpenSpecUI 6.x targets OpenSpec CLI 1.6.x and accepts 1.5.x as legacy-compatible.',
   },
   modes: {
     title: 'Choose the right surface',
@@ -112,11 +119,11 @@ export const en = {
     onRunWorkflow: {
       name: 'onRunWorkflow',
       purpose: 'Wrap an OpenSpec workflow run without replacing the OpenSpec CLI contract.',
-      signature: 'onRunWorkflow(ctx, run): Promise<RunWorkflowResultV1>',
+      signature: 'onRunWorkflow(ctx, run): Promise<RunWorkflowResultV2>',
       when: 'Use it to choose workflow tools, inject safe environment variables, record audit output, or gate execution by project policy.',
       stableFor: ['Workflow orchestration', 'Tool selection', 'Execution audit'],
       example:
-        "import type { OnRunWorkflowHookV1 } from 'openspecui/hooks'\n\nexport const onRunWorkflow: OnRunWorkflowHookV1 = async (ctx, run) => {\n  const result = await run()\n  if (result.kind !== 'agent-prompt') return result\n\n  return {\n    ...result,\n    text: `${result.text}\\n\\nProject policy: include security impact in the final summary.`,\n  }\n}",
+        "import type { OnRunWorkflowHookV2 } from 'openspecui/hooks'\n\nexport const onRunWorkflow: OnRunWorkflowHookV2 = async (ctx, run) => {\n  const result = await run()\n  if (result.kind !== 'agent-prompt') return result\n\n  return {\n    ...result,\n    text: `${result.text}\\n\\nPlanning root: ${ctx.target.planningRoot.path}\\nProject policy: include security impact in the final summary.`,\n  }\n}",
     },
   },
   footer: {

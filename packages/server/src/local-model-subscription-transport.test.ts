@@ -6,7 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 
 const coreMockState = vi.hoisted(() => ({
-  initWatcherPool: vi.fn<() => Promise<void>>(),
+  acquireObservationRoot: vi.fn<() => Promise<() => Promise<void>>>(),
+  disposeObservationEnvironment: vi.fn<() => Promise<void>>(),
+  acquireInvalidationRoot: vi.fn(() => () => {}),
+  disposeProjectInvalidation: vi.fn(),
+  startDataHomeObservation: vi.fn<() => Promise<void>>(),
+  disposeDataHomeObservation: vi.fn<() => Promise<void>>(),
 }))
 
 const hubMock = vi.hoisted(() => ({
@@ -57,8 +62,20 @@ vi.mock('@openspecui/core', async () => {
   const actual = await vi.importActual<typeof import('@openspecui/core')>('@openspecui/core')
   return {
     ...actual,
-    initWatcherPool: coreMockState.initWatcherPool,
-    isWatcherPoolInitialized: vi.fn(() => false),
+    ReactiveObservationEnvironment: class {
+      acquireRoot = coreMockState.acquireObservationRoot
+      dispose = coreMockState.disposeObservationEnvironment
+      getRoots = () => []
+    },
+    RuntimeRootInvalidationRegistry: class {
+      acquireRoot = coreMockState.acquireInvalidationRoot
+      dispose = coreMockState.disposeProjectInvalidation
+    },
+    OpenSpecDataHomeObserver: class extends actual.RuntimeInvalidationIndex {
+      start = coreMockState.startDataHomeObservation
+      dispose = coreMockState.disposeDataHomeObservation
+      getState = () => 'active' as const
+    },
   }
 })
 
@@ -74,6 +91,10 @@ const wsClients: Array<ReturnType<typeof createWSClient>> = []
 const originalFetch = globalThis.fetch
 
 beforeEach(() => {
+  coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
+  coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
+  coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
+  coreMockState.disposeDataHomeObservation.mockResolvedValue(undefined)
   hubMock.downloadFile.mockReset()
   hubMock.fileDownloadInfo.mockClear()
   hubMock.listFiles.mockClear()
@@ -160,7 +181,7 @@ function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = 5_000): 
 
 describe('localModels.subscribeLogs transport', () => {
   it('streams sequential delete lifecycle events to a real tRPC WebSocket client', async () => {
-    coreMockState.initWatcherPool.mockResolvedValue(undefined)
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
     const { projectDir, runtimePaths } = await createIsolatedProjectDir()
     const port = await findAvailablePort(34_600, 100)
     const server = await startServer({ projectDir, port, enableWatcher: false, runtimePaths })
@@ -233,7 +254,7 @@ describe('localModels.subscribeLogs transport', () => {
   })
 
   it('streams byte-level download progress events to a real tRPC WebSocket client', async () => {
-    coreMockState.initWatcherPool.mockResolvedValue(undefined)
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -407,7 +428,7 @@ describe('localModels.subscribeLogs transport', () => {
   })
 
   it('auto-resumes a retryable stream failure and keeps streaming progress events to the client', async () => {
-    coreMockState.initWatcherPool.mockResolvedValue(undefined)
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
     let encoderAttempts = 0
     vi.stubGlobal(
       'fetch',
@@ -596,7 +617,7 @@ describe('localModels.subscribeLogs transport', () => {
   })
 
   it('streams pause and resume lifecycle events to a real tRPC WebSocket client', async () => {
-    coreMockState.initWatcherPool.mockResolvedValue(undefined)
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
     const releaseFirstEncoderStream = createDeferred<void>()
     let encoderAttempts = 0
     vi.stubGlobal(
@@ -795,7 +816,7 @@ describe('localModels.subscribeLogs transport', () => {
   })
 
   it('streams delete lifecycle events for an active download without later completion overwrite', async () => {
-    coreMockState.initWatcherPool.mockResolvedValue(undefined)
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
     const releaseEncoderStream = createDeferred<void>()
     vi.stubGlobal(
       'fetch',

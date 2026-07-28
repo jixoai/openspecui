@@ -1,6 +1,16 @@
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Own one physical project watcher and dispatch normalized events to path subscriptions.
+ * 2. Recover watcher residency after dropped events, errors, missing roots, or root replacement.
+ * 3. Let explicitly opted-in missing paths settle from one coalesced ancestor creation event.
+ * 4. Expose deterministic runtime status and teardown for the shared watcher pool.
+ *
+ * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
+ * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
+ */
 import type { AsyncSubscription, Event } from '@parcel/watcher'
 import { existsSync, lstatSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, isAbsolute, relative, sep } from 'node:path'
 import { resolveRealPathThroughExistingAncestor } from './path-realpath.js'
 
 /**
@@ -37,6 +47,10 @@ interface PathSubscription {
   path: string
   /** 是否监听目录内容变更（而非目录本身） */
   watchChildren: boolean
+  /** Whether a coalesced ancestor event may settle initial path creation. */
+  watchAncestorsWhileMissing: boolean
+  /** The logical path was absent when this subscription last settled. */
+  awaitingPathCreation: boolean
   callback: PathCallback
 }
 
@@ -51,6 +65,16 @@ const RECOVERY_INTERVAL_MS = 3000
 
 /** 路径语义检查间隔 (ms) */
 const PATH_LIVENESS_INTERVAL_MS = 3000
+
+function isStrictAncestorPath(ancestorPath: string, candidatePath: string): boolean {
+  const childPath = relative(ancestorPath, candidatePath)
+  return (
+    childPath !== '' &&
+    childPath !== '..' &&
+    !isAbsolute(childPath) &&
+    !childPath.startsWith(`..${sep}`)
+  )
+}
 
 /** watcher 重建原因 */
 export type ProjectWatcherReinitializeReason =
@@ -332,6 +356,8 @@ export class ProjectWatcher {
           sub.callback(matchedEvents)
         } catch (err) {
           console.error(`[ProjectWatcher] Callback error for ${sub.path}:`, err)
+        } finally {
+          sub.awaitingPathCreation = sub.watchAncestorsWhileMissing && !existsSync(sub.path)
         }
       }
     }
@@ -342,6 +368,14 @@ export class ProjectWatcher {
    */
   private matchPath(event: WatchEvent, sub: PathSubscription): boolean {
     const eventPath = event.path
+
+    if (
+      sub.watchAncestorsWhileMissing &&
+      sub.awaitingPathCreation &&
+      isStrictAncestorPath(eventPath, sub.path)
+    ) {
+      return true
+    }
 
     if (sub.watchChildren) {
       // 监听目录内容：事件路径是订阅目录的子路径
@@ -370,7 +404,7 @@ export class ProjectWatcher {
   subscribeSync(
     path: string,
     callback: PathCallback,
-    options: { watchChildren?: boolean } = {}
+    options: { watchChildren?: boolean; watchAncestorsWhileMissing?: boolean } = {}
   ): () => void {
     if (!this.initialized) {
       throw new Error('ProjectWatcher not initialized. Call init() first.')
@@ -383,6 +417,9 @@ export class ProjectWatcher {
     this.pathSubscriptions.set(id, {
       path: normalizedPath,
       watchChildren: options.watchChildren ?? false,
+      watchAncestorsWhileMissing: options.watchAncestorsWhileMissing ?? false,
+      awaitingPathCreation:
+        (options.watchAncestorsWhileMissing ?? false) && !existsSync(normalizedPath),
       callback,
     })
 
@@ -402,7 +439,7 @@ export class ProjectWatcher {
   async subscribe(
     path: string,
     callback: PathCallback,
-    options: { watchChildren?: boolean } = {}
+    options: { watchChildren?: boolean; watchAncestorsWhileMissing?: boolean } = {}
   ): Promise<() => void> {
     // 确保 watcher 已初始化
     await this.init()

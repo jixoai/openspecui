@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/cli-executor-contracts.test.ts", "src/opsx-kernel-cli-projection.test.ts"],
+  "exclude": ["node_modules", "dist"]
+}

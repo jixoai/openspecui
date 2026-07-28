@@ -1,7 +1,17 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Combine CLI artifact status with formal tracked-task phase.
+ * 2. Keep no-tasks distinct from execution and completion.
+ * 3. Never infer archive readiness from workflow completion.
+ *
+ * Original request (2026-07-15): "0/0 means no-tasks, never complete."
+ */
+import type { TrackedTaskPhase } from '@openspecui/core'
+
 export interface ChangeWorkflowPhaseInput {
   hasStatus: boolean
   isComplete: boolean
-  tasksComplete: boolean
+  trackedTaskPhase: TrackedTaskPhase
   trackedArtifactStatus: 'done' | 'ready' | 'blocked' | null
 }
 
@@ -18,9 +28,9 @@ export function classifyChangeWorkflowPhase(params: ChangeWorkflowPhaseInput): C
     }
   }
 
-  if (params.isComplete && params.tasksComplete) {
+  if (params.isComplete && params.trackedTaskPhase === 'complete') {
     return {
-      label: 'Ready to Archive',
+      label: 'Workflow Complete',
       toneClass: 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300',
     }
   }
@@ -29,6 +39,13 @@ export function classifyChangeWorkflowPhase(params: ChangeWorkflowPhaseInput): C
     return {
       label: 'Draft',
       toneClass: 'border-amber-500/40 text-amber-700 dark:text-amber-300',
+    }
+  }
+
+  if (params.trackedTaskPhase === 'no-tasks') {
+    return {
+      label: 'No Tracked Tasks',
+      toneClass: 'border-border text-muted-foreground',
     }
   }
 

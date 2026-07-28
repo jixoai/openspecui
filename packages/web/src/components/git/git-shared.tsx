@@ -1,11 +1,21 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Render shared Git entry and worktree presentation primitives.
+ * 2. Build stable Git shared-element descriptors and human-readable handoffs.
+ * 3. Carry the originating repository binding token into Git detail transitions.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code/planning repository scopes"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff provenance.
+ */
 import { Badge } from '@/components/badge'
 import type { DashboardGitAutoRefreshPreset } from '@/lib/dashboard-git'
 import { getDashboardGitEntryTimestamp } from '@/lib/dashboard-git'
 import { formatDateTime, formatRelativeTime } from '@/lib/format-time'
+import { getGitEntryEntityId } from '@/lib/git-panel'
 import {
   getSharedElementBinding,
+  type GitSharedElementHandoff,
   type SharedElementDescriptor,
-  type SharedElementHandoff,
 } from '@/lib/view-transitions/shared-elements'
 import type {
   DashboardGitDiffStats,
@@ -83,9 +93,7 @@ export function GitAutoRefreshPresetIcon({ preset }: { preset: DashboardGitAutoR
   return <ChevronDown className="h-3.5 w-3.5" />
 }
 
-export function getGitEntryEntityId(entry: DashboardGitEntry | GitEntrySelector): string {
-  return entry.type === 'commit' ? entry.hash : 'uncommitted'
-}
+export { getGitEntryEntityId }
 
 export function getGitEntrySharedDescriptor(
   entry: DashboardGitEntry | GitEntrySelector
@@ -96,10 +104,21 @@ export function getGitEntrySharedDescriptor(
   }
 }
 
-export function getGitEntrySharedHandoff(entry: DashboardGitEntry): SharedElementHandoff {
+export function getGitEntrySharedHandoff(
+  entry: DashboardGitEntry,
+  bindingToken: string
+): GitSharedElementHandoff {
+  if (bindingToken.trim().length === 0) {
+    throw new Error('Git handoff requires a non-empty binding token.')
+  }
+  const entityId = getGitEntryEntityId(entry)
+  if (entityId.trim().length === 0) {
+    throw new Error('Git entity id must be non-empty.')
+  }
   return {
     family: 'git',
-    entityId: getGitEntryEntityId(entry),
+    entityId,
+    bindingToken,
     title: entry.title,
     subtitle:
       entry.type === 'commit'

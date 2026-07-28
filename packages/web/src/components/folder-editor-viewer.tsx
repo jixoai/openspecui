@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Render and edit one reactive Change or Archive file tree without losing local drafts.
+ * 2. Prepare typed remote previews and preserve explicit preview errors and unavailable states.
+ * 3. Use stable visual geometry for file and preview admission without replacing command evidence.
+ *
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
 import { Dialog } from '@/components/dialog'
@@ -7,6 +15,7 @@ import {
   type FileExplorerEntry,
 } from '@/components/file-explorer'
 import { MarkdownViewer } from '@/components/markdown-viewer'
+import { DetailPanelSkeleton } from '@/components/realtime'
 import { Tooltip } from '@/components/tooltip'
 import {
   prepareEntityFilePreview,
@@ -166,9 +175,8 @@ function PreviewPane({
 
   if (loading) {
     return (
-      <div className="text-muted-foreground flex h-full items-center justify-center gap-2 text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Preparing preview...
+      <div className="h-full p-4" aria-busy="true">
+        <DetailPanelSkeleton count={5} />
       </div>
     )
   }
@@ -348,8 +356,8 @@ export function FolderEditorViewer({
 
   if (!providedFiles && isLoading) {
     return (
-      <div className="bg-muted/20 flex h-[400px] items-center justify-center">
-        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+      <div className="bg-muted/20 h-[400px] p-4" aria-busy="true">
+        <DetailPanelSkeleton count={7} />
       </div>
     )
   }

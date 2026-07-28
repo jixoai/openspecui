@@ -1,20 +1,39 @@
+/**
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Render schema-aware change artifacts and source files while retaining terminal status errors.
+ * 2. Dispatch change workflows through routed compose/verify surfaces.
+ * 3. Lock every change workflow action behind current Root Context readiness.
+ * 4. Attribute Apply instruction divergence without replacing tracked task truth.
+ * 5. Preserve CLI path/action context, Reference evidence, and strict archive diagnostics.
+ *
+ * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
+ * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ */
+import { ApplyProgressNotice } from '@/components/apply-progress-notice'
+import { ChangeContextEvidence } from '@/components/change-context-evidence'
 import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
 import { OpsxEntityDetailView } from '@/components/opsx/opsx-entity-detail-view'
+import { RootActionNotice } from '@/components/root-action-notice'
+import { useArchiveModal } from '@/lib/archive-modal-context'
 import { buildOpsxComposeHref, type OpsxComposeActionId } from '@/lib/opsx-compose'
-import { useOpsxStatusSubscription } from '@/lib/use-opsx'
+import { useOpsxApplyInstructionsSubscription, useOpsxStatusSubscription } from '@/lib/use-opsx'
+import { useRootActionState } from '@/lib/use-root-action-state'
 import { useChangeFilesSubscription } from '@/lib/use-subscription'
 import { vtNavController } from '@/lib/view-transitions/navigation'
 import { readSharedElementHandoffState } from '@/lib/view-transitions/shared-elements'
 import { useLocation, useParams } from '@tanstack/react-router'
-import { GitBranch } from 'lucide-react'
+import { AlertCircle, GitBranch } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 
 export function ChangeView() {
   const { changeId } = useParams({ from: '/changes/$changeId' })
   const location = useLocation()
   const handoff = readSharedElementHandoffState(location.state)
+  const rootAction = useRootActionState()
+  const { openArchiveModal } = useArchiveModal()
 
   const { data: status, isLoading, error } = useOpsxStatusSubscription({ change: changeId })
+  const { data: applyInstructions } = useOpsxApplyInstructionsSubscription({ change: changeId })
   const { data: files } = useChangeFilesSubscription(changeId)
 
   const handleComposeAction = useCallback(
@@ -33,6 +52,10 @@ export function ChangeView() {
     vtNavController.activatePop(`/opsx-verify?change=${encodeURIComponent(changeId)}`)
   }, [changeId])
 
+  const handleArchive = useCallback(() => {
+    openArchiveModal(changeId, status?.changeName ?? changeId)
+  }, [changeId, openArchiveModal, status?.changeName])
+
   const selectedArtifactId = useMemo(() => {
     if (!status) return undefined
     return status.artifacts.find((a) => a.status === 'ready')?.id ?? status.artifacts[0]?.id
@@ -43,6 +66,10 @@ export function ChangeView() {
   const isMissingChangeError =
     error?.message.includes(`Change '${changeId}' not found`) ||
     error?.message.includes(`Change "${changeId}" not found`)
+  const rootFailureMessage =
+    rootAction.status === 'blocked'
+      ? [rootAction.message, ...rootAction.evidence].join('\n')
+      : undefined
 
   return (
     <OpsxEntityDetailView
@@ -56,17 +83,19 @@ export function ChangeView() {
         status ? `Schema: ${status.schemaName} · ${doneCount}/${totalCount} artifacts` : undefined
       }
       handoff={handoff}
-      isLoading={isLoading && !status}
+      isLoading={(isLoading || rootAction.status === 'checking') && !status}
       loadingMessage="Loading change status..."
       errorMessage={
-        error && !isMissingChangeError && !status
-          ? `Error loading change: ${error.message}`
-          : undefined
+        rootFailureMessage && !status
+          ? rootFailureMessage
+          : error && !isMissingChangeError && !status
+            ? `Error loading change: ${error.message}`
+            : undefined
       }
       notFoundMessage={
-        isMissingChangeError && !status
+        !rootAction.disabled && isMissingChangeError && !status
           ? 'Change not found in the current project.'
-          : !status && !isLoading && !error
+          : !rootAction.disabled && !status && !isLoading && !error
             ? 'Change not found.'
             : undefined
       }
@@ -80,7 +109,8 @@ export function ChangeView() {
               outputPath: 'openspec/changes/**/*.md',
               relativePath: `changes/${changeId}`,
               files,
-              emptyMessage: 'No Markdown files found. Open the folder view to inspect change files.',
+              emptyMessage:
+                'No Markdown files found. Open the folder view to inspect change files.',
             }
           : undefined
       }
@@ -89,12 +119,39 @@ export function ChangeView() {
       initialTab={selectedArtifactId}
       toolbar={
         status ? (
-          <ChangeCommandBar
-            status={status}
-            selectedArtifactId={selectedArtifactId}
-            onComposeAction={handleComposeAction}
-            onVerify={handleVerify}
-          />
+          <div className="flex flex-col gap-2">
+            {error ? (
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border p-3 text-sm"
+              >
+                <div className="flex items-center gap-2 font-medium">
+                  <AlertCircle className="h-4 w-4" aria-hidden />
+                  Error loading change: {error.message}
+                </div>
+              </div>
+            ) : null}
+            <RootActionNotice state={rootAction} />
+            <ChangeContextEvidence
+              status={status}
+              references={rootAction.context?.references ?? []}
+            />
+            {applyInstructions ? (
+              <ApplyProgressNotice
+                applyInstructionProgress={applyInstructions.applyInstructionProgress}
+              />
+            ) : null}
+            <ChangeCommandBar
+              status={status}
+              selectedArtifactId={selectedArtifactId}
+              actionDisabled={rootAction.disabled}
+              actionDisabledReason={rootAction.message ?? undefined}
+              onComposeAction={handleComposeAction}
+              onArchive={handleArchive}
+              onVerify={handleVerify}
+            />
+          </div>
         ) : null
       }
     />

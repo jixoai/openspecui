@@ -2,15 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
-    "types": ["node", "vite/client"],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"],
-      "@openspecui/core": ["../core/src/index.ts"],
-      "@openspecui/core/hosted-app": ["../core/src/hosted-app.ts"],
-      "@openspecui/core/sounds": ["../core/src/sounds.ts"],
-      "@openspecui/web-src/*": ["../web/src/*"]
-    }
+    "types": ["node", "vite/client"]
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "../server/src/huggingface-transformers.d.ts"]
 }

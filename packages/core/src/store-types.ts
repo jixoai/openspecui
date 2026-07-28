@@ -1,4 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * 1. Keep beta Store UI projections lenient and independent from strict CLI command contracts.
+ * 2. Classify projection compatibility failures without crashing legacy Store UI.
+ * 3. Preserve complete typed CLI evidence through every beta projection outcome.
+ *
+ * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
+ */
 import { z } from 'zod'
+import type { CliCommandResult } from './cli-contracts/index.js'
 
 /**
  * Beta feature fault-tolerance model (manager directive).
@@ -21,14 +30,7 @@ import { z } from 'zod'
  * Spec: openspec-cli-integration › "Beta Feature Fault Tolerance".
  */
 
-// ---------------------------------------------------------------------------
-// Lenient zod schemas
-// ---------------------------------------------------------------------------
-//
-// 宽松验证：用 .passthrough() 容忍 CLI 新增字段，关键字段可选。这样 openspec-cli 的非破坏性
-// （加字段）更新不会误报为异常一；只有真正破坏性的数据结构变更才会让解析失败。
-
-const StoreDiagnosticSchema = z
+export const StoreDiagnosticSchema = z
   .object({
     severity: z.string().optional(),
     code: z.string().optional(),
@@ -38,13 +40,15 @@ const StoreDiagnosticSchema = z
   })
   .passthrough()
 
-const StoreListEntrySchema = z
+/** Browser-safe lenient fact for one Store inventory entry. */
+export const StoreListEntrySchema = z
   .object({
     id: z.string(),
     root: z.string(),
   })
   .passthrough()
 
+/** Lenient beta projection of `openspec store list --json`. */
 export const StoreListResultSchema = z
   .object({
     stores: z.array(StoreListEntrySchema).default([]),
@@ -78,7 +82,8 @@ const StoreGitFactsSchema = z
   })
   .passthrough()
 
-const StoreDoctorStoreSchema = z
+/** Browser-safe lenient fact for one Store Doctor entry. */
+export const StoreDoctorStoreSchema = z
   .object({
     id: z.string().optional(),
     root: z.string().optional(),
@@ -90,6 +95,7 @@ const StoreDoctorStoreSchema = z
   })
   .passthrough()
 
+/** Lenient beta projection of `openspec store doctor [id] --json`. */
 export const StoreDoctorResultSchema = z
   .object({
     stores: z.array(StoreDoctorStoreSchema).default([]),
@@ -97,15 +103,13 @@ export const StoreDoctorResultSchema = z
   })
   .passthrough()
 
-// ---------------------------------------------------------------------------
-// Public lenient field types (inferred; all extra fields tolerated)
-// ---------------------------------------------------------------------------
-
 export type StoreListEntry = z.infer<typeof StoreListEntrySchema>
 export type StoreDoctorStore = z.infer<typeof StoreDoctorStoreSchema>
 export type StoreListResult = z.infer<typeof StoreListResultSchema>
 export type StoreDoctorResult = z.infer<typeof StoreDoctorResultSchema>
 export type StoreDiagnostic = z.infer<typeof StoreDiagnosticSchema>
+/** Complete process and typed payload evidence for one Store-family CLI command. */
+export type StoreCommandEvidence = CliCommandResult<Record<string, unknown>>
 
 // ---------------------------------------------------------------------------
 // Fault-tolerance error classification
@@ -143,6 +147,7 @@ export type StoreFeatureError = StoreDataIncompatibleError | StoreCommandUnavail
 export type StoreFeatureResult<T = StoreListEntry[]> = {
   available: boolean
   stores: T
+  evidence: StoreCommandEvidence | null
   error?: StoreFeatureError
   cliVersion?: string
 }
@@ -155,38 +160,42 @@ export type StoreFeatureResult<T = StoreListEntry[]> = {
  *  - exit 0 但 zod 失败 → 'data-incompatible'（异常一）
  *  - 非 0 退出 / spawn 失败 → 'command-unavailable'（异常二）
  */
-export type StoreClassification = { kind: 'ok'; data: unknown } | StoreFeatureError
+export type StoreClassification<T> =
+  | { kind: 'ok'; data: T; evidence: StoreCommandEvidence }
+  | (StoreFeatureError & { evidence: StoreCommandEvidence })
 
-export function classifyStoreCliOutput(input: {
-  success: boolean
-  stdout: string
-  stderr: string
-  parse: (stdout: string) => unknown
+/** Classify a typed CLI result while projecting its already parsed payload leniently. */
+export function classifyStoreCliResult<TSchema extends z.ZodTypeAny>(input: {
+  result: StoreCommandEvidence
+  schema: TSchema
   cliVersion?: string
-}): StoreClassification {
-  const { success, stdout, stderr, parse, cliVersion } = input
+}): StoreClassification<z.output<TSchema>> {
+  const { result, schema, cliVersion } = input
 
   // 异常二：指令用法变了 / 指令缺失。CLI 没有按预期执行（非零退出或 spawn 失败）。
-  if (!success) {
+  if (!result.success) {
     return {
       kind: 'command-unavailable',
-      message: stderr.trim() || 'OpenSpec CLI store command failed or is unavailable.',
+      message:
+        result.stderr.trim() ||
+        result.diagnostics.map((diagnostic) => diagnostic.message).join('\n') ||
+        result.contractError ||
+        'OpenSpec CLI store command failed or is unavailable.',
+      evidence: result,
       ...(cliVersion ? { cliVersion } : {}),
     }
   }
 
-  // exit 0：尝试宽松解析。
-  try {
-    const data = parse(stdout)
-    return { kind: 'ok', data }
-  } catch (error) {
-    // 异常一：数据不兼容。命令成功了，但返回的数据结构 openspecui 解析不了。
-    const message = error instanceof Error ? error.message : String(error)
-    return {
-      kind: 'data-incompatible',
-      message: `OpenSpec CLI returned an incompatible stores payload: ${message}`,
-      ...(cliVersion ? { cliVersion } : {}),
-    }
+  const projected = schema.safeParse(result.payload)
+  if (projected.success) {
+    return { kind: 'ok', data: projected.data, evidence: result }
+  }
+
+  return {
+    kind: 'data-incompatible',
+    message: `OpenSpec CLI returned an incompatible stores payload: ${result.contractError ?? projected.error.message}`,
+    evidence: result,
+    ...(cliVersion ? { cliVersion } : {}),
   }
 }
 
@@ -194,23 +203,30 @@ export function classifyStoreCliOutput(input: {
  * 把归类结果转换成端点返回型。成功时 stores = data，失败时 stores = fallback（通常是空数组）
  * 并附上 error。始终尽力带上 cliVersion（版本信息非常重要）。
  */
-export function toStoreFeatureResult<T>(
-  classification: StoreClassification,
-  options: { fromData: (data: unknown) => T; fallback: T; cliVersion?: string }
+export function toStoreFeatureResult<T, TData>(
+  classification: StoreClassification<TData>,
+  options: { fromData: (data: TData) => T; fallback: T; cliVersion?: string }
 ): StoreFeatureResult<T> {
   const cliVersion = options.cliVersion
   if (classification.kind === 'ok') {
     return {
       available: true,
       stores: options.fromData(classification.data),
+      evidence: classification.evidence,
       ...(cliVersion ? { cliVersion } : {}),
     }
   }
 
+  const error: StoreFeatureError = {
+    kind: classification.kind,
+    message: classification.message,
+    ...(classification.cliVersion ? { cliVersion: classification.cliVersion } : {}),
+  }
   return {
     available: false,
     stores: options.fallback,
-    error: classification,
+    evidence: classification.evidence,
+    error,
     ...(cliVersion ? { cliVersion } : {}),
   }
 }

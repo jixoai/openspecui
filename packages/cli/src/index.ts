@@ -1,10 +1,27 @@
+/**
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * 1. Start the embedded Server and its worktree children with one resolved Project Web/preview asset root.
+ * 2. Resolve one Access Gate credential and deliver it to Server, private browser, and worktree children.
+ * 3. Keep inherited child credentials silent while coordinating deterministic runtime teardown.
+ * 4. Bootstrap only worker-thread payloads owned by the worktree Server protocol.
+ *
+ * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
+ * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
+ * Review correction (2026-07-26): explicit Web asset roots are presence-sensitive.
+ * Delivery correction (2026-07-26): nested worktree Servers inherit the resolved parent asset root.
+ */
+import {
+  generateAccessGateCredential,
+  normalizeAccessGatePassword,
+  type AccessGateCredential,
+} from '@openspecui/core'
 import {
   startServer as serverStartServer,
   type GitWorktreeHandoffService,
 } from '@openspecui/server'
 import type { Hono } from 'hono'
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads'
 import { getWebAssetsDirCandidates } from './web-assets.js'
@@ -15,8 +32,8 @@ import {
 import { createParentPortWorktreeHandoffService } from './worktree-server-worker-handoff.js'
 import {
   buildWorktreeServerStartOptions,
-  isWorktreeServerWorkerData,
   normalizeSourceBootstrapEntryUrl,
+  readWorktreeServerWorkerData,
   toWorkerErrorMessage,
   type CreateWorktreeServerWorkerOptions,
   type WorktreeServerWorkerData,
@@ -36,6 +53,22 @@ export interface CLIOptions {
   enableWatcher?: boolean
   /** Extra CORS origins to allow for hosted app mode */
   corsOrigins?: string[]
+  /** Physical Web asset root used by both the public shell and built file-preview entrypoints. */
+  webAssetsDir?: string
+  /**
+   * Generate a high-entropy Bearer credential and protect the whole backend with it. Prints the
+   * complete Authorization header once. Mutually exclusive with `password`.
+   */
+  auth?: boolean
+  /**
+   * Normalize an operator secret into the same Bearer Access Gate. Prefers a hidden prompt when no
+   * inline value is given. Mutually exclusive with `auth`.
+   */
+  password?: string | true
+  /** Private worktree bootstrap Gate. Child runtimes must not print or relay this credential. */
+  accessGateCredential?: AccessGateCredential
+  /** Receives the resolved secret for a private browser fragment; never persist or log it. */
+  onBrowserLaunchCredential?: (credential: string) => void
   /** Optional handoff owner. Worker runtimes use this to delegate nested switches to their parent. */
   gitWorktreeHandoff?: GitWorktreeHandoffService
 }
@@ -102,9 +135,17 @@ export function createWorktreeServerWorker(options: CreateWorktreeServerWorkerOp
   })
 }
 
-function getWebAssetsDir(): string {
-  for (const candidate of getWebAssetsDirCandidates(__dirname)) {
-    if (existsSync(candidate)) {
+function getWebAssetsDir(configuredDir?: string): string {
+  let candidates: string[]
+  if (configuredDir === undefined) {
+    candidates = getWebAssetsDirCandidates(__dirname)
+  } else if (configuredDir.length === 0) {
+    candidates = []
+  } else {
+    candidates = [resolve(configuredDir)]
+  }
+  for (const candidate of candidates) {
+    if (existsSync(candidate) && statSync(candidate).isDirectory()) {
       return candidate
     }
   }
@@ -112,13 +153,7 @@ function getWebAssetsDir(): string {
   throw new Error('Web assets not found. Make sure to build the web package first.')
 }
 
-function getPreviewAssetsDir(): string {
-  return getWebAssetsDir()
-}
-
-function setupStaticFiles(app: Hono): void {
-  const webDir = getWebAssetsDir()
-
+function setupStaticFiles(app: Hono, webDir: string): void {
   const mimeTypes: Record<string, string> = {
     html: 'text/html',
     js: 'application/javascript',
@@ -162,8 +197,92 @@ function setupStaticFiles(app: Hono): void {
   })
 }
 
+/**
+ * Resolve the whole-backend Access Gate credential from `--auth` / `--password`.
+ *
+ * `--auth` generates a high-entropy Bearer credential; `--password` (with an inline value) normalizes
+ * an operator secret into the same Bearer form. The two flags are mutually exclusive. A `--password`
+ * with no inline value reads a hidden prompt from stdin when the process is an interactive TTY, and
+ * rejects in non-interactive (worker) runtimes where prompting is impossible.
+ */
+async function resolveAccessGateCredential(
+  options: CLIOptions
+): Promise<AccessGateCredential | null> {
+  if (options.accessGateCredential && (options.auth || options.password !== undefined)) {
+    throw new Error('An inherited Access Gate cannot be combined with --auth or --password.')
+  }
+  if (options.accessGateCredential) return options.accessGateCredential
+  if (options.auth && options.password !== undefined) {
+    throw new Error(
+      '--auth and --password are mutually exclusive. Choose one Access Gate credential.'
+    )
+  }
+  if (options.auth) {
+    return generateAccessGateCredential()
+  }
+  if (options.password !== undefined) {
+    if (options.password === true) {
+      // No inline value: read a hidden prompt from an interactive TTY.
+      const secret = await promptHiddenPassword()
+      if (!secret) {
+        throw new Error('--password requires a non-empty secret.')
+      }
+      return normalizeAccessGatePassword(secret)
+    }
+    console.warn(
+      'Warning: an inline --password can leak through shell history and process inspection. ' +
+        'Prefer --auth for a generated credential, or pass the secret through a secure mechanism.'
+    )
+    return normalizeAccessGatePassword(options.password)
+  }
+  return null
+}
+
+/** Read a hidden password from an interactive TTY via readline. Rejects in non-TTY runtimes. */
+async function promptHiddenPassword(): Promise<string> {
+  if (!process.stdin.isTTY) {
+    throw new Error(
+      '--password without an inline value requires an interactive terminal. ' +
+        'Pass --password=<secret> instead, or use --auth for a generated credential.'
+    )
+  }
+  const { createInterface } = await import('node:readline')
+  const rl = createInterface({ input: process.stdin, output: undefined })
+  // Mute output so the typed secret is not echoed to the terminal.
+  const writeToStdout = process.stdout.write.bind(process.stdout)
+  process.stdout.write = (() => true) as never
+  try {
+    process.stderr.write('Enter Access Gate password: ')
+    const secret = await new Promise<string>((resolve) => {
+      rl.question('', (answer) => resolve(answer))
+    })
+    process.stderr.write('\n')
+    return secret
+  } finally {
+    process.stdout.write = writeToStdout
+    rl.close()
+  }
+}
+
+/** Print the Access Gate credential once so the operator can distribute the Authorization header. */
+function printAccessGateBanner(credential: AccessGateCredential): void {
+  console.log('')
+  console.log('╔══════════════════════════════════════════════════════════════╗')
+  console.log('║  Backend Access Gate enabled                                ║')
+  console.log('║  Every client must send this header on every transport:     ║')
+  console.log('╠══════════════════════════════════════════════════════════════╣')
+  console.log(`║  Authorization: ${credential.authorizationHeader}`.padEnd(63) + '║')
+  console.log(
+    '║  Credential fingerprint (safe to log): ' + credential.fingerprint + ''.padEnd(16) + '║'
+  )
+  console.log('║  Non-loopback deployments require HTTPS/WSS.                ║')
+  console.log('╚══════════════════════════════════════════════════════════════╝')
+  console.log('')
+}
+
 export async function startServer(options: CLIOptions = {}): Promise<RunningServer> {
   const { projectDir = process.cwd(), port = 3100, enableWatcher = true, corsOrigins } = options
+  const webAssetsDir = getWebAssetsDir(options.webAssetsDir)
   let worktreeManager: WorktreeInstanceManager | null = null
   const gitWorktreeHandoff = options.gitWorktreeHandoff ?? {
     ensureWorktreeServer: async ({ targetPath }: { targetPath: string }) => {
@@ -174,17 +293,26 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
     },
   }
 
+  // Resolve the whole-backend Access Gate credential from --auth or --password (mutually exclusive).
+  const accessGate = await resolveAccessGateCredential(options)
+
   const server = await serverStartServer(
     {
       projectDir,
       port,
       enableWatcher,
       corsOrigins,
-      previewAssetsDir: getPreviewAssetsDir(),
+      previewAssetsDir: webAssetsDir,
       gitWorktreeHandoff,
+      accessGate,
     },
-    setupStaticFiles
+    (app) => setupStaticFiles(app, webAssetsDir)
   )
+
+  if (accessGate && !options.accessGateCredential) {
+    printAccessGateBanner(accessGate)
+    options.onBrowserLaunchCredential?.(accessGate.credential)
+  }
 
   if (!options.gitWorktreeHandoff) {
     worktreeManager = createWorktreeInstanceManager({
@@ -192,6 +320,8 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
       currentServerUrl: server.url,
       runtimeDir: __dirname,
       createWorker: createWorktreeServerWorker,
+      webAssetsDir,
+      accessGateCredential: accessGate,
     })
   }
 
@@ -204,17 +334,16 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
   }
 }
 
-async function runWorktreeServerWorker(): Promise<void> {
-  if (!isWorktreeServerWorkerData(workerData) || !parentPort) {
-    throw new Error('Invalid worktree server worker data.')
-  }
-
+async function runWorktreeServerWorker(
+  data: WorktreeServerWorkerData,
+  port: NonNullable<typeof parentPort>
+): Promise<void> {
   const server = await startServer({
-    ...buildWorktreeServerStartOptions(workerData),
-    gitWorktreeHandoff: createParentPortWorktreeHandoffService(parentPort),
+    ...buildWorktreeServerStartOptions(data),
+    gitWorktreeHandoff: createParentPortWorktreeHandoffService(port),
   })
-  parentPort?.postMessage({ type: 'ready', serverUrl: server.url })
-  parentPort.on('message', (message: unknown) => {
+  port.postMessage({ type: 'ready', serverUrl: server.url })
+  port.on('message', (message: unknown) => {
     if (message === 'close') {
       void server.close().finally(() => {
         process.exit(0)
@@ -224,10 +353,17 @@ async function runWorktreeServerWorker(): Promise<void> {
 }
 
 if (!isMainThread) {
-  runWorktreeServerWorker().catch((error) => {
-    parentPort?.postMessage(toWorkerErrorMessage(error))
-    process.exit(1)
-  })
+  Promise.resolve()
+    .then(async () => {
+      const data = readWorktreeServerWorkerData(workerData)
+      if (!data) return
+      if (!parentPort) throw new Error('Worktree server worker has no parent port.')
+      await runWorktreeServerWorker(data, parentPort)
+    })
+    .catch((error) => {
+      parentPort?.postMessage(toWorkerErrorMessage(error))
+      process.exit(1)
+    })
 }
 
 export { createServer } from '@openspecui/server'

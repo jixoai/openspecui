@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest'
 import type { Change, Spec } from '../src/schemas.js'
 import { Validator } from '../src/validator.js'
 
+function emptyTaskProjections(): Pick<Change, 'trackedTaskProgress' | 'documentChecklistSummary'> {
+  return {
+    trackedTaskProgress: {
+      tasks: [],
+      total: 0,
+      completed: 0,
+      remaining: 0,
+      phase: 'no-tasks',
+      source: { kind: 'none', artifactId: null, outputPath: null, filePaths: [] },
+    },
+    documentChecklistSummary: { groups: [], total: 0, completed: 0, remaining: 0 },
+  }
+}
+
 describe('Validator', () => {
   const validator = new Validator()
 
@@ -131,8 +145,7 @@ describe('Validator', () => {
             description: 'Update API spec',
           },
         ],
-        tasks: [],
-        progress: { total: 0, completed: 0 },
+        ...emptyTaskProjections(),
       }
 
       const result = validator.validateChange(change)
@@ -147,8 +160,7 @@ describe('Validator', () => {
         why: 'Short reason',
         whatChanges: 'Changes',
         deltas: [],
-        tasks: [],
-        progress: { total: 0, completed: 0 },
+        ...emptyTaskProjections(),
       }
 
       const result = validator.validateChange(change)
@@ -164,8 +176,7 @@ describe('Validator', () => {
         why: 'A valid reason that is long enough to pass the 50 character minimum requirement.',
         whatChanges: '',
         deltas: [],
-        tasks: [],
-        progress: { total: 0, completed: 0 },
+        ...emptyTaskProjections(),
       }
 
       const result = validator.validateChange(change)
@@ -181,8 +192,7 @@ describe('Validator', () => {
         why: 'A valid reason that is long enough to pass the 50 character minimum requirement.',
         whatChanges: 'Some changes',
         deltas: [],
-        tasks: [],
-        progress: { total: 0, completed: 0 },
+        ...emptyTaskProjections(),
       }
 
       const result = validator.validateChange(change)

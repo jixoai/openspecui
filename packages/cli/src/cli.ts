@@ -1,14 +1,27 @@
 #!/usr/bin/env node
 
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Parse and dispatch start/export CLI commands through yargs.
+ * 2. Coordinate local/hosted App and consumed worktree runtime bootstrap with protected shutdown.
+ * 3. Delegate one credential-safe Direct/App intent to the selected start-command presenter.
+ *
+ * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
+ * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
+ * Delivery correction (2026-07-26): process children consume the parent's resolved Web asset root.
+ * Original request (2026-07-28): "从底层上封装，后续可能对接 OpenTray 原生窗口。"
+ */
+
 import { ConfigManager } from '@openspecui/core'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import yargs from 'yargs'
-import type { ExportFormat } from './export.js'
 import { getCliArgs } from './argv.js'
+import { createBrowserStartCommandPresenter } from './browser-start-command-presenter.js'
+import type { ExportFormat } from './export.js'
 import { exportStaticSite } from './export.js'
-import { buildHostedAppLaunchUrl, resolveEffectiveHostedAppBaseUrl } from './hosted-app.js'
+import { resolveEffectiveHostedAppBaseUrl } from './hosted-app.js'
 import { startServer } from './index.js'
 import {
   resolveLocalHostedAppWorkspace,
@@ -16,7 +29,12 @@ import {
   startLocalHostedAppDev,
   type LocalHostedAppDevSession,
 } from './local-hosted-app-dev.js'
+import { coordinateStartCommandPresentation } from './start-command-presentation.js'
 import { buildStartupBanner } from './startup-banner.js'
+import {
+  consumeWorktreeProcessAccessGateCredential,
+  consumeWorktreeProcessWebAssetsDir,
+} from './worktree-server-worker.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_HOSTED_CORS_ORIGINS = ['http://localhost:5173', 'http://localhost:3000']
@@ -38,6 +56,8 @@ function buildHostedCorsOrigins(baseUrl: string): string[] {
 }
 
 async function main(): Promise<void> {
+  const inheritedAccessGateCredential = consumeWorktreeProcessAccessGateCredential(process.env)
+  const inheritedWebAssetsDir = consumeWorktreeProcessWebAssetsDir(process.env)
   const originalCwd = process.env.INIT_CWD || process.cwd()
   const args = getCliArgs(process.argv)
 
@@ -73,6 +93,19 @@ async function main(): Promise<void> {
               'Launch the hosted app at the official or custom base URL. Uses the installed PWA when the browser captures that same-scope URL, otherwise falls back to a browser page. Supports --app and --app=<baseUrl>.',
             type: 'string',
           })
+          .option('auth', {
+            describe:
+              'Generate a high-entropy Bearer credential and protect the whole backend Access Gate. ' +
+              'Mutually exclusive with --password.',
+            type: 'boolean',
+          })
+          .option('password', {
+            describe:
+              'Normalize an operator secret into the same Bearer Access Gate (e.g. --password=secret). ' +
+              'Can leak through shell history/process inspection. Mutually exclusive with --auth.',
+            type: 'string',
+            coerce: (value) => (value === '' ? true : value),
+          })
       },
       async (argv) => {
         const rawDir = (argv['project-dir'] as string | undefined) || argv.dir || '.'
@@ -85,7 +118,6 @@ async function main(): Promise<void> {
 
         let server: Awaited<ReturnType<typeof startServer>> | null = null
         let localHostedApp: LocalHostedAppDevSession | null = null
-
         try {
           let hostedBaseUrl: string | null = null
 
@@ -108,37 +140,53 @@ async function main(): Promise<void> {
             }
           }
 
-          server = await startServer({
-            projectDir,
-            port: argv.port,
-            open: false,
-            corsOrigins: hostedBaseUrl ? buildHostedCorsOrigins(hostedBaseUrl) : undefined,
-          })
+          server = await coordinateStartCommandPresentation(
+            {
+              serverOptions: {
+                projectDir,
+                port: argv.port,
+                corsOrigins: hostedBaseUrl ? buildHostedCorsOrigins(hostedBaseUrl) : undefined,
+                auth: argv.auth === true ? true : undefined,
+                password:
+                  argv.password === true
+                    ? true
+                    : typeof argv.password === 'string'
+                      ? argv.password
+                      : undefined,
+                accessGateCredential: inheritedAccessGateCredential ?? undefined,
+                webAssetsDir: inheritedWebAssetsDir ?? undefined,
+              },
+              hostedBaseUrl,
+              shouldOpen: argv.open,
+              onServerReady: ({ server: runningServer, publicHostedUrl }) => {
+                server = runningServer
+                if (runningServer.port !== runningServer.preferredPort) {
+                  console.log(
+                    `⚠️  Port ${runningServer.preferredPort} is in use, using ${runningServer.port} instead`
+                  )
+                }
+                console.log(`✅ Server running at ${runningServer.url}`)
 
-          if (server.port !== server.preferredPort) {
-            console.log(`⚠️  Port ${server.preferredPort} is in use, using ${server.port} instead`)
-          }
-          console.log(`✅ Server running at ${server.url}`)
-
-          let browserUrl = server.url
-          if (useHostedApp && hostedBaseUrl) {
-            browserUrl = buildHostedAppLaunchUrl({
-              baseUrl: hostedBaseUrl,
-              apiBaseUrl: server.url,
-            })
-
-            console.log(`🌐 Hosted app base: ${hostedBaseUrl}`)
-            console.log(`🔗 Hosted URL: ${browserUrl}`)
-            console.log(
-              '📦 Launch mode: prefer an installed hosted-app PWA on the same deployment scope; otherwise open the browser page.'
-            )
-          }
-
-          console.log('')
+                if (hostedBaseUrl && publicHostedUrl) {
+                  console.log(`🌐 Hosted app base: ${hostedBaseUrl}`)
+                  console.log(`🔗 Hosted URL: ${publicHostedUrl}`)
+                  console.log(
+                    '📦 Launch mode: prefer an installed hosted-app PWA on the same deployment scope; otherwise open the browser page.'
+                  )
+                }
+                console.log('')
+              },
+            },
+            {
+              startServer,
+              presenter: createBrowserStartCommandPresenter(async (target) => {
+                const open = await import('open')
+                await open.default(target)
+              }),
+            }
+          )
 
           if (argv.open) {
-            const open = await import('open')
-            await open.default(browserUrl)
             console.log(
               useHostedApp
                 ? '🌐 Hosted app launch requested (browser page or installed PWA, depending on browser capture).'
@@ -219,6 +267,13 @@ async function main(): Promise<void> {
             describe: 'Host for the preview server (used with --open)',
             type: 'string',
           })
+          .option('references', {
+            describe:
+              'Direct Reference export policy. Required when effective References exist: ' +
+              "'include' materializes direct Reference Specs (complete-or-fail), 'omit' excludes them",
+            type: 'string',
+            choices: ['include', 'omit'] as const,
+          })
       },
       async (argv) => {
         const projectDir = resolve(originalCwd, argv.dir || '.')
@@ -236,6 +291,7 @@ async function main(): Promise<void> {
             open: shouldOpen,
             previewPort,
             previewHost: argv['preview-host'],
+            references: argv.references as 'include' | 'omit' | undefined,
           })
 
           if (!shouldOpen) {

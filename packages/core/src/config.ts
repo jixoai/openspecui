@@ -1,3 +1,17 @@
+/**
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * 1. Define and persist project-scoped OpenSpecUI settings.
+ * 2. Resolve, diagnose, cache, and explicitly invalidate the OpenSpec CLI runner.
+ * 3. Prevent retired in-flight runner resolutions from reclaiming cache ownership.
+ * 4. Preserve reactive config reads and serialized config writes.
+ *
+ * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ * Independent review correction (2026-07-20): Global CLI installation must retire cached and
+ * in-flight runner authority.
+ *
+ * Compromise: configuration schemas and runtime management remain in one historical physical file;
+ * splitting that public surface is outside the bounded 6.13 correction.
+ */
 import { exec, execFile } from 'child_process'
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
@@ -1137,6 +1151,7 @@ export class ConfigManager {
   private configPath: string
   private projectDir: string
   private resolvedRunner: ResolvedCliRunner | null = null
+  private resolvedRunnerGeneration = 0
   private resolvingRunnerPromise: Promise<ResolvedCliRunner> | null = null
   private writeChain: Promise<void> = Promise.resolve()
 
@@ -1308,15 +1323,24 @@ export class ConfigManager {
     if (this.resolvingRunnerPromise) {
       return this.resolvingRunnerPromise
     }
-    this.resolvingRunnerPromise = this.resolveCliRunnerUncached()
+    const generation = this.resolvedRunnerGeneration
+    const resolution = this.resolveCliRunnerUncached()
       .then((runner) => {
-        this.resolvedRunner = runner
+        if (
+          this.resolvedRunnerGeneration === generation &&
+          this.resolvingRunnerPromise === resolution
+        ) {
+          this.resolvedRunner = runner
+        }
         return runner
       })
       .finally(() => {
-        this.resolvingRunnerPromise = null
+        if (this.resolvingRunnerPromise === resolution) {
+          this.resolvingRunnerPromise = null
+        }
       })
-    return this.resolvingRunnerPromise
+    this.resolvingRunnerPromise = resolution
+    return resolution
   }
 
   private async resolveCliRunnerUncached(): Promise<ResolvedCliRunner> {
@@ -1364,9 +1388,13 @@ export class ConfigManager {
   }
 
   /**
-   * 清理 CLI 解析缓存（用于 ENOENT 自愈）
+   * Retire the resolved and in-flight CLI runner generation.
+   *
+   * Existing callers still receive their own resolution result, but a retired resolution cannot
+   * repopulate the shared cache or clear a newer pending owner.
    */
   invalidateResolvedCliRunner(): void {
+    this.resolvedRunnerGeneration += 1
     this.resolvedRunner = null
     this.resolvingRunnerPromise = null
   }

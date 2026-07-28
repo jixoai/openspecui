@@ -1,29 +1,51 @@
+/**
+ * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * 1. Run ordered CLI streams with stable process and loading state.
+ * 2. Preserve stdout, stderr, exit, cancellation, and multiline diagnostics verbatim.
+ * 3. Route root-dependent operations through dedicated Server-owned transports.
+ * 4. Derive execution and displayed command evidence from one exhaustive typed transport.
+ * 5. Carry opaque prepared-root generation into direct Verify admission.
+ *
+ * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
+ * Original request (2026-07-17): "Remove the Web generic fallback when no production caller requires it."
+ */
 import '@/styles/terminal-effects.css'
+import type { CliStreamEvent } from '@openspecui/core'
 import { Check, Loader2, Sparkles, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { match } from 'ts-pattern'
 import { isStaticMode } from './static-mode'
 import { trpcClient } from './trpc'
 
+/** Lifecycle state for one queued command. */
 export type CommandRunStatus = 'idle' | 'loading' | 'running' | 'success' | 'error'
+/** Aggregate lifecycle state for the current command queue. */
 export type OverallStatus = 'idle' | 'running' | 'success' | 'error'
+/** Terminal-renderable text or React content emitted by the runner. */
 export type CliRunnerLine =
   | { id: string; kind: 'ascii'; text: string; tone?: 'success' | 'error' | 'info' }
   | { id: string; kind: 'html'; node: ReactNode }
 
+/** Stable queued-command projection exposed to CLI surfaces. */
 export interface CommandDescriptor {
   id: string
   command: string
   args: string[]
+  effectiveCommand: string | null
   status: CommandRunStatus
   exitCode: number | null
+  stream: CliStreamTransport
 }
 
+/** Process event names exposed by the runner facade. */
 export type ProcessEvent = 'data' | 'error' | 'close' | 'exit'
 
+/** Observable command-process facade returned for one running queue item. */
 export interface CommandProcess {
   id: string
   command: string
   args: string[]
+  effectiveCommand: string | null
   status: CommandRunStatus
   exitCode: number | null
   done: Promise<number | null>
@@ -31,10 +53,53 @@ export interface CommandProcess {
   cancel: () => void
 }
 
-interface CommandInput {
-  command: string
-  args?: string[]
+interface ArchiveStrictStreamTransport {
+  type: 'archive-strict'
+  input: {
+    changeId: string
+    skipSpecs?: boolean
+    noValidate?: boolean
+  }
 }
+
+interface InitStreamTransport {
+  type: 'init'
+  input?: {
+    tools?: string[] | 'all' | 'none'
+    profile?: 'core' | 'custom'
+    force?: boolean
+  }
+}
+
+interface PlanningRootUpdateStreamTransport {
+  type: 'planning-root-update'
+  input?: { force?: boolean }
+}
+
+interface ValidateStreamTransport {
+  type: 'validate'
+  input: {
+    type?: 'spec' | 'change'
+    id?: string
+    strict?: boolean
+    /** Opaque Server-issued planning-root generation checked at stream admission. */
+    expectedRootGeneration?: string
+  }
+  /** Prepared Server command used for display; never sent as a selector to the Server. */
+  displayArgs?: string[]
+}
+
+interface InstallGlobalCliStreamTransport {
+  type: 'install-global-cli'
+}
+
+/** Sole semantic descriptor for one browser-requested CLI stream. */
+export type CliStreamTransport =
+  | ArchiveStrictStreamTransport
+  | InitStreamTransport
+  | PlanningRootUpdateStreamTransport
+  | ValidateStreamTransport
+  | InstallGlobalCliStreamTransport
 
 interface UseCliRunnerOptions {
   onCreateProcess?: (process: CommandProcess) => void
@@ -59,6 +124,76 @@ function asCommandText(command: string, args: string[]) {
   return `${command}${argText}`
 }
 
+interface CliStreamHandlers {
+  onData(event: CliStreamEvent): void
+  onError(error: unknown): void
+}
+
+interface CliStreamPlan {
+  command: string
+  args: string[]
+  subscribe(handlers: CliStreamHandlers): { unsubscribe(): void }
+}
+
+function planCliStream(stream: CliStreamTransport): CliStreamPlan {
+  return match(stream)
+    .with({ type: 'archive-strict' }, ({ input }) => {
+      const args = ['archive', '-y', input.changeId]
+      if (input.skipSpecs) args.push('--skip-specs')
+      if (input.noValidate) args.push('--no-validate')
+      return {
+        command: 'openspec',
+        args,
+        subscribe: (handlers: CliStreamHandlers) =>
+          trpcClient.cli.archiveStrictStream.subscribe(input, handlers),
+      }
+    })
+    .with({ type: 'init' }, ({ input }) => {
+      const args = ['init']
+      if (input?.tools !== undefined) {
+        args.push('--tools', Array.isArray(input.tools) ? input.tools.join(',') : input.tools)
+      }
+      if (input?.profile) args.push('--profile', input.profile)
+      if (input?.force) args.push('--force')
+      return {
+        command: 'openspec',
+        args,
+        subscribe: (handlers: CliStreamHandlers) =>
+          trpcClient.cli.initStream.subscribe(input, handlers),
+      }
+    })
+    .with({ type: 'planning-root-update' }, ({ input }) => {
+      const args = ['update']
+      if (input?.force) args.push('--force')
+      return {
+        command: 'openspec',
+        args,
+        subscribe: (handlers: CliStreamHandlers) =>
+          trpcClient.cli.updateStream.subscribe(input, handlers),
+      }
+    })
+    .with({ type: 'validate' }, (stream) => {
+      const { input } = stream
+      const args = ['validate']
+      if (input.id) args.push(input.id)
+      if (input.type) args.push('--type', input.type)
+      if (input.strict) args.push('--strict')
+      return {
+        command: 'openspec',
+        args: stream.displayArgs ?? args,
+        subscribe: (handlers: CliStreamHandlers) =>
+          trpcClient.cli.validateStream.subscribe(input, handlers),
+      }
+    })
+    .with({ type: 'install-global-cli' }, () => ({
+      command: 'npm',
+      args: ['install', '-g', '@fission-ai/openspec'],
+      subscribe: (handlers: CliStreamHandlers) =>
+        trpcClient.cli.installGlobalCliStream.subscribe(undefined, handlers),
+    }))
+    .exhaustive()
+}
+
 function deriveOverallStatus(commands: CommandDescriptor[]): OverallStatus {
   if (commands.some((c) => c.status === 'loading' || c.status === 'running')) return 'running'
   if (commands.some((c) => c.status === 'error')) return 'error'
@@ -66,6 +201,7 @@ function deriveOverallStatus(commands: CommandDescriptor[]): OverallStatus {
   return 'idle'
 }
 
+/** Create one ordered Server-stream CLI queue for a React surface. */
 export function useCliRunner(options: UseCliRunnerOptions = {}) {
   const [commands, setCommands] = useState<CommandDescriptor[]>([])
   const [logs, setLogs] = useState<LogLine[]>([])
@@ -126,27 +262,6 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
     activeCommandIdRef.current = null
   }, [updateCommands])
 
-  const add = useCallback((command: string, args: string[] = [], at = -1) => {
-    const id = createId()
-    updateCommands((prev) => {
-      const next = [...prev]
-      const descriptor: CommandDescriptor = {
-        id,
-        command,
-        args,
-        status: 'idle',
-        exitCode: null,
-      }
-      if (at >= 0 && at < next.length) {
-        next.splice(at, 0, descriptor)
-      } else {
-        next.push(descriptor)
-      }
-      return next
-    })
-    return id
-  }, [])
-
   const remove = useCallback(
     (id: string) => {
       updateCommands((prev) => prev.filter((c) => c.id !== id))
@@ -159,20 +274,25 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
   )
 
   const replaceAll = useCallback(
-    (items: CommandInput[]) => {
+    (items: CliStreamTransport[]) => {
       activeSubscriptionRef.current?.unsubscribe?.()
       activeSubscriptionRef.current = null
       activeCommandIdRef.current = null
       setLogs([])
       setLastExitCode(null)
       updateCommands(() =>
-        items.map((item) => ({
-          id: createId(),
-          command: item.command,
-          args: item.args ?? [],
-          status: 'idle',
-          exitCode: null,
-        }))
+        items.map((stream) => {
+          const plan = planCliStream(stream)
+          return {
+            id: createId(),
+            command: plan.command,
+            args: plan.args,
+            effectiveCommand: null,
+            stream,
+            status: 'idle',
+            exitCode: null,
+          }
+        })
       )
     },
     [updateCommands]
@@ -223,6 +343,7 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
         id: target.id,
         command: target.command,
         args: target.args,
+        effectiveCommand: target.effectiveCommand,
         status: 'loading',
         exitCode: null,
         done,
@@ -237,87 +358,89 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
 
       optionsRef.current.onCreateProcess?.(process)
 
-      const subscription = trpcClient.cli.runCommandStream.subscribe(
-        { command: target.command, args: target.args },
-        {
-          onData: (event) => {
-            if (event.type === 'command') {
-              updateCommands((prev) =>
-                prev.map((c) => (c.id === target.id ? { ...c, status: 'running' } : c))
-              )
-              process.status = 'running'
-              emit('data', event.data ?? '')
-              return
-            }
-
-            if (event.type === 'stdout' && event.data) {
-              appendLog({
-                id: createId(),
-                commandId: target.id,
-                kind: 'stdout',
-                text: event.data,
-              })
-              emit('data', event.data)
-              return
-            }
-
-            if (event.type === 'stderr' && event.data) {
-              appendLog({
-                id: createId(),
-                commandId: target.id,
-                kind: 'stderr',
-                text: event.data,
-                tone: 'error',
-              })
-              emit('error', event.data)
-              return
-            }
-
-            if (event.type === 'exit') {
-              const exitCode = event.exitCode ?? null
-              setLastExitCode(exitCode)
-              const status: CommandRunStatus = exitCode === 0 ? 'success' : 'error'
-              updateCommands((prev) =>
-                prev.map((c) => (c.id === target.id ? { ...c, status, exitCode } : c))
-              )
-              process.status = status
-              process.exitCode = exitCode
-              appendLog({
-                id: createId(),
-                commandId: target.id,
-                kind: 'meta',
-                text: `Process exited with code ${exitCode ?? 'unknown'}`,
-                tone: exitCode === 0 ? 'success' : 'error',
-              })
-              emit('close', exitCode)
-              emit('exit', exitCode)
-              resolveDone(exitCode)
-              activeSubscriptionRef.current?.unsubscribe?.()
-              activeSubscriptionRef.current = null
-              activeCommandIdRef.current = null
-            }
-          },
-          onError: (err) => {
-            const message = err instanceof Error ? err.message : String(err)
+      const handlers = {
+        onData: (event: CliStreamEvent) => {
+          if (event.type === 'command') {
+            const effectiveCommand = event.data ?? ''
             updateCommands((prev) =>
-              prev.map((c) => (c.id === target.id ? { ...c, status: 'error', exitCode: null } : c))
+              prev.map((c) =>
+                c.id === target.id ? { ...c, status: 'running', effectiveCommand } : c
+              )
             )
-            process.status = 'error'
+            process.status = 'running'
+            process.effectiveCommand = effectiveCommand
+            emit('data', effectiveCommand)
+            return
+          }
+
+          if (event.type === 'stdout' && event.data) {
+            appendLog({
+              id: createId(),
+              commandId: target.id,
+              kind: 'stdout',
+              text: event.data,
+            })
+            emit('data', event.data)
+            return
+          }
+
+          if (event.type === 'stderr' && event.data) {
+            appendLog({
+              id: createId(),
+              commandId: target.id,
+              kind: 'stderr',
+              text: event.data,
+              tone: 'error',
+            })
+            emit('error', event.data)
+            return
+          }
+
+          if (event.type === 'exit') {
+            const exitCode = event.exitCode ?? null
+            setLastExitCode(exitCode)
+            const status: CommandRunStatus = exitCode === 0 ? 'success' : 'error'
+            updateCommands((prev) =>
+              prev.map((c) => (c.id === target.id ? { ...c, status, exitCode } : c))
+            )
+            process.status = status
+            process.exitCode = exitCode
             appendLog({
               id: createId(),
               commandId: target.id,
               kind: 'meta',
-              text: `Error: ${message}`,
-              tone: 'error',
+              text: `Process exited with code ${exitCode ?? 'unknown'}`,
+              tone: exitCode === 0 ? 'success' : 'error',
             })
-            emit('error', message)
-            resolveDone(null)
+            emit('close', exitCode)
+            emit('exit', exitCode)
+            resolveDone(exitCode)
             activeSubscriptionRef.current?.unsubscribe?.()
             activeSubscriptionRef.current = null
             activeCommandIdRef.current = null
-          },
-        }
-      )
+          }
+        },
+        onError: (err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err)
+          updateCommands((prev) =>
+            prev.map((c) => (c.id === target.id ? { ...c, status: 'error', exitCode: null } : c))
+          )
+          process.status = 'error'
+          appendLog({
+            id: createId(),
+            commandId: target.id,
+            kind: 'meta',
+            text: `Error: ${message}`,
+            tone: 'error',
+          })
+          emit('error', message)
+          resolveDone(null)
+          activeSubscriptionRef.current?.unsubscribe?.()
+          activeSubscriptionRef.current = null
+          activeCommandIdRef.current = null
+        },
+      }
+      const subscription = planCliStream(target.stream).subscribe(handlers)
 
       process.status = 'running'
       activeSubscriptionRef.current = subscription
@@ -361,10 +484,8 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
             <XCircle className="h-3 w-3 text-red-400" />
           ) : null
 
-        const headerText =
-          cmd.status === 'idle'
-            ? `# ${asCommandText(cmd.command, cmd.args)}`
-            : `$ ${asCommandText(cmd.command, cmd.args)}`
+        const commandText = cmd.effectiveCommand ?? asCommandText(cmd.command, cmd.args)
+        const headerText = cmd.status === 'idle' ? `# ${commandText}` : `$ ${commandText}`
 
         const header: CliRunnerLine[] = [
           {
@@ -417,14 +538,13 @@ export function useCliRunner(options: UseCliRunnerOptions = {}) {
     hasStarted,
     commands: useMemo(
       () => ({
-        add,
         remove,
         list,
         replaceAll,
         run,
         runAll,
       }),
-      [add, list, remove, replaceAll, run, runAll]
+      [list, remove, replaceAll, run, runAll]
     ),
     reset,
     cancel,

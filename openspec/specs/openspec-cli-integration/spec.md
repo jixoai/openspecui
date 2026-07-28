@@ -1,36 +1,48 @@
+<!--
+Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+1. Specify CLI discovery, execution, workflow mapping, error projection, config access, and Store fault tolerance.
+
+Compromise: these six tightly coupled CLI-integration concerns remain in one capability spec because splitting them would break the established public capability identity during the active 1.6 adaptation.
+
+Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
+Original request (2026-07-15): "sync、update 的完整交付链。"
+-->
+
 # openspec-cli-integration Specification
 
 ## Purpose
 
 Define how OpenSpecUI integrates with the OpenSpec CLI to execute OPSX workflows and stream command output across the active version line.
+
 ## Requirements
+
 ### Requirement: CLI Discovery and Version Enforcement
 
-OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enforce the OpenSpecUI major-to-OpenSpec CLI minor version law for stable features. The law is a strict 1:1 mapping: one OpenSpecUI major line targets exactly one OpenSpec CLI minor line (2.x→1.2, 3.x→1.3, 4.x→1.4, 5.x→1.5). The immediately previous CLI minor line is accepted as legacy-compatible; older lines are unsupported.
+OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enforce the OpenSpecUI major-to-OpenSpec CLI minor version law for stable features. The law is a strict 1:1 mapping: one OpenSpecUI major line targets exactly one OpenSpec CLI minor line (2.x→1.2, 3.x→1.3, 4.x→1.4, 5.x→1.5, 6.x→1.6). The immediately previous CLI minor line is accepted as legacy-compatible; older lines are unsupported.
 
-#### Scenario: Enforce OpenSpecUI 5.x compatibility range
+#### Scenario: Enforce OpenSpecUI 6.x compatibility range
 
-- **GIVEN** OpenSpecUI 5.x evaluates an OpenSpec CLI version outside `>=1.4.0 <1.6.0`
+- **GIVEN** OpenSpecUI 6.x evaluates an OpenSpec CLI version outside `>=1.5.0 <1.7.0`
 - **WHEN** OpenSpecUI initializes
 - **THEN** the UI SHALL block usage
 - **AND** present upgrade instructions
 
-#### Scenario: Treat 1.5 runtime as current in 5.x
+#### Scenario: Treat 1.6 runtime as current in 6.x
 
-- **GIVEN** OpenSpecUI 5.x evaluates OpenSpec CLI `>=1.5.0 <1.6.0`
+- **GIVEN** OpenSpecUI 6.x evaluates OpenSpec CLI `>=1.6.0 <1.7.0`
 - **WHEN** OpenSpecUI initializes
 - **THEN** the UI SHALL allow core interactions without a compatibility warning
 
-#### Scenario: Accept legacy-compatible 1.4 runtime in 5.x
+#### Scenario: Accept legacy-compatible 1.5 runtime in 6.x
 
-- **GIVEN** OpenSpecUI 5.x evaluates OpenSpec CLI `>=1.4.0 <1.5.0`
+- **GIVEN** OpenSpecUI 6.x evaluates OpenSpec CLI `>=1.5.0 <1.6.0`
 - **WHEN** OpenSpecUI initializes
 - **THEN** the UI SHALL allow core interactions
-- **AND** SHALL show that the CLI is legacy-compatible and recommend OpenSpec CLI `>=1.5.0 <1.6.0`
+- **AND** SHALL show that the CLI is legacy-compatible and recommend OpenSpec CLI `>=1.6.0 <1.7.0`
 
-#### Scenario: Drop support for 1.3 and older runtimes in 5.x
+#### Scenario: Drop support for 1.4 and older runtimes in 6.x
 
-- **GIVEN** OpenSpecUI 5.x evaluates OpenSpec CLI `1.3.x` or older
+- **GIVEN** OpenSpecUI 6.x evaluates OpenSpec CLI `1.4.x` or older
 - **WHEN** OpenSpecUI initializes
 - **THEN** the UI SHALL block usage as unsupported
 
@@ -41,6 +53,7 @@ OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enfor
 - **THEN** OpenSpecUI 3.x SHALL correspond to OpenSpec CLI 1.3.x
 - **AND** OpenSpecUI 4.x SHALL correspond to OpenSpec CLI 1.4.x
 - **AND** OpenSpecUI 5.x SHALL correspond to OpenSpec CLI 1.5.x
+- **AND** OpenSpecUI 6.x SHALL correspond to OpenSpec CLI 1.6.x
 - **AND** each OpenSpecUI major line SHALL backward-support exactly the previous CLI minor line (no further)
 
 ### Requirement: Safe CLI Execution
@@ -100,6 +113,20 @@ OpenSpecUI SHALL map UI actions to official OPSX CLI commands.
 - **WHEN** the UI requests apply instructions
 - **THEN** the system SHALL execute `openspec instructions apply --json`
 - **AND** normalize CLI-provided `contextFiles` into artifact-id to file-path-array mappings
+
+#### Scenario: Invoke update from a change action
+
+- **GIVEN** a user selects Update for an existing change
+- **WHEN** command invocation mode is active
+- **THEN** the system SHALL produce `/opsx:update <change-id>`
+- **AND** preserve `update` as the workflow action passed through the public hook contract
+
+#### Scenario: Invoke sync from a change action
+
+- **GIVEN** a user selects Sync for an existing change
+- **WHEN** command invocation mode is active
+- **THEN** the system SHALL produce `/opsx:sync <change-id>`
+- **AND** preserve `sync` as the workflow action passed through the public hook contract
 
 ### Requirement: CLI Error Handling
 
@@ -203,4 +230,3 @@ OpenSpecUI SHALL retrieve registered-store discovery data from the OpenSpec CLI 
 - **WHEN** the UI requests store health
 - **THEN** the system SHALL execute `openspec store doctor --json` (optionally with a store id)
 - **AND** surface `openspec_root.healthy`, `metadata`, and `git` facts per store when present
-

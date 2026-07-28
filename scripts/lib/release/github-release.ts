@@ -1,3 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Extract one package changelog section.
+ * 2. Build canonical GitHub release identity and notes.
+ * 3. Project SemVer prerelease state into GitHub CLI flags.
+ *
+ * Original request (2026-07-28): "我想先发布一个beta版本"
+ */
+
+import { resolveReleaseChannel } from './channel'
+
 export function extractChangelogSection(changelog: string, version: string): string | null {
   const lines = changelog.split('\n')
   const header = `## ${version}`
@@ -36,4 +47,8 @@ export function getGithubReleaseTag(packageName: string, version: string): strin
 
 export function getGithubReleaseTitle(packageName: string, version: string): string {
   return `${packageName} ${version}`
+}
+
+export function getGithubReleaseChannelFlags(version: string): string[] {
+  return resolveReleaseChannel(version).prerelease ? ['--prerelease', '--latest=false'] : []
 }

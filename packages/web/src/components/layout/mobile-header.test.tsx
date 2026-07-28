@@ -12,6 +12,22 @@ vi.mock('@/lib/use-dark-mode', () => ({
   useDarkMode: () => false,
 }))
 
+vi.mock('@/lib/use-context-subscription', () => ({
+  useContextSubscription: () => ({
+    data: {
+      state: 'ready',
+      data: {
+        launchProject: { path: '/workspace/openspecui' },
+        planningRoot: { path: '/stores/product-specs', source: 'store' },
+        storeId: 'product',
+      },
+    },
+    isLoading: false,
+    error: null,
+  }),
+  selectRootContextSnapshot: (state: { data?: unknown }) => state?.data ?? null,
+}))
+
 vi.mock('@/lib/use-server-status', () => ({
   useServerStatus: () => ({
     connected: true,
@@ -86,5 +102,7 @@ describe('MobileHeader', () => {
     expect(notificationButton.querySelector('svg')?.className.baseVal).toContain('h-4')
     expect(notificationButton.querySelector('svg')?.className.baseVal).toContain('w-4')
     expect(screen.queryByText('Live')).toBeNull()
+    expect(screen.getByText('openspecui')).toBeTruthy()
+    expect(screen.getByText('product-specs')).toBeTruthy()
   })
 })

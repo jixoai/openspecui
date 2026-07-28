@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 /**
- * SSG CLI - Pre-render OpenSpec UI to static HTML
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Generate route-complete static HTML from a published OpenSpec snapshot.
+ * 2. Resolve and copy the build-owned client/server artifacts for source and packaged execution.
+ * 3. Delegate all dynamic document-value embedding to the static document boundary.
+ *
+ * Original request: SSG CLI - Pre-render OpenSpec UI to static HTML.
+ * Owner-reported defect (2026-07-28): "导出的数据好像逃逸到 html 去了。"
  *
  * This CLI uses prebuilt client/server assets to generate static HTML pages.
  * The client and server are built during `pnpm build` and bundled with the package.
@@ -20,6 +26,8 @@ import {
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveSsgServerEntryPath } from './server-entry'
+import { createStaticDocumentTitle, createStaticHeadTags } from './static-document'
 import { resolveSsgTemplatePath } from './template-path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -95,19 +103,14 @@ async function prerender(opts: {
   const snapshot = JSON.parse(readFileSync(opts.dataPath, 'utf-8'))
   const template = readFileSync(resolveSsgTemplatePath(opts.clientDir), 'utf-8')
 
-  const serverPath = join(opts.serverDir, 'entry-server.js')
+  const serverPath = resolveSsgServerEntryPath(opts.serverDir)
   const { render, getRoutes, getTitle } = await import(serverPath)
 
   const routes = getRoutes(snapshot)
   console.log(`Routes: ${routes.length}`)
   let hasRootRoute = false
 
-  const headTags = `
-    <script>
-      window.__OPENSPEC_BASE_PATH__ = '${opts.basePath}';
-      window.__OPENSPEC_STATIC_MODE__ = true;
-      window.__INITIAL_DATA__ = ${JSON.stringify(snapshot)};
-    </script>`
+  const headTags = createStaticHeadTags(snapshot, opts.basePath)
 
   for (const route of routes) {
     const appHtml = await render(route, snapshot, opts.basePath)
@@ -115,7 +118,7 @@ async function prerender(opts: {
     const html = template
       .replace('<!--app-html-->', appHtml)
       .replace('<!--head-tags-->', headTags)
-      .replace('<title>OpenSpec UI</title>', `<title>${title} - OpenSpec UI</title>`)
+      .replace('<title>OpenSpec UI</title>', `<title>${createStaticDocumentTitle(title)}</title>`)
 
     if (route === '/') {
       hasRootRoute = true

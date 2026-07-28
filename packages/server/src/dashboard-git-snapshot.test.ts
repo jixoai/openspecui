@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Prove Dashboard Git snapshot assembly preserves worktree and OpenSpec entry projections.
+ * 2. Prove each live snapshot carries the backend-issued Code binding provenance.
+ *
+ * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 binds Dashboard snapshots to their Code token.
+ */
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildDashboardGitSnapshot,
@@ -103,11 +111,13 @@ describe('dashboard git snapshot helpers', () => {
 
     const snapshot = await buildDashboardGitSnapshot({
       projectDir,
+      bindingToken: 'code-binding',
       runGit,
       maxCommitEntries: 8,
       readPathTimestampMs,
     })
 
+    expect(snapshot.bindingToken).toBe('code-binding')
     expect(snapshot.defaultBranch).toBe('origin/main')
     expect(snapshot.worktrees).toHaveLength(2)
     expect(snapshot.worktrees[0]?.isCurrent).toBe(true)

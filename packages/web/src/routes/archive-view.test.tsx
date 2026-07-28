@@ -237,7 +237,7 @@ describe('ArchiveView', () => {
 
     render(<ArchiveView />)
 
-    expect(screen.getByText('Archived change not found in the current project.')).toBeTruthy()
+    expect(screen.getByText('Archived change not found in the current Planning root.')).toBeTruthy()
     expect(screen.queryByText(/Error loading archive:/)).toBeNull()
     expect(screen.getByRole('link', { name: 'Back to Archive' }).getAttribute('href')).toBe(
       '/archive'
@@ -254,6 +254,6 @@ describe('ArchiveView', () => {
     render(<ArchiveView />)
 
     expect(screen.getByText('Error loading archive: archive daemon unavailable')).toBeTruthy()
-    expect(screen.queryByText('Archived change not found in the current project.')).toBeNull()
+    expect(screen.queryByText('Archived change not found in the current Planning root.')).toBeNull()
   })
 })

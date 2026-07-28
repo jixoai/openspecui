@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Execute Git commands and retain structured stdout/stderr/exit evidence.
+ * 2. Distinguish a valid non-repository path from an identity-command failure.
+ * 3. Canonicalize repository paths for binding identity and stale-intent checks.
+ *
+ * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 preserves objective Planning Git failures.
+ */
 import { execFile } from 'node:child_process'
 import { realpath, stat } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
@@ -10,6 +19,12 @@ const execFileAsync = promisify(execFile)
 export interface GitCommandResult {
   ok: boolean
   stdout: string
+  /** stderr captured from a failed Git command, when available. */
+  stderr?: string
+  /** Process exit code or runtime error code captured from a failed command. */
+  exitCode?: number | string
+  /** Distinguishes a valid non-repository path from an identity command failure. */
+  failureKind?: 'not-repository' | 'command-failed'
 }
 
 export type GitRunner = (cwd: string, args: string[]) => Promise<GitCommandResult>
@@ -35,9 +50,32 @@ export async function defaultRunGit(cwd: string, args: string[]): Promise<GitCom
       maxBuffer: 8 * 1024 * 1024,
     })
     return { ok: true, stdout }
-  } catch {
-    return { ok: false, stdout: '' }
+  } catch (error: unknown) {
+    const stderrField = readErrorField(error, 'stderr')
+    const stderr = typeof stderrField === 'string' ? stderrField : undefined
+    const errorCode = readErrorField(error, 'code')
+    const message = error instanceof Error ? error.message : String(error)
+    const evidence = [stderr, message].filter((value): value is string => value !== undefined)
+    const failureText = evidence.join('\n')
+    return {
+      ok: false,
+      stdout: '',
+      stderr,
+      exitCode: errorCode,
+      failureKind: isNotRepositoryFailure(failureText) ? 'not-repository' : 'command-failed',
+    }
   }
+}
+
+function readErrorField(error: unknown, key: 'code' | 'stderr'): string | number | undefined {
+  if (typeof error !== 'object' || error === null) return undefined
+  const value = Reflect.get(error, key)
+  if (typeof value === 'string' || typeof value === 'number') return value
+  return undefined
+}
+
+function isNotRepositoryFailure(text: string): boolean {
+  return /not a git repository/i.test(text) && !/permission denied/i.test(text)
 }
 
 export async function defaultReadPathTimestampMs(absolutePath: string): Promise<number | null> {
@@ -132,6 +170,11 @@ export async function canonicalGitPath(path: string): Promise<string> {
   } catch {
     return resolved
   }
+}
+
+/** Resolve a Git identity path without hiding canonicalization failures. */
+export async function strictCanonicalGitPath(path: string): Promise<string> {
+  return realpath(resolve(path))
 }
 
 export async function sameGitPath(left: string, right: string): Promise<boolean> {

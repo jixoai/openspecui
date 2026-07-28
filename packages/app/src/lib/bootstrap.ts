@@ -1,3 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Parse and sanitize hosted launch URLs before App routing.
+ * 2. Bind fragment credentials to the parsed normalized API locator before URL stripping.
+ * 3. Register and eagerly refresh the production service worker.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Delivery correction (2026-07-24): launch credential ownership is locator-scoped and ordering-safe.
+ */
+import { consumeLaunchCredential } from './launch-credential'
 import { normalizeHostedApiBaseUrl, type HostedShellLaunchRequest } from './shell-state'
 
 export interface HostedLaunchParseResult {
@@ -58,6 +68,36 @@ export function stripHostedLaunchParams(href: string): string {
   url.searchParams.delete('version')
   url.searchParams.delete('api')
   return `${url.pathname}${url.search}${url.hash}`
+}
+
+/**
+ * Parse one complete launch URL, bind its credential before removing locator state, and optionally replace
+ * the visible URL with the credential-free relative location.
+ */
+export function consumeHostedLaunchUrl(
+  href: string,
+  replaceState?: (url: string) => void
+): HostedLaunchParseResult {
+  const url = new URL(href)
+  const launch = parseHostedLaunchParams(url.search)
+  const credential = consumeLaunchCredential({
+    apiBaseUrl: launch.request?.apiBaseUrl,
+    hash: url.hash,
+  })
+
+  url.searchParams.delete('version')
+  url.searchParams.delete('api')
+  url.hash = credential.sanitizedHash
+
+  if (launch.hasLaunchParams || credential.status !== 'absent') {
+    replaceState?.(`${url.pathname}${url.search}${url.hash}`)
+  }
+
+  const credentialError = credential.status === 'configuration-error' ? credential.error : null
+  return {
+    ...launch,
+    error: [launch.error, credentialError].filter((message) => message !== null).join(' ') || null,
+  }
 }
 
 function createBrowserRuntime(): HostedBootstrapRuntime {

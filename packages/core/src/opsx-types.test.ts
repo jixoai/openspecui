@@ -1,5 +1,24 @@
+/**
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Verify Apply instruction context-file normalization.
+ * 2. Require command-specific CLI evidence on demand-driven instruction leaves.
+ * 3. Preserve typed OpenSpec 1.6 Reference indexes on both instruction surfaces.
+ *
+ * Original request (2026-07-15): "Preserve CLI-provided paths, action context, References, and diagnostics end to end."
+ * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
+ */
 import { describe, expect, it } from 'vitest'
-import { ApplyInstructionsSchema } from './opsx-types.js'
+import { ApplyInstructionsSchema, ArtifactInstructionsSchema } from './opsx-types.js'
+
+const referenceIndex = [
+  {
+    store_id: 'platform',
+    root: '/stores/platform',
+    specs: [{ id: 'identity', summary: 'Shared identity facts.' }],
+    fetch: 'openspec list --specs --store platform',
+    status: [],
+  },
+] as const
 
 const baseApplyInstructions = {
   changeName: 'add-example',
@@ -19,6 +38,18 @@ const baseApplyInstructions = {
   ],
   state: 'ready',
   instruction: 'Read context files and apply the change.',
+  references: referenceIndex,
+  evidence: {
+    command: 'instructions apply',
+    success: true,
+    stdout: '{"changeName":"add-example"}',
+    stderr: '',
+    exitCode: 0,
+    payload: { changeName: 'add-example' },
+    diagnostics: [],
+    selector: { store: 'shared' },
+    root: { path: '/repo', source: 'store', store_id: 'shared' },
+  },
 } as const
 
 describe('ApplyInstructionsSchema', () => {
@@ -43,6 +74,16 @@ describe('ApplyInstructionsSchema', () => {
       ],
       tasks: ['/repo/openspec/changes/add-example/tasks.md'],
     })
+    expect(parsed).not.toHaveProperty('progress')
+    expect(parsed.applyInstructionProgress).toMatchObject({
+      source: 'openspec-instructions-apply',
+      total: 1,
+      complete: 0,
+      remaining: 1,
+      state: 'ready',
+      divergence: null,
+    })
+    expect(parsed.references).toEqual(referenceIndex)
   })
 
   it('normalizes legacy contextFiles strings to arrays', () => {
@@ -60,5 +101,53 @@ describe('ApplyInstructionsSchema', () => {
       specs: ['/repo/openspec/changes/add-example/specs/alpha/spec.md'],
       tasks: ['/repo/openspec/changes/add-example/tasks.md'],
     })
+  })
+
+  it('requires matching full Apply CLI evidence', () => {
+    expect(() =>
+      ApplyInstructionsSchema.parse({
+        ...baseApplyInstructions,
+        contextFiles: {},
+        evidence: { ...baseApplyInstructions.evidence, command: 'instructions' },
+      })
+    ).toThrow(/instructions apply/)
+  })
+})
+
+describe('ArtifactInstructionsSchema', () => {
+  it('requires command-specific Artifact CLI evidence', () => {
+    const parsed = ArtifactInstructionsSchema.parse({
+      changeName: 'add-example',
+      artifactId: 'proposal',
+      schemaName: 'spec-driven',
+      changeDir: '/repo/openspec/changes/add-example',
+      outputPath: 'proposal.md',
+      description: 'Describe the change.',
+      instruction: 'Write the proposal.',
+      context: null,
+      rules: [],
+      template: '# Proposal',
+      dependencies: [],
+      unlocks: ['design'],
+      references: referenceIndex,
+      evidence: {
+        command: 'instructions',
+        success: true,
+        stdout: '{"artifactId":"proposal"}',
+        stderr: '',
+        exitCode: 0,
+        payload: { artifactId: 'proposal' },
+        diagnostics: [],
+        selector: {},
+        root: { path: '/repo', source: 'nearest' },
+      },
+    })
+
+    expect(parsed.evidence).toMatchObject({
+      command: 'instructions',
+      selector: {},
+      root: { source: 'nearest' },
+    })
+    expect(parsed.references).toEqual(referenceIndex)
   })
 })

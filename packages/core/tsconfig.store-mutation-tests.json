@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/store-mutation-protocol.test.ts"],
+  "exclude": ["node_modules", "dist"]
+}

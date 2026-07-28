@@ -1,6 +1,6 @@
 import {
   MarkdownParser,
-  OPENSPECUI_HOOKS_VERSION,
+  OPENSPECUI_DOCUMENT_HOOK_VERSION,
   type Change,
   type ChangeFile,
   type DeltaSpec,
@@ -486,7 +486,7 @@ export class DocumentService {
     try {
       const result = await hooks.onReadDocument(
         {
-          version: OPENSPECUI_HOOKS_VERSION,
+          version: OPENSPECUI_DOCUMENT_HOOK_VERSION,
           projectDir: this.projectDir,
           consumer: input.consumer,
           document: input.document,

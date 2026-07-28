@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Materialize publication-safe package directories.
+ * 2. Normalize workspace dependencies and repository metadata.
+ * 3. Keep release-script typechecking exact across Node filesystem overloads.
+ *
+ * Original request (2026-07-28): "我想先发布一个beta版本"
+ */
+
 import { spawnSync } from 'node:child_process'
 import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -48,12 +57,13 @@ type WorkspacePackageInfo = {
 
 function readWorkspacePackages(rootDir: string): Map<string, WorkspacePackageInfo> {
   const packagesDir = join(rootDir, 'packages')
-  let entries: ReturnType<typeof readdirSync>
-  try {
-    entries = readdirSync(packagesDir, { withFileTypes: true })
-  } catch {
-    return new Map()
-  }
+  const entries = (() => {
+    try {
+      return readdirSync(packagesDir, { encoding: 'utf8', withFileTypes: true })
+    } catch {
+      return []
+    }
+  })()
 
   const packages = new Map<string, WorkspacePackageInfo>()
   for (const entry of entries) {
@@ -109,7 +119,7 @@ function normalizeManifestDependencies(
   }
 }
 
-function currentRepositoryUrl(repository: RepositoryValue): string | null {
+function currentRepositoryUrl(repository: RepositoryValue | undefined): string | null {
   if (!repository) return null
   if (typeof repository === 'string') {
     const value = repository.trim()

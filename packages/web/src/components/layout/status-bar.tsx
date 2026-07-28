@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * 1. Project live, offline, and static runtime status in the global shell.
+ * 2. Preserve desktop project and snapshot provenance beside notification access.
+ *
+ * Owner-reported defect (2026-07-22): Killing the backend leaves the bottom status bar green and Live.
+ */
 import { NotificationEntryButton } from '@/components/notifications/notification-entry-button'
 import { PathMarquee } from '@/components/path-marquee'
 import { Tooltip } from '@/components/tooltip'

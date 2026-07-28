@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Build Code Git Dashboard snapshots from repository worktrees and recent entries.
+ * 2. Carry the backend-issued Code binding token with every live snapshot.
+ *
+ * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 binds Dashboard snapshots to their Code token.
+ */
 import type {
   DashboardGitEntry,
   DashboardGitSnapshot,
@@ -24,6 +32,7 @@ import {
 
 interface BuildDashboardGitSnapshotOptions {
   projectDir: string
+  bindingToken: string
   runGit?: GitRunner
   maxCommitEntries?: number
   readPathTimestampMs?: PathTimestampReader
@@ -171,6 +180,7 @@ export async function buildDashboardGitSnapshot(
   })
 
   return {
+    bindingToken: options.bindingToken,
     defaultBranch,
     worktrees,
   }

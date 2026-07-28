@@ -66,23 +66,32 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 function createRuntimeStatus(
-  projectResidency: WatcherRuntimeStatus['projectResidency']
+  rootPath: string,
+  projectResidency: WatcherRuntimeStatus['roots'][number]['projectResidency']
 ): WatcherRuntimeStatus {
   return {
-    projectDir: '/tmp/project',
     initialized: true,
+    rootCount: 1,
     subscriptionCount: 1,
-    generation: 1,
-    reinitializeCount: 0,
-    lastReinitializeReason: null,
-    reinitializeReasonCounts: {
-      'drop-events': 0,
-      'watcher-error': 0,
-      'missing-project-dir': 0,
-      'project-dir-replaced': 0,
-      manual: 0,
-    },
-    projectResidency,
+    roots: [
+      {
+        rootPath,
+        referenceCount: 1,
+        initialized: true,
+        subscriptionCount: 1,
+        generation: 1,
+        reinitializeCount: 0,
+        lastReinitializeReason: null,
+        reinitializeReasonCounts: {
+          'drop-events': 0,
+          'watcher-error': 0,
+          'missing-project-dir': 0,
+          'project-dir-replaced': 0,
+          manual: 0,
+        },
+        projectResidency,
+      },
+    ],
   }
 }
 
@@ -101,6 +110,7 @@ describe('ProjectRecoveryService', () => {
     const featureWorktreeDir = await createTempProjectDir('openspecui-recovery-feature-')
     await initGitRepo(baseRepoDir)
     await runGit(baseRepoDir, ['worktree', 'add', featureWorktreeDir, '-b', 'feature-recovery'])
+    const watcherRootPath = realpathSync(featureWorktreeDir)
 
     let watcherRuntimeListener: ((status: WatcherRuntimeStatus | null) => void) | null = null
     const handoffProvider = {
@@ -115,7 +125,7 @@ describe('ProjectRecoveryService', () => {
       gitWorktreeHandoff: handoffProvider,
       subscribeWatcherRuntime: (listener) => {
         watcherRuntimeListener = listener
-        listener(createRuntimeStatus({ state: 'active' }))
+        listener(createRuntimeStatus(watcherRootPath, { state: 'active' }))
         return () => {
           watcherRuntimeListener = null
         }
@@ -129,7 +139,7 @@ describe('ProjectRecoveryService', () => {
     )
     await rm(featureWorktreeDir, { recursive: true, force: true })
     watcherRuntimeListener?.(
-      createRuntimeStatus({
+      createRuntimeStatus(watcherRootPath, {
         state: 'evicted',
         reason: 'missing-project-dir',
         detectedAt: 100,
@@ -165,6 +175,7 @@ describe('ProjectRecoveryService', () => {
     await runGit(baseRepoDir, ['remote', 'set-head', 'origin', 'main'])
     await runGit(baseRepoDir, ['checkout', '-b', 'feature-host'])
     await runGit(baseRepoDir, ['worktree', 'add', mainWorktreeDir, 'main'])
+    const watcherRootPath = realpathSync(mainWorktreeDir)
 
     let watcherRuntimeListener: ((status: WatcherRuntimeStatus | null) => void) | null = null
     const service = new ProjectRecoveryService({
@@ -174,7 +185,7 @@ describe('ProjectRecoveryService', () => {
       },
       subscribeWatcherRuntime: (listener) => {
         watcherRuntimeListener = listener
-        listener(createRuntimeStatus({ state: 'active' }))
+        listener(createRuntimeStatus(watcherRootPath, { state: 'active' }))
         return () => {
           watcherRuntimeListener = null
         }
@@ -189,7 +200,7 @@ describe('ProjectRecoveryService', () => {
     await rm(mainWorktreeDir, { recursive: true, force: true })
     expect(await pathExists(mainWorktreeDir)).toBe(false)
     watcherRuntimeListener?.(
-      createRuntimeStatus({
+      createRuntimeStatus(watcherRootPath, {
         state: 'evicted',
         reason: 'missing-project-dir',
         detectedAt: 200,
@@ -214,6 +225,7 @@ describe('ProjectRecoveryService', () => {
     const featureWorktreeDir = await createTempProjectDir('openspecui-recovery-feature-')
     await initGitRepo(baseRepoDir)
     await runGit(baseRepoDir, ['worktree', 'add', featureWorktreeDir, '-b', 'feature-recovery'])
+    const watcherRootPath = realpathSync(featureWorktreeDir)
 
     let watcherRuntimeListener: ((status: WatcherRuntimeStatus | null) => void) | null = null
     const service = new ProjectRecoveryService({
@@ -223,7 +235,7 @@ describe('ProjectRecoveryService', () => {
       },
       subscribeWatcherRuntime: (listener) => {
         watcherRuntimeListener = listener
-        listener(createRuntimeStatus({ state: 'active' }))
+        listener(createRuntimeStatus(watcherRootPath, { state: 'active' }))
         return () => {
           watcherRuntimeListener = null
         }
@@ -237,7 +249,7 @@ describe('ProjectRecoveryService', () => {
     )
     await rm(featureWorktreeDir, { recursive: true, force: true })
     watcherRuntimeListener?.(
-      createRuntimeStatus({
+      createRuntimeStatus(watcherRootPath, {
         state: 'evicted',
         reason: 'missing-project-dir',
         detectedAt: 300,

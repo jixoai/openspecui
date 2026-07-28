@@ -1,7 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Run route and shared-element View Transitions with deterministic DOM cleanup.
+ * 2. Keep browser-only toolkit detection outside the static server module graph.
+ * 3. Install active-transition tracking before the first native transition starts.
+ *
+ * Original request (2026-07-15): "这是额外的工作还是可以和 live 版本保持尽可能的一致？"
+ * Derived requirement (2026-07-18): Static HTML pre-render must not evaluate browser-only toolkit modules.
+ */
 import { flushSync } from 'react-dom'
-import { supports } from 'view-transitions-toolkit/feature-detection'
 import { setTemporaryViewTransitionNames } from 'view-transitions-toolkit/misc'
-import { trackActiveViewTransition } from 'view-transitions-toolkit/track-active-view-transition'
 import { waitForNamedEntriesReady } from './ready-wait'
 import type { VTIntent } from './route-semantics'
 
@@ -23,16 +30,35 @@ interface RunViewTransitionOptions {
 }
 
 let hasInstalledActiveTransitionTracking = false
+let activeTransitionTrackingPromise: Promise<boolean> | null = null
 
 function getViewTransitionDocument(): ViewTransitionDocument | null {
   if (typeof document === 'undefined') return null
   return document as ViewTransitionDocument
 }
 
-function installActiveTransitionTracking(): void {
-  if (hasInstalledActiveTransitionTracking) return
-  hasInstalledActiveTransitionTracking = true
-  trackActiveViewTransition()
+function installActiveTransitionTracking(): Promise<boolean> {
+  if (hasInstalledActiveTransitionTracking) return Promise.resolve(true)
+  if (activeTransitionTrackingPromise) return activeTransitionTrackingPromise
+
+  // The toolkit's feature-detection module reads browser globals at module
+  // evaluation time. Keep that browser-only shim out of the SSR module graph.
+  const installPromise = import('view-transitions-toolkit/track-active-view-transition')
+    .then(({ trackActiveViewTransition }) => {
+      trackActiveViewTransition()
+      hasInstalledActiveTransitionTracking = true
+      return true
+    })
+    .catch(() => {
+      // View-transition tracking is an optional enhancement; native transitions
+      // are skipped when the toolkit cannot be loaded in a browser runtime.
+      return false
+    })
+    .finally(() => {
+      if (!hasInstalledActiveTransitionTracking) activeTransitionTrackingPromise = null
+    })
+  activeTransitionTrackingPromise = installPromise
+  return installPromise
 }
 
 function isReducedMotionPreferred(): boolean {
@@ -148,23 +174,33 @@ function cleanupTemporaryEntries(vt: ViewTransitionLike, entries: NamedElementEn
 }
 
 export function ensureViewTransitionsReady(): void {
-  if (!supports.sameDocument) return
-  installActiveTransitionTracking()
+  const doc = getViewTransitionDocument()
+  if (!doc || typeof doc.startViewTransition !== 'function') return
+  void installActiveTransitionTracking()
 }
 
-export function runViewTransition(options: RunViewTransitionOptions): Promise<void> {
+export async function runViewTransition(options: RunViewTransitionOptions): Promise<void> {
   const doc = getViewTransitionDocument()
-  if (!doc || !options.intent || !supports.sameDocument || isReducedMotionPreferred()) {
+  if (
+    !doc ||
+    !options.intent ||
+    typeof doc.startViewTransition !== 'function' ||
+    isReducedMotionPreferred()
+  ) {
     flushSync(() => options.update())
-    return Promise.resolve()
+    return
   }
   const intent = options.intent
 
-  ensureViewTransitionsReady()
+  const activeTransitionTrackingReady = await installActiveTransitionTracking()
+  if (!activeTransitionTrackingReady) {
+    flushSync(() => options.update())
+    return
+  }
 
   if (typeof doc.startViewTransition !== 'function' || doc.activeViewTransition) {
     flushSync(() => options.update())
-    return Promise.resolve()
+    return
   }
 
   const beforeEntries = options.collectBeforeEntries?.() ?? []
@@ -226,19 +262,20 @@ export function runViewTransition(options: RunViewTransitionOptions): Promise<vo
       })
       .catch(() => {})
 
-    return vt.finished
+    await vt.finished
       .catch(() => {})
       .finally(() => {
         clearEntries(beforeEntries)
         clearEntries(afterEntries)
         clearIntentDataset()
       })
+    return
   } catch {
     rejectAfterEntriesReady(new Error('startViewTransition failed'))
     clearEntries(beforeEntries)
     clearEntries(afterEntries)
     clearIntentDataset()
     flushSync(() => options.update())
-    return Promise.resolve()
+    return
   }
 }

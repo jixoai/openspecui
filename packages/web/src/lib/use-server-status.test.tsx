@@ -1,5 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Prove one current system emission can establish live Server metadata.
+ * 2. Prove reconnecting transport lifecycle retires stale connected truth.
+ *
+ * Owner-reported defect (2026-07-22): Killing the backend leaves the bottom status bar green and Live.
+ */
 import type { ProjectRecoveryStatus } from '@openspecui/core'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 type ConnectionState = {
@@ -11,10 +18,29 @@ type ConnectionObserver = {
   next: (state: ConnectionState) => void
 }
 
+type SystemHandlers = {
+  onData: (data: {
+    projectDir: string
+    watcherEnabled: boolean
+    projectRecovery: ProjectRecoveryStatus
+  }) => void
+  onError: (error: Error) => void
+}
+
+type SystemSubscription = {
+  unsubscribe: () => void
+}
+
 const idleRecovery: ProjectRecoveryStatus = { state: 'idle' }
 
 const modeState = vi.hoisted(() => ({ staticMode: false }))
-const observerRef = vi.hoisted(() => ({ observer: null as ConnectionObserver | null }))
+const observerRef = vi.hoisted<{ observer: ConnectionObserver | null }>(() => ({ observer: null }))
+const systemHandlersRef = vi.hoisted<{ handlers: SystemHandlers[] }>(() => ({
+  handlers: [],
+}))
+const systemSubscriptionsRef = vi.hoisted<{ subscriptions: SystemSubscription[] }>(() => ({
+  subscriptions: [],
+}))
 const getOrCreateWsClientInstanceMock = vi.hoisted(() => vi.fn())
 const systemSubscribeMock = vi.hoisted(() => vi.fn())
 
@@ -38,11 +64,13 @@ describe('useServerStatus', () => {
   afterEach(() => {
     modeState.staticMode = false
     observerRef.observer = null
+    systemHandlersRef.handlers = []
+    systemSubscriptionsRef.subscriptions = []
+    document.title = ''
     vi.clearAllMocks()
   })
 
-  it('subscribes connection state even when ws client is not pre-created', async () => {
-    // Keep this explicit mock path to validate reconnect countdown behavior in regression checks.
+  it('retires a prior system emission while its WebSocket transport reconnects', async () => {
     getOrCreateWsClientInstanceMock.mockReturnValue({
       connectionState: {
         subscribe: (observer: ConnectionObserver) => {
@@ -52,48 +80,141 @@ describe('useServerStatus', () => {
       },
     })
 
-    systemSubscribeMock.mockImplementation(
-      (
-        _input: undefined,
-        handlers: {
-          onData: (data: {
-            projectDir: string
-            watcherEnabled: boolean
-            projectRecovery: ProjectRecoveryStatus
-          }) => void
-        }
-      ) => {
-        handlers.onData({
-          projectDir: '/tmp/opsx-project',
-          watcherEnabled: true,
-          projectRecovery: idleRecovery,
-        })
-        return { unsubscribe: vi.fn() }
-      }
-    )
+    systemSubscribeMock.mockImplementation((_input: undefined, handlers: SystemHandlers) => {
+      systemHandlersRef.handlers.push(handlers)
+      const subscription = { unsubscribe: vi.fn() }
+      systemSubscriptionsRef.subscriptions.push(subscription)
+      return subscription
+    })
 
     const { useServerStatus } = await import('./use-server-status')
     const { result, unmount } = renderHook(() => useServerStatus())
 
-    await waitFor(() => {
-      expect(result.current.connected).toBe(true)
-      expect(result.current.dirName).toBe('opsx-project')
-      expect(result.current.projectRecovery).toEqual(idleRecovery)
+    act(() => {
+      observerRef.observer?.next({ state: 'pending' })
+      systemHandlersRef.handlers[0]?.onData({
+        projectDir: '/tmp/opsx-project',
+        watcherEnabled: true,
+        projectRecovery: idleRecovery,
+      })
     })
 
-    expect(getOrCreateWsClientInstanceMock).toHaveBeenCalled()
-    expect(observerRef.observer).not.toBeNull()
+    await waitFor(() => {
+      expect(result.current).toMatchObject({
+        connected: true,
+        dirName: 'opsx-project',
+        wsState: 'pending',
+      })
+    })
 
-    observerRef.observer?.next({
-      state: 'connecting',
-      error: new Error('reconnecting'),
+    act(() => {
+      observerRef.observer?.next({
+        state: 'connecting',
+        error: new Error('reconnecting'),
+      })
     })
 
     await waitFor(() => {
       expect(result.current.wsState).toBe('connecting')
+      expect(result.current.connected).toBe(false)
+      expect(result.current.projectDir).toBe('/tmp/opsx-project')
       expect(result.current.reconnectCountdown).not.toBeNull()
     })
 
+    act(() => {
+      observerRef.observer?.next({ state: 'pending' })
+    })
+
+    await waitFor(() => {
+      expect(result.current.wsState).toBe('pending')
+      expect(result.current.connected).toBe(false)
+      expect(systemSubscriptionsRef.subscriptions[0]?.unsubscribe).toHaveBeenCalledTimes(1)
+      expect(systemHandlersRef.handlers).toHaveLength(2)
+    })
+
+    act(() => {
+      systemHandlersRef.handlers[0]?.onData({
+        projectDir: '/tmp/late-a',
+        watcherEnabled: true,
+        projectRecovery: idleRecovery,
+      })
+      systemHandlersRef.handlers[0]?.onError(new Error('late A error'))
+    })
+
+    await waitFor(() => {
+      expect(result.current).toMatchObject({
+        connected: false,
+        projectDir: '/tmp/opsx-project',
+        error: null,
+      })
+      expect(document.title).toBe('opsx-project - OpenSpec UI')
+    })
+
+    act(() => {
+      systemHandlersRef.handlers[1]?.onData({
+        projectDir: '/tmp/opsx-project-b',
+        watcherEnabled: true,
+        projectRecovery: idleRecovery,
+      })
+    })
+
+    await waitFor(() => {
+      expect(result.current).toMatchObject({
+        connected: true,
+        projectDir: '/tmp/opsx-project-b',
+      })
+    })
+
+    act(() => {
+      observerRef.observer?.next({ state: 'idle' })
+    })
+
+    await waitFor(() => {
+      expect(result.current.wsState).toBe('idle')
+      expect(result.current.connected).toBe(false)
+    })
+
     unmount()
+  })
+
+  it('preserves the existing system-subscription fallback when no WebSocket client exists', async () => {
+    getOrCreateWsClientInstanceMock.mockReturnValue(null)
+    systemSubscribeMock.mockImplementation((_input: undefined, handlers: SystemHandlers) => {
+      systemHandlersRef.handlers.push(handlers)
+      return { unsubscribe: vi.fn() }
+    })
+
+    const { useServerStatus } = await import('./use-server-status')
+    const { result } = renderHook(() => useServerStatus())
+
+    act(() => {
+      systemHandlersRef.handlers[0]?.onData({
+        projectDir: '/tmp/http-fallback',
+        watcherEnabled: false,
+        projectRecovery: idleRecovery,
+      })
+    })
+
+    await waitFor(() => {
+      expect(result.current).toMatchObject({
+        connected: false,
+        projectDir: '/tmp/http-fallback',
+        watcherEnabled: false,
+      })
+      expect(document.title).toBe('http-fallback - OpenSpec UI')
+    })
+
+    act(() => {
+      systemHandlersRef.handlers[0]?.onError(new Error('fallback error'))
+    })
+
+    await waitFor(() => {
+      expect(result.current).toMatchObject({
+        connected: false,
+        error: 'fallback error',
+        projectDir: '/tmp/http-fallback',
+      })
+      expect(document.title).toBe('OpenSpec UI (Disconnected)')
+    })
   })
 })

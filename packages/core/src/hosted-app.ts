@@ -1,23 +1,35 @@
-export const OFFICIAL_APP_BASE_URL = 'https://app.openspecui.com'
-export const HOSTED_SHELL_PROTOCOL_VERSION = 1
+/**
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Define browser-safe hosted backend metadata and compatibility capability facts.
+ * 2. Normalize App/embedded launch locators and carry session-only credentials in fragments.
+ * 3. Validate embedded UI origins without inventing backend authority.
+ * 4. Re-export the browser-safe hosted runtime schema source without a Node-bearing Core root import.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Delivery correction (2026-07-24): privately carry the exact Access Gate credential to Project Web.
+ */
+import {
+  HOSTED_SHELL_PROTOCOL_VERSION,
+  HOSTED_STORE_CAPABILITIES,
+  HostedBackendHealthResponseSchema,
+  OPENSPECUI_RUNTIME_CAPABILITIES,
+  type HostedBackendHealthResponse,
+  type HostedBackendRootSummary,
+} from './hosted-contract.js'
 
-export const OPENSPECUI_RUNTIME_CAPABILITIES = [
-  'notifications.subscribe',
-  'config.notifications',
-] as const
+export {
+  HOSTED_SHELL_PROTOCOL_VERSION,
+  HOSTED_STORE_CAPABILITIES,
+  HostedBackendHealthResponseSchema,
+  OPENSPECUI_RUNTIME_CAPABILITIES,
+  type HostedBackendHealthResponse,
+  type HostedBackendRootSummary,
+} from './hosted-contract.js'
+
+export const OFFICIAL_APP_BASE_URL = 'https://app.openspecui.com'
+export const ACCESS_GATE_CREDENTIAL_FRAGMENT_PARAM = 'credential'
 
 export type OpenSpecUIRuntimeCapability = (typeof OPENSPECUI_RUNTIME_CAPABILITIES)[number]
-
-export interface HostedBackendHealthResponse {
-  status: 'ok'
-  projectDir: string
-  projectName: string
-  watcherEnabled: boolean
-  openspecuiVersion: string
-  hostedShellProtocolVersion: typeof HOSTED_SHELL_PROTOCOL_VERSION
-  embeddedUiUrl: string
-  runtimeCapabilities: readonly OpenSpecUIRuntimeCapability[]
-}
 
 export interface BackendHealthPayloadInput {
   projectDir: string
@@ -25,10 +37,12 @@ export interface BackendHealthPayloadInput {
   watcherEnabled: boolean
   openspecuiVersion: string
   embeddedUiUrl: string
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
+  /** Optional 1.6 hosted-protocol additions. */
+  apiBaseUrl?: string
+  cliVersion?: string | null
+  envUri?: string
+  rootSummary?: HostedBackendRootSummary | null
+  accessGateEnabled?: boolean
 }
 
 function withHttpsProtocol(value: string): string {
@@ -114,9 +128,21 @@ export function isSupportedEmbeddedUiUrl(input: string): boolean {
   return parsed.protocol === 'http:' && isLoopbackHostname(parsed.hostname)
 }
 
-export function buildHostedLaunchUrl(options: { baseUrl: string; apiBaseUrl: string }): string {
+function setAccessGateCredentialFragment(url: URL, credential?: string | null): void {
+  if (!credential) return
+  const fragment = new URLSearchParams(url.hash.slice(1))
+  fragment.set(ACCESS_GATE_CREDENTIAL_FRAGMENT_PARAM, credential)
+  url.hash = fragment.toString()
+}
+
+export function buildHostedLaunchUrl(options: {
+  baseUrl: string
+  apiBaseUrl: string
+  credential?: string | null
+}): string {
   const url = new URL(normalizeHostedAppBaseUrl(options.baseUrl))
   url.searchParams.set('api', options.apiBaseUrl)
+  setAccessGateCredentialFragment(url, options.credential)
   return url.toString()
 }
 
@@ -124,10 +150,12 @@ export function buildEmbeddedUiLaunchUrl(options: {
   embeddedUiUrl: string
   apiBaseUrl: string
   sessionId: string
+  credential?: string | null
 }): string {
   const url = new URL(normalizeEmbeddedUiUrl(options.embeddedUiUrl))
   url.searchParams.set('api', options.apiBaseUrl)
   url.searchParams.set('session', options.sessionId)
+  setAccessGateCredentialFragment(url, options.credential)
   return url.toString()
 }
 
@@ -142,7 +170,14 @@ export function buildBackendHealthPayload(
     openspecuiVersion: input.openspecuiVersion,
     hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
     embeddedUiUrl: input.embeddedUiUrl,
-    runtimeCapabilities: OPENSPECUI_RUNTIME_CAPABILITIES,
+    runtimeCapabilities: [...OPENSPECUI_RUNTIME_CAPABILITIES],
+    // 1.6 hosted-protocol additions. All additive so the legacy validator tolerates older backends.
+    apiBaseUrl: input.apiBaseUrl,
+    cliVersion: input.cliVersion,
+    envUri: input.envUri,
+    rootSummary: input.rootSummary,
+    hostedCapabilities: [...HOSTED_STORE_CAPABILITIES],
+    accessGateEnabled: input.accessGateEnabled,
   }
 }
 
@@ -155,17 +190,8 @@ function hasRequiredRuntimeCapabilities(value: unknown): value is OpenSpecUIRunt
 export function isBackendHealthRuntimeMetadata(
   value: unknown
 ): value is HostedBackendHealthResponse {
-  if (!isRecord(value)) return false
-  return (
-    value.status === 'ok' &&
-    typeof value.projectDir === 'string' &&
-    typeof value.projectName === 'string' &&
-    typeof value.watcherEnabled === 'boolean' &&
-    typeof value.openspecuiVersion === 'string' &&
-    value.hostedShellProtocolVersion === HOSTED_SHELL_PROTOCOL_VERSION &&
-    typeof value.embeddedUiUrl === 'string' &&
-    hasRequiredRuntimeCapabilities(value.runtimeCapabilities)
-  )
+  const decoded = HostedBackendHealthResponseSchema.safeParse(value)
+  return decoded.success && hasRequiredRuntimeCapabilities(decoded.data.runtimeCapabilities)
 }
 
 export function isHostedBackendHealthResponse(

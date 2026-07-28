@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Prove watcher-root path-liveness and replacement recovery.
+ * 2. Prove explicitly opted-in missing paths accept one coalesced ancestor creation event.
+ *
+ * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
+ * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
+ */
+import { realpathSync } from 'node:fs'
 import { mkdir, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -22,6 +31,65 @@ afterEach(async () => {
 })
 
 describe('ProjectWatcher path liveness', () => {
+  it('keeps ancestor matching disabled for ordinary missing-path subscriptions', async () => {
+    const root = await createTempRoot()
+    const target = join(root, 'data', 'openspec', 'schemas')
+    const watcher = new ProjectWatcher(root, { debounceMs: 0 })
+    ;(watcher as unknown as { initialized: boolean }).initialized = true
+    const onChange = vi.fn()
+    const release = watcher.subscribeSync(target, onChange, { watchChildren: true })
+
+    try {
+      await mkdir(target, { recursive: true })
+      ;(
+        watcher as unknown as {
+          handleEvents: (events: Array<{ type: 'create'; path: string }>) => void
+        }
+      ).handleEvents([{ type: 'create', path: join(realpathSync(root), 'data') }])
+
+      await new Promise((resolve) => setTimeout(resolve, 25))
+      expect(onChange).not.toHaveBeenCalled()
+    } finally {
+      release()
+      await watcher.close()
+    }
+  })
+
+  it('settles opted-in missing path creation from a coalesced ancestor event', async () => {
+    const root = await createTempRoot()
+    const target = join(root, 'data', 'openspec', 'schemas')
+    const watcher = new ProjectWatcher(root, { debounceMs: 0 })
+    ;(watcher as unknown as { initialized: boolean }).initialized = true
+    const onChange = vi.fn()
+    const release = watcher.subscribeSync(target, onChange, {
+      watchChildren: true,
+      watchAncestorsWhileMissing: true,
+    })
+
+    try {
+      await mkdir(target, { recursive: true })
+      ;(
+        watcher as unknown as {
+          handleEvents: (events: Array<{ type: 'create'; path: string }>) => void
+        }
+      ).handleEvents([{ type: 'create', path: join(realpathSync(root), 'data') }])
+
+      await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 500 })
+
+      onChange.mockClear()
+      ;(
+        watcher as unknown as {
+          handleEvents: (events: Array<{ type: 'create'; path: string }>) => void
+        }
+      ).handleEvents([{ type: 'create', path: join(realpathSync(root), 'data') }])
+      await new Promise((resolve) => setTimeout(resolve, 25))
+      expect(onChange).not.toHaveBeenCalled()
+    } finally {
+      release()
+      await watcher.close()
+    }
+  })
+
   it('schedules reinitialize when project directory is missing', async () => {
     const root = await createTempRoot()
     const projectDir = join(root, 'project')

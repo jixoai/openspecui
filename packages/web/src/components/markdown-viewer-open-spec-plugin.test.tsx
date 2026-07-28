@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * 1. Verify path-driven OpenSpec semantic annotations and navigation metadata.
+ * 2. Preserve authored Markdown, including multiline Requirement bodies, without truncation.
+ * 3. Verify translation, ToC, and responsive projection integration.
+ *
+ * Original request (2026-07-15): "多行 Requirement 内容不能被截断。"
+ */
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownViewer } from './markdown-viewer'
@@ -91,6 +99,21 @@ describe('MarkdownViewer OpenSpec path plugin', () => {
     )
 
     expect(screen.queryByText(/Scenarios \(2\)/)).toBeNull()
+  })
+
+  it('preserves every block in a multiline Requirement body before its scenarios', () => {
+    const { container } = render(<MarkdownViewer markdown={richSpecMarkdown} path={richSpecPath} />)
+
+    const bodyBlocks = container.querySelectorAll(
+      '[data-openspec-zone="requirement-body"][data-openspec-requirement-title="Multiline Markdown Body"]'
+    )
+    const renderedBody = Array.from(bodyBlocks)
+      .map((block) => block.textContent)
+      .join('\n')
+
+    expect(renderedBody).toContain('The system SHALL preserve rich Markdown in requirement bodies.')
+    expect(renderedBody).toContain('Important: this bold marker should render as bold text.')
+    expect(renderedBody).toContain('This quote should render as a quote block.')
   })
 
   it('does not apply OpenSpec semantic projection for non-spec paths', () => {

@@ -1,5 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * 1. Prove system status projects watcher and recovery state.
+ * 2. Keep system-router fixtures type-safe across the Planning-root resolver contract.
+ *
+ * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from './router.js'
+import { createUnavailablePlanningRootServices } from './test-support/planning-root-services.js'
 
 vi.mock('@openspecui/core', async () => {
   const actual = await vi.importActual<typeof import('@openspecui/core')>('@openspecui/core')
@@ -16,14 +24,10 @@ const getWatcherRuntimeStatusMock = vi.mocked(getWatcherRuntimeStatus)
 
 function createCaller(partial: Partial<Context> = {}) {
   return appRouter.createCaller({
-    adapter: {} as Context['adapter'],
+    launchProjectAdapter: {} as Context['launchProjectAdapter'],
+    planningRootServices: createUnavailablePlanningRootServices(),
     configManager: {} as Context['configManager'],
     cliExecutor: {} as Context['cliExecutor'],
-    kernel: {} as Context['kernel'],
-    searchService: {} as Context['searchService'],
-    dashboardOverviewService: {} as Context['dashboardOverviewService'],
-    documentService: {} as Context['documentService'],
-    workflowInvocationService: {} as Context['workflowInvocationService'],
     projectRecoveryService:
       partial.projectRecoveryService ??
       ({
@@ -47,29 +51,42 @@ describe('systemRouter', () => {
 
   it('uses reactive watcher runtime status for watcherEnabled', async () => {
     getWatcherRuntimeStatusMock.mockReturnValue({
-      projectDir: '/tmp/opsx-project',
       initialized: true,
+      rootCount: 1,
       subscriptionCount: 2,
-      generation: 4,
-      reinitializeCount: 1,
-      lastReinitializeReason: 'project-dir-replaced',
-      reinitializeReasonCounts: {
-        'drop-events': 0,
-        'watcher-error': 0,
-        'missing-project-dir': 0,
-        'project-dir-replaced': 1,
-        manual: 0,
-      },
-      projectResidency: { state: 'active' },
+      roots: [
+        {
+          rootPath: '/tmp/opsx-project',
+          referenceCount: 1,
+          initialized: true,
+          subscriptionCount: 2,
+          generation: 4,
+          reinitializeCount: 1,
+          lastReinitializeReason: 'project-dir-replaced',
+          reinitializeReasonCounts: {
+            'drop-events': 0,
+            'watcher-error': 0,
+            'missing-project-dir': 0,
+            'project-dir-replaced': 1,
+            manual: 0,
+          },
+          projectResidency: { state: 'active' },
+        },
+      ],
     })
 
     const caller = createCaller({ watcher: undefined })
     const status = await caller.system.status()
 
     expect(status.watcherEnabled).toBe(true)
-    expect(status.watcherGeneration).toBe(4)
-    expect(status.watcherReinitializeCount).toBe(1)
-    expect(status.watcherLastReinitializeReason).toBe('project-dir-replaced')
+    expect(status.watcherRootCount).toBe(1)
+    expect(status.watcherSubscriptionCount).toBe(2)
+    expect(status.watcherRoots[0]).toMatchObject({
+      rootPath: '/tmp/opsx-project',
+      generation: 4,
+      reinitializeCount: 1,
+      lastReinitializeReason: 'project-dir-replaced',
+    })
     expect(status.projectRecovery).toEqual({ state: 'idle' })
   })
 
@@ -80,6 +97,7 @@ describe('systemRouter', () => {
     const status = await caller.system.status()
 
     expect(status.watcherEnabled).toBe(false)
-    expect(status.watcherGeneration).toBe(0)
+    expect(status.watcherRootCount).toBe(0)
+    expect(status.watcherRoots).toEqual([])
   })
 })

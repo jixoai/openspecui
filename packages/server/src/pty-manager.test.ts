@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePtyCommand, resolvePtyShellDefaults, type PtyPlatform } from './pty-manager.js'
+import {
+  resolvePtyCommand,
+  resolvePtyShellDefaults,
+  resolvePtySpawnEnvironment,
+  type PtyPlatform,
+} from './pty-manager.js'
 
 describe('resolvePtyCommand', () => {
   it('uses explicit command and args when provided', () => {
@@ -87,5 +92,21 @@ describe('resolvePtyShellDefaults', () => {
       '/bin/sh',
       '/bin/fish',
     ])
+  })
+})
+
+describe('resolvePtySpawnEnvironment', () => {
+  it('preserves inherited XDG_DATA_HOME identically for every resolved cwd target', () => {
+    const environment = resolvePtySpawnEnvironment({
+      XDG_DATA_HOME: '/runtime/open-spec-data',
+      PATH: '/usr/bin:/bin',
+      UNDEFINED_VALUE: undefined,
+    })
+
+    expect(environment).toEqual({
+      XDG_DATA_HOME: '/runtime/open-spec-data',
+      PATH: '/usr/bin:/bin',
+      TERM: 'xterm-256color',
+    })
   })
 })

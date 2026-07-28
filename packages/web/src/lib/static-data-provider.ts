@@ -1,10 +1,14 @@
 /**
- * Static Data Provider
+ * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * 1. Project one immutable export snapshot through the live provider-shaped API.
+ * 2. Preserve compound Spec identity and published snapshot policy/provenance without invented CLI evidence.
+ * 3. Reconstruct Dashboard, workflow, schema, template, and entity reads without a backend.
+ * 4. Keep unsupported live mutations and provenance explicitly absent in static mode.
+ * 5. Keep static Git snapshots ineligible for live backend binding authority.
  *
- * Provides data from the static snapshot (data.json) instead of WebSocket subscriptions
- *
- * The snapshot includes fully parsed markdown content generated during export,
- * so specs, changes, and archives can be displayed with proper rendering.
+ * Original request (2026-07-15): "这是额外的工作还是可以和 live 版本保持尽可能的一致？"
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  */
 
 import type {
@@ -25,7 +29,6 @@ import type {
   SchemaInfo,
   SchemaResolution,
   Spec,
-  SpecMeta,
   TemplatesMap,
 } from '@openspecui/core'
 import { selectRecentDashboardItems } from '@openspecui/core/dashboard-display'
@@ -33,8 +36,18 @@ import { DocumentTranslationConfigSchema } from '@openspecui/core/document-trans
 import { toOpsxDisplayPath } from '@openspecui/core/opsx-display-path'
 import { isOpsxGlobPattern, opsxPathMatchesPattern } from '@openspecui/core/opsx-entity'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
-import { projectTasksFromMarkdownFiles } from '@openspecui/core/task-progress'
-import type { SearchDocument } from '@openspecui/search'
+import {
+  createStaticSpecCatalogOwnedProjection,
+  createStaticSpecCatalogReferenceProjection,
+  createStaticSpecCatalogReferenceSource,
+  specIdentityKey,
+  specRoutePath,
+  type SpecCatalog,
+  type SpecCatalogEntry,
+  type SpecDocumentProjection,
+  type SpecIdentity,
+} from '@openspecui/core/spec-catalog'
+import type { ProjectSearchDocument } from '@openspecui/search'
 import { parse as parseYaml } from 'yaml'
 import type { ExportSnapshot } from '../ssg/types'
 import { getBasePath, getInitialData } from './static-mode'
@@ -61,8 +74,6 @@ interface TrendEvent {
   ts: number
   value: number
 }
-
-type SnapshotArchive = ExportSnapshot['archives'][number]
 
 function createEmptyTrends(): Record<DashboardMetricKey, DashboardTrendPoint[]> {
   const trends = {} as Record<DashboardMetricKey, DashboardTrendPoint[]>
@@ -249,17 +260,6 @@ function buildStaticObjectiveTrends(
   )
 
   return trends
-}
-
-function getArchiveTaskProgress(snapshot: ExportSnapshot, archive: SnapshotArchive) {
-  if (archive.progress) return archive.progress
-  const schemaDetail = archive.entity.schemaName
-    ? (snapshot.opsx?.schemaDetails[archive.entity.schemaName] ?? null)
-    : null
-  return projectTasksFromMarkdownFiles(archive.entity.files, {
-    schemaDetail,
-    hasSchemaMetadata: Boolean(archive.entity.schemaName),
-  }).progress
 }
 
 interface GlobArtifactFile {
@@ -456,6 +456,7 @@ function buildChangeStatus(
     isComplete: artifacts.length > 0 && artifacts.every((artifact) => artifact.status === 'done'),
     applyRequires: schemaDetail.applyRequires ?? [],
     artifacts,
+    provenance: { kind: 'static' },
   }
 }
 
@@ -465,6 +466,7 @@ function buildStaticGitSnapshot(snapshot: ExportSnapshot): DashboardOverview['gi
   const recentCommits = snapshot.git?.recentCommits ?? []
   if (recentCommits.length === 0) {
     return {
+      bindingToken: null,
       defaultBranch,
       worktrees: [],
     }
@@ -490,6 +492,7 @@ function buildStaticGitSnapshot(snapshot: ExportSnapshot): DashboardOverview['gi
   )
 
   return {
+    bindingToken: null,
     defaultBranch,
     worktrees: [
       {
@@ -579,24 +582,60 @@ function snapshotChangeToChange(snapChange: ExportSnapshot['changes'][0]): Chang
     whatChanges: snapChange.whatChanges,
     design: snapChange.design,
     deltas: [], // Simplified - not used in UI directly
-    tasks: snapChange.parsedTasks,
-    progress: snapChange.progress,
-  } as Change
+    trackedTaskProgress: snapChange.trackedTaskProgress,
+    documentChecklistSummary: snapChange.documentChecklistSummary,
+  }
 }
 
-/**
- * Get all specs metadata
- */
-export async function getSpecs(): Promise<SpecMeta[]> {
+/** Get the source-aware static Spec Catalog. */
+export async function getSpecCatalog(): Promise<SpecCatalog> {
   const snapshot = await loadSnapshot()
-  if (!snapshot) return []
+  if (!snapshot) {
+    return {
+      entries: [],
+      ownedProjection: createStaticSpecCatalogOwnedProjection(),
+      referenceSources: [],
+      referenceProjection: createStaticSpecCatalogReferenceProjection(undefined),
+      observedAt: 0,
+    }
+  }
 
-  return snapshot.specs.map((spec) => ({
-    id: spec.id,
-    name: spec.name,
-    createdAt: spec.createdAt,
-    updatedAt: spec.updatedAt,
-  }))
+  const entries: SpecCatalogEntry[] = snapshot.specs.map((spec) =>
+    spec.identity.kind === 'owned'
+      ? {
+          identity: spec.identity,
+          source: 'owned',
+          readOnly: false,
+          name: spec.name,
+          summary: null,
+          requirementCount: spec.requirements.length,
+          updatedAt: spec.updatedAt,
+        }
+      : {
+          identity: spec.identity,
+          source: 'referenced',
+          readOnly: true,
+          name: spec.name,
+          summary: null,
+          // Static snapshot carries the parsed body, so requirementCount is not a list-time fact here;
+          // the Referenced catalog entry requires the field but the body detail owns the count.
+          requirementCount: spec.requirements.length,
+          updatedAt: 0,
+        }
+  )
+
+  return {
+    entries,
+    ownedProjection: createStaticSpecCatalogOwnedProjection(
+      snapshot.specs.filter((spec) => spec.identity.kind === 'owned').length
+    ),
+    referenceSources:
+      snapshot.meta.referencePolicy?.kind === 'include'
+        ? snapshot.meta.referencePolicy.referenceSources.map(createStaticSpecCatalogReferenceSource)
+        : [],
+    referenceProjection: createStaticSpecCatalogReferenceProjection(snapshot.meta.referencePolicy),
+    observedAt: snapshot.meta.observedAt || Date.parse(snapshot.meta.timestamp) || 0,
+  }
 }
 
 /**
@@ -633,6 +672,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       specifications: [],
       activeChanges: [],
       git: {
+        bindingToken: null,
         defaultBranch: 'main',
         worktrees: [],
       },
@@ -659,25 +699,28 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const allActiveChanges = snapshot.changes.map((change) => ({
     id: change.id,
     name: change.name,
-    progress: change.progress,
+    trackedTaskProgress: change.trackedTaskProgress,
     updatedAt: change.updatedAt,
   }))
   const activeChanges = selectRecentDashboardItems(allActiveChanges)
 
   const requirements = allSpecifications.reduce((sum, spec) => sum + spec.requirements, 0)
-  const tasksTotal = allActiveChanges.reduce((sum, change) => sum + change.progress.total, 0)
+  const tasksTotal = allActiveChanges.reduce(
+    (sum, change) => sum + change.trackedTaskProgress.total,
+    0
+  )
   const tasksCompleted = allActiveChanges.reduce(
-    (sum, change) => sum + change.progress.completed,
+    (sum, change) => sum + change.trackedTaskProgress.completed,
     0
   )
   const archivedTasksCompleted = snapshot.archives.reduce(
-    (sum, archive) => sum + getArchiveTaskProgress(snapshot, archive).completed,
+    (sum, archive) => sum + archive.trackedTaskProgress.completed,
     0
   )
   const taskCompletionPercent =
     tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : null
   const inProgressChanges = allActiveChanges.filter(
-    (change) => change.progress.total > 0 && change.progress.completed < change.progress.total
+    (change) => change.trackedTaskProgress.phase === 'in-progress'
   ).length
 
   const trends = buildStaticObjectiveTrends(snapshot, trendPointLimit, rightEdgeTs)
@@ -717,28 +760,88 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   }
 }
 
-/**
- * Get a single spec by ID
- */
-export async function getSpec(id: string): Promise<Spec | null> {
+/** Get the exact compound Spec document from the static snapshot. */
+export async function getSpecDocument(identity: SpecIdentity): Promise<SpecDocumentProjection> {
   const snapshot = await loadSnapshot()
-  if (!snapshot) return null
+  const snapSpec = snapshot?.specs.find(
+    (spec) => specIdentityKey(spec.identity) === specIdentityKey(identity)
+  )
 
-  const snapSpec = snapshot.specs.find((s) => s.id === id)
-  if (!snapSpec) return null
+  if (identity.kind === 'owned') {
+    return {
+      identity,
+      source: 'owned',
+      readOnly: false,
+      state: snapSpec ? 'ready' : 'not-found',
+      spec: snapSpec ? snapshotSpecToSpec(snapSpec) : null,
+      rawMarkdown: snapSpec?.content ?? snapSpec?.sourceContent ?? null,
+      upstream: null,
+      evidence: null,
+    }
+  }
 
-  return snapshotSpecToSpec(snapSpec)
-}
+  // Referenced Spec: only present when the snapshot was exported with --references include.
+  const referencePolicy = snapshot?.meta.referencePolicy
+  const staticSource =
+    referencePolicy?.kind === 'include'
+      ? (referencePolicy.referenceSources
+          .filter((source) => source.storeId === identity.storeId)
+          .map(createStaticSpecCatalogReferenceSource)[0] ?? null)
+      : null
+  if (!snapSpec) {
+    const provenance = !snapshot
+      ? {
+          kind: 'static' as const,
+          state: 'snapshot-unavailable' as const,
+          policy: 'absent' as const,
+        }
+      : referencePolicy?.kind === 'omit'
+        ? {
+            kind: 'static' as const,
+            state: 'omitted' as const,
+            policy: 'omit' as const,
+            referenceSourceCount: referencePolicy.referenceSourceCount,
+          }
+        : referencePolicy?.kind === 'none'
+          ? { kind: 'static' as const, state: 'none' as const, policy: 'none' as const }
+          : {
+              kind: 'static' as const,
+              state: 'missing' as const,
+              policy:
+                referencePolicy?.kind === 'include'
+                  ? ('include' as const)
+                  : ('unrecorded' as const),
+              source: staticSource,
+            }
+    return {
+      identity,
+      source: 'referenced',
+      readOnly: true,
+      state: 'error',
+      spec: null,
+      rawMarkdown: null,
+      upstream: null,
+      provenance,
+      evidence: null,
+    }
+  }
 
-/**
- * Get raw spec content (markdown)
- */
-export async function getSpecRaw(id: string): Promise<string | null> {
-  const snapshot = await loadSnapshot()
-  if (!snapshot) return null
-
-  const spec = snapshot.specs.find((s) => s.id === id)
-  return spec?.content ?? spec?.sourceContent ?? null
+  return {
+    identity,
+    source: 'referenced',
+    readOnly: true,
+    state: 'ready',
+    spec: snapshotSpecToSpec(snapSpec),
+    rawMarkdown: snapSpec.content ?? snapSpec.sourceContent ?? null,
+    upstream: null,
+    provenance: {
+      kind: 'static',
+      state: 'included',
+      policy: referencePolicy?.kind === 'include' ? 'include' : 'unrecorded',
+      source: staticSource,
+    },
+    evidence: null,
+  }
 }
 
 /**
@@ -751,7 +854,8 @@ export async function getChanges(): Promise<ChangeMeta[]> {
   return snapshot.changes.map((change) => ({
     id: change.id,
     name: change.name,
-    progress: change.progress,
+    trackedTaskProgress: change.trackedTaskProgress,
+    documentChecklistSummary: change.documentChecklistSummary,
     createdAt: change.createdAt,
     updatedAt: change.updatedAt,
   }))
@@ -835,7 +939,8 @@ export async function getArchives(): Promise<ArchiveMeta[]> {
   return snapshot.archives.map((archive) => ({
     id: archive.id,
     name: archive.name,
-    progress: getArchiveTaskProgress(snapshot, archive),
+    trackedTaskProgress: archive.trackedTaskProgress,
+    documentChecklistSummary: archive.documentChecklistSummary,
     createdAt: archive.createdAt,
     updatedAt: archive.updatedAt,
   }))
@@ -963,16 +1068,19 @@ export async function getConfiguredTools(): Promise<string[]> {
 // OPSX Config data (static mode)
 // =====================
 
+/** Return the exported OPSX project configuration, or null when the snapshot omitted it. */
 export async function getOpsxProjectConfig(): Promise<string | null> {
   const snapshot = await loadSnapshot()
   return snapshot?.opsx?.configYaml ?? null
 }
 
+/** Return all Schema summaries captured in the static snapshot. */
 export async function getOpsxSchemas(): Promise<SchemaInfo[]> {
   const snapshot = await loadSnapshot()
   return snapshot?.opsx?.schemas ?? []
 }
 
+/** Return the static Schema list together with its detail and resolution projections. */
 export async function getOpsxConfigBundle(): Promise<{
   schemas: SchemaInfo[]
   schemaDetails: Record<string, SchemaDetail | null>
@@ -986,6 +1094,7 @@ export async function getOpsxConfigBundle(): Promise<{
   }
 }
 
+/** Return one exported Schema detail by name. */
 export async function getOpsxSchemaDetail(name?: string): Promise<SchemaDetail | null> {
   if (!name) return null
   const snapshot = await loadSnapshot()
@@ -993,6 +1102,7 @@ export async function getOpsxSchemaDetail(name?: string): Promise<SchemaDetail |
   return details?.[name] ?? null
 }
 
+/** Return one exported Schema resolution with display paths projected for static presentation. */
 export async function getOpsxSchemaResolution(name?: string): Promise<SchemaResolution | null> {
   if (!name) return null
   const snapshot = await loadSnapshot()
@@ -1006,7 +1116,6 @@ export async function getOpsxSchemaResolution(name?: string): Promise<SchemaReso
       resolution.displayPath ??
       toOpsxDisplayPath(resolution.path, {
         source: resolution.source,
-        projectDir: snapshot?.meta.projectDir,
       }),
     shadows: resolution.shadows.map((shadow) => ({
       ...shadow,
@@ -1014,12 +1123,12 @@ export async function getOpsxSchemaResolution(name?: string): Promise<SchemaReso
         shadow.displayPath ??
         toOpsxDisplayPath(shadow.path, {
           source: shadow.source,
-          projectDir: snapshot?.meta.projectDir,
         }),
     })),
   }
 }
 
+/** Return exported templates for the requested Schema, or the snapshot default Schema. */
 export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | null> {
   const snapshot = await loadSnapshot()
   if (!snapshot?.opsx?.templates) return null
@@ -1036,7 +1145,6 @@ export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | 
             template.displayPath ??
             toOpsxDisplayPath(template.path, {
               source: template.source,
-              projectDir: snapshot.meta.projectDir,
             }),
         },
       ])
@@ -1053,13 +1161,13 @@ export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | 
           template.displayPath ??
           toOpsxDisplayPath(template.path, {
             source: template.source,
-            projectDir: snapshot.meta.projectDir,
           }),
       },
     ])
   )
 }
 
+/** Reconstruct the exported file tree for one Schema without enabling mutations. */
 export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | null> {
   const snapshot = await loadSnapshot()
   if (!snapshot?.opsx) return null
@@ -1108,12 +1216,14 @@ export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | 
   return entries
 }
 
+/** Return the exported YAML document for one Schema. */
 export async function getOpsxSchemaYaml(name?: string): Promise<string | null> {
   if (!name) return null
   const snapshot = await loadSnapshot()
   return snapshot?.opsx?.schemaYamls?.[name] ?? null
 }
 
+/** Return one exported template document by compound Schema/artifact identity. */
 export async function getOpsxTemplateContent(
   schema?: string,
   artifactId?: string
@@ -1129,6 +1239,7 @@ export async function getOpsxTemplateContent(
   return all[artifactId] ?? null
 }
 
+/** Return all exported template documents for the requested or default Schema. */
 export async function getOpsxTemplateContents(schema?: string): Promise<Record<
   string,
   {
@@ -1163,7 +1274,6 @@ export async function getOpsxTemplateContents(schema?: string): Promise<Record<
             template.displayPath ??
             toOpsxDisplayPath(template.path, {
               source: template.source,
-              projectDir: snapshot.meta.projectDir,
             }),
           source: template.source,
         },
@@ -1173,6 +1283,7 @@ export async function getOpsxTemplateContents(schema?: string): Promise<Record<
   return merged
 }
 
+/** Return all Change ids available in the static snapshot. */
 export async function getOpsxChangeList(): Promise<string[]> {
   const snapshot = await loadSnapshot()
   if (snapshot?.opsx?.changeMetadata) {
@@ -1181,6 +1292,7 @@ export async function getOpsxChangeList(): Promise<string[]> {
   return snapshot?.changes.map((change) => change.id) ?? []
 }
 
+/** Return the exported OPSX metadata document for one Change. */
 export async function getOpsxChangeMetadata(changeId?: string): Promise<string | null> {
   if (!changeId) return null
   const snapshot = await loadSnapshot()
@@ -1191,6 +1303,7 @@ export async function getOpsxChangeMetadata(changeId?: string): Promise<string |
   return null
 }
 
+/** Project one Change status from immutable snapshot artifacts. */
 export async function getOpsxStatus(
   changeId?: string,
   schema?: string
@@ -1203,12 +1316,14 @@ export async function getOpsxStatus(
   return buildChangeStatus(snapshot, change, schema)
 }
 
+/** Project status for every static Change. */
 export async function getOpsxStatusList(): Promise<ChangeStatus[]> {
   const snapshot = await loadSnapshot()
   if (!snapshot) return []
   return snapshot.changes.map((change) => buildChangeStatus(snapshot, change))
 }
 
+/** Return one non-glob artifact output captured for a Change. */
 export async function getOpsxArtifactOutput(
   changeId?: string,
   outputPath?: string
@@ -1224,6 +1339,7 @@ export async function getOpsxArtifactOutput(
   return resolveArtifactOutput(change, outputPath)
 }
 
+/** Return captured files matching one glob artifact output. */
 export async function getOpsxGlobArtifactFiles(
   changeId?: string,
   outputPath?: string
@@ -1239,19 +1355,26 @@ export async function getOpsxGlobArtifactFiles(
   return resolveGlobArtifactFiles(change, outputPath)
 }
 
-export async function getSearchDocuments(): Promise<SearchDocument[]> {
+/** Build the source-scoped static search index from exported entities. */
+export async function getSearchDocuments(): Promise<ProjectSearchDocument[]> {
   const snapshot = await loadSnapshot()
   if (!snapshot) return []
 
-  const docs: SearchDocument[] = []
+  const docs: ProjectSearchDocument[] = []
 
   for (const spec of snapshot.specs) {
+    const identityKey = specIdentityKey(spec.identity)
+    const isReferenced = spec.identity.kind === 'referenced'
     docs.push({
-      id: `spec:${spec.id}`,
+      id: `spec:${identityKey}`,
       kind: 'spec',
+      // Source isolation: referenced Specs appear only in the Referenced search scope.
+      scope: isReferenced ? 'referenced-specs' : 'active-root',
       title: spec.name,
-      href: `/specs/${encodeURIComponent(spec.id)}`,
-      path: `openspec/specs/${spec.id}/spec.md`,
+      href: specRoutePath(spec.identity),
+      path: isReferenced
+        ? `referenced:${spec.identity.kind === 'referenced' ? spec.identity.storeId : ''}:${spec.identity.specId}/spec.md`
+        : `owned:openspec/specs/${spec.identity.specId}/spec.md`,
       content: spec.content,
       updatedAt: spec.updatedAt,
     })
@@ -1261,6 +1384,7 @@ export async function getSearchDocuments(): Promise<SearchDocument[]> {
     docs.push({
       id: `change:${change.id}`,
       kind: 'change',
+      scope: 'active-root',
       title: change.name,
       href: `/changes/${encodeURIComponent(change.id)}`,
       path: `openspec/changes/${change.id}`,
@@ -1281,6 +1405,7 @@ export async function getSearchDocuments(): Promise<SearchDocument[]> {
     docs.push({
       id: `archive:${archive.id}`,
       kind: 'archive',
+      scope: 'active-root',
       title: archive.name,
       href: `/archive/${encodeURIComponent(archive.id)}`,
       path: `openspec/changes/archive/${archive.id}`,

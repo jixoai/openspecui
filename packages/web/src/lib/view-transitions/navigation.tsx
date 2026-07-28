@@ -1,3 +1,16 @@
+/**
+ * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * 1. Coordinate route navigation with native View Transitions.
+ * 2. Preserve navigation state and shared-element descriptors across route areas.
+ * 3. Forward Git binding provenance into detail prefetch before committing navigation.
+ * 4. Record causally bounded preparation, route-update-issued, and transition-settlement timings.
+ * 5. Commit cold detail routes after the preparation budget and use skip-vt.
+ *
+ * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git handoff prefetch.
+ * Owner request (2026-07-23): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
+ * Derived requirement (2026-07-23): Cold detail prefetch must commit without waiting beyond its bounded budget.
+ */
 import { navController } from '@/lib/nav-controller'
 import {
   Link as RouterLink,
@@ -7,6 +20,7 @@ import {
 } from '@tanstack/react-router'
 import { forwardRef, useCallback, type MouseEvent, type RefObject } from 'react'
 import { prepareRouteDetailViewTransition } from './detail-prepare'
+import { startNavigationTimingAttempt } from './navigation-timing'
 import { resolveViewTransitionIntent, type VTArea } from './route-semantics'
 import { runViewTransition } from './runtime'
 import { collectSharedElementEntries, type SharedElementDescriptor } from './shared-elements'
@@ -76,34 +90,69 @@ function resolveSource(
 
 async function runPreparedViewTransition(options: {
   intent: ReturnType<typeof resolveViewTransitionIntent>
+  area: VTArea
+  fromPath: string
   pathname: string
+  search?: string
+  state?: unknown
   update: () => void
   collectBeforeEntries?: () => Array<[HTMLElement, string]>
   collectAfterEntries?: () => Array<[HTMLElement, string]>
 }): Promise<void> {
-  const prepareOutcome = await prepareRouteDetailViewTransition({
-    intent: options.intent,
-    pathname: options.pathname,
+  const timing = startNavigationTimingAttempt({
+    area: options.area,
+    fromPath: options.fromPath,
+    toPath: options.pathname,
   })
+  let prepareOutcome: Awaited<ReturnType<typeof prepareRouteDetailViewTransition>>
+  try {
+    prepareOutcome = await prepareRouteDetailViewTransition({
+      intent: options.intent,
+      pathname: options.pathname,
+      search: options.search,
+      state: options.state,
+    })
+  } catch (error) {
+    timing.recordPrepareFailed(error)
+    throw error
+  }
+  timing.recordPrepareSettled(prepareOutcome)
 
   if (prepareOutcome === 'cancelled') {
     return
   }
 
-  if (prepareOutcome === 'skip-vt') {
-    await runViewTransition({
-      intent: null,
-      update: options.update,
-    })
-    return
+  const update = () => {
+    try {
+      options.update()
+    } catch (error) {
+      timing.recordRouteUpdateFailed(error)
+      throw error
+    }
+    timing.recordRouteUpdateIssued()
   }
 
-  await runViewTransition({
-    intent: options.intent,
-    collectBeforeEntries: options.collectBeforeEntries,
-    collectAfterEntries: options.collectAfterEntries,
-    update: options.update,
-  })
+  try {
+    if (prepareOutcome === 'skip-vt') {
+      await runViewTransition({
+        intent: null,
+        update,
+      })
+      timing.recordTransitionSettled()
+      return
+    }
+
+    await runViewTransition({
+      intent: options.intent,
+      collectBeforeEntries: options.collectBeforeEntries,
+      collectAfterEntries: options.collectAfterEntries,
+      update,
+    })
+    timing.recordTransitionSettled()
+  } catch (error) {
+    timing.recordTransitionFailed(error)
+    throw error
+  }
 }
 
 export function useVTHrefNavigate() {
@@ -113,7 +162,8 @@ export function useVTHrefNavigate() {
   return useCallback(
     ({ href, replace = false, state, vt }: NavigateByHrefOptions) => {
       const relativeHref = toRelativeHref(href)
-      const pathname = toPathname(href)
+      const targetUrl = new URL(href, window.location.origin)
+      const pathname = targetUrl.pathname
       const area = vt?.area ?? navController.getAreaForPath(pathname)
       const sourceRoot = resolveSource(vt?.source, null)
       const intent = resolveViewTransitionIntent({
@@ -124,7 +174,11 @@ export function useVTHrefNavigate() {
 
       return runPreparedViewTransition({
         intent,
+        area,
+        fromPath: location.pathname,
         pathname,
+        search: targetUrl.search,
+        state,
         collectBeforeEntries: () => collectSharedElementEntries(sourceRoot, vt?.sharedElements),
         collectAfterEntries: () => collectSharedElementEntries(document, vt?.sharedElements),
         update: () => {
@@ -215,7 +269,8 @@ function runNavControllerTransition(options: {
     return Promise.resolve()
   }
 
-  const pathname = toPathname(options.href)
+  const targetUrl = new URL(options.href, window.location.origin)
+  const pathname = targetUrl.pathname
   const currentLocation = navController.getLocation(options.area)
   const sourceRoot = resolveSource(options.source, null)
   const intent = resolveViewTransitionIntent({
@@ -226,7 +281,11 @@ function runNavControllerTransition(options: {
 
   return runPreparedViewTransition({
     intent,
+    area: options.area,
+    fromPath: currentLocation.pathname,
     pathname,
+    search: targetUrl.search,
+    state: options.state,
     collectBeforeEntries: () => collectSharedElementEntries(sourceRoot, options.sharedElements),
     collectAfterEntries: () => collectSharedElementEntries(document, options.sharedElements),
     update: () => {

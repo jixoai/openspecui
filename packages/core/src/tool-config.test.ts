@@ -34,6 +34,10 @@ describe('getDetectedProjectTools', () => {
     )
   })
 
+  it('includes the OpenSpec CLI 1.6 Oh My Pi tool id', () => {
+    expect(getAllToolIds()).toContain('oh-my-pi')
+  })
+
   it('detects project-local tool directories only', async () => {
     await mkdir(join(tempDir, '.claude'), { recursive: true })
     await mkdir(join(tempDir, '.cursor'), { recursive: true })

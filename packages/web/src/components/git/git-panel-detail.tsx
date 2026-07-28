@@ -1,5 +1,18 @@
+/**
+ * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * 1. Render file-tree and diff detail for one selected Git entry.
+ * 2. Load eager and on-demand patches without crossing repository-binding caches.
+ * 3. Preserve scroll, routed pane, reveal, and responsive layout state.
+ * 4. Preserve detail geometry while changed-file metadata is admitted.
+ *
+ * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
+ * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ */
 import { ErrorBoundary } from '@/components/error-boundary'
+import { DetailPanelSkeleton } from '@/components/realtime'
 import { Tabs } from '@/components/tabs'
+import { getGitEntryPatchQueryKey } from '@/lib/git-panel'
 import { trpcClient } from '@/lib/trpc'
 import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
 import type {
@@ -7,6 +20,7 @@ import type {
   GitEntryFilePatch,
   GitEntryFileSummary,
   GitEntrySelector,
+  GitRepositoryScope,
 } from '@openspecui/core'
 import { useQueries } from '@tanstack/react-query'
 import { AlertCircle, Files, GitCommitHorizontal, ListTree, LoaderCircle } from 'lucide-react'
@@ -226,6 +240,8 @@ export function GitEntryDetailPanel({
   files,
   eagerFiles = [],
   projectDir,
+  repositoryScope = 'code',
+  repositoryBindingToken = 'unbound-preview',
   isLoading,
   error,
   showEntrySummary = true,
@@ -236,6 +252,8 @@ export function GitEntryDetailPanel({
   files: GitEntryFileSummary[]
   eagerFiles?: GitEntryFilePatch[]
   projectDir?: string | null
+  repositoryScope?: GitRepositoryScope
+  repositoryBindingToken?: string
   isLoading: boolean
   error: Error | null
   showEntrySummary?: boolean
@@ -341,9 +359,14 @@ export function GitEntryDetailPanel({
         return patchLoader({ selector, fileId })
       }
 
-      return trpcClient.git.getEntryPatch.query({ selector, fileId })
+      return trpcClient.git.getEntryPatch.query({
+        scope: repositoryScope,
+        expectedBindingToken: repositoryBindingToken,
+        selector,
+        fileId,
+      })
     },
-    [patchLoader, selector]
+    [patchLoader, repositoryBindingToken, repositoryScope, selector]
   )
 
   useEffect(() => {
@@ -387,7 +410,9 @@ export function GitEntryDetailPanel({
 
   const patchQueries = useQueries({
     queries: requestedOrderedFileIds.map((fileId) => ({
-      queryKey: ['git', 'patch', selectorKey, fileId],
+      queryKey: selector
+        ? getGitEntryPatchQueryKey(repositoryScope, repositoryBindingToken, selector, fileId)
+        : ['git', repositoryScope, repositoryBindingToken, 'patch', 'none', fileId],
       queryFn: () => loadPatch(fileId),
       enabled: selector !== null,
       staleTime: 5 * 60 * 1000,
@@ -827,9 +852,8 @@ export function GitEntryDetailPanel({
 
   if (isLoading && !entry) {
     return (
-      <div className="text-muted-foreground flex items-center gap-2 rounded-md border border-dashed px-3 py-4 text-sm">
-        <LoaderCircle className="h-4 w-4 animate-spin" />
-        Loading changed files…
+      <div className="p-3" aria-busy="true">
+        <DetailPanelSkeleton count={5} />
       </div>
     )
   }
@@ -844,8 +868,8 @@ export function GitEntryDetailPanel({
 
   const wideTreeContent =
     isLoading && files.length === 0 ? (
-      <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
-        Loading changed files…
+      <div className="p-3" aria-busy="true">
+        <DetailPanelSkeleton count={4} />
       </div>
     ) : (
       <div
@@ -872,8 +896,8 @@ export function GitEntryDetailPanel({
 
   const narrowTreeContent =
     isLoading && files.length === 0 ? (
-      <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
-        Loading changed files…
+      <div className="p-3" aria-busy="true">
+        <DetailPanelSkeleton count={4} />
       </div>
     ) : (
       <div className="py-3" style={{ marginBlock: `${FILE_TREE_NARROW_MARGIN_BLOCK}px` }}>
@@ -912,8 +936,8 @@ export function GitEntryDetailPanel({
 
   const diffStreamContent =
     isLoading && files.length === 0 ? (
-      <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
-        Loading changed files…
+      <div className="p-3" aria-busy="true">
+        <DetailPanelSkeleton count={6} />
       </div>
     ) : files.length === 0 ? (
       <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">

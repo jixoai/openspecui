@@ -16,8 +16,9 @@
     "build:deps": "pnpm --filter @openspecui/core build && pnpm --filter @openspecui/search build && pnpm --filter @openspecui/ai-provider build && pnpm --filter @openspecui/browser-translator build && pnpm --filter ctranslate2 build && pnpm --filter @openspecui/local-ct2-translator build && pnpm --filter @openspecui/local-llama-translator build && pnpm --filter @openspecui/local-translator build && pnpm --filter @openspecui/openai-completion-translator build",
     "build:packages": "pnpm --filter @openspecui/server build && pnpm --filter @openspecui/web build",
     "build:cli": "pnpm --filter openspecui run build:copy-web && pnpm --filter openspecui exec tsdown",
-    "typecheck": "pnpm -r --parallel run typecheck",
-    "tc": "pnpm -r --parallel run typecheck",
+    "typecheck": "pnpm run typecheck:scripts && pnpm -r --parallel run typecheck",
+    "typecheck:scripts": "tsc --noEmit -p tsconfig.release-scripts.json",
+    "tc": "pnpm run typecheck",
     "preview": "pnpm --filter openspecui dev",
     "lint": "oxlint packages scripts --ignore-path .gitignore",
     "lint:ci": "oxlint packages scripts --ignore-path .gitignore",
@@ -67,6 +68,7 @@
     "@opentui/core": "^0.1.79",
     "@opentui/react": "^0.1.79",
     "@types/node": "^22.10.0",
+    "@types/yargs": "^17.0.35",
     "@xterm/headless": "6.0.0",
     "oxlint": "^1.15.0",
     "prettier": "^3.4.2",
@@ -75,7 +77,9 @@
     "react": "^19.2.0",
     "shadcn": "^3.8.2",
     "tsx": "^4.20.6",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.0",
+    "yargs": "^18.0.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

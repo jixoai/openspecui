@@ -1,10 +1,26 @@
+/**
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * 1. Present backend, CLI execution, terminal, notification, and appearance settings.
+ * 2. Compose the extracted OpenSpec diagnostics and initialization owner.
+ * 3. Bind network-triggered settings actions to visible loading and failure state.
+ * 4. Delegate CLI installation and Init through single-source Server-owned transports.
+ * 5. Preserve first-frame and dirty Terminal drafts through field-value Config synchronization.
+ *
+ * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
+ * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
+ * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): "你说的组件化封装是必要的。"
+ */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
 import { CliTerminal } from '@/components/cli-terminal'
 import { CopyablePath } from '@/components/copyable-path'
 import { Dialog } from '@/components/dialog'
 import { NotificationSettings } from '@/components/notifications/notification-settings'
+import { AccessibleStatus, AsyncAction, RealtimeSkeletonLine } from '@/components/realtime'
 import { Select, type SelectOption } from '@/components/select'
+import { OpenSpecSettingsSections } from '@/components/settings/openspec-settings-section'
 import { SoundSettingControl } from '@/components/sound-setting-control'
 import { Switch } from '@/components/switch'
 import { TerminalInvocationSettings } from '@/components/terminal/terminal-invocation-settings'
@@ -30,8 +46,6 @@ import {
   type TerminalRendererEngine,
 } from '@/lib/terminal-controller'
 import {
-  isTerminalThemeId,
-  isTerminalThemeMode,
   TERMINAL_THEME_MODE_VALUES,
   TERMINAL_THEME_OPTIONS,
   type TerminalThemeId,
@@ -42,27 +56,22 @@ import { queryClient, trpc, trpcClient } from '@/lib/trpc'
 import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
 import { useConfigSubscription } from '@/lib/use-subscription'
+import type { OpenSpecUIConfig } from '@openspecui/core'
 import { OFFICIAL_APP_BASE_URL } from '@openspecui/core/hosted-app'
 import { NotificationSoundSchema } from '@openspecui/core/notifications'
-import {
-  OPENSPEC_CLI_TARGET_SERIES,
-  OPENSPECUI_TARGET_MAJOR,
-} from '@openspecui/core/openspec-compat'
 import {
   DEFAULT_BELL_SOUND_ID,
   DEFAULT_NOTIFICATION_SOUND_ID,
   type SoundId,
 } from '@openspecui/core/sounds'
-import { TerminalBellSoundSchema, type TerminalBellSound } from '@openspecui/core/terminal-audio'
+import type { TerminalBellSound } from '@openspecui/core/terminal-audio'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
-  AlertTriangle,
   ArrowUp,
   Check,
   CheckCircle,
   Download,
   FolderOpen,
-  FolderPlus,
   GitCommitHorizontal,
   LayoutDashboard,
   Link2,
@@ -70,7 +79,6 @@ import {
   Monitor,
   Moon,
   Plus,
-  RefreshCw,
   Settings as SettingsIcon,
   Sparkles,
   Sun,
@@ -78,17 +86,16 @@ import {
   Unlink2,
   XCircle,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
-  buildSettingsInitArgs,
-  canAutoInit,
-  countSelectedToolActions,
-  formatSelectedInitLabel,
-  getSettingsInitActionState,
-  getToolInitStatus,
-  type InitProfileOverride,
-  type InitToolsMode,
-} from './settings-init'
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
 import { SettingsTranslationPanel } from './settings-translation-panel'
 
 function formatExecutePath(command: string, args: readonly string[] = []): string {
@@ -100,18 +107,6 @@ function formatExecutePath(command: string, args: readonly string[] = []): strin
   return [command, ...args].map(quote).join(' ')
 }
 
-const INIT_TOOLS_MODE_OPTIONS: SelectOption<InitToolsMode>[] = [
-  { value: 'auto', label: 'Auto-detect tools (recommended)' },
-  { value: 'selected', label: 'Use selected tools' },
-  { value: 'all', label: 'Use all tools' },
-]
-
-const INIT_PROFILE_OVERRIDE_OPTIONS: SelectOption<InitProfileOverride>[] = [
-  { value: 'default', label: 'Use global default' },
-  { value: 'core', label: 'core' },
-  { value: 'custom', label: 'custom' },
-]
-
 const DEFAULT_TERMINAL_FONT_SIZE = 13
 const DEFAULT_TERMINAL_FONT_FAMILY = ''
 const DEFAULT_TERMINAL_CURSOR_BLINK = true
@@ -121,6 +116,36 @@ const DEFAULT_TERMINAL_RENDERER_ENGINE: TerminalRendererEngine = 'xterm'
 const DEFAULT_TERMINAL_BELL_VOLUME = 1
 const DEFAULT_DASHBOARD_TREND_POINT_LIMIT = 100
 const DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET = 1000
+
+function resolveTerminalDraft(
+  config: OpenSpecUIConfig['terminal'] | undefined,
+  controllerFallback: ReturnType<typeof terminalController.getConfig>
+) {
+  return {
+    fontSize: config?.fontSize ?? controllerFallback.fontSize,
+    fontFamily: config?.fontFamily ?? controllerFallback.fontFamily,
+    cursorBlink: config?.cursorBlink ?? controllerFallback.cursorBlink,
+    cursorStyle: config?.cursorStyle ?? controllerFallback.cursorStyle,
+    scrollback: config?.scrollback ?? controllerFallback.scrollback,
+    useTheme: config?.useTheme ?? controllerFallback.useTheme,
+    lightTheme: config?.lightTheme ?? controllerFallback.lightTheme,
+    darkTheme: config?.darkTheme ?? controllerFallback.darkTheme,
+    rendererEngine: config?.rendererEngine ?? controllerFallback.rendererEngine,
+    bellSound: config?.bellSound ?? controllerFallback.bellSound,
+    bellVolume: config?.bellVolume ?? controllerFallback.bellVolume,
+  }
+}
+
+function useFieldValueDraft<T>(upstreamValue: T): [T, Dispatch<SetStateAction<T>>] {
+  const [draft, setDraft] = useState(upstreamValue)
+
+  useEffect(() => {
+    setDraft(upstreamValue)
+  }, [upstreamValue])
+
+  return [draft, setDraft]
+}
+
 const THEME_OPTIONS = [
   {
     value: 'light',
@@ -169,11 +194,11 @@ const SETTINGS_TOC_ITEMS: TocItem[] = [
   { id: 'settings-git-detail', label: 'Git Detail' },
   { id: 'settings-project-directory', label: 'Project Directory' },
   { id: 'settings-cli-configuration', label: 'CLI Configuration' },
-  { id: 'settings-openspec-profile', label: 'OpenSpec Profile' },
+  { id: 'settings-openspec-diagnostics', label: 'OpenSpec Diagnostics' },
+  { id: 'settings-init-openspec', label: 'Initialize OpenSpec' },
   { id: 'settings-api-configuration', label: 'API Configuration' },
   { id: 'settings-hosted-app', label: 'Hosted App' },
   { id: 'settings-file-watcher', label: 'File Watcher' },
-  { id: 'settings-init-openspec', label: 'Initialize OpenSpec' },
 ]
 
 function tocIndex(id: string): number {
@@ -278,32 +303,24 @@ function FontFamilyEditor({
   )
 }
 
+/** Render the project-backend Settings workspace. */
 export function Settings() {
-  const [theme, setTheme] = useState<Theme>(getStoredTheme)
-  const [codeEditorTheme, setCodeEditorTheme] = useState<CodeEditorTheme>(DEFAULT_CODE_EDITOR_THEME)
+  // 订阅配置；已缓存的 Config 必须成为 writable draft 的首帧 authority。
+  const { data: config } = useConfigSubscription()
+  const configuredCodeEditorTheme = config?.codeEditor?.theme
+  const [theme, setTheme] = useState<Theme>(() => config?.theme ?? getStoredTheme())
+  const [codeEditorTheme, setCodeEditorTheme] = useState<CodeEditorTheme>(() =>
+    configuredCodeEditorTheme && isCodeEditorTheme(configuredCodeEditorTheme)
+      ? configuredCodeEditorTheme
+      : DEFAULT_CODE_EDITOR_THEME
+  )
   const [apiUrl, setApiUrl] = useState(getApiBaseUrl() || '')
-  const [appBaseUrl, setAppBaseUrl] = useState('')
-  const [cliCommand, setCliCommand] = useState('')
-  const [manualSelectedTools, setManualSelectedTools] = useState<string[]>([])
-  const [showInitModal, setShowInitModal] = useState(false)
+  const [appBaseUrl, setAppBaseUrl] = useState(() => config?.appBaseUrl ?? '')
+  const [cliCommand, setCliCommand] = useState(() =>
+    config?.cli?.command ? formatExecutePath(config.cli.command, config.cli.args ?? []) : ''
+  )
   const [showInstallModal, setShowInstallModal] = useState(false)
-  const [initToolsMode, setInitToolsMode] = useState<InitToolsMode>('auto')
-  const [initProfileOverride, setInitProfileOverride] = useState<InitProfileOverride>('default')
-  const [initForce, setInitForce] = useState(true)
-
-  const initRunner = useCliRunner()
   const installRunner = useCliRunner()
-
-  const {
-    lines: initLines,
-    status: initStatus,
-    commands: initCommands,
-    cancel: cancelInit,
-    reset: resetInit,
-  } = initRunner
-
-  const initBorderVariant =
-    initStatus === 'error' ? 'error' : initStatus === 'success' ? 'success' : 'default'
 
   const {
     lines: installLines,
@@ -321,9 +338,7 @@ export function Settings() {
 
   // In static mode, only show appearance settings
   const inStaticMode = isStaticMode()
-
-  // 订阅配置
-  const { data: config } = useConfigSubscription()
+  const visibleTocItems = inStaticMode ? SETTINGS_TOC_ITEMS.slice(0, 1) : SETTINGS_TOC_ITEMS
 
   // 嗅探全局 CLI（每次进入 settings 页面都会重新嗅探）
   // Skip in static mode
@@ -340,94 +355,10 @@ export function Settings() {
 
   // CLI 可用性检查（基于配置或嗅探结果）
   // Skip in static mode
-  const {
-    data: cliAvailability,
-    isLoading: isCheckingCli,
-    refetch: recheckCli,
-  } = useQuery({
-    ...trpc.cli.checkAvailability.queryOptions(),
-    enabled: !inStaticMode,
-  })
   const { data: effectiveCliCommand, refetch: refetchEffectiveCliCommand } = useQuery({
     ...trpc.config.getEffectiveCliCommand.queryOptions(),
     enabled: !inStaticMode,
   })
-  // 获取所有工具列表
-  // Skip in static mode
-  const { data: allTools } = useQuery({
-    ...trpc.cli.getAllTools.queryOptions(),
-    enabled: !inStaticMode,
-  })
-  const {
-    data: detectedProjectTools,
-    isLoading: isLoadingDetectedProjectTools,
-    refetch: refetchDetectedProjectTools,
-  } = useQuery({
-    ...trpc.cli.getDetectedProjectTools.queryOptions(),
-    enabled: !inStaticMode,
-  })
-  const {
-    data: opsxProfileState,
-    isLoading: isLoadingOpsxProfileState,
-    refetch: refetchOpsxProfileState,
-  } = useQuery({
-    ...trpc.cli.getProfileState.queryOptions(),
-    enabled: !inStaticMode,
-  })
-
-  const toolInitStateInput = useMemo(() => {
-    if (!opsxProfileState?.available || !opsxProfileState.delivery) {
-      return null
-    }
-    return {
-      delivery: opsxProfileState.delivery,
-      workflows: opsxProfileState.workflows,
-    }
-  }, [opsxProfileState?.available, opsxProfileState?.delivery, opsxProfileState?.workflows])
-
-  const { data: toolInitStates, refetch: refetchToolInitStates } = useQuery({
-    ...trpc.cli.getToolInitStates.queryOptions(
-      toolInitStateInput ?? { delivery: 'both', workflows: [] }
-    ),
-    enabled: !inStaticMode && toolInitStateInput !== null,
-  })
-
-  const nativeTools = useMemo(() => allTools?.filter((t) => t.available) ?? [], [allTools])
-  const cliSupportedToolIds = useMemo(() => nativeTools.map((t) => t.value), [nativeTools])
-  const cliSupportedTools = useMemo(() => new Set(cliSupportedToolIds), [cliSupportedToolIds])
-  const cliSupportedToolsKey = useMemo(() => cliSupportedToolIds.join('|'), [cliSupportedToolIds])
-  const detectedProjectToolIds = useMemo(
-    () => detectedProjectTools?.map((tool) => tool.value) ?? [],
-    [detectedProjectTools]
-  )
-  const toolInitStateById = useMemo(
-    () => new Map((toolInitStates ?? []).map((state) => [state.toolId, state])),
-    [toolInitStates]
-  )
-  const initializedToolIds = useMemo(
-    () =>
-      cliSupportedToolIds.filter(
-        (toolId) => getToolInitStatus(toolInitStateById, toolId) === 'initialized'
-      ),
-    [cliSupportedToolIds, toolInitStateById]
-  )
-  const initializedToolSet = useMemo(() => new Set(initializedToolIds), [initializedToolIds])
-  const initializedToolIdsKey = useMemo(() => initializedToolIds.join('|'), [initializedToolIds])
-  const selectableToolIds = useMemo(
-    () =>
-      cliSupportedToolIds.filter(
-        (toolId) => getToolInitStatus(toolInitStateById, toolId) !== 'initialized'
-      ),
-    [cliSupportedToolIds, toolInitStateById]
-  )
-  const selectedTools = useMemo(
-    () =>
-      manualSelectedTools.filter(
-        (toolId) => cliSupportedTools.has(toolId) && !initializedToolSet.has(toolId)
-      ),
-    [cliSupportedTools, initializedToolSet, manualSelectedTools]
-  )
-
   // 同步配置到本地状态（只有用户配置了才显示）
   useEffect(() => {
     if (config?.cli?.command) {
@@ -458,9 +389,8 @@ export function Settings() {
   // 安装完成后重新嗅探
   const handleInstallSuccess = useCallback(() => {
     resniffCli()
-    recheckCli()
     setShowInstallModal(false)
-  }, [resniffCli, recheckCli])
+  }, [resniffCli])
 
   // 计算显示的 placeholder
   const cliPlaceholder = cliSniffResult?.hasGlobal
@@ -468,65 +398,11 @@ export function Settings() {
     : 'npx @fission-ai/openspec'
 
   useEffect(() => {
-    setManualSelectedTools((prev) => {
-      const next = prev.filter(
-        (toolId) => cliSupportedTools.has(toolId) && !initializedToolSet.has(toolId)
-      )
-      return prev.length === next.length && prev.every((toolId, index) => toolId === next[index])
-        ? prev
-        : next
-    })
-  }, [cliSupportedTools, cliSupportedToolsKey, initializedToolSet, initializedToolIdsKey])
-
-  const selectedToolActionCounts = useMemo(
-    () => countSelectedToolActions(toolInitStateById, selectedTools),
-    [selectedTools, toolInitStateById]
-  )
-  const initializedToolsCount = useMemo(
-    () => (toolInitStates ?? []).filter((state) => state.status === 'initialized').length,
-    [toolInitStates]
-  )
-  const repairableToolsCount = useMemo(
-    () => (toolInitStates ?? []).filter((state) => state.status === 'partial').length,
-    [toolInitStates]
-  )
-
-  // 打开 init modal
-  const startInit = (mode: InitToolsMode) => {
-    setInitToolsMode(mode)
-    setShowInitModal(true)
-  }
-
-  // Modal lifecycle: auto start streams when打开
-  // Keep state clean when关闭
-  useEffect(() => {
-    if (!showInitModal) {
-      cancelInit()
-      resetInit()
-    }
-  }, [showInitModal, cancelInit, resetInit])
-
-  const initArgs = useMemo(
-    () =>
-      buildSettingsInitArgs({
-        mode: initToolsMode,
-        selectedToolIds: selectedTools,
-        cliSupportedToolIds: cliSupportedTools,
-        profileOverride: initProfileOverride,
-        force: initForce,
-      }),
-    [cliSupportedTools, initForce, initProfileOverride, initToolsMode, selectedTools]
-  )
-
-  useEffect(() => {
-    if (!showInitModal) return
-    initCommands.replaceAll([{ command: 'openspec', args: initArgs }])
-  }, [initArgs, initCommands, showInitModal])
-
-  useEffect(() => {
     if (showInstallModal) {
       installCommands.replaceAll([
-        { command: 'npm', args: ['install', '-g', '@fission-ai/openspec'] },
+        {
+          type: 'install-global-cli',
+        },
       ])
       installCommands.runAll()
     } else {
@@ -534,70 +410,6 @@ export function Settings() {
       resetInstall()
     }
   }, [showInstallModal, installCommands, cancelInstall, resetInstall])
-
-  useEffect(() => {
-    if (initStatus !== 'success') return
-    void Promise.allSettled([
-      refetchOpsxProfileState(),
-      refetchDetectedProjectTools(),
-      refetchToolInitStates(),
-      recheckCli(),
-      resniffCli(),
-    ])
-  }, [
-    initStatus,
-    refetchDetectedProjectTools,
-    refetchOpsxProfileState,
-    refetchToolInitStates,
-    recheckCli,
-    resniffCli,
-  ])
-
-  const isToolInitialized = (toolId: string) =>
-    getToolInitStatus(toolInitStateById, toolId) === 'initialized'
-
-  const toggleTool = (toolId: string) => {
-    if (!cliSupportedTools.has(toolId) || isToolInitialized(toolId)) return
-    setManualSelectedTools((prev) =>
-      prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId]
-    )
-  }
-
-  const toggleAllTools = () => {
-    const allSelectableSelected =
-      selectableToolIds.length > 0 &&
-      selectableToolIds.every((toolId) => manualSelectedTools.includes(toolId))
-
-    if (allSelectableSelected) {
-      setManualSelectedTools([])
-      return
-    }
-
-    setManualSelectedTools([...selectableToolIds])
-  }
-
-  const newToolsCount = selectedToolActionCounts.newCount
-  const repairToolsCount = selectedToolActionCounts.repairCount
-  const selectedInitLabel = formatSelectedInitLabel(selectedToolActionCounts)
-  const hasSelectedToolActions = newToolsCount + repairToolsCount > 0
-  const isManualToolsMode = initToolsMode === 'selected'
-  const autoInitDisabled = isLoadingDetectedProjectTools || !canAutoInit(detectedProjectToolIds)
-  const currentInitAction = useMemo(
-    () =>
-      getSettingsInitActionState({
-        mode: initToolsMode,
-        selectedLabel: selectedInitLabel,
-        autoInitDisabled,
-        hasSelectedToolActions,
-      }),
-    [autoInitDisabled, hasSelectedToolActions, initToolsMode, selectedInitLabel]
-  )
-
-  const handleCloseInit = () => {
-    setShowInitModal(false)
-    cancelInit()
-    resetInit()
-  }
 
   const handleCloseInstall = () => {
     setShowInstallModal(false)
@@ -609,30 +421,8 @@ export function Settings() {
   const saveCliCommandMutation = useMutation({
     mutationFn: (command: string) => trpcClient.config.update.mutate({ cli: { command } }),
     onSuccess: async () => {
-      await Promise.allSettled([recheckCli(), refetchEffectiveCliCommand(), resniffCli()])
-      await Promise.allSettled([
-        queryClient.invalidateQueries(trpc.cli.checkAvailability.queryFilter()),
-        queryClient.invalidateQueries(trpc.config.getEffectiveCliCommand.queryFilter()),
-      ])
-    },
-  })
-
-  const syncOpsxProjectMutation = useMutation({
-    mutationFn: () => trpcClient.cli.execute.mutate({ args: ['update'] }),
-    onSuccess: async () => {
-      await Promise.allSettled([
-        refetchOpsxProfileState(),
-        recheckCli(),
-        resniffCli(),
-        queryClient.invalidateQueries(trpc.cli.checkAvailability.queryFilter()),
-      ])
-    },
-  })
-
-  const setCoreProfileMutation = useMutation({
-    mutationFn: () => trpcClient.cli.execute.mutate({ args: ['config', 'profile', 'core'] }),
-    onSuccess: async () => {
-      await Promise.allSettled([refetchOpsxProfileState()])
+      await Promise.allSettled([refetchEffectiveCliCommand(), resniffCli()])
+      await queryClient.invalidateQueries(trpc.config.getEffectiveCliCommand.queryFilter())
     },
   })
 
@@ -652,24 +442,43 @@ export function Settings() {
       trpcClient.config.update.mutate({ opsx: { agentInvocationMode } }),
   })
 
-  // Terminal config — seed local state from controller's current config
-  const initialConfig = useMemo(() => terminalController.getConfig(), [])
-
-  const [termFontSize, setTermFontSize] = useState(initialConfig.fontSize)
-  const [termFontFamily, setTermFontFamily] = useState(initialConfig.fontFamily)
-  const [termCursorBlink, setTermCursorBlink] = useState(initialConfig.cursorBlink)
-  const [termCursorStyle, setTermCursorStyle] = useState<TerminalCursorStyle>(
-    initialConfig.cursorStyle
+  // Terminal controller state is the fallback only when Config has no corresponding value.
+  const terminalUpstreamValues = resolveTerminalDraft(
+    config?.terminal,
+    terminalController.getConfig()
   )
-  const [termScrollback, setTermScrollback] = useState(initialConfig.scrollback)
-  const [termUseTheme, setTermUseTheme] = useState<TerminalThemeMode>(initialConfig.useTheme)
-  const [termLightTheme, setTermLightTheme] = useState<TerminalThemeId>(initialConfig.lightTheme)
-  const [termDarkTheme, setTermDarkTheme] = useState<TerminalThemeId>(initialConfig.darkTheme)
-  const [termRendererEngine, setTermRendererEngine] = useState<string>(initialConfig.rendererEngine)
-  const [termBellSound, setTermBellSound] = useState<TerminalBellSound>(initialConfig.bellSound)
-  const [termBellVolume, setTermBellVolume] = useState(initialConfig.bellVolume)
-  const [dashboardTrendPointLimit, setDashboardTrendPointLimit] = useState(100)
-  const [gitDiffEagerLineBudget, setGitDiffEagerLineBudget] = useState(1000)
+  const configuredDashboardTrendPointLimit = config?.dashboard?.trendPointLimit
+  const configuredGitDiffEagerLineBudget = config?.git?.diffEagerLineBudget
+
+  const [termFontSize, setTermFontSize] = useFieldValueDraft(terminalUpstreamValues.fontSize)
+  const [termFontFamily, setTermFontFamily] = useFieldValueDraft(terminalUpstreamValues.fontFamily)
+  const [termCursorBlink, setTermCursorBlink] = useFieldValueDraft(
+    terminalUpstreamValues.cursorBlink
+  )
+  const [termCursorStyle, setTermCursorStyle] = useFieldValueDraft(
+    terminalUpstreamValues.cursorStyle
+  )
+  const [termScrollback, setTermScrollback] = useFieldValueDraft(terminalUpstreamValues.scrollback)
+  const [termUseTheme, setTermUseTheme] = useFieldValueDraft(terminalUpstreamValues.useTheme)
+  const [termLightTheme, setTermLightTheme] = useFieldValueDraft(terminalUpstreamValues.lightTheme)
+  const [termDarkTheme, setTermDarkTheme] = useFieldValueDraft(terminalUpstreamValues.darkTheme)
+  const [termRendererEngine, setTermRendererEngine] = useFieldValueDraft<string>(
+    terminalUpstreamValues.rendererEngine
+  )
+  const [termBellSound, setTermBellSound] = useFieldValueDraft(terminalUpstreamValues.bellSound)
+  const [termBellVolume, setTermBellVolume] = useFieldValueDraft(terminalUpstreamValues.bellVolume)
+  const [dashboardTrendPointLimit, setDashboardTrendPointLimit] = useState(() =>
+    typeof configuredDashboardTrendPointLimit === 'number' &&
+    Number.isFinite(configuredDashboardTrendPointLimit)
+      ? configuredDashboardTrendPointLimit
+      : DEFAULT_DASHBOARD_TREND_POINT_LIMIT
+  )
+  const [gitDiffEagerLineBudget, setGitDiffEagerLineBudget] = useState(() =>
+    typeof configuredGitDiffEagerLineBudget === 'number' &&
+    Number.isFinite(configuredGitDiffEagerLineBudget)
+      ? configuredGitDiffEagerLineBudget
+      : DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET
+  )
   const [termRendererError, setTermRendererError] = useState<string | null>(null)
   const codeEditorThemeOptions = CODE_EDITOR_THEME_OPTIONS satisfies SelectOption<CodeEditorTheme>[]
   const terminalThemeOptions = TERMINAL_THEME_OPTIONS satisfies SelectOption<TerminalThemeId>[]
@@ -691,64 +500,6 @@ export function Settings() {
     engine.init()
     return engine
   }, [])
-
-  // Re-sync local state when controller config changes
-  useEffect(
-    () => {
-      const current = terminalController.getConfig()
-      setTermFontSize(current.fontSize)
-      setTermFontFamily(current.fontFamily)
-      setTermCursorBlink(current.cursorBlink)
-      setTermCursorStyle(current.cursorStyle)
-      setTermScrollback(current.scrollback)
-      setTermUseTheme(current.useTheme)
-      setTermLightTheme(current.lightTheme)
-      setTermDarkTheme(current.darkTheme)
-      setTermRendererEngine(current.rendererEngine)
-      setTermBellSound(current.bellSound)
-      setTermBellVolume(current.bellVolume)
-    },
-    [
-      /* re-run when entering settings page — captured by loading state transition */
-    ]
-  )
-
-  useEffect(() => {
-    const nextUseTheme = config?.terminal?.useTheme
-    if (nextUseTheme && isTerminalThemeMode(nextUseTheme)) {
-      setTermUseTheme(nextUseTheme)
-    }
-  }, [config?.terminal?.useTheme])
-  useEffect(() => {
-    const nextLightTheme = config?.terminal?.lightTheme
-    if (nextLightTheme && isTerminalThemeId(nextLightTheme)) {
-      setTermLightTheme(nextLightTheme)
-    }
-  }, [config?.terminal?.lightTheme])
-  useEffect(() => {
-    const nextDarkTheme = config?.terminal?.darkTheme
-    if (nextDarkTheme && isTerminalThemeId(nextDarkTheme)) {
-      setTermDarkTheme(nextDarkTheme)
-    }
-  }, [config?.terminal?.darkTheme])
-  useEffect(() => {
-    const nextRenderer = config?.terminal?.rendererEngine
-    if (typeof nextRenderer === 'string' && nextRenderer.length > 0) {
-      setTermRendererEngine(nextRenderer)
-    }
-  }, [config?.terminal?.rendererEngine])
-  useEffect(() => {
-    const result = TerminalBellSoundSchema.safeParse(config?.terminal?.bellSound)
-    if (result.success) {
-      setTermBellSound(result.data)
-    }
-  }, [config?.terminal?.bellSound])
-  useEffect(() => {
-    const nextVolume = config?.terminal?.bellVolume
-    if (typeof nextVolume === 'number' && Number.isFinite(nextVolume)) {
-      setTermBellVolume(nextVolume)
-    }
-  }, [config?.terminal?.bellVolume])
 
   // Apply immediately on local state change (live preview)
   const applyTerminalConfig = useCallback(
@@ -923,21 +674,13 @@ export function Settings() {
     }
     window.location.href = currentUrl.toString()
   }
-  const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    setLoading(false)
-  }, [])
-  if (loading) {
-    return <div className="route-loading animate-pulse">Loading settings...</div>
-  }
-
   return (
     <div
       className="@container-[size] scrollbar-thin scrollbar-track-transparent h-full min-h-0 overflow-y-auto scroll-smooth"
-      style={{ timelineScope: generateTimelineScope(SETTINGS_TOC_ITEMS) } as CSSProperties}
+      style={{ timelineScope: generateTimelineScope(visibleTocItems) } as CSSProperties}
     >
       <div className="toc-page-layout min-h-full gap-6 p-4 [--toc-page-sidebar-min:14rem]">
-        <Toc items={SETTINGS_TOC_ITEMS} className="toc-page-sidebar [--toc-sticky-top:16px]" />
+        <Toc items={visibleTocItems} className="toc-page-sidebar [--toc-sticky-top:16px]" />
         <div className="toc-page-content min-w-0 space-y-8">
           <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
             <SettingsIcon className="h-6 w-6 shrink-0" />
@@ -1224,7 +967,9 @@ export function Settings() {
 
                   {/* Save Button */}
                   <div className="flex justify-end">
-                    <Button
+                    <AsyncAction
+                      pending={saveTerminalConfigMutation.isPending}
+                      settled={terminalConfigSaved && isRendererEngineValid}
                       onClick={() => {
                         saveTerminalConfigMutation.mutate({
                           fontSize: termFontSize,
@@ -1241,19 +986,14 @@ export function Settings() {
                         })
                       }}
                       disabled={saveTerminalConfigMutation.isPending || !isRendererEngineValid}
-                      activity={terminalConfigSaved && isRendererEngineValid}
                     >
                       {saveTerminalConfigMutation.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : terminalConfigSaved ? (
                         <Check className="h-4 w-4" />
                       ) : null}
-                      {saveTerminalConfigMutation.isPending
-                        ? 'Saving...'
-                        : terminalConfigSaved
-                          ? 'Saved'
-                          : 'Save'}
-                    </Button>
+                      Save
+                    </AsyncAction>
                   </div>
                 </div>
               </TocSection>
@@ -1304,7 +1044,9 @@ export function Settings() {
                         }}
                         className="bg-background border-border text-foreground focus:ring-primary w-36 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
                       />
-                      <Button
+                      <AsyncAction
+                        pending={saveDashboardConfigMutation.isPending}
+                        settled={dashboardTrendPointLimitSaved}
                         onClick={() => {
                           const next = Math.max(
                             20,
@@ -1314,14 +1056,9 @@ export function Settings() {
                           saveDashboardConfigMutation.mutate(next)
                         }}
                         disabled={saveDashboardConfigMutation.isPending}
-                        activity={dashboardTrendPointLimitSaved}
                       >
-                        {saveDashboardConfigMutation.isPending
-                          ? 'Saving...'
-                          : dashboardTrendPointLimitSaved
-                            ? 'Saved'
-                            : 'Save'}
-                      </Button>
+                        Save
+                      </AsyncAction>
                     </div>
                     <p className="text-muted-foreground mt-2 text-xs">
                       Allowed range: 20-500. Lower values reduce memory and increase visual
@@ -1364,7 +1101,9 @@ export function Settings() {
                         }}
                         className="bg-background border-border text-foreground focus:ring-primary w-40 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1"
                       />
-                      <Button
+                      <AsyncAction
+                        pending={saveGitConfigMutation.isPending}
+                        settled={gitDiffEagerLineBudgetSaved}
                         onClick={() => {
                           const next = Math.max(
                             0,
@@ -1374,14 +1113,9 @@ export function Settings() {
                           saveGitConfigMutation.mutate(next)
                         }}
                         disabled={saveGitConfigMutation.isPending}
-                        activity={gitDiffEagerLineBudgetSaved}
                       >
-                        {saveGitConfigMutation.isPending
-                          ? 'Saving...'
-                          : gitDiffEagerLineBudgetSaved
-                            ? 'Saved'
-                            : 'Save'}
-                      </Button>
+                        Save
+                      </AsyncAction>
                     </div>
                     <p className="text-muted-foreground mt-2 text-xs">
                       Set to `0` to force fully lazy patch loading. Default is `1000`.
@@ -1403,7 +1137,7 @@ export function Settings() {
                     {serverStatus.projectDir ? (
                       <CopyablePath path={serverStatus.projectDir} className="flex-1" />
                     ) : (
-                      <span className="text-muted-foreground text-sm">Loading...</span>
+                      <RealtimeSkeletonLine className="w-40" />
                     )}
                   </div>
                 </div>
@@ -1422,9 +1156,13 @@ export function Settings() {
                     <label className="mb-2 block text-sm font-medium">Global CLI Detection</label>
                     <div className="mb-2 flex items-center gap-2">
                       {isSniffingCli ? (
-                        <span className="text-muted-foreground flex items-center gap-2 text-sm">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Detecting global openspec command...
+                        <span
+                          className="inline-flex min-w-40 items-center"
+                          aria-busy="true"
+                          data-testid="global-cli-detection-loading"
+                        >
+                          <AccessibleStatus>Detecting global openspec command</AccessibleStatus>
+                          <RealtimeSkeletonLine className="w-40" />
                         </span>
                       ) : cliSniffResult?.hasGlobal ? (
                         <div className="flex flex-col gap-1">
@@ -1512,17 +1250,14 @@ export function Settings() {
                         placeholder={cliPlaceholder}
                         className="border-border bg-background text-foreground flex-1 rounded-md border px-3 py-2 font-mono text-sm"
                       />
-                      <Button
+                      <AsyncAction
+                        pending={saveCliCommandMutation.isPending}
+                        settled={cliCommandSaved}
                         onClick={() => saveCliCommandMutation.mutate(cliCommand)}
                         disabled={saveCliCommandMutation.isPending}
-                        activity={cliCommandSaved}
                       >
-                        {saveCliCommandMutation.isPending
-                          ? 'Saving...'
-                          : cliCommandSaved
-                            ? 'Saved'
-                            : 'Save'}
-                      </Button>
+                        Save
+                      </AsyncAction>
                     </div>
                     {config?.cli?.command && (
                       <p className="text-muted-foreground mt-2 text-xs">
@@ -1532,178 +1267,20 @@ export function Settings() {
                         </code>
                       </p>
                     )}
-                  </div>
-
-                  {/* CLI Status */}
-                  <div className="border-border border-t pt-3">
-                    <div className="flex items-center gap-2">
-                      <Terminal className="text-muted-foreground h-4 w-4" />
-                      <span className="text-sm font-medium">CLI Status:</span>
-                      {isCheckingCli ? (
-                        <span className="text-muted-foreground flex items-center gap-1 text-sm">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Checking...
-                        </span>
-                      ) : cliAvailability?.available ? (
-                        <span className="flex items-center gap-1 text-sm text-green-600">
-                          <CheckCircle className="h-4 w-4" />
-                          Available {cliAvailability.version && `(${cliAvailability.version})`}
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-sm text-red-600">
-                          <XCircle className="h-4 w-4" />
-                          Not available
-                        </span>
-                      )}
-                    </div>
                     {effectiveCliCommand && (
-                      <p className="text-muted-foreground ml-6 mt-1 text-sm">
+                      <p className="text-muted-foreground mt-2 text-xs">
                         Effective execute path:{' '}
                         <code className="bg-muted rounded px-1">{effectiveCliCommand}</code>
                       </p>
                     )}
-                    {cliAvailability && !cliAvailability.available && cliAvailability.error && (
-                      <p className="text-muted-foreground ml-6 mt-1 text-sm">
-                        {cliAvailability.error}
-                        <br />
-                        Set an explicit execute path above to recover quickly.
-                      </p>
-                    )}
                   </div>
                 </div>
               </TocSection>
 
-              {/* OpenSpec Profile & Sync */}
-              <TocSection
-                id="settings-openspec-profile"
-                index={tocIndex('settings-openspec-profile')}
-                className="space-y-4"
-              >
-                <h2 className="text-lg font-semibold">OpenSpec Profile &amp; Sync</h2>
-                <div className="border-border space-y-4 rounded-lg border p-4">
-                  {isLoadingOpsxProfileState ? (
-                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading profile state...
-                    </div>
-                  ) : !opsxProfileState?.available ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm text-red-600">
-                        <XCircle className="h-4 w-4" />
-                        Unable to read profile state from OpenSpec CLI.
-                      </div>
-                      {opsxProfileState?.error && (
-                        <p className="text-muted-foreground text-xs">{opsxProfileState.error}</p>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <div className="border-border bg-muted/30 rounded-md border px-3 py-2">
-                          <div className="text-muted-foreground text-xs">Profile</div>
-                          <div className="mt-1 text-sm font-medium">{opsxProfileState.profile}</div>
-                        </div>
-                        <div className="border-border bg-muted/30 rounded-md border px-3 py-2">
-                          <div className="text-muted-foreground text-xs">Delivery</div>
-                          <div className="mt-1 text-sm font-medium">
-                            {opsxProfileState.delivery}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-muted-foreground mb-1 text-xs">Workflows</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {opsxProfileState.workflows.length > 0 ? (
-                            opsxProfileState.workflows.map((workflow) => (
-                              <span
-                                key={workflow}
-                                className="border-border bg-muted rounded border px-1.5 py-0.5 text-xs"
-                              >
-                                {workflow}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-muted-foreground text-xs">(none)</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="border-border flex flex-wrap items-center gap-2 border-t pt-3">
-                        {opsxProfileState.driftStatus === 'drift' ? (
-                          <span className="flex items-center gap-1.5 text-sm text-amber-600">
-                            <AlertTriangle className="h-4 w-4" />
-                            Global profile is not fully applied to this project.
-                          </span>
-                        ) : opsxProfileState.driftStatus === 'in-sync' ? (
-                          <span className="flex items-center gap-1.5 text-sm text-green-600">
-                            <CheckCircle className="h-4 w-4" />
-                            Project files are in sync with global profile.
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">
-                            Drift status unavailable.
-                          </span>
-                        )}
-                        {opsxProfileState.warningText && (
-                          <span className="text-muted-foreground text-xs">
-                            {opsxProfileState.warningText}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="border-border flex flex-wrap items-center gap-2 border-t pt-3">
-                        <button
-                          type="button"
-                          onClick={() => syncOpsxProjectMutation.mutate()}
-                          disabled={syncOpsxProjectMutation.isPending}
-                          className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm disabled:opacity-50"
-                        >
-                          {syncOpsxProjectMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <RefreshCw className="h-4 w-4" />
-                          )}
-                          Run openspec update
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCoreProfileMutation.mutate()}
-                          disabled={setCoreProfileMutation.isPending}
-                          className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
-                        >
-                          {setCoreProfileMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Check className="h-4 w-4" />
-                          )}
-                          Set profile to core
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void refetchOpsxProfileState()}
-                          className="border-border hover:bg-muted inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm"
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                          Refresh state
-                        </button>
-                      </div>
-
-                      <p className="text-muted-foreground text-xs">
-                        Note: <code className="bg-muted rounded px-1">openspec update</code> follows
-                        OpenSpec CLI profile behavior and prunes deselected workflow command/skill
-                        files.
-                      </p>
-
-                      <p className="text-muted-foreground text-xs">
-                        For interactive custom profile editing, run{' '}
-                        <code className="bg-muted rounded px-1">openspec config profile</code> in a
-                        local terminal.
-                      </p>
-                    </>
-                  )}
-                </div>
-              </TocSection>
+              <OpenSpecSettingsSections
+                diagnosticsIndex={tocIndex('settings-openspec-diagnostics')}
+                initializationIndex={tocIndex('settings-init-openspec')}
+              />
 
               {/* API Configuration */}
               <TocSection
@@ -1728,7 +1305,7 @@ export function Settings() {
                         className="border-border bg-background text-foreground flex-1 rounded-md border px-3 py-2"
                       />
                       <Button onClick={handleApiUrlChange} activity={apiUrlApplied}>
-                        {apiUrlApplied ? 'Applied' : 'Apply'}
+                        Apply
                       </Button>
                     </div>
                     {getApiBaseUrl() && (
@@ -1763,17 +1340,14 @@ export function Settings() {
                         placeholder={OFFICIAL_APP_BASE_URL}
                         className="border-border bg-background text-foreground flex-1 rounded-md border px-3 py-2"
                       />
-                      <Button
+                      <AsyncAction
+                        pending={saveAppBaseUrlMutation.isPending}
+                        settled={appBaseUrlSaved}
                         onClick={() => saveAppBaseUrlMutation.mutate(appBaseUrl)}
                         disabled={saveAppBaseUrlMutation.isPending}
-                        activity={appBaseUrlSaved}
                       >
-                        {saveAppBaseUrlMutation.isPending
-                          ? 'Saving...'
-                          : appBaseUrlSaved
-                            ? 'Saved'
-                            : 'Save'}
-                      </Button>
+                        Save
+                      </AsyncAction>
                     </div>
                     <p className="text-muted-foreground mt-2 text-sm">
                       Effective default:{' '}
@@ -1811,273 +1385,65 @@ export function Settings() {
                   </p>
                 </div>
               </TocSection>
-
-              {/* Initialize OpenSpec */}
-              <TocSection
-                id="settings-init-openspec"
-                index={tocIndex('settings-init-openspec')}
-                className="space-y-4"
-              >
-                <h2 className="text-lg font-semibold">Initialize OpenSpec</h2>
-                <div className="border-border space-y-4 rounded-lg border p-4">
-                  <p className="text-muted-foreground text-sm">
-                    Create the OpenSpec directory structure in the current project. This will create{' '}
-                    <code className="bg-muted rounded px-1">openspec/</code> with specs, changes,
-                    and archive directories.
-                  </p>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label className="space-y-1.5">
-                      <span className="text-sm font-medium">Init Mode</span>
-                      <Select
-                        value={initToolsMode}
-                        options={INIT_TOOLS_MODE_OPTIONS}
-                        onValueChange={setInitToolsMode}
-                        ariaLabel="Init Mode"
-                        className="w-full"
-                      />
-                      <p className="text-muted-foreground text-xs">
-                        OpenSpec CLI can auto-detect existing tool directories. OpenSpecUI{' '}
-                        {OPENSPECUI_TARGET_MAJOR}.x uses OpenSpec CLI {OPENSPEC_CLI_TARGET_SERIES}.x
-                        as the current tool line.
-                      </p>
-                    </label>
-
-                    <label className="space-y-1.5">
-                      <span className="text-sm font-medium">Profile Override</span>
-                      <Select
-                        value={initProfileOverride}
-                        options={INIT_PROFILE_OVERRIDE_OPTIONS}
-                        onValueChange={setInitProfileOverride}
-                        ariaLabel="Profile Override"
-                        className="w-full"
-                      />
-                      <p className="text-muted-foreground text-xs">
-                        Adds <code className="bg-muted rounded px-1">--profile</code> when set.
-                      </p>
-                    </label>
-                  </div>
-                  {/* Tool Selection */}
-                  <div className={`space-y-4 ${isManualToolsMode ? '' : 'opacity-60'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium">AI Tools Configuration</label>
-                        <p className="text-muted-foreground text-sm">
-                          Color encodes current init state. Hover a tool for the exact status.
-                        </p>
-                      </div>
-                      <button
-                        onClick={toggleAllTools}
-                        disabled={!isManualToolsMode}
-                        className="text-primary shrink-0 text-xs hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {selectedTools.length > 0 &&
-                        selectedTools.length === selectableToolIds.length
-                          ? 'Deselect All'
-                          : 'Select All'}
-                      </button>
-                    </div>
-
-                    <div>
-                      <p className="text-muted-foreground mb-2 text-xs font-medium">
-                        Natively supported providers (OpenSpec custom commands + skills)
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                        {nativeTools.map((tool) => {
-                          const status = getToolInitStatus(toolInitStateById, tool.value)
-                          const initialized = status === 'initialized'
-                          const repairable = status === 'partial'
-                          const selected = selectedTools.includes(tool.value)
-                          const legacyCommandWorkflows =
-                            toolInitStateById.get(tool.value)?.legacyCommandWorkflows ?? []
-                          const statusTitle = initialized
-                            ? legacyCommandWorkflows.length > 0
-                              ? `Initialized: legacy-compatible command paths detected for ${legacyCommandWorkflows.join(', ')}`
-                              : 'Initialized: exact match for current delivery/workflows'
-                            : repairable
-                              ? 'Partial: detected artifacts need repair for current delivery/workflows'
-                              : 'Uninitialized: no generated artifacts detected'
-                          return (
-                            <button
-                              key={tool.value}
-                              onClick={() => toggleTool(tool.value)}
-                              disabled={initialized || !isManualToolsMode}
-                              title={statusTitle}
-                              className={`flex min-w-0 items-center gap-1.5 rounded border px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
-                                initialized
-                                  ? 'cursor-not-allowed border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                                  : repairable
-                                    ? 'text-foreground border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/15'
-                                    : selected
-                                      ? 'border-primary bg-primary/10 text-primary'
-                                      : 'border-border hover:bg-muted'
-                              }`}
-                            >
-                              <span className="min-w-0 flex-1 truncate">{tool.name}</span>
-                              {initialized ? (
-                                <CheckCircle className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-300" />
-                              ) : repairable ? (
-                                <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-300" />
-                              ) : selected ? (
-                                <Check className="h-3 w-3 shrink-0" />
-                              ) : null}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="text-muted-foreground flex flex-wrap gap-4 text-xs">
-                      <span className="inline-flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500/50" />
-                        {initializedToolsCount} initialized
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full bg-amber-500/50" />
-                        {repairableToolsCount} repair needed
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <span className="bg-primary/50 h-2 w-2 rounded-full" />
-                        {selectedTools.length} selected
-                      </span>
-                    </div>
-                  </div>
-                  <div className="border-border flex flex-row flex-wrap gap-2.5 border-t pt-3 md:flex-nowrap">
-                    {/*md:grid md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] md:items-start md:gap-4*/}
-                    <button
-                      onClick={() => startInit(initToolsMode)}
-                      disabled={currentInitAction.disabled}
-                      title={currentInitAction.title}
-                      className="bg-primary text-primary-foreground inline-flex grow-0 items-start justify-start gap-2 self-start rounded-md px-3.5 py-2 text-[13px] font-medium leading-5 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 md:min-w-0 md:max-w-none md:text-balance"
-                    >
-                      <FolderPlus className="mt-1 h-4 w-4 shrink-0" />
-                      {currentInitAction.label}
-                    </button>
-                    <label className="border-border bg-background/50 flex min-w-0 flex-col gap-1 rounded-md border px-3 py-2">
-                      <span className="flex flex-wrap items-center justify-between gap-3">
-                        <span className="break-word text-xs font-medium leading-4">
-                          Force non-interactive init
-                        </span>
-                        <Switch
-                          checked={initForce}
-                          onCheckedChange={setInitForce}
-                          ariaLabel="Force non-interactive init"
-                        />
-                      </span>
-                      <span className="text-muted-foreground text-[11px] leading-4">
-                        Enabled by default so{' '}
-                        <code className="bg-muted rounded px-1">openspec init --tools ...</code>{' '}
-                        also writes{' '}
-                        <code className="bg-muted rounded px-1">openspec/config.yaml</code>.
-                      </span>
-                    </label>
-                  </div>
-                  <p className="text-muted-foreground text-xs">{currentInitAction.helperText}</p>
-                </div>
-              </TocSection>
             </>
           )}
 
-          {/* Init Terminal Dialog - only in dynamic mode */}
+          {/* Install / Update CLI Dialog */}
           {!inStaticMode && (
-            <>
-              <Dialog
-                open={showInitModal}
-                onClose={handleCloseInit}
-                bodyClassName="max-h-[70vh]"
-                borderVariant={initBorderVariant}
-                title={
-                  <div className="flex items-center gap-2">
-                    <Terminal className="h-4 w-4" />
-                    <span className="font-semibold">Initialize OpenSpec</span>
-                  </div>
-                }
-                footer={
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleCloseInit}
-                      className="bg-muted hover:bg-muted/80 rounded-md px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={initStatus === 'running'}
-                    >
-                      Close
-                    </button>
-                    {initStatus !== 'success' && (
-                      <button
-                        onClick={() => initCommands.runAll()}
-                        className="bg-primary text-primary-foreground rounded-md px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={
-                          initStatus === 'running' ||
-                          (initToolsMode === 'selected' && !hasSelectedToolActions)
-                        }
-                      >
-                        {initStatus === 'running' ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          'Run init'
-                        )}
-                      </button>
-                    )}
-                  </div>
-                }
-              >
-                <CliTerminal lines={initLines} />
-              </Dialog>
+            <Dialog
+              open={showInstallModal}
+              onClose={handleCloseInstall}
+              bodyClassName="max-h-[70vh]"
+              borderVariant={installBorderVariant}
+              title={
+                <div className="flex items-center gap-2">
+                  <Download className="h-4 w-4" />
+                  <span className="font-semibold">
+                    {cliSniffResult?.hasUpdate
+                      ? 'Update OpenSpec CLI'
+                      : 'Install OpenSpec CLI Globally'}
+                  </span>
+                </div>
+              }
+              footer={
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCloseInstall}
+                    className="bg-muted hover:bg-muted/80 rounded-md px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={installStatus === 'running'}
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleCloseInstall()
+                      handleInstallSuccess()
+                    }}
+                    className="bg-primary text-primary-foreground rounded-md px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={installStatus !== 'success'}
+                  >
+                    Re-detect CLI
+                  </button>
+                </div>
+              }
+            >
+              <CliTerminal lines={installLines} />
 
-              {/* Install / Update CLI Dialog */}
-              <Dialog
-                open={showInstallModal}
-                onClose={handleCloseInstall}
-                bodyClassName="max-h-[70vh]"
-                borderVariant={installBorderVariant}
-                title={
-                  <div className="flex items-center gap-2">
-                    <Download className="h-4 w-4" />
-                    <span className="font-semibold">
-                      {cliSniffResult?.hasUpdate
-                        ? 'Update OpenSpec CLI'
-                        : 'Install OpenSpec CLI Globally'}
-                    </span>
+              {installStatus === 'success' && (
+                <div className="border-border bg-muted/40 mt-3 rounded border px-3 py-2 text-sm">
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle className="h-4 w-4" />
+                    {cliSniffResult?.hasUpdate
+                      ? `OpenSpec CLI updated to v${cliSniffResult?.latestVersion ?? ''}`
+                      : 'OpenSpec CLI installed globally'}
                   </div>
-                }
-                footer={
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleCloseInstall}
-                      className="bg-muted hover:bg-muted/80 rounded-md px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={installStatus === 'running'}
-                    >
-                      Close
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleCloseInstall()
-                        handleInstallSuccess()
-                      }}
-                      className="bg-primary text-primary-foreground rounded-md px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={installStatus !== 'success'}
-                    >
-                      Re-detect CLI
-                    </button>
-                  </div>
-                }
-              >
-                <CliTerminal lines={installLines} />
-
-                {installStatus === 'success' && (
-                  <div className="border-border bg-muted/40 mt-3 rounded border px-3 py-2 text-sm">
-                    <div className="flex items-center gap-2 text-green-600">
-                      <CheckCircle className="h-4 w-4" />
-                      {cliSniffResult?.hasUpdate
-                        ? `OpenSpec CLI updated to v${cliSniffResult?.latestVersion ?? ''}`
-                        : 'OpenSpec CLI installed globally'}
-                    </div>
-                    <p className="text-muted-foreground text-xs">
-                      You can now run the "openspec" command directly. Click "Re-detect CLI" to
-                      refresh status.
-                    </p>
-                  </div>
-                )}
-              </Dialog>
-            </>
+                  <p className="text-muted-foreground text-xs">
+                    You can now run the "openspec" command directly. Click "Re-detect CLI" to
+                    refresh status.
+                  </p>
+                </div>
+              )}
+            </Dialog>
           )}
         </div>
       </div>

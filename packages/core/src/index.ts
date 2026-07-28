@@ -1,4 +1,21 @@
 /**
+ * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * 1. Expose the public Core package contract through one stable barrel.
+ * 2. Keep filesystem, CLI, Root Context, workflow, live, and static projection types source-distinct.
+ * 3. Publish browser-safe subpath contracts, including Dashboard Summary v2 and the external Codex command
+ *    observation root, without forcing browser runtimes through this root.
+ * 4. Export the typed Git repository binding and Dashboard provenance contracts.
+ * 5. Export the generic CLI-backed projection lifecycle while preserving the browser-safe subpath.
+ *
+ * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
+ * Original request (2026-07-17): "Root-scoped stream startup returns an owned handle, not a void cancel function."
+ * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
+ * Derived requirement (2026-07-19): "Static Git remains unavailable and must not fabricate live binding provenance."
+ * Derived requirement (2026-07-19): "Project Binding writes return typed launch and transition evidence."
+ * Derived requirement (2026-07-20): "Environment-global Codex command observation shares Core path truth."
+ * Original request (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
+ */
+/**
  * @openspecui/core
  *
  * Core library for OpenSpec file operations, parsing, and validation.
@@ -10,6 +27,11 @@
 
 // Filesystem adapter for reading/writing OpenSpec files
 export { OpenSpecAdapter, type ArchiveMeta, type ChangeMeta, type SpecMeta } from './adapter.js'
+export type {
+  ChangeProjectionBatch,
+  ChangeProjectionData,
+  ChangeProjectionRowError,
+} from './change-projection.js'
 
 // Markdown parser for spec and change documents
 export { MarkdownParser } from './parser.js'
@@ -105,6 +127,7 @@ export {
   ScenarioStepSchema,
   SpecSchema,
   TaskSchema,
+  TrackedTaskProgressSchema,
   type Change,
   type ChangeFile,
   type Delta,
@@ -117,14 +140,68 @@ export {
 } from './schemas.js'
 
 export {
-  computeTaskProgress,
+  createApplyInstructionProgress,
+  createDocumentChecklistSummary,
+  createTrackedTaskProgress,
+  deriveTrackedTaskPhase,
   isMarkdownTaskSourcePath,
   parseMarkdownTasks,
-  projectTasksFromMarkdownFiles,
-  type TaskProgress,
-  type TaskProjection,
+  projectTaskProjectionsFromMarkdownFiles,
+  toggleMarkdownTask,
+  type ApplyInstructionDivergence,
+  type ApplyInstructionProgress,
+  type ApplyInstructionState,
+  type DocumentChecklistGroup,
+  type DocumentChecklistSummary,
   type TaskProjectionOptions,
+  type TaskProjections,
+  type TrackedTask,
+  type TrackedTaskLocation,
+  type TrackedTaskPhase,
+  type TrackedTaskProgress,
+  type TrackedTaskSource,
 } from './task-progress.js'
+
+export {
+  OwnedSpecIdentitySchema,
+  ReferencedSpecIdentitySchema,
+  SpecCatalogSchema,
+  SpecCommandEvidenceSchema,
+  SpecDocumentProjectionSchema,
+  SpecIdentitySchema,
+  buildSpecCatalog,
+  createStaticSpecCatalogOwnedProjection,
+  createStaticSpecCatalogReferenceProjection,
+  createStaticSpecCatalogReferenceSource,
+  getSpecCatalogEntry,
+  isReferencedSpecIdentity,
+  mergeSpecCatalog,
+  specIdentityFromRoute,
+  specIdentityKey,
+  specRoutePath,
+  type CliShowSpecDocument,
+  type LiveReferencedSpecDocumentProjection,
+  type LiveSpecCatalogOwnedProjection,
+  type LiveSpecCatalogReferenceSource,
+  type OwnedSpecCatalogEntry,
+  type OwnedSpecDocumentProjection,
+  type OwnedSpecIdentity,
+  type ReferencedSpecCatalogEntry,
+  type ReferencedSpecDocumentProjection,
+  type ReferencedSpecIdentity,
+  type SpecCatalog,
+  type SpecCatalogEntry,
+  type SpecCatalogOwnedProjection,
+  type SpecCatalogReferenceProjection,
+  type SpecCatalogReferenceSource,
+  type SpecCommandEvidence,
+  type SpecDocumentProjection,
+  type SpecIdentity,
+  type StaticReferencedSpecDocumentProjection,
+  type StaticSpecCatalogOwnedProjection,
+  type StaticSpecCatalogReferenceProjection,
+  type StaticSpecCatalogReferenceSource,
+} from './spec-catalog.js'
 
 export {
   isBatchTranslationAbort,
@@ -136,12 +213,38 @@ export {
 
 // Reactive file system for realtime updates
 export {
+  EnvironmentGlobalConfigValueSchema,
+  PlanningConfigJsonValueSchema,
+  PlanningConfigReferenceSchema,
+  ProjectBindingUpdateSchema,
+  inspectProjectBinding,
+  updateProjectBindingContent,
+  type ActiveRootConfig,
+  type EnvironmentGlobalCliProjection,
+  type EnvironmentGlobalConfig,
+  type EnvironmentGlobalFileProjection,
+  type EnvironmentGlobalProfileState,
+  type PlanningConfigDiagnostic,
+  type PlanningConfigFile,
+  type PlanningConfigReference,
+  type ProjectBindingConfig,
+  type ProjectBindingInspection,
+  type ProjectBindingLaunchWrite,
+  type ProjectBindingReferences,
+  type ProjectBindingStore,
+  type ProjectBindingTransition,
+  type ProjectBindingUpdate,
+  type ProjectBindingUpdateResult,
+} from './planning-config.js'
+export {
   // Low-level project watcher
   ProjectWatcher,
   ReactiveContext,
+  ReactiveObservationEnvironment,
   // Core classes
   ReactiveState,
   acquireWatcher,
+  acquireWatcherRoot,
   clearCache,
   closeAllProjectWatchers,
   closeAllWatchers,
@@ -149,10 +252,7 @@ export {
   getActiveWatcherCount,
   getCacheSize,
   getProjectWatcher,
-  getWatchedProjectDir,
   getWatcherRuntimeStatus,
-  // Watcher pool management (based on @parcel/watcher)
-  initWatcherPool,
   isWatcherPoolInitialized,
   reactiveExists,
   reactiveReadDir,
@@ -160,15 +260,21 @@ export {
   reactiveReadFile,
   reactiveStat,
   subscribeWatcherRuntimeStatus,
+  updateReactiveFileCache,
+  type ObservationEnvironmentRoot,
+  type ObservationRootOwner,
   type PathCallback,
   type ProjectResidencyEvictionReason,
   type ProjectResidencyStatus,
   type ProjectWatcherReinitializeReason,
   type ProjectWatcherRuntimeStatus,
   type ProjectWatcherRuntimeStatusListener,
+  type ReactiveContextStreamObserver,
   type ReactiveStateOptions,
   type WatchEvent,
   type WatchEventType,
+  type WatcherRootRelease,
+  type WatcherRootRuntimeStatus,
   type WatcherRuntimeStatus,
 } from './reactive-fs/index.js'
 
@@ -478,7 +584,160 @@ export {
 } from './terminal-control.js'
 
 // CLI executor for calling external openspec commands
-export { CliExecutor, type CliResult, type CliStreamEvent } from './cli-executor.js'
+export {
+  CliExecutor,
+  CliStreamTerminationError,
+  type CliResult,
+  type CliStreamEvent,
+  type CliStreamHandle,
+  type CliStreamSettlement,
+} from './cli-executor.js'
+
+export {
+  createPhysicalReactiveDirectory,
+  removePhysicalReactivePath,
+  runPhysicalReactivePathMutation,
+  writePhysicalReactiveFile,
+  type PhysicalReactiveFileWrite,
+  type PhysicalReactivePathTarget,
+} from './physical-reactive-file-writer.js'
+
+export {
+  CliApplyInstructionsSchema,
+  CliArchiveSchema,
+  CliArtifactInstructionsSchema,
+  CliChangeListSchema,
+  CliContextSchema,
+  CliDiagnosticFailureSchema,
+  CliDiagnosticSchema,
+  CliDoctorReferenceEntrySchema,
+  CliDoctorSchema,
+  CliReferenceIndexEntrySchema,
+  CliRootSchema,
+  CliRootSourceSchema,
+  CliShowSpecDocumentSchema,
+  CliShowSpecSchema,
+  CliSpecListSchema,
+  CliStoreCleanupSchema,
+  CliStoreDoctorEntrySchema,
+  CliStoreDoctorSchema,
+  CliStoreListSchema,
+  CliStoreMutationSchema,
+  CliStoreSchema,
+  CliValidateSchema,
+  CliWorkflowStatusSchema,
+  OpenSpecCliContractExecutor,
+  parseCliCommandResult,
+  type CliApplyInstructions,
+  type CliArchive,
+  type CliArtifactInstructions,
+  type CliChangeList,
+  type CliCommandResult,
+  type CliContext,
+  type CliDiagnostic,
+  type CliDiagnosticFailure,
+  type CliDoctor,
+  type CliDoctorReferenceEntry,
+  type CliJsonValue,
+  type CliReferenceIndexEntry,
+  type CliRoot,
+  type CliRootSelector,
+  type CliRootSource,
+  type CliShowSpec,
+  type CliSpecList,
+  type CliStore,
+  type CliStoreCleanup,
+  type CliStoreDoctor,
+  type CliStoreDoctorEntry,
+  type CliStoreList,
+  type CliStoreMutation,
+  type CliStoreRegisterOptions,
+  type CliStoreRemoveOptions,
+  type CliStoreSetupOptions,
+  type CliValidate,
+  type CliValidateJsonOptions,
+  type CliValidateTarget,
+  type CliWorkflowOptions,
+  type CliWorkflowStatus,
+} from './cli-contracts/index.js'
+
+export {
+  CliJsonValueSchema,
+  CliProjectionCommandError,
+  CliProjectionCommandEvidenceSchema,
+  CliProjectionFailureSchema,
+  CliProjectionInvalidationCauseSchema,
+  CliProjectionNoticeSchema,
+  CliProjectionStateNameSchema,
+  cliProjectionStates,
+  createCliProjectionStateSchema,
+  toCliProjectionCommandEvidence,
+  toCliProjectionFailure,
+  toCliProjectionNotice,
+  type CliProjectionCommandEvidence,
+  type CliProjectionFailure,
+  type CliProjectionInvalidationCause,
+  type CliProjectionNotice,
+  type CliProjectionState,
+  type CliProjectionStateName,
+} from './cli-projection.js'
+export {
+  OPEN_SPEC_DATA_HOME_OBSERVATION_TARGETS,
+  OpenSpecDataHomeObserver,
+  type OpenSpecDataHomeObservationState,
+  type OpenSpecDataHomeObserverOptions,
+} from './open-spec-data-home-observer.js'
+export {
+  OPEN_SPEC_DATA_DIRECTORY_NAME,
+  resolveOpenSpecDataScope,
+  type OpenSpecDataScope,
+  type OpenSpecDataScopeSource,
+  type ResolveOpenSpecDataScopeOptions,
+} from './open-spec-data-scope.js'
+export {
+  EnvironmentGlobalFileProjectionDataSchema,
+  EnvironmentGlobalFileProjectionStateSchema,
+  EnvironmentGlobalProjectionDataSchema,
+  EnvironmentGlobalProjectionStateSchema,
+  PlanningCliProjectionDataSchema,
+  PlanningCliProjectionSelectorSchema,
+  PlanningCliProjectionStateSchema,
+  type EnvironmentGlobalFileProjectionData,
+  type EnvironmentGlobalFileProjectionState,
+  type EnvironmentGlobalProjectionData,
+  type EnvironmentGlobalProjectionState,
+  type PlanningCliProjectionData,
+  type PlanningCliProjectionSelector,
+  type PlanningCliProjectionState,
+} from './planning-cli-projection.js'
+export {
+  getRootContextCliSelector,
+  resolveRootContext,
+  type ResolveRootContextOptions,
+  type RootContext,
+  type RootContextCli,
+  type RootContextCliAvailability,
+  type RootContextCliExecutor,
+  type RootContextCommandEvidence,
+  type RootContextError,
+  type RootContextErrorCode,
+  type RootContextResolvedState,
+  type RootContextState,
+} from './root-context.js'
+export {
+  RUNTIME_INVALIDATION_FACETS,
+  RuntimeInvalidationIndex,
+  type RuntimeInvalidationController,
+  type RuntimeInvalidationFacet,
+  type RuntimeInvalidationListener,
+  type RuntimeInvalidationReader,
+  type RuntimeInvalidationToken,
+} from './runtime-invalidation.js'
+export {
+  RuntimeRootInvalidationRegistry,
+  type RuntimeInvalidationRoot,
+  type RuntimeRootInvalidationOwner,
+} from './runtime-root-invalidation.js'
 
 // Tool configuration detection
 export {
@@ -498,6 +757,8 @@ export {
 // Tool initialization state detection
 export {
   TOOL_WORKFLOW_TO_SKILL_DIR,
+  createToolInitStateProjection,
+  getExternalCodexCommandObservationRoot,
   getToolInitStates,
   type ToolInitDelivery,
   type ToolInitState,
@@ -507,7 +768,21 @@ export {
 
 // Export types for static site generation
 export {
+  DashboardSummaryIdentitySchema,
+  DashboardSummaryInvalidationCauseSchema,
+  DashboardSummaryInvalidationSchema,
+  DashboardSummaryProjectionStateSchema,
+  type DashboardSummaryIdentity,
+  type DashboardSummaryInvalidation,
+  type DashboardSummaryInvalidationCause,
+  type DashboardSummaryProjectionState,
+} from './dashboard-summary-transport.js'
+export {
   DASHBOARD_METRIC_KEYS,
+  DashboardGitSnapshotSchema,
+  DashboardOverviewSchema,
+  DashboardSummaryProjectionSchema,
+  DashboardTrendsProjectionSchema,
   type DashboardCardAvailability,
   type DashboardGitCommitEntry,
   type DashboardGitDiffStats,
@@ -518,12 +793,19 @@ export {
   type DashboardMetricKey,
   type DashboardOverview,
   type DashboardSummary,
+  type DashboardSummaryProjection,
   type DashboardTrendKind,
   type DashboardTrendMeta,
   type DashboardTrendPoint,
+  type DashboardTrendsProjection,
   type DashboardTriColorTrendPoint,
 } from './dashboard-types.js'
-export { type ExportSnapshot } from './export-types.js'
+export {
+  type ExportReferencePolicy,
+  type ExportRootProvenance,
+  type ExportRootSource,
+  type ExportSnapshot,
+} from './export-types.js'
 export {
   type GitEntriesPage,
   type GitEntryCursor,
@@ -539,12 +821,19 @@ export {
   type GitFileChangeType,
   type GitPatchFile,
   type GitPatchState,
+  type GitRepositoryIdentity,
+  type GitRepositoryScope,
+  type GitRepositoryScopeDescriptor,
+  type GitRepositoryScopes,
   type GitWorktreeHandoff,
   type GitWorktreeOverview,
   type GitWorktreeSummary,
+  type StaticGitRepositoryScopeDescriptor,
+  type StaticGitRepositoryScopes,
 } from './git-panel-types.js'
 export {
-  OPENSPECUI_HOOKS_VERSION,
+  OPENSPECUI_DOCUMENT_HOOK_VERSION,
+  OPENSPECUI_WORKFLOW_HOOK_VERSION,
   type DocumentConsumerV1,
   type DocumentReadModeV1,
   type DocumentRefV1,
@@ -552,15 +841,17 @@ export {
   type HookDiagnosticV1,
   type HookLifecycleV1,
   type OnReadDocumentHookV1,
-  type OnRunWorkflowHookV1,
-  type OpenSpecUIHooksV1,
+  type OnRunWorkflowHookV2,
+  type OpenSpecUIHooks,
   type ReadDocumentContextV1,
   type ReadDocumentResultV1,
-  type RunWorkflowContextV1,
+  type RunWorkflowContextV2,
   type RunWorkflowInputV1,
-  type RunWorkflowResultV1,
+  type RunWorkflowResultV2,
+  type WorkflowActionEvidenceV2,
   type WorkflowActionV1,
   type WorkflowInvocationModeResolutionV1,
+  type WorkflowInvocationTargetV2,
   type WorkflowRequestedModeV1,
 } from './hooks.js'
 export {
@@ -579,14 +870,60 @@ export {
   type HostedBackendHealthResponse,
   type OpenSpecUIRuntimeCapability,
 } from './hosted-app.js'
+export {
+  ACCESS_GATE_CREDENTIAL_BYTES,
+  accessGateFingerprint,
+  asEnvUri,
+  computeEnvUri,
+  constantTimeEqual,
+  generateAccessGateCredential,
+  hasCapability,
+  isTerminalMutationStatus,
+  normalizeAccessGatePassword,
+  type AccessGateCredential,
+  type EnvUri,
+  type StoreCapability,
+  type StoreCapabilitySet,
+  type StoreMutation,
+  type StoreMutationKind,
+  type StoreMutationResult,
+  type StoreMutationStatus,
+} from './hosted-protocol.js'
 export { VIRTUAL_PROJECT_DIRNAME, toOpsxDisplayPath } from './opsx-display-path.js'
+export {
+  OPSX_ALL_WORKFLOWS,
+  OPSX_ARTIFACT_INPUT_ACTIONS,
+  OPSX_CHANGE_INPUT_ACTIONS,
+  OPSX_COMMAND_CAPABLE_WORKFLOWS,
+  OPSX_CORE_PROFILE_WORKFLOWS,
+  OPSX_TEXT_INPUT_ACTIONS,
+  OPSX_WORKFLOW_LABELS,
+  OPSX_WORKFLOW_TO_SKILL_DIR,
+  isOpsxCoreWorkflowSelection,
+  type OpsxArtifactInputAction,
+  type OpsxChangeInputAction,
+  type OpsxTextInputAction,
+  type OpsxWorkflowId,
+} from './opsx-workflows.js'
 export { type ProjectRecoveryStatus } from './runtime-types.js'
+export { redactSnapshotForPublication, snapshotHasAbsolutePath } from './snapshot-redaction.js'
+export {
+  StoreMutationLifecycleEventSchema,
+  StoreMutationResultSchema,
+  StoreMutationSchema,
+  StoreMutationStartResponseSchema,
+  type StoreMutationEnvelope,
+  type StoreMutationLifecycleEvent,
+  type StoreMutationResultEnvelope,
+  type StoreMutationStartResponse,
+} from './store-mutation-protocol.js'
 export {
   StoreDoctorResultSchema,
   StoreListResultSchema,
-  classifyStoreCliOutput,
+  classifyStoreCliResult,
   toStoreFeatureResult,
   type StoreClassification,
+  type StoreCommandEvidence,
   type StoreCommandUnavailableError,
   type StoreDataIncompatibleError,
   type StoreDiagnostic,
@@ -630,9 +967,15 @@ export {
 } from './terminal-theme.js'
 
 // OPSX Kernel - reactive in-memory data store
-export { OpsxKernel, type TemplateContentMap } from './opsx-kernel.js'
+export { OpsxKernel } from './opsx-kernel.js'
 
 // OPSX CLI output schemas and types
+export {
+  requireCanonicalOpenSpecEntityId,
+  requireOpenSpecEntityRelativePath,
+  type OpenSpecEntityIdField,
+  type OpenSpecEntityPathField,
+} from './entity-id.js'
 export {
   buildOpsxEntityDetail,
   getOpsxEntityMetadataPath,
@@ -653,16 +996,22 @@ export {
 export { parseOpsxSchemaDetail, type ParsedOpsxSchemaDetail } from './opsx-schema-detail.js'
 export {
   ApplyInstructionsContextFilesSchema,
+  ApplyInstructionsProjectionSchema,
   ApplyInstructionsSchema,
   ApplyTaskSchema,
   ArtifactInstructionsSchema,
   ArtifactStatusSchema,
   ChangeStatusSchema,
   DependencyInfoSchema,
+  OpsxCliEvidenceSchema,
+  OpsxConfigBundleSchema,
+  OpsxStatusEvidenceSchema,
   SchemaArtifactSchema,
   SchemaDetailSchema,
   SchemaInfoSchema,
   SchemaResolutionSchema,
+  TemplateContentMapSchema,
+  TemplateContentSchema,
   TemplatesSchema,
   isGlobPattern,
   type ApplyInstructions,
@@ -671,10 +1020,14 @@ export {
   type ArtifactStatus,
   type ChangeStatus,
   type DependencyInfo,
+  type OpsxCliEvidence,
+  type OpsxConfigBundle,
+  type OpsxStatusEvidence,
   type SchemaArtifact,
   type SchemaDetail,
   type SchemaInfo,
   type SchemaResolution,
+  type TemplateContentMap,
   type TemplatesMap,
 } from './opsx-types.js'
 
@@ -699,8 +1052,10 @@ export {
   PtyResizeMessageSchema,
   PtyServerMessageSchema,
   PtyTitleResponseSchema,
+  TerminalCwdTargetSchema,
   type PtyClientMessage,
   type PtyPlatform,
   type PtyServerMessage,
   type PtySessionInfo,
+  type TerminalCwdTarget,
 } from './pty-protocol.js'

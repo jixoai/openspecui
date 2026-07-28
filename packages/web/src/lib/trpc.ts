@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * 1. Own the SPA query cache and typed tRPC client singleton.
+ * 2. Supply one in-memory Access Gate credential to HTTP and WebSocket transports.
+ * 3. Preserve lazy subscription transport creation and reconnect behavior outside static mode.
+ *
+ * Original request (2026-07-15): "后端接口就必须带上这个 http header。"
+ * Delivery correction (2026-07-24): HTTP and WS consume one Project Web credential owner.
+ */
 import type { AppRouter } from '@openspecui/server'
 import { QueryClient } from '@tanstack/react-query'
 import {
@@ -10,6 +19,7 @@ import {
 } from '@trpc/client'
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query'
 import { getTrpcUrl, getWsUrl } from './api-config'
+import { getAccessGateAuthorization } from './access-gate-credential'
 import { isStaticMode } from './static-mode'
 
 // Check if running in browser
@@ -37,6 +47,13 @@ function getWsClient() {
     try {
       wsClient = createWSClient({
         url: getWsUrl(),
+        ...(getAccessGateAuthorization()
+          ? {
+              connectionParams: () => ({
+                authorization: getAccessGateAuthorization() ?? '',
+              }),
+            }
+          : {}),
         retryDelayMs: () => WS_RETRY_DELAY_MS,
         keepAlive: {
           enabled: true,
@@ -92,11 +109,21 @@ function createTrpcClientSafe() {
           if (ws) {
             return wsLink({ client: ws })(runtime)
           }
-          return httpBatchLink({ url: getTrpcUrl() })(runtime)
+          return httpBatchLink({
+            url: getTrpcUrl(),
+            headers: () => {
+              const authorization = getAccessGateAuthorization()
+              return authorization ? { Authorization: authorization } : {}
+            },
+          })(runtime)
         }) as TRPCLink<AppRouter>,
         // Use HTTP for queries and mutations
         false: httpBatchLink({
           url: getTrpcUrl(),
+          headers: () => {
+            const authorization = getAccessGateAuthorization()
+            return authorization ? { Authorization: authorization } : {}
+          },
         }),
       }),
     ],

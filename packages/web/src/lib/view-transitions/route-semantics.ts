@@ -29,7 +29,11 @@ const ROUTE_SEMANTICS: readonly RouteSemanticMatcher[] = [
   { family: 'config', level: 'top', pattern: /^\/config$/ },
   { family: 'git', level: 'detail', pattern: /^\/git\/(?:uncommitted|commit\/[^/]+)$/ },
   { family: 'git', level: 'top', pattern: /^\/git$/ },
-  { family: 'specs', level: 'detail', pattern: /^\/specs\/[^/]+$/ },
+  {
+    family: 'specs',
+    level: 'detail',
+    pattern: /^\/specs\/(?:owned\/[^/]+|referenced\/[^/]+\/[^/]+)$/,
+  },
   { family: 'specs', level: 'top', pattern: /^\/specs$/ },
   { family: 'changes', level: 'detail', pattern: /^\/changes\/[^/]+$/ },
   { family: 'changes', level: 'top', pattern: /^\/changes$/ },

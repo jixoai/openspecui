@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * 1. Verify normalized hosted App and embedded Project Web launch URLs.
+ * 2. Verify hosted-shell protocol capability and backend-health contracts.
+ *
+ * Original request (2026-07-15): "把 --app 模式提上日程。因为 app 模式提供了多标签管理。"
+ */
 import { describe, expect, it } from 'vitest'
 import {
   HOSTED_SHELL_PROTOCOL_VERSION,
@@ -95,6 +102,16 @@ describe('hosted-app helpers', () => {
         watcherEnabled: true,
         openspecuiVersion: '3.7.0',
         embeddedUiUrl: 'http://localhost:3100',
+        apiBaseUrl: 'http://localhost:3100',
+        cliVersion: '1.6.0',
+        envUri: 'openspecui-env://1/abc',
+        rootSummary: {
+          planningRootPath: 'demo',
+          rootSource: 'nearest',
+          storeId: null,
+          ready: true,
+        },
+        accessGateEnabled: true,
       })
     ).toEqual({
       status: 'ok',
@@ -105,6 +122,34 @@ describe('hosted-app helpers', () => {
       hostedShellProtocolVersion: HOSTED_SHELL_PROTOCOL_VERSION,
       embeddedUiUrl: 'http://localhost:3100',
       runtimeCapabilities: OPENSPECUI_RUNTIME_CAPABILITIES,
+      apiBaseUrl: 'http://localhost:3100',
+      cliVersion: '1.6.0',
+      envUri: 'openspecui-env://1/abc',
+      rootSummary: {
+        planningRootPath: 'demo',
+        rootSource: 'nearest',
+        storeId: null,
+        ready: true,
+      },
+      hostedCapabilities: ['stores.inspect', 'stores.mutate', 'contexts.inspect'],
+      accessGateEnabled: true,
     })
+  })
+
+  it('emits the 1.6 hosted-protocol additions even when omitted from input', () => {
+    const payload = buildBackendHealthPayload({
+      projectDir: '/tmp/demo',
+      projectName: 'demo',
+      watcherEnabled: true,
+      openspecuiVersion: '3.7.0',
+      embeddedUiUrl: 'http://localhost:3100',
+    })
+    expect(payload.hostedCapabilities).toEqual([
+      'stores.inspect',
+      'stores.mutate',
+      'contexts.inspect',
+    ])
+    expect(payload.accessGateEnabled).toBeUndefined()
+    expect(payload.envUri).toBeUndefined()
   })
 })

@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Verify multi-area project navigation, URL canonicalization, and hosted launch parameters.
+ * 2. Verify persisted/project layouts remain a complete partition of supported project tabs.
+ * 3. Prove retired project routes are discarded while Context remains canonical.
+ *
+ * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
+ * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ */
 import type { RouterHistory } from '@tanstack/react-router'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -28,7 +37,7 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/changes',
   '/board',
   '/archive',
-  '/stores',
+  '/context',
   '/settings',
 ]
 
@@ -40,7 +49,7 @@ const ALL_TABS: TabId[] = [
   '/changes',
   '/board',
   '/archive',
-  '/stores',
+  '/context',
   '/settings',
   '/terminal',
 ]
@@ -188,6 +197,26 @@ describe('NavController kernel lifecycle', () => {
     expect(nav.getLocation('main').pathname).toBe('/dashboard')
     expect(nav.getLocation('bottom').pathname).toBe('/')
     expect(window.location.search).toContain('_b=%2F')
+    assertPartition(nav)
+  })
+
+  it('drops a retired Stores tab from persisted layouts while retaining Context', () => {
+    localStorage.clear()
+    window.history.replaceState({}, '', '/dashboard')
+    localStorage.setItem(
+      'nav-layout',
+      JSON.stringify({
+        mainTabs: ['/stores', '/context', '/dashboard'],
+        bottomTabs: ['/terminal'],
+        updatedAt: 1,
+      })
+    )
+
+    nav = new NavController()
+
+    expect(nav.mainTabs).toContain('/context')
+    expect(nav.mainTabs as readonly string[]).not.toContain('/stores')
+    expect(nav.bottomTabs as readonly string[]).not.toContain('/stores')
     assertPartition(nav)
   })
 
@@ -452,7 +481,7 @@ describe('NavController kernel lifecycle', () => {
   })
 
   it('preserves direct spec detail links with bottom no-focus marker during project rebind', async () => {
-    nav = createController('/specs/cli-shell-product?_b=%2F')
+    nav = createController('/specs/owned/cli-shell-product?_b=%2F')
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ projectDir: '/repo/current' }),
@@ -460,9 +489,9 @@ describe('NavController kernel lifecycle', () => {
 
     await nav.init()
 
-    expect(nav.getLocation('main').pathname).toBe('/specs/cli-shell-product')
+    expect(nav.getLocation('main').pathname).toBe('/specs/owned/cli-shell-product')
     expect(nav.getLocation('bottom').pathname).toBe('/')
-    expect(window.location.pathname).toBe('/specs/cli-shell-product')
+    expect(window.location.pathname).toBe('/specs/owned/cli-shell-product')
     expect(window.location.search).toContain('_b=%2F')
   })
 

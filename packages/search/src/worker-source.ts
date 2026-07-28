@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * 1. Generate equivalent browser and Node Search worker runtimes.
+ * 2. Preserve source filtering and provenance without runtime package imports.
+ *
+ * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ */
 const sharedRuntimeSource = String.raw`
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -21,6 +29,7 @@ function toSearchIndexDocument(doc) {
   return {
     id: doc.id,
     kind: doc.kind,
+    scope: doc.scope,
     title: doc.title,
     href: doc.href,
     path: doc.path,
@@ -102,9 +111,10 @@ function searchIndex(index, query) {
   const hits = [];
 
   for (const doc of index.documents) {
+    if (query && query.scope !== undefined && doc.scope !== query.scope) continue;
     if (!isDocumentMatch(doc, terms)) continue;
 
-    hits.push({
+    const hit = {
       documentId: doc.id,
       kind: doc.kind,
       title: doc.title,
@@ -113,7 +123,9 @@ function searchIndex(index, query) {
       score: scoreDocument(doc, terms),
       snippet: createSnippet(doc.content, terms),
       updatedAt: doc.updatedAt,
-    });
+    };
+    if (doc.scope !== undefined) hit.scope = doc.scope;
+    hits.push(hit);
   }
 
   hits.sort((a, b) => {

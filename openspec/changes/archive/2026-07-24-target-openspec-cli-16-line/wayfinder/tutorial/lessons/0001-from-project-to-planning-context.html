@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenSpec: from one project to a planning context</title>
+    <link rel="stylesheet" href="../assets/lesson.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>OpenSpec 不是在发明 package monorepo</h1>
+        <p class="lede">
+          1.5 的核心变化是把“命令在哪个规划根执行”和“规划时可以读取哪些外部规范”变成显式模型。
+          它处理的是 planning topology，不是 npm/pnpm package graph。
+        </p>
+      </header>
+
+      <section>
+        <h2>先掌握三个共享实体</h2>
+        <div class="topology">
+          <article class="node project">
+            <strong>Project root</strong>
+            <span>代码仓库自己的 <code>openspec/</code>。代码和规划一起版本化。</span>
+          </article>
+          <article class="node store">
+            <strong>Store</strong>
+            <span
+              >独立 Git 仓库中的 <code>openspec/</code>。规划可以先于代码，或跨多个代码仓库。</span
+            >
+          </article>
+          <article class="node store">
+            <strong>Reference</strong>
+            <span>当前根对另一个 Store 的只读声明。只增加可读取的规范，不改变写入目标。</span>
+          </article>
+        </div>
+
+        <div class="callout">
+          一个命令始终只选择一个可写 OpenSpec root。Reference 可以有多个，但都是只读上下文。
+        </div>
+
+        <p>
+          <strong>1.6 限制：</strong>Reference 的目标必须是本机注册的 Store id，不能直接填写任意
+          package 路径或未注册的项目规划根。<code>store setup</code>
+          面向新建独立规划仓库，会拒绝在已有 Git 仓库内部创建；但
+          <code>store register</code> 可以为一个已有的健康规划根补充 Store 身份并注册，包括 monorepo
+          内没有独立 <code>.git</code> 的 package root。
+        </p>
+      </section>
+
+      <section>
+        <h2>再区分两个本机视图</h2>
+        <div class="topology">
+          <article class="node personal">
+            <strong>Context</strong>
+            <span>从当前 root 和它声明的 References 实时推导出来的工作上下文。</span>
+          </article>
+          <article class="node personal">
+            <strong>Workset</strong>
+            <span>用户手工保存的一组本地目录，用来一次打开多个仓库；不表达规划依赖。</span>
+          </article>
+          <article class="node personal">
+            <strong>Store registry</strong>
+            <span
+              >用户/机器级把 Store id 映射到 checkout 路径，默认跨项目共享。不会提交，也不会自动
+              clone/pull/push。</span
+            >
+          </article>
+        </div>
+        <p>
+          <code>references:</code> 只声明 Store id，不会自动注册。官方用户入口是
+          <code>store setup</code> 和
+          <code>store register</code>；它们负责健康检查、身份校验、路径规范化、冲突检测和加锁写入。
+          可以用 <code>XDG_DATA_HOME</code> 为一组进程隔离
+          registry，但这不是项目配置，也不会随仓库自动生效。
+        </p>
+      </section>
+
+      <section>
+        <h2>它和 monorepo 的真正关系</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>问题</th>
+              <th>package monorepo</th>
+              <th>OpenSpec 1.5/1.6</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>一等实体</td>
+              <td>package、依赖边、workspace</td>
+              <td>OpenSpec root、Store、Reference</td>
+            </tr>
+            <tr>
+              <td>主要动作</td>
+              <td>安装、构建、测试、发布</td>
+              <td>选择规划根、生成 artifact、校验、归档</td>
+            </tr>
+            <tr>
+              <td>跨仓库</td>
+              <td>通常不处理</td>
+              <td>Store 和 Reference 正面处理</td>
+            </tr>
+            <tr>
+              <td>写入模型</td>
+              <td>可同时操作多个 package</td>
+              <td>每个命令只写一个解析后的 root</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>一个跨团队例子</h2>
+        <pre><code>platform-reqs (Store, platform team owns it)
+  openspec/specs/auth/spec.md
+            |
+            | Reference: read-only
+            v
+api-server (Project root) ---- current writable change
+            ^
+            | same external requirements
+web-app (Project root) ------- its own writable change
+
+workset "auth" = [platform-reqs, api-server, web-app]
+                   only a personal open-these-folders view</code></pre>
+
+        <p>
+          这里没有“一个 change 同时修改三个 root”的机制。通常是平台规范作为
+          Reference，两个代码仓库各自维护自己的 change。Store
+          也可以反过来成为唯一规划根，让多个代码仓库都通过 <code>store:</code> 指针使用同一套
+          change。
+        </p>
+        <p>
+          因此，在 monorepo 内给每个 package 建立独立
+          <code>openspec/</code> 可以获得最近根隔离。它们最初不能直接通过
+          <code>references:</code> 互相引用；但已有健康 root 可以通过
+          <code>store register --yes</code> 获得 Store 身份，随后按 Store id 被其它 package 引用。
+        </p>
+      </section>
+
+      <section>
+        <h2>对 OpenSpecUI 的三个产品层级</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>层级</th>
+              <th>用户体验</th>
+              <th>是否是 1.6 正确性的前提</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>L0 Root-correct</td>
+              <td>
+                从任意项目启动，UI 展示 CLI 实际选中的一个 root；读写、监听、归档都不走错目录。
+              </td>
+              <td>是</td>
+            </tr>
+            <tr>
+              <td>L1 Context-aware</td>
+              <td>
+                展示 References、健康状态和外部 spec 索引，解释当前 change 借用了哪些上游规范。
+              </td>
+              <td>对完整 Stores 体验重要，但可单独分期</td>
+            </tr>
+            <tr>
+              <td>L2 Workspace orchestration</td>
+              <td>Store CRUD、注册修复、Context 浏览、Workset 创建和多仓库导航。</td>
+              <td>否，是更高阶产品能力</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="check">
+        <h2>检验理解</h2>
+        <p>
+          在 <code>api-server</code> 中声明 <code>references: [platform-reqs]</code> 后运行
+          <code>openspec new change fix-auth</code>，change 应写到哪里？
+        </p>
+        <p>
+          <strong>答案：</strong>写到 api-server 自己的 root。Reference
+          只增加只读上下文，不重定向写入。
+        </p>
+      </section>
+
+      <p>
+        Primary source:
+        <a href="https://github.com/Fission-AI/OpenSpec/blob/v1.6.0/docs/stores-beta/user-guide.md"
+          >OpenSpec v1.6.0 Stores Beta user guide</a
+        >. 对任何不清楚的边界，继续在当前 Wayfinder 讨论中提问。
+      </p>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.check.json",
+  "include": [
+    "src/huggingface-transformers.d.ts",
+    "src/search-router.test.ts",
+    "src/search-service.test.ts",
+    "../local-translator/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}
