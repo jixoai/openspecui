@@ -161,6 +161,11 @@ disposable lab, exact trigger/restoration commands, sanitized PASS/FAIL evidence
 `$LAB/acceptance-results.md` ledger. Providing those tools does not complete 3.6; only the owner's recorded result
 against the exact delivered head can do so.
 
+PR Quality run `30326605259` tested exact implementation head `de6b27c` and passed Changeset Gate, CI Scope,
+Fast Gate, the Web Browser shard, and aggregate Browser Gate. Checkpoint 3.6 remains open because AT-09 and the
+manager's final browser/visual acceptance are still separate owner evidence; no merge, archive, or release is
+authorized.
+
 ## 4. Merge Readiness
 
 - [ ] 4.1 Confirm all P1-P5 work is complete, all strict/OpenSpec validation is green, no loopback trigger remains unresolved, and implementation notes match the checked source.

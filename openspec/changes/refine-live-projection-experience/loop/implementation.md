@@ -886,6 +886,10 @@ until all five packages receive focused review. No Agent-run fixture is final br
   workspace packages. `pnpm test:browser:ci` passed xterm `60` with `1` expected skip and Web Storybook `12/12`.
   The jsdom canvas warnings and existing Lightning CSS `scroll-button` warning remained non-fatal. These are
   automated preparation evidence; final real-window presentation remains owner acceptance under checkpoint 3.6.
+- **Remote evidence**: PR Quality run `30326605259` tested exact implementation head `de6b27c` and passed
+  Changeset Gate, CI Scope, Fast Gate, the Web Browser shard, and aggregate Browser Gate. The only annotations
+  were GitHub Actions' Node 20 deprecation notices. This accepts automated delivery of P8 and the shared
+  accessibility correction; it does not complete owner-only checkpoint 3.6.
 
 ## Loopback Triggers
 
