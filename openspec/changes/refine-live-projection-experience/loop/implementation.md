@@ -941,6 +941,46 @@ until all five packages receive focused review. No Agent-run fixture is final br
   Vite+ `staged` configuration. The scoped spec and implementation commits use `--no-verify` only after the
   complete final-tree gates above; hook configuration is not expanded inside this acceptance fix.
 
+### P10 static document embedding correction (2026-07-28 Asia/Shanghai)
+
+- **Owner symptom and direct artifact**: `pnpm openspecui export -o ./tmp --open` displayed serialized snapshot
+  and file-preview source across the page. The retained `tmp/data.json` contains a Store Manager HTML preview with
+  literal `</script>`, while `src/ssg/cli.ts` inserted `JSON.stringify(snapshot)` directly inside an inline
+  `<script>`. HTML parsing closes the element regardless of JavaScript string syntax, so the remaining snapshot
+  became document markup. The same boundary directly interpolated base paths and route titles.
+- **Original-path red**: parsing the owner's generated `tmp/index.html` through jsdom produced
+  `{snapshotLoaded:false, leaked:true}`. A production-boundary unit fixture then failed 2/2: the bootstrap script
+  never assigned `window.__INITIAL_DATA__`, and a `</title><script>` title escaped the title owner. This is direct
+  generated-document evidence, not a mocked rendering component.
+- **Correction**: `src/ssg/static-document.ts` is the single dynamic-value embedding owner. Snapshot and base-path
+  values remain JSON but escape HTML-significant `<` and JavaScript line separators before inline-script
+  insertion. Title text escapes HTML entities. No source data is removed or rewritten after browser parsing;
+  exact snapshot, base-path, and title values round-trip.
+- **Focused green and mutation resistance**: `static-document.test.ts` passed 2/2. Restoring either former direct
+  interpolation makes its corresponding exact assertion fail: bootstrap data becomes undefined/source markup is
+  admitted, or the title truncates and executes the injected script.
+- **Real export green**: after deleting and rebuilding `dist-ssg`/`.vite`, the source CLI generated 84 routes
+  under `/tmp/openspecui-static-escape-final.TPFimH` without opening a browser. DOM parsing of both `index.html` and
+  `context/index.html` reported `snapshotLoaded:true`, `specs:17`, `visibleLeak:false`, and zero script errors.
+  The first diagnostic counted script text as body text and was rejected as a false-positive signal; the final
+  check excludes `script/style` descendants and measures only document-visible text nodes.
+- **Packaged export green**: `build:ssg-cli` produced `dist-ssg/ssg-cli.mjs`; invoking that packaged entry against
+  the same 17-Spec snapshot generated 84 routes under `/tmp/openspecui-static-escape-packaged.qkJyk5`. DOM parsing
+  reported `snapshotLoaded:true`, `encodedScriptClose:true`, and zero script errors, proving the published entry
+  carries the same encoding owner as source mode.
+- **Repository gates and scoped stop rule**: `format:check`, lint with zero warnings/errors, all 15 workspace
+  typechecks, strict Change validation, and `git diff --check` passed. Two serial `test:ci` attempts passed Root
+  `43/43`, Core `483/483`, and Server `542/542`, then stopped only in the unchanged App
+  `mutation-observation-transport.test.ts`: first a terminal lifecycle exceeded 10 seconds, then `afterEach` Server
+  close exceeded 10 seconds. The exact App file passed `2/2` in an idle standalone rerun. Per the package-local
+  stop rule, no App code or timeout was changed; affected Web passed `159 files / 1,024 tests`, CLI passed `71/71`,
+  xterm browser fixtures passed `60` with one expected skip, and Web Storybook passed `12/12`. Remote CI remains
+  responsible for a clean full-workspace rerun on the committed head.
+- **Acceptance boundary**: this automated correction proves the static document contract. The owner still owns
+  final visual confirmation and checkpoint 3.6; no merge, archive, or release is authorized by this evidence.
+- **Delivery note**: the pre-commit hook again stopped before project checks because root `vite.config.ts` has no
+  Vite+ `staged` configuration. The scoped commits use `--no-verify` only after the independent gates above.
+
 ## Loopback Triggers
 
 Return to `research-plan.md` and obtain an explicit owner decision before progressing when any of the following occurs:

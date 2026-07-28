@@ -36,4 +36,6 @@ best-effort so the existing App surface can remain foreground.
 Static export now generates a publication-safe Context route from redacted
 snapshot root and Reference-policy metadata, without synthesizing live CLI or
 environment evidence. Shared list skeletons use an explicit physical row
-separator across Web and App loading surfaces.
+separator across Web and App loading surfaces. Static document bootstrap data,
+base paths, and titles now cross a context-aware HTML encoding boundary so
+source previews cannot escape into visible or executable document markup.

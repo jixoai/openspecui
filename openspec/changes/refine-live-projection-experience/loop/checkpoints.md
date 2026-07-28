@@ -112,6 +112,11 @@ missing historical pre-v2 red.
 - [x] 2.35 Keep Static `/context` in the shared information architecture and render only publication-safe snapshot root/Reference metadata. Do not start live transports or synthesize CLI, registry, data-scope, diagnostics, or mutation authority.
 - [x] 2.36 Add `/context` to the generated SSG route/title contract, run focused static/Context/skeleton tests, and rebuild fresh SSG output. Final visual confirmation remains owner-owned.
 
+### P10 Static document embedding correction
+
+- [x] 2.37 Reproduce the owner's real static-export leak at the generated-document boundary, then encode snapshot JSON, base paths, and titles for their exact HTML contexts without filtering source content.
+- [x] 2.38 Add direct DOM-parsing red/green evidence and rerun the real `pnpm openspecui export` path without opening a browser; prove the full snapshot loads and source previews do not escape into visible or executable markup.
+
 ## 3. PR and Release Gates
 
 - [x] 3.1 Update `.changeset/refine-live-projection-experience-p1a.md` for the publishable Core/Server/Web protocol and presentation behavior; App remains private.
