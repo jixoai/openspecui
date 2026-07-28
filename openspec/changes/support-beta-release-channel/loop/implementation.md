@@ -9,7 +9,7 @@ Original request (2026-07-28): "我想先发布一个beta版本"
 
 ## Implementation State
 
-Status: infrastructure implementation and full local gates complete; PR delivery remains pending. No registry state has changed.
+Status: infrastructure PR #214 merged; the first real changeversion attempt stopped before mutation and its CLI-entry correction is pending. No registry state has changed.
 
 ```text
 release-channel projection   implemented
@@ -84,7 +84,7 @@ The release script's real registry probe remained a safe no-op against the stabl
 
 ## Divergence Notes
 
-None.
+- The first `pnpm changeversion --pre beta` attempt failed before Changesets mutation because Yargs 18 treated the boolean option's default `false` as present for `.conflicts('pre', 'exit-pre')`. The typed prerelease planner already distinguishes a real `exitPre: true` conflict, but the production argument parser was not directly covered. The correction moves production parsing behind checked evidence and removes the duplicate Yargs-level conflict owner.
 
 ## Loopback Triggers
 
