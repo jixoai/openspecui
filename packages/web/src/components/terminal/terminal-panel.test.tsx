@@ -3,9 +3,11 @@
  * 1. Verify terminal panel tabs, actions, notifications, and visibility behavior.
  * 2. Verify distinct-root selection and same-root implicit Launch creation.
  * 3. Verify restored tab identity survives resolved paths, long titles, and renaming.
+ * 4. Verify the panel owns a palette-local neutral color scope.
  *
  * Original request (2026-07-16): "Terminal shows selected cwd/root identity in creation controls and tab labels."
  * Owner same-root direction (2026-07-29): generic Terminal hides cwd switching and remains Launch-owned when roots collapse.
+ * Owner accessibility direction (2026-07-29): Terminal text must remain legible when its palette differs from the application theme.
  */
 import type { NotificationRecord } from '@openspecui/core/notifications'
 import { fireEvent, render, within } from '@testing-library/react'
@@ -280,6 +282,7 @@ describe('TerminalPanel', () => {
 
     const tabs = getByTestId('tabs')
     const wrapper = tabs.parentElement
+    expect(wrapper).toHaveClass('terminal-surface', 'bg-terminal')
     expect(wrapper?.style.getPropertyValue('--terminal')).toBe('#fdf6e3')
     expect(wrapper?.style.getPropertyValue('--terminal-foreground')).toBe('#586e75')
   })

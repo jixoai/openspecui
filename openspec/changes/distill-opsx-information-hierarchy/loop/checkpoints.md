@@ -68,8 +68,8 @@ Owner correction (2026-07-29): navigation, Project Binding, Context, Settings sc
 - [x] 6.19 Pass focused Web tests, typecheck, lint/format, strict Change validation, and `git diff --check`
 - [x] 6.20 Update PR evidence and stop for Owner visual/browser acceptance
 - [x] 6.21 Specify the Terminal palette boundary and reject descendant-wide semantic color flattening
-- [ ] 6.22 Scope Terminal neutral tokens to the active palette across tabs, cwd controls, and empty state
-- [ ] 6.23 Prove built-in contrast, semantic-color preservation, focused unit coverage, and local gates
+- [x] 6.22 Scope Terminal neutral tokens to the active palette across tabs, cwd controls, and empty state
+- [x] 6.23 Prove built-in contrast, semantic-color preservation, focused unit coverage, and local gates
 - [ ] 6.24 Update PR evidence and return to Owner visual/browser acceptance
 
 ## 7. Finalization

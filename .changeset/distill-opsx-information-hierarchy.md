@@ -10,3 +10,6 @@ blockers, and failures remain directly visible.
 
 Root Context now carries the canonical physical Launch identity used to collapse redundant
 same-root presentation without changing CLI or PTY ownership.
+
+Terminal chrome now scopes neutral text, surfaces, and borders to the active Terminal palette,
+preserving accessible contrast when the application and Terminal themes differ.

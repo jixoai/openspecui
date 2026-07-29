@@ -4,9 +4,11 @@
  * 2. Expose explicit cwd targets only when Launch and Planning physical roots differ.
  * 3. Keep each tab's initial cwd identity visible across local creation and restore.
  * 4. Host shell and configured-command creation flows without owning PTY path resolution.
+ * 5. Scope neutral chrome colors to the active Terminal palette independently from the application theme.
  *
  * Original request (2026-07-16): "Terminal shows selected cwd/root identity in creation controls and tab labels."
  * Owner same-root direction (2026-07-29): generic same-root creation implicitly remains Launch-owned.
+ * Owner accessibility direction (2026-07-29): Terminal text must remain legible when its palette differs from the application theme.
  */
 import { Badge, CountBadge } from '@/components/badge'
 import {
@@ -26,6 +28,7 @@ import {
 } from '@/lib/use-terminal-cwd-target'
 import { useTerminalInvocationConfig } from '@/lib/use-terminal-invocation-config'
 import '@/styles/terminal-effects.css'
+import '@/styles/terminal-surface.css'
 import type { TerminalCwdTarget } from '@openspecui/core/pty-protocol'
 import type { TerminalSpawnCommand } from '@openspecui/core/terminal-invocation'
 import {
@@ -484,7 +487,7 @@ export function TerminalPanel({ className }: { className?: string }) {
     <div
       ref={wrapperRef}
       style={terminalThemeStyle}
-      className={`bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${className}`}
+      className={`terminal-surface bg-terminal flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${className}`}
     >
       {sessions.length === 0 ? (
         <div className="text-terminal-foreground bg-terminal flex h-full min-w-0 items-center justify-center p-4 text-sm">

@@ -1,0 +1,16 @@
+/*
+ * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * 1. Scope neutral application tokens to the active Terminal palette without overriding semantic descendant colors.
+ *
+ * Owner accessibility direction (2026-07-29): Terminal text must remain legible when its palette differs from the application theme.
+ */
+.terminal-surface {
+  --background: color-mix(in oklab, var(--terminal-foreground) 14%, var(--terminal));
+  --foreground: var(--terminal-foreground);
+  --muted: color-mix(in oklab, var(--terminal-foreground) 12%, var(--terminal));
+  --muted-foreground: var(--terminal-foreground);
+  --border: color-mix(in oklab, var(--terminal-foreground) 28%, transparent);
+  --input: color-mix(in oklab, var(--terminal-foreground) 36%, transparent);
+
+  color: var(--terminal-foreground);
+}

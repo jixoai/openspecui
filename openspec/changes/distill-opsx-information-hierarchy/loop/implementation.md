@@ -410,6 +410,39 @@ PR state                                       OPEN / CLEAN
 Checkpoint 6.20 is complete. Checkpoint 6.6 and finalization remain open for the Owner's visual and real-browser
 acceptance; no merge, archive, or release has occurred.
 
+## Terminal Palette Accessibility Correction (2026-07-29)
+
+The Owner's screenshot exposed a palette-boundary defect rather than an xterm glyph-rendering defect: Terminal
+tabs used the active Terminal foreground at the outer header, but nested cwd labels explicitly resolved the
+application theme's `muted-foreground`. An application Light theme could therefore render dark nested text over a
+dark or gray Terminal palette.
+
+A universal descendant color selector was rejected because it would override explicit exit, activity, focus,
+selection, and notification colors. `TerminalPanel` now owns one `terminal-surface` scope that rebinds neutral
+application tokens to the active Terminal palette. The root uses the Terminal background; default and secondary
+neutral text use the full Terminal foreground; selected/hover surfaces and borders are derived locally. Command
+dialogs and Terminal Settings remain application-themed because their overlays are outside this DOM scope.
+
+```text
+Focused Terminal unit                         2 files / 16 tests passed
+Built-in palette contrast                     6 / 6 >= WCAG AA 4.5:1
+Complete Web unit                             166 files / 1060 tests passed
+Repository lint                               1057 files / 0 warnings / 0 errors
+Workspace typecheck                           15 projects passed
+xterm browser fixture                         60 passed / 1 skipped
+Web realtime browser fixture                  2 passed
+Web Storybook fixture                         12 passed
+Production Web build                          passed
+Focused format + git diff --check             passed
+Strict OpenSpec validation                    passed
+```
+
+The production build contains the `terminal-surface` scope and retained only the repository's existing
+`scroll-button` CSS compatibility warning. Complete Web unit retained the existing jsdom Canvas diagnostics while
+all tests passed. The Owner's `openspec/config.yaml` remains unmodified and excluded from delivery. Automated
+browser fixtures are component preparation evidence only; checkpoint 6.24 remains open for remote PR evidence,
+then final visual acceptance returns to the Owner.
+
 ## Loopback Triggers
 
 - A required failure becomes reachable only by opening an Accordion or focusing a Tooltip.
