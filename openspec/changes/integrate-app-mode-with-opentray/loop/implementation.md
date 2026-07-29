@@ -143,6 +143,15 @@ PR delivery                      not started
 - Each initial lease connection now owns an acknowledgement timer through the initial deadline. The timer rejects the initial lease and destroys only its socket; normal acknowledgement and all socket closes clear the timer. Already-established leases retain their deliberate reconnect-until-retired behavior.
 - The focused production-transport fixture creates a real Unix endpoint that accepts request bytes and never answers. It requires `createDaemonWorkspaceLease()` to reject with the acknowledgement-bound error. Mutation evidence removes the timer and the named test times out at its 500 ms bound; restoring the timer returns the expected rejection.
 
+### Current-candidate automated revalidation (2026-07-30 Asia/Shanghai)
+
+- Candidate: `7f52312d42dcc578c752599eb1c7ec1422dd820b` (`feat/opentray-app-mode`). The only dirty path was the Owner's concurrent `packages/ct2-engine/binding.js`; it was excluded from the candidate commits and no generated output entered the index.
+- Full non-visual delivery gates passed against this candidate: changed-branch format check (113 files), Oxlint (1,093 files, zero warnings/errors), all 15 workspace typechecks, and `git diff --check`. Strict validation passed for the changed main Specs `cli-commands`, `hosted-app-distribution`, and `opsx-ui-views`; Changesets detected the existing package-impact file.
+- Complete unit evidence passed with status `0`: Root 15 files / 64 tests, Core 52 / 489, Server 84 / 545, App 36 / 226, Web 166 / 1,062, CLI 23 / 112, plus all remaining workspace suites. The usual jsdom Canvas messages occurred during Web imports but did not fail tests.
+- Component/browser preparation passed with status `0`: xterm 60 passed / 1 skipped, App 1 / 1, Web 14 / 14. This is not Owner Browser/PWA/OpenTray acceptance.
+- Fresh Core, Server, Web/SSG, App, and CLI builds passed. The Web build retained known non-failing CSS `::scroll-button(*)`, ineffective dynamic-import, and chunk-size warnings. A real current-package tarball exists at `/tmp/openspecui-appmode-package-current/openspecui-6.0.0.tgz`; its manifest inspection confirms `dist/cli.mjs`, bundled `app/index.html`/assets, and `web/index.html`/assets.
+- Remaining boundary is unchanged: Owner must execute and report the numbered Browser/PWA/OpenTray procedure at the actual candidate HEAD before 10.2-10.4, PR delivery, archive, merge, or release can proceed.
+
 ## Decisions Taken
 
 ### Command and process ownership
