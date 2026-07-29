@@ -7,11 +7,12 @@ Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 Original request (2026-07-28): implement the information-hierarchy optimization, then hand final acceptance to the Owner.
 Owner correction (2026-07-29): reorganize the rejected shell, Config, Context, Settings, and Change evidence surfaces before acceptance.
 Owner Terminal popup correction (2026-07-29): Terminal-owned popup text must remain legible.
+Owner stable release authorization (2026-07-29): "开始发布"
 -->
 
 ## Implementation State
 
-Status: **implementation active; presentation migration and focused delivery gate complete**.
+Status: **Owner accepted; merge, archive, and stable release delivery active**.
 
 ```text
 spec artifacts -> shared primitives -> owner groups -> focused evidence -> delivery -> owner acceptance
@@ -570,7 +571,15 @@ PR state                                      OPEN / CLEAN
 
 The complete Web unit run retained the repository's existing non-failing jsdom Canvas diagnostics. The
 production build retained only the existing `scroll-button` CSS compatibility warning. No agent visual or
-end-to-end browser acceptance was performed; checkpoints 6.6 and 7.1 remain Owner-owned.
+end-to-end browser acceptance was performed; at this code-bearing head, checkpoints 6.6 and 7.1 still awaited the
+Owner's separate walkthrough.
+
+## Owner Acceptance and Stable Release Authorization (2026-07-29)
+
+The Owner completed the final visual walkthrough, accepted the Terminal popup correction, and explicitly
+authorized stable `6.0.0` release delivery. Checkpoints 6.6 and 7.1 are therefore complete. The repository still
+records Changesets prerelease mode `beta`, so stable promotion must occur only after this PR and the subsequent
+archive PR merge, through the explicit `changeversion --exit-pre` transition.
 
 ## Loopback Triggers
 

@@ -67,6 +67,7 @@ Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间
 Owner-reported defect (2026-07-28): "pnpm openspecui export -o ./tmp --open 导出的数据好像逃逸到 html 去了。"
 Original request (2026-07-28): "把残留的工作先完成"
 Original request (2026-07-28): "我想先发布一个beta版本"
+Owner stable release authorization (2026-07-29): "开始发布"
 Original request (2026-07-28): "让界面像5.x那样清爽的同时，仍然保证6.x新增的信息可以被Get到。因为我们openspecui最关键的是OPSX这套流程，其它都是服务于这套流程的。"
 Review correction (2026-07-20): Terminal cwd evidence must cross the production Server owner instead of injecting a hand-authored downstream callback.
 Review correction (2026-07-20): Settings tool delivery must preserve upstream physical artifact scope, render-time subscription provenance, and CLI-runner cache retirement.
@@ -139,6 +140,7 @@ MUST READ: CLAUDE.md
   5. notify manager only after the GitHub release automation succeeds
 
 - Prerelease delivery law (2026-07-28): A requested beta release enters or continues explicit Changesets prerelease mode and derives npm dist-tag plus GitHub prerelease state from the generated SemVer version; caller-authored parallel channel flags are forbidden. `6.0.0-beta.0` publishes under `beta` and cannot move `latest`. Semantic flag conflicts belong to the typed prerelease planner because a CLI parser may materialize absent boolean flags as `false`; direct production-parser evidence is required. Registry publication and package-tag delivery are independent facts: a rerun must recover missing tags after packages already exist, while a true registry-and-tag no-op must not rewrite an old GitHub Release. Release automation pushes tag refs only, never its potentially stale checked-out `main`. Completion requires the exact-head workflow, npm channel state, remote tags, and GitHub prerelease as separate evidence.
+- Stable promotion law (2026-07-29): when `.changeset/pre.json` still records an active prerelease channel, a stable release MUST explicitly exit that channel through `pnpm changeversion --exit-pre`; plain `pnpm changeversion` is valid only when no prerelease state exists. The version PR, merged `main` head, npm `latest`, remote package tags, and non-prerelease GitHub Release remain independent completion facts.
 
 ## OpenSpec 1.6 Adaptation Baseline
 

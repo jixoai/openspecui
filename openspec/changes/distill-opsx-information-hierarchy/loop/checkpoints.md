@@ -9,6 +9,7 @@ Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 Original request (2026-07-28): implement the UI simplification autonomously, then hand final acceptance to the Owner.
 Owner correction (2026-07-29): navigation, Project Binding, Context, Settings scroll ownership, and Change evidence require a focused product-information pass before acceptance.
 Owner Terminal popup correction (2026-07-29): Terminal-owned popup text must remain legible.
+Owner stable release authorization (2026-07-29): final visual acceptance passed; merge and stable release are authorized.
 -->
 
 ## 1. Research and Specification
@@ -53,7 +54,7 @@ Owner Terminal popup correction (2026-07-29): Terminal-owned popup text must rem
 - [x] 6.3 Pass focused Vitest, Web typecheck/lint/format, static tests, and a clean SSG build
 - [x] 6.4 Pass repository CI-equivalent gates, strict OpenSpec validation, and `git diff --check`
 - [x] 6.5 Open the PR and record successful remote checks
-- [ ] 6.6 Owner completes final visual and real-browser walkthrough
+- [x] 6.6 Owner completes final visual and real-browser walkthrough
 - [x] 6.7 Remove the redundant shell Planning/Context entry and prove navigation ownership stays route-only
 - [x] 6.8 Reorganize Project Binding around editable declarations and a freeform registry-backed Store Combobox
 - [x] 6.9 Reorganize Context around root identity, launch project, Store/References, and action readiness
@@ -83,6 +84,6 @@ Owner Terminal popup correction (2026-07-29): Terminal-owned popup text must rem
 
 ## 7. Finalization
 
-- [ ] 7.1 Owner approves the accepted presentation for merge
+- [x] 7.1 Owner approves the accepted presentation for merge
 - [ ] 7.2 Sync/archive the Change in a dedicated commit
 - [ ] 7.3 Merge the PR after required checks; do not publish another version without separate approval
