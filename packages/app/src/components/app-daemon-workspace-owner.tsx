@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
- * 1. Apply daemon Workspace snapshots while keeping credentials in runtime memory.
+ * 1. Apply daemon Workspace snapshots while keeping current credentials in runtime memory.
  * 2. Bind persisted backend locators to current opaque daemon Workspace ids.
  * 3. Expose same-origin open-in-browser actions and objective failures to the App surface.
  *
@@ -21,7 +21,7 @@ import {
   createDaemonWorkspaceControl,
   type DaemonWorkspaceControl,
 } from '../lib/daemon-workspace-control'
-import { bindLaunchCredential } from '../lib/launch-credential'
+import { bindLaunchCredential, clearLaunchCredential } from '../lib/launch-credential'
 import { applyHostedLaunchRequest, normalizeHostedApiBaseUrl } from '../lib/shell-state'
 import { useConnectionsActions } from '../lib/use-connections'
 
@@ -42,7 +42,11 @@ export function applyDaemonWorkspaceSnapshot(
   for (const workspace of snapshot.workspaces) {
     const apiBaseUrl = normalizeHostedApiBaseUrl(workspace.backendUrl)
     if (!apiBaseUrl) continue
-    if (workspace.credential !== null) bindLaunchCredential(apiBaseUrl, workspace.credential)
+    if (workspace.credential !== null) {
+      bindLaunchCredential(apiBaseUrl, workspace.credential)
+    } else {
+      clearLaunchCredential(apiBaseUrl)
+    }
     workspaceIds.set(apiBaseUrl, workspace.id)
     applyLaunch(apiBaseUrl)
   }

@@ -8,6 +8,7 @@
  * Original request (2026-07-29): "daemon 不应该拥有或关闭每个 backend。"
  */
 import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -267,4 +268,38 @@ describe('daemon IPC server', () => {
       await cleanupTempDir(tempDir)
     }
   })
+
+  it('rejects a connected daemon endpoint that never acknowledges the initial Workspace lease', async () => {
+    const tempDir = await createTempDir()
+    const runDir = join(tempDir, 'run')
+    const endpoint = join(runDir, 'silent.sock')
+    await mkdir(runDir, { recursive: true })
+    const silentServer = createServer((socket) => {
+      socket.on('data', () => {})
+    })
+    await new Promise<void>((resolve, reject) => {
+      silentServer.once('error', reject)
+      silentServer.listen(endpoint, () => resolve())
+    })
+    try {
+      await expect(
+        createDaemonWorkspaceLease({
+          endpoint,
+          initialTimeoutMs: 25,
+          retryDelayMs: 5,
+          workspace: {
+            id: 'workspace-silent',
+            projectDir: '/projects/silent',
+            backendUrl: 'http://127.0.0.1:3400',
+            credential: null,
+          },
+        })
+      ).rejects.toThrow('did not acknowledge the initial Workspace lease')
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        silentServer.close((error) => (error ? reject(error) : resolve()))
+      )
+      await cleanupTempDir(tempDir)
+    }
+  }, 500)
 })

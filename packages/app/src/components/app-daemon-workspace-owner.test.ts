@@ -32,4 +32,28 @@ describe('App daemon Workspace snapshot application', () => {
     expect(ids).toEqual(new Map([[apiBaseUrl, 'workspace-a']]))
     clearLaunchCredential(apiBaseUrl)
   })
+
+  it('revokes a previously bound locator credential when its current Workspace snapshot is anonymous', () => {
+    const apiBaseUrl = 'http://127.0.0.1:3101'
+    clearLaunchCredential(apiBaseUrl)
+    const appliedCredentials: Array<string | null> = []
+
+    applyDaemonWorkspaceSnapshot(
+      {
+        revision: 1,
+        workspaces: [{ id: 'workspace-a', backendUrl: apiBaseUrl, credential: 'runtime-only' }],
+      },
+      () => {}
+    )
+    applyDaemonWorkspaceSnapshot(
+      {
+        revision: 2,
+        workspaces: [{ id: 'workspace-a', backendUrl: apiBaseUrl, credential: null }],
+      },
+      (target) => appliedCredentials.push(readLaunchCredential(target))
+    )
+
+    expect(appliedCredentials).toEqual([null])
+    expect(readLaunchCredential(apiBaseUrl)).toBeNull()
+  })
 })

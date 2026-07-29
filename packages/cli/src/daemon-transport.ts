@@ -90,6 +90,30 @@ export async function createDaemonWorkspaceLease(options: {
     let acknowledged = false
     let buffer = ''
     let reconnectError: Error = new DaemonUnavailableError()
+    let acknowledgementTimer: NodeJS.Timeout | null = null
+    const clearAcknowledgementTimer = () => {
+      if (!acknowledgementTimer) return
+      clearTimeout(acknowledgementTimer)
+      acknowledgementTimer = null
+    }
+    const failUnacknowledgedInitialLease = () => {
+      if (connectedOnce || closed || acknowledged) return
+      const error = new DaemonUnavailableError(
+        'App daemon did not acknowledge the initial Workspace lease before its deadline.'
+      )
+      reconnectError = error
+      failInitial(error)
+      nextSocket.destroy(error)
+    }
+    if (!connectedOnce) {
+      const remainingInitialMs = initialDeadline - Date.now()
+      if (remainingInitialMs <= 0) {
+        failUnacknowledgedInitialLease()
+        return
+      }
+      acknowledgementTimer = setTimeout(failUnacknowledgedInitialLease, remainingInitialMs)
+      acknowledgementTimer.unref()
+    }
     nextSocket.setEncoding('utf8')
     nextSocket.once('connect', () => nextSocket.write(`${JSON.stringify(request)}\n`))
     nextSocket.on('data', (chunk: string) => {
@@ -112,6 +136,7 @@ export async function createDaemonWorkspaceLease(options: {
           return
         }
         acknowledged = true
+        clearAcknowledgementTimer()
         if (!connectedOnce) {
           connectedOnce = true
           resolveInitial?.()
@@ -127,6 +152,7 @@ export async function createDaemonWorkspaceLease(options: {
       reconnectError = new DaemonUnavailableError(undefined, { cause: error })
     })
     nextSocket.once('close', () => {
+      clearAcknowledgementTimer()
       if (socket === nextSocket) socket = null
       if (!closed) {
         scheduleReconnect(
