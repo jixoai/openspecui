@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Render accessible expanded/collapsed navigation for the project workspace.
- * 2. Preserve the Root Context and search entry points across sidebar states.
+ * 2. Preserve the Context route and search entry points across sidebar states.
  * 3. Render static links or live draggable areas from the canonical navigation registry.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ * Owner correction (2026-07-29): the navigation rail must not duplicate Context with a clickable Planning summary.
  */
 import { getHostedScopedStorageKey } from '@/lib/hosted-session'
 import { getBasePath, isStaticMode } from '@/lib/static-mode'
@@ -18,7 +19,6 @@ import { Tooltip } from '../tooltip'
 import { AreaNav } from './area-nav'
 import { BetaCornerMark, BetaPill } from './beta-mark'
 import { navItems, settingsItem } from './nav-items'
-import { RootContextIndicator } from './root-context-indicator'
 import { TopLayerEntryButton } from './top-layer-entry-button'
 
 const DESKTOP_SIDEBAR_COLLAPSED_STORAGE_KEY = 'openspecui:desktop-sidebar-collapsed'
@@ -89,8 +89,6 @@ export function DesktopSidebar() {
           </button>
         </Tooltip>
       </div>
-
-      <RootContextIndicator variant="sidebar" collapsed={collapsed} />
 
       <TopLayerEntryButton
         label="Search"

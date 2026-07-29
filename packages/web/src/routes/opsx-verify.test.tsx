@@ -1,18 +1,20 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify change validation dialog lifecycle.
  * 2. Verify Root Context failure prevents command preparation and execution.
- * 3. Verify direct validation queues only its typed transport and preserves diagnostics.
+ * 3. Verify direct validation preserves typed diagnostics and raw evidence on demand.
  * 4. Verify prepared Root A validation is rejected after Root B replacement.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
+ * Original request (2026-07-28): supporting workflow evidence should remain available on demand.
  */
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsxVerifyRoute } from './opsx-verify'
 
 const {
+  commandsMock,
   prepareWorkflowInvocationMock,
   replaceAllMock,
   rootActionMock,
@@ -20,15 +22,20 @@ const {
   setConfigMock,
   useLocationMock,
   workflowDiagnosticsMock,
-} = vi.hoisted(() => ({
-  prepareWorkflowInvocationMock: vi.fn(),
-  replaceAllMock: vi.fn(),
-  rootActionMock: vi.fn(),
-  runAllMock: vi.fn(),
-  setConfigMock: vi.fn(),
-  useLocationMock: vi.fn(),
-  workflowDiagnosticsMock: vi.fn(),
-}))
+} = vi.hoisted(() => {
+  const replaceAllMock = vi.fn()
+  const runAllMock = vi.fn()
+  return {
+    commandsMock: { replaceAll: replaceAllMock, runAll: runAllMock },
+    prepareWorkflowInvocationMock: vi.fn(),
+    replaceAllMock,
+    rootActionMock: vi.fn(),
+    runAllMock,
+    setConfigMock: vi.fn(),
+    useLocationMock: vi.fn(),
+    workflowDiagnosticsMock: vi.fn(),
+  }
+})
 
 vi.mock('@/components/layout/pop-area', () => ({
   usePopAreaConfigContext: () => ({
@@ -44,10 +51,7 @@ vi.mock('@/lib/use-cli-runner', () => ({
     lines: [],
     status: 'idle',
     hasStarted: false,
-    commands: {
-      replaceAll: replaceAllMock,
-      runAll: runAllMock,
-    },
+    commands: commandsMock,
     reset: vi.fn(),
     cancel: vi.fn(),
   }),
@@ -124,9 +128,8 @@ describe('OpsxVerifyRoute', () => {
 
     render(<OpsxVerifyRoute />)
 
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('Context exit: 1')
-    })
+    expect(await screen.findByText('Root selection failed.')).toBeVisible()
+    expect(screen.getByText('Context exit: 1')).not.toBeVisible()
     expect(prepareWorkflowInvocationMock).not.toHaveBeenCalled()
     expect(replaceAllMock).not.toHaveBeenCalled()
     expect(runAllMock).not.toHaveBeenCalled()
@@ -164,6 +167,43 @@ describe('OpsxVerifyRoute', () => {
       },
     ])
     expect(screen.getByText(/MODIFIED requirement would remove existing scenarios/)).toBeTruthy()
+  })
+
+  it('keeps the complete preparation evidence collapsed until requested', async () => {
+    prepareWorkflowInvocationMock.mockResolvedValue({
+      kind: 'cli-command',
+      command: 'openspec',
+      args: ['validate', 'add-terminal-spawn-command', '--type', 'change', '--strict'],
+      mode: { requestedMode: 'direct', actualMode: 'direct', fallbackReason: null },
+      target: null,
+      evidence: {
+        kind: 'workflow-status',
+        options: {},
+        result: {
+          success: true,
+          stdout: '{"changeName":"add-terminal-spawn-command"}',
+          stderr: '',
+          exitCode: 0,
+          data: { changeName: 'add-terminal-spawn-command' },
+          payload: { changeName: 'add-terminal-spawn-command' },
+          diagnostics: [],
+          contractError: null,
+        },
+      },
+    })
+
+    render(<OpsxVerifyRoute />)
+
+    const trigger = await screen.findByRole('button', { name: /CLI evidence/ })
+    const rawEvidence = screen.getByText(
+      (_, element) =>
+        element?.tagName === 'PRE' &&
+        element.textContent?.includes('"changeName": "add-terminal-spawn-command"') === true
+    )
+    expect(rawEvidence).not.toBeVisible()
+    fireEvent.click(trigger)
+    expect(rawEvidence).toBeVisible()
+    expect(screen.getByText(/Running validation for/)).toBeVisible()
   })
 
   it('rejects the prepared A target at the runner boundary after Root B replaces it', async () => {

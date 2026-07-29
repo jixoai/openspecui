@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
- * 1. Define one public Root Context for launch-project and CLI-selected planning-root facts.
+ * 1. Define one public Root Context with display and physical launch identity plus CLI-selected planning-root facts.
  * 2. Compose CLI availability, Doctor, Context, Reference, and data-scope evidence without rewriting it.
  * 3. Represent loading, refresh, stale-data, and failed-attempt states as one type-safe contract.
  * 4. Keep root-dependent readiness tied to CLI-owned health and diagnostics.
@@ -23,6 +23,7 @@ import {
   type OpenSpecDataScope,
   type ResolveOpenSpecDataScopeOptions,
 } from './open-spec-data-scope.js'
+import { resolveRealPathThroughExistingAncestor } from './reactive-fs/path-realpath.js'
 
 /** OpenSpec CLI availability and runner provenance observed by Root Context resolution. */
 export interface RootContextCliAvailability {
@@ -55,6 +56,8 @@ export interface RootContext {
   launchProject: {
     /** Absolute launch-project path used as the CLI working directory. */
     path: string
+    /** Canonical physical identity used only to compare Root topology. */
+    physicalPath?: string
   }
   /** CLI Doctor root projection. Null means root selection did not resolve. */
   planningRoot: NonNullable<CliDoctor['root']> | null
@@ -194,7 +197,10 @@ function createRootContext(
   const planningRoot = doctorData?.root ?? null
 
   return {
-    launchProject: { path: options.launchProjectDir },
+    launchProject: {
+      path: options.launchProjectDir,
+      physicalPath: resolveRealPathThroughExistingAncestor(options.launchProjectDir),
+    },
     planningRoot,
     storeId: planningRoot?.store_id ?? doctorData?.store?.id ?? null,
     cli,

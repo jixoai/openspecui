@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * 1. Verify compact mobile access to search, notifications, and live status.
+ * 2. Keep passive project identity separate from the Context navigation owner.
+ *
+ * Owner correction (2026-07-29): mobile navigation must not duplicate the clickable Planning/Context summary.
+ */
 import { cleanup, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -103,6 +110,7 @@ describe('MobileHeader', () => {
     expect(notificationButton.querySelector('svg')?.className.baseVal).toContain('w-4')
     expect(screen.queryByText('Live')).toBeNull()
     expect(screen.getByText('openspecui')).toBeTruthy()
-    expect(screen.getByText('product-specs')).toBeTruthy()
+    expect(screen.queryByText('product-specs')).toBeNull()
+    expect(screen.queryByRole('link', { name: /Open Root Context/ })).toBeNull()
   })
 })

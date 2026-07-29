@@ -1,15 +1,17 @@
 /**
  * @vitest-environment node
  *
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Prove SSG enumerates and titles Owned Specs through compound identity.
  * 2. Prove the static server entry imports and renders without browser globals.
- * 3. Prove `/context` and objective Kanban are generated through the static route manifest.
+ * 3. Prove Config-owned Resolved Context and objective Kanban are generated through the static route manifest.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  * Derived requirement (2026-07-18): Static HTML pre-render must not evaluate browser-only toolkit modules.
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
  * Original request (2026-07-28): static Board uses the shared ReadonlyKanban.
+ * Original request (2026-07-28): keep static provenance accessible after verbose evidence is collapsed.
+ * Owner Context direction (2026-07-29): publish only `/config/context`, with no `/context` alias.
  */
 import type { ExportSnapshot } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
@@ -53,9 +55,10 @@ describe('static Spec routes', () => {
   it('enumerates and titles the compound Owned route', () => {
     const data = snapshot()
     expect(getRoutes(data)).toContain('/specs/owned/auth%2Fv2')
-    expect(getRoutes(data)).toContain('/context')
+    expect(getRoutes(data)).toContain('/config/context')
+    expect(getRoutes(data)).not.toContain('/context')
     expect(getRoutes(data)).toContain('/board')
-    expect(getTitle('/context', data)).toBe('Context')
+    expect(getTitle('/config/context', data)).toBe('Resolved Context')
     expect(getTitle('/board', data)).toBe('Kanban')
     expect(getTitle('/specs/owned/auth%2Fv2', data)).toBe('Auth V2')
     expect(getRoutes(data)).not.toContain('/specs/auth%2Fv2')
@@ -71,11 +74,12 @@ describe('static Spec routes', () => {
   it('renders published Context provenance into the static server output', async () => {
     const { render } = await import('./entry-server')
 
-    const html = await render('/context', snapshot(), '/')
+    const html = await render('/config/context', snapshot(), '/')
 
     expect(html).toContain('workspace/openspec')
     expect(html).toContain('No effective References were recorded')
-    expect(html).toContain('Runtime CLI evidence, registry, and data scope are not published')
+    expect(html).toContain('aria-label="Static Context evidence boundary"')
+    expect(html).toContain('Published Reference policy')
     expect(html).not.toContain('XDG_DATA_HOME')
   }, 20_000)
 })

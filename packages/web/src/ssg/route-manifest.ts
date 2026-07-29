@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Enumerate static routes from snapshot identities without loading the render runtime.
  * 2. Resolve static page titles through the same compound Spec identity contract.
  * 3. Preserve Context and objective readonly Kanban as generated static routes.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
+ * Owner Context direction (2026-07-29): publish only the canonical `/config/context` route.
  * Original request (2026-07-28): static Board uses the shared ReadonlyKanban.
  */
 import type { ExportSnapshot } from '@openspecui/core'
@@ -24,7 +25,7 @@ export function getRoutes(snapshot: ExportSnapshot): string[] {
     '/board',
     '/archive',
     '/config',
-    '/context',
+    '/config/context',
     '/settings',
     ...snapshot.specs.map((spec) => specRoutePath(spec.identity)),
     ...snapshot.changes.map((change) => `/changes/${change.id}`),
@@ -40,7 +41,7 @@ export function getTitle(path: string, snapshot: ExportSnapshot): string {
   if (path === '/board') return 'Kanban'
   if (path === '/archive') return 'Archived Changes'
   if (path === '/config') return 'Config'
-  if (path === '/context') return 'Context'
+  if (path === '/config/context') return 'Resolved Context'
   if (path === '/settings') return 'Settings'
 
   const ownedSpecMatch = path.match(/^\/specs\/owned\/([^/]+)$/)

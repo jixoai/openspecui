@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Compose ownership-specific Config sections with routed Schema tabs.
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * 1. Compose ownership-specific Config sections with routed Schema tabs and Resolved Context access.
  * 2. Orchestrate Schema discovery, inspection, creation, and file editing.
  * 3. Preserve Schema source-specific read-only behavior and shared Root action gating.
  * 4. Keep static/live tab selection on one route contract.
@@ -12,6 +12,7 @@
  * Original request (2026-07-18): "Schema and Template mutations must use useRootActionState."
  * Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Owner Context direction (2026-07-29): expose Resolved Context as a Config title action.
  */
 import { Button } from '@/components/button'
 import { ButtonGroup } from '@/components/button-group'
@@ -19,6 +20,7 @@ import { CodeEditor } from '@/components/code-editor'
 import { ActiveRootConfigSection } from '@/components/config/active-root-config-section'
 import { EnvironmentGlobalConfigSection } from '@/components/config/environment-global-config-section'
 import { ProjectBindingSection } from '@/components/config/project-binding-section'
+import { ResolvedContextAction } from '@/components/config/resolved-context-header'
 import {
   ContextMenu,
   ContextMenuTargeter,
@@ -1622,10 +1624,13 @@ export function Config() {
         </div>
       </Dialog>
 
-      <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
-        <SlidersHorizontal className="h-6 w-6 shrink-0" />
-        Config
-      </h1>
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <h1 className="font-nav flex min-w-0 items-center gap-2 text-2xl font-bold">
+          <SlidersHorizontal className="h-6 w-6 shrink-0" aria-hidden />
+          Config
+        </h1>
+        <ResolvedContextAction />
+      </div>
 
       <Tabs
         ref={tabsRef}

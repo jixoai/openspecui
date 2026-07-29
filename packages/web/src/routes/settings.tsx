@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Present backend, CLI execution, terminal, notification, and appearance settings.
  * 2. Compose the extracted OpenSpec diagnostics and initialization owner.
  * 3. Bind network-triggered settings actions to visible loading and failure state.
@@ -11,6 +11,7 @@
  * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
+ * Owner correction (2026-07-29): Settings uses one shell scroll owner and container-driven field density.
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -676,7 +677,7 @@ export function Settings() {
   }
   return (
     <div
-      className="@container-[size] scrollbar-thin scrollbar-track-transparent h-full min-h-0 overflow-y-auto scroll-smooth"
+      className="@container-[size] h-full min-h-0 scroll-smooth"
       style={{ timelineScope: generateTimelineScope(visibleTocItems) } as CSSProperties}
     >
       <div className="toc-page-layout min-h-full gap-6 p-4 [--toc-page-sidebar-min:14rem]">
@@ -800,7 +801,7 @@ export function Settings() {
                     </p>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="@[42rem]:grid-cols-2 grid gap-4">
                     <div>
                       <label className="mb-2 block text-sm font-medium">Light Theme</label>
                       <Select

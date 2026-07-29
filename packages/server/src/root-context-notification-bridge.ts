@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Convert current Manager-owned Root Context terminal transitions into local health notifications.
  * 2. Derive root-change records from resolved root identity while retaining generation as lifecycle provenance.
  * 3. Retire late Root callbacks through explicit generation and subscription-epoch boundaries.
@@ -7,6 +7,7 @@
  * Original checkpoint (2026-07-16): "6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging."
  * Owner correction (2026-07-22): "每项先明确一个生产 owner、一个精准红例、一个绿例。"
  * Independent review correction (2026-07-22): Root identity excludes generation and data-scope diagnostics.
+ * Owner Context direction (2026-07-29): route Root health actions to Config-owned Resolved Context.
  */
 import type { RootContext, RootContextError, RootContextState } from '@openspecui/core'
 import type { NotificationPublishInput } from '@openspecui/core/notifications'
@@ -69,8 +70,8 @@ function contextAction(): NotificationPublishInput['actions'] {
   return [
     {
       type: 'href.open',
-      label: 'Open context',
-      target: { href: '/context' },
+      label: 'Open Resolved Context',
+      target: { href: '/config/context' },
     },
   ]
 }
@@ -98,7 +99,7 @@ function recoveryNotification(): NotificationPublishInput {
 function rootChangedNotification(): NotificationPublishInput {
   return {
     title: 'Planning root changed',
-    body: 'Open Root Context for the current planning-root details.',
+    body: 'Open Resolved Context for the current planning-root details.',
     source: { type: 'root-context' },
     actions: contextAction(),
     level: 'info',

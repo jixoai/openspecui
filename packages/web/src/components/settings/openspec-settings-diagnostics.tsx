@@ -1,25 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Present read-only Root Context compatibility, selection, and failed-attempt evidence.
- * 2. Present the independent Environment Global profile, delivery, drift, and data-scope lifecycle.
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * 1. Summarize read-only Root compatibility, selection, and failed-attempt state with links to Context.
+ * 2. Summarize Environment Global profile, delivery, drift, and data scope with a link to Config.
  * 3. Preserve settled diagnostic facts during revalidation and use stable skeleton geometry on admission.
  *
  * Original request (2026-07-20): "Settings diagnostics are read-only."
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Original request (2026-07-28): Settings should stay concise and defer verbose OpenSpec evidence to its owning routes.
+ * Owner Context direction (2026-07-29): link Root details to Config-owned Resolved Context.
  */
-import { CopyablePath } from '@/components/copyable-path'
+import { InformationBadge } from '@/components/information-disclosure'
 import { DetailPanelSkeleton, RealtimeRevalidateCue } from '@/components/realtime'
 import { TocSection } from '@/components/toc'
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import type { EnvironmentGlobalConfig, RootContext, RootContextState } from '@openspecui/core'
-import {
-  classifyOpenSpecCliVersion,
-  OPENSPEC_CLI_TARGET_SERIES,
-  OPENSPECUI_TARGET_MAJOR,
-} from '@openspecui/core/openspec-compat'
+import { classifyOpenSpecCliVersion } from '@openspecui/core/openspec-compat'
 import { AlertCircle, ExternalLink } from 'lucide-react'
-import type { ReactNode } from 'react'
 import { SettingsStatusLabel } from './settings-status-label'
 
 /** Environment subscription facts rendered independently from Root Context. */
@@ -30,23 +27,11 @@ export interface SettingsEnvironmentDiagnostics {
   error: Error | null
 }
 
-function DiagnosticField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0 border-t py-2 first:border-t-0 sm:border-l sm:border-t-0 sm:px-3 sm:first:border-l-0 sm:first:pl-0">
-      <dt className="text-muted-foreground text-[11px] font-medium">{label}</dt>
-      <dd className="mt-1 min-w-0 text-sm">{children}</dd>
-    </div>
-  )
-}
-
 function CompatibilityStatus({ context }: { context: RootContext | null }) {
   if (!context) {
     return (
-      <div className="space-y-1">
+      <div>
         <SettingsStatusLabel status="pending">CLI evidence pending</SettingsStatusLabel>
-        <p className="text-muted-foreground text-xs">
-          Waiting for the Root Context availability and version projection.
-        </p>
       </div>
     )
   }
@@ -68,59 +53,49 @@ function CompatibilityStatus({ context }: { context: RootContext | null }) {
             : 'Unsupported CLI line'
 
   return (
-    <div className="space-y-1">
-      <SettingsStatusLabel status={visibleStatus}>{visibleLabel}</SettingsStatusLabel>
-      <p className="text-muted-foreground text-xs">
-        {availability.available
+    <InformationBadge
+      ariaLabel={`OpenSpec CLI compatibility ${visibleLabel}`}
+      tooltip={
+        availability.available
           ? compatibility.message
-          : availability.error || 'OpenSpec CLI is explicitly unavailable.'}
-      </p>
-    </div>
+          : availability.error || 'OpenSpec CLI is explicitly unavailable.'
+      }
+      tone={visibleStatus === 'current' ? 'subtle' : 'muted'}
+    >
+      {visibleLabel}
+    </InformationBadge>
   )
 }
 
 function RootFacts({ context }: { context: RootContext }) {
   return (
-    <dl className="grid min-w-0 border-y sm:grid-cols-2 lg:grid-cols-4">
-      <DiagnosticField label="Launch project">
-        <CopyablePath path={context.launchProject.path} />
-      </DiagnosticField>
-      <DiagnosticField label="Planning root">
-        {context.planningRoot ? (
-          <div className="space-y-1">
-            <CopyablePath path={context.planningRoot.path} />
-            <span className="text-muted-foreground block text-xs">
-              source: {context.planningRoot.source}
-              {context.storeId ? ` | Store ${context.storeId}` : ''}
-            </span>
-          </div>
-        ) : (
-          <span className="text-muted-foreground">Unresolved</span>
-        )}
-      </DiagnosticField>
-      <DiagnosticField label="Inherited data scope">
-        <div className="space-y-1">
-          <CopyablePath path={context.dataScope.path} />
-          <span className="text-muted-foreground block text-xs">
-            {context.dataScope.source}
-            {context.dataScope.environmentVariable
-              ? ` | ${context.dataScope.environmentVariable}`
-              : ''}
-          </span>
-        </div>
-      </DiagnosticField>
-      <DiagnosticField label="CLI evidence">
-        <div className="space-y-1">
-          <span className="font-mono text-xs">
-            {context.cli.version ?? (context.cli.available ? 'version unavailable' : 'unavailable')}
-          </span>
-          <span className="text-muted-foreground block text-xs">
-            doctor {context.evidence.doctor?.exitCode ?? 'not run'} | context{' '}
-            {context.evidence.context?.exitCode ?? 'not run'}
-          </span>
-        </div>
-      </DiagnosticField>
-    </dl>
+    <div className="flex flex-wrap gap-1.5">
+      <InformationBadge ariaLabel="Launch project path" tooltip={context.launchProject.path}>
+        Launch
+      </InformationBadge>
+      <InformationBadge
+        ariaLabel={context.planningRoot ? 'Planning root selected' : 'Planning root unresolved'}
+        tooltip={
+          context.planningRoot
+            ? `${context.planningRoot.path} · source ${context.planningRoot.source}${context.storeId ? ` · Store ${context.storeId}` : ''}`
+            : 'No Planning root is selected.'
+        }
+      >
+        {context.planningRoot ? 'Planning selected' : 'Planning unresolved'}
+      </InformationBadge>
+      <InformationBadge
+        ariaLabel={`Inherited data scope source ${context.dataScope.source}`}
+        tooltip={`${context.dataScope.path}${context.dataScope.environmentVariable ? ` · ${context.dataScope.environmentVariable}` : ''}`}
+      >
+        Data {context.dataScope.source}
+      </InformationBadge>
+      <InformationBadge
+        ariaLabel="Root Context CLI command evidence"
+        tooltip={`CLI ${context.cli.version ?? 'unavailable'} · doctor ${context.evidence.doctor?.exitCode ?? 'not run'} · context ${context.evidence.context?.exitCode ?? 'not run'}`}
+      >
+        CLI {context.cli.version ?? 'unavailable'}
+      </InformationBadge>
+    </div>
   )
 }
 
@@ -149,24 +124,29 @@ function FailedAttemptEvidence({
         Attempted root: {attempt.planningRoot?.path ?? 'unresolved'}
         {attempt.storeId ? ` | Store ${attempt.storeId}` : ''}
       </p>
-      <p className="text-muted-foreground text-xs">
-        Doctor exit {attempt.evidence.doctor?.exitCode ?? 'not run'} | Context exit{' '}
-        {attempt.evidence.context?.exitCode ?? 'not run'}
-      </p>
-      {attempt.evidence.doctor?.stderr || attempt.evidence.context?.stderr ? (
-        <pre className="bg-muted/50 max-h-28 overflow-auto whitespace-pre-wrap rounded px-2 py-1 text-[11px]">
-          {attempt.evidence.doctor?.stderr || attempt.evidence.context?.stderr}
-        </pre>
-      ) : null}
-      {diagnostics.length > 0 ? (
-        <ul className="space-y-1 text-[11px]">
-          {diagnostics.map((diagnostic, index) => (
-            <li key={`${diagnostic.code}-${index}`}>
-              {diagnostic.severity}: {diagnostic.code} - {diagnostic.message}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <div className="flex flex-wrap gap-1.5">
+        <InformationBadge
+          ariaLabel="Failed Root attempt command exits"
+          tooltip={`Doctor ${attempt.evidence.doctor?.exitCode ?? 'not run'} · Context ${attempt.evidence.context?.exitCode ?? 'not run'}`}
+        >
+          Command exits
+        </InformationBadge>
+        <InformationBadge
+          ariaLabel={`${diagnostics.length} failed Root attempt diagnostics`}
+          tooltip={
+            diagnostics.length > 0
+              ? diagnostics
+                  .map(
+                    (diagnostic) =>
+                      `${diagnostic.severity}: ${diagnostic.code} - ${diagnostic.message}`
+                  )
+                  .join('\n')
+              : 'No structured diagnostics.'
+          }
+        >
+          Diagnostics {diagnostics.length}
+        </InformationBadge>
+      </div>
     </div>
   )
 }
@@ -190,12 +170,9 @@ function RootDiagnostics() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium">
-            OpenSpecUI {OPENSPECUI_TARGET_MAJOR}.x targets OpenSpec CLI {OPENSPEC_CLI_TARGET_SERIES}
-            .x
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium">OpenSpec runtime</p>
           <CompatibilityStatus context={compatibilityContext} />
         </div>
         <SettingsStatusLabel status={lifecycle}>
@@ -288,48 +265,37 @@ function EnvironmentDiagnostics({ environment }: { environment: SettingsEnvironm
 
       {config ? (
         <RealtimeRevalidateCue active={lifecycle === 'refreshing'}>
-          <dl className="grid min-w-0 border-y sm:grid-cols-2 lg:grid-cols-4">
-            <DiagnosticField label="Profile">
-              {profile?.available ? profile.profile : 'Unavailable'}
-            </DiagnosticField>
-            <DiagnosticField label="Delivery">
-              {profile?.available ? profile.delivery : 'Unavailable'}
-            </DiagnosticField>
-            <DiagnosticField label="Drift">
-              <SettingsStatusLabel status={profile?.driftStatus ?? 'unknown'}>
-                {profile?.driftStatus ?? 'unknown'}
-              </SettingsStatusLabel>
-            </DiagnosticField>
-            <DiagnosticField label="Environment data scope">
-              <div className="space-y-1">
-                <CopyablePath path={config.owner.dataScope.path} />
-                <span className="text-muted-foreground block text-xs">
-                  {config.owner.dataScope.source}
-                </span>
-              </div>
-            </DiagnosticField>
-          </dl>
-          <div>
-            <p className="text-muted-foreground mb-1 text-[11px] font-medium">
-              Effective workflows
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {profile?.workflows.length ? (
-                profile.workflows.map((workflow) => (
-                  <span
-                    key={workflow}
-                    className="border-border bg-muted rounded border px-1.5 py-0.5 text-xs"
-                  >
-                    {workflow}
-                  </span>
-                ))
-              ) : (
-                <span className="text-muted-foreground text-xs">(none)</span>
-              )}
-            </div>
-            {profile?.warningText ? (
-              <p className="text-muted-foreground mt-2 text-xs">{profile.warningText}</p>
-            ) : null}
+          <div className="flex flex-wrap gap-1.5">
+            <InformationBadge
+              ariaLabel={`Environment profile ${profile?.available ? profile.profile : 'Unavailable'}`}
+              tooltip="Effective profile reported by OpenSpec environment-global config."
+            >
+              Profile {profile?.available ? profile.profile : 'Unavailable'}
+            </InformationBadge>
+            <InformationBadge
+              ariaLabel={`Environment delivery ${profile?.available ? profile.delivery : 'Unavailable'}`}
+              tooltip="Effective tool delivery reported by OpenSpec environment-global config."
+            >
+              Delivery {profile?.available ? profile.delivery : 'Unavailable'}
+            </InformationBadge>
+            <InformationBadge
+              ariaLabel={`Environment drift ${profile?.driftStatus ?? 'unknown'}`}
+              tooltip={profile?.warningText ?? 'No environment drift warning reported.'}
+            >
+              Drift {profile?.driftStatus ?? 'unknown'}
+            </InformationBadge>
+            <InformationBadge
+              ariaLabel={`${profile?.workflows.length ?? 0} effective workflows`}
+              tooltip={profile?.workflows.length ? profile.workflows.join(', ') : '(none)'}
+            >
+              Workflows {profile?.workflows.length ?? 0}
+            </InformationBadge>
+            <InformationBadge
+              ariaLabel={`Environment data scope source ${config.owner.dataScope.source}`}
+              tooltip={config.owner.dataScope.path}
+            >
+              Data {config.owner.dataScope.source}
+            </InformationBadge>
           </div>
         </RealtimeRevalidateCue>
       ) : lifecycle === 'loading' ? (
@@ -351,8 +317,8 @@ export function OpenSpecSettingsDiagnosticsSection({
     <TocSection id="settings-openspec-diagnostics" index={index} className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">OpenSpec Diagnostics</h2>
-        <VTLink to="/context" className="text-primary text-xs hover:underline">
-          Root / Doctor / Context details
+        <VTLink to="/config/context" className="text-primary text-xs hover:underline">
+          Resolved Context details
         </VTLink>
       </div>
       <div className="border-border space-y-5 rounded-lg border p-4">

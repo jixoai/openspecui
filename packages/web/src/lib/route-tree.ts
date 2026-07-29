@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Register the canonical live project route tree and objective Kanban around one writable planning root.
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * 1. Register the canonical live project route tree, Config-owned Context, and objective Kanban.
  * 2. Register pop-layer workflows independently from project workspace tabs.
  * 3. Keep terminal registration configurable for hosted project surfaces.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  * Original request (2026-07-28): add the objective Kanban project surface.
+ * Owner Context direction (2026-07-29): make `/config/context` the only live Context route.
  */
 import { createRoute, type AnyRootRoute, type AnyRoute } from '@tanstack/react-router'
 import { ArchiveList } from '../routes/archive-list'
@@ -62,8 +63,11 @@ export function createRouteTree(rootRoute: AnyRootRoute, opts?: { includeTermina
       path: '/specs/referenced/$storeId/$specId',
       component: SpecView,
     }),
-    // 6.9 项目级 Context 视图（取代项目 Stores 页）。
-    createRoute({ getParentRoute: () => rootRoute, path: '/context', component: ContextView }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/config/context',
+      component: ContextView,
+    }),
     createRoute({ getParentRoute: () => rootRoute, path: '/changes', component: ChangeList }),
     createRoute({
       getParentRoute: () => rootRoute,

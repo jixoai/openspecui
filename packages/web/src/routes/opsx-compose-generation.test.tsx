@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Prove late Root A preparation cannot overwrite a B-current target or A-owned dirty draft.
  * 2. Prove same-generation observations preserve the real editor and spawn-dialog instances.
  * 3. Prove pending preparation uses the shared visual cue without routine visible copy.
@@ -7,6 +7,7 @@
  * Original request (2026-07-21): "Compose 需要先建模 pending A -> B 的 generation；不要用假按钮、手动 downstream 调用或同时绕过两层保护。"
  * Owner correction (2026-07-21): "每项先明确一个生产 owner、一个精准红例、一个绿例。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): keep workflow evidence retrievable while removing verbose direct labels.
  */
 import { EditorView } from '@codemirror/view'
 import type { RunWorkflowResultV2, WorkflowInvocationTargetV2 } from '@openspecui/core'
@@ -249,10 +250,7 @@ function getComposeEditorView(): EditorView {
 }
 
 function getWorkflowTargetNotice(): HTMLElement {
-  const diagnosticLabel = screen.getByText('Direct Reference diagnostics')
-  const notice = diagnosticLabel.parentElement
-  if (!notice) throw new Error('Expected the mounted WorkflowTargetNotice.')
-  return notice
+  return screen.getByRole('region', { name: 'Workflow target' })
 }
 
 function replaceComposeDraft(editor: EditorView, value: string): void {

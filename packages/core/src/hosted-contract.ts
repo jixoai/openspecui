@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
- * 1. Publish the browser-safe runtime schemas for hosted Health, Store, Root Context, and mutation facts.
+ * 1. Publish browser-safe hosted schemas including Root Context display and physical launch identity.
  * 2. Decode one successful tRPC result envelope into typed data or retained contract-error evidence.
  * 3. Preserve upstream Store and OpenSpec diagnostic facts without inferring health or ownership.
  * 4. Keep this protocol entry free of Node runtime dependencies for hosted browser consumers.
@@ -160,7 +160,9 @@ const HostedContextMemberSchema = z
 /** Browser-safe complete Root Context fact retained by the hosted App projection. */
 export const HostedRootContextSchema = z
   .object({
-    launchProject: z.object({ path: z.string() }).passthrough(),
+    launchProject: z
+      .object({ path: z.string(), physicalPath: z.string().optional() })
+      .passthrough(),
     planningRoot: HostedPlanningRootSchema.nullable(),
     storeId: z.string().nullable(),
     generation: z.string().optional(),

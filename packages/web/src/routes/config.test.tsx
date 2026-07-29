@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Verify routed Config schema selection.
  * 2. Verify Project Binding, Active Root, and Environment Global ownership surfaces.
  * 3. Prove Active Root file presence is independent from empty content.
@@ -9,9 +9,11 @@
  * Original request (2026-07-17): "An existing empty Active Root file remains editable."
  * Original request (2026-07-18): "Schema and Template mutations must use useRootActionState."
  * Original request (2026-07-26): "缓存更新期间仍可读，但不能授权写入。"
+ * Original request (2026-07-28): preserve Config ownership facts through compact accessible evidence.
+ * Owner Context direction (2026-07-29): expose Resolved Context through the Config title action.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Config } from './config'
 
@@ -81,6 +83,18 @@ vi.mock('@/components/scroll-spy', () => ({
 vi.mock('@/lib/static-mode', () => ({
   getBasePath: () => '/',
   isStaticMode: isStaticModeMock,
+}))
+
+vi.mock('@/lib/view-transitions/navigation', () => ({
+  VTLink: ({
+    children,
+    to,
+    ...props
+  }: { children?: ReactNode; to: string } & Omit<ComponentProps<'a'>, 'href'>) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 vi.mock('@/lib/terminal-context', () => ({
@@ -242,6 +256,10 @@ describe('Config schema tabs', () => {
     expect(screen.getByRole('button', { name: 'Environment Global' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Project Config' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Global Config' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Open Resolved Context' })).toHaveAttribute(
+      'href',
+      '/config/context'
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'Environment Global' }))
 
@@ -324,18 +342,22 @@ describe('Config schema tabs', () => {
     window.history.replaceState(null, '', '/config?configTab=active-root')
     render(<Config />)
 
+    expect(screen.getByText('Planning root: /stores/shared')).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Active Root source declared' })).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Active Root Store shared' })).toBeTruthy()
     expect(
-      screen.getByText('Planning root: /stores/shared · declared · Store shared · external')
+      screen.getByRole('note', { name: 'Active Root is external to the launch project' })
     ).toBeTruthy()
-    expect(screen.getByText('File: /stores/shared/openspec/config.yaml')).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Active Root config file path' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Environment Global' }))
 
-    await waitFor(() => {
-      expect(screen.getByText('/runtime/openspec/config.json', { selector: 'code' })).toBeTruthy()
-    })
-    expect(screen.getByText('/runtime/openspec')).toBeTruthy()
-    expect(screen.getByText(/xdg-data-home/)).toBeTruthy()
+    await waitFor(() =>
+      expect(screen.getByRole('note', { name: 'Environment Global config file path' })).toBeTruthy()
+    )
+    expect(
+      screen.getByRole('note', { name: 'OpenSpec data scope source xdg-data-home' })
+    ).toBeTruthy()
   })
 
   it('keeps an existing empty Active Root config editable instead of rendering absence', () => {

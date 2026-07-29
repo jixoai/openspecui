@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Verify live mobile navigation resolves only canonical project tabs.
- * 2. Verify static mobile navigation exposes Context without a retired Stores entry.
+ * 2. Verify static and live mobile navigation omit Config-owned Context and retired Stores.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ * Owner Context direction (2026-07-29): Resolved Context is a Config action, not a mobile tab.
  */
 import { cleanup, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -21,7 +22,7 @@ vi.mock('@/lib/static-mode', () => ({
 
 vi.mock('@/lib/use-nav-controller', () => ({
   useNavLayout: () => ({
-    mainTabs: ['/dashboard', '/context', '/stores'],
+    mainTabs: ['/dashboard', '/config', '/context', '/stores'],
     bottomTabs: [],
   }),
 }))
@@ -44,19 +45,21 @@ describe('MobileTabBar', () => {
     modeState.isStatic = false
   })
 
-  it('renders Context and discards a retired Stores tab id in live mode', () => {
+  it('discards retired Context and Stores tab ids in live mode', () => {
     render(<MobileTabBar />)
 
-    expect(screen.getByRole('link', { name: 'Context' })).toHaveAttribute('href', '/context')
+    expect(screen.getByRole('link', { name: 'Config' })).toHaveAttribute('href', '/config')
+    expect(screen.queryByRole('link', { name: 'Context' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'Stores' })).toBeNull()
   })
 
-  it('renders Context without Stores from the canonical static navigation', () => {
+  it('omits Context and Stores from canonical static navigation', () => {
     modeState.isStatic = true
 
     render(<MobileTabBar />)
 
-    expect(screen.getByRole('link', { name: 'Context' })).toHaveAttribute('href', '/context')
+    expect(screen.getByRole('link', { name: 'Config' })).toHaveAttribute('href', '/config')
+    expect(screen.queryByRole('link', { name: 'Context' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'Stores' })).toBeNull()
   })
 })

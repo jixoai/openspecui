@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify change detail fallbacks and schema-driven artifact rendering.
  * 2. Verify retained status errors alongside detail and Root Context failure locks the workflow toolbar.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ * Original request (2026-07-28): keep progress divergence direct while compressing its source counts.
  */
 import type { RootActionState } from '@/lib/use-root-action-state'
 import type { ChangeStatus } from '@openspecui/core'
@@ -336,8 +337,8 @@ describe('ChangeView', () => {
 
     render(<ChangeView />)
 
-    expect(screen.getByText('Apply instructions: 0/0')).toBeTruthy()
-    expect(screen.getByText('Tracked artifact glob: 1/3')).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Apply instructions progress 0 of 0' })).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Tracked artifact glob progress 1 of 3' })).toBeTruthy()
   })
 
   it('falls back to the shared content document tab when no artifact tab is available', () => {

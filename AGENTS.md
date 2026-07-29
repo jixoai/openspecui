@@ -1,10 +1,10 @@
 <!--
-Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 1. Bootstrap repository agents through CLAUDE.md.
 2. Enforce protected-branch, PR, CI, and release delivery policy.
 3. Protect static/SSG behavior and shared live/static projections.
 4. Preserve the OpenSpec adaptation baseline, source-distinct projections, and independent-review corrections.
-5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, live-projection loading, real-time visual lifecycle, container-responsive objective Kanban projection, live Board scroll ownership, and delivery-correction boundaries for the 1.6 adaptation.
+5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, live-projection loading, real-time visual lifecycle, OPSX-first information hierarchy, Config-owned Resolved Context, Terminal palette accessibility, container-responsive objective Kanban projection, live Board scroll ownership, and delivery-correction boundaries for the 1.6 adaptation.
 
 Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配，目前我们的进度有点落后。你先了解项目，然后更新 references/openspec，然后使用 $wayfinder 和我讨论具体的适配计划。我们最终使用openspec来管理 wayfinder 产出的文档。"
 Original request (2026-07-28): "这个PR自身是否符合OPSX的开放式设计，是否会冲突？都需要进行深入的调查。"
@@ -52,13 +52,26 @@ Owner-reported defect (2026-07-27): SessionTabs Offline presentation can lag an 
 Owner-reported defect (2026-07-27): A clean SSG build emits a hashed Server entry while export assumes `dist-ssg/server/entry-server.js`.
 Owner-reported defect (2026-07-27): Mobile Store Inspector overflows inline; AppHeader plus viewport-sized SessionTabs/iframe overflows the block axis.
 Owner acceptance request (2026-07-28): "我需要非常具体的验收工具和验收流程"
+Owner information-hierarchy correction (2026-07-29): "左侧导航栏的上方没必要放 Planning 信息，这和左侧导航栏的作用冲突了；点击等同于点击 Context。"
+Owner information-hierarchy correction (2026-07-29): "Config > Project Binding 的 Store 使用 Combobox；其它卡片从产品价值重新组织，并用 Tooltip 提供解释。"
+Owner information-hierarchy correction (2026-07-29): "Context 页面同理，从产品经理的角度重新组织有价值的信息。"
+Owner layout correction (2026-07-29): "Settings 页面只能保留一个滚动 owner；ChangeDetail 的 Paths and CLI evidence 需要拆分可读摘要、artifact、References、CLI 结果，移动端不得横向溢出。"
+Owner Terminal popup correction (2026-07-29): "弹出层的字体颜色要修复。"
+Owner responsive direction (2026-07-29): "从产品经理的角度优化信息展示。以移动端的视觉体验优先，再逐步扩展到平板尺寸和桌面尺寸，使用容器查询做响应式。"
+Owner same-root correction (2026-07-29): "Launch==Planning 的情况下，Dashboard 应隐藏冗余上下文，Terminal 不应提供 cwd 切换；ignored Store warning 仍应在 Config 中可修复。"
+Owner Context placement (2026-07-29): "把它作为 Config 页面 title 部分的一个 Actions，点击进入一个 config/context 的子页面，这个页面顶部提供一个返回按钮。"
+Owner Context readability (2026-07-29): "将结构化信息的可读性增强，并利用手风琴折叠隐藏次要信息，用 tooltip 隐藏冗长信息，用 tooltip 提供帮助信息。"
+Owner accessibility correction (2026-07-29): "终端的字体色相关的使用必须统一，因为在 light 环境下终端背景可能仍然是黑色或者灰色。"
 Owner presentation direction (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
 Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间需要 gap 或分割线；Static 导出后的 /context 页面没数据。"
 Owner-reported defect (2026-07-28): "pnpm openspecui export -o ./tmp --open 导出的数据好像逃逸到 html 去了。"
 Original request (2026-07-28): "把残留的工作先完成"
 Original request (2026-07-28): "我想先发布一个beta版本"
+Owner stable release authorization (2026-07-29): "开始发布"
+Original request (2026-07-28): "让界面像5.x那样清爽的同时，仍然保证6.x新增的信息可以被Get到。因为我们openspecui最关键的是OPSX这套流程，其它都是服务于这套流程的。"
 Review correction (2026-07-20): Terminal cwd evidence must cross the production Server owner instead of injecting a hand-authored downstream callback.
 Review correction (2026-07-20): Settings tool delivery must preserve upstream physical artifact scope, render-time subscription provenance, and CLI-runner cache retirement.
+Product information architecture law (2026-07-29): Project navigation must not render a clickable Planning summary that duplicates `/context`; the shell may expose only route navigation, while Context owns root identity and explanation. Project Binding owns launch `store:`/`references:` editing and should present registry Store suggestions through a freeform Combobox without making registry lookup a save prerequisite. Context answers root, launch project, Store/References, and action readiness first; timestamps, raw command envelopes, data-scope paths, and diagnostics remain deeper evidence. Settings has one page-level scroll owner. Change evidence is layered as human summary -> readable paths/artifacts/references -> raw CLI payload/stdout/stderr, with no path or JSON block forcing horizontal overflow.
 -->
 
 MUST READ: CLAUDE.md
@@ -127,8 +140,72 @@ MUST READ: CLAUDE.md
   5. notify manager only after the GitHub release automation succeeds
 
 - Prerelease delivery law (2026-07-28): A requested beta release enters or continues explicit Changesets prerelease mode and derives npm dist-tag plus GitHub prerelease state from the generated SemVer version; caller-authored parallel channel flags are forbidden. `6.0.0-beta.0` publishes under `beta` and cannot move `latest`. Semantic flag conflicts belong to the typed prerelease planner because a CLI parser may materialize absent boolean flags as `false`; direct production-parser evidence is required. Registry publication and package-tag delivery are independent facts: a rerun must recover missing tags after packages already exist, while a true registry-and-tag no-op must not rewrite an old GitHub Release. Release automation pushes tag refs only, never its potentially stale checked-out `main`. Completion requires the exact-head workflow, npm channel state, remote tags, and GitHub prerelease as separate evidence.
+- Stable promotion law (2026-07-29): when `.changeset/pre.json` still records an active prerelease channel, a stable release MUST explicitly exit that channel through `pnpm changeversion --exit-pre`; plain `pnpm changeversion` is valid only when no prerelease state exists. The version PR, merged `main` head, npm `latest`, remote package tags, and non-prerelease GitHub Release remain independent completion facts.
 
 ## OpenSpec 1.6 Adaptation Baseline
+
+### OPSX-first information hierarchy law (2026-07-28)
+
+OPSX decisions own the direct visual plane: current task, next action, mutation state, authority loss, errors, and
+blockers remain visible without hover or expansion. Secondary scan facts such as Root source, Store, References,
+schema, freshness, and counts use compact, keyboard-reachable `Badge + Tooltip` presentation. Verbose paths, raw
+CLI envelopes, provenance, successful settlement history, and low-frequency diagnostics belong to a collapsed
+Accordion or equivalent evidence disclosure. A failure is always promoted to the direct plane; Tooltip-only error
+or stale-authority presentation is forbidden. Shared information components are pure presentation owners and must
+not acquire subscriptions, infer aggregate health, authorize operations, or fork static/live semantics. Settings
+summarizes and links to the owning Context/Config surfaces instead of duplicating them; Context retains complete
+objective evidence but keeps raw command envelopes collapsed by default.
+
+### Terminal palette boundary law (2026-07-29)
+
+Terminal-owned chrome and popups that are physically mounted inside `terminal-surface` derive neutral surface,
+foreground, border, and hover tokens from the active xterm palette. Their legibility must not depend on the
+application light/dark theme. Application-owned dialogs and Settings remain outside that scope and retain the
+application palette. Never enforce a descendant-wide Terminal color: explicit error, success, activity, focus,
+selection, and notification colors remain semantic overrides.
+
+### Container-responsive information surface law (2026-07-29)
+
+Project information surfaces default to one readable mobile column and add density only when their nearest
+inline-size container can sustain it. Config forms, Context summaries, Settings field groups, and Change evidence
+must use container queries for internal topology; viewport breakpoints are forbidden because the same viewport may
+contain a mobile-width project surface beside the desktop rail. The shell may still use viewport/media queries to
+choose its navigation topology. Narrow, intermediate, and spacious evidence must be verified at the rendered
+container boundary, not inferred from viewport width alone.
+
+### Config-owned Resolved Context law (2026-07-29)
+
+Config owns declarations; Resolved Context owns the objective result after OpenSpec CLI root selection. Context is
+therefore a Config title action and the canonical route is `/config/context`, with a direct return to `/config`;
+it is not a persistent project navigation tab. Live and static route trees, SSG publication, notifications, and
+all internal links use that same route. The direct plane answers effective Root identity and current action
+authority first. Structured Launch/Planning relationships and Reference summaries follow. Long diagnostics,
+Context members, data scope, and Doctor/Context command envelopes use separate collapsed disclosures. Tooltip is
+limited to short terminology help, compact status explanations, and complete single values; errors, blockers, and
+multi-record evidence must never exist only inside Tooltip content.
+
+### Root-topology presentation law (2026-07-29)
+
+Root topology and configuration hygiene are independent facts. A shared, subscription-free presentation selector
+classifies current server-observed physical identities as `collapsed`, `distinct`, or `unresolved`; Root source,
+Store id, warning text, Git scope, and lexical display-path equality are not topology substitutes. A missing
+server-observed physical Launch identity remains `unresolved`; it must never fall back to the display/cwd path. In
+the healthy collapsed default, Dashboard
+omits its redundant context band and generic Terminal creation implicitly remains `launch-project` without a cwd
+selector. Workflow-locked Terminal creation remains `planning-root`, preserves expected Root generation, and does
+not weaken the public PTY protocol or stale-generation guard. Project Binding owns repair of an ignored `store:`
+declaration: `root_pointer_ignored` is a non-blocking warning with a clear action through the existing draft/save
+flow. Context combines Launch and Planning into one `Project root` summary only when topology is collapsed; source,
+provenance, warnings, failures, and raw evidence remain retrievable, and exceptional states stay direct.
+
+### Terminal palette accessibility law (2026-07-29)
+
+Terminal chrome is a palette-local surface independent from the application light/dark theme. The Terminal panel
+owns neutral foreground, secondary foreground, elevated neutral surface, and border tokens derived from the active
+xterm palette; all built-in neutral foreground/background pairs must meet WCAG AA contrast. Do not enforce one
+color through a universal descendant selector because explicit error, success, activity, focus, selection, and
+notification colors must remain semantic. Command dialogs, Terminal Settings, and other application-owned overlays
+remain outside this palette scope.
 
 ### Objective Kanban projection law (2026-07-28)
 

@@ -1,14 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Exercise the real Config writeSchemaFile mutation function through React Query.
  * 2. Prove a readiness transition blocks schema/template file writes before transport.
  * 3. Preserve the shared Root Action contract for the Schema workspace.
  *
  * Original request (2026-07-18): "Schema/Template writes require real mutation-boundary evidence."
+ * Owner Context direction (2026-07-29): keep Config title actions inside the route test boundary.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Config } from './config'
 
@@ -98,6 +99,15 @@ vi.mock('@/lib/nav-controller', () => ({
 }))
 vi.mock('@/lib/view-transitions/navigation', () => ({
   vtNavController: { push: vi.fn() },
+  VTLink: ({
+    children,
+    to,
+    ...props
+  }: { children?: ReactNode; to: string } & Omit<ComponentProps<'a'>, 'href'>) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
 }))
 vi.mock('@/lib/use-cli-runner', () => ({
   useCliRunner: () => ({

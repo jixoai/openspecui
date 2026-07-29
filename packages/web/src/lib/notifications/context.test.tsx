@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Verify notification actions resolve against current project-Web navigation and terminal ownership.
  * 2. Verify notification read mutations target only the invoked current-backend record.
- * 3. Verify Root Context health records open the existing Context route.
+ * 3. Verify Root Context health records open Config-owned Resolved Context.
  *
  * Original checkpoint (2026-07-16): "6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging."
+ * Owner Context direction (2026-07-29): route health actions to `/config/context`.
  */
 import { DEFAULT_CONFIG, type OpenSpecUIConfig } from '@openspecui/core'
 import type { NotificationAction, NotificationRecord } from '@openspecui/core/notifications'
@@ -120,13 +121,13 @@ function createRootContextNotification(): NotificationRecord {
   return {
     id: 'root-context-1',
     title: 'Planning root changed',
-    body: 'Open Root Context for the current planning-root details.',
+    body: 'Open Resolved Context for the current planning-root details.',
     source: { type: 'root-context' },
     actions: [
       {
         type: 'href.open',
-        label: 'Open context',
-        target: { href: '/context' },
+        label: 'Open Resolved Context',
+        target: { href: '/config/context' },
       },
     ],
     level: 'info',
@@ -234,7 +235,7 @@ describe('NotificationProvider action resolution', () => {
     expect(pushMock).not.toHaveBeenCalled()
   })
 
-  it('opens Context and marks only the invoked root-context record read', async () => {
+  it('opens Resolved Context and marks only the invoked root-context record read', async () => {
     currentNotifications = [createRootContextNotification(), createTerminalNotification()]
     useNavLayoutMock.mockReturnValue({
       popActive: true,
@@ -247,11 +248,11 @@ describe('NotificationProvider action resolution', () => {
       </NotificationProvider>
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open context' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open Resolved Context' }))
 
     await waitFor(() => {
       expect(deactivatePopMock).toHaveBeenCalledTimes(1)
-      expect(pushMock).toHaveBeenCalledWith('main', '/context', null)
+      expect(pushMock).toHaveBeenCalledWith('main', '/config/context', null)
       expect(markReadMock).toHaveBeenCalledWith({ id: 'root-context-1' })
     })
     expect(markReadMock).toHaveBeenCalledTimes(1)

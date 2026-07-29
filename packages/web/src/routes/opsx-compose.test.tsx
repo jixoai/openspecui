@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify the change workflow dialog preserves route action and invocation-mode inputs.
  * 2. Verify the shared terminal dispatch surface remains available.
- * 3. Verify server-owned planning-root and Store targets remain visible before dispatch.
+ * 3. Verify server-owned planning-root targets and raw evidence remain retrievable before dispatch.
  * 4. Verify failed Root Context prevents preparation and every terminal dispatch action.
  * 5. Verify typed draft recovery and dispatcher identity across settled Root replacement.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
+ * Original request (2026-07-28): supporting workflow evidence should remain available on demand.
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -227,8 +228,9 @@ describe('OpsxComposeRoute', () => {
     render(<OpsxComposeRoute />)
 
     await waitFor(() => {
-      expect(screen.getByText('/stores/shared')).toBeInTheDocument()
-      expect(screen.getByText('store · Store shared')).toBeInTheDocument()
+      expect(screen.getAllByText('/stores/shared').length).toBeGreaterThan(0)
+      expect(screen.getByRole('note', { name: 'Planning root source store' })).toBeInTheDocument()
+      expect(screen.getByRole('note', { name: 'Planning Store shared' })).toBeInTheDocument()
     })
   })
 
@@ -257,14 +259,17 @@ describe('OpsxComposeRoute', () => {
 
     render(<OpsxComposeRoute />)
 
-    await waitFor(() => {
-      expect(screen.getByText('CLI evidence')).toBeInTheDocument()
-    })
-    const evidence = screen.getByText('CLI evidence').parentElement
-    expect(evidence).toHaveTextContent('workflow-status')
-    expect(evidence).toHaveTextContent('status warning')
-    expect(evidence).toHaveTextContent('artifacts: Required')
-    expect(evidence).toHaveTextContent('/stores/shared/openspec/changes/add-search')
+    const trigger = await screen.findByRole('button', { name: /CLI evidence/ })
+    const rawEvidence = screen.getByText(
+      (_, element) =>
+        element?.tagName === 'PRE' && element.textContent?.includes('status warning') === true
+    )
+    expect(rawEvidence).not.toBeVisible()
+
+    fireEvent.click(trigger)
+    expect(rawEvidence).toBeVisible()
+    expect(rawEvidence).toHaveTextContent('artifacts: Required')
+    expect(rawEvidence).toHaveTextContent('/stores/shared/openspec/changes/add-search')
   })
 
   it('does not prepare or dispatch while Root Context is blocked', async () => {
@@ -280,9 +285,8 @@ describe('OpsxComposeRoute', () => {
 
     render(<OpsxComposeRoute />)
 
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('Doctor exit: 1')
-    })
+    expect(await screen.findByText('OpenSpec Doctor rejected the selected Store.')).toBeVisible()
+    expect(screen.getByText('Doctor exit: 1')).not.toBeVisible()
     expect(prepareWorkflowInvocationMock).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
@@ -393,7 +397,7 @@ describe('OpsxComposeRoute', () => {
     })
     view.rerender(<OpsxComposeRoute />)
 
-    await waitFor(() => expect(screen.getByText('/stores/next')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('/stores/next').length).toBeGreaterThan(0))
     expect(screen.getByLabelText('Prompt')).toHaveValue('edited prompt for the operator')
     expect(prepareWorkflowInvocationMock).toHaveBeenCalledTimes(2)
     expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled()
@@ -521,7 +525,7 @@ describe('OpsxComposeRoute', () => {
     rootActionMock.mockReturnValue(readyB)
     view.rerender(<OpsxComposeRoute />)
 
-    await waitFor(() => expect(screen.getByText('/stores/next')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('/stores/next').length).toBeGreaterThan(0))
     await waitFor(() => expect(dialogA).not.toBeInTheDocument())
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(getComposePrompt()).toHaveValue('edited Root A prompt')
@@ -611,7 +615,7 @@ describe('OpsxComposeRoute', () => {
     expect(screen.getByRole('button', { name: 'Retry preparation' })).toBeEnabled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry preparation' }))
-    await waitFor(() => expect(screen.getByText('/stores/next')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('/stores/next').length).toBeGreaterThan(0))
     expect(screen.getByLabelText('Prompt')).toHaveValue('keep this draft after failure')
   })
 

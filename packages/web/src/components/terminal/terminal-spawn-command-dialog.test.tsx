@@ -1,12 +1,13 @@
 /**
  * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Verify argv and shell-line terminal command creation plus advanced-field behavior.
- * 2. Verify configured commands expose resolved cwd identity and send only a cwd target.
+ * 2. Verify distinct-root selection and same-root implicit or workflow-locked cwd ownership.
  * 3. Verify planning-root readiness keeps repair through the available Launch target.
  * 4. Verify workflow-bound creation opens Terminal and activates the new session.
  *
  * Original request (2026-07-16): "Terminal creation controls expose the selected cwd/root identity."
  * Owner-reported defect (2026-07-22): Creating Codex/Claude/Gemini must open Terminal when hidden.
+ * Owner same-root direction (2026-07-29): hide redundant cwd switching without weakening Planning generation.
  */
 import { fieldsToTerminalCommandParameters } from '@openspecui/core/terminal-invocation'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -151,6 +152,7 @@ describe('TerminalSpawnCommandDialog', () => {
       defaultShellProfile: shell,
     })
     useTerminalCwdTargetStateMock.mockReturnValue({
+      topology: 'distinct',
       launchProject: {
         target: 'launch-project',
         label: 'Launch project',
@@ -341,8 +343,86 @@ describe('TerminalSpawnCommandDialog', () => {
     })
   })
 
+  it('hides same-root selection and forces generic creation back to Launch', () => {
+    useTerminalCwdTargetStateMock.mockReturnValue({
+      topology: 'collapsed',
+      launchProject: {
+        target: 'launch-project',
+        label: 'Launch project',
+        path: '/workspace/project',
+        available: true,
+        unavailableReason: null,
+      },
+      planningRoot: {
+        target: 'planning-root',
+        label: 'Planning root',
+        path: '/workspace/project',
+        available: true,
+        unavailableReason: null,
+      },
+    })
+
+    render(
+      <TerminalSpawnCommandDialog
+        open
+        command={command}
+        initialCwdTarget="planning-root"
+        onClose={() => {}}
+      />
+    )
+
+    expect(screen.queryByRole('radiogroup', { name: 'Terminal working directory' })).toBeNull()
+    expect(screen.queryByText('Working directory')).toBeNull()
+    fireEvent.click(screen.getByText('Create'))
+    expect(createDedicatedSessionMock).toHaveBeenCalledWith('claude', [], {
+      cwdTarget: 'launch-project',
+      label: 'Claude',
+    })
+  })
+
+  it('hides same-root workflow selection while preserving Planning generation', () => {
+    useTerminalCwdTargetStateMock.mockReturnValue({
+      topology: 'collapsed',
+      launchProject: {
+        target: 'launch-project',
+        label: 'Launch project',
+        path: '/workspace/project',
+        available: true,
+        unavailableReason: null,
+      },
+      planningRoot: {
+        target: 'planning-root',
+        label: 'Planning root',
+        path: '/workspace/project',
+        available: true,
+        unavailableReason: null,
+      },
+    })
+
+    render(
+      <TerminalSpawnCommandDialog
+        open
+        command={command}
+        initialCwdTarget="planning-root"
+        lockedCwdTarget="planning-root"
+        expectedRootGeneration="same-root-generation"
+        onClose={() => {}}
+      />
+    )
+
+    expect(screen.queryByRole('radiogroup', { name: 'Terminal working directory' })).toBeNull()
+    expect(screen.queryByText('Working directory')).toBeNull()
+    fireEvent.click(screen.getByText('Create'))
+    expect(createDedicatedSessionMock).toHaveBeenCalledWith('claude', [], {
+      cwdTarget: 'planning-root',
+      expectedRootGeneration: 'same-root-generation',
+      label: 'Claude',
+    })
+  })
+
   it('keeps planning-root creation disabled until Root Context is current and ready', () => {
     useTerminalCwdTargetStateMock.mockReturnValue({
+      topology: 'distinct',
       launchProject: {
         target: 'launch-project',
         label: 'Launch project',

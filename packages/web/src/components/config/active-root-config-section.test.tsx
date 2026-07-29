@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify Active Root presence, empty content, owner provenance, and static projection states.
  * 2. Verify loading/error topology without conflating transport failure and file absence.
  * 3. Verify save pending/failure locks, dirty-draft retention, and the real mutation boundary.
@@ -7,6 +7,7 @@
  * Original request (2026-07-17): "An existing empty Active Root file remains editable."
  * Original request (2026-07-18): "Stale or transport-error Active Root data must remain read-only."
  * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
+ * Original request (2026-07-28): successful Config provenance should remain accessible through compact badges.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -143,13 +144,18 @@ describe('ActiveRootConfigSection', () => {
     expect(screen.getByLabelText('Active Root config editor')).toHaveValue(content)
   })
 
-  it('shows external Store owner and file provenance', () => {
+  it('shows external Store owner and file provenance through accessible badges', async () => {
     renderSection(<ActiveRootConfigSection isStatic={false} />)
 
+    expect(screen.getByText('Planning root: /stores/shared')).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Active Root source declared' })).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Active Root Store shared' })).toBeTruthy()
     expect(
-      screen.getByText('Planning root: /stores/shared · declared · Store shared · external')
+      screen.getByRole('note', { name: 'Active Root is external to the launch project' })
     ).toBeTruthy()
-    expect(screen.getByText('File: /stores/shared/openspec/config.yaml')).toBeTruthy()
+    const fileBadge = screen.getByRole('note', { name: 'Active Root config file path' })
+    fireEvent.focus(fileBadge)
+    expect(await screen.findByText('/stores/shared/openspec/config.yaml')).toBeVisible()
     expect(
       screen.getByText(
         'Edits write the Store-backed planning root and are observed by other projects resolving Store shared.'

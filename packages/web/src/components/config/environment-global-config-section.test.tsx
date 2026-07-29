@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Verify environment-global path, data-scope, CLI evidence, and static absence.
  * 2. Verify JSON writes preserve unknown fields and reject invalid/non-object drafts.
  * 3. Verify mutation pending/failure state and gated typed Planning-root Update dispatch.
@@ -11,6 +11,7 @@
  * Original request (2026-07-18): "Environment Global Profile Apply remains valid when Root Context is blocked; only Update is root-owned."
  * Original request (2026-07-26): "缓存更新期间仍可读，但不能授权写入。"
  * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
+ * Original request (2026-07-28): successful Environment provenance and raw CLI evidence should use indirect space.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -207,15 +208,38 @@ describe('EnvironmentGlobalConfigSection', () => {
 
   afterEach(() => cleanup())
 
-  it('shows CLI path, inherited data scope, raw evidence, and unknown fields', () => {
+  it('shows compact paths and preserves collapsed raw CLI evidence and unknown fields', async () => {
     renderSection(<EnvironmentGlobalConfigSection isStatic={false} />)
 
-    expect(screen.getByText('/runtime/openspec/config.json', { selector: 'code' })).toBeTruthy()
-    expect(screen.getByText('/runtime/openspec')).toBeTruthy()
-    expect(screen.getByText(/xdg-data-home/)).toBeTruthy()
-    expect(screen.getByText('CLI evidence')).toBeTruthy()
+    const configPath = screen.getByRole('note', { name: 'Environment Global config file path' })
+    fireEvent.focus(configPath)
+    await waitFor(() => {
+      expect(
+        [...document.querySelectorAll('[data-base-ui-portal]')].some((portal) =>
+          portal.textContent?.includes('/runtime/openspec/config.json')
+        )
+      ).toBe(true)
+    })
+
+    const dataScope = screen.getByRole('note', {
+      name: 'OpenSpec data scope source xdg-data-home',
+    })
+    fireEvent.focus(dataScope)
+    await waitFor(() => {
+      expect(
+        [...document.querySelectorAll('[data-base-ui-portal]')].some((portal) =>
+          portal.textContent?.includes('/runtime/openspec')
+        )
+      ).toBe(true)
+    })
+
+    const evidenceTrigger = screen.getByRole('button', { name: /CLI evidence/ })
+    const rawPath = screen.getByText('/runtime/openspec/config.json', { selector: 'dd' })
+    expect(evidenceTrigger).toHaveAttribute('aria-expanded', 'false')
+    expect(rawPath).not.toBeVisible()
     expect(screen.getByText('futureField')).toBeTruthy()
-    expect(screen.getByText('/runtime/openspec/config.json', { selector: 'dd' })).toBeTruthy()
+    fireEvent.click(evidenceTrigger)
+    expect(rawPath).toBeVisible()
   })
 
   it('refreshes profile and drift from the reactive environment projection', async () => {

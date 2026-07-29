@@ -1,12 +1,13 @@
 /**
  * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
  * 1. Configure a command and shell before creating a terminal session.
- * 2. Require an explicit server-resolved launch-project or planning-root cwd target.
+ * 2. Preserve explicit backend cwd ownership while omitting redundant same-root selection.
  * 3. Preserve advanced command fields and a preview of the rendered command line.
  * 4. Reveal and activate each successfully created Agent terminal.
  *
  * Original request (2026-07-16): "Terminal creation controls expose the selected cwd/root identity."
  * Owner-reported defect (2026-07-22): Creating Codex/Claude/Gemini must open Terminal when hidden.
+ * Owner same-root direction (2026-07-29): generic creation uses Launch and locked workflows preserve Planning generation without a same-root switch.
  */
 import { Dialog } from '@/components/dialog'
 import { Select, type SelectOption } from '@/components/select'
@@ -122,6 +123,8 @@ export function TerminalSpawnCommandDialog({
   const [shellProfileId, setShellProfileId] = useState('')
   const [cwdTarget, setCwdTarget] = useState<TerminalCwdTarget>(initialCwdTarget)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const effectiveCwdTarget =
+    lockedCwdTarget ?? (cwdTargetState.topology === 'collapsed' ? 'launch-project' : cwdTarget)
 
   useEffect(() => {
     if (!command) return
@@ -187,11 +190,7 @@ export function TerminalSpawnCommandDialog({
 
   const handleCreate = () => {
     if (!command) return
-    if (
-      !getTerminalCwdTargetOption(cwdTargetState, cwdTarget).available ||
-      (lockedCwdTarget !== undefined && cwdTarget !== lockedCwdTarget)
-    )
-      return
+    if (!getTerminalCwdTargetOption(cwdTargetState, effectiveCwdTarget).available) return
     const renderedCommand = renderTerminalSpawnCommand({ command, values })
     const invocation =
       renderedCommand.kind === 'argv'
@@ -199,7 +198,7 @@ export function TerminalSpawnCommandDialog({
         : resolveShellLineInvocation(selectedShell, renderedCommand.commandLine)
     if (!invocation.command) return
     const sessionId = createDedicatedSession(invocation.command, invocation.args, {
-      cwdTarget,
+      cwdTarget: effectiveCwdTarget,
       ...(expectedRootGeneration ? { expectedRootGeneration } : {}),
       label: command.label,
     })
@@ -241,7 +240,7 @@ export function TerminalSpawnCommandDialog({
           <button
             type="button"
             onClick={handleCreate}
-            disabled={!getTerminalCwdTargetOption(cwdTargetState, cwdTarget).available}
+            disabled={!getTerminalCwdTargetOption(cwdTargetState, effectiveCwdTarget).available}
             className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs"
           >
             <Rocket className="h-3.5 w-3.5" />
@@ -251,16 +250,19 @@ export function TerminalSpawnCommandDialog({
       }
     >
       <div className="space-y-4">
-        <div className="flex flex-col gap-1 text-xs font-medium">
-          <span>Working directory</span>
-          <TerminalCwdTargetControl
-            value={cwdTarget}
-            state={cwdTargetState}
-            onValueChange={setCwdTarget}
-            lockedTarget={lockedCwdTarget}
-            showPath
-          />
-        </div>
+        {cwdTargetState.topology !== 'collapsed' ||
+        !getTerminalCwdTargetOption(cwdTargetState, effectiveCwdTarget).available ? (
+          <div className="flex flex-col gap-1 text-xs font-medium">
+            <span>Working directory</span>
+            <TerminalCwdTargetControl
+              value={effectiveCwdTarget}
+              state={cwdTargetState}
+              onValueChange={setCwdTarget}
+              lockedTarget={lockedCwdTarget}
+              showPath
+            />
+          </div>
+        ) : null}
 
         <label className="flex flex-col gap-1 text-xs font-medium">
           Shell

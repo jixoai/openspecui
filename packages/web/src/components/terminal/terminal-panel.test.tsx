@@ -1,10 +1,14 @@
 /**
  * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Verify terminal panel tabs, actions, notifications, and visibility behavior.
- * 2. Verify first-session and active-session cwd target selection.
+ * 2. Verify distinct-root selection and same-root implicit Launch creation.
  * 3. Verify restored tab identity survives resolved paths, long titles, and renaming.
+ * 4. Verify the panel and its physically nested popups own a palette-local neutral color scope.
  *
  * Original request (2026-07-16): "Terminal shows selected cwd/root identity in creation controls and tab labels."
+ * Owner same-root direction (2026-07-29): generic Terminal hides cwd switching and remains Launch-owned when roots collapse.
+ * Owner accessibility direction (2026-07-29): Terminal text must remain legible when its palette differs from the application theme.
+ * Owner popup correction (2026-07-29): Terminal-owned popup text must remain legible.
  */
 import type { NotificationRecord } from '@openspecui/core/notifications'
 import { fireEvent, render, within } from '@testing-library/react'
@@ -190,6 +194,7 @@ describe('TerminalPanel', () => {
     })
     createShellSessionMock.mockReset()
     useTerminalCwdTargetStateMock.mockReturnValue({
+      topology: 'distinct',
       launchProject: {
         target: 'launch-project',
         label: 'Launch project',
@@ -278,6 +283,7 @@ describe('TerminalPanel', () => {
 
     const tabs = getByTestId('tabs')
     const wrapper = tabs.parentElement
+    expect(wrapper).toHaveClass('terminal-surface', 'bg-terminal')
     expect(wrapper?.style.getPropertyValue('--terminal')).toBe('#fdf6e3')
     expect(wrapper?.style.getPropertyValue('--terminal-foreground')).toBe('#586e75')
   })
@@ -340,6 +346,45 @@ describe('TerminalPanel', () => {
     )
   })
 
+  it('hides same-root cwd selection and creates the generic shell in Launch', () => {
+    useTerminalContextMock.mockReturnValue({
+      sessions: [],
+      activeSessionId: null,
+      setActiveSession: vi.fn(),
+      createShellSession: createShellSessionMock,
+      closeSession: vi.fn(),
+      setCustomTitle: vi.fn(),
+    })
+    useTerminalCwdTargetStateMock.mockReturnValue({
+      topology: 'collapsed',
+      launchProject: {
+        target: 'launch-project',
+        label: 'Launch project',
+        path: '/workspace/project',
+        available: true,
+        unavailableReason: null,
+      },
+      planningRoot: {
+        target: 'planning-root',
+        label: 'Planning root',
+        path: '/workspace/project',
+        available: true,
+        unavailableReason: null,
+      },
+    })
+
+    const { container } = render(<TerminalPanel />)
+
+    expect(
+      within(container).queryByRole('radiogroup', { name: 'Terminal working directory' })
+    ).toBeNull()
+    fireEvent.click(within(container).getByRole('button', { name: 'New terminal' }))
+    expect(createShellSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'builtin:sh' }),
+      { cwdTarget: 'launch-project' }
+    )
+  })
+
   it('shows the cwd identity and creates the first shell at the selected planning root', () => {
     useTerminalContextMock.mockReturnValue({
       sessions: [],
@@ -381,7 +426,11 @@ describe('TerminalPanel', () => {
 
     fireEvent.click(first(getAllByTitle('New terminal options')))
 
-    expect(getByText('/bin/sh')).toBeTruthy()
+    const shellChoice = getByText('/bin/sh')
+    const menu = shellChoice.closest('[popover]')
+
+    expect(menu).toHaveClass('bg-card', 'text-foreground')
+    expect(menu?.closest('.terminal-surface')).toBeTruthy()
     expect(getByText('Claude')).toBeTruthy()
   })
 

@@ -1,11 +1,12 @@
 /**
  * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
- * 1. Render the explicit launch-project versus planning-root terminal cwd choice.
+ * 1. Render an explicit Launch/Planning choice only when physical Root topology needs one.
  * 2. Keep unavailable planning-root state visible and non-interactive.
  * 3. Show the selected server-observed path without accepting arbitrary client paths.
  * 4. Lock the control to a Server-owned workflow target when dispatch requires it.
  *
  * Original request (2026-07-16): "Terminal shows selected cwd/root identity in creation controls."
+ * Owner same-root direction (2026-07-29): omit cwd switching when Launch and Planning are one root.
  */
 import {
   getTerminalCwdTargetOption,
@@ -35,6 +36,14 @@ export function TerminalCwdTargetControl({
   className,
 }: TerminalCwdTargetControlProps) {
   const selected = getTerminalCwdTargetOption(state, value)
+
+  if (state.topology === 'collapsed') {
+    return showPath && !selected.available ? (
+      <p className={`text-muted-foreground min-w-0 text-[11px] ${className ?? ''}`} role="status">
+        {selected.unavailableReason}
+      </p>
+    ) : null
+  }
 
   return (
     <div className={className}>

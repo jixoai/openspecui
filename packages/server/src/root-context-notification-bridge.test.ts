@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (created 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Prove Root Context terminal transitions publish only local Server health records.
  * 2. Prove resolved-root identity excludes generation/data scope while lifecycle retirement remains strict.
  * 3. Prove refresh, duplicate error, late generation, and disposal callbacks remain inert.
- * 4. Prove root-context records retain the existing `/context` href action.
+ * 4. Prove root-context records target Config-owned Resolved Context.
  *
  * Original checkpoint (2026-07-16): "6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging."
  * Independent review correction (2026-07-22): disposed observers are rejected by epoch, not a hidden flag.
+ * Owner Context direction (2026-07-29): route health notifications to `/config/context`.
  */
 import type { RootContext, RootContextState } from '@openspecui/core'
 import { observable, type Observer } from '@trpc/server/observable'
@@ -118,7 +119,7 @@ describe('Root Context notification bridge', () => {
       {
         title: 'Planning root changed',
         source: { type: 'root-context' },
-        actions: [{ type: 'href.open', target: { href: '/context' } }],
+        actions: [{ type: 'href.open', target: { href: '/config/context' } }],
       },
     ])
     bridge.dispose()

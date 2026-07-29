@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Project the CLI-selected Planning-root config with exact owner and file-presence evidence.
  * 2. Own Active Root draft, mutation, loading, error, and pending-lock state.
  * 3. Preserve a read-only static snapshot without inventing live owner provenance.
@@ -8,8 +8,10 @@
  * Original request (2026-07-17): "An existing empty Active Root file remains editable."
  * Original request (2026-07-18): "Stale or transport-error Active Root data must remain read-only."
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): successful Config provenance should use compact indirect space.
  */
 import { CodeEditor } from '@/components/code-editor'
+import { InformationBadge } from '@/components/information-disclosure'
 import { AsyncAction, ConfigFormSkeleton } from '@/components/realtime'
 import { RootActionNotice } from '@/components/root-action-notice'
 import { useViewportConstrainedHeight } from '@/components/scroll-spy'
@@ -112,11 +114,41 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
           <div className="min-w-0">
             <h2 className="text-sm font-semibold">Active Root Config</h2>
             {config.owner ? (
-              <p className="text-muted-foreground mt-1 break-all text-xs">
-                Planning root: {config.owner.path} · {config.owner.source}
-                {config.owner.storeId ? ` · Store ${config.owner.storeId}` : ''}
-                {config.owner.externalToLaunchProject ? ' · external' : ''}
-              </p>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-muted-foreground break-all">
+                  Planning root: {config.owner.path}
+                </span>
+                <InformationBadge
+                  ariaLabel={`Active Root source ${config.owner.source}`}
+                  tooltip={`The CLI selected this root from source ${config.owner.source}.`}
+                >
+                  {config.owner.source}
+                </InformationBadge>
+                {config.owner.storeId ? (
+                  <InformationBadge
+                    ariaLabel={`Active Root Store ${config.owner.storeId}`}
+                    tooltip={`Writes target Store ${config.owner.storeId}.`}
+                  >
+                    Store {config.owner.storeId}
+                  </InformationBadge>
+                ) : null}
+                {config.owner.externalToLaunchProject ? (
+                  <InformationBadge
+                    ariaLabel="Active Root is external to the launch project"
+                    tooltip="The selected Planning root is outside the launch project."
+                  >
+                    External
+                  </InformationBadge>
+                ) : null}
+                {config.filePath ? (
+                  <InformationBadge
+                    ariaLabel="Active Root config file path"
+                    tooltip={config.filePath}
+                  >
+                    Config file
+                  </InformationBadge>
+                ) : null}
+              </div>
             ) : (
               <p className="text-muted-foreground mt-1 text-xs">Static Active Root snapshot</p>
             )}
@@ -124,11 +156,6 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
               <p className="text-muted-foreground mt-1 text-xs">
                 Edits write the Store-backed planning root and are observed by other projects
                 resolving Store {config.owner.storeId}.
-              </p>
-            ) : null}
-            {config.filePath ? (
-              <p className="text-muted-foreground mt-1 break-all text-[11px]">
-                File: {config.filePath}
               </p>
             ) : null}
           </div>

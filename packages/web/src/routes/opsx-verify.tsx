@@ -8,9 +8,11 @@
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
+ * Original request (2026-07-28): supporting workflow evidence should remain available on demand.
  */
 import { CliTerminal } from '@/components/cli-terminal'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
+import { WorkflowEvidenceDisclosure } from '@/components/opsx/workflow-evidence-disclosure'
 import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
 import { RootActionNotice } from '@/components/root-action-notice'
 import { Switch } from '@/components/switch'
@@ -153,14 +155,7 @@ export function OpsxVerifyRoute() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
         <RootActionNotice state={rootAction} />
         <WorkflowTargetNotice target={workflowTarget} stale={!workflowTargetCurrent} />
-        {workflowEvidence ? (
-          <details className="border-border bg-muted/20 max-h-40 overflow-auto rounded-md border p-2 text-xs">
-            <summary className="cursor-pointer font-medium">CLI evidence</summary>
-            <pre className="text-muted-foreground mt-2 whitespace-pre-wrap break-all font-mono">
-              {JSON.stringify(workflowEvidence, null, 2)}
-            </pre>
-          </details>
-        ) : null}
+        <WorkflowEvidenceDisclosure evidence={workflowEvidence} />
 
         {changeId ? (
           <p className="text-muted-foreground text-sm">

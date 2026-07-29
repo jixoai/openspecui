@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Project CLI-owned environment-global config, data-scope provenance, and raw evidence.
  * 2. Own the JSON draft and preserve unknown fields through the typed global-config write.
  * 3. Compose the focused Profile/Update lifecycle without a second reactive projection.
@@ -9,10 +9,12 @@
  * Original request (2026-07-18): "Environment Global profile/drift must remain reactive and Update must use the Root action gate."
  * Original request (2026-07-26): "缓存更新期间仍可读，但不能授权写入。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
+ * Original request (2026-07-28): successful Config provenance should use compact indirect space.
  */
 import { ButtonGroup } from '@/components/button-group'
 import { CodeEditor } from '@/components/code-editor'
 import { EnvironmentGlobalProfileSection } from '@/components/config/environment-global-profile-section'
+import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import { AsyncAction, DetailPanelSkeleton } from '@/components/realtime'
 import { trpcClient } from '@/lib/trpc'
 import { useEnvironmentGlobalConfigSubscription } from '@/lib/use-planning-config'
@@ -247,19 +249,20 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
       <header className="flex flex-none flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">Environment Global Config</h2>
-          <div className="text-muted-foreground mt-1 break-all text-xs">
-            <span className="mr-1">Path:</span>
-            <code className="bg-muted rounded px-1">
-              {environmentGlobalConfig?.file.path ?? 'Unavailable'}
-            </code>
-          </div>
           {environmentGlobalConfig ? (
-            <div className="text-muted-foreground mt-1 break-all text-[11px]">
-              OpenSpec data scope:{' '}
-              <code className="bg-muted rounded px-1">
-                {environmentGlobalConfig.owner.dataScope.path}
-              </code>{' '}
-              · {environmentGlobalConfig.owner.dataScope.source}
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              <InformationBadge
+                ariaLabel="Environment Global config file path"
+                tooltip={environmentGlobalConfig.file.path}
+              >
+                Config file
+              </InformationBadge>
+              <InformationBadge
+                ariaLabel={`OpenSpec data scope source ${environmentGlobalConfig.owner.dataScope.source}`}
+                tooltip={environmentGlobalConfig.owner.dataScope.path}
+              >
+                {environmentGlobalConfig.owner.dataScope.source}
+              </InformationBadge>
             </div>
           ) : null}
         </div>
@@ -298,9 +301,8 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
       ) : null}
 
       {environmentGlobalConfig ? (
-        <details className="border-border/70 rounded-md border px-3 py-2 text-xs">
-          <summary className="cursor-pointer font-medium">CLI evidence</summary>
-          <dl className="mt-2 grid gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
+        <EvidenceDisclosure title="CLI evidence" summary="config path + list + drift">
+          <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
             <dt className="text-muted-foreground">config path exit</dt>
             <dd>{environmentGlobalConfig.evidence.path.exitCode ?? 'unknown'}</dd>
             <dt className="text-muted-foreground">config path stdout</dt>
@@ -334,7 +336,7 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
               {environmentGlobalConfig.evidence.config.contractError ?? 'compatible'}
             </dd>
           </dl>
-        </details>
+        </EvidenceDisclosure>
       ) : null}
 
       {globalConfigTab === 'preview' ? (
