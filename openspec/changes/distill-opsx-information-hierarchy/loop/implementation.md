@@ -262,6 +262,14 @@ The local Vite+ pre-commit hook could not run because the repository has no `sta
 `vite.config.ts`. After the complete gates above passed, the implementation commit used `--no-verify`; remote CI
 remains the independent delivery check.
 
+### Correction pull request evidence
+
+- Code-bearing HEAD: `5eb7d8beedd90aa9d09a0d75806516886c0c56a9`.
+- PR #219 remained `OPEN` and `CLEAN` at that HEAD.
+- Changeset Gate, CI Scope, Fast Gate, Browser Gate (`@openspecui/web`), and aggregate Browser Gate all completed
+  successfully for the code-bearing HEAD.
+- No merge, archive, or release occurred; the next boundary remains Owner visual acceptance.
+
 These measurements are agent preparation evidence only. Checkpoint 6.6 remains open for the Owner's final visual
 and end-to-end walkthrough.
 
