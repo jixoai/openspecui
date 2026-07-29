@@ -57,7 +57,7 @@ Owner correction (2026-07-29): navigation, Project Binding, Context, Settings sc
 - [x] 6.10 Enforce one Settings scroll owner and no competing Change evidence overflow on mobile
 - [x] 6.11 Replace the remaining Settings viewport-owned field topology with a mobile-first container query
 - [x] 6.12 Prove Config, Context, Settings, and Change evidence at 390px, 768px, and 1280px viewport widths
-- [ ] 6.13 Re-run focused and delivery gates, update PR evidence, and stop at Owner acceptance
+- [x] 6.13 Re-run focused and delivery gates, update PR evidence, and stop at Owner acceptance
 
 ## 7. Finalization
 

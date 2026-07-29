@@ -316,6 +316,14 @@ Repository `format:check` inspected the Owner's uncommitted `openspec/config.yam
 The correction did not alter or stage it; every production, test, and Change file in this correction passed the
 scoped formatter check.
 
+### Container correction pull request evidence
+
+- Code-bearing HEAD: `6cbacc23c9a3cb4fc406a5d85a60f1809277bd4f`.
+- PR #219 remained `OPEN` and `CLEAN` at that exact HEAD.
+- Changeset Gate, CI Scope, Fast Gate, Browser Gate (`@openspecui/web`), and aggregate Browser Gate all completed
+  successfully.
+- No merge, archive, or release occurred. Checkpoints 6.6 and 7.1 remain the Owner's visual acceptance boundary.
+
 ## Loopback Triggers
 
 - A required failure becomes reachable only by opening an Accordion or focusing a Tooltip.
