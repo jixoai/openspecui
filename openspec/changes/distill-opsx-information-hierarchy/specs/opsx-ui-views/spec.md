@@ -11,6 +11,7 @@ Owner correction (2026-07-29): assign shell, Project Binding, Context, Settings,
 Owner responsive direction (2026-07-29): information surfaces start mobile-first and expand to tablet/desktop density through container queries.
 Owner same-root direction (2026-07-29): when Launch and Planning are the same root, hide redundant Dashboard context and Terminal cwd selection while keeping ignored Store declarations repairable in Config.
 Owner accessibility direction (2026-07-29): Terminal default text colors must remain legible when its background differs from the application theme.
+Owner Terminal popup correction (2026-07-29): Terminal-owned popup text must remain legible.
 Owner Context direction (2026-07-29): Context becomes a Config title action at `/config/context`, with a direct return and a more readable fact-to-evidence hierarchy.
 -->
 
@@ -167,6 +168,14 @@ application light or dark theme.
 - **WHEN** the palette-local neutral defaults are applied
 - **THEN** those explicit semantic states SHALL remain distinguishable rather than being flattened into one descendant color
 - **AND** Terminal configuration dialogs, Settings, and other application-owned overlays SHALL continue to use the application theme.
+
+#### Scenario: Keep Terminal-owned popups on one palette
+
+- **GIVEN** a Context Menu, Popover, or equivalent popup is physically mounted inside the Terminal palette boundary
+- **WHEN** the popup renders neutral surface and text tokens
+- **THEN** its paired surface and foreground colors SHALL both derive from the active Terminal palette
+- **AND** its default text SHALL maintain at least WCAG AA `4.5:1` contrast against that popup surface
+- **AND** application-owned overlays outside the Terminal boundary SHALL remain application-themed.
 
 ### Requirement: Resolved Context is a Config-owned fact surface
 

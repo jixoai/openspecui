@@ -56,6 +56,7 @@ Owner information-hierarchy correction (2026-07-29): "左侧导航栏的上方�
 Owner information-hierarchy correction (2026-07-29): "Config > Project Binding 的 Store 使用 Combobox；其它卡片从产品价值重新组织，并用 Tooltip 提供解释。"
 Owner information-hierarchy correction (2026-07-29): "Context 页面同理，从产品经理的角度重新组织有价值的信息。"
 Owner layout correction (2026-07-29): "Settings 页面只能保留一个滚动 owner；ChangeDetail 的 Paths and CLI evidence 需要拆分可读摘要、artifact、References、CLI 结果，移动端不得横向溢出。"
+Owner Terminal popup correction (2026-07-29): "弹出层的字体颜色要修复。"
 Owner responsive direction (2026-07-29): "从产品经理的角度优化信息展示。以移动端的视觉体验优先，再逐步扩展到平板尺寸和桌面尺寸，使用容器查询做响应式。"
 Owner same-root correction (2026-07-29): "Launch==Planning 的情况下，Dashboard 应隐藏冗余上下文，Terminal 不应提供 cwd 切换；ignored Store warning 仍应在 Config 中可修复。"
 Owner Context placement (2026-07-29): "把它作为 Config 页面 title 部分的一个 Actions，点击进入一个 config/context 的子页面，这个页面顶部提供一个返回按钮。"
@@ -152,6 +153,14 @@ or stale-authority presentation is forbidden. Shared information components are 
 not acquire subscriptions, infer aggregate health, authorize operations, or fork static/live semantics. Settings
 summarizes and links to the owning Context/Config surfaces instead of duplicating them; Context retains complete
 objective evidence but keeps raw command envelopes collapsed by default.
+
+### Terminal palette boundary law (2026-07-29)
+
+Terminal-owned chrome and popups that are physically mounted inside `terminal-surface` derive neutral surface,
+foreground, border, and hover tokens from the active xterm palette. Their legibility must not depend on the
+application light/dark theme. Application-owned dialogs and Settings remain outside that scope and retain the
+application palette. Never enforce a descendant-wide Terminal color: explicit error, success, activity, focus,
+selection, and notification colors remain semantic overrides.
 
 ### Container-responsive information surface law (2026-07-29)
 

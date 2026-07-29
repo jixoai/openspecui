@@ -6,6 +6,7 @@ Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 
 Original request (2026-07-28): implement the information-hierarchy optimization, then hand final acceptance to the Owner.
 Owner correction (2026-07-29): reorganize the rejected shell, Config, Context, Settings, and Change evidence surfaces before acceptance.
+Owner Terminal popup correction (2026-07-29): Terminal-owned popup text must remain legible.
 -->
 
 ## Implementation State

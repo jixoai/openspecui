@@ -5,11 +5,15 @@ Orthogonal intents (created 2026-07-28 Asia/Shanghai):
 3. Define automated preparation evidence separately from owner visual acceptance.
 
 Original request (2026-07-28): "对比 5.x 的版本，我们这个版本在界面上加了很多信息，这些信息绝大部分应该简化成badge+toolip或者手风琴。让界面像5.x那样清爽的同时，仍然保证6.x新增的信息可以被Get到。因为我们openspecui最关键的是OPSX这套流程，其它都是服务于这套流程的。"
+Owner Terminal popup correction (2026-07-29): "弹出层的字体颜色要修复。"
 -->
 
 ## User Input
 
 对比 5.x，6.x 新增的大量信息应当被重新组织为 Badge + Tooltip、手风琴或其他间接空间。界面需要恢复 5.x 的清爽感，同时保证 6.x 新增事实仍然能够被获取。OPSX 流程是 OpenSpecUI 的核心，其余信息服务于该流程。大部分具体界面决策由实现者完成，Owner 负责最终验收。
+
+Owner 验收发现 Terminal 内创建菜单的浅色背景与浅色文字重叠。Terminal-owned popup 必须跟随当前
+Terminal palette；应用级 Dialog 与 Settings 仍跟随应用主题。
 
 ## Objective Scope
 

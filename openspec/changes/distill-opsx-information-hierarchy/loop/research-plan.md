@@ -7,6 +7,7 @@ Orthogonal intents (created 2026-07-28 Asia/Shanghai):
 5. Define palette-local Terminal accessibility and Config-owned Resolved Context placement.
 
 Original request (2026-07-28): restore 5.x-like clarity while keeping all 6.x facts retrievable and OPSX-primary.
+Owner Terminal popup correction (2026-07-29): keep Terminal-owned popup text legible.
 -->
 
 ## Research Findings
@@ -235,6 +236,22 @@ active Terminal palette
 Measured built-in foreground/background contrast ratios are `15.80`, `13.88`, `13.94`, `9.25`, `4.99`, and
 `5.61`; all satisfy WCAG AA. Reusing the full Terminal foreground for small secondary labels preserves that floor.
 Dialogs and Settings remain application-owned surfaces outside this scope.
+
+### Terminal-owned popup boundary
+
+The Terminal creation `ContextMenu` is physically mounted under `terminal-surface`. It therefore inherits the
+palette-local `--foreground`, but its generic `bg-card` background still resolves from the application palette.
+In a Light application theme with a dark Terminal palette, that splits one popup across two palettes:
+
+```text
+Terminal-owned ContextMenu
+  |-- text-foreground -> Terminal foreground
+  `-- bg-card --------> application card   [invalid mixed palette]
+```
+
+The Terminal scope must also rebind the paired `card/card-foreground` and `popover/popover-foreground` tokens.
+This completes the local palette contract for physically nested popups without changing the reusable
+`ContextMenu`, flattening semantic item colors, or pulling application-owned Dialogs into Terminal theming.
 
 ## Config-owned Resolved Context Follow-up (2026-07-29)
 
