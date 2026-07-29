@@ -73,7 +73,7 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 
 - [x] 6.1 Lock `opentray` and `@opentray/ext-webview` to one exact compatible protocol line, following the `../skill-creator-v2` `0.18.0` reference unless current package evidence requires an approved update.
 - [x] 6.2 Native mode dynamically imports OpenTray packages, creates one stable App/tray identity, and creates one WebView session with `style.appMode: true`, `frameless: false`, `resizable: true`, and `autoHide: false`.
-- [x] 6.3 First native `show()` supplies URL, size, style, overlay, and minimal native API bootstrap; later activation uses `toVisible()` then `focus()` without replaying bootstrap options.
+- [x] 6.3 First native `show()` supplies URL, size, style, overlay, and minimal native API bootstrap, then applies one `WebviewPlacementKit` `screen-center` placement; later activation uses `toVisible()` then `focus()` without replaying bootstrap options or resetting user position.
 - [x] 6.4 Native close/hide retains page state; explicit daemon stop performs ordered listener cleanup, WebView destroy, tray/session teardown, and endpoint release.
 - [x] 6.5 Web mode may mount base tray/browser behavior but does not import, initialize, mock, or probe `@opentray/ext-webview`.
 - [x] 6.6 Linux defaults to Web; headless or tray failure preserves an explicit browser-capable result instead of reporting false native success.
@@ -91,7 +91,7 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 - [x] 7.5 Replace PWA-only titlebar state with an exhaustive `browser | pwa-overlay | opentray | native-frame` presentation state.
 - [x] 7.6 Ensure exactly one titlebar geometry owner writes CSS inset variables; source changes unsubscribe the retired owner and reset inactive insets to zero.
 - [x] 7.7 Adapt async OpenTray overlay geometry and `geometrychange` events; retain existing PWA Window Controls Overlay behavior when the native bridge is absent.
-- [x] 7.8 Render a dedicated overlay-only self-drawn titlebar for macOS/PWA overlay avoidance; its blank surface is the designated native drag entry, while Workspace tabs, buttons, inputs, and other interactive hit regions remain outside drag/caption regions.
+- [x] 7.8 Render a visually explicit, full-width overlay-only self-drawn titlebar for macOS/PWA overlay avoidance; its blank surface is the designated native drag entry, while Workspace tabs, buttons, inputs, and other interactive hit regions remain outside drag/caption regions.
 - [x] 7.9 Keep the verified Windows native-frame baseline unless separate capability evidence and Owner acceptance authorize Windows overlay expansion.
 - [x] 7.10 Component tests cover container/narrow layouts, Open in browser states, no horizontal overflow, every titlebar variant, geometry replacement, and zero double-inset.
 - [x] 7.11 Update `implementation.md`, pass App focused Vitest/basic component Playwright, and commit this checkpoint before broad gates.
