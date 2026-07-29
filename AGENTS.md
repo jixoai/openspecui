@@ -56,6 +56,7 @@ Owner information-hierarchy correction (2026-07-29): "左侧导航栏的上方�
 Owner information-hierarchy correction (2026-07-29): "Config > Project Binding 的 Store 使用 Combobox；其它卡片从产品价值重新组织，并用 Tooltip 提供解释。"
 Owner information-hierarchy correction (2026-07-29): "Context 页面同理，从产品经理的角度重新组织有价值的信息。"
 Owner layout correction (2026-07-29): "Settings 页面只能保留一个滚动 owner；ChangeDetail 的 Paths and CLI evidence 需要拆分可读摘要、artifact、References、CLI 结果，移动端不得横向溢出。"
+Owner responsive direction (2026-07-29): "从产品经理的角度优化信息展示。以移动端的视觉体验优先，再逐步扩展到平板尺寸和桌面尺寸，使用容器查询做响应式。"
 Owner presentation direction (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
 Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间需要 gap 或分割线；Static 导出后的 /context 页面没数据。"
 Owner-reported defect (2026-07-28): "pnpm openspecui export -o ./tmp --open 导出的数据好像逃逸到 html 去了。"
@@ -147,6 +148,15 @@ or stale-authority presentation is forbidden. Shared information components are 
 not acquire subscriptions, infer aggregate health, authorize operations, or fork static/live semantics. Settings
 summarizes and links to the owning Context/Config surfaces instead of duplicating them; Context retains complete
 objective evidence but keeps raw command envelopes collapsed by default.
+
+### Container-responsive information surface law (2026-07-29)
+
+Project information surfaces default to one readable mobile column and add density only when their nearest
+inline-size container can sustain it. Config forms, Context summaries, Settings field groups, and Change evidence
+must use container queries for internal topology; viewport breakpoints are forbidden because the same viewport may
+contain a mobile-width project surface beside the desktop rail. The shell may still use viewport/media queries to
+choose its navigation topology. Narrow, intermediate, and spacious evidence must be verified at the rendered
+container boundary, not inferred from viewport width alone.
 
 ### Objective Kanban projection law (2026-07-28)
 

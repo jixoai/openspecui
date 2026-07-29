@@ -152,3 +152,18 @@ shared primitive tests
   `git diff --check`.
 - Automated browser/component evidence is preparation only. Final visual and end-to-end acceptance belongs to
   the Owner.
+
+## Container-Responsive Follow-up (2026-07-29)
+
+The first mobile/tablet pass found one remaining viewport-owned topology in Settings:
+
+```text
+viewport 768px - desktop rail 256px = Settings container 512px
+                                         |
+                                         +-- md:grid-cols-2 activates too early
+```
+
+Settings already owns an `@container-[size]` boundary, so its Light/Dark terminal-theme pair must follow that
+container instead of `md`. The correction keeps one column at mobile and rail-constrained tablet widths, then
+adds two columns only when the Settings content container itself is spacious. Browser evidence must record both
+viewport and actual content widths at `390x844`, `768x1024`, and `1280x900`.

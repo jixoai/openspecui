@@ -168,7 +168,9 @@ component/fixture preparation only and does not close the Owner walkthrough.
 
 ## Divergence Notes
 
-- None.
+- The `768x1024` preparation pass exposed one viewport-owned Settings field pair: `md:grid-cols-2` activates from
+  the outer viewport even though the desktop rail leaves only a `512px` Settings container. Checkpoints 6.11-6.13
+  reopen implementation for a container-query correction and narrow/intermediate/spacious proof.
 
 ## Owner Follow-up (2026-07-29)
 

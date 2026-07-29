@@ -6,6 +6,7 @@ Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 
 Original request (2026-07-28): simplify most added 6.x information into Badge + Tooltip or Accordion while keeping OPSX primary.
 Owner correction (2026-07-29): assign shell, Project Binding, Context, Settings, and Change evidence facts to their product-task owners.
+Owner responsive direction (2026-07-29): information surfaces start mobile-first and expand to tablet/desktop density through container queries.
 -->
 
 # Delta for opsx-ui-views
@@ -86,3 +87,11 @@ clickable summary across navigation and content surfaces.
 - **WHEN** Paths and CLI evidence is opened on a narrow viewport
 - **THEN** readable summaries SHALL use wrapping or bounded code blocks
 - **AND** no ancestor shall create a competing page-level horizontal scrollbar.
+
+#### Scenario: Information density follows the content container
+
+- **GIVEN** a Config, Context, Settings, or Change evidence surface is rendered inside a shell
+- **WHEN** its nearest inline-size container moves from narrow through intermediate to spacious widths
+- **THEN** the surface SHALL begin with one readable mobile column
+- **AND** it SHALL add columns only through content-driven container queries
+- **AND** an outer viewport breakpoint SHALL NOT force a denser internal layout before the content container can sustain it.
