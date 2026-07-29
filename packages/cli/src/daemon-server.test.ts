@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Prove IPC bind ownership, mode-0600 Unix endpoints, and stale-socket recovery.
  * 2. Prove Workspace credentials remain private while opaque-id browser actions resolve server-side.
  * 3. Prove stop tears down only daemon host and endpoint state.
+ * 4. Prove endpoint authority is released even when host teardown reports a failure.
  *
  * Original request (2026-07-29): "daemon 不应该拥有或关闭每个 backend。"
  */
@@ -164,6 +165,23 @@ describe('daemon IPC server', () => {
       await expect(
         sendDaemonCommand({ endpoint: fixture.endpoint, command: { type: 'status' } })
       ).resolves.toMatchObject({ kind: 'status' })
+    } finally {
+      await cleanupTempDir(tempDir)
+    }
+  })
+
+  it('releases endpoint authority after a presentation teardown failure', async () => {
+    const tempDir = await createTempDir()
+    try {
+      const harness = createHost()
+      harness.host.close = vi.fn(async () => {
+        throw new Error('fixture teardown failure')
+      })
+      const fixture = await startFixture(tempDir, harness.host)
+
+      await expect(fixture.server.close()).rejects.toThrow('fixture teardown failure')
+      await expect(stat(fixture.endpoint)).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(fixture.server.closed).resolves.toBeUndefined()
     } finally {
       await cleanupTempDir(tempDir)
     }

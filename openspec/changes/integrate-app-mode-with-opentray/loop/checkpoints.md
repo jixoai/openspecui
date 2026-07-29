@@ -71,16 +71,16 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 
 ## 6. OpenTray Native and Web Presenters
 
-- [ ] 6.1 Lock `opentray` and `@opentray/ext-webview` to one exact compatible protocol line, following the `../skill-creator-v2` `0.18.0` reference unless current package evidence requires an approved update.
-- [ ] 6.2 Native mode dynamically imports OpenTray packages, creates one stable App/tray identity, and creates one WebView session with `style.appMode: true`, `frameless: false`, `resizable: true`, and `autoHide: false`.
-- [ ] 6.3 First native `show()` supplies URL, size, style, overlay, and minimal native API bootstrap; later activation uses `toVisible()` then `focus()` without replaying bootstrap options.
-- [ ] 6.4 Native close/hide retains page state; explicit daemon stop performs ordered listener cleanup, WebView destroy, tray/session teardown, and endpoint release.
-- [ ] 6.5 Web mode may mount base tray/browser behavior but does not import, initialize, mock, or probe `@opentray/ext-webview`.
-- [ ] 6.6 Linux defaults to Web; headless or tray failure preserves an explicit browser-capable result instead of reporting false native success.
-- [ ] 6.7 Native capability policy admits only the daemon's loopback App shell and only required window/overlay/drag capabilities; wildcard origins are rejected.
-- [ ] 6.8 Presenter tests prove one bootstrap, repeated retained activation, ordered teardown, Web import isolation, platform selection, and structured native failure fallback.
-- [ ] 6.9 Packed-package verification proves CLI daemon entry, App assets, OpenTray runtime closure, and platform-optional installation are present without direct platform-package imports.
-- [ ] 6.10 Update `implementation.md`, pass focused presenter/package tests, and commit this checkpoint before App chrome changes.
+- [x] 6.1 Lock `opentray` and `@opentray/ext-webview` to one exact compatible protocol line, following the `../skill-creator-v2` `0.18.0` reference unless current package evidence requires an approved update.
+- [x] 6.2 Native mode dynamically imports OpenTray packages, creates one stable App/tray identity, and creates one WebView session with `style.appMode: true`, `frameless: false`, `resizable: true`, and `autoHide: false`.
+- [x] 6.3 First native `show()` supplies URL, size, style, overlay, and minimal native API bootstrap; later activation uses `toVisible()` then `focus()` without replaying bootstrap options.
+- [x] 6.4 Native close/hide retains page state; explicit daemon stop performs ordered listener cleanup, WebView destroy, tray/session teardown, and endpoint release.
+- [x] 6.5 Web mode may mount base tray/browser behavior but does not import, initialize, mock, or probe `@opentray/ext-webview`.
+- [x] 6.6 Linux defaults to Web; headless or tray failure preserves an explicit browser-capable result instead of reporting false native success.
+- [x] 6.7 Native capability policy admits only the daemon's loopback App shell and only required window/overlay/drag capabilities; wildcard origins are rejected.
+- [x] 6.8 Presenter tests prove one bootstrap, repeated retained activation, ordered teardown, Web import isolation, platform selection, and structured native failure fallback.
+- [x] 6.9 Packed-package verification proves CLI daemon entry, App assets, OpenTray runtime closure, and platform-optional installation are present without direct platform-package imports.
+- [x] 6.10 Update `implementation.md`, pass focused presenter/package tests, and commit this checkpoint before App chrome changes.
 
 ## 7. Workspaces and Titlebar Host State
 

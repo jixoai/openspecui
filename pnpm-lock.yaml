@@ -162,12 +162,18 @@ importers:
       '@lydell/node-pty':
         specifier: ^1.1.0
         version: 1.1.0
+      '@opentray/ext-webview':
+        specifier: 0.18.0
+        version: 0.18.0(opentray@0.18.0(@gaubee/util@0.35.2))
       '@parcel/watcher':
         specifier: ^2.5.1
         version: 2.5.1
       better-sqlite3:
         specifier: ^12.5.0
         version: 12.10.0
+      opentray:
+        specifier: 0.18.0
+        version: 0.18.0(@gaubee/util@0.35.2)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -2433,6 +2439,20 @@ packages:
       '@codemirror/view': ^6.0.0
       '@lezer/highlight': ^1.0.0
 
+  '@gaubee/node@0.4.0':
+    resolution:
+      {
+        integrity: sha512-Zeayj73PSkc0FTEBKQxHaIOKxiHG7w7k/e+ndIwSCmS9OJPyLWDMDUWZ7LTq4PB4ff86CYLdVI+k5Djx6JCnMA==,
+      }
+    peerDependencies:
+      '@gaubee/util': '*'
+
+  '@gaubee/util@0.35.2':
+    resolution:
+      {
+        integrity: sha512-LfxuAPDLyh2ngZvnQEiRWAgAuxvDNOKOxl46rfmoVIJltUvKMSI9POMjaDXkXNt4Tb+WsP5TRPQ3IR5PnXS/lQ==,
+      }
+
   '@hono/node-server@1.19.6':
     resolution:
       {
@@ -4398,6 +4418,114 @@ packages:
         integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==,
       }
 
+  '@opentray/darwin-arm64@0.18.0':
+    resolution:
+      {
+        integrity: sha512-A7nZun4M6AhVGCVlFsi1ZBUvdBNGOAYlGLYqsUnz+k0/KikvB7kiLXcjamwCBPwlvUg/suY5OQVL6OSrxRDY2w==,
+      }
+    cpu: [arm64]
+    os: [darwin]
+
+  '@opentray/darwin-x64@0.18.0':
+    resolution:
+      {
+        integrity: sha512-UGpXuTY9C/1uNdGQJAgNJtMVu/5B3fD/aaUldVi7+n8RxMBSu2TUA4WJQjcEf7fZjBJhfzcj+kdW2AuY5+kx1w==,
+      }
+    cpu: [x64]
+    os: [darwin]
+
+  '@opentray/ext-webview-darwin-arm64@0.18.0':
+    resolution:
+      {
+        integrity: sha512-gqJF8Vi8ayCP4EwFI6WwpPltmKQXKv+XDBvafwo2YQv6uX7v56A6GzX1VBQK3j8yDeV6e7TTwj2vkhd+ZloFVA==,
+      }
+    cpu: [arm64]
+    os: [darwin]
+    peerDependencies:
+      opentray: '>=0.1.0'
+
+  '@opentray/ext-webview-darwin-x64@0.18.0':
+    resolution:
+      {
+        integrity: sha512-ftSHbyWN9uNxw3WGsdznlBdHLx30bo8ZkrVxvU6ROA4UOaynpkxVRAWH1d7PuNjTnN5q7fyhqP3yGsxInFwcgw==,
+      }
+    cpu: [x64]
+    os: [darwin]
+    peerDependencies:
+      opentray: '>=0.1.0'
+
+  '@opentray/ext-webview-windows-arm64@0.18.0':
+    resolution:
+      {
+        integrity: sha512-fTitiAOoKl2MqN0dZZM4qLU3swPZOHn2DNFdZ0AGq6shgsBqFUJ0mZWTL83QC+EOOuP0FcG5rS5ggNU9SgRIsw==,
+      }
+    cpu: [arm64]
+    os: [win32]
+    peerDependencies:
+      opentray: '>=0.1.0'
+
+  '@opentray/ext-webview-windows-x64@0.18.0':
+    resolution:
+      {
+        integrity: sha512-N6+hDc9ttXnFgeAn57r1ZaZIX16QNbC4f8eBjw50bwJXSwuLQPPEgepR7GWIWKyRIpZEP2FXEYTpDXbd+XlqPQ==,
+      }
+    cpu: [x64]
+    os: [win32]
+    peerDependencies:
+      opentray: '>=0.1.0'
+
+  '@opentray/ext-webview@0.18.0':
+    resolution:
+      {
+        integrity: sha512-0MQvwByJtj1Xna4/cF15lHw0fZvSGC0nbI9D9zjTglRyiDbk/A1uLPHBfGt9yRiqpd6rs9dnNAu2/7E7J+QtCQ==,
+      }
+    peerDependencies:
+      opentray: '>=0.0.0'
+
+  '@opentray/linux-arm64@0.18.0':
+    resolution:
+      {
+        integrity: sha512-3YdOjOouKO3jzecNTuKj3yVUq6sGXd28wCY7QMaMFbZREJnha5DNT6ktN3ILX4mxppGejtOT19fIDpZm4eXOHg==,
+      }
+    cpu: [arm64]
+    os: [linux]
+
+  '@opentray/linux-x64@0.18.0':
+    resolution:
+      {
+        integrity: sha512-iCSBo13fPfanFExwnNxZGO2UZcnZzWBU17SHCn3JTBrjFj5JcY/InWAwo9b6A5SY4Cc7uk4u2X4d5eZ2mdKM/A==,
+      }
+    cpu: [x64]
+    os: [linux]
+
+  '@opentray/packaging@0.18.0':
+    resolution:
+      {
+        integrity: sha512-f41CpHlxiSqJKjA4cXeVDJIMtLDNFAjD0MXupc2SDXvVGImEtkavO8WpUPVvJJutp8J3uB0nrP9iaWsBNTeHGw==,
+      }
+
+  '@opentray/spec@0.18.0':
+    resolution:
+      {
+        integrity: sha512-QupKxGT6JWQDTjLwmyg0jSQFPW3VR5Om/vPcEDzTCLXh7YSjzFzk1w8rn/Dne56Ic+WVKETBBmpfewdQB4dn0g==,
+      }
+
+  '@opentray/windows-arm64@0.18.0':
+    resolution:
+      {
+        integrity: sha512-dJiGSpa26PLGVlvtELyIGdV01XIbZ1RFE/qHZOb/DBDix3YIyCXTZ4bG2WprhgM/RAsBiT2fZk4k2gr0ZPxGdw==,
+      }
+    cpu: [arm64]
+    os: [win32]
+
+  '@opentray/windows-x64@0.18.0':
+    resolution:
+      {
+        integrity: sha512-Rcye5fIGJxcifGROGcyaK1KU/OvsgwmXMcNJTwh728h+qB+qaoDIR6cXHb2DmvfJw7Pz3FmuNp1pFi7AJ8Ip4A==,
+      }
+    cpu: [x64]
+    os: [win32]
+
   '@opentui/core-darwin-arm64@0.1.79':
     resolution:
       {
@@ -6325,6 +6453,13 @@ packages:
       }
     engines: { node: '>=10.0.0' }
     deprecated: this version has critical issues, please update to the latest version
+
+  '@xmldom/xmldom@0.9.10':
+    resolution:
+      {
+        integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==,
+      }
+    engines: { node: '>=14.6' }
 
   '@xterm/addon-fit@0.12.0-beta.167':
     resolution:
@@ -9803,6 +9938,13 @@ packages:
       zod:
         optional: true
 
+  opentray@0.18.0:
+    resolution:
+      {
+        integrity: sha512-nMVkV+2FUzwQQBuD3nVCmor97D47fQLSZ3ed+r35C3QZ0RLSTRvduSmMlu1GkyfGO1UZWI+kSKKj1oivlZkrkw==,
+      }
+    hasBin: true
+
   ora@8.2.0:
     resolution:
       {
@@ -10116,6 +10258,13 @@ packages:
       }
     engines: { node: '>=18' }
     hasBin: true
+
+  plist@5.0.0:
+    resolution:
+      {
+        integrity: sha512-20N+g1DvMm/DFRbsvER7tT4wDryq0WunK7VMkDaiJcKNapAnUMkTsAnacFYf8n420F4Hf6/hefgmJRkMb1M0fg==,
+      }
+    engines: { node: '>=18' }
 
   pngjs@6.0.0:
     resolution:
@@ -12163,6 +12312,13 @@ packages:
       }
     engines: { node: '>=4.0' }
 
+  xmlbuilder@15.1.1:
+    resolution:
+      {
+        integrity: sha512-yMqGBqtXyeN1e3TGYvgNgDVZ3j84W4cwkOXQswghol6APgZWaff9lnbvN7MHYJOiXsvGPXtjTYJEiC9J2wv9Eg==,
+      }
+    engines: { node: '>=8.0' }
+
   xmlchars@2.2.0:
     resolution:
       {
@@ -13502,6 +13658,15 @@ snapshots:
       '@codemirror/view': 6.38.8
       '@lezer/highlight': 1.2.3
 
+  '@gaubee/node@0.4.0(@gaubee/util@0.35.2)':
+    dependencies:
+      '@gaubee/util': 0.35.2
+      tslib: 2.8.1
+
+  '@gaubee/util@0.35.2':
+    dependencies:
+      tslib: 2.8.1
+
   '@hono/node-server@1.19.6(hono@4.10.6)':
     dependencies:
       hono: 4.10.6
@@ -14700,6 +14865,63 @@ snapshots:
 
   '@open-draft/until@2.1.0': {}
 
+  '@opentray/darwin-arm64@0.18.0':
+    optional: true
+
+  '@opentray/darwin-x64@0.18.0':
+    optional: true
+
+  '@opentray/ext-webview-darwin-arm64@0.18.0(opentray@0.18.0(@gaubee/util@0.35.2))':
+    dependencies:
+      opentray: 0.18.0(@gaubee/util@0.35.2)
+    optional: true
+
+  '@opentray/ext-webview-darwin-x64@0.18.0(opentray@0.18.0(@gaubee/util@0.35.2))':
+    dependencies:
+      opentray: 0.18.0(@gaubee/util@0.35.2)
+    optional: true
+
+  '@opentray/ext-webview-windows-arm64@0.18.0(opentray@0.18.0(@gaubee/util@0.35.2))':
+    dependencies:
+      opentray: 0.18.0(@gaubee/util@0.35.2)
+    optional: true
+
+  '@opentray/ext-webview-windows-x64@0.18.0(opentray@0.18.0(@gaubee/util@0.35.2))':
+    dependencies:
+      opentray: 0.18.0(@gaubee/util@0.35.2)
+    optional: true
+
+  '@opentray/ext-webview@0.18.0(opentray@0.18.0(@gaubee/util@0.35.2))':
+    dependencies:
+      opentray: 0.18.0(@gaubee/util@0.35.2)
+    optionalDependencies:
+      '@opentray/ext-webview-darwin-arm64': 0.18.0(opentray@0.18.0(@gaubee/util@0.35.2))
+      '@opentray/ext-webview-darwin-x64': 0.18.0(opentray@0.18.0(@gaubee/util@0.35.2))
+      '@opentray/ext-webview-windows-arm64': 0.18.0(opentray@0.18.0(@gaubee/util@0.35.2))
+      '@opentray/ext-webview-windows-x64': 0.18.0(opentray@0.18.0(@gaubee/util@0.35.2))
+
+  '@opentray/linux-arm64@0.18.0':
+    optional: true
+
+  '@opentray/linux-x64@0.18.0':
+    optional: true
+
+  '@opentray/packaging@0.18.0(@gaubee/util@0.35.2)':
+    dependencies:
+      '@gaubee/node': 0.4.0(@gaubee/util@0.35.2)
+      '@opentray/spec': 0.18.0
+      plist: 5.0.0
+    transitivePeerDependencies:
+      - '@gaubee/util'
+
+  '@opentray/spec@0.18.0': {}
+
+  '@opentray/windows-arm64@0.18.0':
+    optional: true
+
+  '@opentray/windows-x64@0.18.0':
+    optional: true
+
   '@opentui/core-darwin-arm64@0.1.79':
     optional: true
 
@@ -15363,14 +15585,14 @@ snapshots:
       '@tanstack/ai': 0.20.0
       '@tanstack/devtools-event-client': 0.4.3
 
-  '@tanstack/ai-openai@0.9.4(@tanstack/ai-client@0.11.2)(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@3.25.76)':
+  '@tanstack/ai-openai@0.9.4(@tanstack/ai-client@0.11.2)(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@4.4.3)':
     dependencies:
       '@tanstack/ai': 0.20.0
       '@tanstack/ai-client': 0.11.2
       '@tanstack/ai-utils': 0.2.0
-      '@tanstack/openai-base': 0.3.3(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@3.25.76)
-      openai: 6.38.0(ws@8.19.0)(zod@3.25.76)
-      zod: 3.25.76
+      '@tanstack/openai-base': 0.3.3(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@4.4.3)
+      openai: 6.38.0(ws@8.19.0)(zod@4.4.3)
+      zod: 4.4.3
     transitivePeerDependencies:
       - ws
 
@@ -15386,11 +15608,11 @@ snapshots:
 
   '@tanstack/history@1.139.0': {}
 
-  '@tanstack/openai-base@0.3.3(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@3.25.76)':
+  '@tanstack/openai-base@0.3.3(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@4.4.3)':
     dependencies:
       '@tanstack/ai': 0.20.0
       '@tanstack/ai-utils': 0.2.0
-      openai: 6.38.0(ws@8.19.0)(zod@3.25.76)
+      openai: 6.38.0(ws@8.19.0)(zod@4.4.3)
     transitivePeerDependencies:
       - ws
       - zod
@@ -15746,6 +15968,8 @@ snapshots:
       '@types/json-schema': 7.0.15
 
   '@xmldom/xmldom@0.8.11': {}
+
+  '@xmldom/xmldom@0.9.10': {}
 
   '@xterm/addon-fit@0.12.0-beta.167(@xterm/xterm@6.1.0-beta.167)':
     dependencies:
@@ -17837,10 +18061,24 @@ snapshots:
       powershell-utils: 0.1.0
       wsl-utils: 0.3.1
 
-  openai@6.38.0(ws@8.19.0)(zod@3.25.76):
+  openai@6.38.0(ws@8.19.0)(zod@4.4.3):
     optionalDependencies:
       ws: 8.19.0
-      zod: 3.25.76
+      zod: 4.4.3
+
+  opentray@0.18.0(@gaubee/util@0.35.2):
+    dependencies:
+      '@opentray/packaging': 0.18.0(@gaubee/util@0.35.2)
+      '@opentray/spec': 0.18.0
+    optionalDependencies:
+      '@opentray/darwin-arm64': 0.18.0
+      '@opentray/darwin-x64': 0.18.0
+      '@opentray/linux-arm64': 0.18.0
+      '@opentray/linux-x64': 0.18.0
+      '@opentray/windows-arm64': 0.18.0
+      '@opentray/windows-x64': 0.18.0
+    transitivePeerDependencies:
+      - '@gaubee/util'
 
   ora@8.2.0:
     dependencies:
@@ -18022,6 +18260,11 @@ snapshots:
       playwright-core: 1.58.2
     optionalDependencies:
       fsevents: 2.3.2
+
+  plist@5.0.0:
+    dependencies:
+      '@xmldom/xmldom': 0.9.10
+      xmlbuilder: 15.1.1
 
   pngjs@6.0.0: {}
 
@@ -19302,6 +19545,8 @@ snapshots:
       xmlbuilder: 11.0.1
 
   xmlbuilder@11.0.1: {}
+
+  xmlbuilder@15.1.1: {}
 
   xmlchars@2.2.0: {}
 

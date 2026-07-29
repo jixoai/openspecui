@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Own the single-instance daemon IPC bind and credential-memory Workspace ledger.
  * 2. Route validated presentation commands without owning project backend processes.
  * 3. Recover stale Unix endpoints only after a failed liveness probe.
- * 4. Teardown host, connections, and endpoint in a bounded order.
+ * 4. Teardown host, connections, and endpoint in a bounded order even when one owner fails.
  *
  * Original request (2026-07-29): "start/stop/restart 只针对 daemon，不污染 serve 的项目语义。"
  */
@@ -249,7 +249,11 @@ export async function startDaemonServer(options: {
                 ok: true,
                 data: { kind: 'stopped' },
               }
-              setImmediate(() => void close())
+              setImmediate(() => {
+                void close().catch(() => {
+                  process.stderr.write('App daemon shutdown did not release every host resource.\n')
+                })
+              })
             }
             socket.write(`${JSON.stringify(response)}\n`)
           } catch (error) {
@@ -276,13 +280,24 @@ export async function startDaemonServer(options: {
     if (closePromise) return closePromise
     closing = true
     closePromise = (async () => {
+      let firstFailure: unknown
+      const attempt = async (operation: () => Promise<void>): Promise<void> => {
+        try {
+          await operation()
+        } catch (error) {
+          firstFailure ??= error
+        }
+      }
       for (const socket of sockets) socket.destroy()
-      await new Promise<void>((resolve) => server.close(() => resolve()))
+      await attempt(() => new Promise<void>((resolve) => server.close(() => resolve())))
       workspaces.clear()
-      await publishWorkspaces()
-      await options.host.close()
-      if (platform !== 'win32') await rm(options.endpoint, { force: true })
+      await attempt(async () => void (await publishWorkspaces()))
+      await attempt(() => options.host.close())
+      if (platform !== 'win32') {
+        await attempt(() => rm(options.endpoint, { force: true }))
+      }
       resolveClosed?.()
+      if (firstFailure !== undefined) throw firstFailure
     })()
     return closePromise
   }

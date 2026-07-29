@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Bootstrap the detached App daemon from explicit environment-owned startup evidence.
  * 2. Compose local App HTTP, presentation host, and IPC lifecycle in teardown order.
  * 3. Keep project backend credentials and processes outside daemon bootstrap state.
@@ -9,11 +9,15 @@
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveAppAssetsDir } from './app-assets.js'
-import { createBrowserDaemonHost } from './browser-daemon-host.js'
 import { resolveDaemonPaths } from './daemon-paths.js'
 import { DaemonHostModeSchema, type DaemonHostMode } from './daemon-protocol.js'
-import { startDaemonServer } from './daemon-server.js'
+import { startDaemonServer, type RunningDaemonServer } from './daemon-server.js'
 import { startLocalAppServer } from './local-app-server.js'
+import {
+  createOpenTrayDaemonPresenter,
+  type DaemonPresenterDiagnostic,
+  type OpenTrayDaemonPresenterResolution,
+} from './opentray-daemon-presenter.js'
 import { readCliPackageVersion } from './package-version.js'
 
 export const DAEMON_RUN_ENV = 'OPENSPECUI_INTERNAL_DAEMON_RUN'
@@ -45,21 +49,48 @@ export async function runDaemonProcess(options: {
       const open = await import('open')
       await open.default(target)
     })
-  // Native presentation is replaced by the OpenTray host in checkpoint 6. Until then status truthfully
-  // reports Browser capability only instead of claiming a native window exists.
-  const host = createBrowserDaemonHost({ appServer, openExternalUrl })
-  const server = await startDaemonServer({
-    endpoint: paths.endpoint,
-    runDir: paths.runDir,
-    version: readCliPackageVersion(runtimeDir),
-    hostMode:
-      options.hostMode === 'native' && !host.capabilities.nativeWindow ? 'web' : options.hostMode,
-    host,
-  })
-  const shutdown = () => void server.close()
+  const version = readCliPackageVersion(runtimeDir)
+  let server: RunningDaemonServer | null = null
+  const reportDiagnostic = (diagnostic: DaemonPresenterDiagnostic) => {
+    process.stderr.write(
+      `[OpenSpecUI App] ${diagnostic.code} (${diagnostic.stage}): ${diagnostic.message}\n`
+    )
+  }
+  let presentation: OpenTrayDaemonPresenterResolution
+  try {
+    presentation = await createOpenTrayDaemonPresenter({
+      appServer,
+      requestedHostMode: options.hostMode,
+      version,
+      openExternalUrl,
+      onStopRequested: () => void server?.close(),
+      reportDiagnostic,
+    })
+  } catch (error) {
+    await appServer.close()
+    throw error
+  }
+  try {
+    server = await startDaemonServer({
+      endpoint: paths.endpoint,
+      runDir: paths.runDir,
+      version,
+      hostMode: presentation.effectiveHostMode,
+      host: presentation.host,
+    })
+  } catch (error) {
+    await presentation.host.close()
+    throw error
+  }
+  const runningServer = server
+  const shutdown = () => {
+    void runningServer.close().catch(() => {
+      process.stderr.write('App daemon shutdown did not release every host resource.\n')
+    })
+  }
   process.once('SIGINT', shutdown)
   process.once('SIGTERM', shutdown)
-  await server.closed
+  await runningServer.closed
   process.off('SIGINT', shutdown)
   process.off('SIGTERM', shutdown)
 }

@@ -1,6 +1,6 @@
 {
   // Orthogonal intents (created 2026-07-29 Asia/Shanghai):
-  // 1. Typecheck CLI command, daemon, App-control, presentation, and prompt evidence instead of relying on transpilation.
+  // 1. Typecheck CLI command, daemon, App-control, OpenTray presentation, and prompt evidence instead of relying on transpilation.
   // Original request (2026-07-29): "openspecui --web == openspecui serve --web。"
   "extends": "./tsconfig.json",
   "compilerOptions": {
@@ -15,6 +15,7 @@
     "src/daemon-controller.test.ts",
     "src/daemon-server.test.ts",
     "src/local-app-server.test.ts",
+    "src/opentray-daemon-presenter.test.ts",
     "src/serve-presentation-plan.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts",
     "../server/src/huggingface-transformers.d.ts"

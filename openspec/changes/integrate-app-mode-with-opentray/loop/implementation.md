@@ -12,9 +12,9 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 
 ```text
 Research and owner decisions     complete
-Implementation checkpoints       2-5 complete; checkpoint 6 next
-Production code                  CLI daemon, leases, local App control complete
-Focused automated evidence       complete through bundled App/control boundary
+Implementation checkpoints       2-6 complete; checkpoint 7 next
+Production code                  daemon, leases, App control, OpenTray presenters complete
+Focused automated evidence       complete through presenter/package boundary
 Owner browser/native acceptance  not started
 PR delivery                      not started
 6.1.x release                    out of this Change
@@ -22,7 +22,7 @@ PR delivery                      not started
 
 - Approved execution source: `loop/research-plan.md`.
 - Current branch: `feat/opentray-app-mode`.
-- Current implementation boundary: checkpoint 5 is complete at the bundled local App/control transport boundary; OpenTray packages and native presentation have not started.
+- Current implementation boundary: checkpoint 6 is complete at the OpenTray Native/Web presenter and packaged runtime-closure boundary; checkpoint 7 App chrome/Workspaces work has not started.
 - The existing user modification in `openspec/config.yaml` is outside this Change and must not be rewritten or included accidentally.
 - Each checkpoint must update this file with the exact production owner, focused red/green evidence, changed package surface, verification result, and any accepted residual risk before it can close.
 - Full repository gates remain deferred until all focused checkpoint evidence is accepted. Final Browser/PWA and OpenTray native-window walkthrough remains Owner-only.
@@ -55,6 +55,26 @@ PR delivery                      not started
 - Fixed point: `695bdef` (`openspecui@6.0.0`). At that point `start [project-dir]` owns a project Server, `--app` is a string/App-URL selector, and `serve`, daemon-only `stop|restart`, and `serve --web` do not exist.
 - Exact red evidence: production-parser cases expecting bare/explicit `serve` equivalence, daemon-only `start|stop|restart`, boolean `--app`/`--web`, URL rejection, TTY/non-TTY admission, and `--no-open` short-circuit cannot pass against that registry. Evidence must invoke the extracted production yargs registry; a hand-authored argv parser is not acceptable.
 - Execution order: extract checked parser/plan types, add parser and decision tests, remove obsolete `appBaseUrl` ownership, then wire daemon-dependent effects as their typed port becomes available. Do not claim checkpoint 2 complete while runtime dispatch is still a placeholder.
+
+### Checkpoint 6 execution start (2026-07-29 Asia/Shanghai)
+
+- Named production owners: `packages/cli/src/opentray-daemon-presenter.ts` owns host selection, stable tray/App identity, retained native WebView lifecycle, native capability policy, and browser-capable fallback; `packages/cli/src/opentray-presenter-driver.ts` physically isolates the Web facade import from the Native facade-plus-WebView import and adapts public OpenTray handles into the presenter's narrow lifecycle ports. `daemon-process.ts` only composes the selected presenter with local App HTTP and IPC teardown.
+- Fixed point: `eb9f6fe`. At that point `daemon-process.ts` always creates `createBrowserDaemonHost(...)`, reports a requested native daemon as Web, has no OpenTray package closure, and cannot create or retain a native App window.
+- Exact red evidence: checked presenter tests at this fixed point cannot import a production presenter factory or observe one first `show()`, later `toVisible() -> focus()`, retained `close()` without destroy, listener -> WebView -> tray teardown order, loopback-only `nativeApiPolicy`, Linux/Web selection, Web-mode extension-import isolation, or a structured native-to-Web fallback. The tests must inject the real module-loading seam used by production; mocking a downstream window callback after bypassing presenter selection is not evidence.
+- Mutation target: deleting either the retained activation sequence or one ordered teardown transition must fail its named lifecycle assertion. Replacing the exact loopback origin with `*`, importing `@opentray/ext-webview` from the Web branch, or reporting native after presenter construction fails must also fail focused evidence.
+- Execution order: lock the exact `0.18.0` facade closure, add the checked presenter contract/tests, replace the temporary native-to-Web branch in `daemon-process.ts`, verify real build/pack closure, then update checkpoint state. Do not start titlebar geometry or Workspaces UI changes from checkpoint 7.
+
+### Checkpoint 6 implementation result (2026-07-29 Asia/Shanghai)
+
+- Production owners: `opentray-daemon-presenter.ts` owns host selection, stable `com.jixoai.openspecui` / `openspecui-app` identity, capability policy, and retained lifecycle; `opentray-presenter-driver.ts` owns two physically separate dynamic import paths. Web imports only `opentray`; Native imports the same facade plus `@opentray/ext-webview` and adapts one retained window. `daemon-process.ts` publishes only the presenter's effective host mode.
+- Native lifecycle: first construction declares the local App URL, 1280x840 geometry, `appMode: true`, framed/resizable/non-auto-hide style, platform overlay choice, and one exact-origin `window` native API policy, then calls `show()` once. Later daemon activation serializes `toVisible() -> focus()`. Tray hide calls `close()` without destroy; final close retires listeners, drains activation, destroys WebView, destroys tray, closes App HTTP, then releases IPC endpoint authority even if one teardown owner fails.
+- Fallback truth: Linux and other unsupported native platforms select Web before loading the extension. Native creation/show failure destroys partial native resources and returns effective Web status. Base tray failure remains browser-capable. Diagnostics contain only fixed code/stage/message facts and never reflect opener targets or native exception payloads.
+- Package contract: `opentray` and `@opentray/ext-webview` are exact `0.18.0` dependencies and external CLI runtime facades. The built CLI contains only dynamic facade imports and no direct platform-package imports. macOS arm64 installation contains both the OpenTray broker and WebView dylib through optional closure. A clean simulated Linux x64 install contains `@opentray/linux-x64` and intentionally contains no nonexistent Linux WebView native package.
+- Focused green evidence: production and checked-test TypeScript lanes pass. Presenter, daemon-server, and runtime-dependency suites pass with 14 tests after Windows native-frame and headless Web coverage. Complete CLI tests pass with 22 files and 108 tests. Oxlint reports zero warnings/errors on the touched CLI files.
+- Mutation evidence: removing retained activation `focus()` makes the exact test receive `toVisible, toVisible` instead of `toVisible, focus, toVisible, focus`. Removing final `window.destroy()` makes the teardown sequence omit `destroy:window`. Both transitions were restored and the focused suite returned green.
+- Build/pack evidence: the real CLI build completed; known pre-existing warnings remain the unsupported generated `::scroll-button(*)` selector and the App's approximately 500 kB chunk. `npm pack --dry-run --json` includes `dist/cli.mjs`, `app/index.html`, hashed App CSS/JS, fonts, and service worker. The extracted package metadata retains exact OpenTray facade versions.
+- Commit-hook limitation: the repository Vite+ pre-commit hook still cannot run because `vite.config.ts` has no `staged` configuration. This checkpoint uses `--no-verify` only after the recorded typecheck, tests, lint, format, build, pack, and `git diff --check` evidence passed; hook configuration is outside this Change.
+- Residual boundary: Agent automation has not claimed Browser/PWA or native-window visual acceptance. Overlay geometry consumption, drag hit regions, Workspaces language, and Open in browser UI remain checkpoint 7.
 
 ## Decisions Taken
 

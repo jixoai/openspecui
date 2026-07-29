@@ -38,8 +38,10 @@
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
+    "@opentray/ext-webview": "0.18.0",
     "@parcel/watcher": "^2.5.1",
     "better-sqlite3": "^12.5.0",
+    "opentray": "0.18.0",
     "zod": "^3.24.1"
   },
   "// runtime-note": "The published openspecui package installs heavyweight translation runtimes only when the user asks for them.",
@@ -58,11 +60,11 @@
     "@types/yargs": "^17.0.35",
     "hono": "^4.7.3",
     "open": "^10.1.0",
-    "tsx": "^4.19.2",
     "tsdown": "^0.16.6",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^4.1.0",
-    "yargs": "^18.0.0",
-    "yaml": "^2.8.0"
+    "yaml": "^2.8.0",
+    "yargs": "^18.0.0"
   }
 }
