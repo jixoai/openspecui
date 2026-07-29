@@ -163,7 +163,9 @@ container boundary, not inferred from viewport width alone.
 
 Root topology and configuration hygiene are independent facts. A shared, subscription-free presentation selector
 classifies current server-observed physical identities as `collapsed`, `distinct`, or `unresolved`; Root source,
-Store id, warning text, and Git scope are not topology substitutes. In the healthy collapsed default, Dashboard
+Store id, warning text, Git scope, and lexical display-path equality are not topology substitutes. A missing
+server-observed physical Launch identity remains `unresolved`; it must never fall back to the display/cwd path. In
+the healthy collapsed default, Dashboard
 omits its redundant context band and generic Terminal creation implicitly remains `launch-project` without a cwd
 selector. Workflow-locked Terminal creation remains `planning-root`, preserves expected Root generation, and does
 not weaken the public PTY protocol or stale-generation guard. Project Binding owns repair of an ignored `store:`

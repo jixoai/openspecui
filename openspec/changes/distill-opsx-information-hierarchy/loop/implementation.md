@@ -378,6 +378,26 @@ The Owner's uncommitted `openspec/config.yaml` supplied the real warning observa
 staged, or included. Automated evidence stops at unit/component boundaries; checkpoint 6.20 and final visual/browser
 acceptance remain open.
 
+### Independent review correction
+
+Independent review found that the first selector implementation fell back from the optional hosted
+`launchProject.physicalPath` field to the lexical display/cwd path. That fallback could classify an older hosted
+payload or incomplete fixture as `collapsed` without the physical identity required by the specification. The
+selector now returns `unresolved` when physical Launch identity is absent; real Core resolution continues to
+publish that field through the existing physical-path owner.
+
+```text
+Code-bearing correction HEAD                    1c40a6c3ec2646e20b366e6f505f743985bafcf4
+Root topology / affected owner unit             7 files / 81 tests passed
+Web typecheck + checked P6 tests                 passed
+Focused lint                                    0 warnings / 0 errors
+Focused format + git diff --check                passed
+```
+
+The regression fixture proves lexical path equality without `physicalPath` remains `unresolved`; current Root
+Context fixtures that assert `distinct` now carry the same physical Launch identity supplied by Core. Remote PR
+evidence remains pending, so checkpoint 6.20 and the Owner acceptance boundary stay open.
+
 ## Loopback Triggers
 
 - A required failure becomes reachable only by opening an Accordion or focusing a Tooltip.
