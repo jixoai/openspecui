@@ -492,6 +492,39 @@ reported that file only; it remains unmodified and excluded. The real export was
 No agent browser or final visual acceptance was performed. Checkpoint 6.29 remains open until the code is
 committed, PR evidence is current, and the surface returns to the Owner's visual/browser acceptance boundary.
 
+### Remote Config fixture correction
+
+PR Quality run `30435212845` exposed a test-owner gap at code-bearing HEAD
+`ef28957fece80cd412e7252d2dcb207b59b0db1b`. `ResolvedContextAction` correctly added a production `VTLink` to the
+Config title row, but three older route fixtures rendered the full Config route without a Router or a complete
+navigation mock:
+
+```text
+config-schema-catalog.test.tsx     5 failures: real VTLink had no Router store
+config-schema-files.test.tsx       5 failures: real VTLink had no Router store
+config-schema-mutation.test.tsx    1 failure: navigation mock omitted VTLink
+```
+
+This was fixture infrastructure, not a product routing or Schema-projection defect. Each fixture now supplies the
+same typed, anchor-backed `VTLink` boundary while retaining its existing Config production owner and test purpose.
+No Router behavior, Config implementation, subscription, mutation, or Schema contract was changed to satisfy the
+fixture.
+
+```text
+Corrected Config fixtures                    3 files / 11 tests passed
+Complete Web unit                            166 files / 1061 tests passed
+Web typecheck                                passed
+Repository lint                              1058 files / 0 warnings / 0 errors
+Focused format                               passed
+Strict OpenSpec validation                   passed
+git diff --check                             passed
+```
+
+The complete Web run retained the existing non-failing jsdom Canvas diagnostics. The aggregate Browser Gate in
+run `30435212845` failed only because Fast Gate failed and no browser shard was admitted; it did not expose an
+independent browser regression. Checkpoint 6.29 remains open until the corrected PR HEAD completes its required
+remote checks.
+
 ## Loopback Triggers
 
 - A required failure becomes reachable only by opening an Accordion or focusing a Tooltip.

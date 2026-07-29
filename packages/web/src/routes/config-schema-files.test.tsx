@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Exercise the Config route's independent Schema-files subscription topology.
  * 2. Reach the real FileExplorer empty branches without a downstream mock.
  * 3. Preserve retained Schema-file selection when the projection has terminal error evidence.
@@ -8,9 +8,10 @@
  * Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading。"
  * Review finding (2026-07-23): Schema-files errors must not be projected as an empty FileExplorer.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Owner Context direction (2026-07-29): keep Config title actions inside the route test boundary.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Config } from './config'
 
@@ -73,6 +74,18 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('@/lib/static-mode', () => ({
   getBasePath: () => '/',
   isStaticMode: () => true,
+}))
+
+vi.mock('@/lib/view-transitions/navigation', () => ({
+  VTLink: ({
+    children,
+    to,
+    ...props
+  }: { children?: ReactNode; to: string } & Omit<ComponentProps<'a'>, 'href'>) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 vi.mock('@/lib/terminal-context', () => ({
