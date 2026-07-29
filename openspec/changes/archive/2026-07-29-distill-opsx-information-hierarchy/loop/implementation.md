@@ -581,6 +581,14 @@ authorized stable `6.0.0` release delivery. Checkpoints 6.6 and 7.1 are therefor
 records Changesets prerelease mode `beta`, so stable promotion must occur only after this PR and the subsequent
 archive PR merge, through the explicit `changeversion --exit-pre` transition.
 
+## Merge and Archive Evidence (2026-07-29)
+
+PR #219 completed every required check on accepted head `bae69e993ac05e336b2360b0c5c67df74cf2882f` and was
+squash-merged into `main` as `e49ff53d6f31bda14899f47538177ad69ae2fda8`. The Change then entered its dedicated
+archive boundary: the `opsx-ui-views` delta is synchronized to the main specification and the completed Change is
+archived without product-code edits. Stable promotion remains a later release PR boundary and must use
+`changeversion --exit-pre` after the archive PR reaches `main`.
+
 ## Loopback Triggers
 
 - A required failure becomes reachable only by opening an Accordion or focusing a Tooltip.

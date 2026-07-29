@@ -85,5 +85,5 @@ Owner stable release authorization (2026-07-29): final visual acceptance passed;
 ## 7. Finalization
 
 - [x] 7.1 Owner approves the accepted presentation for merge
-- [ ] 7.2 Sync/archive the Change in a dedicated commit
-- [ ] 7.3 Merge the PR after required checks; do not publish another version without separate approval
+- [x] 7.2 Sync/archive the Change in a dedicated commit
+- [x] 7.3 Merge the PR after required checks; do not publish another version without separate approval
