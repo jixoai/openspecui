@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Pull the daemon's complete runtime Workspace ledger from the same-origin App shell.
  * 2. Convert typed SSE invalidations into serialized replacement Pulls.
  * 3. Treat absent daemon endpoints as unsupported while surfacing real local control failures.
+ * 4. Dispatch only opaque Workspace ids through the same-origin browser action.
  *
  * Original request (2026-07-29): "如果已经有 app daemon，那么默认投递到 app 中。"
  */
 import {
   AppDaemonInvalidationSchema,
+  AppDaemonOpenWorkspaceResponseSchema,
   AppDaemonWorkspaceSnapshotSchema,
   type AppDaemonWorkspaceSnapshot,
 } from '@openspecui/core/app-daemon-control'
@@ -21,6 +23,7 @@ export interface DaemonWorkspaceEventSource {
 }
 
 export interface DaemonWorkspaceControl {
+  openWorkspaceInBrowser(workspaceId: string): Promise<void>
   start(): Promise<DaemonWorkspaceControlAvailability>
   stop(): void
 }
@@ -127,6 +130,34 @@ export function createDaemonWorkspaceControl(options: {
   }
 
   return {
+    async openWorkspaceInBrowser(workspaceId) {
+      const actionUrl = new URL(
+        `/api/daemon/workspaces/${encodeURIComponent(workspaceId)}/open`,
+        options.baseUrl
+      ).toString()
+      let response: Response
+      try {
+        response = await fetchSnapshot(actionUrl, {
+          method: 'POST',
+          cache: 'no-store',
+          credentials: 'same-origin',
+        })
+      } catch {
+        throw new Error('OpenSpecUI App daemon is unavailable.')
+      }
+      let payload: unknown
+      try {
+        payload = JSON.parse(await response.text())
+      } catch {
+        throw new Error('Daemon browser action returned an invalid response.')
+      }
+      const parsed = AppDaemonOpenWorkspaceResponseSchema.safeParse(payload)
+      if (!parsed.success) {
+        throw new Error('Daemon browser action returned an invalid response.')
+      }
+      const result = parsed.data
+      if (!result.ok) throw new Error(result.error.message)
+    },
     async start() {
       const availability = await pullOnce()
       if (stopped || availability === 'unsupported') return availability

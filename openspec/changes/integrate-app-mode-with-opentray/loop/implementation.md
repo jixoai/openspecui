@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
 1. Track implementation truth against the approved OpenTray daemon plan.
 2. Preserve settled owner decisions that constrain code execution.
 3. Record approved divergences without rewriting history.
@@ -12,9 +12,9 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 
 ```text
 Research and owner decisions     complete
-Implementation checkpoints       2-6 complete; checkpoint 7 next
-Production code                  daemon, leases, App control, OpenTray presenters complete
-Focused automated evidence       complete through presenter/package boundary
+Implementation checkpoints       2-7 complete; checkpoint 8 next
+Production code                  daemon, leases, App control, presenters, Workspaces chrome complete
+Focused automated evidence       complete through App chrome/component-browser boundary
 Owner browser/native acceptance  not started
 PR delivery                      not started
 6.1.x release                    out of this Change
@@ -22,7 +22,7 @@ PR delivery                      not started
 
 - Approved execution source: `loop/research-plan.md`.
 - Current branch: `feat/opentray-app-mode`.
-- Current implementation boundary: checkpoint 6 is complete at the OpenTray Native/Web presenter and packaged runtime-closure boundary; checkpoint 7 App chrome/Workspaces work has not started.
+- Current implementation boundary: checkpoint 7 is complete at the Workspaces, open-by-id, exclusive titlebar-owner, and basic Chromium component boundary; checkpoint 8 specs/docs/package contracts are next.
 - The existing user modification in `openspec/config.yaml` is outside this Change and must not be rewritten or included accidentally.
 - Each checkpoint must update this file with the exact production owner, focused red/green evidence, changed package surface, verification result, and any accepted residual risk before it can close.
 - Full repository gates remain deferred until all focused checkpoint evidence is accepted. Final Browser/PWA and OpenTray native-window walkthrough remains Owner-only.
@@ -75,6 +75,25 @@ PR delivery                      not started
 - Build/pack evidence: the real CLI build completed; known pre-existing warnings remain the unsupported generated `::scroll-button(*)` selector and the App's approximately 500 kB chunk. `npm pack --dry-run --json` includes `dist/cli.mjs`, `app/index.html`, hashed App CSS/JS, fonts, and service worker. The extracted package metadata retains exact OpenTray facade versions.
 - Commit-hook limitation: the repository Vite+ pre-commit hook still cannot run because `vite.config.ts` has no `staged` configuration. This checkpoint uses `--no-verify` only after the recorded typecheck, tests, lint, format, build, pack, and `git diff --check` evidence passed; hook configuration is outside this Change.
 - Residual boundary: Agent automation has not claimed Browser/PWA or native-window visual acceptance. Overlay geometry consumption, drag hit regions, Workspaces language, and Open in browser UI remain checkpoint 7.
+
+### Checkpoint 7 execution start (2026-07-29 Asia/Shanghai)
+
+- Named production owners: `packages/app/src/app-router.tsx`, `components/app-layout.tsx`, and `components/hosted-shell.tsx` own the persistent multi-project route, tab triggers, iframe Documents, and responsive header; `components/app-launch-owner.tsx` plus `lib/daemon-workspace-control.ts` own the in-memory backend-locator -> opaque Workspace-id binding and browser action; `packages/cli/src/local-app-server.ts` and `daemon-server.ts` carry that action to the authoritative private Workspace ledger. A new App-local titlebar presentation owner will exclusively select Browser, PWA overlay, OpenTray overlay, or native frame geometry.
+- Fixed point: `44f83f7`. At that point the route and visible product language are still `/sessions` / Sessions, every persisted tab has only a generated hosted session id, the same-origin daemon control exposes only snapshot/events GET endpoints, and `pwa-runtime.ts` synchronously reads only Browser Window Controls Overlay. The page cannot dispatch an opaque daemon Workspace id, cannot observe async OpenTray geometry, cannot distinguish OpenTray from a native frame, and cannot initiate native drag.
+- Exact red evidence: production App tests must fail at this fixed point when they expect `/workspaces` navigation and accessible labels while retaining the same iframe node across route round-trips; an Open in browser control on every tab with disabled/manual, pending, success, stale-id, and failure states; an HTTP action containing only an encoded opaque Workspace id that resolves through the live daemon ledger; and exhaustive `browser | pwa-overlay | opentray | native-frame` geometry with retired-listener cleanup and zero inactive insets. Tests that call `openProjectInBrowser` directly, inject a URL into the page action, or invoke a downstream geometry callback without the source-selection owner are not evidence.
+- Mutation targets: deleting the backend-locator -> opaque-id binding must disable a registered tab action; replacing the posted id with a backend URL must fail the local-server assertion; deleting the retired OpenTray/PWA listener cleanup must fail the source-replacement test; adding PWA and OpenTray insets or allowing an interactive tab/button pointerdown to start native drag must fail exact assertions. Route round-trip evidence must compare the original iframe DOM node, not only its URL.
+- Execution order: first add the typed same-origin open-by-id action and in-memory binding, then rename the App surface and add the tab icon control, then replace PWA-only geometry with the exclusive titlebar owner and drag filtering. Run checked App/CLI focused tests before changing checkpoint state; final visual Browser/PWA/OpenTray acceptance remains Owner-only.
+
+### Checkpoint 7 implementation result (2026-07-30 Asia/Shanghai)
+
+- Production owners: `AppDaemonWorkspaceOwner` binds each current daemon snapshot's backend locator to its opaque Workspace id after binding runtime-only credential authority. `daemon-workspace-control.ts` posts only that encoded id to the same-origin local App server; `RunningDaemonServer` resolves it against the live private ledger before the external Browser presenter materializes any target.
+- Product surface: `/sessions` and visible Sessions language are removed in favor of `/workspaces` and Workspaces. `AppLayout` retains the mounted HostedShell across route changes, and the existing production route test compares the same iframe DOM node before and after `/workspaces -> /environment -> /workspaces`.
+- Interaction structure: shared Tabs now renders tab trigger, tab-local Open in browser, and Close as sibling native buttons. The fixed-width tab item contains its actions; the internal tab list remains the only inline scroll owner while App route/shell surfaces stay `min-w-0` and `overflow-hidden`.
+- Titlebar lifecycle: one owner exhaustively selects `browser | pwa-overlay | opentray | native-frame`, replaces rather than combines insets, retires PWA/OpenTray listeners, rejects late async geometry, and keeps PWA geometry failures settled at zero inset. Native drag accepts only non-interactive `.tabs-header` space and rejects tab, close, browser, global action, link, and input regions.
+- Focused green evidence: Core, CLI, and App checked TypeScript lanes pass. Shared Tabs unit evidence passes with 2 files / 11 tests. App focused evidence passes with 6 files / 32 tests; complete App evidence passes with 36 files / 225 tests. Complete CLI evidence passes with 22 files / 109 tests. The new App Chromium component lane passes 1 file / 1 test at a 320px viewport and proves page containment plus internal strip overflow ownership. Oxlint reports zero warnings/errors across 34 touched TS/TSX/config files; `git diff --check` passes.
+- Browser-lane correction: the first complete App run correctly rejected the new `.browser.test.tsx` fixture from the default fork pool. `vitest.config.ts` now excludes browser fixtures and `vitest.browser.config.ts` owns them explicitly; both complete Node and Playwright lanes pass after the correction.
+- Existing-suite observation: one complete App run timed out in the unchanged simultaneous guarded-locator WebSocket test while waiting for its B ledger. The exact test then passed (1 passed / 1 skipped), and an immediate serial complete rerun passed 36 files / 225 tests. No production or timeout constant was changed for that non-deterministic observation.
+- Residual boundary: automated evidence is preparation only. Browser/PWA and native OpenTray overlay, frame, hit-region, focus, and visual acceptance remain Owner-only at checkpoint 10.
 
 ## Decisions Taken
 

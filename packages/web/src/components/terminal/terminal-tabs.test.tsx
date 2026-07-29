@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Prove TerminalTabs projects shared Tabs through terminal-palette chrome.
+ * 2. Prove fixed-width tab items contain sibling actions without widening the page owner.
+ *
+ * Owner direction (2026-07-29): Workspace tabs expose an Open in browser icon button.
+ */
 import { render } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -44,8 +51,9 @@ describe('TerminalTabs', () => {
       headerFrame: 'items-end',
       strip: 'min-w-0 flex-1 items-end border-b border-terminal-foreground/20 px-4 rounded-none',
       list: 'flex-1 items-end overflow-y-hidden pt-2 [&::scroll-button(*)]:mt-3',
+      item: 'w-[clamp(8.5rem,18vw,13rem)]',
       buttonBase:
-        'z-20 w-[clamp(8.5rem,18vw,13rem)] rounded-t-[8px] border border-b-0 border-transparent px-0 py-0 transition-[color,background-color,border-color] duration-180 ease-[cubic-bezier(0.22,0.61,0.36,1)]',
+        'z-20 rounded-tl-[8px] border border-b-0 border-transparent px-0 py-0 transition-[color,background-color,border-color] duration-180 ease-[cubic-bezier(0.22,0.61,0.36,1)]',
       buttonInner:
         'grid h-full min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-t-[8px] px-3 py-1.5 transition-[color,background-color,transform,filter] duration-180 ease-[cubic-bezier(0.22,0.61,0.36,1)] will-change-transform',
       activeButton: 'bg-transparent text-terminal-foreground',
@@ -54,6 +62,7 @@ describe('TerminalTabs', () => {
         'bg-transparent text-terminal-foreground/72 hover:border-[color-mix(in_oklab,var(--background)_10%,transparent)] hover:text-terminal-foreground',
       inactiveButtonInner:
         'bg-terminal [filter:brightness(0.9)] [transform:translateY(0.25em)] hover:text-terminal-foreground hover:[filter:brightness(0.96)] hover:[transform:translateY(0.125em)]',
+      tabActions: 'border-terminal-foreground/20 border-b bg-terminal px-0.5',
       selectionIndicatorViewport:
         'inset-x-0 top-0 bottom-[-1px] overflow-visible overflow-x-hidden',
       selectionIndicator:

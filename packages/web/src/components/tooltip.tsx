@@ -1,6 +1,13 @@
-import { cn } from '@/lib/utils'
+/**
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Render a keyboard-compatible Base UI Tooltip with disabled-trigger support.
+ * 2. Remain source-reusable by App without relying on the Web-only path alias.
+ *
+ * Original request (2026-07-29): "使用 tooltip 来提供解释和帮助信息。"
+ */
 import { Tooltip as BaseTooltip } from '@base-ui/react/tooltip'
 import type { ReactElement, ReactNode } from 'react'
+import { cn } from '../lib/utils'
 
 interface TooltipProps {
   content?: ReactNode

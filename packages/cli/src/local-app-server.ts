@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Serve the same-release App shell from a loopback-only HTTP endpoint.
  * 2. Enforce bounded static paths, MIME types, cache policy, and SPA fallback.
- * 3. Publish transient Workspace authority through snapshot Pull and invalidation Push.
+ * 3. Publish transient Workspace authority through snapshot Pull, invalidation Push, and open-by-id.
  *
  * Original request (2026-07-29): "daemon 使用随 CLI 发布的本地 App 外壳。"
  */
+import { AppDaemonOpenWorkspaceResponseSchema } from '@openspecui/core/app-daemon-control'
 import { createReadStream } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import type { ServerResponse } from 'node:http'
@@ -46,6 +47,7 @@ async function isFile(path: string): Promise<boolean> {
 /** Start an ephemeral loopback server over one immutable App asset directory. */
 export async function startLocalAppServer(options: {
   assetsDir: string
+  openWorkspaceInBrowser(workspaceId: string): Promise<'not-found' | 'opened'>
   host?: string
   port?: number
 }): Promise<LocalAppServer> {
@@ -57,12 +59,50 @@ export async function startLocalAppServer(options: {
   let workspaces: readonly DaemonWorkspaceBinding[] = []
   const server = createServer((request, response) => {
     void (async () => {
+      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1')
+      const openWorkspaceMatch = requestUrl.pathname.match(
+        /^\/api\/daemon\/workspaces\/([^/]+)\/open$/
+      )
+      if (request.method === 'POST' && openWorkspaceMatch) {
+        const workspaceId = decodeURIComponent(openWorkspaceMatch[1] ?? '')
+        try {
+          const result = await options.openWorkspaceInBrowser(workspaceId)
+          const payload = AppDaemonOpenWorkspaceResponseSchema.parse(
+            result === 'opened'
+              ? { ok: true }
+              : {
+                  ok: false,
+                  error: { code: 'NOT_FOUND', message: 'Workspace is no longer registered.' },
+                }
+          )
+          response.writeHead(result === 'opened' ? 200 : 404, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+          })
+          response.end(JSON.stringify(payload))
+        } catch {
+          const payload = AppDaemonOpenWorkspaceResponseSchema.parse({
+            ok: false,
+            error: {
+              code: 'PRESENTATION_FAILED',
+              message: 'Failed to open the registered Workspace in the system browser.',
+            },
+          })
+          response.writeHead(502, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+          })
+          response.end(JSON.stringify(payload))
+        }
+        return
+      }
       if (request.method !== 'GET' && request.method !== 'HEAD') {
-        response.writeHead(405, { Allow: 'GET, HEAD' })
+        response.writeHead(405, { Allow: 'GET, HEAD, POST' })
         response.end()
         return
       }
-      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1')
       if (requestUrl.pathname === '/api/daemon/workspaces') {
         const snapshot = DaemonWorkspaceSnapshotSchema.parse({ revision, workspaces })
         response.writeHead(200, {

@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Orchestrate persistent credential-free project tabs and the embedded frame's visual lifecycle.
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Orchestrate persistent credential-free project tabs, browser actions, and iframe lifecycle.
  * 2. Coordinate PWA install, display, and update ownership.
  * 3. Publish shell state once and consume exact-tab reachability from the shared observation owner.
  * 4. Keep refresh/retry feedback attached to the affected tab runtime.
@@ -9,6 +9,7 @@
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
+ * Original request (2026-07-29): "Workspaces 的 tab 可以提供一个 open in browser 的 icon-button。"
  * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
  * Compromise: tab, frame, and PWA display lifecycles remain co-located because they settle in one mounted
  * shell; launch, health, and Root observation are physically extracted into App-lifetime owners.
@@ -35,12 +36,9 @@ import {
 } from '../lib/connection-observation'
 import {
   computeHostedAppDisplayMode,
-  EMPTY_TITLEBAR_INSETS,
   isBeforeInstallPromptEvent,
-  readHostedAppTitlebarInsets,
   type BeforeInstallPromptEventLike,
   type HostedAppDisplayMode,
-  type HostedAppTitlebarInsets,
   type HostedAppWindowControlsOverlayLike,
 } from '../lib/pwa-runtime'
 import type { HostedTabReachability } from '../lib/reachability'
@@ -56,8 +54,11 @@ import {
   type HostedShellTab,
 } from '../lib/shell-state'
 import { useConnections, useConnectionsActions } from '../lib/use-connections'
+import { useTitlebarPresentation } from '../lib/use-titlebar-presentation'
+import { useAppDaemonWorkspace } from './app-daemon-workspace-owner'
 import { useAppLaunchError } from './app-launch-owner'
 import { HostedShellThemeBootstrap } from './hosted-shell-theme'
+import { WorkspaceTabBrowserAction } from './workspace-tab-browser-action'
 
 const REFRESH_FEEDBACK_MS = 1200
 const UPDATE_CHECK_INTERVAL_MS = 60000
@@ -89,7 +90,6 @@ interface HostedShellPwaState {
   isInstalling: boolean
   isInstalled: boolean
   displayMode: HostedAppDisplayMode
-  titlebarInsets: HostedAppTitlebarInsets
 }
 
 type HostedAppUpdateStatus = 'idle' | 'ready'
@@ -100,10 +100,10 @@ interface HostedAppUpdateState {
 }
 
 interface HostedShellRootStyle extends CSSProperties {
-  '--hosted-pwa-titlebar-left': string
-  '--hosted-pwa-titlebar-right': string
-  '--hosted-pwa-titlebar-top': string
-  '--hosted-pwa-titlebar-height': string
+  '--app-titlebar-left': string
+  '--app-titlebar-right': string
+  '--app-titlebar-top': string
+  '--app-titlebar-height': string
 }
 
 interface HostedNavigator extends Navigator {
@@ -139,7 +139,6 @@ const DEFAULT_PWA_STATE: HostedShellPwaState = {
   isInstalling: false,
   isInstalled: false,
   displayMode: 'browser',
-  titlebarInsets: EMPTY_TITLEBAR_INSETS,
 }
 
 const DEFAULT_UPDATE_STATE: HostedAppUpdateState = {
@@ -189,7 +188,6 @@ function createBrowserPwaSnapshot(deferredPrompt: BeforeInstallPromptEventLike |
     isInstalling: false,
     isInstalled: displayMode !== 'browser',
     displayMode,
-    titlebarInsets: readHostedAppTitlebarInsets(runtime),
   } satisfies HostedShellPwaState
 }
 
@@ -287,7 +285,8 @@ export function HostedShellTabContent({
       {runtime.reachability === 'offline' && (
         <div className="border-border bg-muted/40 text-muted-foreground flex items-center justify-between gap-3 border-b px-3 py-2 text-xs">
           <span>
-            Backend unreachable. The session stays mounted so you can retry without losing context.
+            Backend unreachable. The Workspace stays mounted so you can retry without losing
+            context.
           </span>
           <button
             type="button"
@@ -394,6 +393,9 @@ function createHostedShellTab(props: {
   onSetIframeRef: (tabId: string, node: HTMLIFrameElement | null) => void
   onFrameLoad: (tabId: string) => void
   onFrameError: (tabId: string) => void
+  workspaceId: string | null
+  isOpeningInBrowser: boolean
+  onOpenInBrowser: (workspaceId: string) => void
 }): Tab {
   const title = props.runtime.projectName ?? getHostedTabLabel(props.tab)
 
@@ -404,30 +406,40 @@ function createHostedShellTab(props: {
     label: (
       <div
         className={cx(
-          'flex min-w-0 flex-col py-0.5 text-left transition',
+          'flex min-w-0 items-center gap-1 py-0.5 text-left transition',
           props.runtime.reachability === 'offline' && 'opacity-60 grayscale'
         )}
         data-hosted-reachability={props.runtime.reachability}
       >
-        <span className="flex min-w-0 items-center gap-1.5">
-          {props.runtime.reachability === 'checking' && (
-            <LoaderCircle className="h-3 w-3 animate-spin" />
-          )}
-          {props.runtime.reachability === 'online' && (
-            <Link2 className="h-3 w-3 text-emerald-500" />
-          )}
-          {props.runtime.reachability === 'offline' && (
-            <Unlink2 className="h-3 w-3 text-amber-500" />
-          )}
-          {props.runtime.reachability === 'authentication-required' && (
-            <AlertCircle className="h-3 w-3 text-amber-500" />
-          )}
-          <span className="font-nav min-w-0 truncate text-xs">{title}</span>
-        </span>
-        <span className="text-muted-foreground max-w-72 truncate text-[10px]">
-          {props.tab.apiBaseUrl}
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex min-w-0 items-center gap-1.5">
+            {props.runtime.reachability === 'checking' && (
+              <LoaderCircle className="h-3 w-3 animate-spin" />
+            )}
+            {props.runtime.reachability === 'online' && (
+              <Link2 className="h-3 w-3 text-emerald-500" />
+            )}
+            {props.runtime.reachability === 'offline' && (
+              <Unlink2 className="h-3 w-3 text-amber-500" />
+            )}
+            {props.runtime.reachability === 'authentication-required' && (
+              <AlertCircle className="h-3 w-3 text-amber-500" />
+            )}
+            <span className="font-nav min-w-0 truncate text-xs">{title}</span>
+          </span>
+          <span className="text-muted-foreground max-w-72 truncate text-[10px]">
+            {props.tab.apiBaseUrl}
+          </span>
         </span>
       </div>
+    ),
+    action: (
+      <WorkspaceTabBrowserAction
+        label={title}
+        workspaceId={props.workspaceId}
+        pending={props.isOpeningInBrowser}
+        onOpen={props.onOpenInBrowser}
+      />
     ),
     content: <HostedShellTabContent {...props} />,
   }
@@ -439,6 +451,8 @@ function HostedShellRuntime({
   initialError,
 }: HostedShellProps) {
   const appLaunchError = useAppLaunchError()
+  const daemonWorkspace = useAppDaemonWorkspace()
+  const titlebar = useTitlebarPresentation()
   const [errorMessage, setErrorMessage] = useState(initialError)
   const connectionOwner = useConnectionObservationOwner()
   const connectionSnapshot = useConnectionObservations()
@@ -454,6 +468,7 @@ function HostedShellRuntime({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isRefreshFeedbackActive, setIsRefreshFeedbackActive] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [openingWorkspaceId, setOpeningWorkspaceId] = useState<string | null>(null)
   const [apiDraft, setApiDraft] = useState('')
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
   const [pwaState, setPwaState] = useState<HostedShellPwaState>(DEFAULT_PWA_STATE)
@@ -659,7 +674,6 @@ function HostedShellRuntime({
   useEffect(() => {
     syncPwaState()
 
-    const hostedNavigator = navigator as HostedNavigator
     const onDisplayChange = () => {
       syncPwaState()
     }
@@ -690,7 +704,6 @@ function HostedShellRuntime({
     window.addEventListener('resize', onDisplayChange)
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
     window.addEventListener('appinstalled', onAppInstalled)
-    hostedNavigator.windowControlsOverlay?.addEventListener('geometrychange', onDisplayChange)
 
     return () => {
       standaloneMedia.removeEventListener('change', onDisplayChange)
@@ -698,7 +711,6 @@ function HostedShellRuntime({
       window.removeEventListener('resize', onDisplayChange)
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
       window.removeEventListener('appinstalled', onAppInstalled)
-      hostedNavigator.windowControlsOverlay?.removeEventListener('geometrychange', onDisplayChange)
     }
   }, [syncPwaState])
 
@@ -924,6 +936,20 @@ function HostedShellRuntime({
     registration.waiting.postMessage({ type: 'SKIP_WAITING' })
   }, [])
 
+  const handleOpenWorkspaceInBrowser = useCallback(
+    (workspaceId: string) => {
+      if (openingWorkspaceId !== null) return
+      setOpeningWorkspaceId(workspaceId)
+      void daemonWorkspace
+        .openWorkspaceInBrowser(workspaceId)
+        .catch(() => {})
+        .finally(() => {
+          setOpeningWorkspaceId((current) => (current === workspaceId ? null : current))
+        })
+    },
+    [daemonWorkspace, openingWorkspaceId]
+  )
+
   useEffect(() => {
     if (!activeHostedTab) {
       document.title = 'OpenSpec UI App'
@@ -946,11 +972,19 @@ function HostedShellRuntime({
           onSetIframeRef: setIframeRef,
           onFrameLoad: markFrameLoaded,
           onFrameError: markFrameErrored,
+          workspaceId: daemonWorkspace.resolveWorkspaceId(tab.apiBaseUrl),
+          isOpeningInBrowser:
+            openingWorkspaceId !== null &&
+            daemonWorkspace.resolveWorkspaceId(tab.apiBaseUrl) === openingWorkspaceId,
+          onOpenInBrowser: handleOpenWorkspaceInBrowser,
         })
       ),
     [
       markFrameErrored,
       markFrameLoaded,
+      daemonWorkspace,
+      handleOpenWorkspaceInBrowser,
+      openingWorkspaceId,
       probeTabs,
       setIframeRef,
       shellState.tabs,
@@ -977,16 +1011,17 @@ function HostedShellRuntime({
   )
 
   const rootStyle: HostedShellRootStyle = {
-    '--hosted-pwa-titlebar-left': `${pwaState.titlebarInsets.left}px`,
-    '--hosted-pwa-titlebar-right': `${pwaState.titlebarInsets.right}px`,
-    '--hosted-pwa-titlebar-top': `${pwaState.titlebarInsets.top}px`,
-    '--hosted-pwa-titlebar-height': `${pwaState.titlebarInsets.height}px`,
+    '--app-titlebar-left': `${titlebar.presentation.insets.left}px`,
+    '--app-titlebar-right': `${titlebar.presentation.insets.right}px`,
+    '--app-titlebar-top': `${titlebar.presentation.insets.top}px`,
+    '--app-titlebar-height': `${titlebar.presentation.insets.height}px`,
   }
 
   return (
     <div
       className="hosted-shell-root bg-background text-foreground flex h-full min-h-0 min-w-0 flex-col"
-      data-titlebar-overlay={pwaState.displayMode === 'window-controls-overlay'}
+      data-titlebar-presentation={titlebar.presentation.kind}
+      onPointerDown={titlebar.onPointerDown}
       style={rootStyle}
     >
       <HostedShellThemeBootstrap />
@@ -994,6 +1029,12 @@ function HostedShellRuntime({
       {updateState.status === 'ready' && (
         <div className="border-border bg-muted/30 text-muted-foreground border-b px-3 py-2 text-xs">
           {updateState.errorMessage ?? UPDATE_READY_MESSAGE}
+        </div>
+      )}
+
+      {(daemonWorkspace.error ?? errorMessage) && (
+        <div className="border-border bg-muted/30 border-b px-3 py-2 text-xs">
+          {daemonWorkspace.error ?? errorMessage}
         </div>
       )}
 
@@ -1023,16 +1064,11 @@ function HostedShellRuntime({
               />
             </div>
           </div>
-          {errorMessage && (
-            <div className="border-border bg-muted/30 border-b px-3 py-2 text-xs">
-              {errorMessage}
-            </div>
-          )}
           <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6 text-center">
             <div className="space-y-3">
-              <p className="font-nav text-xs uppercase tracking-[0.16em]">No Hosted Sessions</p>
+              <p className="font-nav text-xs uppercase tracking-[0.16em]">No Workspaces</p>
               <p className="text-muted-foreground max-w-sm text-sm">
-                Open a backend connection to start a hosted OpenSpec UI tab.
+                Open a backend connection to start an OpenSpec UI Workspace.
               </p>
             </div>
           </div>

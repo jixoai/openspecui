@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Prove launch credentials bind only to their normalized backend locator in runtime memory.
  * 2. Prove launch parsing binds credentials before visible URL stripping.
  * 3. Reject credential fragments without a valid launch locator using actionable evidence.
@@ -108,13 +108,13 @@ describe('hosted launch URL credential boundary', () => {
     const replaceState = vi.fn<(url: string) => void>()
 
     const launch = consumeHostedLaunchUrl(
-      'https://app.openspecui.com/sessions#credential=orphan-secret',
+      'https://app.openspecui.com/workspaces#credential=orphan-secret',
       replaceState
     )
 
     expect(launch.request).toBeNull()
     expect(launch.error).toContain('?api=')
-    expect(replaceState).toHaveBeenCalledWith('/sessions')
+    expect(replaceState).toHaveBeenCalledWith('/workspaces')
     expect(replaceState.mock.calls.flat().join('')).not.toContain('orphan-secret')
   })
 })

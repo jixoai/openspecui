@@ -1,0 +1,201 @@
+/**
+ * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * 1. Prove exhaustive titlebar source selection and zero double-inset behavior.
+ * 2. Prove source replacement retires listeners and rejects late async geometry.
+ * 3. Prove OpenTray drag excludes every interactive header target.
+ *
+ * Original request (2026-07-29): "PWA 和 OpenTray 的标题栏 inset 不能叠加。"
+ */
+// @vitest-environment jsdom
+
+import { describe, expect, it, vi } from 'vitest'
+import {
+  createAppTitlebarPresentationOwner,
+  type AppTitlebarPresentation,
+  type AppTitlebarRuntime,
+  type OpenTrayGeometryEvent,
+} from './titlebar-presentation'
+
+function deferred<T>() {
+  let resolvePromise: ((value: T) => void) | null = null
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve
+  })
+  return {
+    promise,
+    resolve(value: T) {
+      if (!resolvePromise) throw new Error('Deferred promise is unavailable.')
+      resolvePromise(value)
+    },
+  }
+}
+
+describe('App titlebar presentation owner', () => {
+  it('selects one source, replaces rather than adds insets, and retires each listener', async () => {
+    const pwaListeners = new Set<EventListener>()
+    const removePwa = vi.fn((listener: EventListener) => pwaListeners.delete(listener))
+    const nativeListener: { current: ((event: OpenTrayGeometryEvent) => void) | null } = {
+      current: null,
+    }
+    const stopNative = vi.fn(async () => {})
+    let runtime: AppTitlebarRuntime = {
+      viewportWidth: 1200,
+      pwaOverlay: {
+        visible: true,
+        getTitlebarAreaRect: () => ({ x: 72, y: 0, width: 1000, height: 48 }),
+        addEventListener: (_type, listener) => pwaListeners.add(listener),
+        removeEventListener: (_type, listener) => removePwa(listener),
+      },
+    }
+    const changes: AppTitlebarPresentation[] = []
+    const owner = createAppTitlebarPresentationOwner({
+      readRuntime: () => runtime,
+      onChange: (presentation) => changes.push(presentation),
+    })
+
+    await owner.start()
+    expect(changes.at(-1)).toEqual({
+      kind: 'pwa-overlay',
+      insets: { left: 72, right: 128, top: 0, height: 48 },
+    })
+
+    runtime = {
+      viewportWidth: 1200,
+      openTrayWindow: {
+        overlay: {
+          getTitlebarAreaRect: async () => ({ x: 80, y: 0, width: 1000, height: 44 }),
+          listen: async (_type, listener) => {
+            nativeListener.current = listener
+            return stopNative
+          },
+        },
+      },
+    }
+    await owner.refresh()
+    expect(removePwa).toHaveBeenCalledOnce()
+    expect(changes.at(-1)).toEqual({
+      kind: 'opentray',
+      insets: { left: 80, right: 120, top: 0, height: 44 },
+    })
+    const emitNativeGeometry = nativeListener.current
+    if (!emitNativeGeometry) throw new Error('OpenTray geometry listener was not installed.')
+    emitNativeGeometry({ titlebarAreaRect: { x: 90, y: 0, width: 1010, height: 46 } })
+    expect(changes.at(-1)).toEqual({
+      kind: 'opentray',
+      insets: { left: 90, right: 100, top: 0, height: 46 },
+    })
+
+    runtime = { viewportWidth: 1200, openTrayWindow: {} }
+    await owner.refresh()
+    expect(stopNative).toHaveBeenCalledOnce()
+    expect(changes.at(-1)).toEqual({ kind: 'native-frame', insets: expectZeroInsets() })
+
+    runtime = { viewportWidth: 1200 }
+    await owner.refresh()
+    expect(changes.at(-1)).toEqual({ kind: 'browser', insets: expectZeroInsets() })
+    owner.stop()
+  })
+
+  it('keeps a replacement Browser source after an older OpenTray measurement arrives late', async () => {
+    const geometry = deferred<{ x: number; y: number; width: number; height: number }>()
+    const listen = vi.fn()
+    let runtime: AppTitlebarRuntime = {
+      viewportWidth: 1000,
+      openTrayWindow: {
+        overlay: { getTitlebarAreaRect: () => geometry.promise, listen },
+      },
+    }
+    const changes: AppTitlebarPresentation[] = []
+    const owner = createAppTitlebarPresentationOwner({
+      readRuntime: () => runtime,
+      onChange: (presentation) => changes.push(presentation),
+    })
+
+    const pendingNative = owner.start()
+    await Promise.resolve()
+    runtime = { viewportWidth: 1000 }
+    await owner.refresh()
+    geometry.resolve({ x: 70, y: 0, width: 860, height: 44 })
+    await pendingNative
+
+    expect(changes.at(-1)).toEqual({ kind: 'browser', insets: expectZeroInsets() })
+    expect(listen).not.toHaveBeenCalled()
+    owner.stop()
+  })
+
+  it('retains a zero-inset PWA overlay when browser geometry throws', async () => {
+    const onError = vi.fn()
+    const changes: AppTitlebarPresentation[] = []
+    const owner = createAppTitlebarPresentationOwner({
+      readRuntime: () => ({
+        viewportWidth: 1000,
+        pwaOverlay: {
+          visible: true,
+          getTitlebarAreaRect: () => {
+            throw new Error('unavailable')
+          },
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        },
+      }),
+      onChange: (presentation) => changes.push(presentation),
+      onError,
+    })
+
+    await expect(owner.start()).resolves.toBeUndefined()
+    expect(changes.at(-1)).toEqual({ kind: 'pwa-overlay', insets: expectZeroInsets() })
+    expect(onError).toHaveBeenCalledWith('Native titlebar geometry is unavailable.')
+    owner.stop()
+  })
+
+  it('starts native drag only from non-interactive tabs-header space', async () => {
+    const startAppRegionDrag = vi.fn(async () => ({}))
+    const root = document.createElement('div')
+    root.innerHTML = `
+      <div class="tabs-header">
+        <span data-blank></span>
+        <button>Tab</button>
+        <input aria-label="Filter" />
+        <a href="#workspace">Workspace</a>
+        <span data-tabs-actions="true"><span data-action></span></span>
+        <span data-tabs-tab-actions="true"><span data-tab-action></span></span>
+      </div>
+    `
+    const blank = root.querySelector('[data-blank]')
+    const button = root.querySelector('button')
+    const input = root.querySelector('input')
+    const link = root.querySelector('a')
+    const globalAction = root.querySelector('[data-action]')
+    const tabAction = root.querySelector('[data-tab-action]')
+    if (!blank || !button || !input || !link || !globalAction || !tabAction) {
+      throw new Error('Titlebar fixture did not mount.')
+    }
+    const owner = createAppTitlebarPresentationOwner({
+      readRuntime: () => ({
+        viewportWidth: 1000,
+        openTrayWindow: {
+          startAppRegionDrag,
+          overlay: {
+            getTitlebarAreaRect: async () => ({ x: 70, y: 0, width: 860, height: 44 }),
+          },
+        },
+      }),
+      onChange: vi.fn(),
+    })
+    await owner.start()
+
+    owner.startDrag({ root, target: button, clientX: 1, clientY: 2, pointerId: 3 })
+    owner.startDrag({ root, target: input, clientX: 1, clientY: 2, pointerId: 3 })
+    owner.startDrag({ root, target: link, clientX: 1, clientY: 2, pointerId: 3 })
+    owner.startDrag({ root, target: globalAction, clientX: 1, clientY: 2, pointerId: 3 })
+    owner.startDrag({ root, target: tabAction, clientX: 1, clientY: 2, pointerId: 3 })
+    owner.startDrag({ root, target: blank, clientX: 4, clientY: 5, pointerId: 6 })
+    expect(startAppRegionDrag).toHaveBeenCalledOnce()
+    expect(startAppRegionDrag).toHaveBeenCalledWith({ x: 4, y: 5, pointerId: 6 })
+    owner.stop()
+  })
+})
+
+function expectZeroInsets() {
+  return { left: 0, right: 0, top: 0, height: 0 }
+}

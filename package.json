@@ -26,7 +26,7 @@
     "format:check": "tsx scripts/format-check.ts",
     "test": "node scripts/test-root.mjs",
     "test:ci": "pnpm test:root && pnpm -r --workspace-concurrency=1 --if-present run test",
-    "test:browser:ci": "pnpm --filter xterm-input-panel test:browser && pnpm --filter @openspecui/web test:browser:ci",
+    "test:browser:ci": "pnpm --filter xterm-input-panel test:browser && pnpm --filter @openspecui/app test:browser:ci && pnpm --filter @openspecui/web test:browser:ci",
     "changeset:check": "node scripts/changeset-check.mjs",
     "changeset": "changeset",
     "changeversion": "bun ./scripts/changeversion-auto.ts",

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Own the single-instance daemon IPC bind and credential-memory Workspace ledger.
  * 2. Route validated presentation commands without owning project backend processes.
  * 3. Recover stale Unix endpoints only after a failed liveness probe.
@@ -44,6 +44,7 @@ export interface DaemonPresentationHost {
 export interface RunningDaemonServer {
   status: DaemonStatus
   closed: Promise<void>
+  openWorkspaceInBrowser(workspaceId: string): Promise<'not-found' | 'opened'>
   close(): Promise<void>
 }
 
@@ -149,6 +150,16 @@ export async function startDaemonServer(options: {
         credential: workspace.credential,
       }))
     )
+  const openWorkspaceInBrowser = async (workspaceId: string): Promise<'not-found' | 'opened'> => {
+    const workspace = workspaces.get(workspaceId)
+    if (!workspace) return 'not-found'
+    await options.host.openProjectInBrowser({
+      id: workspace.id,
+      backendUrl: workspace.backendUrl,
+      credential: workspace.credential,
+    })
+    return 'opened'
+  }
 
   const server = createServer((socket) => {
     sockets.add(socket)
@@ -221,8 +232,7 @@ export async function startDaemonServer(options: {
                 },
               }
             } else if (command.type === 'open-workspace-in-browser') {
-              const workspace = workspaces.get(command.workspaceId)
-              if (!workspace) {
+              if ((await openWorkspaceInBrowser(command.workspaceId)) === 'not-found') {
                 response = {
                   protocol: DAEMON_PROTOCOL_VERSION,
                   id: request.id,
@@ -230,11 +240,6 @@ export async function startDaemonServer(options: {
                   error: { code: 'NOT_FOUND', message: 'Workspace is no longer registered.' },
                 }
               } else {
-                await options.host.openProjectInBrowser({
-                  id: workspace.id,
-                  backendUrl: workspace.backendUrl,
-                  credential: workspace.credential,
-                })
                 response = {
                   protocol: DAEMON_PROTOCOL_VERSION,
                   id: request.id,
@@ -306,5 +311,5 @@ export async function startDaemonServer(options: {
   server.on('error', (error) => {
     if (!closing) process.stderr.write(`App daemon IPC error: ${error.message}\n`)
   })
-  return { status, closed, close }
+  return { status, closed, openWorkspaceInBrowser, close }
 }

@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Define the browser-safe daemon Workspace snapshot and invalidation wire contract.
  * 2. Keep runtime credentials typed but separate from persistent App shell state.
+ * 3. Define the same-origin open-by-id acknowledgement without exposing backend targets.
  *
  * Original request (2026-07-29): "如果已经有 app daemon，那么默认投递到 app 中。"
  */
@@ -27,3 +28,16 @@ export const AppDaemonInvalidationSchema = z.object({
   revision: z.number().int().nonnegative(),
 })
 export type AppDaemonInvalidation = z.infer<typeof AppDaemonInvalidationSchema>
+
+/** Result of asking the daemon to open one currently registered opaque Workspace id. */
+export const AppDaemonOpenWorkspaceResponseSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true) }),
+  z.object({
+    ok: z.literal(false),
+    error: z.object({
+      code: z.enum(['NOT_FOUND', 'PRESENTATION_FAILED']),
+      message: z.string().min(1),
+    }),
+  }),
+])
+export type AppDaemonOpenWorkspaceResponse = z.infer<typeof AppDaemonOpenWorkspaceResponseSchema>

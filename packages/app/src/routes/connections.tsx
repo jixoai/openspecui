@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Render backend connection discovery and retained entry actions.
  * 2. Keep credentials outside persisted connection state.
  * 3. Consume shared authentication and reachability observations.
@@ -128,7 +128,7 @@ function ConnectionRow({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <Link to="/sessions" className="hover:bg-muted rounded-md px-3 py-1.5 text-sm">
+        <Link to="/workspaces" className="hover:bg-muted rounded-md px-3 py-1.5 text-sm">
           Open
         </Link>
         <button

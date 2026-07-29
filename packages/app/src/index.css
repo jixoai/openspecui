@@ -4,17 +4,20 @@
 @source '../../web/src';
 
 :root {
-  --hosted-pwa-titlebar-left: 0px;
-  --hosted-pwa-titlebar-right: 0px;
-  --hosted-pwa-titlebar-top: 0px;
-  --hosted-pwa-titlebar-height: 0px;
+  --app-titlebar-left: 0px;
+  --app-titlebar-right: 0px;
+  --app-titlebar-top: 0px;
+  --app-titlebar-height: 0px;
 }
 
-.hosted-shell-root[data-titlebar-overlay='true'] {
+.hosted-shell-root:is(
+  [data-titlebar-presentation='pwa-overlay'],
+  [data-titlebar-presentation='opentray']
+) {
   background-color: var(--terminal);
 }
 
-.hosted-shell-root .tabs-header {
+.hosted-shell-root[data-titlebar-presentation='pwa-overlay'] .tabs-header {
   -webkit-app-region: drag;
   app-region: drag;
 }
@@ -34,13 +37,18 @@
   padding-block-start: 0.5rem;
 }
 
-html.dark .hosted-shell-root .hosted-shell-tabs .tabs-button > button.tab-selected {
+html.dark .hosted-shell-root .hosted-shell-tabs [data-tab-trigger='true'].tab-selected {
   background-color: var(--primary);
   color: var(--primary-foreground);
 }
 
-.hosted-shell-root[data-titlebar-overlay='true'] .tabs-header {
-  padding-inline-start: var(--hosted-pwa-titlebar-left);
-  padding-inline-end: var(--hosted-pwa-titlebar-right);
-  min-height: max(2.75rem, var(--hosted-pwa-titlebar-height));
+.hosted-shell-root:is(
+    [data-titlebar-presentation='pwa-overlay'],
+    [data-titlebar-presentation='opentray']
+  )
+  .tabs-header {
+  padding-inline-start: var(--app-titlebar-left);
+  padding-inline-end: var(--app-titlebar-right);
+  padding-block-start: var(--app-titlebar-top);
+  min-height: max(2.75rem, calc(var(--app-titlebar-top) + var(--app-titlebar-height)));
 }

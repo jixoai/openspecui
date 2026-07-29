@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Prove the loopback App server owns immutable assets, SPA fallback, and bounded paths.
  * 2. Prove Workspace control follows invalidation Push then typed replacement Pull.
+ * 3. Prove browser actions carry only encoded opaque Workspace ids to daemon authority.
  *
  * Original request (2026-07-29): "daemon 使用随 CLI 发布的本地 App 外壳。"
  */
+import { AppDaemonOpenWorkspaceResponseSchema } from '@openspecui/core/app-daemon-control'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { request } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -21,13 +23,16 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
-async function startFixture(): Promise<LocalAppServer> {
+async function startFixture(
+  openWorkspaceInBrowser: (workspaceId: string) => Promise<'not-found' | 'opened'> = async () =>
+    'not-found'
+): Promise<LocalAppServer> {
   const assetsDir = await mkdtemp(join(tmpdir(), 'openspecui-local-app-'))
   tempDirs.push(assetsDir)
   await mkdir(join(assetsDir, 'assets'))
   await writeFile(join(assetsDir, 'index.html'), '<main>OpenSpecUI App</main>')
   await writeFile(join(assetsDir, 'assets', 'app-a1b2c3.js'), 'globalThis.appReady = true')
-  const server = await startLocalAppServer({ assetsDir })
+  const server = await startLocalAppServer({ assetsDir, openWorkspaceInBrowser })
   servers.push(server)
   return server
 }
@@ -120,5 +125,29 @@ describe('local App server', () => {
     })
 
     await events.cancel()
+  })
+
+  it('opens only an encoded opaque Workspace id and reports stale authority', async () => {
+    const received: string[] = []
+    const server = await startFixture(async (workspaceId) => {
+      received.push(workspaceId)
+      return workspaceId === 'workspace/a' ? 'opened' : 'not-found'
+    })
+
+    const opened = await fetch(`${server.url}/api/daemon/workspaces/workspace%2Fa/open`, {
+      method: 'POST',
+    })
+    expect(AppDaemonOpenWorkspaceResponseSchema.parse(await opened.json())).toEqual({ ok: true })
+    expect(received).toEqual(['workspace/a'])
+
+    const stale = await fetch(`${server.url}/api/daemon/workspaces/https%3A%2F%2Fevil.test/open`, {
+      method: 'POST',
+    })
+    expect(stale.status).toBe(404)
+    expect(AppDaemonOpenWorkspaceResponseSchema.parse(await stale.json())).toMatchObject({
+      ok: false,
+      error: { code: 'NOT_FOUND' },
+    })
+    expect(received).toEqual(['workspace/a', 'https://evil.test'])
   })
 })

@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Prove the App router renders every first-party product surface.
- * 2. Prove launch ownership remains active outside the Sessions route.
+ * 2. Prove launch ownership remains active outside the Workspaces route.
  * 3. Prove route round-trips preserve the AppLayout-owned iframe Document identity.
- * 4. Prove persistent Sessions consumes the App shell's remaining mobile viewport budget.
+ * 4. Prove persistent Workspaces consumes the App shell's remaining mobile viewport budget.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Owner-reported defect (2026-07-26): opening B or C eventually makes older tabs lose authentication.
@@ -177,13 +177,13 @@ describe('app-router', () => {
     launcher.close()
   })
 
-  it('preserves an App-lifetime launch error for the Sessions surface', async () => {
+  it('preserves an App-lifetime launch error for the Workspaces surface', async () => {
     const router = routerFor(
       {
         ...EMPTY_CONTEXT,
         initialError: 'The launch credential requires a valid backend locator.',
       },
-      '/sessions'
+      '/workspaces'
     )
     const { container } = await renderAt(<RouterProvider router={router} />)
 
@@ -192,7 +192,7 @@ describe('app-router', () => {
     )
   })
 
-  it('preserves the hosted iframe identity across Sessions route round-trips', async () => {
+  it('preserves the hosted iframe identity across Workspaces route round-trips', async () => {
     localStorage.setItem(
       getHostedShellStorageKey(),
       JSON.stringify({
@@ -232,7 +232,7 @@ describe('app-router', () => {
       })
     }) as typeof fetch
 
-    const router = routerFor(EMPTY_CONTEXT, '/sessions')
+    const router = routerFor(EMPTY_CONTEXT, '/workspaces')
     const { container } = await renderAt(<RouterProvider router={router} />)
     await waitFor(() => {
       expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBeTruthy()
@@ -243,9 +243,9 @@ describe('app-router', () => {
     expect(container.querySelector('[data-testid="app-main"]')?.className).toContain(
       'overflow-hidden'
     )
-    expect(container.querySelector('[data-testid="hosted-sessions-surface"]')?.className).toContain(
-      'h-full'
-    )
+    expect(
+      container.querySelector('[data-testid="hosted-workspaces-surface"]')?.className
+    ).toContain('h-full')
     expect(container.querySelector('.hosted-shell-root')?.className).toContain('h-full')
     expect(container.querySelector('.hosted-shell-tabs')?.className).toContain('h-full')
 
@@ -253,15 +253,15 @@ describe('app-router', () => {
       await router.navigate({ to: '/environment' })
     })
     expect(
-      container.querySelector<HTMLElement>('[data-testid="hosted-sessions-surface"]')?.hidden
+      container.querySelector<HTMLElement>('[data-testid="hosted-workspaces-surface"]')?.hidden
     ).toBe(true)
     expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBe(iframe)
 
     await act(async () => {
-      await router.navigate({ to: '/sessions' })
+      await router.navigate({ to: '/workspaces' })
     })
     expect(
-      container.querySelector<HTMLElement>('[data-testid="hosted-sessions-surface"]')?.hidden
+      container.querySelector<HTMLElement>('[data-testid="hosted-workspaces-surface"]')?.hidden
     ).toBe(false)
     expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBe(iframe)
   })

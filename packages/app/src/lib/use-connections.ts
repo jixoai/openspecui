@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Project persisted credential-free backend connection entries.
  * 2. Own same-window and storage-driven shell-state publication.
  * 3. Expose a synchronous snapshot for Store authority revalidation at dispatch time.
@@ -21,7 +21,7 @@ const SHELL_STATE_STORE_KEY = 'openspecui-app:shell'
  * 持久化的 backend 连接条目（live 同步 localStorage）。
  *
  * 复用 shell-state.ts 的 HostedShellTab——它是「无凭据」的 backend 定位（apiBaseUrl），
- * 与 AGENTS.md「连接持久化不带凭据」一致。凭据只在 session memory 中（本轮骨架不涉及）。
+ * 与 AGENTS.md「连接持久化不带凭据」一致。凭据只在运行时内存中。
  */
 function createShellStateStore() {
   const listeners = new Set<() => void>()

@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Register App-native Connections, Environment, Sessions, Settings, and Store routes.
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Register App-native Connections, Environment, Workspaces, Settings, and Store routes.
  * 2. Preserve one typed launch context across the App route tree.
  *
  * Original request (2026-07-15): "在没有后端的基础上，先把前端的初步工作先完成。"
@@ -16,15 +16,15 @@ import type { HostedShellLaunchRequest } from './lib/shell-state'
 import { ConnectionsRoute } from './routes/connections'
 import { ContextMatrixRoute } from './routes/context-matrix'
 import { EnvironmentRoute } from './routes/environment'
-import { SessionsRoute } from './routes/sessions'
 import { SettingsRoute } from './routes/settings'
 import { StoreInspectorRoute } from './routes/store-inspector'
 import { StoreInventoryRoute } from './routes/store-inventory'
+import { WorkspacesRoute } from './routes/workspaces'
 
 /**
  * App 路由上下文：承载一次性启动信息（launch params / fallback / error）。
  *
- * 这些值在 main.tsx 解析后注入 router，供 /sessions（HostedShell）使用，保证现有 PWA 启动路径不变。
+ * 这些值在 main.tsx 解析后注入 router，供 /workspaces（HostedShell）使用。
  */
 export interface AppRouterContext {
   initialLaunchRequest: HostedShellLaunchRequest | null
@@ -57,11 +57,11 @@ const environmentRoute = createRoute({
   component: EnvironmentRoute,
 })
 
-// --- Sessions：现有 iframe 多标签 HostedShell，作为项目工作面入口 ---
-const sessionsRoute = createRoute({
+// --- Workspaces：现有 iframe 多标签 HostedShell，作为项目工作面入口 ---
+const workspacesRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/sessions',
-  component: SessionsRoute,
+  path: '/workspaces',
+  component: WorkspacesRoute,
 })
 
 const settingsRoute = createRoute({
@@ -102,7 +102,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   connectionsRoute,
   environmentRoute,
-  sessionsRoute,
+  workspacesRoute,
   settingsRoute,
   storeManagerRoute,
   storeInspectorRoute,

@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
 1. Sequence independently reviewable production boundaries.
 2. Bind every checkpoint to focused evidence and implementation-state updates.
 3. Protect credentials, backend ownership, and host-mode invariants.
@@ -84,17 +84,17 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 
 ## 7. Workspaces and Titlebar Host State
 
-- [ ] 7.1 Rename App product language, route/navigation, accessible labels, and tests from Sessions to Workspaces without changing project backend session semantics.
-- [ ] 7.2 Preserve Workspace iframe DOM identity, reachability generation, tab persistence, and runtime-only credential ownership across App route changes.
-- [ ] 7.3 Add a tooltip-labelled Open in browser icon button to every Workspace tab using the existing icon system and stable control dimensions.
-- [ ] 7.4 Dispatch only an opaque Workspace id; daemon resolves the current registered backend and refuses stale, missing, or arbitrary URL requests.
-- [ ] 7.5 Replace PWA-only titlebar state with an exhaustive `browser | pwa-overlay | opentray | native-frame` presentation state.
-- [ ] 7.6 Ensure exactly one titlebar geometry owner writes CSS inset variables; source changes unsubscribe the retired owner and reset inactive insets to zero.
-- [ ] 7.7 Adapt async OpenTray overlay geometry and `geometrychange` events; retain existing PWA Window Controls Overlay behavior when the native bridge is absent.
-- [ ] 7.8 Enable macOS overlay avoidance and designated native drag surface while keeping buttons, tabs, inputs, and other interactive hit regions outside drag/caption regions.
-- [ ] 7.9 Keep the verified Windows native-frame baseline unless separate capability evidence and Owner acceptance authorize Windows overlay expansion.
-- [ ] 7.10 Component tests cover container/narrow layouts, Open in browser states, no horizontal overflow, every titlebar variant, geometry replacement, and zero double-inset.
-- [ ] 7.11 Update `implementation.md`, pass App focused Vitest/basic component Playwright, and commit this checkpoint before broad gates.
+- [x] 7.1 Rename App product language, route/navigation, accessible labels, and tests from Sessions to Workspaces without changing project backend session semantics.
+- [x] 7.2 Preserve Workspace iframe DOM identity, reachability generation, tab persistence, and runtime-only credential ownership across App route changes.
+- [x] 7.3 Add a tooltip-labelled Open in browser icon button to every Workspace tab using the existing icon system and stable control dimensions.
+- [x] 7.4 Dispatch only an opaque Workspace id; daemon resolves the current registered backend and refuses stale, missing, or arbitrary URL requests.
+- [x] 7.5 Replace PWA-only titlebar state with an exhaustive `browser | pwa-overlay | opentray | native-frame` presentation state.
+- [x] 7.6 Ensure exactly one titlebar geometry owner writes CSS inset variables; source changes unsubscribe the retired owner and reset inactive insets to zero.
+- [x] 7.7 Adapt async OpenTray overlay geometry and `geometrychange` events; retain existing PWA Window Controls Overlay behavior when the native bridge is absent.
+- [x] 7.8 Enable macOS overlay avoidance and designated native drag surface while keeping buttons, tabs, inputs, and other interactive hit regions outside drag/caption regions.
+- [x] 7.9 Keep the verified Windows native-frame baseline unless separate capability evidence and Owner acceptance authorize Windows overlay expansion.
+- [x] 7.10 Component tests cover container/narrow layouts, Open in browser states, no horizontal overflow, every titlebar variant, geometry replacement, and zero double-inset.
+- [x] 7.11 Update `implementation.md`, pass App focused Vitest/basic component Playwright, and commit this checkpoint before broad gates.
 
 ## 8. Specifications, Documentation, and Package Contract
 

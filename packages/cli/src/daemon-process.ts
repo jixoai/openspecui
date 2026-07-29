@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Bootstrap the detached App daemon from explicit environment-owned startup evidence.
  * 2. Compose local App HTTP, presentation host, and IPC lifecycle in teardown order.
  * 3. Keep project backend credentials and processes outside daemon bootstrap state.
@@ -42,7 +42,12 @@ export async function runDaemonProcess(options: {
   const runtimeDir = options.runtimeDir ?? dirname(fileURLToPath(import.meta.url))
   const paths = resolveDaemonPaths()
   const assetsDir = await resolveAppAssetsDir(runtimeDir)
-  const appServer = await startLocalAppServer({ assetsDir })
+  let server: RunningDaemonServer | null = null
+  const appServer = await startLocalAppServer({
+    assetsDir,
+    openWorkspaceInBrowser: async (workspaceId) =>
+      server?.openWorkspaceInBrowser(workspaceId) ?? 'not-found',
+  })
   const openExternalUrl =
     options.openExternalUrl ??
     (async (target: string) => {
@@ -50,7 +55,6 @@ export async function runDaemonProcess(options: {
       await open.default(target)
     })
   const version = readCliPackageVersion(runtimeDir)
-  let server: RunningDaemonServer | null = null
   const reportDiagnostic = (diagnostic: DaemonPresenterDiagnostic) => {
     process.stderr.write(
       `[OpenSpecUI App] ${diagnostic.code} (${diagnostic.stage}): ${diagnostic.message}\n`

@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Prove daemon control performs initial Pull and notice-driven replacement Pull.
  * 2. Prove unsupported hosted shells stay quiet while objective local failures remain visible.
+ * 3. Prove open-in-browser posts only an encoded opaque Workspace id and parses typed failures.
  *
  * Original request (2026-07-29): "如果已经有 app daemon，那么默认投递到 app 中。"
  */
@@ -44,6 +45,56 @@ class TestEventSource implements DaemonWorkspaceEventSource {
 }
 
 describe('daemon Workspace control', () => {
+  it('posts only an encoded opaque Workspace id and surfaces a typed stale-id failure', async () => {
+    const fetchControl = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: { code: 'NOT_FOUND', message: 'Workspace is no longer registered.' },
+          }),
+          { status: 404, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+        )
+      )
+    const control = createDaemonWorkspaceControl({
+      baseUrl: 'http://127.0.0.1:14000',
+      fetch: fetchControl,
+      onSnapshot: vi.fn(),
+      onError: vi.fn(),
+    })
+
+    await expect(control.openWorkspaceInBrowser('workspace/a')).resolves.toBeUndefined()
+    expect(fetchControl).toHaveBeenNthCalledWith(
+      1,
+      'http://127.0.0.1:14000/api/daemon/workspaces/workspace%2Fa/open',
+      { method: 'POST', cache: 'no-store', credentials: 'same-origin' }
+    )
+    await expect(control.openWorkspaceInBrowser('stale-id')).rejects.toThrow(
+      'Workspace is no longer registered.'
+    )
+    expect(JSON.stringify(fetchControl.mock.calls)).not.toContain('http://backend.example')
+  })
+
+  it('does not reflect an invalid daemon payload into the App error surface', async () => {
+    const control = createDaemonWorkspaceControl({
+      baseUrl: 'http://127.0.0.1:14000',
+      fetch: async () =>
+        new Response(JSON.stringify({ ok: false, privateTarget: 'http://backend.example' })),
+      onSnapshot: vi.fn(),
+      onError: vi.fn(),
+    })
+
+    await expect(control.openWorkspaceInBrowser('workspace-a')).rejects.toThrow(
+      'Daemon browser action returned an invalid response.'
+    )
+  })
+
   it('pulls the initial snapshot and replaces it after a typed invalidation', async () => {
     const responses = [
       snapshotResponse(1, ['workspace-a']),
