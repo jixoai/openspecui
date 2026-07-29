@@ -39,7 +39,7 @@ test ! -e "$OPENSPECUI_HOME/run/daemon.sock"
 printf 'candidate=%s\nlab=%s\n' "$HEAD" "$LAB"
 ```
 
-PASS：build、pack、install 均退出 `0`；`$CLI` 指向安装包，不是仓库源码；初始 daemon endpoint 不存在。当前准备基线为 `fc889898b9457122fccf270995152c083eea4a67`，若 HEAD 不同，结果必须记录实际 HEAD。
+PASS：build、pack、install 均退出 `0`；`$CLI` 指向安装包，不是仓库源码；初始 daemon endpoint 不存在。生产代码固定点为 `cb434dcfbeba11e892cfd4a55a404de4729b0b1d`；后续提交只补充 checkpoint/验收文档。结果必须记录实际运行的 HEAD。
 
 验收项目：
 
