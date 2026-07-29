@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Spawn non-shell child processes without converting synchronous failures into thrown control flow.
+ * 2. Buffer stdout/stderr and preserve exit, timeout, and spawn-error evidence.
+ * 3. Retire cancelled buffered children through bounded SIGTERM-to-SIGKILL escalation.
+ *
+ * Original request (2026-07-29): "继续打磨 app 模式，我们需要将它适配对接 opentray。"
+ * Built-runtime correction (2026-07-30): one foreground Server signal must retire background OpenSpec CLI children.
+ */
 import { spawn, type ChildProcess, type SpawnOptionsWithoutStdio } from 'child_process'
 
 export interface SpawnErrorInfo {
@@ -68,14 +77,32 @@ function killChild(child: ChildProcess): void {
   }
 }
 
+const BUFFERED_TERMINATION_GRACE_MS = 1_000
+
+function bufferedCancellationError(): SpawnErrorInfo {
+  return { code: 'ABORT_ERR', message: 'CLI command was cancelled.' }
+}
+
 export function runBufferedCommand(options: {
   command: string
   args: readonly string[]
   cwd: string
   env: NodeJS.ProcessEnv
   timeoutMs?: number
+  signal?: AbortSignal
 }): Promise<BufferedSpawnResult> {
   return new Promise((resolve) => {
+    if (options.signal?.aborted) {
+      resolve({
+        stdout: '',
+        stderr: '',
+        exitCode: null,
+        timedOut: false,
+        spawnError: bufferedCancellationError(),
+      })
+      return
+    }
+
     const started = spawnSafe(options.command, options.args, {
       cwd: options.cwd,
       shell: false,
@@ -97,23 +124,54 @@ export function runBufferedCommand(options: {
     let stdout = ''
     let stderr = ''
     let timedOut = false
+    let cancelled = false
     let settled = false
 
-    let clearTimer = () => {}
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null
+    let forceTerminationTimer: ReturnType<typeof setTimeout> | null = null
     if (options.timeoutMs !== undefined) {
-      const timer = setTimeout(() => {
+      timeoutTimer = setTimeout(() => {
         timedOut = true
         killChild(child)
       }, options.timeoutMs)
-      clearTimer = () => clearTimeout(timer)
     }
 
     const finish = (result: BufferedSpawnResult) => {
       if (settled) return
       settled = true
-      clearTimer()
-      resolve(result)
+      if (timeoutTimer) clearTimeout(timeoutTimer)
+      if (forceTerminationTimer) clearTimeout(forceTerminationTimer)
+      options.signal?.removeEventListener('abort', cancel)
+      resolve(
+        cancelled
+          ? {
+              ...result,
+              exitCode: null,
+              spawnError: bufferedCancellationError(),
+            }
+          : result
+      )
     }
+
+    const cancel = () => {
+      if (cancelled || settled) return
+      cancelled = true
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        // The close/error event remains the settlement authority.
+      }
+      forceTerminationTimer = setTimeout(() => {
+        if (settled) return
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          // The close/error event may already be queued.
+        }
+      }, BUFFERED_TERMINATION_GRACE_MS)
+    }
+
+    options.signal?.addEventListener('abort', cancel, { once: true })
 
     child.stdout?.on('data', (data: Buffer) => {
       stdout += data.toString()

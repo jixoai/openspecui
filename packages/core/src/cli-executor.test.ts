@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
- * 1. Verify buffered and streaming CLI execution, runner resolution, and error behavior.
+ * 1. Verify buffered and streaming CLI execution, bounded runner probes, disposal, and error behavior.
  * 2. Preserve the launch process environment without loading project-owned environment files.
  * 3. Verify OpenSpec lifecycle command construction and cancellation.
  * 4. Prove cancellation ownership and forced-timeout settlement remain immutable through late close.
@@ -10,8 +10,9 @@
  * Original request (2026-07-17): "Cancellation during command resolution cannot spawn after cancellation."
  * Original request (2026-07-17): "Cover repeated cancel/dispose and a late close after forced-timeout rejection."
  * Original request (2026-07-17): "Make late-child-close bookkeeping proof resistant to the exact missing-cleanup mutation."
+ * Built-runtime correction (2026-07-30): foreground Server shutdown must retire buffered projection children and settled probe timers.
  */
-import { mkdir, writeFile } from 'fs/promises'
+import { mkdir, readFile, writeFile } from 'fs/promises'
 import { ChildProcess } from 'node:child_process'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -50,6 +51,7 @@ describe('CliExecutor', () => {
   })
 
   afterEach(async () => {
+    await cliExecutor.dispose()
     clearCache()
     await closeAllWatchers()
     await cleanupTempDir(tempDir)
@@ -184,6 +186,29 @@ describe('CliExecutor', () => {
         }
       }
     })
+
+    it.skipIf(process.platform === 'win32')(
+      'disposes an active buffered child with bounded force escalation',
+      async () => {
+        const readyPath = join(tempDir, 'buffered-child-ready')
+        await configManager.writeConfig({ cli: { command: process.execPath } })
+        clearCache()
+        const execution = cliExecutor.execute([
+          '-e',
+          `require('node:fs').writeFileSync(${JSON.stringify(readyPath)}, 'ready'); process.on('SIGTERM', () => {}); setInterval(() => {}, 1_000)`,
+        ])
+
+        await vi.waitFor(async () => expect(await readFile(readyPath, 'utf8')).toBe('ready'))
+        const disposeStartedAt = Date.now()
+        await cliExecutor.dispose()
+
+        await expect(execution).resolves.toMatchObject({
+          success: false,
+          exitCode: null,
+        })
+        expect(Date.now() - disposeStartedAt).toBeGreaterThanOrEqual(900)
+      }
+    )
   })
 
   describe('init()', () => {
@@ -567,6 +592,31 @@ describe('CliExecutor', () => {
   })
 
   describe('checkAvailability()', () => {
+    it('retires both successful probe timeout handles', async () => {
+      await configManager.writeConfig({ cli: { command: 'node' } })
+      clearCache()
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+
+      try {
+        const result = await cliExecutor.checkAvailability(12_345)
+        const probeTimers = setTimeoutSpy.mock.results.flatMap((entry, index) =>
+          setTimeoutSpy.mock.calls[index]?.[1] === 12_345 && entry.type === 'return'
+            ? [entry.value]
+            : []
+        )
+
+        expect(result.available).toBe(true)
+        expect(probeTimers).toHaveLength(2)
+        for (const timer of probeTimers) {
+          expect(clearTimeoutSpy).toHaveBeenCalledWith(timer)
+        }
+      } finally {
+        clearTimeoutSpy.mockRestore()
+        setTimeoutSpy.mockRestore()
+      }
+    })
+
     it('should return available when command succeeds', async () => {
       await configManager.writeConfig({ cli: { command: 'node' } })
       clearCache()

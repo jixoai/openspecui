@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Own every root-scoped operation, CLI projection, and project-Schema mutation for the selected Planning root.
  * 2. Serialize replacement and issue fresh record/generation provenance without reconstructing root selection.
  * 3. Acquire and retire observation/invalidation leases with each active root.
@@ -14,6 +14,7 @@
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Owner architecture clarification (2026-07-26): "将这些变更信息收集起来作为触发器，更新底层幂等计算的缓存结果。"
+ * Built-runtime correction (2026-07-30): retiring a Planning root must retire its buffered CLI children.
  */
 import {
   CliExecutor,
@@ -87,6 +88,7 @@ export interface PlanningRootServices {
 
 interface PlanningRootServiceRecord extends PlanningRootServices {
   identity: string
+  rootCliExecutor: CliExecutor
   schemaMutationService: SchemaMutationService
   hookRuntime: HookRuntime
   observationRelease: Promise<WatcherRootRelease | null>
@@ -328,6 +330,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
 
     return {
       identity: this.rootIdentity(rootContext),
+      rootCliExecutor,
       gitBindingToken,
       schemaMutationService,
       rootContext,
@@ -372,6 +375,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         Promise.resolve().then(() => record.dashboardProjectionService.dispose()),
         Promise.resolve().then(() => record.changesProjectionService.dispose()),
         Promise.resolve().then(() => record.planningCliProjectionService.dispose()),
+        Promise.resolve().then(() => record.rootCliExecutor.dispose()),
         record.hookRuntime.dispose(),
         record.searchService.dispose(),
         record.observationRelease.then((releaseObservationRoot) => releaseObservationRoot?.()),

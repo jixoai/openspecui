@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
- * 1. Execute buffered CLI processes with runner recovery and complete process evidence.
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Execute buffered CLI processes with runner recovery, complete process evidence, bounded probes, and owner-scoped disposal.
  * 2. Own streaming CLI processes through cancellation request, escalation, and confirmed settlement.
  * 3. Retain established init/schema/template and human validate/archive helpers.
  * 4. Expose the physically separated OpenSpec 1.6 typed command facade.
@@ -8,12 +8,18 @@
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "A stream cancellation request is not child-process settlement."
+ * Built-runtime correction (2026-07-30): foreground Server shutdown must retire buffered projection children and settled probe timers.
  */
 import { type ChildProcess } from 'child_process'
 import { OpenSpecCliContractExecutor } from './cli-contracts/index.js'
 import { CliStreamChildOwner } from './cli-stream-child-owner.js'
 import { createCleanCliEnv, type ConfigManager } from './config.js'
-import { formatSpawnError, runBufferedCommand, spawnSafe } from './spawn-safe.js'
+import {
+  formatSpawnError,
+  runBufferedCommand,
+  spawnSafe,
+  type BufferedSpawnResult,
+} from './spawn-safe.js'
 
 /** CLI 执行结果 */
 export interface CliResult {
@@ -71,6 +77,16 @@ function createDeferred<T>(): {
   return { promise, resolve, reject }
 }
 
+function settleWithin<T>(operation: Promise<T>, timeout: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const timeoutFailure = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeout)
+  })
+  return Promise.race([operation, timeoutFailure]).finally(() => {
+    if (timer) clearTimeout(timer)
+  })
+}
+
 /**
  * CLI 执行器
  *
@@ -79,6 +95,10 @@ function createDeferred<T>(): {
  */
 export class CliExecutor {
   readonly contracts: OpenSpecCliContractExecutor
+  private readonly bufferedAbortController = new AbortController()
+  private readonly activeBufferedCommands = new Set<Promise<BufferedSpawnResult>>()
+  private disposePromise: Promise<void> | null = null
+  private disposed = false
 
   constructor(
     private configManager: ConfigManager,
@@ -93,13 +113,25 @@ export class CliExecutor {
   }
 
   private async runCommandOnce(fullCommand: readonly string[]): Promise<CliResultInternal> {
+    if (this.disposed) {
+      return {
+        success: false,
+        stdout: '',
+        stderr: 'CLI executor is disposed.',
+        exitCode: null,
+        errorCode: 'ABORT_ERR',
+      }
+    }
     const [cmd, ...cmdArgs] = fullCommand
-    const result = await runBufferedCommand({
+    const command = runBufferedCommand({
       command: cmd,
       args: cmdArgs,
       cwd: this.projectDir,
       env: createCleanCliEnv(),
+      signal: this.bufferedAbortController.signal,
     })
+    this.activeBufferedCommands.add(command)
+    const result = await command.finally(() => this.activeBufferedCommands.delete(command))
 
     if (result.spawnError) {
       return {
@@ -152,6 +184,16 @@ export class CliExecutor {
    */
   async execute(args: string[]): Promise<CliResult> {
     return this.executeInternal(args, true)
+  }
+
+  /** Cancel and await every buffered CLI child owned by this executor. */
+  dispose(): Promise<void> {
+    if (this.disposePromise) return this.disposePromise
+    this.disposed = true
+    this.bufferedAbortController.abort()
+    const activeCommands = [...this.activeBufferedCommands]
+    this.disposePromise = Promise.allSettled(activeCommands).then(() => undefined)
+    return this.disposePromise
   }
 
   /**
@@ -253,19 +295,17 @@ export class CliExecutor {
     tried?: string[]
   }> {
     try {
-      const resolved = await Promise.race([
+      const resolved = await settleWithin(
         this.configManager.getResolvedCliRunner(),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('CLI runner resolve timed out')), timeout)
-        ),
-      ])
+        timeout,
+        'CLI runner resolve timed out'
+      )
 
-      const versionResult = await Promise.race([
+      const versionResult = await settleWithin(
         this.runCommandOnce([...resolved.commandParts, '--version']),
-        new Promise<CliResultInternal>((_, reject) =>
-          setTimeout(() => reject(new Error('CLI check timed out')), timeout)
-        ),
-      ])
+        timeout,
+        'CLI check timed out'
+      )
 
       if (versionResult.success) {
         return {

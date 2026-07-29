@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
  * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
  * 3. Host Server-local terminal/Root Context notifications, sound, preview-resource, and translation HTTP boundaries.
@@ -21,6 +21,7 @@
  * Owner-reported defect (2026-07-26): App-embedded Project Web must enter its canonical Dashboard
  * route directly instead of visibly normalizing the backend root after iframe launch.
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Built-runtime defect (2026-07-30): Direct Web shutdown must await HTTP closure and retire non-cooperative WebSocket and buffered CLI children after one signal.
  *
  * @module server
  */
@@ -755,6 +756,15 @@ export async function createWebSocketServer(
     }
   }
 
+  const closeWebSocketServer = (socketServer: WebSocketServer): Promise<void> =>
+    new Promise((resolve, reject) => {
+      for (const client of socketServer.clients) client.terminate()
+      socketServer.close((error) => {
+        if (error) reject(error)
+        else resolve()
+      })
+    })
+
   return {
     wss,
     ptyWss,
@@ -766,8 +776,8 @@ export async function createWebSocketServer(
         await settleCleanupPhase(failures, [
           () => handler.broadcastReconnectNotification(),
           () => ptyManager.closeAll(),
-          () => ptyWss.close(),
-          () => wss.close(),
+          () => closeWebSocketServer(ptyWss),
+          () => closeWebSocketServer(wss),
           () => server.watcher?.stop(),
         ])
         await settleCleanupPhase(failures, [() => server.storeObservationFallback.dispose()])
@@ -777,6 +787,7 @@ export async function createWebSocketServer(
         await settleCleanupPhase(failures, [
           () => server.environmentGlobalProjectionService.dispose(),
         ])
+        await settleCleanupPhase(failures, [() => server.cliExecutor.dispose()])
         await settleCleanupPhase(failures, [() => server.planningRootServices.dispose()])
         await settleCleanupPhase(failures, [() => server.projectionWorkRuntime.clear()])
         await settleCleanupPhase(failures, [() => server.storeObservation.dispose()])
@@ -856,6 +867,15 @@ export async function startServer(
     port,
   })
 
+  const closeHttpServer = (): Promise<void> =>
+    new Promise((resolve, reject) => {
+      httpServer.close((error) => {
+        if (error) reject(error)
+        else resolve()
+      })
+      if ('closeAllConnections' in httpServer) httpServer.closeAllConnections()
+    })
+
   // Create WebSocket server.
   const wsServer = await createWebSocketServer(server, httpServer, {
     projectDir: config.projectDir,
@@ -880,9 +900,7 @@ export async function startServer(
         const websocketResults = await Promise.allSettled([
           Promise.resolve().then(() => wsServer.close()),
         ])
-        const httpResults = await Promise.allSettled([
-          Promise.resolve().then(() => httpServer.close()),
-        ])
+        const httpResults = await Promise.allSettled([closeHttpServer()])
         const failures = [...modelResults, ...websocketResults, ...httpResults].flatMap((result) =>
           result.status === 'rejected' ? [result.reason] : []
         )
