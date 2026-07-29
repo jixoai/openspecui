@@ -131,6 +131,18 @@ PR delivery                      not started
 - Owner handoff: `walkthrough/ACCEPTANCE.md` fixes the real packed-CLI setup and nine numbered cases for interactive admission, dual Workspaces, open-in-browser, retained native activation, daemon restart convergence, immutable mode, Browser/PWA state, macOS/Windows chrome, Direct Web, and cleanup. Each case has explicit PASS/FAIL/NOT RUN and restore boundaries; it contains no credential-bearing command.
 - Remaining boundary: final interactive prompt, multi-Workspace, Browser/PWA, macOS/Windows native window, overlay hit-region, retained-focus, and visual presentation acceptance belongs to the Owner at checkpoint 10. No PR is opened or updated before that acceptance.
 
+### Independent review correction (2026-07-30 Asia/Shanghai)
+
+- Review found that `AppDaemonWorkspaceOwner` bound non-null snapshot credentials but did not revoke a previously bound locator credential when the authoritative later snapshot explicitly carried `credential: null`. A restarted or reconfigured backend reusing that locator could therefore receive stale Authorization from App runtime memory.
+- The snapshot owner now calls `clearLaunchCredential()` before applying the credential-free launch target for that authoritative anonymous Workspace. The focused red/green test first binds `runtime-only`, then applies the same opaque Workspace and locator with `credential: null`; it requires both the launch-time read and the registry read to be `null`. Removing the clear transition makes that exact assertion fail.
+- This is an automated authority-boundary correction only. It changes neither persisted Workspace state nor the Owner's Browser/PWA/OpenTray visual-acceptance boundary.
+
+### Independent review correction: lease acknowledgement bound (2026-07-30 Asia/Shanghai)
+
+- Review found that `createDaemonWorkspaceLease()` applied its initial deadline only after a socket close. A connected but silent IPC endpoint never reached that path, so foreground `serve --app` could wait forever despite the stated bounded initial lease contract.
+- Each initial lease connection now owns an acknowledgement timer through the initial deadline. The timer rejects the initial lease and destroys only its socket; normal acknowledgement and all socket closes clear the timer. Already-established leases retain their deliberate reconnect-until-retired behavior.
+- The focused production-transport fixture creates a real Unix endpoint that accepts request bytes and never answers. It requires `createDaemonWorkspaceLease()` to reject with the acknowledgement-bound error. Mutation evidence removes the timer and the named test times out at its 500 ms bound; restoring the timer returns the expected rejection.
+
 ## Decisions Taken
 
 ### Command and process ownership
