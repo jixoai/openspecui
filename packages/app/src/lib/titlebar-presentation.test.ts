@@ -2,9 +2,10 @@
  * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
  * 1. Prove exhaustive titlebar source selection and zero double-inset behavior.
  * 2. Prove source replacement retires listeners and rejects late async geometry.
- * 3. Prove OpenTray drag excludes every interactive header target.
+ * 3. Prove OpenTray drag is exclusive to the dedicated App titlebar.
  *
  * Original request (2026-07-29): "PWA 和 OpenTray 的标题栏 inset 不能叠加。"
+ * Original request (2026-07-30): "顶部区域缺少一个自绘制的 titlebar 区域，它是通过 overlay-window-controls 得来的，主语它可以拖拽窗口。"
  */
 // @vitest-environment jsdom
 
@@ -148,18 +149,19 @@ describe('App titlebar presentation owner', () => {
     owner.stop()
   })
 
-  it('starts native drag only from non-interactive tabs-header space', async () => {
+  it('starts native drag only from non-interactive dedicated App titlebar space', async () => {
     const startAppRegionDrag = vi.fn(async () => ({}))
     const root = document.createElement('div')
     root.innerHTML = `
-      <div class="tabs-header">
+      <header data-app-titlebar="true">
         <span data-blank></span>
-        <button>Tab</button>
+        <button>Titlebar action</button>
         <input aria-label="Filter" />
         <a href="#workspace">Workspace</a>
         <span data-tabs-actions="true"><span data-action></span></span>
         <span data-tabs-tab-actions="true"><span data-tab-action></span></span>
-      </div>
+      </header>
+      <div class="tabs-header"><button data-tab>Workspace tab</button></div>
     `
     const blank = root.querySelector('[data-blank]')
     const button = root.querySelector('button')
@@ -167,7 +169,8 @@ describe('App titlebar presentation owner', () => {
     const link = root.querySelector('a')
     const globalAction = root.querySelector('[data-action]')
     const tabAction = root.querySelector('[data-tab-action]')
-    if (!blank || !button || !input || !link || !globalAction || !tabAction) {
+    const tab = root.querySelector('[data-tab]')
+    if (!blank || !button || !input || !link || !globalAction || !tabAction || !tab) {
       throw new Error('Titlebar fixture did not mount.')
     }
     const owner = createAppTitlebarPresentationOwner({
@@ -189,6 +192,7 @@ describe('App titlebar presentation owner', () => {
     owner.startDrag({ root, target: link, clientX: 1, clientY: 2, pointerId: 3 })
     owner.startDrag({ root, target: globalAction, clientX: 1, clientY: 2, pointerId: 3 })
     owner.startDrag({ root, target: tabAction, clientX: 1, clientY: 2, pointerId: 3 })
+    owner.startDrag({ root, target: tab, clientX: 1, clientY: 2, pointerId: 3 })
     owner.startDrag({ root, target: blank, clientX: 4, clientY: 5, pointerId: 6 })
     expect(startAppRegionDrag).toHaveBeenCalledOnce()
     expect(startAppRegionDrag).toHaveBeenCalledWith({ x: 4, y: 5, pointerId: 6 })

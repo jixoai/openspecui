@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
- * 1. Orchestrate persistent credential-free project tabs, browser actions, and iframe lifecycle.
+ * 1. Orchestrate persistent credential-free project tabs, browser actions, iframe lifecycle, and overlay titlebar placement.
  * 2. Coordinate PWA install, display, and update ownership.
  * 3. Publish shell state once and consume exact-tab reachability from the shared observation owner.
  * 4. Keep refresh/retry feedback attached to the affected tab runtime.
@@ -10,6 +10,7 @@
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
  * Original request (2026-07-29): "Workspaces 的 tab 可以提供一个 open in browser 的 icon-button。"
+ * Original request (2026-07-30): "顶部区域缺少一个自绘制的 titlebar 区域，它是通过 overlay-window-controls 得来的，主语它可以拖拽窗口。"
  * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
  * Compromise: tab, frame, and PWA display lifecycles remain co-located because they settle in one mounted
  * shell; launch, health, and Root observation are physically extracted into App-lifetime owners.
@@ -57,6 +58,7 @@ import { useConnections, useConnectionsActions } from '../lib/use-connections'
 import { useTitlebarPresentation } from '../lib/use-titlebar-presentation'
 import { useAppDaemonWorkspace } from './app-daemon-workspace-owner'
 import { useAppLaunchError } from './app-launch-owner'
+import { AppTitlebar } from './app-titlebar'
 import { HostedShellThemeBootstrap } from './hosted-shell-theme'
 import { WorkspaceTabBrowserAction } from './workspace-tab-browser-action'
 
@@ -1021,10 +1023,10 @@ function HostedShellRuntime({
     <div
       className="hosted-shell-root bg-background text-foreground flex h-full min-h-0 min-w-0 flex-col"
       data-titlebar-presentation={titlebar.presentation.kind}
-      onPointerDown={titlebar.onPointerDown}
       style={rootStyle}
     >
       <HostedShellThemeBootstrap />
+      <AppTitlebar presentation={titlebar.presentation} onPointerDown={titlebar.onPointerDown} />
 
       {updateState.status === 'ready' && (
         <div className="border-border bg-muted/30 text-muted-foreground border-b px-3 py-2 text-xs">

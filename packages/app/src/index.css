@@ -17,20 +17,31 @@
   background-color: var(--terminal);
 }
 
-.hosted-shell-root[data-titlebar-presentation='pwa-overlay'] .tabs-header {
+.app-titlebar {
+  display: flex;
+  min-width: 0;
+  min-height: max(2.25rem, calc(var(--app-titlebar-top) + var(--app-titlebar-height)));
+  flex-shrink: 0;
+  align-items: center;
+  padding-block-start: var(--app-titlebar-top);
+  padding-inline-start: var(--app-titlebar-left);
+  padding-inline-end: var(--app-titlebar-right);
+  user-select: none;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.app-titlebar[data-app-titlebar-kind='pwa-overlay'] {
   -webkit-app-region: drag;
   app-region: drag;
 }
 
-.hosted-shell-root .tabs-header button,
-.hosted-shell-root .tabs-header input,
-.hosted-shell-root .tabs-header select,
-.hosted-shell-root .tabs-header textarea,
-.hosted-shell-root .tabs-header a,
-.hosted-shell-root .tabs-header [role='button'],
-.hosted-shell-root .tabs-header [data-tabs-actions='true'] {
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
+.app-titlebar-brand {
+  padding-inline: 0.75rem;
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  pointer-events: none;
 }
 
 .hosted-shell-root .hosted-shell-tabs .tabs-button {
@@ -40,15 +51,4 @@
 html.dark .hosted-shell-root .hosted-shell-tabs [data-tab-trigger='true'].tab-selected {
   background-color: var(--primary);
   color: var(--primary-foreground);
-}
-
-.hosted-shell-root:is(
-    [data-titlebar-presentation='pwa-overlay'],
-    [data-titlebar-presentation='opentray']
-  )
-  .tabs-header {
-  padding-inline-start: var(--app-titlebar-left);
-  padding-inline-end: var(--app-titlebar-right);
-  padding-block-start: var(--app-titlebar-top);
-  min-height: max(2.75rem, calc(var(--app-titlebar-top) + var(--app-titlebar-height)));
 }

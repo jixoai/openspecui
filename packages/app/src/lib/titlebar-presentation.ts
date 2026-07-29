@@ -5,6 +5,7 @@
  * 3. Dispatch native drag only from the designated non-interactive titlebar surface.
  *
  * Original request (2026-07-29): "对 opentray 的窗口 overlay-window-controls 的样式适配。"
+ * Original request (2026-07-30): "顶部区域缺少一个自绘制的 titlebar 区域，它是通过 overlay-window-controls 得来的，主语它可以拖拽窗口。"
  */
 import { computeTitlebarInsets, EMPTY_TITLEBAR_INSETS } from './pwa-runtime'
 
@@ -92,10 +93,10 @@ function titlebarPresentation(
   }
 }
 
-/** Return true only for non-interactive content inside the designated tabs titlebar. */
+/** Return true only for non-interactive content inside the dedicated App titlebar. */
 export function isOpenTrayDragTarget(target: EventTarget | null, root: HTMLElement): boolean {
   if (!(target instanceof Element) || !root.contains(target)) return false
-  const titlebar = target.closest('.tabs-header')
+  const titlebar = target.closest<HTMLElement>('[data-app-titlebar="true"]')
   if (!titlebar || !root.contains(titlebar)) return false
   return !target.closest(
     'button, input, select, textarea, a, [role="button"], [data-tabs-actions="true"], [data-tabs-tab-actions="true"]'

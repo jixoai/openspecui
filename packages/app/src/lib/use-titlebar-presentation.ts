@@ -1,9 +1,10 @@
 /**
  * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
  * 1. Bind the titlebar presentation owner to browser media, resize, and React lifecycle events.
- * 2. Forward pointer input from the App shell without giving interactive controls drag authority.
+ * 2. Forward pointer input from the dedicated App titlebar without giving Workspace controls drag authority.
  *
  * Original request (2026-07-29): "Browser/PWA 和 OpenTray 只能有一个标题栏 geometry owner。"
+ * Original request (2026-07-30): "顶部区域缺少一个自绘制的 titlebar 区域，它是通过 overlay-window-controls 得来的，主语它可以拖拽窗口。"
  */
 import { useCallback, useEffect, useRef, useState, type PointerEventHandler } from 'react'
 import type { HostedAppWindowControlsOverlayLike } from './pwa-runtime'
@@ -27,7 +28,7 @@ const DEFAULT_PRESENTATION: AppTitlebarPresentation = {
 
 /** Read and subscribe to the active host titlebar presentation. */
 export function useTitlebarPresentation(): {
-  onPointerDown: PointerEventHandler<HTMLDivElement>
+  onPointerDown: PointerEventHandler<HTMLElement>
   presentation: AppTitlebarPresentation
 } {
   const [presentation, setPresentation] = useState(DEFAULT_PRESENTATION)
@@ -65,7 +66,7 @@ export function useTitlebarPresentation(): {
     }
   }, [])
 
-  const onPointerDown = useCallback<PointerEventHandler<HTMLDivElement>>((event) => {
+  const onPointerDown = useCallback<PointerEventHandler<HTMLElement>>((event) => {
     ownerRef.current?.startDrag({
       root: event.currentTarget,
       target: event.target,
