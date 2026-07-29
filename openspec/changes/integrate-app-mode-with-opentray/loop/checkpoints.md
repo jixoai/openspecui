@@ -121,7 +121,7 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 
 ## 10. Owner Acceptance, PR, and Merge
 
-- [ ] 10.1 Provide numbered acceptance cases with exact isolated setup, trigger, expected observation, and restore commands for native and Web modes.
+- [x] 10.1 Provide numbered acceptance cases with exact isolated setup, trigger, expected observation, and restore commands for native and Web modes.
 - [ ] 10.2 Owner accepts interactive prompt, multiple Workspaces, Open in browser, daemon restart convergence, and immutable-mode diagnostics.
 - [ ] 10.3 Owner accepts macOS/Windows OpenTray window lifecycle, overlay/native-frame hit regions, retained focus, and visual presentation on supported available platforms.
 - [ ] 10.4 Owner accepts Web daemon browser/PWA behavior; Agent automation is not recorded as final browser acceptance.

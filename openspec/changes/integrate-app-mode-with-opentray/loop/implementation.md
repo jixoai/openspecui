@@ -15,7 +15,7 @@ Research and owner decisions     complete
 Implementation checkpoints       2-9 complete; Owner acceptance next
 Production code                  daemon, leases, App control, presenters, Workspaces chrome complete
 Focused automated evidence       complete through integrated package/runtime boundary
-Owner browser/native acceptance  not started
+Owner browser/native acceptance  prepared; not executed
 PR delivery                      not started
 6.1.x release                    out of this Change
 ```
@@ -128,6 +128,7 @@ PR delivery                      not started
 - Package-tool divergence: pnpm 10.22.0 rejects `pnpm pack --dry-run` with `Unknown option: 'dry-run'`. Completion therefore uses the stronger available chain: real `pnpm pack`, tar member inspection, fresh isolated install, dependency-closure inspection, and installed runtime exercises. The checkpoint text records that executable proof rather than claiming an unsupported pnpm flag ran.
 - Delivery metadata: `CHANGESET_CHECK_BASE_SHA=$(git merge-base HEAD main) pnpm changeset:check` reports `Changeset file detected.` The generic `openspec validate --all --strict` passes all 19 standard items except this repo-local `opsx-collab-pr-loop` Change; its standard Change validator requires a `specs/` delta directory and reports `No deltas found`. All main Specs, including `cli-commands`, `hosted-app-distribution`, and `opsx-ui-views`, pass strict validation. No duplicate standard delta was fabricated to satisfy the wrong schema.
 - Known non-blocking output remains unchanged: jsdom canvas warnings, the generated `::scroll-button(*)` CSS warning, the App chunk-size warning, and the SSG dynamic-import warning. The Vite+ commit hook still lacks repository `staged` configuration. None changed the exact focused/full result, package contents, or installed lifecycle outcome.
+- Owner handoff: `walkthrough/ACCEPTANCE.md` fixes the real packed-CLI setup and nine numbered cases for interactive admission, dual Workspaces, open-in-browser, retained native activation, daemon restart convergence, immutable mode, Browser/PWA state, macOS/Windows chrome, Direct Web, and cleanup. Each case has explicit PASS/FAIL/NOT RUN and restore boundaries; it contains no credential-bearing command.
 - Remaining boundary: final interactive prompt, multi-Workspace, Browser/PWA, macOS/Windows native window, overlay hit-region, retained-focus, and visual presentation acceptance belongs to the Owner at checkpoint 10. No PR is opened or updated before that acceptance.
 
 ## Decisions Taken
