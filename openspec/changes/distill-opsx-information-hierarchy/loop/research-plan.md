@@ -4,7 +4,7 @@ Orthogonal intents (created 2026-07-28 Asia/Shanghai):
 2. Define the shared information hierarchy and affected production owners.
 3. Sequence implementation, risk controls, and owner-only final acceptance.
 4. Separate same-root presentation topology from repairable OpenSpec configuration diagnostics.
-5. Define a palette-local accessibility boundary for Terminal chrome.
+5. Define palette-local Terminal accessibility and Config-owned Resolved Context placement.
 
 Original request (2026-07-28): restore 5.x-like clarity while keeping all 6.x facts retrievable and OPSX-primary.
 -->
@@ -235,3 +235,39 @@ active Terminal palette
 Measured built-in foreground/background contrast ratios are `15.80`, `13.88`, `13.94`, `9.25`, `4.99`, and
 `5.61`; all satisfy WCAG AA. Reusing the full Terminal foreground for small secondary labels preserves that floor.
 Dialogs and Settings remain application-owned surfaces outside this scope.
+
+## Config-owned Resolved Context Follow-up (2026-07-29)
+
+Context is not another configuration owner. It is the read-only computation produced after OpenSpec CLI applies
+root selection to Config declarations:
+
+```text
+Config declarations --CLI resolution--> Resolved Context
+       /config                            /config/context
+          |                                      |
+          +-- title action ----------------------+
+                                                 +-- direct return to Config
+```
+
+The existing topology conflicts with that model in three ways: `/context` is persisted as a workspace Tab, its
+page header provides no return to the declaration owner, and one `Full Root Context evidence` disclosure mixes
+resolution metadata, Context members, Doctor evidence, and Context evidence.
+
+Implementation sequence:
+
+1. Remove Context from persistent desktop/mobile tab registries and migrate the canonical live/static/SSG route,
+   notifications, Settings, and Dashboard links to `/config/context`.
+2. Add one Config title action and one shared Resolved Context header with a predictable `/config` return.
+3. Keep effective Root identity and authority direct; retain source, Store, and same-root topology as concise
+   scan facts.
+4. Separate References, resolution details, CLI diagnostics, and command evidence into concern-specific collapsed
+   disclosures. Errors and authority loss stay direct.
+5. Prove route ownership, direct facts, keyboard retrieval, static parity, and narrow-surface containment with
+   focused unit/SSG evidence before delivery gates. Final visual acceptance remains Owner-owned.
+
+Hard stops:
+
+- Do not preserve `/context` as a second canonical alias or persistent Tab.
+- Do not make Config subscribe to Root Context merely to decorate its action.
+- Do not put multi-record diagnostics or raw command output in Tooltip-only content.
+- Do not change Root Context, subscription, static publication, or action-authority semantics.

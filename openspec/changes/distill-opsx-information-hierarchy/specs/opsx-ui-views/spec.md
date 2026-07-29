@@ -4,13 +4,14 @@ Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 2. Preserve accessible retrieval of secondary 6.x facts.
 3. Forbid progressive disclosure from hiding errors, blockers, or stale authority.
 4. Collapse redundant same-root presentation without hiding configuration hygiene.
-5. Keep Terminal chrome legible when its palette differs from the application theme.
+5. Keep Terminal chrome legible and place Resolved Context under Config without weakening objective evidence.
 
 Original request (2026-07-28): simplify most added 6.x information into Badge + Tooltip or Accordion while keeping OPSX primary.
 Owner correction (2026-07-29): assign shell, Project Binding, Context, Settings, and Change evidence facts to their product-task owners.
 Owner responsive direction (2026-07-29): information surfaces start mobile-first and expand to tablet/desktop density through container queries.
 Owner same-root direction (2026-07-29): when Launch and Planning are the same root, hide redundant Dashboard context and Terminal cwd selection while keeping ignored Store declarations repairable in Config.
 Owner accessibility direction (2026-07-29): Terminal default text colors must remain legible when its background differs from the application theme.
+Owner Context direction (2026-07-29): Context becomes a Config title action at `/config/context`, with a direct return and a more readable fact-to-evidence hierarchy.
 -->
 
 # Delta for opsx-ui-views
@@ -166,3 +167,34 @@ application light or dark theme.
 - **WHEN** the palette-local neutral defaults are applied
 - **THEN** those explicit semantic states SHALL remain distinguishable rather than being flattened into one descendant color
 - **AND** Terminal configuration dialogs, Settings, and other application-owned overlays SHALL continue to use the application theme.
+
+### Requirement: Resolved Context is a Config-owned fact surface
+
+OpenSpecUI SHALL present Resolved Context as the objective output of Config declarations after OpenSpec CLI root
+selection, rather than as an independent persistent workspace area.
+
+#### Scenario: Enter and leave Resolved Context through Config
+
+- **GIVEN** Config is the owner of project, Planning-root, and environment declarations
+- **WHEN** project navigation and the Config page header render
+- **THEN** Context SHALL NOT appear as a persistent desktop or mobile workspace tab
+- **AND** Config SHALL expose a title-level action to `/config/context`
+- **AND** Resolved Context SHALL expose a direct return action to `/config`
+- **AND** live routing, static routing, SSG generation, notifications, and internal links SHALL use `/config/context` as the single canonical route.
+
+#### Scenario: Read effective facts before technical evidence
+
+- **GIVEN** a live, refreshing, failed, or static Context observation exists
+- **WHEN** Resolved Context renders
+- **THEN** effective Root identity and current action authority SHALL occupy the direct plane
+- **AND** Launch/Planning relationship, Store provenance, and direct Reference summary SHALL remain structured and readable without opening raw evidence
+- **AND** errors, blockers, stale authority, and failed Reference diagnostics SHALL remain directly visible.
+
+#### Scenario: Disclose secondary Context evidence by concern
+
+- **GIVEN** Context contains Reference diagnostics, resolution metadata, Context members, and Doctor/Context command envelopes
+- **WHEN** the page first renders
+- **THEN** each concern SHALL use a distinct collapsed disclosure rather than one mixed evidence panel
+- **AND** Tooltip SHALL contain only concise terminology help, status explanation, or a complete single value
+- **AND** long diagnostics, multi-record evidence, stderr, stdout, and raw payloads SHALL NOT exist only in Tooltip content
+- **AND** every disclosure SHALL remain keyboard accessible and bounded without page-level horizontal overflow.

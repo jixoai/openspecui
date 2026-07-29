@@ -4,7 +4,7 @@ Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 2. Enforce protected-branch, PR, CI, and release delivery policy.
 3. Protect static/SSG behavior and shared live/static projections.
 4. Preserve the OpenSpec adaptation baseline, source-distinct projections, and independent-review corrections.
-5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, live-projection loading, real-time visual lifecycle, OPSX-first information hierarchy, Terminal palette accessibility, container-responsive objective Kanban projection, live Board scroll ownership, and delivery-correction boundaries for the 1.6 adaptation.
+5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, live-projection loading, real-time visual lifecycle, OPSX-first information hierarchy, Config-owned Resolved Context, Terminal palette accessibility, container-responsive objective Kanban projection, live Board scroll ownership, and delivery-correction boundaries for the 1.6 adaptation.
 
 Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配，目前我们的进度有点落后。你先了解项目，然后更新 references/openspec，然后使用 $wayfinder 和我讨论具体的适配计划。我们最终使用openspec来管理 wayfinder 产出的文档。"
 Original request (2026-07-28): "这个PR自身是否符合OPSX的开放式设计，是否会冲突？都需要进行深入的调查。"
@@ -58,6 +58,8 @@ Owner information-hierarchy correction (2026-07-29): "Context 页面同理，从
 Owner layout correction (2026-07-29): "Settings 页面只能保留一个滚动 owner；ChangeDetail 的 Paths and CLI evidence 需要拆分可读摘要、artifact、References、CLI 结果，移动端不得横向溢出。"
 Owner responsive direction (2026-07-29): "从产品经理的角度优化信息展示。以移动端的视觉体验优先，再逐步扩展到平板尺寸和桌面尺寸，使用容器查询做响应式。"
 Owner same-root correction (2026-07-29): "Launch==Planning 的情况下，Dashboard 应隐藏冗余上下文，Terminal 不应提供 cwd 切换；ignored Store warning 仍应在 Config 中可修复。"
+Owner Context placement (2026-07-29): "把它作为 Config 页面 title 部分的一个 Actions，点击进入一个 config/context 的子页面，这个页面顶部提供一个返回按钮。"
+Owner Context readability (2026-07-29): "将结构化信息的可读性增强，并利用手风琴折叠隐藏次要信息，用 tooltip 隐藏冗长信息，用 tooltip 提供帮助信息。"
 Owner accessibility correction (2026-07-29): "终端的字体色相关的使用必须统一，因为在 light 环境下终端背景可能仍然是黑色或者灰色。"
 Owner presentation direction (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
 Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间需要 gap 或分割线；Static 导出后的 /context 页面没数据。"
@@ -159,6 +161,17 @@ must use container queries for internal topology; viewport breakpoints are forbi
 contain a mobile-width project surface beside the desktop rail. The shell may still use viewport/media queries to
 choose its navigation topology. Narrow, intermediate, and spacious evidence must be verified at the rendered
 container boundary, not inferred from viewport width alone.
+
+### Config-owned Resolved Context law (2026-07-29)
+
+Config owns declarations; Resolved Context owns the objective result after OpenSpec CLI root selection. Context is
+therefore a Config title action and the canonical route is `/config/context`, with a direct return to `/config`;
+it is not a persistent project navigation tab. Live and static route trees, SSG publication, notifications, and
+all internal links use that same route. The direct plane answers effective Root identity and current action
+authority first. Structured Launch/Planning relationships and Reference summaries follow. Long diagnostics,
+Context members, data scope, and Doctor/Context command envelopes use separate collapsed disclosures. Tooltip is
+limited to short terminology help, compact status explanations, and complete single values; errors, blockers, and
+multi-record evidence must never exist only inside Tooltip content.
 
 ### Root-topology presentation law (2026-07-29)
 
