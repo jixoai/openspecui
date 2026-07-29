@@ -1,8 +1,16 @@
+<!--
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+1. Specify project serving, App-daemon admission, and immutable host-mode commands.
+2. Specify static export, deployment, and automation behavior.
+
+Owner direction (2026-07-29): bare openspecui is serve; start/stop/restart manage only the App daemon.
+-->
+
 # cli-commands Specification
 
 ## Purpose
 
-Define the OpenSpecUI CLI export workflow for producing a deployable static website and data snapshot.
+Define OpenSpecUI project serving, App-daemon presentation, and static export commands.
 
 ## Requirements
 
@@ -330,38 +338,85 @@ The export process SHALL silently handle the absence of file watchers without di
 - **AND** SHALL return correct data
 - **AND** SHALL NOT throw errors about missing watchers
 
-### Requirement: Hosted App Launch Mode
+### Requirement: Project Serve Ownership
 
-The CLI SHALL support `openspecui --app[=<baseUrl>]` to start the local backend service and open the hosted OpenSpecUI workspace shell instead of the locally served web UI.
+The CLI SHALL keep each project Server in its foreground `serve` process and SHALL keep App-daemon lifecycle commands project-free.
 
-#### Scenario: Use configured app base URL when no CLI override is provided
+#### Scenario: Bare command is serve
 
-- **WHEN** the user runs `openspecui --app`
-- **AND** OpenSpecUI runtime config contains a non-empty `appBaseUrl`
-- **THEN** the CLI SHALL use that configured base URL as the hosted shell URL base
+- **WHEN** the user runs `openspecui [project-dir]`
+- **THEN** the CLI SHALL execute the same plan as `openspecui serve [project-dir]`
+- **AND** that foreground process SHALL own the project Server until it exits
 
-#### Scenario: Use official default when configured app base URL is empty
+#### Scenario: Daemon commands do not accept a project
 
-- **WHEN** the user runs `openspecui --app`
-- **AND** OpenSpecUI runtime config contains an empty `appBaseUrl`
-- **THEN** the CLI SHALL use `https://app.openspecui.com` as the default base URL
+- **WHEN** the user runs `openspecui start`, `openspecui stop`, or `openspecui restart`
+- **THEN** the command SHALL manage only the user-level App daemon
+- **AND** it SHALL NOT start, adopt, stop, or restart a project Server
 
-#### Scenario: CLI override wins over configured base URL
+### Requirement: App Admission And Presentation
 
-- **WHEN** the user runs `openspecui --app=https://app.example.com/openspecui`
-- **THEN** the CLI SHALL use the provided base URL instead of persisted config
+The CLI SHALL admit project presentation through the current App daemon or Direct Project Web without exposing an App-shell location setting.
 
-#### Scenario: Bare app flag uses local hosted app dev server in workspace development mode
+#### Scenario: Interactive serve offers App mode
 
-- **WHEN** the user runs `pnpm openspecui --app`
-- **AND** the command is executed from an OpenSpecUI workspace checkout that contains the local `packages/app` project
-- **THEN** the CLI SHALL start the local backend service
-- **AND** it SHALL start the local hosted app frontend dev server
-- **AND** it SHALL open a local URL such as `http://localhost:<app-port>/?api=<encoded-local-service-url>`
+- **GIVEN** no App daemon is running
+- **AND** stdin and stdout are interactive TTYs
+- **WHEN** the user runs an unqualified `openspecui serve`
+- **THEN** the CLI SHALL ask `Start OpenSpecUI App? [Y/n]`
+- **AND** the default accepted answer SHALL start the daemon and attach the project as a Workspace
 
-#### Scenario: Open the hosted shell with an initial backend tab request
+#### Scenario: Non-interactive serve stays Direct Web
 
-- **WHEN** the user runs `openspecui --app`
-- **THEN** the CLI SHALL start the local backend service
-- **AND** it SHALL open `<baseUrl>/?api=<encoded-local-service-url>`
-- **AND** the hosted shell SHALL query that backend for embedded UI metadata after launch
+- **GIVEN** no App daemon is running
+- **AND** the command is non-interactive
+- **WHEN** the user runs an unqualified `openspecui serve`
+- **THEN** the CLI SHALL open Direct Project Web without prompting or starting the daemon
+
+#### Scenario: Explicit App presentation
+
+- **WHEN** the user runs `openspecui --app` or `openspecui serve --app`
+- **THEN** the CLI SHALL start the daemon when absent
+- **AND** SHALL register the ready project backend as a Workspace
+
+#### Scenario: Explicit Web presentation
+
+- **WHEN** the user runs `openspecui --web` or `openspecui serve --web`
+- **THEN** the CLI SHALL open Direct Project Web
+- **AND** when a daemon is already running, SHALL also register the backend as a Workspace
+- **AND** when no daemon is running, SHALL NOT start one
+
+#### Scenario: Presentation is disabled
+
+- **WHEN** the user runs `openspecui serve --no-open`
+- **THEN** the CLI SHALL NOT prompt, start or probe the daemon, register a Workspace, or open a Browser
+
+#### Scenario: App URL selection is rejected
+
+- **WHEN** the user supplies `--app=<url>`
+- **THEN** the CLI SHALL reject the retired syntax with an actionable local-daemon message
+- **AND** project or runtime settings SHALL NOT expose `appBaseUrl`
+
+### Requirement: Immutable App Daemon Host Mode
+
+The App daemon SHALL choose its `native | web` host mode at startup and SHALL not mutate that mode in place.
+
+#### Scenario: Start native or Web daemon
+
+- **WHEN** the user runs `openspecui start`
+- **THEN** supported platforms SHALL select the native OpenTray host
+- **WHEN** the user runs `openspecui start --web`
+- **THEN** the daemon SHALL select the Browser/PWA host without loading the native WebView extension
+
+#### Scenario: Repeated start activates the current daemon
+
+- **GIVEN** a compatible daemon is already running in the requested mode
+- **WHEN** the user runs `openspecui start`
+- **THEN** the CLI SHALL activate that daemon instead of starting another instance
+
+#### Scenario: Host-mode conflict requires restart
+
+- **GIVEN** a daemon is running in a different explicitly requested mode
+- **WHEN** the user runs `openspecui start [--web]`
+- **THEN** the CLI SHALL preserve the running mode
+- **AND** SHALL report the exact corrective `openspecui restart [--web]` command

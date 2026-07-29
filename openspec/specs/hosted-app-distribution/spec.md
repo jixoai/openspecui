@@ -1,108 +1,102 @@
+<!--
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+1. Specify the bundled local App shell and optional standalone PWA distribution.
+2. Specify backend-owned embedding, authentication, and capability boundaries.
+3. Specify reactive Workspace and Inspector continuity.
+4. Specify daemon-owned Workspaces, retained OpenTray presentation, and titlebar geometry.
+
+Owner direction (2026-07-29): the daemon's same-version local App shell is authoritative; standalone App deployment is manual and is not a CLI shell-location setting.
+-->
+
 # hosted-app-distribution Specification
 
 ## Purpose
 
-Define the hosted app shell as a persistent PWA tabs manager that embeds backend-owned OpenSpecUI pages.
+Define the App as a persistent multi-project shell distributed with the CLI, presented by the local App daemon, and optionally deployed as a standalone browser/PWA surface.
 
 ## Requirements
 
-### Requirement: Frontend App Workspace for Hosted Delivery
+### Requirement: App Workspace And Distribution
 
-The system SHALL provide a dedicated frontend `app` workspace that builds the hosted workspace shell for a single base URL.
+The system SHALL provide a dedicated frontend `app` workspace that builds one persistent Workspaces shell for bundled local and optional standalone delivery.
 
-#### Scenario: Build root hosted workspace shell
+#### Scenario: Build the App shell
 
-- **WHEN** the hosted app workspace is built
+- **WHEN** the App workspace is built
 - **THEN** it SHALL emit a root `index.html`
 - **AND** it SHALL emit a root `service-worker.js`
 - **AND** it SHALL emit a root `manifest.webmanifest`
-- **AND** the root shell SHALL be responsible for hosted tabs, session restoration, backend probing, and initial-tab creation behavior
+- **AND** the shell SHALL own Workspace restoration, backend probing, and initial-Workspace admission
 
-#### Scenario: Open an initial hosted tab from launch parameters
+#### Scenario: Package the authoritative local shell
 
-- **WHEN** the root hosted shell loads with a valid `api` query parameter
-- **THEN** it SHALL create or activate a hosted tab for that backend service
-- **AND** it SHALL query the backend health endpoint for embedding metadata
-- **AND** it SHALL render the selected tab without discarding the shell itself
+- **WHEN** the publishable CLI package is built
+- **THEN** it SHALL include the App output produced by that same source release
+- **AND** the user-level App daemon SHALL serve those assets from a loopback endpoint
+- **AND** the daemon SHALL NOT select or depend on an external App deployment
 
-#### Scenario: Label tabs with project metadata
+#### Scenario: Deploy the App independently
 
-- **WHEN** the hosted shell receives backend metadata from `/api/health`
-- **THEN** each tab SHALL use the backend project name as its primary title
-- **AND** it SHALL use the backend API URL as its subtitle
-- **AND** long titles or subtitles SHALL truncate rather than expanding the tab strip indefinitely
+- **WHEN** an operator deploys the App output as a static browser or PWA surface
+- **THEN** the package README SHALL document static-host cache and SPA-fallback requirements
+- **AND** that deployment MAY accept a manually supplied backend launch parameter
+- **AND** the CLI SHALL NOT expose a setting or URL-valued flag that selects that deployment
 
-#### Scenario: Keep shell chrome focused on the tab strip
+#### Scenario: Open an initial standalone Workspace
 
-- **WHEN** the hosted workspace shell renders its own UI
-- **THEN** the tab strip SHALL remain the primary chrome surface
-- **AND** shell actions such as refresh or add-backend SHALL live inline at the end of the tab strip instead of in a separate page header
+- **GIVEN** a standalone App deployment
+- **WHEN** the shell loads with a valid `api` query parameter
+- **THEN** it SHALL create or activate a Workspace for that backend service
+- **AND** it SHALL query backend health for embedding metadata
+- **AND** it SHALL render the Workspace without discarding the shell itself
 
 ### Requirement: Backend-Owned Embedded UI Contract
 
-The hosted shell SHALL depend on backend-declared embedding metadata instead of a hosted version manifest.
-The backend health payload SHALL also declare runtime protocol capabilities used by cross-runtime Web shells.
+The App SHALL depend on backend-declared embedding metadata instead of a frontend version manifest. The backend health payload SHALL declare runtime protocol capabilities used by cross-runtime App shells.
 
 #### Scenario: Backend health advertises embedded UI entrypoint
 
-- **WHEN** the hosted shell probes `/api/health`
+- **WHEN** the App probes `/api/health`
 - **THEN** the payload SHALL include `hostedShellProtocolVersion`
 - **AND** the payload SHALL include `embeddedUiUrl`
 - **AND** the payload SHALL include runtime capabilities
-- **AND** the shell SHALL reject payloads that do not satisfy that contract
+- **AND** the App SHALL reject payloads that do not satisfy that contract
 
 #### Scenario: Reject backend without required runtime capabilities
 
 - **GIVEN** a backend health endpoint returns `status: "ok"` and project metadata
-- **WHEN** the payload omits a runtime capability required by the current Web shell
+- **WHEN** the payload omits a runtime capability required by the current App shell
 - **THEN** the payload SHALL be treated as incompatible
 - **AND** the caller SHALL reject the backend before embedding or handoff navigation
 
-#### Scenario: Hosted shell launches backend-owned page
+#### Scenario: App loads a backend-owned page
 
 - **WHEN** the backend advertises a compatible `embeddedUiUrl`
-- **THEN** the shell SHALL load that URL in the iframe
+- **THEN** the App SHALL load that URL in the iframe
 - **AND** it SHALL append the active backend `api` parameter
 - **AND** it SHALL append the tab-local `session` parameter
 
 #### Scenario: Supported embedded URLs stay browser-compatible
 
 - **WHEN** the backend advertises an embedded UI URL
-- **THEN** the shell SHALL accept `https://` URLs
+- **THEN** the App SHALL accept `https://` URLs
 - **AND** it SHALL accept loopback `http://` URLs
 - **AND** it SHALL reject arbitrary remote `http://` URLs
 
 ### Requirement: PWA Shell Updates
 
-The hosted shell SHALL use normal PWA/service-worker upgrade semantics instead of warming versioned frontend caches.
+The App SHALL use normal PWA and service-worker upgrade semantics when it runs in a browser deployment.
 
 #### Scenario: Detect waiting shell update
 
-- **WHEN** the browser reports a waiting service worker for the hosted shell
-- **THEN** the shell SHALL surface an apply-update action
+- **WHEN** the browser reports a waiting service worker for the App
+- **THEN** the App SHALL surface an apply-update action
 - **AND** applying that update SHALL reload the shell
-- **AND** persisted tabs and sessions SHALL survive that reload
+- **AND** persisted Workspaces and tab sessions SHALL survive that reload
 
-### Requirement: Hosted Deployment Documentation
+### Requirement: Workspace Projection And Document Continuity
 
-The app workspace SHALL document how to deploy the built hosted shell in official and self-hosted environments.
-
-#### Scenario: Document container deployment
-
-- **WHEN** the app workspace README is generated
-- **THEN** it SHALL include Docker-based deployment instructions for serving the built static output
-
-#### Scenario: Document reverse-proxy deployment
-
-- **WHEN** the app workspace README is generated
-- **THEN** it SHALL include nginx and Caddy examples
-- **AND** it SHALL explain cache expectations for shell entrypoints and static shell assets
-
-### Requirement: Hosted Projection And Session Continuity
-
-The hosted App SHALL perform one typed Pull for each selected Store and Root projection when its owner is
-admitted, without waiting for a WebSocket lifecycle notice. It SHALL retain stateful hosted project iframe
-Documents across ordinary App route transitions.
+The App SHALL perform one typed Pull for each selected Store and Root projection when its owner is admitted, without waiting for a WebSocket lifecycle notice. It SHALL retain stateful project iframe Documents across ordinary App route transitions.
 
 #### Scenario: An App projection mounts before its first notice
 
@@ -119,17 +113,16 @@ Documents across ordinary App route transitions.
 - **THEN** the App SHALL render an unresolved lifecycle surface rather than an authoritative empty conclusion
 - **AND** SHALL retain already-settled sibling rows while only the affected region updates
 
-#### Scenario: A user leaves and returns to Sessions
+#### Scenario: A user leaves and returns to Workspaces
 
-- **GIVEN** a hosted project iframe Document is mounted in Sessions
-- **WHEN** the user navigates to another App route and later returns to Sessions
+- **GIVEN** a project iframe Document is mounted in Workspaces
+- **WHEN** the user navigates to another App route and later returns to Workspaces
 - **THEN** the App SHALL preserve the same iframe DOM identity, Document, and tab session
 - **AND** SHALL NOT reload the project merely because the product route changed
 
 ### Requirement: Project Web Authentication Admission
 
-A live Project Web document SHALL settle backend authentication before it starts ordinary application transports.
-Authentication rejection SHALL be a terminal presentation state rather than an unresolved loading state.
+A live Project Web document SHALL settle backend authentication before it starts ordinary application transports. Authentication rejection SHALL be a terminal presentation state rather than an unresolved loading state.
 
 #### Scenario: A live credential is accepted
 
@@ -154,21 +147,20 @@ Authentication rejection SHALL be a terminal presentation state rather than an u
 
 ### Requirement: Minimal Embedded Capability Delegation
 
-The hosted App SHALL delegate only the browser capabilities required by the embedded Project Web workflow.
+The App SHALL delegate only the browser capabilities required by the embedded Project Web workflow.
 
-#### Scenario: Terminal Clipboard runs inside the hosted iframe
+#### Scenario: Terminal Clipboard runs inside the App iframe
 
 - **GIVEN** the backend-owned Project Web is embedded by the App
 - **WHEN** Terminal copy or paste uses the browser Clipboard API
 - **THEN** the iframe SHALL receive Clipboard read and write capability
 - **AND** SHALL NOT receive unrelated camera, microphone, display-capture, filesystem, or wildcard capability
 
-### Requirement: Hosted Session And Inspector Continuity
+### Requirement: Workspace And Inspector Continuity
 
-The App SHALL project one accepted connection generation consistently across SessionTabs and its hosted iframe. The
-persistent Sessions and Store Inspector surfaces SHALL remain contained within their parent viewport at narrow sizes.
+The App SHALL project one accepted connection generation consistently across Workspace tabs and their iframe. Persistent Workspaces and Store Inspector surfaces SHALL remain contained within their parent viewport at narrow sizes.
 
-#### Scenario: A hosted backend disconnects and reconnects
+#### Scenario: A Workspace backend disconnects and reconnects
 
 - **GIVEN** one tab and iframe consume the same current backend observation
 - **WHEN** an established transport fails and an event-driven health probe confirms offline, or reconnect admission later accepts online
@@ -176,11 +168,11 @@ persistent Sessions and Store Inspector surfaces SHALL remain contained within t
 - **AND** a superseded checking or terminal result SHALL NOT update either surface
 - **AND** an HTTP-success result during WebSocket reconnection SHALL NOT fabricate online transport state
 
-#### Scenario: Sessions renders below the mobile App header
+#### Scenario: Workspaces renders below the mobile App header
 
-- **GIVEN** the App renders its mobile header and a persistent Sessions document
+- **GIVEN** the App renders its mobile header and a persistent Workspaces document
 - **WHEN** the viewport is narrow
-- **THEN** SessionTabs and the iframe SHALL consume the remaining block size
+- **THEN** the Workspace tabs and iframe SHALL consume the remaining block size
 - **AND** SHALL NOT add another full viewport height or remount the iframe to fit
 
 #### Scenario: Inspector refreshes after document focus
@@ -189,33 +181,55 @@ persistent Sessions and Store Inspector surfaces SHALL remain contained within t
 - **WHEN** focus or visibility triggers replacement observation work
 - **THEN** settled content and selection SHALL remain mounted and readable while the replacement is pending
 - **AND** the stable selected locator SHALL grant no mutation authority while its current generation is retired
-- **AND** accepted/running/terminal activity SHALL be visible without inventing optimistic Store inventory
+- **AND** accepted, running, or terminal activity SHALL be visible without inventing optimistic Store inventory
 - **AND** long Store facts and controls SHALL wrap, truncate, or reflow within the available inline size
 
-### Requirement: Host-Neutral App Presentation
+### Requirement: Daemon-Owned Workspace Projection
 
-The CLI start owner SHALL submit a semantic presentation request after the backend Server is ready. The selected
-host presenter SHALL own how that request becomes a browser/PWA or native surface; Server startup SHALL NOT depend
-on a browser-only opener contract.
+The user-level App daemon SHALL own the local App endpoint and transient Workspace presentation ledger without owning project backend processes.
 
-#### Scenario: Browser presents a hosted App request
+#### Scenario: A project registers with the daemon
 
-- **GIVEN** the start owner resolved a hosted App base, backend locator, and runtime-only credential
-- **WHEN** the Browser presenter receives the semantic request
-- **THEN** it SHALL build the private launch URL only at the presentation boundary
-- **AND** an installed same-scope PWA MAY use its declared `focus-existing` launch handling
-- **AND** the credential SHALL NOT enter the public hosted URL, logs, or persisted shell state
+- **GIVEN** a foreground `serve` process owns a ready project backend
+- **WHEN** it registers a Workspace lease with the daemon
+- **THEN** the daemon SHALL publish an invalidation notice
+- **AND** the App SHALL Pull a replacement typed Workspace snapshot
+- **AND** credentials SHALL remain runtime-only and SHALL NOT enter persisted Workspace state
 
-#### Scenario: An ordinary browser launch reaches an existing App leader
+#### Scenario: Open a Workspace in the system browser
 
-- **GIVEN** a newly opened App Document forwards its launch to an existing same-origin browser or PWA leader
-- **WHEN** the leader acknowledges and applies the request
-- **THEN** the leader SHALL request focus
-- **AND** the transient source Document SHALL retire best-effort whether the leader is a browser or PWA
-- **AND** a source that applies locally or becomes the fallback leader SHALL remain mounted
+- **WHEN** a Workspace tab invokes Open in browser
+- **THEN** the App SHALL submit only its opaque Workspace id
+- **AND** the daemon SHALL resolve the current backend and runtime credential
+- **AND** arbitrary page-supplied URLs SHALL be rejected
 
-#### Scenario: A native host presenter is selected in the future
+#### Scenario: Daemon restarts while backends remain live
 
-- **WHEN** a native host such as OpenTray implements the presentation contract
-- **THEN** it SHALL consume the same semantic backend presentation intent
-- **AND** it MAY show or focus its native window without requiring the start owner to construct a browser URL
+- **WHEN** the App daemon stops or restarts
+- **THEN** it SHALL NOT terminate or adopt any project backend
+- **AND** active `serve` leases SHALL re-register after the replacement daemon is ready
+
+### Requirement: OpenTray And Browser Presentation
+
+The daemon SHALL present the same bundled App shell through an exclusive native OpenTray or Browser/PWA host without changing project Server ownership.
+
+#### Scenario: Native OpenTray retains one App window
+
+- **GIVEN** native presentation is supported
+- **WHEN** the daemon starts in native mode
+- **THEN** it SHALL create one retained OpenTray WebView with `style.appMode: true`
+- **AND** only the first `show()` SHALL supply bootstrap geometry, style, and native capability
+- **AND** later activation SHALL reveal and focus the retained window
+
+#### Scenario: Web mode isolates the native extension
+
+- **WHEN** the daemon starts in Web mode or native presentation is unsupported
+- **THEN** it SHALL preserve a Browser/PWA-capable App result
+- **AND** it SHALL NOT import, initialize, or probe the native WebView extension
+
+#### Scenario: Exactly one titlebar owner is active
+
+- **WHEN** the App runs in an ordinary browser, PWA overlay, OpenTray overlay, or native frame
+- **THEN** exactly one presentation owner SHALL write titlebar inset geometry
+- **AND** retired geometry listeners and late async results SHALL NOT update the current owner
+- **AND** interactive controls SHALL remain outside native drag regions
