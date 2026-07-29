@@ -91,7 +91,7 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 - [x] 7.5 Replace PWA-only titlebar state with an exhaustive `browser | pwa-overlay | opentray | native-frame` presentation state.
 - [x] 7.6 Ensure exactly one titlebar geometry owner writes CSS inset variables; source changes unsubscribe the retired owner and reset inactive insets to zero.
 - [x] 7.7 Adapt async OpenTray overlay geometry and `geometrychange` events; retain existing PWA Window Controls Overlay behavior when the native bridge is absent.
-- [x] 7.8 Enable macOS overlay avoidance and designated native drag surface while keeping buttons, tabs, inputs, and other interactive hit regions outside drag/caption regions.
+- [x] 7.8 Render a dedicated overlay-only self-drawn titlebar for macOS/PWA overlay avoidance; its blank surface is the designated native drag entry, while Workspace tabs, buttons, inputs, and other interactive hit regions remain outside drag/caption regions.
 - [x] 7.9 Keep the verified Windows native-frame baseline unless separate capability evidence and Owner acceptance authorize Windows overlay expansion.
 - [x] 7.10 Component tests cover container/narrow layouts, Open in browser states, no horizontal overflow, every titlebar variant, geometry replacement, and zero double-inset.
 - [x] 7.11 Update `implementation.md`, pass App focused Vitest/basic component Playwright, and commit this checkpoint before broad gates.

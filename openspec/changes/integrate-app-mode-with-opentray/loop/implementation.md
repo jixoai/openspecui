@@ -152,6 +152,13 @@ PR delivery                      not started
 - Fresh Core, Server, Web/SSG, App, and CLI builds passed. The Web build retained known non-failing CSS `::scroll-button(*)`, ineffective dynamic-import, and chunk-size warnings. A real current-package tarball exists at `/tmp/openspecui-appmode-package-current/openspecui-6.0.0.tgz`; its manifest inspection confirms `dist/cli.mjs`, bundled `app/index.html`/assets, and `web/index.html`/assets.
 - Remaining boundary is unchanged: Owner must execute and report the numbered Browser/PWA/OpenTray procedure at the actual candidate HEAD before 10.2-10.4, PR delivery, archive, merge, or release can proceed.
 
+### Self-drawn overlay titlebar correction (2026-07-30 Asia/Shanghai)
+
+- Owner report: the original overlay adaptation padded the Workspace tab header and treated that header as the OpenTray drag target. It respected geometry but did not render the required self-drawn titlebar, so Workspace controls still shared a window-chrome semantic boundary.
+- Production owner: `packages/app/src/components/app-titlebar.tsx` renders exactly one `header[data-app-titlebar]` before notices and Workspaces when the existing `useTitlebarPresentation()` owner publishes `opentray` or `pwa-overlay`. `packages/app/src/lib/titlebar-presentation.ts` retains exclusive geometry selection and invokes `startAppRegionDrag()` only for a non-interactive target inside that header. The existing native-frame and Browser variants render no artificial titlebar.
+- Focused red/green evidence: the titlebar owner fixture now tries the Workspace tab after titlebar buttons, inputs, links, global actions, and tab actions; none dispatch native drag. Only the blank dedicated-titlebar target produces the exact native drag call. `AppTitlebar` component fixtures prove Browser/native-frame absence and PWA/OpenTray presence plus pointer forwarding. Removing the `data-app-titlebar` target or restoring `.tabs-header` makes the named native-drag assertion fail, proving the guard is attached to the production surface rather than a downstream mock.
+- Verified locally at this correction: `pnpm --filter @openspecui/app exec vitest run src/lib/titlebar-presentation.test.ts src/components/app-titlebar.test.tsx src/components/hosted-shell.test.tsx` passed 3 files / 17 tests, and the real-Chromium `pnpm --filter @openspecui/app exec vitest run --config vitest.browser.config.ts src/components/app-titlebar.browser.test.tsx` passed 1 file / 1 test at 320px. App typecheck, scoped format check, and `git diff --check` passed. This is component/unit preparation only. The Owner must repeat the changed overlay visual and physical-drag cases at the final candidate HEAD; 10.2-10.4 remain open.
+
 ## Decisions Taken
 
 ### Command and process ownership
