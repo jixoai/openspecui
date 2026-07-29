@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Preserve CLI-authored Change paths, action context, and raw Status evidence on demand.
  * 2. Compress Root source, Store, and Reference scan facts without inferred health.
  * 3. Keep direct Reference errors visible outside the collapsed evidence region.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
+ * Owner correction (2026-07-29): Paths and CLI evidence must separate readable facts, artifacts, References, and raw CLI output without mobile overflow.
  */
 import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import type { ChangeStatus, CliReferenceIndexEntry } from '@openspecui/core'
@@ -47,7 +48,7 @@ export function ChangeContextEvidence({ status, references }: ChangeContextEvide
   }
 
   return (
-    <section aria-label="Change CLI paths and context" className="space-y-2">
+    <section aria-label="Change CLI paths and context" className="@container min-w-0 space-y-2">
       <div className="border-border flex min-w-0 flex-wrap items-center gap-2 border-y py-2 text-xs">
         <FileCode2 className="text-muted-foreground h-4 w-4" aria-hidden />
         <span className="font-medium">Change context</span>
@@ -92,84 +93,132 @@ export function ChangeContextEvidence({ status, references }: ChangeContextEvide
         title="Paths and CLI evidence"
         summary={`${Object.keys(provenance.artifactPaths).length} artifacts · ${references.length} References`}
       >
-        <div className="space-y-4">
-          <dl className="grid min-w-0 gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
-            <dt className="text-muted-foreground">Change root</dt>
-            <dd className="break-all font-mono">{provenance.changeRoot}</dd>
-            <dt className="text-muted-foreground">Planning home</dt>
-            <dd className="break-all font-mono">{provenance.planningHome.root}</dd>
-            <dt className="text-muted-foreground">Root source</dt>
-            <dd>
-              {provenance.root.source}
-              {provenance.root.store_id ? ` · Store ${provenance.root.store_id}` : ''}
-            </dd>
-            <dt className="text-muted-foreground">Action context</dt>
-            <dd>
-              {provenance.actionContext.mode} · {provenance.actionContext.sourceOfTruth}
-            </dd>
-          </dl>
-
-          <ReferenceEvidence references={references} />
-
-          <dl className="space-y-2">
-            {Object.entries(provenance.artifactPaths).map(([artifactId, artifact]) => (
-              <div key={artifactId}>
-                <dt className="font-medium">{artifactId}</dt>
-                <dd className="text-muted-foreground break-all font-mono">
-                  {artifact.outputPath} {'->'} {artifact.resolvedOutputPath}
-                </dd>
-                <dd className="text-muted-foreground break-all">
-                  Existing:{' '}
-                  {artifact.existingOutputPaths.length > 0
-                    ? artifact.existingOutputPaths.join(', ')
-                    : 'none observed'}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <EvidenceList
-            label="Allowed edit roots"
-            values={provenance.actionContext.allowedEditRoots}
-          />
-          <EvidenceList
-            label="Planning artifacts"
-            values={provenance.actionContext.planningArtifacts}
-          />
-          <EvidenceList
-            label="Linked context"
-            values={provenance.actionContext.linkedContext.map((entry) => entry.name)}
-          />
-          <EvidenceList label="Constraints" values={provenance.actionContext.constraints} />
-          <EvidenceList label="Next steps" values={provenance.nextSteps} />
-
-          <div className="space-y-2">
-            <div className="font-medium">Status command evidence</div>
-            <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
-              <dt className="text-muted-foreground">Command</dt>
-              <dd>{provenance.evidence.command}</dd>
-              <dt className="text-muted-foreground">Exit</dt>
-              <dd>{provenance.evidence.exitCode ?? 'unknown'}</dd>
-              <dt className="text-muted-foreground">Selector</dt>
-              <dd>{provenance.evidence.selector.store ?? 'none'}</dd>
-              <dt className="text-muted-foreground">Contract</dt>
-              <dd>{provenance.evidence.contractError ?? 'compatible'}</dd>
-            </dl>
-            <pre className="bg-muted/40 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded p-2 font-mono">
-              {JSON.stringify(
-                {
-                  stdout: provenance.evidence.stdout,
-                  stderr: provenance.evidence.stderr,
-                  diagnostics: provenance.evidence.diagnostics,
-                  payload: provenance.evidence.payload,
-                },
-                null,
-                2
-              )}
-            </pre>
-          </div>
+        <div className="min-w-0 space-y-3">
+          <ReadableChangeFacts provenance={provenance} />
+          <EvidenceDisclosure
+            title="Artifact outputs"
+            summary={`${Object.keys(provenance.artifactPaths).length} outputs`}
+            className="border-border/60"
+          >
+            <div className="min-w-0 space-y-3">
+              <ArtifactOutputs artifactPaths={provenance.artifactPaths} />
+              <EvidenceList
+                label="Allowed edit roots"
+                values={provenance.actionContext.allowedEditRoots}
+              />
+              <EvidenceList
+                label="Planning artifacts"
+                values={provenance.actionContext.planningArtifacts}
+              />
+              <EvidenceList
+                label="Linked context"
+                values={provenance.actionContext.linkedContext.map((entry) => entry.name)}
+              />
+              <EvidenceList label="Constraints" values={provenance.actionContext.constraints} />
+              <EvidenceList label="Next steps" values={provenance.nextSteps} />
+            </div>
+          </EvidenceDisclosure>
+          <EvidenceDisclosure
+            title="References"
+            summary={`${references.length} observed`}
+            className="border-border/60"
+          >
+            <ReferenceEvidence references={references} />
+          </EvidenceDisclosure>
+          <EvidenceDisclosure
+            title="CLI result"
+            summary={`${provenance.evidence.command} · exit ${provenance.evidence.exitCode ?? 'unknown'}`}
+            className="border-border/60"
+          >
+            <CliResultEvidence evidence={provenance.evidence} />
+          </EvidenceDisclosure>
         </div>
       </EvidenceDisclosure>
     </section>
+  )
+}
+
+function ReadableChangeFacts({
+  provenance,
+}: {
+  provenance: Extract<ChangeStatus['provenance'], { kind: 'cli' }>
+}) {
+  return (
+    <dl className="@[32rem]:grid-cols-[auto_minmax(0,1fr)] grid min-w-0 gap-x-3 gap-y-1">
+      <dt className="text-muted-foreground">Change root</dt>
+      <dd className="min-w-0 break-all font-mono">{provenance.changeRoot}</dd>
+      <dt className="text-muted-foreground">Planning home</dt>
+      <dd className="min-w-0 break-all font-mono">{provenance.planningHome.root}</dd>
+      <dt className="text-muted-foreground">Root source</dt>
+      <dd className="min-w-0 break-words">
+        {provenance.root.source}
+        {provenance.root.store_id ? ` · ${provenance.root.store_id}` : ''}
+      </dd>
+      <dt className="text-muted-foreground">Action context</dt>
+      <dd className="min-w-0 break-words">
+        {provenance.actionContext.mode} · {provenance.actionContext.sourceOfTruth}
+      </dd>
+    </dl>
+  )
+}
+
+function ArtifactOutputs({
+  artifactPaths,
+}: {
+  artifactPaths: Extract<ChangeStatus['provenance'], { kind: 'cli' }>['artifactPaths']
+}) {
+  return (
+    <dl className="min-w-0 space-y-3">
+      {Object.entries(artifactPaths).map(([artifactId, artifact]) => (
+        <div key={artifactId} className="min-w-0">
+          <dt className="font-medium">{artifactId}</dt>
+          <dd className="text-muted-foreground min-w-0 break-all font-mono">
+            {artifact.outputPath} {'->'} {artifact.resolvedOutputPath}
+          </dd>
+          <dd className="text-muted-foreground min-w-0 break-all">
+            Existing:{' '}
+            {artifact.existingOutputPaths.length > 0
+              ? artifact.existingOutputPaths.join(', ')
+              : 'none observed'}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+function CliResultEvidence({
+  evidence,
+}: {
+  evidence: Extract<ChangeStatus['provenance'], { kind: 'cli' }>['evidence']
+}) {
+  return (
+    <div className="min-w-0 space-y-3">
+      <dl className="@[32rem]:grid-cols-[auto_minmax(0,1fr)] grid min-w-0 gap-x-3 gap-y-1">
+        <dt className="text-muted-foreground">Command</dt>
+        <dd className="min-w-0 break-all font-mono">{evidence.command}</dd>
+        <dt className="text-muted-foreground">Exit</dt>
+        <dd>{evidence.exitCode ?? 'unknown'}</dd>
+        <dt className="text-muted-foreground">Selector</dt>
+        <dd className="min-w-0 break-all">{evidence.selector.store ?? 'none'}</dd>
+        <dt className="text-muted-foreground">Contract</dt>
+        <dd className="min-w-0 break-words">{evidence.contractError ?? 'compatible'}</dd>
+      </dl>
+      <EvidenceDisclosure title="Raw CLI payload" summary="stdout · stderr · diagnostics">
+        <pre className="bg-muted/40 max-h-48 max-w-full overflow-auto whitespace-pre-wrap break-all rounded p-2 font-mono">
+          {JSON.stringify(
+            {
+              stdout: evidence.stdout,
+              stderr: evidence.stderr,
+              diagnostics: evidence.diagnostics,
+              payload: evidence.payload,
+            },
+            null,
+            2
+          )}
+        </pre>
+      </EvidenceDisclosure>
+    </div>
   )
 }
 

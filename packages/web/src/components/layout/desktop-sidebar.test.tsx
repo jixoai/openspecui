@@ -1,11 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Verify the desktop sidebar remains accessible in expanded and collapsed layouts.
- * 2. Verify project Context remains reachable while retired Stores entries cannot render.
+ * 2. Verify project Context remains reachable while a duplicate Planning summary cannot render.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
- * Original request (2026-07-28): make Planning identity primary while Launch remains accessible.
+ * Owner correction (2026-07-29): the navigation rail only navigates; Planning identity belongs to Context.
  */
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -114,12 +114,8 @@ describe('DesktopSidebar', () => {
     expect(screen.getByAltText('OpenSpec')).toBeTruthy()
     const expandedSearchButton = screen.getByRole('button', { name: 'Search' })
     expect(screen.getByText('Search')).toBeTruthy()
-    expect(screen.getByText('planning-root')).toBeTruthy()
-    expect(
-      screen.getByRole('link', {
-        name: 'Open Root Context. Launch: launch-app. Planning: planning-root.',
-      })
-    ).toBeTruthy()
+    expect(screen.queryByText('planning-root')).toBeNull()
+    expect(screen.queryByRole('link', { name: /Open Root Context/ })).toBeNull()
     expect(expandedSearchButton.className).toContain('justify-start')
     expect(expandedSearchButton.className).not.toContain('justify-center')
     expect(screen.getByText('Dashboard')).toBeTruthy()
@@ -138,11 +134,7 @@ describe('DesktopSidebar', () => {
     expect(screen.queryByText('Bottom')).toBeNull()
 
     expect(screen.getByRole('button', { name: 'Search' })).toBeTruthy()
-    expect(
-      screen.getByRole('link', {
-        name: 'Open Root Context. Launch: launch-app. Planning: planning-root.',
-      })
-    ).toBeTruthy()
+    expect(screen.queryByRole('link', { name: /Open Root Context/ })).toBeNull()
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Context' })).toBeTruthy()
     expect(screen.queryByRole('link', { name: 'Stores' })).toBeNull()

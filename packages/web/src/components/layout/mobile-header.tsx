@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * 1. Render compact mobile navigation, search, notification, and connection controls.
+ * 2. Keep project identity as a passive header title rather than duplicate Context navigation.
+ * 3. Preserve the canonical static/live route registry inside the mobile drawer.
+ *
+ * Original request (2026-07-29): navigation should not repeat a clickable Planning summary that is equivalent to Context.
+ */
 import { getBasePath, isStaticMode } from '@/lib/static-mode'
 import { useDarkMode } from '@/lib/use-dark-mode'
 import { useNavLayout } from '@/lib/use-nav-controller'
@@ -8,7 +16,6 @@ import { useState } from 'react'
 import { NotificationEntryButton } from '../notifications/notification-entry-button'
 import { AreaNav } from './area-nav'
 import { navItems, settingsItem } from './nav-items'
-import { RootContextIndicator } from './root-context-indicator'
 import { StatusIndicator } from './status-bar'
 import { TopLayerEntryButton } from './top-layer-entry-button'
 
@@ -35,7 +42,9 @@ export function MobileHeader() {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <RootContextIndicator variant="mobile" fallbackLabel={pageTitle} />
+          <span className="font-nav max-w-[min(52vw,18rem)] truncate text-[12px] tracking-[0.04em]">
+            {pageTitle}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <TopLayerEntryButton
@@ -74,8 +83,6 @@ export function MobileHeader() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-
-            <RootContextIndicator variant="sidebar" onNavigate={closeMenu} />
 
             {isStatic ? (
               /* Static mode: simple nav list */

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Edit only launch-project Store and Reference declarations.
  * 2. Preserve Root Context preview and declaration diagnostics without treating them as registry truth.
  * 3. Bind mutation controls and execution to loading/error/dirty lifecycle states.
@@ -10,14 +10,18 @@
  * Derived requirement (2026-07-19): "A binding mutation must not relabel its returned preview as current Root Context."
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  * Original request (2026-07-28): successful Config evidence should not outrank editable OPSX declarations.
+ * Owner correction (2026-07-29): Store editing needs a freeform registry-backed Combobox and the binding cards must be reorganized around user tasks.
  */
 import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import { AsyncAction, ConfigFormSkeleton } from '@/components/realtime'
 import { trpcClient } from '@/lib/trpc'
 import { useProjectBindingSubscription } from '@/lib/use-planning-config'
+import { useStoreListProjection } from '@/lib/use-store-list-projection'
 import type { PlanningConfigReference, ProjectBindingConfig } from '@openspecui/core'
 import { useMutation } from '@tanstack/react-query'
-import { AlertCircle, Link2, Plus, Save, Trash2 } from 'lucide-react'
+import { AlertCircle, Info, Link2, Plus, Save, Trash2 } from 'lucide-react'
+import { Tooltip } from '../tooltip'
+import { ProjectStoreCombobox } from './project-store-combobox'
 import { useProjectBindingSettlement } from './use-project-binding-settlement'
 
 function currentRootPreview(config: ProjectBindingConfig) {
@@ -26,9 +30,26 @@ function currentRootPreview(config: ProjectBindingConfig) {
     : { context: config.rootPreview.attempt, error: config.rootPreview.error }
 }
 
+function BindingHelp({ label, content }: { label: string; content: string }) {
+  return (
+    <Tooltip content={content}>
+      <button
+        type="button"
+        aria-label={label}
+        className="text-muted-foreground hover:text-foreground focus-visible:ring-primary inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+      >
+        <Info className="h-3.5 w-3.5" aria-hidden />
+      </button>
+    </Tooltip>
+  )
+}
+
 /** Render and mutate launch-project Store/Reference binding independently of active-root config. */
 export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   const { data: config, isLoading, error: subscriptionError } = useProjectBindingSubscription()
+  const storeProjection = useStoreListProjection(
+    !isStatic && config !== null && config !== undefined
+  )
   const settlement = useProjectBindingSettlement({ config, subscriptionError })
   const {
     convergenceError,
@@ -98,9 +119,12 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
     mutationTransitionError !== null &&
     mutationTransitionError !== visibleError &&
     mutationTransitionError !== preview.error?.message
+  const storeSuggestions = storeProjection.data?.stores ?? []
+  const storeSuggestionsUnavailable =
+    storeProjection.error !== null || storeProjection.data?.available === false
 
   return (
-    <div className="space-y-5">
+    <div className="@container min-w-0 space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">Project Binding</h2>
@@ -120,29 +144,54 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
         </AsyncAction>
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(16rem,0.75fr)_minmax(0,1.25fr)]">
-        <div className="space-y-1.5">
-          <label htmlFor="project-binding-store" className="block text-xs font-medium">
-            Store
-          </label>
-          <input
+      <div className="space-y-5">
+        <section className="space-y-2" aria-labelledby="project-binding-store-label">
+          <div className="flex items-center gap-1.5">
+            <label
+              id="project-binding-store-label"
+              htmlFor="project-binding-store"
+              className="text-xs font-medium"
+            >
+              Planning Store
+            </label>
+            <BindingHelp
+              label="About Planning Store"
+              content="Select a registered Store suggestion or enter an exact Store id. An empty value keeps the launch project's nearest OpenSpec root."
+            />
+          </div>
+          <ProjectStoreCombobox
             id="project-binding-store"
             value={storeId}
+            stores={storeSuggestions}
             disabled={saveMutation.isPending}
-            onChange={(event) => settlement.editStore(event.target.value)}
-            placeholder="No declared Store"
-            className="border-border bg-background focus-visible:ring-primary h-10 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-1"
+            onChange={settlement.editStore}
           />
-          <p className="text-muted-foreground text-[11px]">
-            Empty keeps root selection on the launch project's nearest OpenSpec root.
-          </p>
-        </div>
+          <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+            {storeSuggestions.length > 0 ? (
+              <span>{storeSuggestions.length} registered suggestions available</span>
+            ) : null}
+            {storeSuggestionsUnavailable ? (
+              <span
+                role="status"
+                title={storeProjection.error?.message ?? storeProjection.data?.error?.message}
+              >
+                Suggestions unavailable; exact ids remain editable.
+              </span>
+            ) : null}
+          </div>
+        </section>
 
         <section className="space-y-2" aria-labelledby="project-binding-references">
           <div className="flex items-center justify-between gap-2">
-            <h3 id="project-binding-references" className="text-xs font-medium">
-              References
-            </h3>
+            <div className="flex items-center gap-1.5">
+              <h3 id="project-binding-references" className="text-xs font-medium">
+                Read-only References
+              </h3>
+              <BindingHelp
+                label="About References"
+                content="References add Specs from registered Stores to this project's OpenSpec context without changing the writable Planning root."
+              />
+            </div>
             <button
               type="button"
               disabled={saveMutation.isPending}
@@ -159,7 +208,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
               {references.map((reference) => (
                 <div
                   key={reference.key}
-                  className="grid gap-2 sm:grid-cols-[minmax(8rem,0.75fr)_minmax(12rem,1.25fr)_2.5rem]"
+                  className="@[36rem]:grid-cols-[minmax(8rem,0.75fr)_minmax(12rem,1.25fr)_2.5rem] grid min-w-0 gap-2"
                 >
                   <input
                     value={reference.id}
@@ -295,7 +344,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
         <div className="space-y-4">
           <section className="space-y-2">
             <h3 className="font-medium">Root Context preview</h3>
-            <dl className="grid gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
+            <dl className="@[32rem]:grid-cols-[auto_minmax(0,1fr)] grid min-w-0 gap-x-3 gap-y-1">
               <dt className="text-muted-foreground">Planning root</dt>
               <dd className="break-all font-mono">
                 {preview.context.planningRoot?.path ?? 'Not resolved'}

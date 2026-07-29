@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Verify Context projects CLI-selected root, Store, launch, and inherited data-scope facts.
  * 2. Verify Reference errors stay direct while neutral read-only evidence remains retrievable on demand.
  * 3. Verify loading, refreshing, terminal-error, stale-error, and command-evidence states stay distinct.
@@ -10,9 +10,10 @@
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
  * Original request (2026-07-28): Context should stay concise without deleting source-attributed evidence.
+ * Owner correction (2026-07-29): Context summarizes root, launch, References, and action readiness before technical evidence.
  */
 import type { ExportSnapshot, RootContext, RootContextState } from '@openspecui/core'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StaticDataProvider } from '../ssg/static-data-context'
 import { ContextView } from './context'
@@ -33,11 +34,19 @@ vi.mock('@/lib/use-context-subscription', () => ({
   },
 }))
 
-function setState(overrides: Partial<{ data: unknown; isLoading: boolean; error: Error | null }>) {
+function setState(
+  overrides: Partial<{
+    data: unknown
+    isLoading: boolean
+    error: Error | null
+    authority: { state: 'current' | 'waiting' | 'failed' }
+  }>
+) {
   useContextSubscriptionMock.mockReturnValue({
     data: undefined,
     isLoading: false,
     error: null,
+    authority: { state: 'current' },
     ...overrides,
   })
 }
@@ -274,32 +283,25 @@ describe('ContextView', () => {
     expect(text).toContain('No reference currently observed')
   })
 
-  it('shows planning root directly and keeps launch and data paths in accessible badges', async () => {
+  it('answers planning root, launch project, References, and action readiness before technical evidence', () => {
     setState({ data: readyState() })
     const { container } = render(<ContextView />)
     const text = container.textContent ?? ''
     expect(text).toContain('/tmp/planning')
+    expect(text).toContain('/tmp/launch')
+    expect(text).toContain('0 observed')
     expect(text).toContain('store')
     expect(text).toContain('platform')
-
-    const launch = screen.getByRole('note', { name: 'Launch project path' })
-    fireEvent.focus(launch)
-    expect(await screen.findByText('/tmp/launch')).toBeVisible()
-    const dataScope = screen.getByRole('note', {
-      name: 'Inherited data scope source xdg-data-home',
-    })
-    fireEvent.focus(dataScope)
-    await waitFor(() => expect(screen.getByText(/\/tmp\/data\/openspec/)).toBeVisible())
+    expect(screen.getByRole('note', { name: 'Root actions ready' })).toBeTruthy()
+    expect(screen.getByText('/tmp/data/openspec')).not.toBeVisible()
   })
 
-  it('states registry is read-only without Store mutations or machine-wide claims', async () => {
+  it('keeps data scope and read-only registry evidence in technical disclosure', () => {
     setState({ data: readyState() })
     const { container } = render(<ContextView />)
-    const dataScope = screen.getByRole('note', {
-      name: 'Inherited data scope source xdg-data-home',
-    })
-    fireEvent.focus(dataScope)
-    expect(await screen.findByText(/does not own a project-local registry/)).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: /Full Root Context evidence/ }))
+    expect(screen.getByText('/tmp/data/openspec')).toBeVisible()
+    expect(screen.getByText('Read-only from this project workspace')).toBeVisible()
     // 绝不暗示项目级 registry（AGENTS.md：项目无 project-local registry）。
     expect(container.textContent).not.toMatch(/all stores|unregistered stores|machine-wide/i)
     expect(screen.queryByRole('button', { name: /setup|register|remove|unregister/i })).toBeNull()

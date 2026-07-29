@@ -51,10 +51,10 @@ Owner correction (2026-07-29): navigation, Project Binding, Context, Settings sc
 - [x] 6.4 Pass repository CI-equivalent gates, strict OpenSpec validation, and `git diff --check`
 - [x] 6.5 Open the PR and record successful remote checks
 - [ ] 6.6 Owner completes final visual and real-browser walkthrough
-- [ ] 6.7 Remove the redundant shell Planning/Context entry and prove navigation ownership stays route-only
-- [ ] 6.8 Reorganize Project Binding around editable declarations and a freeform registry-backed Store Combobox
-- [ ] 6.9 Reorganize Context around root identity, launch project, Store/References, and action readiness
-- [ ] 6.10 Enforce one Settings scroll owner and no competing Change evidence overflow on mobile
+- [x] 6.7 Remove the redundant shell Planning/Context entry and prove navigation ownership stays route-only
+- [x] 6.8 Reorganize Project Binding around editable declarations and a freeform registry-backed Store Combobox
+- [x] 6.9 Reorganize Context around root identity, launch project, Store/References, and action readiness
+- [x] 6.10 Enforce one Settings scroll owner and no competing Change evidence overflow on mobile
 
 ## 7. Finalization
 

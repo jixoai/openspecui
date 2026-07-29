@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Verify Project Binding presents launch/root ownership without registry inference.
  * 2. Verify Store/Reference edits submit one structured, loading-locked mutation.
  * 3. Verify only an active write locks controls while stale/error evidence retains a repair path.
@@ -12,6 +12,7 @@
  * Derived requirement (2026-07-19): "A converging binding write must retain the submitted draft until subscription convergence."
  * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
  * Original request (2026-07-28): successful preview, Reference, and settlement evidence should be collapsed by default.
+ * Owner correction (2026-07-29): Store uses a registry-backed freeform Combobox; registry failure never blocks explicit repair.
  */
 import type { ProjectBindingConfig, ProjectBindingUpdateResult } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -29,13 +30,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectBindingSection } from './project-binding-section'
 import { useProjectBindingSettlement } from './use-project-binding-settlement'
 
-const { bindingSubscriptionMock, updateProjectBindingMock } = vi.hoisted(() => ({
-  bindingSubscriptionMock: vi.fn(),
-  updateProjectBindingMock: vi.fn(),
-}))
+const { bindingSubscriptionMock, storeProjectionMock, updateProjectBindingMock } = vi.hoisted(
+  () => ({
+    bindingSubscriptionMock: vi.fn(),
+    storeProjectionMock: vi.fn(),
+    updateProjectBindingMock: vi.fn(),
+  })
+)
 
 vi.mock('@/lib/use-planning-config', () => ({
   useProjectBindingSubscription: bindingSubscriptionMock,
+}))
+
+vi.mock('@/lib/use-store-list-projection', () => ({
+  useStoreListProjection: storeProjectionMock,
 }))
 
 vi.mock('@/lib/trpc', () => ({
@@ -206,6 +214,19 @@ describe('ProjectBindingSection', () => {
       error: null,
     })
     updateProjectBindingMock.mockReset().mockResolvedValue(bindingUpdateResult())
+    storeProjectionMock.mockReset().mockReturnValue({
+      data: {
+        available: true,
+        stores: [
+          { id: 'shared', root: '/stores/shared' },
+          { id: 'registered-design', root: '/stores/registered-design' },
+        ],
+      },
+      isLoading: false,
+      isUpdating: false,
+      error: null,
+      authority: { state: 'current' },
+    })
   })
 
   afterEach(() => cleanup())
@@ -226,6 +247,19 @@ describe('ProjectBindingSection', () => {
     expect(resolvedRoot).not.toBeVisible()
     fireEvent.click(evidenceTrigger)
     expect(resolvedRoot).toBeVisible()
+  })
+
+  it('makes declaration help available from keyboard-focusable Tooltip buttons', async () => {
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    const storeHelp = screen.getByRole('button', { name: 'About Planning Store' })
+    storeHelp.focus()
+    expect(storeHelp).toHaveFocus()
+    expect(
+      await screen.findByText(
+        "Select a registered Store suggestion or enter an exact Store id. An empty value keeps the launch project's nearest OpenSpec root."
+      )
+    ).toBeVisible()
   })
 
   it('discloses observed Reference warning evidence without claiming a direct failure', () => {
@@ -264,6 +298,49 @@ describe('ProjectBindingSection', () => {
         references: [{ id: 'platform-next', remote: 'https://example.test/platform.git' }],
       })
     })
+  })
+
+  it('selects a registered Store suggestion while preserving freeform input authority', async () => {
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show registered Store suggestions' }))
+    fireEvent.click(await screen.findByText('registered-design'))
+    expect(screen.getByLabelText('Store')).toHaveValue('registered-design')
+
+    fireEvent.change(screen.getByLabelText('Store'), {
+      target: { value: 'exact-unregistered-id' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save binding' }))
+
+    await waitFor(() => {
+      expect(updateProjectBindingMock).toHaveBeenCalledWith({
+        store: 'exact-unregistered-id',
+        references: [{ id: 'platform' }],
+      })
+    })
+  })
+
+  it('keeps Store repair editable when registry suggestions are unavailable', () => {
+    storeProjectionMock.mockReturnValue({
+      data: {
+        available: false,
+        stores: [],
+        error: { kind: 'command-unavailable', message: 'Store list unavailable.' },
+      },
+      isLoading: false,
+      isUpdating: false,
+      error: null,
+      authority: { state: 'current' },
+    })
+
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Suggestions unavailable; exact ids remain editable.'
+    )
+    expect(screen.getByLabelText('Store')).toBeEnabled()
+    fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'repair-store' } })
+    expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
   })
 
   it('locks every declaration control while one structured save is pending', async () => {

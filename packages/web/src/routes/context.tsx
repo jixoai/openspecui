@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Project one launch project's CLI-selected planning root and direct References.
  * 2. Present current, stale, terminal-error, and failed-attempt authority without hiding failures.
  * 3. Present the inherited Store registry/data scope as read-only environment evidence.
@@ -11,6 +11,7 @@
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
  * Original request (2026-07-28): Context remains the evidence owner but should default to a concise OPSX-first hierarchy.
+ * Owner correction (2026-07-29): Context must answer Planning root, Launch project, Store/References, and action readiness before machine evidence.
  */
 import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import { DetailPanelSkeleton, RealtimeRevalidateCue } from '@/components/realtime'
@@ -26,7 +27,7 @@ export function ContextView() {
 }
 
 function LiveContextView() {
-  const { data: projection, isLoading, error: transportError } = useContextSubscription()
+  const { data: projection, isLoading, error: transportError, authority } = useContextSubscription()
   const context = selectRootContextSnapshot(projection)
   const projectionError = projection?.state === 'error' ? projection.error : null
   const loading =
@@ -85,7 +86,12 @@ function LiveContextView() {
         />
       ) : !loading && context ? (
         <RealtimeRevalidateCue active={projection?.state === 'refreshing'}>
-          <ContextBody context={context} />
+          <ContextBody
+            context={context}
+            actionStatus={
+              projection?.state === 'ready' && authority.state === 'current' ? 'ready' : 'checking'
+            }
+          />
         </RealtimeRevalidateCue>
       ) : null}
     </div>
@@ -112,10 +118,12 @@ function ContextObservation({
 }
 
 function ContextBody({
+  actionStatus = 'blocked',
   context,
   evidenceSummary = 'Full Root Context evidence',
   rootHeading = 'Active planning root',
 }: {
+  actionStatus?: 'ready' | 'checking' | 'blocked'
   context: RootContext
   evidenceSummary?: string
   rootHeading?: string
@@ -139,45 +147,47 @@ function ContextBody({
       ? `Context contract drift: ${context.evidence.context.contractError}`
       : null,
   ].filter((error): error is string => error !== null)
+  const referenceDiagnosticCount = context.references.reduce(
+    (count, reference) => count + reference.status.length,
+    0
+  )
 
   return (
-    <div className="space-y-4">
-      <section className="border-border flex min-w-0 flex-wrap items-center gap-2 border-y py-3 text-xs">
-        <span className="font-medium">{rootHeading}</span>
-        <span className="min-w-0 flex-1 break-all font-mono text-sm">
-          {planningRoot?.path ?? 'No planning root resolved.'}
-        </span>
-        {planningRoot ? (
-          <InformationBadge
-            ariaLabel={`Planning root source ${planningRoot.source}`}
-            tooltip={`Root source: ${planningRoot.source}`}
-          >
-            {planningRoot.source}
-          </InformationBadge>
-        ) : null}
-        {context.storeId ? (
-          <InformationBadge
-            ariaLabel={`Planning Store ${context.storeId}`}
-            tooltip={`The CLI-selected Planning root uses Store ${context.storeId}.`}
-          >
-            Store {context.storeId}
-          </InformationBadge>
-        ) : null}
-        <InformationBadge ariaLabel="Launch project path" tooltip={context.launchProject.path}>
-          Launch
-        </InformationBadge>
-        <InformationBadge
-          ariaLabel={`Inherited data scope source ${context.dataScope.source}`}
-          tooltip={`${context.dataScope.path}${context.dataScope.environmentVariable ? ` · ${context.dataScope.environmentVariable}` : ''}. Registry access is read-only; this backend does not own a project-local registry.`}
-        >
-          Data {context.dataScope.source}
-        </InformationBadge>
-        <InformationBadge
-          ariaLabel={`OpenSpec CLI ${context.cli.version ?? 'unavailable'}`}
-          tooltip={`Effective command: ${context.cli.effectiveCommand ?? 'unavailable'}`}
-        >
-          CLI {context.cli.version ?? 'unavailable'}
-        </InformationBadge>
+    <div className="@container min-w-0 space-y-4">
+      <section aria-label="Operational Context" className="border-border min-w-0 divide-y border-y">
+        <div className="flex min-w-0 flex-wrap items-start gap-2 py-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-muted-foreground text-xs">{rootHeading}</div>
+            <div className="mt-1 min-w-0 break-all font-mono text-sm font-medium">
+              {planningRoot?.path ?? 'No planning root resolved.'}
+            </div>
+          </div>
+          {planningRoot ? (
+            <InformationBadge
+              ariaLabel={`Planning root source ${planningRoot.source}`}
+              tooltip={`OpenSpec selected this root from source: ${planningRoot.source}.`}
+            >
+              {planningRoot.source}
+            </InformationBadge>
+          ) : null}
+          {context.storeId ? (
+            <InformationBadge
+              ariaLabel={`Planning Store ${context.storeId}`}
+              tooltip={`The CLI-selected Planning root uses Store ${context.storeId}.`}
+            >
+              Store {context.storeId}
+            </InformationBadge>
+          ) : null}
+        </div>
+        <div className="@[36rem]:grid-cols-3 grid min-w-0 gap-4 py-3">
+          <ContextSummaryFact label="Launch project" value={context.launchProject.path} mono />
+          <ContextSummaryFact
+            label="References"
+            value={`${context.references.length} observed`}
+            detail={`${referenceDiagnosticCount} CLI diagnostics`}
+          />
+          <ContextActionFact status={actionStatus} />
+        </div>
       </section>
 
       {context.cli.error ? (
@@ -249,9 +259,71 @@ function ContextBody({
   )
 }
 
+function ContextSummaryFact({
+  label,
+  value,
+  detail,
+  mono = false,
+}: {
+  label: string
+  value: string
+  detail?: string
+  mono?: boolean
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="text-muted-foreground text-xs">{label}</div>
+      <div className={`mt-1 min-w-0 break-all text-sm ${mono ? 'font-mono' : 'font-medium'}`}>
+        {value}
+      </div>
+      {detail ? <div className="text-muted-foreground mt-0.5 text-[11px]">{detail}</div> : null}
+    </div>
+  )
+}
+
+function ContextActionFact({ status }: { status: 'ready' | 'checking' | 'blocked' }) {
+  const content =
+    status === 'ready'
+      ? {
+          label: 'Ready',
+          tooltip: 'The current Root Context can authorize root-dependent operations.',
+          className:
+            'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+        }
+      : status === 'checking'
+        ? {
+            label: 'Refreshing',
+            tooltip: 'Cached facts remain readable while root-dependent operations stay locked.',
+            className: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+          }
+        : {
+            label: 'Blocked',
+            tooltip: 'This observation cannot authorize root-dependent operations.',
+            className: 'border-destructive/40 bg-destructive/10 text-destructive',
+          }
+  return (
+    <div className="min-w-0">
+      <div className="text-muted-foreground text-xs">Root actions</div>
+      <div className="mt-1">
+        <InformationBadge
+          ariaLabel={`Root actions ${content.label.toLowerCase()}`}
+          tooltip={content.tooltip}
+          tone="custom"
+          className={content.className}
+        >
+          {content.label}
+        </InformationBadge>
+      </div>
+    </div>
+  )
+}
+
 function RootContextEvidence({ context, summary }: { context: RootContext; summary: string }) {
   return (
-    <EvidenceDisclosure title={summary} summary="doctor + context">
+    <EvidenceDisclosure
+      title={summary}
+      summary={`CLI ${context.cli.version ?? 'unavailable'} · doctor + context`}
+    >
       <div className="space-y-5">
         <dl className="text-muted-foreground grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
           <dt>observed at</dt>
@@ -262,6 +334,17 @@ function RootContextEvidence({ context, summary }: { context: RootContext; summa
           <dd>{context.cli.version ?? 'unavailable'}</dd>
           <dt>effective command</dt>
           <dd className="break-all">{context.cli.effectiveCommand ?? 'unavailable'}</dd>
+          <dt>data scope</dt>
+          <dd className="break-all">{context.dataScope.path}</dd>
+          <dt>data source</dt>
+          <dd>
+            {context.dataScope.source}
+            {context.dataScope.environmentVariable
+              ? ` · ${context.dataScope.environmentVariable}`
+              : ''}
+          </dd>
+          <dt>Store registry</dt>
+          <dd>Read-only from this project workspace</dd>
           {context.cli.error ? (
             <>
               <dt>CLI error</dt>
