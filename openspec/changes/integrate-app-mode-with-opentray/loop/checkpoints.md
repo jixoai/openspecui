@@ -108,16 +108,16 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 
 ## 9. Integrated Automated Verification
 
-- [ ] 9.1 All checkpoint-focused tests remain green at the exact candidate head; no focused failure is deferred into the full gate.
-- [ ] 9.2 Build the App and CLI from clean outputs, run the real packed CLI under an isolated home/runtime directory, and record artifact paths without credentials.
-- [ ] 9.3 Built CLI exercises pass for daemon start/activate/stop, restart `--web`, stale endpoint recovery, project serve registration, Direct Web, and active lease re-registration.
-- [ ] 9.4 `pnpm format:check` and `git diff --check` pass.
-- [ ] 9.5 `pnpm lint:ci` passes with zero errors and warnings.
-- [ ] 9.6 All workspace typechecks pass, including every new test file and public protocol fixture.
-- [ ] 9.7 `pnpm test:ci` passes.
-- [ ] 9.8 `pnpm test:browser:ci` passes as basic automated preparation evidence, not final acceptance.
-- [ ] 9.9 Package builds and `pnpm pack --dry-run` prove daemon, bundled App, and OpenTray artifacts from clean outputs.
-- [ ] 9.10 Synchronize exact command outputs, counts, candidate commit, known limitations, and all divergence decisions into `implementation.md`.
+- [x] 9.1 All checkpoint-focused tests remain green at the exact candidate head; no focused failure is deferred into the full gate.
+- [x] 9.2 Build the App and CLI from clean outputs, run the real packed CLI under an isolated home/runtime directory, and record artifact paths without credentials.
+- [x] 9.3 Built CLI exercises pass for daemon start/activate/stop, restart `--web`, stale endpoint recovery, project serve registration, Direct Web, and active lease re-registration.
+- [x] 9.4 `pnpm format:check` and `git diff --check` pass.
+- [x] 9.5 `pnpm lint:ci` passes with zero errors and warnings.
+- [x] 9.6 All workspace typechecks pass, including every new test file and public protocol fixture.
+- [x] 9.7 `pnpm test:ci` passes.
+- [x] 9.8 `pnpm test:browser:ci` passes as basic automated preparation evidence, not final acceptance.
+- [x] 9.9 Clean package builds, a real `pnpm pack`, tar inspection, isolated installation, and installed runtime exercises prove daemon, bundled App, and OpenTray artifacts; pnpm 10.22.0 does not implement `pack --dry-run`.
+- [x] 9.10 Synchronize exact command outputs, counts, candidate commit, known limitations, and all divergence decisions into `implementation.md`.
 
 ## 10. Owner Acceptance, PR, and Merge
 

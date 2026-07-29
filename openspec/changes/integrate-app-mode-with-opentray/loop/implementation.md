@@ -12,9 +12,9 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 
 ```text
 Research and owner decisions     complete
-Implementation checkpoints       2-8 complete; checkpoint 9 next
+Implementation checkpoints       2-9 complete; Owner acceptance next
 Production code                  daemon, leases, App control, presenters, Workspaces chrome complete
-Focused automated evidence       complete through App chrome/component-browser boundary
+Focused automated evidence       complete through integrated package/runtime boundary
 Owner browser/native acceptance  not started
 PR delivery                      not started
 6.1.x release                    out of this Change
@@ -22,7 +22,7 @@ PR delivery                      not started
 
 - Approved execution source: `loop/research-plan.md`.
 - Current branch: `feat/opentray-app-mode`.
-- Current implementation boundary: checkpoint 8 is complete at the main-spec, public documentation, parser-backed command-example, and Changeset boundary; checkpoint 9 integrated verification is next.
+- Current implementation boundary: checkpoint 9 is complete at exact-head full gates, clean package output, installed-tarball lifecycle, and delivery-metadata evidence; checkpoint 10 Owner acceptance is next.
 - The existing user modification in `openspec/config.yaml` is outside this Change and must not be rewritten or included accidentally.
 - Each checkpoint must update this file with the exact production owner, focused red/green evidence, changed package surface, verification result, and any accepted residual risk before it can close.
 - Full repository gates remain deferred until all focused checkpoint evidence is accepted. Final Browser/PWA and OpenTray native-window walkthrough remains Owner-only.
@@ -116,6 +116,19 @@ PR delivery                      not started
 - Focused quality evidence: Core and Server typechecks pass; focused Oxlint reports zero errors/warnings; `git diff --check` passes. The Server startup file passes 8/8 after one sequence-sensitive timeout replay. An accidentally broad Server package invocation also observed one unchanged Git binding test time out at 5 seconds; its exact replay passes 1/1 in 416 ms. No timeout or production contract was widened.
 - Commit-hook limitation: the ordinary commit attempt again stopped because `vite.config.ts` has no Vite+ `staged` configuration. Hook configuration remains outside this Change; the independently verified correction uses `--no-verify` rather than changing repository delivery policy incidentally.
 - Remaining boundary: commit this runtime correction independently, then run checkpoint 9 full gates and the remaining built-daemon command exercises. No 9.x checkbox is closed early, and final Browser/PWA/OpenTray visual acceptance remains Owner-only.
+
+### Checkpoint 9 integrated verification result (2026-07-30 Asia/Shanghai)
+
+- Exact candidate: `cb434dcfbeba11e892cfd4a55a404de4729b0b1d` on `feat/opentray-app-mode`. The only dirty worktree path throughout verification was the Owner's concurrent `packages/ct2-engine/binding.js`; it was neither read as implementation evidence nor staged, rewritten, or included in this Change.
+- Full local gates: `pnpm format:check` passed; Oxlint checked 1,093 files with zero warnings/errors; all 15 workspace typechecks passed. `pnpm test:ci` passed Root 15 files / 64 tests, Core 52 / 489, Server 84 / 545, App 36 / 225, Web 166 / 1,062, CLI 23 / 111, plus every remaining workspace suite. `pnpm test:browser:ci` passed xterm 60 with 1 intentional skip, App 1 / 1, and Web 14 / 14. `git diff --check` passed.
+- Clean package chain: Server, Web/SSG, App, and CLI were rebuilt from their current outputs without rebuilding the concurrently modified ct2 package. The final real tarball is `/tmp/openspecui-opentray-checkpoint9/pack/openspecui-6.0.0.tgz` (6.5 MB); it contains `dist/cli.mjs`, bundled App entry/assets, Project Web assets, and the exact `opentray` / `@opentray/ext-webview` `0.18.0` runtime declarations. A fresh `pnpm add` installation lives at `/tmp/openspecui-opentray-checkpoint9/install-final` and executed the installed binary rather than workspace source.
+- Installed lifecycle matrix: a stale regular file at the isolated Unix endpoint was recovered by `start --web`; repeated `start --web` activated the same PID; native `start` succeeded; a subsequent `start --web` was rejected with the exact `openspecui restart --web` correction; and `restart --web` replaced the host mode. These are process/API observations only, not Owner visual acceptance.
+- Backend ownership matrix: installed `serve --app` registered one project in the daemon ledger. `stop` released the daemon endpoint while `/api/health` on the foreground backend remained `ok`; a new `start --web` caused the live lease to restore exactly that Workspace. Exiting the serve owner retired the Workspace and backend listener. Installed `serve --web` passed both daemon-present attach-plus-Direct-Web and daemon-absent Direct-Web-only paths.
+- Shutdown proof: with a real installed Direct Web backend and a deliberately retained `/trpc` WebSocket, one `SIGINT` closed the peer socket, retired the process in 54 ms, and the parent command settled with code 0. Final daemon stop released the isolated endpoint; no credential, Authorization header, or private fragment was printed or recorded.
+- Package-tool divergence: pnpm 10.22.0 rejects `pnpm pack --dry-run` with `Unknown option: 'dry-run'`. Completion therefore uses the stronger available chain: real `pnpm pack`, tar member inspection, fresh isolated install, dependency-closure inspection, and installed runtime exercises. The checkpoint text records that executable proof rather than claiming an unsupported pnpm flag ran.
+- Delivery metadata: `CHANGESET_CHECK_BASE_SHA=$(git merge-base HEAD main) pnpm changeset:check` reports `Changeset file detected.` The generic `openspec validate --all --strict` passes all 19 standard items except this repo-local `opsx-collab-pr-loop` Change; its standard Change validator requires a `specs/` delta directory and reports `No deltas found`. All main Specs, including `cli-commands`, `hosted-app-distribution`, and `opsx-ui-views`, pass strict validation. No duplicate standard delta was fabricated to satisfy the wrong schema.
+- Known non-blocking output remains unchanged: jsdom canvas warnings, the generated `::scroll-button(*)` CSS warning, the App chunk-size warning, and the SSG dynamic-import warning. The Vite+ commit hook still lacks repository `staged` configuration. None changed the exact focused/full result, package contents, or installed lifecycle outcome.
+- Remaining boundary: final interactive prompt, multi-Workspace, Browser/PWA, macOS/Windows native window, overlay hit-region, retained-focus, and visual presentation acceptance belongs to the Owner at checkpoint 10. No PR is opened or updated before that acceptance.
 
 ## Decisions Taken
 
