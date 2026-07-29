@@ -4,6 +4,7 @@ Orthogonal intents (created 2026-07-28 Asia/Shanghai):
 2. Define the shared information hierarchy and affected production owners.
 3. Sequence implementation, risk controls, and owner-only final acceptance.
 4. Separate same-root presentation topology from repairable OpenSpec configuration diagnostics.
+5. Define a palette-local accessibility boundary for Terminal chrome.
 
 Original request (2026-07-28): restore 5.x-like clarity while keeping all 6.x facts retrievable and OPSX-primary.
 -->
@@ -213,3 +214,24 @@ presentation density         warning / repair ownership
 - Do not remove `launch-project | planning-root` from the public PTY contract.
 - Do not make `root_pointer_ignored` block Root actions or disappear outside Config/Context evidence.
 - Do not touch the Owner's live `openspec/config.yaml` while implementing or validating this follow-up.
+
+## Terminal Palette Accessibility Follow-up (2026-07-29)
+
+The active Terminal palette is independent from the application theme. The screenshot failure occurs because tab
+chrome inherits Terminal foreground at its outer boundary while nested cwd labels explicitly resolve the
+application's `muted-foreground`, producing dark text over a dark Terminal palette.
+
+Literal descendant-wide color enforcement is rejected: it would erase explicit exit, activity, focus, selection,
+and notification colors. The Terminal panel instead owns one local neutral-token scope:
+
+```text
+active Terminal palette
+  |-- background ----------> panel and xterm surface
+  |-- foreground ----------> default + secondary neutral text
+  |-- derived neutral -----> selected/hover surface and borders
+  `-- semantic colors -----> remain explicit and unmodified
+```
+
+Measured built-in foreground/background contrast ratios are `15.80`, `13.88`, `13.94`, `9.25`, `4.99`, and
+`5.61`; all satisfy WCAG AA. Reusing the full Terminal foreground for small secondary labels preserves that floor.
+Dialogs and Settings remain application-owned surfaces outside this scope.

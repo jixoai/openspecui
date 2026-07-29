@@ -4,6 +4,7 @@ Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 2. Bind each production-owner migration to focused evidence.
 3. Keep automated delivery, owner visual acceptance, archive, merge, and later release separate.
 4. Bind same-root simplification to one shared topology fact without weakening warning or Terminal ownership.
+5. Bind Terminal chrome accessibility to its own palette without flattening semantic state colors.
 
 Original request (2026-07-28): implement the UI simplification autonomously, then hand final acceptance to the Owner.
 Owner correction (2026-07-29): navigation, Project Binding, Context, Settings scroll ownership, and Change evidence require a focused product-information pass before acceptance.
@@ -66,6 +67,10 @@ Owner correction (2026-07-29): navigation, Project Binding, Context, Settings sc
 - [x] 6.18 Present `root_pointer_ignored` repairably in Config and consolidate same-root identity in Context
 - [x] 6.19 Pass focused Web tests, typecheck, lint/format, strict Change validation, and `git diff --check`
 - [x] 6.20 Update PR evidence and stop for Owner visual/browser acceptance
+- [x] 6.21 Specify the Terminal palette boundary and reject descendant-wide semantic color flattening
+- [ ] 6.22 Scope Terminal neutral tokens to the active palette across tabs, cwd controls, and empty state
+- [ ] 6.23 Prove built-in contrast, semantic-color preservation, focused unit coverage, and local gates
+- [ ] 6.24 Update PR evidence and return to Owner visual/browser acceptance
 
 ## 7. Finalization
 

@@ -4,11 +4,13 @@ Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 2. Preserve accessible retrieval of secondary 6.x facts.
 3. Forbid progressive disclosure from hiding errors, blockers, or stale authority.
 4. Collapse redundant same-root presentation without hiding configuration hygiene.
+5. Keep Terminal chrome legible when its palette differs from the application theme.
 
 Original request (2026-07-28): simplify most added 6.x information into Badge + Tooltip or Accordion while keeping OPSX primary.
 Owner correction (2026-07-29): assign shell, Project Binding, Context, Settings, and Change evidence facts to their product-task owners.
 Owner responsive direction (2026-07-29): information surfaces start mobile-first and expand to tablet/desktop density through container queries.
 Owner same-root direction (2026-07-29): when Launch and Planning are the same root, hide redundant Dashboard context and Terminal cwd selection while keeping ignored Store declarations repairable in Config.
+Owner accessibility direction (2026-07-29): Terminal default text colors must remain legible when its background differs from the application theme.
 -->
 
 # Delta for opsx-ui-views
@@ -145,3 +147,22 @@ only redundant presentation while preserving every warning and repair path at it
 - **THEN** it SHALL present one `Project root` identity rather than separate Active Planning root and Launch project rows
 - **AND** Root source, Store provenance, configuration warnings, and raw command evidence SHALL remain retrievable in their appropriate indirect or direct evidence layers
 - **AND** `distinct` or `unresolved` topology SHALL preserve separate Launch and Planning facts.
+
+### Requirement: Terminal chrome follows the active Terminal palette
+
+OpenSpecUI SHALL treat Terminal chrome as a palette-local surface whose neutral foreground does not depend on the
+application light or dark theme.
+
+#### Scenario: Keep neutral Terminal text legible
+
+- **GIVEN** the active Terminal palette may have a dark, gray, or light background independently from the application theme
+- **WHEN** Terminal tabs, cwd identity, controls, or the empty state render neutral text and borders
+- **THEN** their default and secondary neutral colors SHALL derive from the active Terminal palette
+- **AND** every built-in palette's neutral foreground SHALL maintain at least WCAG AA `4.5:1` contrast against its Terminal background.
+
+#### Scenario: Preserve semantic state colors and application-owned overlays
+
+- **GIVEN** Terminal chrome contains explicit error, success, activity, focus, selection, or notification states
+- **WHEN** the palette-local neutral defaults are applied
+- **THEN** those explicit semantic states SHALL remain distinguishable rather than being flattened into one descendant color
+- **AND** Terminal configuration dialogs, Settings, and other application-owned overlays SHALL continue to use the application theme.
