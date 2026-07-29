@@ -23,7 +23,7 @@ export function selectRootTopology(
   const planningPath = context?.planningRoot?.path
   if (!context || !planningPath) return 'unresolved'
 
-  const launchPath = context.launchProject.physicalPath ?? context.launchProject.path
+  const launchPath = context.launchProject.physicalPath
   if (!launchPath) return 'unresolved'
 
   return normalizeObservedPath(launchPath) === normalizeObservedPath(planningPath)

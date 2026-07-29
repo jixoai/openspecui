@@ -31,17 +31,22 @@ describe('selectRootTopology', () => {
     ).toBe('collapsed')
   })
 
-  it('normalizes server-observed separators without using Root provenance as identity', () => {
-    expect(selectRootTopology(identity('/workspace/project/', '/workspace/project'))).toBe(
-      'collapsed'
-    )
-    expect(selectRootTopology(identity('/workspace/launch', '/workspace/planning'))).toBe(
-      'distinct'
-    )
+  it('normalizes server-observed physical separators without using Root provenance as identity', () => {
+    expect(
+      selectRootTopology(
+        identity('/workspace/project-link', '/workspace/project', '/workspace/project/')
+      )
+    ).toBe('collapsed')
+    expect(
+      selectRootTopology(identity('/workspace/launch', '/workspace/planning', '/workspace/launch'))
+    ).toBe('distinct')
   })
 
   it('keeps missing current identity unresolved', () => {
     expect(selectRootTopology(null)).toBe('unresolved')
     expect(selectRootTopology(identity('/workspace/launch', null))).toBe('unresolved')
+    expect(selectRootTopology(identity('/workspace/project', '/workspace/project'))).toBe(
+      'unresolved'
+    )
   })
 })

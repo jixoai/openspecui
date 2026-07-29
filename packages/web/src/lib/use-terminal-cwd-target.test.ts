@@ -13,7 +13,7 @@ import { selectTerminalCwdTargetState } from './use-terminal-cwd-target'
 
 function context(): RootContext {
   return {
-    launchProject: { path: '/launch' },
+    launchProject: { path: '/launch', physicalPath: '/launch' },
     planningRoot: {
       path: '/stores/shared',
       source: 'store',
