@@ -275,6 +275,47 @@ remains the independent delivery check.
 These measurements are agent preparation evidence only. Checkpoint 6.6 remains open for the Owner's final visual
 and end-to-end walkthrough.
 
+## Container-Responsive Correction (2026-07-29)
+
+The remaining Terminal Light/Dark field pair now follows the existing Settings `@container-[size]` owner. It stays
+in one column until that content container reaches `42rem`; the outer viewport no longer chooses the field density.
+The checked Settings fixture asserts the container variant and rejects restoration of `md:grid-cols-2`.
+
+```text
+Viewport       Settings content   Terminal theme columns   Document width   Block scroll owner
+390 x 844      390px              324px                    390 / 390        .main-content only
+768 x 1024     512px              446px                    768 / 768        .main-content only
+1280 x 900     1024px             347px + 347px            1280 / 1280      .main-content only
+```
+
+- Config, Context, Settings, and expanded Change evidence retained equal document client/scroll widths at all
+  three viewports. Bounded tabs and syntax blocks may scroll locally, but did not create page-level inline scroll.
+- Config kept the Planning Store editor and Reference draft in a readable mobile flow. Context kept Planning root,
+  launch project, References, and action readiness before evidence. Change evidence retained its readable path ->
+  Artifact outputs / References / CLI result hierarchy at `390px`.
+- Agent-browser screenshots and computed layout checks are preparation evidence only. They do not close the Owner's
+  final visual or end-to-end acceptance checkpoint.
+
+### Local correction gate
+
+```text
+Web unit                              164 files / 1046 tests passed
+Focused Web format + lint             passed, 0 warnings / 0 errors
+Repository lint                       0 warnings / 0 errors
+Workspace typecheck                   15 projects passed
+Complete workspace unit               passed
+xterm browser fixture                 60 passed / 1 skipped
+Web realtime browser fixture          2 passed
+Web Storybook fixture                 12 passed
+Clean SSG build                       passed
+Strict OpenSpec validation            passed
+git diff --check                      passed
+```
+
+Repository `format:check` inspected the Owner's uncommitted `openspec/config.yaml` and reported that file only.
+The correction did not alter or stage it; every production, test, and Change file in this correction passed the
+scoped formatter check.
+
 ## Loopback Triggers
 
 - A required failure becomes reachable only by opening an Accordion or focusing a Tooltip.

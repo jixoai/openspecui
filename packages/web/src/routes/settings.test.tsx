@@ -10,7 +10,7 @@
  * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
- * Owner correction (2026-07-29): Settings delegates scrolling to the shell's single `.main-content` owner.
+ * Owner correction (2026-07-29): Settings delegates scrolling to the shell and field density to its container.
  */
 import type {
   LocalModelAssetLog,
@@ -2658,6 +2658,12 @@ describe('Settings', { timeout: 10_000 }, () => {
     root.innerHTML = markup
     expect(root.firstElementChild?.classList.contains('@container-[size]')).toBe(true)
     expect(root.firstElementChild?.classList.contains('overflow-y-auto')).toBe(false)
+    const lightThemeLabel = Array.from(root.querySelectorAll('label')).find(
+      (candidate) => candidate.textContent?.trim() === 'Light Theme'
+    )
+    const terminalThemeGrid = lightThemeLabel?.parentElement?.parentElement
+    expect(terminalThemeGrid?.classList.contains('@[42rem]:grid-cols-2')).toBe(true)
+    expect(terminalThemeGrid?.classList.contains('md:grid-cols-2')).toBe(false)
     const readInputValue = (labelText: string): string => {
       const label = Array.from(root.querySelectorAll('label')).find(
         (candidate) => candidate.textContent?.trim() === labelText
