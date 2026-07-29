@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Define and persist project-scoped OpenSpecUI settings.
  * 2. Resolve, diagnose, cache, and explicitly invalidate the OpenSpec CLI runner.
  * 3. Prevent retired in-flight runner resolutions from reclaiming cache ownership.
@@ -8,6 +8,7 @@
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  * Independent review correction (2026-07-20): Global CLI installation must retire cached and
  * in-flight runner authority.
+ * Owner correction (2026-07-29): App shell location is daemon-owned; project config must not expose appBaseUrl.
  *
  * Compromise: configuration schemas and runtime management remain in one historical physical file;
  * splitting that public surface is outside the bounded 6.13 correction.
@@ -645,9 +646,6 @@ export const OpenSpecUIConfigSchema = z.object({
   /** 代码编辑器配置 */
   codeEditor: CodeEditorConfigSchema.default(CodeEditorConfigSchema.parse({})),
 
-  /** Hosted app 基础 URL（空字符串表示使用官方默认值） */
-  appBaseUrl: z.string().default(''),
-
   /** OPSX workflow invocation preferences */
   opsx: OpsxConfigSchema.default(OpsxConfigSchema.parse({})),
 
@@ -675,7 +673,6 @@ export type OpenSpecUIConfigUpdate = {
   }
   theme?: OpenSpecUIConfig['theme']
   codeEditor?: Partial<OpenSpecUIConfig['codeEditor']>
-  appBaseUrl?: OpenSpecUIConfig['appBaseUrl']
   opsx?: Partial<OpsxConfig>
   terminal?: Partial<TerminalConfig>
   dashboard?: Partial<DashboardConfig>
@@ -691,7 +688,6 @@ export type PersistedOpenSpecUIConfig = {
   }
   theme?: OpenSpecUIConfig['theme']
   codeEditor?: Partial<OpenSpecUIConfig['codeEditor']>
-  appBaseUrl?: OpenSpecUIConfig['appBaseUrl']
   opsx?: Partial<OpsxConfig>
   terminal?: Partial<TerminalConfig>
   dashboard?: Partial<DashboardConfig>
@@ -723,7 +719,6 @@ export const DEFAULT_CONFIG: OpenSpecUIConfig = {
   },
   theme: 'system',
   codeEditor: CodeEditorConfigSchema.parse({}),
-  appBaseUrl: '',
   opsx: OpsxConfigSchema.parse({}),
   terminal: TerminalConfigSchema.parse({}),
   dashboard: DashboardConfigSchema.parse({}),
@@ -928,10 +923,6 @@ export function toPersistedConfig(
   }
   if (hasOwnEntries(codeEditor)) {
     persisted.codeEditor = codeEditor
-  }
-
-  if (config.appBaseUrl !== DEFAULT_CONFIG.appBaseUrl) {
-    persisted.appBaseUrl = config.appBaseUrl
   }
 
   const opsx: NonNullable<PersistedOpenSpecUIConfig['opsx']> = {}
@@ -1236,7 +1227,6 @@ export class ConfigManager {
         cli: nextCli,
         theme: config.theme ?? current.theme,
         codeEditor: { ...current.codeEditor, ...config.codeEditor },
-        appBaseUrl: config.appBaseUrl ?? current.appBaseUrl,
         opsx: { ...current.opsx, ...config.opsx },
         terminal: { ...current.terminal, ...config.terminal },
         dashboard: { ...current.dashboard, ...config.dashboard },

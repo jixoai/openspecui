@@ -1,50 +1,47 @@
 /**
- * Orthogonal intents (created 2026-07-28 Asia/Shanghai):
- * 1. Prove the Browser presenter materializes semantic Direct Web and hosted App requests.
- * 2. Keep credentials in private URL fragments rather than query state.
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * 1. Prove the Browser presenter materializes Direct Project Web requests.
+ * 2. Keep credentials in private URL fragments without reflecting them through opener errors.
  *
  * Original request (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口。"
  */
 import { describe, expect, it } from 'vitest'
-import { createBrowserStartCommandPresenter } from './browser-start-command-presenter.js'
-import type { StartCommandPresentationRequest } from './start-command-presentation.js'
+import {
+  createBrowserStartCommandPresenter,
+  type ProjectWebPresentationRequest,
+} from './browser-start-command-presenter.js'
 
 describe('Browser start-command presenter', () => {
-  it.each([
-    {
-      name: 'Direct Web',
-      request: {
-        surface: 'project-web',
-        webBaseUrl: 'http://localhost:13100',
-        credential: 'browser-secret',
-      } satisfies StartCommandPresentationRequest,
-      expectedOrigin: 'http://localhost:13100',
-      expectedApi: null,
-    },
-    {
-      name: 'hosted App',
-      request: {
-        surface: 'hosted-app',
-        appBaseUrl: 'https://app.openspecui.example/workspace',
-        apiBaseUrl: 'http://localhost:13100',
-        credential: 'browser-secret',
-      } satisfies StartCommandPresentationRequest,
-      expectedOrigin: 'https://app.openspecui.example',
-      expectedApi: 'http://localhost:13100',
-    },
-  ])('opens the private $name target', async (testCase) => {
+  it('opens the private Direct Web target', async () => {
     const targets: string[] = []
     const presenter = createBrowserStartCommandPresenter(async (target) => {
       targets.push(target)
     })
 
-    await presenter.present(testCase.request)
+    await presenter.present({
+      surface: 'project-web',
+      webBaseUrl: 'http://localhost:13100',
+      credential: 'browser-secret',
+    } satisfies ProjectWebPresentationRequest)
 
     expect(targets).toHaveLength(1)
     const target = new URL(targets[0] ?? 'invalid:missing-target')
-    expect(target.origin).toBe(testCase.expectedOrigin)
-    expect(target.searchParams.get('api')).toBe(testCase.expectedApi)
+    expect(target.origin).toBe('http://localhost:13100')
     expect(target.searchParams.has('credential')).toBe(false)
     expect(new URLSearchParams(target.hash.slice(1)).get('credential')).toBe('browser-secret')
+  })
+
+  it('does not reflect a private target from an external opener failure', async () => {
+    const presenter = createBrowserStartCommandPresenter(async (target) => {
+      throw new Error(`Unable to open ${target}`)
+    })
+
+    const failure = presenter.present({
+      surface: 'project-web',
+      webBaseUrl: 'http://localhost:13100',
+      credential: 'browser-secret',
+    })
+    await expect(failure).rejects.toThrow('Failed to open Project Web in the system browser.')
+    await expect(failure).rejects.not.toThrow('browser-secret')
   })
 })

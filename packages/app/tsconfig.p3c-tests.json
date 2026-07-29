@@ -7,6 +7,7 @@
     "src/components/app-launch-owner.test.ts",
     "src/components/store-remove-dialog.test.tsx",
     "src/components/store-mutation-lifecycle.test.tsx",
+    "src/lib/daemon-workspace-control.test.ts",
     "src/lib/store-action-correlation.test.ts",
     "src/lib/store-lifecycle-composer.test.ts",
     "src/lib/use-store-data.test.tsx",

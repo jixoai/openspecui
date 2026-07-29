@@ -7,6 +7,7 @@
       "@openspecui/server": ["../server/src/index.ts"],
       "@openspecui/ai-provider": ["../ai-provider/src/index.ts"],
       "@openspecui/core": ["../core/src/index.ts"],
+      "@openspecui/core/app-daemon-control": ["../core/src/app-daemon-control.ts"],
       "@openspecui/core/hosted-contract": ["../core/src/hosted-contract.ts"],
       "@openspecui/core/markdown-facts": ["../core/src/markdown-facts.ts"],
       "@openspecui/core/markdown-reading": ["../core/src/markdown-reading.ts"],

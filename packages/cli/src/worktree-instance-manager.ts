@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Own reusable worktree Server instances and their readiness lifecycle.
  * 2. Select worker-thread or process bootstrap without exposing private runtime inputs through argv or URLs.
  * 3. Propagate one parent Access Gate and resolved Web asset root through child launch and readiness.
- * 4. Preserve nested worker handoff delegation and deterministic child teardown.
+ * 4. Preserve nested worker handoff delegation and deterministic child teardown through explicit serve ownership.
  *
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
  * Delivery correction (2026-07-26): nested worktree Servers reuse the parent runtime's Web assets.
+ * Owner correction (2026-07-29): daemon start is not a project Server command; child processes use serve.
  */
 import { findAvailablePort } from '@openspecui/server'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -20,7 +21,6 @@ import {
   type AccessGateCredential,
   type GitWorktreeHandoff,
 } from '@openspecui/core'
-import type { SpawnCommandConfig } from './local-hosted-app-dev'
 import type {
   WorktreeServerWorkerData,
   WorktreeServerWorkerFactory,
@@ -95,7 +95,11 @@ export interface WorktreeServerWorkerLaunchPlan {
   workerData: WorktreeServerWorkerData
 }
 
-export interface WorktreeServerProcessLaunchPlan extends SpawnCommandConfig {
+export interface WorktreeServerProcessLaunchPlan {
+  command: string
+  args: string[]
+  cwd: string
+  env?: NodeJS.ProcessEnv
   kind: 'process'
 }
 
@@ -218,7 +222,7 @@ function createNodeCliCommandPlan(options: {
     command: process.execPath,
     args: [
       options.cliEntry,
-      'start',
+      'serve',
       options.projectDir,
       '--port',
       String(options.port),

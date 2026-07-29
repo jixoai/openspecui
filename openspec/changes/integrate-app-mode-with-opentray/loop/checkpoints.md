@@ -19,55 +19,55 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 
 ## 2. CLI Command Contract
 
-- [ ] 2.1 Extract a type-safe, side-effect-free command planner for `ServePlan | DaemonPlan` while keeping yargs as the only argv parser.
-- [ ] 2.2 Make bare `openspecui [project]` and explicit `openspecui serve [project]` execute the same foreground project Server owner.
-- [ ] 2.3 Add daemon-only `start`, `stop`, and `restart`; reject project positional arguments and backend-only flags on those commands.
-- [ ] 2.4 Implement boolean `serve --app` and `serve --web` as mutually exclusive modes; prove bare `--app` and bare `--web` dispatch through the default `serve` command.
-- [ ] 2.5 Remove `--app=<url>` parsing, `appBaseUrl` config/schema/router/Settings ownership, and old hosted-shell launch resolution without ignored compatibility fields.
-- [ ] 2.6 Implement interactive `[Y/n]` App admission only when daemon is absent and stdin/stdout are TTYs; preserve non-TTY Direct Web.
-- [ ] 2.7 Make `--no-open` short-circuit prompt, daemon probing/start, Workspace registration, and Browser opening.
-- [ ] 2.8 Return exact daemon mode/version mismatch diagnostics with the corrective `openspecui restart [--web]` command.
-- [ ] 2.9 Focused parser/planner tests cover every command-matrix row, default answer, explicit no, EOF, non-TTY, conflicts, legacy aliases, and `--no-open`.
-- [ ] 2.10 Update `implementation.md`, pass CLI focused typecheck/tests, and commit this checkpoint before starting daemon runtime work.
+- [x] 2.1 Extract a type-safe, side-effect-free command planner for `ServePlan | DaemonPlan` while keeping yargs as the only argv parser.
+- [x] 2.2 Make bare `openspecui [project]` and explicit `openspecui serve [project]` execute the same foreground project Server owner.
+- [x] 2.3 Add daemon-only `start`, `stop`, and `restart`; reject project positional arguments and backend-only flags on those commands.
+- [x] 2.4 Implement boolean `serve --app` and `serve --web` as mutually exclusive modes; prove bare `--app` and bare `--web` dispatch through the default `serve` command.
+- [x] 2.5 Remove `--app=<url>` parsing, `appBaseUrl` config/schema/router/Settings ownership, and old hosted-shell launch resolution without ignored compatibility fields.
+- [x] 2.6 Implement interactive `[Y/n]` App admission only when daemon is absent and stdin/stdout are TTYs; preserve non-TTY Direct Web.
+- [x] 2.7 Make `--no-open` short-circuit prompt, daemon probing/start, Workspace registration, and Browser opening.
+- [x] 2.8 Return exact daemon mode/version mismatch diagnostics with the corrective `openspecui restart [--web]` command.
+- [x] 2.9 Focused parser/planner tests cover every command-matrix row, default answer, explicit no, EOF, non-TTY, conflicts, legacy aliases, and `--no-open`.
+- [x] 2.10 Update `implementation.md`, pass CLI focused typecheck/tests, and commit this checkpoint before starting daemon runtime work.
 
 ## 3. User-Level Daemon and IPC
 
-- [ ] 3.1 Add typed daemon protocol schemas for status, activate, register/unregister Workspace, open Workspace in browser, stop, acknowledgements, and structured errors.
-- [ ] 3.2 Resolve user-global runtime/log paths under `~/.openspecui`; use a mode-`0600` Unix socket and a home-digest Windows named pipe.
-- [ ] 3.3 Implement single-instance ownership through successful IPC bind, with liveness-proven stale Unix socket cleanup and no PID-file authority.
-- [ ] 3.4 Spawn the daemon detached and report success only after a bounded versioned readiness exchange; preserve actionable startup logs and failure diagnostics.
-- [ ] 3.5 Publish immutable daemon evidence for version, PID, `native | web` host mode, local App endpoint, and capability state without credential-bearing fields.
-- [ ] 3.6 Implement bounded graceful stop and restart that wait for endpoint release; never signal, adopt, or terminate project backend processes.
-- [ ] 3.7 Reject explicit host-mode mutation on a running daemon while allowing mode-unspecified activation of the current daemon.
-- [ ] 3.8 Redaction tests prove credentials, Authorization headers, and private launch fragments do not enter status, logs, files, or error messages.
-- [ ] 3.9 Race/stale-endpoint tests fail when bind ownership or liveness proof is bypassed and pass for one winner, loser convergence, stop, and restart.
-- [ ] 3.10 Update `implementation.md`, pass daemon focused typecheck/tests, and commit this checkpoint before adding `serve` leases.
+- [x] 3.1 Add typed daemon protocol schemas for status, activate, register/unregister Workspace, open Workspace in browser, stop, acknowledgements, and structured errors.
+- [x] 3.2 Resolve user-global runtime/log paths under `~/.openspecui`; use a mode-`0600` Unix socket and a home-digest Windows named pipe.
+- [x] 3.3 Implement single-instance ownership through successful IPC bind, with liveness-proven stale Unix socket cleanup and no PID-file authority.
+- [x] 3.4 Spawn the daemon detached and report success only after a bounded versioned readiness exchange; preserve actionable startup logs and failure diagnostics.
+- [x] 3.5 Publish immutable daemon evidence for version, PID, `native | web` host mode, local App endpoint, and capability state without credential-bearing fields.
+- [x] 3.6 Implement bounded graceful stop and restart that wait for endpoint release; never signal, adopt, or terminate project backend processes.
+- [x] 3.7 Reject explicit host-mode mutation on a running daemon while allowing mode-unspecified activation of the current daemon.
+- [x] 3.8 Redaction tests prove credentials, Authorization headers, and private launch fragments do not enter status, logs, files, or error messages.
+- [x] 3.9 Race/stale-endpoint tests fail when bind ownership or liveness proof is bypassed and pass for one winner, loser convergence, stop, and restart.
+- [x] 3.10 Update `implementation.md`, pass daemon focused typecheck/tests, and commit this checkpoint before adding `serve` leases.
 
 ## 4. Serve Registration Leases and Presentation
 
-- [ ] 4.1 Keep one foreground `serve` process as the sole owner of each project Server and its SIGINT/SIGTERM shutdown.
-- [ ] 4.2 Register the ready backend locator, backend identity, and runtime-only credential with daemon IPC without persisting or logging private presentation state.
-- [ ] 4.3 Keep a bounded reconnecting lease that re-registers after daemon restart and retires when its `serve` owner exits.
-- [ ] 4.4 Prove daemon stop/restart leaves every live project backend reachable and does not transfer child/process ownership.
-- [ ] 4.5 Implement daemon-present behavior: unqualified `serve` attaches when daemon exists; `serve --app` starts when absent; `serve --web` attaches and also opens Direct Project Web.
-- [ ] 4.6 Implement daemon-absent behavior: unqualified non-TTY or rejected prompt opens Direct Web; `serve --web` opens Direct Web; `serve --app` starts daemon then attaches.
-- [ ] 4.7 Materialize private Direct Project Web URLs only inside the external Browser presenter and never print them.
-- [ ] 4.8 Lifecycle tests cover late daemon start, daemon restart during a live backend, backend exit, duplicate backend registration, and reconnect cancellation.
-- [ ] 4.9 Mutation-resistance tests fail when exact lease retirement or re-registration transitions are removed, not merely when downstream callbacks are mocked.
-- [ ] 4.10 Update `implementation.md`, pass focused lifecycle tests, and commit this checkpoint before App-shell integration.
+- [x] 4.1 Keep one foreground `serve` process as the sole owner of each project Server and its SIGINT/SIGTERM shutdown.
+- [x] 4.2 Register the ready backend locator, backend identity, and runtime-only credential with daemon IPC without persisting or logging private presentation state.
+- [x] 4.3 Keep a bounded reconnecting lease that re-registers after daemon restart and retires when its `serve` owner exits.
+- [x] 4.4 Prove daemon stop/restart leaves every live project backend reachable and does not transfer child/process ownership.
+- [x] 4.5 Implement daemon-present behavior: unqualified `serve` attaches when daemon exists; `serve --app` starts when absent; `serve --web` attaches and also opens Direct Project Web.
+- [x] 4.6 Implement daemon-absent behavior: unqualified non-TTY or rejected prompt opens Direct Web; `serve --web` opens Direct Web; `serve --app` starts daemon then attaches.
+- [x] 4.7 Materialize private Direct Project Web URLs only inside the external Browser presenter and never print them.
+- [x] 4.8 Lifecycle tests cover late daemon start, daemon restart during a live backend, backend exit, duplicate backend registration, and reconnect cancellation.
+- [x] 4.9 Mutation-resistance tests fail when exact lease retirement or re-registration transitions are removed, not merely when downstream callbacks are mocked.
+- [x] 4.10 Update `implementation.md`, pass focused lifecycle tests, and commit this checkpoint before App-shell integration.
 
 ## 5. Bundled Local App Shell and Control Transport
 
-- [ ] 5.1 Build `packages/app` as part of CLI packaging and copy its deterministic assets into the published `openspecui` package.
-- [ ] 5.2 Serve the bundled App shell on a loopback daemon endpoint with SPA fallback, correct assets/MIME/cache policy, and no project backend reverse proxy.
-- [ ] 5.3 Add a same-origin typed daemon control transport through which App reads the current Workspace ledger and receives invalidation notices.
-- [ ] 5.4 Preserve the reactive rule `Push notification -> Pull current snapshot`; retain settled sibling Workspaces while one registration changes.
-- [ ] 5.5 Bind transient credentials to matching backend locators in App memory only; App persistence remains credential-free across reload and restart.
-- [ ] 5.6 Active `serve` leases restore authenticated Workspace authority after daemon restart without writing credentials into browser storage.
-- [ ] 5.7 Repository development may inject local `packages/app` dev output through dev tooling, but no public App-shell URL setting or CLI option reappears.
-- [ ] 5.8 Real built-package tests prove the daemon serves the same-version App entry/assets and cannot fall back to stale workspace output.
-- [ ] 5.9 Focused App/control tests cover initial Pull, notice-driven replacement Pull, regional failure, credential binding, and daemon restart convergence.
-- [ ] 5.10 Update `implementation.md`, pass focused build/control tests, and commit this checkpoint before native presentation.
+- [x] 5.1 Build `packages/app` as part of CLI packaging and copy its deterministic assets into the published `openspecui` package.
+- [x] 5.2 Serve the bundled App shell on a loopback daemon endpoint with SPA fallback, correct assets/MIME/cache policy, and no project backend reverse proxy.
+- [x] 5.3 Add a same-origin typed daemon control transport through which App reads the current Workspace ledger and receives invalidation notices.
+- [x] 5.4 Preserve the reactive rule `Push notification -> Pull current snapshot`; retain settled sibling Workspaces while one registration changes.
+- [x] 5.5 Bind transient credentials to matching backend locators in App memory only; App persistence remains credential-free across reload and restart.
+- [x] 5.6 Active `serve` leases restore authenticated Workspace authority after daemon restart without writing credentials into browser storage.
+- [x] 5.7 Repository development may inject local `packages/app` dev output through dev tooling, but no public App-shell URL setting or CLI option reappears.
+- [x] 5.8 Real built-package tests prove the daemon serves the same-version App entry/assets and cannot fall back to stale workspace output.
+- [x] 5.9 Focused App/control tests cover initial Pull, notice-driven replacement Pull, regional failure, credential binding, and daemon restart convergence.
+- [x] 5.10 Update `implementation.md`, pass focused build/control tests, and commit this checkpoint before native presentation.
 
 ## 6. OpenTray Native and Web Presenters
 

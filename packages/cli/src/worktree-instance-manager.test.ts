@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Prove worktree runtime selection and source bootstrap normalization.
  * 2. Prove worker-thread and process children inherit the exact parent Access Gate and Web asset root without argv leakage.
  * 3. Prove readiness authenticates with the inherited Gate while unguarded readiness remains unchanged.
- * 4. Cross both production bootstraps into real guarded child Servers with self-contained Web assets.
+ * 4. Cross both production bootstraps into real guarded child Servers with explicit serve ownership and self-contained Web assets.
  *
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
  * Delivery correction (2026-07-26): clean child fixtures own one minimal physical Web asset root.
+ * Owner correction (2026-07-29): daemon start is not a project Server command; child processes use serve.
  */
 import {
   buildBackendHealthPayload,
@@ -213,7 +214,7 @@ describe('worktree instance manager helpers', () => {
     expect(plan.command).toBe(process.execPath)
     expect(plan.args).toEqual([
       '/pkg/runtime/cli.mjs',
-      'start',
+      'serve',
       '/tmp/feature-worktree',
       '--port',
       '3123',

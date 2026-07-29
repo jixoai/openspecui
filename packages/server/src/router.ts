@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX, regional Dashboard, and archive procedures.
  * 2. Register CLI, Root Context, reactive launch-tool initialization, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
@@ -21,6 +21,7 @@
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
+ * Owner correction (2026-07-29): App shell location is daemon-owned and is not writable project config.
  */
 import type {
   ChangeFile,
@@ -1911,7 +1912,6 @@ export const configRouter = router({
             theme: CodeEditorThemeSchema.optional(),
           })
           .optional(),
-        appBaseUrl: z.string().optional(),
         opsx: OpsxConfigSchema.partial().optional(),
         terminal: TerminalConfigSchema.omit({ rendererEngine: true })
           .partial()
@@ -1936,7 +1936,6 @@ export const configRouter = router({
         if (
           input.theme !== undefined ||
           input.codeEditor !== undefined ||
-          input.appBaseUrl !== undefined ||
           input.opsx !== undefined ||
           input.terminal !== undefined ||
           input.dashboard !== undefined ||
@@ -1947,7 +1946,6 @@ export const configRouter = router({
           await ctx.configManager.writeConfig({
             theme: input.theme,
             codeEditor: input.codeEditor,
-            appBaseUrl: input.appBaseUrl,
             opsx: input.opsx,
             terminal: input.terminal,
             dashboard: input.dashboard,

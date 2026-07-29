@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Project one immutable export snapshot through the live provider-shaped API.
  * 2. Preserve compound Spec identity and published snapshot policy/provenance without invented CLI evidence.
  * 3. Reconstruct Dashboard, objective Kanban, workflow, schema, template, and entity reads without a backend.
@@ -10,6 +10,7 @@
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
+ * Owner correction (2026-07-29): static project config does not publish daemon-owned App location.
  */
 
 import type {
@@ -994,7 +995,6 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
     codeEditor: {
       theme: 'github',
     },
-    appBaseUrl: '',
     opsx: {
       agentInvocationMode: 'compose',
     },

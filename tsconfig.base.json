@@ -25,6 +25,7 @@
       "@openspecui/core": ["packages/core/src/index.ts"],
       "@openspecui/core/dashboard-display": ["packages/core/src/dashboard-display.ts"],
       "@openspecui/core/hosted-app": ["packages/core/src/hosted-app.ts"],
+      "@openspecui/core/app-daemon-control": ["packages/core/src/app-daemon-control.ts"],
       "@openspecui/core/hosted-contract": ["packages/core/src/hosted-contract.ts"],
       "@openspecui/core/markdown-facts": ["packages/core/src/markdown-facts.ts"],
       "@openspecui/core/markdown-reading": ["packages/core/src/markdown-reading.ts"],

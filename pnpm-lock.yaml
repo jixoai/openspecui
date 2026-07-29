@@ -168,6 +168,9 @@ importers:
       better-sqlite3:
         specifier: ^12.5.0
         version: 12.10.0
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       '@hono/node-server':
         specifier: ^1.14.1
