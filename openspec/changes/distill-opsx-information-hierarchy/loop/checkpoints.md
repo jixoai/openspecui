@@ -79,7 +79,7 @@ Owner Terminal popup correction (2026-07-29): Terminal-owned popup text must rem
 - [x] 6.29 Update PR evidence and return to Owner visual/browser acceptance
 - [x] 6.30 Specify Terminal-owned popup versus application-owned overlay palette boundaries
 - [x] 6.31 Rebind Terminal-local card/popover token pairs and prove the regression without global overrides
-- [ ] 6.32 Pass focused gates, record delivery evidence, and return to Owner visual/browser acceptance
+- [x] 6.32 Pass focused gates, record delivery evidence, and return to Owner visual/browser acceptance
 
 ## 7. Finalization
 

@@ -554,6 +554,24 @@ remain outside the scope, and descendant-wide selectors or `!important` remain f
 opens the production `TerminalPanel -> ContextMenu` chain and proves that the popup remains physically nested in
 the palette owner; the CSS contract test proves all four token mappings and retains semantic-color guardrails.
 
+Code-bearing HEAD `103b9f9df3295a08d5d0f3cbddb340fc068e4905` passed local and remote delivery evidence:
+
+```text
+Focused Terminal unit                         2 files / 16 tests passed
+Complete Web unit                             166 files / 1061 tests passed
+Web typecheck                                 passed
+Repository lint                               1058 files / 0 warnings / 0 errors
+Production Web + SSG + SSG CLI build          passed
+Focused Prettier + git diff --check           passed
+Strict OpenSpec validation                    passed
+PR Quality run 30440446612                    all gates passed
+PR state                                      OPEN / CLEAN
+```
+
+The complete Web unit run retained the repository's existing non-failing jsdom Canvas diagnostics. The
+production build retained only the existing `scroll-button` CSS compatibility warning. No agent visual or
+end-to-end browser acceptance was performed; checkpoints 6.6 and 7.1 remain Owner-owned.
+
 ## Loopback Triggers
 
 - A required failure becomes reachable only by opening an Accordion or focusing a Tooltip.
