@@ -396,7 +396,19 @@ Focused format + git diff --check                passed
 
 The regression fixture proves lexical path equality without `physicalPath` remains `unresolved`; current Root
 Context fixtures that assert `distinct` now carry the same physical Launch identity supplied by Core. Remote PR
-evidence remains pending, so checkpoint 6.20 and the Owner acceptance boundary stay open.
+evidence for PR HEAD `01e7ba747986180bddd58bb81d3cd0f73104edf0` is complete:
+
+```text
+Changeset Gate                                 passed
+CI Scope                                       passed
+Fast Gate                                      passed
+Browser Gate (@openspecui/web)                 passed
+Browser Gate                                   passed
+PR state                                       OPEN / CLEAN
+```
+
+Checkpoint 6.20 is complete. Checkpoint 6.6 and finalization remain open for the Owner's visual and real-browser
+acceptance; no merge, archive, or release has occurred.
 
 ## Loopback Triggers
 

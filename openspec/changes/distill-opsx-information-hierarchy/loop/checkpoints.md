@@ -65,7 +65,7 @@ Owner correction (2026-07-29): navigation, Project Binding, Context, Settings sc
 - [x] 6.17 Omit redundant Terminal cwd controls while preserving generic Launch and workflow Planning-generation ownership
 - [x] 6.18 Present `root_pointer_ignored` repairably in Config and consolidate same-root identity in Context
 - [x] 6.19 Pass focused Web tests, typecheck, lint/format, strict Change validation, and `git diff --check`
-- [ ] 6.20 Update PR evidence and stop for Owner visual/browser acceptance
+- [x] 6.20 Update PR evidence and stop for Owner visual/browser acceptance
 
 ## 7. Finalization
 
