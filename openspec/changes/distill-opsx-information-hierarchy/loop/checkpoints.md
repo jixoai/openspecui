@@ -3,6 +3,7 @@ Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 1. Provide executable apply-change checkpoints for information-hierarchy distillation.
 2. Bind each production-owner migration to focused evidence.
 3. Keep automated delivery, owner visual acceptance, archive, merge, and later release separate.
+4. Bind same-root simplification to one shared topology fact without weakening warning or Terminal ownership.
 
 Original request (2026-07-28): implement the UI simplification autonomously, then hand final acceptance to the Owner.
 Owner correction (2026-07-29): navigation, Project Binding, Context, Settings scroll ownership, and Change evidence require a focused product-information pass before acceptance.
@@ -58,6 +59,13 @@ Owner correction (2026-07-29): navigation, Project Binding, Context, Settings sc
 - [x] 6.11 Replace the remaining Settings viewport-owned field topology with a mobile-first container query
 - [x] 6.12 Prove Config, Context, Settings, and Change evidence at 390px, 768px, and 1280px viewport widths
 - [x] 6.13 Re-run focused and delivery gates, update PR evidence, and stop at Owner acceptance
+- [x] 6.14 Specify same-root topology, ignored-pointer ownership, and focused implementation boundaries
+- [ ] 6.15 Add a pure `collapsed | distinct | unresolved` Root-topology selector with canonical identity evidence
+- [ ] 6.16 Omit the healthy collapsed Dashboard band while restoring References, refresh, distinct, and failure states
+- [ ] 6.17 Omit redundant Terminal cwd controls while preserving generic Launch and workflow Planning-generation ownership
+- [ ] 6.18 Present `root_pointer_ignored` repairably in Config and consolidate same-root identity in Context
+- [ ] 6.19 Pass focused Web tests, typecheck, lint/format, strict Change validation, and `git diff --check`
+- [ ] 6.20 Update PR evidence and stop for Owner visual/browser acceptance
 
 ## 7. Finalization
 

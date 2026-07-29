@@ -3,6 +3,7 @@ Orthogonal intents (created 2026-07-28 Asia/Shanghai):
 1. Record fixed-point 5.x versus 6.x information-density evidence.
 2. Define the shared information hierarchy and affected production owners.
 3. Sequence implementation, risk controls, and owner-only final acceptance.
+4. Separate same-root presentation topology from repairable OpenSpec configuration diagnostics.
 
 Original request (2026-07-28): restore 5.x-like clarity while keeping all 6.x facts retrievable and OPSX-primary.
 -->
@@ -167,3 +168,48 @@ Settings already owns an `@container-[size]` boundary, so its Light/Dark termina
 container instead of `md`. The correction keeps one column at mobile and rail-constrained tablet widths, then
 adds two columns only when the Settings content container itself is spacious. Browser evidence must record both
 viewport and actual content widths at `390x844`, `768x1024`, and `1280x900`.
+
+## Same-Root Presentation Follow-up (2026-07-29)
+
+The Owner's live project exposes the upstream warning `root_pointer_ignored`: `openspec/config.yaml` declares a
+Store while the same directory already has a real planning shape. OpenSpec 1.6 intentionally keeps the local root,
+ignores only the pointer, and reports a structured non-blocking warning with a removal fix. Evidence:
+
+- `references/openspec/src/core/root-selection.ts` selects the real nearest root before a declared Store fallback.
+- `references/openspec/src/core/relationship-health.ts` emits `root_pointer_ignored` with warning severity.
+- `references/openspec/openspec/work/simplify-context-and-workspace-model/slices/declared-store-fallback/spec.md`
+  defines fallback-never-override and preserves `references:` beside the ignored pointer.
+- A real local `openspec doctor --json` run reports Planning root source `nearest`, `store: null`, and the warning in
+  top-level `status`; Root Context remains ready.
+
+The product must therefore keep two axes orthogonal:
+
+```text
+Root topology                 Config hygiene
+collapsed | distinct         clean | root_pointer_ignored
+          | unresolved       | other diagnostics
+          |                  |
+          v                  v
+presentation density         warning / repair ownership
+```
+
+### Implementation sequence
+
+1. Add one subscription-free selector for `collapsed | distinct | unresolved`. It compares canonical,
+   server-observed physical identities and never infers topology from Root source, Store id, warning text, or Git.
+2. Omit Dashboard's entire context band only for the healthy collapsed default. References, refresh, failed or
+   resolving Git, Root/transport failures, and distinct roots restore it.
+3. Omit Terminal cwd selection for collapsed roots. Generic creation remains Launch-owned; workflow-locked
+   Planning creation retains the Planning target and expected generation. The PTY protocol is unchanged.
+4. Project Binding reads `root_pointer_ignored` from CLI Doctor diagnostics, renders warning severity, labels the
+   declaration ignored, and clears it through the existing draft/save owner.
+5. Context renders one Project root summary for collapsed topology and separate Launch/Planning facts otherwise.
+6. Prove each production boundary with focused Vitest before repository gates. Final visual and browser acceptance
+   remains Owner-owned.
+
+### Hard stops
+
+- Do not treat lexical display labels, Store identity, `nearest`, or one-Git scope as proof of same physical root.
+- Do not remove `launch-project | planning-root` from the public PTY contract.
+- Do not make `root_pointer_ignored` block Root actions or disappear outside Config/Context evidence.
+- Do not touch the Owner's live `openspec/config.yaml` while implementing or validating this follow-up.

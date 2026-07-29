@@ -57,6 +57,7 @@ Owner information-hierarchy correction (2026-07-29): "Config > Project Binding �
 Owner information-hierarchy correction (2026-07-29): "Context 页面同理，从产品经理的角度重新组织有价值的信息。"
 Owner layout correction (2026-07-29): "Settings 页面只能保留一个滚动 owner；ChangeDetail 的 Paths and CLI evidence 需要拆分可读摘要、artifact、References、CLI 结果，移动端不得横向溢出。"
 Owner responsive direction (2026-07-29): "从产品经理的角度优化信息展示。以移动端的视觉体验优先，再逐步扩展到平板尺寸和桌面尺寸，使用容器查询做响应式。"
+Owner same-root correction (2026-07-29): "Launch==Planning 的情况下，Dashboard 应隐藏冗余上下文，Terminal 不应提供 cwd 切换；ignored Store warning 仍应在 Config 中可修复。"
 Owner presentation direction (2026-07-28): "backend a 会重新打开一个浏览器窗口，而不是聚焦原本的窗口；从底层封装，后续可能对接 OpenTray 原生窗口。"
 Owner acceptance feedback (2026-07-28): "基本全部通过。列表骨架之间需要 gap 或分割线；Static 导出后的 /context 页面没数据。"
 Owner-reported defect (2026-07-28): "pnpm openspecui export -o ./tmp --open 导出的数据好像逃逸到 html 去了。"
@@ -157,6 +158,18 @@ must use container queries for internal topology; viewport breakpoints are forbi
 contain a mobile-width project surface beside the desktop rail. The shell may still use viewport/media queries to
 choose its navigation topology. Narrow, intermediate, and spacious evidence must be verified at the rendered
 container boundary, not inferred from viewport width alone.
+
+### Root-topology presentation law (2026-07-29)
+
+Root topology and configuration hygiene are independent facts. A shared, subscription-free presentation selector
+classifies current server-observed physical identities as `collapsed`, `distinct`, or `unresolved`; Root source,
+Store id, warning text, and Git scope are not topology substitutes. In the healthy collapsed default, Dashboard
+omits its redundant context band and generic Terminal creation implicitly remains `launch-project` without a cwd
+selector. Workflow-locked Terminal creation remains `planning-root`, preserves expected Root generation, and does
+not weaken the public PTY protocol or stale-generation guard. Project Binding owns repair of an ignored `store:`
+declaration: `root_pointer_ignored` is a non-blocking warning with a clear action through the existing draft/save
+flow. Context combines Launch and Planning into one `Project root` summary only when topology is collapsed; source,
+provenance, warnings, failures, and raw evidence remain retrievable, and exceptional states stay direct.
 
 ### Objective Kanban projection law (2026-07-28)
 

@@ -3,10 +3,12 @@ Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
 1. Define the OPSX-first information hierarchy across Web projections.
 2. Preserve accessible retrieval of secondary 6.x facts.
 3. Forbid progressive disclosure from hiding errors, blockers, or stale authority.
+4. Collapse redundant same-root presentation without hiding configuration hygiene.
 
 Original request (2026-07-28): simplify most added 6.x information into Badge + Tooltip or Accordion while keeping OPSX primary.
 Owner correction (2026-07-29): assign shell, Project Binding, Context, Settings, and Change evidence facts to their product-task owners.
 Owner responsive direction (2026-07-29): information surfaces start mobile-first and expand to tablet/desktop density through container queries.
+Owner same-root direction (2026-07-29): when Launch and Planning are the same root, hide redundant Dashboard context and Terminal cwd selection while keeping ignored Store declarations repairable in Config.
 -->
 
 # Delta for opsx-ui-views
@@ -95,3 +97,51 @@ clickable summary across navigation and content surfaces.
 - **THEN** the surface SHALL begin with one readable mobile column
 - **AND** it SHALL add columns only through content-driven container queries
 - **AND** an outer viewport breakpoint SHALL NOT force a denser internal layout before the content container can sustain it.
+
+### Requirement: Root topology and configuration hygiene remain independent
+
+OpenSpecUI SHALL derive one objective Root topology independently from configuration diagnostics, then simplify
+only redundant presentation while preserving every warning and repair path at its owning surface.
+
+#### Scenario: Classify physical Root topology
+
+- **GIVEN** a current Root Context observation contains a Launch project and a CLI-selected Planning root
+- **WHEN** their canonical physical identities are compared
+- **THEN** the presentation topology SHALL be `collapsed` when they identify the same directory
+- **AND** it SHALL be `distinct` when both identities are available and differ
+- **AND** it SHALL be `unresolved` when a current identity is unavailable
+- **AND** Root source labels or configuration diagnostics SHALL NOT substitute for that physical comparison.
+
+#### Scenario: Remove the healthy collapsed Dashboard band
+
+- **GIVEN** Root topology is `collapsed`, no References are observed, Code and Planning use one settled Git repository, and no Root, Reference, Git, transport, or refresh state needs attention
+- **WHEN** Dashboard renders
+- **THEN** the context band SHALL be absent rather than restating the Planning path, `nearest`, zero References, and one Git repository
+- **AND** Context navigation SHALL remain available through the project navigation owner
+- **AND** distinct topology, References, refresh, Git resolution, or any failure SHALL restore the relevant direct summary.
+
+#### Scenario: Collapse Terminal cwd choice without weakening ownership
+
+- **GIVEN** Root topology is `collapsed`
+- **WHEN** a generic Terminal creation surface renders
+- **THEN** it SHALL omit the Launch-versus-Planning selector and create against `launch-project`
+- **AND** a workflow-locked Planning creation SHALL omit the selector while preserving `planning-root` and its expected Root generation
+- **AND** the backend cwd-target protocol and Planning stale-generation guard SHALL remain unchanged
+- **AND** `distinct` topology SHALL retain the explicit selector.
+
+#### Scenario: Keep an ignored Store declaration repairable
+
+- **GIVEN** CLI Doctor reports `root_pointer_ignored` because a real local OpenSpec root also declares `store:`
+- **WHEN** Project Binding renders
+- **THEN** it SHALL present the diagnostic as a non-blocking configuration warning
+- **AND** it SHALL state that the current Store declaration is ignored
+- **AND** it SHALL provide a clear action through the existing editable declaration draft to remove that `store:` value
+- **AND** the warning SHALL NOT block Root-dependent actions or be styled as a destructive Root failure.
+
+#### Scenario: Consolidate same-root Context identity
+
+- **GIVEN** Root topology is `collapsed`
+- **WHEN** live Context renders its operational summary
+- **THEN** it SHALL present one `Project root` identity rather than separate Active Planning root and Launch project rows
+- **AND** Root source, Store provenance, configuration warnings, and raw command evidence SHALL remain retrievable in their appropriate indirect or direct evidence layers
+- **AND** `distinct` or `unresolved` topology SHALL preserve separate Launch and Planning facts.
