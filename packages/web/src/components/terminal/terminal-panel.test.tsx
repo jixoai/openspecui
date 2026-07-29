@@ -1,10 +1,11 @@
 /**
  * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Verify terminal panel tabs, actions, notifications, and visibility behavior.
- * 2. Verify first-session and active-session cwd target selection.
+ * 2. Verify distinct-root selection and same-root implicit Launch creation.
  * 3. Verify restored tab identity survives resolved paths, long titles, and renaming.
  *
  * Original request (2026-07-16): "Terminal shows selected cwd/root identity in creation controls and tab labels."
+ * Owner same-root direction (2026-07-29): generic Terminal hides cwd switching and remains Launch-owned when roots collapse.
  */
 import type { NotificationRecord } from '@openspecui/core/notifications'
 import { fireEvent, render, within } from '@testing-library/react'
@@ -190,6 +191,7 @@ describe('TerminalPanel', () => {
     })
     createShellSessionMock.mockReset()
     useTerminalCwdTargetStateMock.mockReturnValue({
+      topology: 'distinct',
       launchProject: {
         target: 'launch-project',
         label: 'Launch project',
@@ -336,6 +338,45 @@ describe('TerminalPanel', () => {
 
     expect(createShellSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'builtin:sh', command: '/bin/sh' }),
+      { cwdTarget: 'launch-project' }
+    )
+  })
+
+  it('hides same-root cwd selection and creates the generic shell in Launch', () => {
+    useTerminalContextMock.mockReturnValue({
+      sessions: [],
+      activeSessionId: null,
+      setActiveSession: vi.fn(),
+      createShellSession: createShellSessionMock,
+      closeSession: vi.fn(),
+      setCustomTitle: vi.fn(),
+    })
+    useTerminalCwdTargetStateMock.mockReturnValue({
+      topology: 'collapsed',
+      launchProject: {
+        target: 'launch-project',
+        label: 'Launch project',
+        path: '/workspace/project',
+        available: true,
+        unavailableReason: null,
+      },
+      planningRoot: {
+        target: 'planning-root',
+        label: 'Planning root',
+        path: '/workspace/project',
+        available: true,
+        unavailableReason: null,
+      },
+    })
+
+    const { container } = render(<TerminalPanel />)
+
+    expect(
+      within(container).queryByRole('radiogroup', { name: 'Terminal working directory' })
+    ).toBeNull()
+    fireEvent.click(within(container).getByRole('button', { name: 'New terminal' }))
+    expect(createShellSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'builtin:sh' }),
       { cwdTarget: 'launch-project' }
     )
   })

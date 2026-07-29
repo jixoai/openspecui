@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
- * 1. Verify Context projects CLI-selected root, Store, launch, and inherited data-scope facts.
+ * 1. Verify Context projects distinct identities and consolidates canonical same-root identity.
  * 2. Verify Reference errors stay direct while neutral read-only evidence remains retrievable on demand.
  * 3. Verify loading, refreshing, terminal-error, stale-error, and command-evidence states stay distinct.
  * 4. Verify Static Context uses only publication-safe snapshot facts and starts no live owner.
@@ -11,6 +11,7 @@
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
  * Original request (2026-07-28): Context should stay concise without deleting source-attributed evidence.
  * Owner correction (2026-07-29): Context summarizes root, launch, References, and action readiness before technical evidence.
+ * Owner same-root direction (2026-07-29): collapse identity while retaining ignored Store warning evidence.
  */
 import type { ExportSnapshot, RootContext, RootContextState } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
@@ -294,6 +295,70 @@ describe('ContextView', () => {
     expect(text).toContain('platform')
     expect(screen.getByRole('note', { name: 'Root actions ready' })).toBeTruthy()
     expect(screen.getByText('/tmp/data/openspec')).not.toBeVisible()
+  })
+
+  it('consolidates a current same-root identity into one Project root summary', () => {
+    setState({
+      data: readyState(
+        rootContext({
+          launchProject: { path: '/tmp/project-link', physicalPath: '/tmp/project' },
+          planningRoot: {
+            path: '/tmp/project',
+            source: 'nearest',
+            healthy: true,
+            status: [],
+          },
+          storeId: null,
+        })
+      ),
+    })
+
+    render(<ContextView />)
+
+    expect(screen.getByText('Project root')).toBeVisible()
+    expect(screen.getByText('/tmp/project')).toBeVisible()
+    expect(screen.queryByText('Launch project')).toBeNull()
+    expect(screen.queryByText('Active planning root')).toBeNull()
+  })
+
+  it('keeps ignored Store configuration warning retrievable without blocking actions', async () => {
+    setState({
+      data: readyState(
+        rootContext({
+          launchProject: { path: '/tmp/project', physicalPath: '/tmp/project' },
+          planningRoot: {
+            path: '/tmp/project',
+            source: 'nearest',
+            healthy: true,
+            status: [],
+          },
+          storeId: null,
+          diagnostics: {
+            root: [],
+            doctor: [
+              {
+                severity: 'warning',
+                code: 'root_pointer_ignored',
+                message: 'The local root ignores store shared.',
+                target: 'relationships',
+                fix: 'Remove the store declaration.',
+              },
+            ],
+            context: [],
+          },
+        })
+      ),
+    })
+
+    render(<ContextView />)
+
+    expect(screen.getByRole('note', { name: 'Root actions ready' })).toBeVisible()
+    const warning = screen.getByRole('note', { name: 'Ignored Store declaration warning' })
+    expect(warning).toHaveTextContent('Store declaration ignored')
+    fireEvent.focus(warning)
+    expect(await screen.findByText('warning · root_pointer_ignored · relationships')).toBeVisible()
+    expect(await screen.findByText('The local root ignores store shared.')).toBeVisible()
+    expect(await screen.findByText('Fix: Remove the store declaration.')).toBeVisible()
   })
 
   it('keeps data scope and read-only registry evidence in technical disclosure', () => {

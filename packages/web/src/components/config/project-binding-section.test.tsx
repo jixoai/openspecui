@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
- * 1. Verify Project Binding presents launch/root ownership without registry inference.
+ * 1. Verify Project Binding presents launch/root ownership and warning severity without registry inference.
  * 2. Verify Store/Reference edits submit one structured, loading-locked mutation.
  * 3. Verify only an active write locks controls while stale/error evidence retains a repair path.
  * 4. Verify mutation preview evidence does not replace the subscribed current Root Context.
@@ -13,6 +13,7 @@
  * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
  * Original request (2026-07-28): successful preview, Reference, and settlement evidence should be collapsed by default.
  * Owner correction (2026-07-29): Store uses a registry-backed freeform Combobox; registry failure never blocks explicit repair.
+ * Owner same-root direction (2026-07-29): `root_pointer_ignored` stays non-blocking and clears through the existing draft.
  */
 import type { ProjectBindingConfig, ProjectBindingUpdateResult } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -340,6 +341,58 @@ describe('ProjectBindingSection', () => {
     )
     expect(screen.getByLabelText('Store')).toBeEnabled()
     fireEvent.change(screen.getByLabelText('Store'), { target: { value: 'repair-store' } })
+    expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
+  })
+
+  it('presents an ignored Store pointer as a repairable non-destructive warning', () => {
+    const config = bindingConfig()
+    bindingSubscriptionMock.mockReturnValue({
+      data: {
+        ...config,
+        rootPreview: {
+          ...config.rootPreview,
+          data: {
+            ...config.rootPreview.data,
+            launchProject: {
+              path: '/workspace/launch-app',
+              physicalPath: '/workspace/launch-app',
+            },
+            planningRoot: {
+              path: '/workspace/launch-app',
+              source: 'nearest',
+              healthy: true,
+              status: [],
+            },
+            storeId: null,
+            diagnostics: {
+              root: [],
+              doctor: [
+                {
+                  severity: 'warning',
+                  code: 'root_pointer_ignored',
+                  message: 'The local root ignores store shared.',
+                  fix: 'Remove the store declaration.',
+                },
+              ],
+              context: [],
+            },
+          },
+        },
+      } satisfies ProjectBindingConfig,
+      isLoading: false,
+      error: null,
+    })
+
+    renderSection(<ProjectBindingSection isStatic={false} />)
+
+    const warning = screen.getByRole('status')
+    expect(warning).toHaveTextContent('Store declaration ignored')
+    expect(warning).toHaveTextContent('warning · root_pointer_ignored')
+    expect(warning).toHaveTextContent('The local root ignores store shared.')
+    expect(warning.className).not.toContain('text-destructive')
+    fireEvent.click(screen.getByRole('button', { name: 'Clear declaration' }))
+    expect(screen.getByLabelText('Store')).toHaveValue('')
+    expect(warning).toHaveTextContent('Removed in draft; save to apply.')
     expect(screen.getByRole('button', { name: 'Save binding' })).toBeEnabled()
   })
 

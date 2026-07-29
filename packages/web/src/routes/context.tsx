@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
- * 1. Project one launch project's CLI-selected planning root and direct References.
+ * 1. Project one launch project's CLI-selected root with same-root identity consolidation.
  * 2. Present current, stale, terminal-error, and failed-attempt authority without hiding failures.
  * 3. Present the inherited Store registry/data scope as read-only environment evidence.
  * 4. Expose each Root Context command-evidence envelope through on-demand disclosure.
@@ -12,9 +12,11 @@
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
  * Original request (2026-07-28): Context remains the evidence owner but should default to a concise OPSX-first hierarchy.
  * Owner correction (2026-07-29): Context must answer Planning root, Launch project, Store/References, and action readiness before machine evidence.
+ * Owner same-root direction (2026-07-29): consolidate Launch and Planning identity without hiding ignored-pointer evidence.
  */
 import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import { DetailPanelSkeleton, RealtimeRevalidateCue } from '@/components/realtime'
+import { selectRootTopology } from '@/lib/root-topology'
 import { isStaticMode } from '@/lib/static-mode'
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import type { RootContext, RootContextCommandEvidence } from '@openspecui/core'
@@ -151,13 +153,22 @@ function ContextBody({
     (count, reference) => count + reference.status.length,
     0
   )
+  const rootTopology = actionStatus === 'blocked' ? 'unresolved' : selectRootTopology(context)
+  const ignoredStorePointerWarnings = diagnostics.filter(
+    (diagnostic) => diagnostic.severity === 'warning' && diagnostic.code === 'root_pointer_ignored'
+  )
+  const directDiagnostics = diagnostics.filter(
+    (diagnostic) => diagnostic.severity !== 'warning' || diagnostic.code !== 'root_pointer_ignored'
+  )
 
   return (
     <div className="@container min-w-0 space-y-4">
       <section aria-label="Operational Context" className="border-border min-w-0 divide-y border-y">
         <div className="flex min-w-0 flex-wrap items-start gap-2 py-3">
           <div className="min-w-0 flex-1">
-            <div className="text-muted-foreground text-xs">{rootHeading}</div>
+            <div className="text-muted-foreground text-xs">
+              {rootTopology === 'collapsed' ? 'Project root' : rootHeading}
+            </div>
             <div className="mt-1 min-w-0 break-all font-mono text-sm font-medium">
               {planningRoot?.path ?? 'No planning root resolved.'}
             </div>
@@ -178,9 +189,38 @@ function ContextBody({
               Store {context.storeId}
             </InformationBadge>
           ) : null}
+          {ignoredStorePointerWarnings.length > 0 ? (
+            <InformationBadge
+              ariaLabel="Ignored Store declaration warning"
+              tooltip={
+                <div className="space-y-1">
+                  {ignoredStorePointerWarnings.map((diagnostic) => (
+                    <div key={`${diagnostic.code}:${diagnostic.message}`}>
+                      <div className="font-mono">
+                        {diagnostic.severity} · {diagnostic.code}
+                        {diagnostic.target ? ` · ${diagnostic.target}` : ''}
+                      </div>
+                      <div>{diagnostic.message}</div>
+                      {diagnostic.fix ? <div>Fix: {diagnostic.fix}</div> : null}
+                    </div>
+                  ))}
+                </div>
+              }
+              tone="custom"
+              className="border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+            >
+              Store declaration ignored
+            </InformationBadge>
+          ) : null}
         </div>
-        <div className="@[36rem]:grid-cols-3 grid min-w-0 gap-4 py-3">
-          <ContextSummaryFact label="Launch project" value={context.launchProject.path} mono />
+        <div
+          className={`grid min-w-0 gap-4 py-3 ${
+            rootTopology === 'collapsed' ? '@[36rem]:grid-cols-2' : '@[36rem]:grid-cols-3'
+          }`}
+        >
+          {rootTopology !== 'collapsed' ? (
+            <ContextSummaryFact label="Launch project" value={context.launchProject.path} mono />
+          ) : null}
           <ContextSummaryFact
             label="References"
             value={`${context.references.length} observed`}
@@ -243,11 +283,11 @@ function ContextBody({
 
       <RootContextEvidence context={context} summary={evidenceSummary} />
 
-      {diagnostics.length > 0 ? (
+      {directDiagnostics.length > 0 ? (
         <section className="border-border space-y-2 rounded-lg border p-4">
           <h2 className="text-sm font-semibold">CLI diagnostics</h2>
           <ul className="space-y-2">
-            {diagnostics.map((diagnostic) => (
+            {directDiagnostics.map((diagnostic) => (
               <li key={`${diagnostic.code}:${diagnostic.message}`} className="text-sm">
                 <span className="font-medium">{diagnostic.code}</span>: {diagnostic.message}
               </li>

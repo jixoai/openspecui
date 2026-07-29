@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Prove Dashboard attributes planning facts to Root Context provenance.
+ * 1. Prove Dashboard omits only the healthy same-root default and otherwise attributes Root provenance.
  * 2. Preserve Reference diagnostics through compact scan status without inferred health.
  * 3. Keep Git detail retrievable while binding failures remain directly visible.
  * 4. Cover static, loading, stale-error, and Git failure states.
@@ -10,6 +10,7 @@
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git binding provenance in Dashboard fixtures.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-28): restore 5.x-like clarity while keeping 6.x context facts retrievable.
+ * Owner same-root direction (2026-07-29): hide redundant Dashboard context when Launch equals Planning.
  */
 import type { GitRepositoryScopes, RootContext, RootContextState } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -255,6 +256,64 @@ describe('DashboardContextSummary', () => {
     expect(screen.queryByText('No distinct Planning Git repository.')).toBeNull()
     fireEvent.focus(badge)
     expect(await screen.findByText('No distinct Planning Git repository.')).toBeTruthy()
+  })
+
+  it('omits the entire healthy collapsed context band', () => {
+    setContext({
+      data: readyState(
+        rootContext({
+          launchProject: { path: '/workspace/code', physicalPath: '/workspace/code' },
+          planningRoot: {
+            path: '/workspace/code',
+            source: 'nearest',
+            healthy: true,
+            status: [],
+          },
+          storeId: null,
+        })
+      ),
+    })
+    setGit({ data: gitScopes(false) })
+
+    render(<DashboardContextSummary staticMode={false} />)
+
+    expect(screen.queryByLabelText('Dashboard data scopes')).toBeNull()
+  })
+
+  it('restores collapsed context for References and refresh', () => {
+    const collapsed = rootContext({
+      launchProject: { path: '/workspace/code', physicalPath: '/workspace/code' },
+      planningRoot: {
+        path: '/workspace/code',
+        source: 'nearest',
+        healthy: true,
+        status: [],
+      },
+      storeId: null,
+    })
+    setGit({ data: gitScopes(false) })
+    setContext({
+      data: readyState({
+        ...collapsed,
+        references: [{ store_id: 'shared', status: [] }],
+      }),
+    })
+    const view = render(<DashboardContextSummary staticMode={false} />)
+    expect(screen.getByLabelText('Dashboard data scopes')).toBeVisible()
+    expect(screen.getByText('References 1')).toBeVisible()
+
+    setContext({
+      data: {
+        state: 'refreshing',
+        data: collapsed,
+        attempt: null,
+        error: null,
+        observedAt: 2,
+      },
+    })
+    view.rerender(<DashboardContextSummary staticMode={false} />)
+    expect(screen.getByLabelText('Dashboard data scopes')).toBeVisible()
+    expect(view.container.querySelector('.rt-revalidate-cue')).not.toBeNull()
   })
 
   it('does not render settled-collapse copy when Planning Git identity resolution fails', () => {

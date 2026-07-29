@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Edit only launch-project Store and Reference declarations.
- * 2. Preserve Root Context preview and declaration diagnostics without treating them as registry truth.
+ * 2. Preserve parse failures and CLI warning severity without treating either as registry truth.
  * 3. Bind mutation controls and execution to loading/error/dirty lifecycle states.
  * 4. Keep failures and convergence direct while disclosing successful preview/write evidence on demand.
  *
@@ -11,6 +11,7 @@
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  * Original request (2026-07-28): successful Config evidence should not outrank editable OPSX declarations.
  * Owner correction (2026-07-29): Store editing needs a freeform registry-backed Combobox and the binding cards must be reorganized around user tasks.
+ * Owner same-root direction (2026-07-29): ignored Store declarations remain visible and repairable without becoming Root failures.
  */
 import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import { AsyncAction, ConfigFormSkeleton } from '@/components/realtime'
@@ -122,6 +123,10 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   const storeSuggestions = storeProjection.data?.stores ?? []
   const storeSuggestionsUnavailable =
     storeProjection.error !== null || storeProjection.data?.available === false
+  const ignoredStorePointer = preview.context.diagnostics.doctor.find(
+    (diagnostic) => diagnostic.severity === 'warning' && diagnostic.code === 'root_pointer_ignored'
+  )
+  const ignoredStoreClearedInDraft = ignoredStorePointer !== undefined && storeId.trim() === ''
 
   return (
     <div className="@container min-w-0 space-y-5">
@@ -179,6 +184,38 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
               </span>
             ) : null}
           </div>
+          {ignoredStorePointer ? (
+            <div
+              role="status"
+              className="flex min-w-0 flex-wrap items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+            >
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">Store declaration ignored</p>
+                <p className="mt-0.5 font-mono opacity-75">
+                  {ignoredStorePointer.severity} · {ignoredStorePointer.code}
+                  {ignoredStorePointer.target ? ` · ${ignoredStorePointer.target}` : ''}
+                </p>
+                <p className="mt-0.5 break-words">{ignoredStorePointer.message}</p>
+                {ignoredStorePointer.fix ? (
+                  <p className="mt-1 break-words opacity-80">{ignoredStorePointer.fix}</p>
+                ) : null}
+              </div>
+              {ignoredStoreClearedInDraft ? (
+                <span className="shrink-0 font-medium">Removed in draft; save to apply.</span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={saveMutation.isPending}
+                  onClick={() => settlement.editStore('')}
+                  className="border-current/30 inline-flex h-8 shrink-0 items-center gap-1 rounded-sm border px-2 font-medium hover:bg-amber-500/10 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                  Clear declaration
+                </button>
+              )}
+            </div>
+          ) : null}
         </section>
 
         <section className="space-y-2" aria-labelledby="project-binding-references">

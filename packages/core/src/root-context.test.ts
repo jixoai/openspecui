@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * 1. Verify Root Context composes CLI and environment facts without rewriting evidence.
+ * 2. Verify launch-project display identity retains a canonical physical comparison path.
+ * 3. Verify Root readiness and error taxonomy remain CLI-owned.
+ *
+ * Original request (2026-07-15): Root Context is the objective OpenSpec CLI projection.
+ * Owner same-root direction (2026-07-29): compare Launch and Planning by physical identity before collapsing UI.
+ */
 import { describe, expect, it, vi } from 'vitest'
 import type {
   CliCommandResult,
@@ -120,6 +129,7 @@ describe('resolveRootContext', () => {
     expect(state.state).toBe('ready')
     if (state.state !== 'ready') return
     expect(state.data.launchProject.path).toBe('/workspace/app')
+    expect(state.data.launchProject.physicalPath).toBe('/workspace/app')
     expect(state.data.planningRoot).toMatchObject({
       path: '/stores/platform',
       source: 'declared',

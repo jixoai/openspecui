@@ -1,16 +1,18 @@
 /**
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Attribute Dashboard planning metrics to the active CLI-selected root.
- * 2. Compress Store, Reference, and Git scan facts without inferring aggregate health.
+ * 2. Omit the healthy same-root default while preserving decision-relevant scope facts.
  * 3. Keep Root, Reference-error, and Git-binding failures directly visible.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 distinguishes pending Planning Git.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-28): restore 5.x-like clarity while keeping 6.x context facts retrievable.
+ * Owner same-root direction (2026-07-29): hide redundant Dashboard context when Launch equals Planning.
  */
 import { InformationBadge } from '@/components/information-disclosure'
 import { RealtimeRevalidateCue, RealtimeSkeletonLine } from '@/components/realtime'
+import { selectRootTopology } from '@/lib/root-topology'
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import { useGitRepositoryScopes } from '@/lib/use-git-repository-scope'
 import { VTLink } from '@/lib/view-transitions/navigation'
@@ -53,6 +55,18 @@ function LiveDashboardContextSummary() {
           gitScopesQuery.data?.planningState === 'failed'
         ? gitScopesQuery.data.planningError.message
         : null
+  const hideHealthyCollapsedSummary =
+    projection?.state === 'ready' &&
+    selectRootTopology(context) === 'collapsed' &&
+    context?.references.length === 0 &&
+    !contextTransportError &&
+    !contextError &&
+    gitScopesQuery.authority.state === 'current' &&
+    gitScopesQuery.data?.planningState === 'settled' &&
+    gitScopesQuery.data.planning === null &&
+    !gitFailure
+
+  if (hideHealthyCollapsedSummary) return null
 
   return (
     <section aria-label="Dashboard data scopes" className="border-border border-y py-2">

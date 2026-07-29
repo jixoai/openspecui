@@ -1,10 +1,11 @@
 /**
  * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Verify launch-project terminal cwd is always selectable.
+ * 1. Verify launch-project terminal cwd is always selectable and same-root topology is explicit.
  * 2. Verify planning-root terminal cwd requires a current ready Root Context.
  * 3. Verify displayed paths come from Root Context observations.
  *
  * Original request (2026-07-16): "Terminal exposes explicit launch-project cwd and planning-root cwd."
+ * Owner same-root direction (2026-07-29): omit cwd switching only for canonical same-root identity.
  */
 import type { RootContext, RootContextState } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
@@ -74,6 +75,21 @@ describe('selectTerminalCwdTargetState', () => {
 
     expect(state.launchProject).toMatchObject({ path: '/launch', available: true })
     expect(state.planningRoot).toMatchObject({ path: '/stores/shared', available: true })
+    expect(state.topology).toBe('distinct')
+  })
+
+  it('reports collapsed topology from the physical Launch identity', () => {
+    const rootContext = context()
+    rootContext.launchProject = { path: '/launch-link', physicalPath: '/stores/shared' }
+    const state = select({
+      state: 'ready',
+      data: rootContext,
+      attempt: null,
+      error: null,
+      observedAt: 2,
+    })
+
+    expect(state.topology).toBe('collapsed')
   })
 
   it('locks planning-root during refresh even when stale paths exist', () => {
@@ -86,6 +102,7 @@ describe('selectTerminalCwdTargetState', () => {
     })
 
     expect(state.launchProject.path).toBe('/launch')
+    expect(state.topology).toBe('distinct')
     expect(state.planningRoot).toMatchObject({ path: null, available: false })
     expect(state.planningRoot.unavailableReason).toContain('refreshing')
   })
@@ -104,6 +121,7 @@ describe('selectTerminalCwdTargetState', () => {
     })
 
     expect(errorState.launchProject.path).toBe('/launch')
+    expect(errorState.topology).toBe('unresolved')
     expect(errorState.planningRoot).toMatchObject({ available: false, path: null })
     expect(errorState.planningRoot.unavailableReason).toContain('Store root is unhealthy.')
     expect(transportState.launchProject.available).toBe(true)

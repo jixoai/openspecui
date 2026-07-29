@@ -1,11 +1,13 @@
 /**
  * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
- * 1. Project terminal cwd choices from the shared CLI-owned Root Context.
+ * 1. Project terminal cwd choices and same-root topology from the shared CLI-owned Root Context.
  * 2. Keep launch-project creation available while planning-root creation requires current ready data.
  * 3. Expose only server-observed paths and objective unavailability reasons.
  *
  * Original request (2026-07-16): "Terminal exposes explicit launch-project cwd and planning-root cwd."
+ * Owner same-root direction (2026-07-29): omit cwd switching when Launch and Planning are one physical root.
  */
+import { selectRootTopology, type RootTopology } from '@/lib/root-topology'
 import type { RootContextState, TerminalCwdTarget } from '@openspecui/core'
 import { useContextSubscription } from './use-context-subscription'
 
@@ -20,6 +22,7 @@ export interface TerminalCwdTargetOption {
 
 /** Available terminal cwd targets and the current selection. */
 export interface TerminalCwdTargetState {
+  topology: RootTopology
   launchProject: TerminalCwdTargetOption
   planningRoot: TerminalCwdTargetOption
 }
@@ -65,6 +68,11 @@ export function selectTerminalCwdTargetState(
       : null
 
   return {
+    topology: selectRootTopology(
+      input.projection?.state === 'ready' || input.projection?.state === 'refreshing'
+        ? input.projection.data
+        : null
+    ),
     launchProject: {
       target: 'launch-project',
       label: 'Launch project',

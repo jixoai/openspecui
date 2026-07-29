@@ -1,11 +1,12 @@
 /**
  * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
  * 1. Render terminal tabs, lifecycle indicators, notifications, and panel actions.
- * 2. Expose explicit launch-project versus planning-root creation targets.
+ * 2. Expose explicit cwd targets only when Launch and Planning physical roots differ.
  * 3. Keep each tab's initial cwd identity visible across local creation and restore.
  * 4. Host shell and configured-command creation flows without owning PTY path resolution.
  *
  * Original request (2026-07-16): "Terminal shows selected cwd/root identity in creation controls and tab labels."
+ * Owner same-root direction (2026-07-29): generic same-root creation implicitly remains Launch-owned.
  */
 import { Badge, CountBadge } from '@/components/badge'
 import {
@@ -217,7 +218,8 @@ export function TerminalPanel({ className }: { className?: string }) {
   const { shellProfiles, spawnCommands, defaultShellProfile } = useTerminalInvocationConfig()
   const cwdTargetState = useTerminalCwdTargetState()
   const [cwdTarget, setCwdTarget] = useState<TerminalCwdTarget>('launch-project')
-  const selectedCwdTarget = getTerminalCwdTargetOption(cwdTargetState, cwdTarget)
+  const effectiveCwdTarget = cwdTargetState.topology === 'collapsed' ? 'launch-project' : cwdTarget
+  const selectedCwdTarget = getTerminalCwdTargetOption(cwdTargetState, effectiveCwdTarget)
   const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null)
   const [selectedSpawnCommand, setSelectedSpawnCommand] = useState<TerminalSpawnCommand | null>(
     null
@@ -356,8 +358,8 @@ export function TerminalPanel({ className }: { className?: string }) {
 
   const handleCreateDefaultShell = useCallback(() => {
     if (!selectedCwdTarget.available) return
-    createShellSession(defaultShellProfile, { cwdTarget })
-  }, [createShellSession, cwdTarget, defaultShellProfile, selectedCwdTarget.available])
+    createShellSession(defaultShellProfile, { cwdTarget: effectiveCwdTarget })
+  }, [createShellSession, defaultShellProfile, effectiveCwdTarget, selectedCwdTarget.available])
 
   const handleOpenCreateMenu = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault()
@@ -376,7 +378,7 @@ export function TerminalPanel({ className }: { className?: string }) {
       icon: <Terminal className="h-3.5 w-3.5" />,
       disabled: !selectedCwdTarget.available,
       onSelect: () => {
-        createShellSession(shell, { cwdTarget })
+        createShellSession(shell, { cwdTarget: effectiveCwdTarget })
         setMenuAnchor(null)
       },
     }))
@@ -397,7 +399,13 @@ export function TerminalPanel({ className }: { className?: string }) {
         : []),
       ...commandItems,
     ]
-  }, [createShellSession, cwdTarget, selectedCwdTarget.available, shellProfiles, spawnCommands])
+  }, [
+    createShellSession,
+    effectiveCwdTarget,
+    selectedCwdTarget.available,
+    shellProfiles,
+    spawnCommands,
+  ])
 
   const addButton = (
     <button
@@ -524,7 +532,7 @@ export function TerminalPanel({ className }: { className?: string }) {
       <TerminalSpawnCommandDialog
         open={selectedSpawnCommand !== null}
         command={selectedSpawnCommand}
-        initialCwdTarget={cwdTarget}
+        initialCwdTarget={effectiveCwdTarget}
         onClose={() => setSelectedSpawnCommand(null)}
       />
     </div>

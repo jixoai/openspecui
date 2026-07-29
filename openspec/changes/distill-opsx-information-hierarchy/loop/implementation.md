@@ -324,6 +324,60 @@ scoped formatter check.
   successfully.
 - No merge, archive, or release occurred. Checkpoints 6.6 and 7.1 remain the Owner's visual acceptance boundary.
 
+## Same-Root Presentation Correction (2026-07-29)
+
+The follow-up keeps physical Root topology and configuration hygiene as independent facts:
+
+```text
+Root Context launch physical identity + CLI Planning path
+                         |
+                         v
+          collapsed | distinct | unresolved
+            |             |            |
+            v             v            v
+       omit duplicate   keep both    preserve uncertainty
+
+Doctor root_pointer_ignored -> Config warning + editable clear draft
+```
+
+- Core now retains `launchProject.physicalPath`, resolved through the existing physical-path owner, while keeping
+  the original Launch display/cwd path. The browser-safe hosted schema preserves this additive identity.
+- `selectRootTopology` is a pure Web selector. It reads only Launch/Planning identities and does not inspect Root
+  source, Store, diagnostics, References, Git, subscriptions, or action authority.
+- Dashboard omits its entire context band only for a ready collapsed Root with zero References, one settled Git
+  scope, and no Root/transport/Git failure. Refresh, References, distinct/resolving Planning Git, and failures
+  restore the band.
+- Generic Terminal creation hides the same-root cwd selector and sends `launch-project`. Workflow-locked creation
+  hides the same redundant selector but still sends `planning-root` plus the expected Root generation. The public
+  PTY target protocol and stale-generation guard are unchanged.
+- Project Binding reads `root_pointer_ignored` from Doctor diagnostics, presents it as a non-destructive warning,
+  and clears only the Store draft through the existing Save owner. Context keeps Root actions ready, exposes the
+  warning through a keyboard-reachable badge, and combines current same-root identity as `Project root`.
+- Failed Context attempts remain expanded; only current ready/refreshing same-root observations consolidate.
+
+### Focused same-root evidence
+
+```text
+Core Root/hosted contract unit             2 files / 12 tests passed
+Web topology/Dashboard/Terminal/Config/
+Context unit                               7 files / 81 tests passed
+Core + Web typecheck                       passed
+Focused lint                               0 warnings / 0 errors
+Focused Prettier check                     passed
+Strict OpenSpec validation                 passed
+git diff --check                           passed
+```
+
+The subsequent delivery gate also passed repository lint across 1,056 files, all 15 workspace typechecks, complete
+`test:ci`, and a clean SSG client/server build from absent `dist-ssg` and `.vite` outputs. SSG retained only the
+existing `scroll-button`, chunk-size, and ineffective dynamic-import warnings. Repository `format:check` inspected
+23 changed files and reported only the Owner's uncommitted `openspec/config.yaml`; all 22 delivery-owned files pass
+the scoped Prettier check.
+
+The Owner's uncommitted `openspec/config.yaml` supplied the real warning observation but was not modified, formatted,
+staged, or included. Automated evidence stops at unit/component boundaries; checkpoint 6.20 and final visual/browser
+acceptance remain open.
+
 ## Loopback Triggers
 
 - A required failure becomes reachable only by opening an Accordion or focusing a Tooltip.
