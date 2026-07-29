@@ -1,6 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Provide the canonical English product-site copy.
+ * 2. Keep launch guidance aligned with the local App daemon and explicit Direct Web contract.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  */
@@ -23,22 +24,22 @@ export const en = {
   nav: {
     home: 'Home',
     hooks: 'Hooks',
-    app: 'Hosted app',
+    app: 'Standalone PWA',
     github: 'GitHub',
   },
   hero: {
     title: 'Operate OpenSpec through a UI that stays close to the CLI.',
     summary:
       'OpenSpecUI gives OpenSpec projects a concrete dashboard, config surface, change workflow views, terminal tabs, and static export capabilities without hiding the underlying workflow.',
-    primaryCta: 'Open hosted app',
+    primaryCta: 'Open standalone PWA',
     secondaryCta: 'Read hooks docs',
     sidebarEyebrow: 'Default path',
-    sidebarTitle: 'PWA first, browser fallback',
+    sidebarTitle: 'One local App daemon',
     sidebarBody:
-      'Start the local backend, then launch the maintained app shell URL. Matching installed PWAs on the same deployment scope may take over.',
+      'Serve a project into the bundled same-version App shell. Native OpenTray is the default host; explicit Web mode uses the browser/PWA presenter.',
     badges: {
       live: 'Live mode',
-      hosted: 'Hosted app',
+      hosted: 'App daemon',
       static: 'Static export',
     },
   },
@@ -49,13 +50,14 @@ export const en = {
     runnerLabel: 'Runner',
     appToggleLabel: 'App mode',
     appToggleSummary:
-      'Launch the app shell instead of a local web bundle. Matching installed PWAs on the same deployment scope may be reused by the browser.',
+      'Choose the local App daemon for Workspaces, or Direct Web for one explicit browser surface.',
     appToggleEnabled: 'On',
     appToggleDisabled: 'Off',
     runLabel: 'Run OpenSpec UI',
     appOnSummary:
-      'Start the local backend and launch the app shell URL. Browsers may route that same-scope URL into an installed PWA; otherwise it stays in a browser tab.',
-    appOffSummary: 'Start the local backend and serve the local web UI from this machine.',
+      'Start the project backend, ensure the local App daemon is running, and attach the project as a Workspace.',
+    appOffSummary:
+      'Start the project backend and explicitly open Direct Project Web. A running daemon also retains the Workspace.',
     exportLabel: 'Static export',
     exportSummary: 'Generate a deployable snapshot for docs hosting or offline review.',
     compatibility:
@@ -70,8 +72,8 @@ export const en = {
         body: 'Best for editing specs, reviewing changes, working with terminals, and watching project state reactively.',
       },
       {
-        title: 'Hosted app mode',
-        body: 'Best when you want one maintained shell deployment, multiple local backends, and optional PWA reuse on that same hosted scope.',
+        title: 'App daemon mode',
+        body: 'Best for keeping multiple project Workspaces in one retained OpenTray or Browser/PWA App shell.',
       },
       {
         title: 'Static export',
@@ -81,10 +83,11 @@ export const en = {
   },
   links: {
     title: 'Go deeper',
-    summary: 'Start with the app, then follow the upstream workflow and source repository.',
+    summary:
+      'Start locally, then follow the upstream workflow, standalone PWA, and source repository.',
     appTitle: 'app.openspecui.com',
     appBody:
-      'Hosted app shell that opens backend-owned OpenSpecUI pages, with browser-managed PWA capture on the same deployment scope.',
+      'Optional standalone browser/PWA deployment. CLI App mode uses its own bundled local shell instead.',
     openspecTitle: 'openspec.dev',
     openspecBody: 'Official OpenSpec project site and workflow reference.',
     githubTitle: 'GitHub',

@@ -10,6 +10,7 @@
     "src/app-admission-prompt.test.ts",
     "src/browser-daemon-host.test.ts",
     "src/cli-command.test.ts",
+    "src/cli-documentation.test.ts",
     "src/cli-execution.test.ts",
     "src/daemon-paths.test.ts",
     "src/daemon-controller.test.ts",

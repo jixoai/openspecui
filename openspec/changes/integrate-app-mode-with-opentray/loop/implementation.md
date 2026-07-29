@@ -12,7 +12,7 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 
 ```text
 Research and owner decisions     complete
-Implementation checkpoints       2-7 complete; checkpoint 8 next
+Implementation checkpoints       2-8 complete; checkpoint 9 next
 Production code                  daemon, leases, App control, presenters, Workspaces chrome complete
 Focused automated evidence       complete through App chrome/component-browser boundary
 Owner browser/native acceptance  not started
@@ -22,7 +22,7 @@ PR delivery                      not started
 
 - Approved execution source: `loop/research-plan.md`.
 - Current branch: `feat/opentray-app-mode`.
-- Current implementation boundary: checkpoint 7 is complete at the Workspaces, open-by-id, exclusive titlebar-owner, and basic Chromium component boundary; checkpoint 8 specs/docs/package contracts are next.
+- Current implementation boundary: checkpoint 8 is complete at the main-spec, public documentation, parser-backed command-example, and Changeset boundary; checkpoint 9 integrated verification is next.
 - The existing user modification in `openspec/config.yaml` is outside this Change and must not be rewritten or included accidentally.
 - Each checkpoint must update this file with the exact production owner, focused red/green evidence, changed package surface, verification result, and any accepted residual risk before it can close.
 - Full repository gates remain deferred until all focused checkpoint evidence is accepted. Final Browser/PWA and OpenTray native-window walkthrough remains Owner-only.
@@ -94,6 +94,17 @@ PR delivery                      not started
 - Browser-lane correction: the first complete App run correctly rejected the new `.browser.test.tsx` fixture from the default fork pool. `vitest.config.ts` now excludes browser fixtures and `vitest.browser.config.ts` owns them explicitly; both complete Node and Playwright lanes pass after the correction.
 - Existing-suite observation: one complete App run timed out in the unchanged simultaneous guarded-locator WebSocket test while waiting for its B ledger. The exact test then passed (1 passed / 1 skipped), and an immediate serial complete rerun passed 36 files / 225 tests. No production or timeout constant was changed for that non-deterministic observation.
 - Residual boundary: automated evidence is preparation only. Browser/PWA and native OpenTray overlay, frame, hit-region, focus, and visual acceptance remain Owner-only at checkpoint 10.
+
+### Checkpoint 8 implementation result (2026-07-30 Asia/Shanghai)
+
+- Production contract owners: `openspec/specs/cli-commands/spec.md` now defines foreground `serve`, daemon-only `start|stop|restart`, TTY admission, explicit `--app`/`--web`, `--no-open`, and immutable host mode. `openspec/specs/hosted-app-distribution/spec.md` now defines the same-version bundled shell, Workspaces, daemon Push -> Pull control, opaque-id browser opening, retained OpenTray presentation, and exclusive titlebar geometry. Settings remains free of App-shell location ownership through `opsx-ui-views`.
+- Deleted public contracts: current README/package/website guidance no longer offers a URL-valued App flag, project App-shell location setting, or independently deployed PWA as the CLI's runtime target. Historical archived Specs and versioned legacy READMEs remain unchanged. `app.openspecui.com` remains an optional manually addressed standalone Browser/PWA deployment, not a daemon dependency.
+- Public command story: English and Chinese root READMEs cover bare and explicit `serve`, project ownership, TTY/non-TTY behavior, `--app`, `--web`, `--no-open`, Workspaces, Open in browser, daemon-only lifecycle commands, and exact restart guidance. The package App README distinguishes the bundled primary runtime from optional static deployment. The website toggle now emits explicit `--app` or `--web`; disabling App mode no longer emits the ambiguous bare command.
+- Parser evidence: `cli-documentation.test.ts` reads both current root READMEs and invokes the production `parseCliCommand` for 12 documented forms. Its initial red found that `serve --no-open` was described but not published as a complete copyable command; both READMEs were corrected. The final focused CLI run passed 2 files / 7 tests, and the complete CLI run reached 23 files / 111 tests with only that intentional initial red before correction.
+- Website evidence: Website Vitest passed 7 files / 15 tests. `svelte-check` passed with zero errors and warnings. The updated component test directly proves the disabled App toggle emits `pnpx openspecui@latest --web`.
+- Spec and package evidence: strict main-spec validation passed 18/18 Specs, including all three changed capabilities. The generic standard-change validator still rejects this repo-local `opsx-collab-pr-loop` Change because it has no standard `specs/` delta directory; this is a schema mismatch, not a failed main Spec, and no duplicate delta was fabricated. A minor Changeset covers `openspecui`, `@openspecui/core`, `@openspecui/server`, and `@openspecui/web`; the private App workspace is not publishable.
+- Quality evidence: CLI and Website typechecks passed. Focused Oxlint reported zero errors/warnings. Changed-file `format:check` and `git diff --check` passed. The repository Prettier CLI has no standalone Svelte parser, while the repository format checker accepts the file and Svelte's own checked lane is green.
+- Residual boundary: package-impact status from Changesets compares committed history and cannot account for an uncommitted Changeset; it is deferred to checkpoint 9 after this independent commit. No release, final Browser/PWA walkthrough, or native OpenTray visual acceptance is claimed.
 
 ## Decisions Taken
 

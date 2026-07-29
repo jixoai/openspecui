@@ -1,3 +1,12 @@
+<!--
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+1. Document the current OpenSpec compatibility and project workflow.
+2. Document serve, App-daemon, Direct Web, and static-export commands.
+3. Document project hooks without hiding OpenSpec CLI authority.
+
+Original request (2026-07-29): "补充 openspecui --web == openspecui serve --web；README 文档需要补充这些命令的介绍。"
+-->
+
 # OpenSpec UI
 
 [English](./README.md) | [中文](./README-zh.md)
@@ -38,7 +47,7 @@ npm install -g openspecui
 openspecui
 ```
 
-Default URL: `http://localhost:3100`.
+Direct Project Web defaults to `http://localhost:3100` when that presentation is selected.
 
 ## OpenSpec CLI Compatibility
 
@@ -56,13 +65,46 @@ npm install -g @fission-ai/openspec@latest
 
 ## Common Flows
 
-### Start server
+### Serve a project
 
 ```bash
 openspecui
 openspecui ./my-project
+openspecui serve ./my-project
 openspecui --port 3200
 ```
+
+The bare command is an alias for `serve`. Each `serve` process owns its project Server. If an App
+daemon is already running, the project is added to its **Workspaces**. Otherwise an interactive
+terminal asks `Start OpenSpecUI App? [Y/n]`; non-interactive execution opens Direct Project Web.
+
+### App daemon and explicit presentation
+
+```bash
+# Serve this project through the local App daemon (native OpenTray by default)
+openspecui --app
+openspecui serve --app
+
+# Open Direct Project Web; also attach to an already-running daemon
+openspecui --web
+openspecui serve --web
+openspecui serve --no-open
+
+# Manage only the user-level App daemon, never project Servers
+openspecui start
+openspecui start --web
+openspecui stop
+openspecui restart
+openspecui restart --web
+```
+
+Daemon host mode is fixed at startup: native uses a retained OpenTray window; `--web` uses the
+Browser/PWA host. If a repeated `start` explicitly requests another mode, use the exact `restart`
+command reported by the CLI. `serve --no-open` performs no prompt, daemon start, Workspace
+registration, or Browser opening. URL-valued App mode and project-level shell-location settings are
+no longer supported; the daemon serves the App shell bundled with the same CLI release. Every
+Workspace tab can ask the daemon to open its current backend in the system browser without exposing
+the backend URL as page-controlled input.
 
 ### Static export
 

@@ -1,6 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Verify the website launch controls and current compatibility guidance.
+ * 2. Prove App and Direct Web choices emit explicit production CLI modes.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  */
@@ -31,7 +32,7 @@ describe('HomePage', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'App mode' }))
 
-    expect(screen.getByText('pnpx openspecui@latest')).toBeVisible()
+    expect(screen.getByText('pnpx openspecui@latest --web')).toBeVisible()
     expect(screen.getAllByText('pnpx openspecui@latest --app')).toHaveLength(1)
     expect(screen.getByText('pnpx openspecui@latest export -o ./dist')).toBeVisible()
   })

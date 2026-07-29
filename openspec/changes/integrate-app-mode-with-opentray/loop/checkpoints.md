@@ -98,13 +98,13 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 
 ## 8. Specifications, Documentation, and Package Contract
 
-- [ ] 8.1 Update main OpenSpec CLI-command and hosted-App requirements for daemon/serve ownership, local App shell, Workspaces, and OpenTray presentation.
-- [ ] 8.2 Remove obsolete OpenSpec requirements for configurable/self-hosted App launch from the local CLI while preserving objective historical records in archives.
-- [ ] 8.3 Rewrite README command documentation for `serve`, bare aliases, `start|stop|restart`, prompt/non-TTY behavior, daemon mode mismatch, `--app`, `--web`, Workspaces, and Open in browser.
-- [ ] 8.4 Update CLI help, package App README, website launch examples, Settings copy, and localized terminology so they match the production parser exactly.
-- [ ] 8.5 Add Changesets for every affected publishable package; do not publish 6.1.x in this Change.
-- [ ] 8.6 Run strict OpenSpec validation and tests that compare documented command examples against parser behavior.
-- [ ] 8.7 Update `implementation.md` with deleted public contracts, package impact, and residual limitations; commit this checkpoint.
+- [x] 8.1 Update main OpenSpec CLI-command and hosted-App requirements for daemon/serve ownership, local App shell, Workspaces, and OpenTray presentation.
+- [x] 8.2 Remove obsolete OpenSpec requirements for configurable/self-hosted App launch from the local CLI while preserving objective historical records in archives.
+- [x] 8.3 Rewrite README command documentation for `serve`, bare aliases, `start|stop|restart`, prompt/non-TTY behavior, daemon mode mismatch, `--app`, `--web`, Workspaces, and Open in browser.
+- [x] 8.4 Update CLI help, package App README, website launch examples, Settings copy, and localized terminology so they match the production parser exactly.
+- [x] 8.5 Add Changesets for every affected publishable package; do not publish 6.1.x in this Change.
+- [x] 8.6 Run strict OpenSpec validation and tests that compare documented command examples against parser behavior.
+- [x] 8.7 Update `implementation.md` with deleted public contracts, package impact, and residual limitations; commit this checkpoint.
 
 ## 9. Integrated Automated Verification
 
