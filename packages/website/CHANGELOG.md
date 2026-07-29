@@ -1,5 +1,7 @@
 # @openspecui/website
 
+## 6.0.0
+
 ## 6.0.0-beta.1
 
 ## 6.0.0-beta.0

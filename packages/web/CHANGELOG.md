@@ -1,5 +1,287 @@
 # @openspecui/web
 
+## 6.0.0
+
+### Major Changes
+
+- ccd72af: Migrate Dashboard Summary live delivery to a version-2 data-free invalidation
+  and identity/generation-correlated retained/current pull contract, and unify
+  Web realtime loading, revalidation, and command-activity presentation.
+
+  The Summary subscription no longer publishes business snapshot payloads. The
+  Server issues an opaque identity, work generation, and cause; the Web adapter
+  pulls the retained or current Summary and accepts it only when it still matches
+  the active wake-up. Fresh browser Documents can render bounded Server-retained
+  data as display-only while matching current work converges. Web routes retain
+  readable content during revalidation, use stable local skeleton geometry for
+  first loads, and preserve command labels while actions are pending. Trends,
+  Git, and Changes retain their existing transport contracts.
+
+  Live Project Web now settles protected health admission before importing its
+  ordinary transports, while clean static export resolves the hashed SSG server
+  entry through Vite's manifest. Authentication rejection becomes an explicit
+  terminal document instead of an indefinite loading/retry loop.
+
+  Effective OpenSpec data-home observation now settles initially missing Store,
+  Workset, and Schema targets from bounded ancestor creation events without
+  introducing generic missing-path polling.
+
+  CLI startup now emits a host-neutral Direct Web or hosted App presentation
+  request. The Browser adapter owns private URL materialization today, while a
+  future native host can present the same backend intent without impersonating a
+  browser opener. Successfully forwarded browser and PWA launch sources retire
+  best-effort so the existing App surface can remain foreground.
+
+  Static export now generates a publication-safe Context route from redacted
+  snapshot root and Reference-policy metadata, without synthesizing live CLI or
+  environment evidence. Shared list skeletons use an explicit physical row
+  separator across Web and App loading surfaces. Static document bootstrap data,
+  base paths, and titles now cross a context-aware HTML encoding boundary so
+  source previews cannot escape into visible or executable document markup.
+
+- 8b81f7d: Target the OpenSpec CLI 1.6.x line with OpenSpecUI 6.x.
+
+  OpenSpecUI keeps the strict major-to-minor version law: OpenSpecUI 6.x targets
+  OpenSpec CLI 1.6.x, accepts 1.5.x as the immediately previous legacy-compatible
+  line, and rejects older or forward CLI lines by default.
+  - Preserve typed CLI JSON, stdout, stderr, diagnostics, resolved root provenance,
+    and exit status for workflow, Store, Context, Doctor, validate, and archive
+    commands.
+  - Complete the 1.6 workflow/tool contract with `update`, the 1.4 `sync` baseline,
+    Oh My Pi, and Trae command delivery.
+  - Follow strict validate/archive failures without implicit validation bypass or
+    synthesized scenario merges.
+  - Preserve empty healthy Stores and multiline Requirement bodies according to
+    the pinned OpenSpec 1.6 contracts.
+  - Add one typed, reactive Root Context contract across Core, Server, and Web for
+    launch-project, CLI-selected planning-root, Reference, command-evidence, and
+    inherited data-scope facts.
+  - Bind project document, OPSX, search, dashboard, and preview services to the
+    CLI-selected planning root instead of the launch directory.
+  - Preserve one typed workflow target and command-specific Status/Instructions
+    evidence through hooks, Server, tRPC, and Web Compose, including explicit
+    Store selectors, resolved artifact outputs, action context, References, and
+    process diagnostics.
+  - Bind Agent prompts to the CLI-selected planning root and raw CLI-resolved
+    paths, explicitly prohibit launch-project path reconstruction, and retain the
+    same Store selector across OPSX command and direct CLI modes.
+  - Replace workflow hook v1 with root-explicit `OnRunWorkflowHookV2`; document
+    hooks remain independently versioned at v1 and no workflow compatibility
+    alias is retained.
+  - Lock root-dependent Compose, Propose, New, Verify, Change, terminal dispatch,
+    and Archive actions during Root Context loading, refresh, and failure while
+    preserving CLI-owned failed-attempt evidence.
+  - Separate OpenSpec configuration contracts into launch-project Project
+    Binding, CLI-selected Active Root Config, and Environment Global Config;
+    remove the ambiguous project/global config RPC aliases.
+  - Add explicit Code and distinct Planning Git repository scopes across status,
+    history, detail, patch, refresh, worktree removal, handoff, URLs, and cache
+    keys. Repository identity uses canonical worktree top-level and common-dir
+    facts, so nested roots in one worktree do not create a false second scope.
+  - Require every terminal creation to select Launch Project or current Planning
+    Root, resolve absolute cwd only on the backend, preserve cwd identity across
+    reconnect/restore, inherit the same backend environment for both targets, and
+    reveal a successfully created Agent session in the area that owns Terminal.
+  - Bound each PTY WebSocket client's output backlog and reconnect replay without
+    terminating the Server-owned process, and coalesce browser output-activity
+    projection updates so Agent output cannot starve the backend or React shell.
+  - Spawn configured Agents directly from their executable and argument vector,
+    and route Unix PTY input through an ordered, byte-bounded asynchronous file
+    descriptor writer so canonical-line backpressure cannot starve the Server;
+    Windows retains the native ConPTY writer.
+  - Stamp Planning terminals with immutable Root generation provenance, keep Launch
+    Agent PTYs valid Send targets, and route both through acknowledged,
+    Server-revalidated workflow input.
+  - Preserve the launch process OpenSpec data scope without project `.env`,
+    `StoreRoot`, synthesized registry, registry overlay, or project configuration
+    fields that could redirect `XDG_DATA_HOME`.
+  - Route Spec, Change, task, archive, entity, artifact, schema, and active-config
+    writes through one physical/reactive owner under the selected planning root.
+    Reject lexical and observed symlink escapes, write disk before settling
+    reactive file/directory state, and return only after subscribed projections
+    can observe OpenSpecUI-owned writes.
+  - Replace the single-project watcher pool with runtime-environment-owned,
+    reference-counted dynamic observation roots. Existing reactive reads rebind
+    when matching roots appear, overlapping roots choose the deepest owner, and
+    Launch/Planning leases release deterministically during service teardown.
+  - Observe the effective inherited OpenSpec data home and emit identity-only
+    invalidation generations for Store, Workset, schema, and Context facets;
+    affected subscriptions pull fresh CLI projections instead of receiving a
+    competing copy of data-home truth.
+  - Reconcile registered Store observation roots from successful typed
+    `store list --json` results, acquiring, moving, and releasing leases as CLI
+    truth changes while preserving the prior observed set on command failure.
+  - Map normalized Launch and connected Planning root changes to identity-only
+    project/context invalidations through one environment-local index, sharing
+    registrations for the same canonical root and releasing them on teardown.
+  - Invalidate server-owned OpenSpec mutation facets before buffered or streamed
+    terminal/indeterminate outcomes reach clients, while leaving read-only and
+    unknown commands free from inferred mutation claims.
+  - Expose identity-only runtime invalidation pushes and make Store clients pull
+    fresh CLI projections explicitly instead of receiving Store data in push
+    frames.
+  - Generalize Root Context, Store, Environment Global, OPSX, and Spec projections
+    onto one lifecycle-only Push plus typed Pull contract. Retain settled CLI data
+    as display-only during replacement, keep failed Work dependencies live for
+    automatic recovery, and observe Environment Global config through the exact
+    CLI-resolved XDG config path rather than unrelated project/data-home facets.
+  - Coalesce duplicate invalidation pushes to each facet's latest generation and
+    prevent slower stale Store pulls from replacing newer CLI projections.
+  - Remove Store polling from healthy subscriptions and retain one bounded
+    backend-owned fallback only for data-home, Store-root, or watcher observation
+    gaps.
+  - Make reactive runtime teardown idempotent and asynchronous so fallback checks,
+    Store/Planning/data-home leases, path subscriptions, and physical watcher
+    roots are fully released.
+  - Map external registered-Store edits to Store/Context invalidation and prove
+    two-client convergence across registry edits, concurrent settlements,
+    reconnect, and root disappearance.
+  - Replace generic task progress with formal tracked-artifact progress, grouped
+    schema-document checklist analytics, and attributed Apply instruction
+    progress. Tracked globs follow OpenSpec 1.6 selection/fallback semantics,
+    `0/0` remains `no-tasks`, and divergent Apply counts stay visible without
+    normalization. Every formal task retains its exact source file and file-local
+    checkbox index so guarded mutations update the tracked artifact rather than a
+    fixed `tasks.md`. Task writes use reactive file state, immediately refresh
+    subscribed projections, and lock the active task control until settlement.
+  - Replace bare Spec ids and RPCs with one Core-owned compound identity and
+    source-aware Catalog/Document contract. Enumerate every Doctor-declared
+    direct Reference through typed per-Store Spec list commands, retain partial
+    failure evidence, and keep detail CLI-backed and read-only; routes, search
+    records, caches, View Transitions, static providers, and SSG enumeration
+    preserve full source identity.
+  - Attribute Dashboard planning metrics to the CLI-selected root, expose its
+    source, Store, and direct Reference evidence, and keep the Code Git snapshot
+    distinct from an optional Planning repository. Workflow completion no longer
+    implies archive readiness.
+  - Keep the active Change list writable-Planning-root-only and derive its state
+    from the full formal tracked-task phase, including an explicit `no-tasks`
+    presentation that cannot become workflow or archive completion.
+  - Preserve typed CLI Status/Instructions paths, action context, References, and
+    explicit Store selection on Change detail. Archive now uses one Server-owned
+    Root Context selection for strict validation and archive, retains multiline
+    diagnostics, and never starts a synthesized validation-bypass retry. The
+    legacy direct filesystem rename endpoint is removed so no public Archive path
+    bypasses CLI evidence.
+  - Replace generic `cli.execute` / arbitrary-command streaming RPCs with
+    dedicated buffered and streamed OpenSpec argv procedures. Both reject Archive
+    before `CliExecutor` starts, fixed global installation has its own route, and
+    `archiveStrictStream` remains the only public application Archive mutation.
+  - Serialize Planning-root replacement around one active service record. Root
+    changes and disappearance retire obsolete watcher/invalidation leases,
+    Kernel, hooks, Search, Dashboard, and preview state before callers observe a
+    completed transition; final backend disposal remains idempotent.
+  - Own every streamed CLI child through one settlement-aware handle. Cancellation
+    requests SIGTERM, escalates to SIGKILL after a bounded grace period, and keeps
+    the Planning-root lease until child close; backend disposal actively cancels
+    attached streams and awaits settlement without depending on client detach.
+  - Make each Web CLI queue item one exhaustive typed transport that derives its
+    logical preview and subscription together, then replaces the preview with the
+    backend-emitted effective command instead of accepting caller-authored argv as
+    a second display truth.
+  - Reject non-canonical filesystem-backed Spec and Change ids through one shared
+    Core/Server guard before any read or mutation can escape its entity root.
+    Entity-relative file and glob paths use the same boundary before OPSX queries,
+    subscriptions, watcher dependencies, previews, or writes touch the filesystem.
+  - Default the Spec Catalog to writable Owned entries and place direct
+    Referenced Specs in a Store-grouped, visibly read-only sibling view while
+    retaining compound routes for duplicate ids.
+  - Scope live project Search to Active root by default and expose direct
+    Referenced Specs through an explicit sibling scope. Shared engines filter
+    source before scoring and limit, while Store-qualified live hits preserve
+    compound identity. Current static snapshots remain Owned-only, so static
+    Referenced Search is neutral-empty until the explicit 7.x export policy.
+  - Make Settings a read-only projection of Root Context and Environment Global
+    diagnostics, with launch-project tool detection and initialization state kept
+    current through generation-safe reactive subscriptions.
+
+- cdb2cb5: Static export now supports direct OpenSpec References and publication privacy.
+
+  `ExportSnapshot.meta` is root-aware and privacy-safe: it carries `observedAt`,
+  `projectName`, CLI-resolved `root` provenance, and `referencePolicy`. The absolute
+  `meta.projectDir` is removed. `specs[].identity` is the compound `SpecIdentity`
+  union (owned | referenced) so exported referenced Specs keep `(storeId, specId)`
+  identity across routes, search, and the static catalog.
+
+  `openspecui export` gains `--references <include|omit>`, required when the planning
+  root declares effective References. `include` materializes direct Reference Specs
+  through official `list --specs --store --json` / `show --type spec --store --json`
+  (complete-or-fail, never transitive); `omit` records an explicit omission state.
+  A single publication redaction boundary strips absolute paths, host identity, and
+  gates the Git remote behind the explicit include policy.
+
+  Referenced Specs hydrate in the static provider/search/SSG under their compound
+  routes (`/specs/referenced/<storeId>/<specId>`), scoped to `referenced-specs`
+  search, with an explicit omission error when absent.
+
+### Minor Changes
+
+- 5def094: Add an objective Kanban projection over exact tracked-task phases and structural archives.
+
+  Core and Server now expose exact phase counts plus bounded recent archive summaries through the shared Dashboard Summary contract. Web adds an interactive `/board`, replaces Dashboard Workflow Progress with the callback-free `ReadonlyKanban`, and publishes the same readonly Board in static exports. The readonly projection uses its own container to select four, two, or one columns without horizontal scrolling. The live Board contains page overflow, uses one horizontal lane-grid scrollbar, and lets each lane body scroll vertically on its own. Apply and Archive remain explicit existing Operator flows; drag-to-archive only opens Archive, and stale Root or projection data cannot authorize commands.
+
+- 731f684: Complete the three ownership-specific Config surfaces.
+  - Keep Project Binding limited to launch-project Store and Reference declarations while showing direct observed Reference diagnostics.
+  - Settle Project Binding mutations after the launch write with detached preview and transition evidence; let the live Root Context subscription perform and expose asynchronous convergence without relabeling the preview as current.
+  - Make Active Root Config distinguish file presence from content, state shared Store consequences, and lock stale root mutations through the shared readiness gate.
+  - Keep Environment Global Config environment-scoped, refresh profile and drift through one reactive projection, preserve raw CLI evidence, and gate typed Update execution on a ready Planning root.
+
+- ca75f35: Add OpenSpec CLI 1.6 frontend foundations: a live project Context view, compound Spec routes, and task/Spec-catalog type contracts.
+
+  This began as a frontend-first skeleton for the OpenSpecUI 6.x / OpenSpec CLI
+  1.6 line. The project Context view now consumes the shared Core/Server Root
+  Context subscription, and the three task projections have migrated to the
+  shared Core contract. The source-aware Spec Catalog now uses one Core identity
+  contract across Server, Web, Search, View Transitions, and static providers.
+  - **Project Context view** (`/context`): replaces the project Stores panel and
+    removes the project `/stores` route, navigation entry, and presentation-only
+    subscription. It provides root/Reference/registry read-only diagnostics and uses neutral
+    "observed references" / "no reference currently observed" copy — never claims
+    machine-wide completeness.
+  - **Global Root Context identity** (6.1): desktop and mobile shells display the
+    launch project and active planning root independently, preserve stale/error
+    status, and link to on-demand Context members plus raw Doctor/Context command
+    evidence without introducing a browser-owned root switcher.
+  - **Compound Spec identity & routes** (5.7–5.9): adds `/specs/owned/$specId` and
+    `/specs/referenced/$storeId/$specId`. `specId` is no longer treated as globally
+    unique; routes/cache/search preserve full identity. The legacy
+    `/specs/$specId` route and bare-id RPC contracts are removed without aliases.
+  - **Source-aware catalog and detail** (5.8–5.11): combines planning-root Owned
+    metadata with direct Root Context References, reads referenced detail through
+    `openspec show --store`, preserves command evidence, and renders References as
+    visibly read-only without synthesizing missing Requirement fields.
+  - **Task projection contracts** (5.1–5.6): uses Core `TrackedTaskProgress`
+    (workflow truth, `0/0` → `no-tasks` never `complete`),
+    `DocumentChecklistSummary` (secondary analytics, never drives readiness), and
+    `ApplyInstructionProgress` (raw Apply result with visible divergence). No
+    compatibility alias for the generic `progress` field.
+
+  Note: this web changeset covers the published package. The accompanying
+  `@openspecui/app` changes (App router, Home/Connections, Environment Center, and
+  the experimental Store Manager Inspector/Context-Matrix/Inventory skeleton) are
+  in the private `@openspecui/app` package and therefore do not require a
+  publishable changeset.
+
+### Patch Changes
+
+- 95bc2b9: Accelerate live Dashboard and Changes projections with server-owned bounded Work,
+  current/stale snapshot delivery, progressive Change rows, and demand-driven OPSX
+  Status. Dashboard now admits first-screen Summary before secondary projections,
+  and Changes renders its first row before aggregate workflow Status starts.
+- e49ff53: Restore an OPSX-first information hierarchy across the Web interface. Root, Store, Reference,
+  schema, source, and CLI provenance now use keyboard-accessible badges and collapsed evidence
+  disclosures where they do not affect the current decision, while actions, stale authority,
+  blockers, and failures remain directly visible.
+
+  Root Context now carries the canonical physical Launch identity used to collapse redundant
+  same-root presentation without changing CLI or PTY ownership.
+
+  Terminal chrome now scopes neutral text, surfaces, and borders to the active Terminal palette,
+  preserving accessible contrast when the application and Terminal themes differ.
+
+  Config now owns the canonical Resolved Context entry at `/config/context`. Live, static, Settings,
+  Dashboard, and notification entry points share that route while root authority and failures remain direct.
+
 ## 6.0.0-beta.1
 
 ### Minor Changes
