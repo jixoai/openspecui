@@ -2,8 +2,10 @@
  * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
  * 1. Isolate the Web facade import from the Native facade-plus-WebView import boundary.
  * 2. Adapt OpenTray public handles into the narrow lifecycle ports consumed by the App presenter.
+ * 3. Apply one screen-center placement through the Native-only WebView facade.
  *
  * Original request (2026-07-29): "--web 这个模式只在最开始 start 的时候定好。"
+ * Original request (2026-07-30): "初始使用placement center的窗口位置。"
  */
 import type { WebviewWindowHandle, WebviewWindowOptions } from '@opentray/ext-webview'
 import type {
@@ -23,6 +25,7 @@ export interface PresenterTray {
 
 export interface PresenterWindow {
   show(): Promise<void>
+  placeAtScreenCenter(size: { width: number; height: number }): Promise<void>
   close(): Promise<void>
   destroy(): Promise<void>
   focus(): Promise<void>
@@ -58,9 +61,13 @@ function adaptTray(tray: CreateTrayHandle): PresenterTray {
   }
 }
 
-function adaptWindow(window: WebviewWindowHandle): PresenterWindow {
+function adaptWindow(
+  window: WebviewWindowHandle,
+  placeAtScreenCenter: PresenterWindow['placeAtScreenCenter']
+): PresenterWindow {
   return {
     show: () => window.show(),
+    placeAtScreenCenter,
     close: () => window.close(),
     destroy: () => window.destroy(),
     focus: () => window.focus(),
@@ -78,7 +85,7 @@ export const productionOpenTrayPresenterDriver: OpenTrayPresenterDriver = {
     return adaptTray(await createTray(options.tray, options.runtime))
   },
   async createNative(options) {
-    const [{ createTray }, { WebviewExt }] = await Promise.all([
+    const [{ createTray }, { WebviewExt, WebviewPlacementKit }] = await Promise.all([
       import('opentray'),
       import('@opentray/ext-webview'),
     ])
@@ -86,9 +93,17 @@ export const productionOpenTrayPresenterDriver: OpenTrayPresenterDriver = {
     try {
       tray = await createTray(options.tray, options.runtime)
       const nativeTray = tray.extend(WebviewExt)
+      const nativeWindow = nativeTray.createWebviewWindow(options.window)
+      const placement = new WebviewPlacementKit({ screen: nativeTray })
       return {
         tray: adaptTray(nativeTray),
-        window: adaptWindow(nativeTray.createWebviewWindow(options.window)),
+        window: adaptWindow(nativeWindow, async (size) => {
+          await placement.applyOnce(nativeWindow, {
+            placement: 'screen-center',
+            width: size.width,
+            height: size.height,
+          })
+        }),
       }
     } catch (error) {
       try {

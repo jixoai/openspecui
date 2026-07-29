@@ -10,19 +10,18 @@
   --app-titlebar-height: 0px;
 }
 
-.hosted-shell-root:is(
-  [data-titlebar-presentation='pwa-overlay'],
-  [data-titlebar-presentation='opentray']
-) {
-  background-color: var(--terminal);
-}
-
 .app-titlebar {
+  position: relative;
+  z-index: 30;
   display: flex;
   min-width: 0;
-  min-height: max(2.25rem, calc(var(--app-titlebar-top) + var(--app-titlebar-height)));
+  min-height: max(2.5rem, calc(var(--app-titlebar-top) + var(--app-titlebar-height)));
   flex-shrink: 0;
   align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  background-color: color-mix(in srgb, var(--background) 92%, var(--muted));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
+  color: var(--foreground);
   padding-block-start: var(--app-titlebar-top);
   padding-inline-start: var(--app-titlebar-left);
   padding-inline-end: var(--app-titlebar-right);
@@ -37,11 +36,51 @@
 }
 
 .app-titlebar-brand {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
   padding-inline: 0.75rem;
   font-size: 0.6875rem;
-  letter-spacing: 0.14em;
+  font-weight: 600;
+  letter-spacing: 0;
   text-transform: uppercase;
+  color: color-mix(in srgb, var(--foreground) 76%, transparent);
+}
+
+.app-titlebar-content {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: space-between;
   pointer-events: none;
+}
+
+.app-titlebar-mark {
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  background-color: color-mix(in srgb, var(--muted) 82%, transparent);
+  color: color-mix(in srgb, var(--foreground) 82%, transparent);
+}
+
+.app-titlebar-drag-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+  padding-inline: 0.875rem;
+}
+
+.app-titlebar-drag-cue span {
+  width: 0.1875rem;
+  height: 0.1875rem;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--foreground) 32%, transparent);
 }
 
 .hosted-shell-root .hosted-shell-tabs .tabs-button {

@@ -4,11 +4,13 @@
  * 2. Prove hide-versus-destroy semantics and exact final teardown order.
  * 3. Prove Web import isolation, platform selection, and native fallback truth.
  * 4. Prove native page authority is bound to the exact loopback App origin.
+ * 5. Prove initial screen-center placement follows first show and never replays on activation.
  *
- * Compromise: these four assertion groups share one checked driver fixture because splitting the
+ * Compromise: these five assertion groups share one checked driver fixture because splitting the
  * fixture would duplicate the same retained-window state-machine seam and weaken mutation evidence.
  *
  * Original request (2026-07-29): "多次执行 openspecui --app 只是在激活同一个 daemon。"
+ * Original request (2026-07-30): "初始使用placement center的窗口位置。"
  */
 import { describe, expect, it, vi } from 'vitest'
 import type { LocalAppServer } from './local-app-server.js'
@@ -21,7 +23,12 @@ type NativeCreateOptions = Parameters<OpenTrayPresenterDriver['createNative']>[0
 type WebCreateOptions = Parameters<OpenTrayPresenterDriver['createWebTray']>[0]
 
 function createFixture(
-  options: { nativeFailure?: boolean; showFailure?: boolean; webFailure?: boolean } = {}
+  options: {
+    nativeFailure?: boolean
+    placementFailure?: boolean
+    showFailure?: boolean
+    webFailure?: boolean
+  } = {}
 ) {
   const events: string[] = []
   const nativeCalls: NativeCreateOptions[] = []
@@ -46,6 +53,10 @@ function createFixture(
     show: vi.fn(async () => {
       events.push('show')
       if (options.showFailure) throw new Error('native show fixture failure')
+    }),
+    placeAtScreenCenter: vi.fn(async () => {
+      events.push('screen-center')
+      if (options.placementFailure) throw new Error('native placement fixture failure')
     }),
     close: vi.fn(async () => {
       visible = false
@@ -150,12 +161,44 @@ describe('OpenTray daemon presenter', () => {
     )
     expect(JSON.stringify(fixture.nativeCalls[0])).not.toContain('"*"')
     expect(fixture.window.show).toHaveBeenCalledOnce()
+    expect(fixture.window.placeAtScreenCenter).toHaveBeenCalledExactlyOnceWith({
+      width: 1280,
+      height: 840,
+    })
+    expect(fixture.events.slice(0, 2)).toEqual(['show', 'screen-center'])
 
     fixture.events.length = 0
     await resolution.host.activate()
     await resolution.host.activate()
     expect(fixture.events).toEqual(['toVisible', 'focus', 'toVisible', 'focus'])
     expect(fixture.window.show).toHaveBeenCalledOnce()
+    expect(fixture.window.placeAtScreenCenter).toHaveBeenCalledOnce()
+  })
+
+  it('retains native presentation when initial placement fails', async () => {
+    const fixture = createFixture({ placementFailure: true })
+    const resolution = await createOpenTrayDaemonPresenter({
+      appServer: fixture.appServer,
+      requestedHostMode: 'native',
+      version: '6.1.0',
+      openExternalUrl: fixture.openExternalUrl,
+      onStopRequested: vi.fn(),
+      platform: 'darwin',
+      driver: fixture.driver,
+    })
+
+    expect(resolution.effectiveHostMode).toBe('native')
+    expect(fixture.window.show).toHaveBeenCalledOnce()
+    expect(fixture.window.placeAtScreenCenter).toHaveBeenCalledExactlyOnceWith({
+      width: 1280,
+      height: 840,
+    })
+    expect(resolution.diagnostics).toContainEqual({
+      code: 'presenter-event-failed',
+      stage: 'native-initial-placement',
+      message: 'Native window could not be centered; keeping the system-selected position.',
+    })
+    await resolution.host.close()
   })
 
   it('hides the retained window without destroying it and tears down in owner order', async () => {

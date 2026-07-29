@@ -2,8 +2,10 @@
  * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Select and operate the Web or retained Native App presentation lifecycle.
  * 2. Keep native/browser authority credential-safe and preserve truthful browser-capable fallback.
+ * 3. Center only the first retained native window without overriding later user placement.
  *
  * Original request (2026-07-29): "使用 appMode，并且 --web 只在最开始 start 的时候定好。"
+ * Original request (2026-07-30): "初始使用placement center的窗口位置。"
  */
 import type { WebviewNativeApiPolicy, WebviewWindowOptions } from '@opentray/ext-webview'
 import type { CreateTrayMenu, CreateTrayOptions, OpenTrayRuntimeOptions } from 'opentray'
@@ -247,6 +249,15 @@ async function createNativePresenter(options: {
   } catch (error) {
     await runTeardown([() => resources.window.destroy(), () => resources.tray.destroy()])
     throw error
+  }
+  try {
+    await resources.window.placeAtScreenCenter({ width: WINDOW_WIDTH, height: WINDOW_HEIGHT })
+  } catch {
+    options.report({
+      code: 'presenter-event-failed',
+      stage: 'native-initial-placement',
+      message: 'Native window could not be centered; keeping the system-selected position.',
+    })
   }
 
   const unlisten: Array<() => void> = []
