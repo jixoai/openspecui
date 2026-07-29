@@ -1,9 +1,10 @@
 /**
  * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
  * 1. Prove every built-in Terminal palette retains WCAG AA neutral-text contrast.
- * 2. Prove the Terminal surface remaps neutral tokens without descendant-wide color enforcement.
+ * 2. Prove the Terminal surface remaps neutral and popup token pairs without descendant-wide color enforcement.
  *
  * Owner accessibility direction (2026-07-29): Terminal text must remain legible when its palette differs from the application theme.
+ * Owner popup correction (2026-07-29): Terminal-owned popup text must remain legible.
  */
 import { TERMINAL_THEME_OPTIONS, getTerminalThemeDefinition } from '@/lib/terminal-theme'
 import { readFileSync } from 'node:fs'
@@ -56,6 +57,10 @@ describe('Terminal surface accessibility', () => {
 
     expect(css).toContain('--foreground: var(--terminal-foreground);')
     expect(css).toContain('--muted-foreground: var(--terminal-foreground);')
+    expect(css).toContain('--card: var(--terminal);')
+    expect(css).toContain('--card-foreground: var(--terminal-foreground);')
+    expect(css).toContain('--popover: var(--terminal);')
+    expect(css).toContain('--popover-foreground: var(--terminal-foreground);')
     expect(css).not.toMatch(/\.terminal-surface\s+\*/)
     expect(css).not.toContain('!important')
   })

@@ -541,6 +541,19 @@ This exact run covers both the previously delivered Terminal palette boundary an
 Context correction. Checkpoints 6.24 and 6.29 are complete. No agent visual or end-to-end browser acceptance was
 performed; checkpoints 6.6 and 7.1 remain Owner-owned, and no merge, archive, or release has occurred.
 
+## Terminal-owned Popup Palette Correction (2026-07-29)
+
+Owner acceptance exposed one incomplete pair in the prior Terminal palette boundary. The Terminal creation
+`ContextMenu` is a real descendant of `terminal-surface`: `text-foreground` therefore resolved to the active
+Terminal foreground, while `bg-card` still resolved to the application card. A Light application theme plus a
+dark Terminal palette rendered light text over a light popup.
+
+The Terminal scope now maps `card/card-foreground` and `popover/popover-foreground` as complete pairs to the
+active Terminal background and foreground. The shared `ContextMenu` remains unchanged, application-owned Dialogs
+remain outside the scope, and descendant-wide selectors or `!important` remain forbidden. Focused unit evidence
+opens the production `TerminalPanel -> ContextMenu` chain and proves that the popup remains physically nested in
+the palette owner; the CSS contract test proves all four token mappings and retains semantic-color guardrails.
+
 ## Loopback Triggers
 
 - A required failure becomes reachable only by opening an Accordion or focusing a Tooltip.

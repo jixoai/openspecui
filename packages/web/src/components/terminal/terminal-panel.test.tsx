@@ -3,11 +3,12 @@
  * 1. Verify terminal panel tabs, actions, notifications, and visibility behavior.
  * 2. Verify distinct-root selection and same-root implicit Launch creation.
  * 3. Verify restored tab identity survives resolved paths, long titles, and renaming.
- * 4. Verify the panel owns a palette-local neutral color scope.
+ * 4. Verify the panel and its physically nested popups own a palette-local neutral color scope.
  *
  * Original request (2026-07-16): "Terminal shows selected cwd/root identity in creation controls and tab labels."
  * Owner same-root direction (2026-07-29): generic Terminal hides cwd switching and remains Launch-owned when roots collapse.
  * Owner accessibility direction (2026-07-29): Terminal text must remain legible when its palette differs from the application theme.
+ * Owner popup correction (2026-07-29): Terminal-owned popup text must remain legible.
  */
 import type { NotificationRecord } from '@openspecui/core/notifications'
 import { fireEvent, render, within } from '@testing-library/react'
@@ -425,7 +426,11 @@ describe('TerminalPanel', () => {
 
     fireEvent.click(first(getAllByTitle('New terminal options')))
 
-    expect(getByText('/bin/sh')).toBeTruthy()
+    const shellChoice = getByText('/bin/sh')
+    const menu = shellChoice.closest('[popover]')
+
+    expect(menu).toHaveClass('bg-card', 'text-foreground')
+    expect(menu?.closest('.terminal-surface')).toBeTruthy()
     expect(getByText('Claude')).toBeTruthy()
   })
 
