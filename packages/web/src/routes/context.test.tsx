@@ -12,9 +12,11 @@
  * Original request (2026-07-28): Context should stay concise without deleting source-attributed evidence.
  * Owner correction (2026-07-29): Context summarizes root, launch, References, and action readiness before technical evidence.
  * Owner same-root direction (2026-07-29): collapse identity while retaining ignored Store warning evidence.
+ * Owner Context direction (2026-07-29): prove Config-owned routing and concern-specific disclosures.
  */
 import type { ExportSnapshot, RootContext, RootContextState } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StaticDataProvider } from '../ssg/static-data-context'
 import { ContextView } from './context'
@@ -33,6 +35,18 @@ vi.mock('@/lib/use-context-subscription', () => ({
     if (!state || state.state === 'loading') return null
     return state.state === 'error' ? (state.data ?? state.attempt) : state.data
   },
+}))
+
+vi.mock('@/lib/view-transitions/navigation', () => ({
+  VTLink: ({
+    children,
+    to,
+    ...props
+  }: { children?: ReactNode; to: string } & Omit<ComponentProps<'a'>, 'href'>) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 function setState(
@@ -102,6 +116,9 @@ describe('ContextView', () => {
     // The initial-loading topology is now a visual skeleton (luminance language) rather than routine copy.
     expect(container.querySelector('.rt-skeleton')).not.toBeNull()
     expect(screen.queryByText('Loading context...')).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Resolved Context' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Config' })).toHaveAttribute('href', '/config')
+    expect(screen.getByRole('note', { name: 'Resolved Context status resolving' })).toBeVisible()
   })
 
   it('renders error state with message', () => {
@@ -272,7 +289,7 @@ describe('ContextView', () => {
     const attemptRegions = screen.getAllByRole('region', { name: 'Current failed attempt' })
     expect(attemptRegions).toHaveLength(1)
     expect(within(attemptRegions[0]).getByText('/tmp/only-attempt')).toBeTruthy()
-    expect(within(attemptRegions[0]).getByText('Full failed attempt evidence')).toBeTruthy()
+    expect(within(attemptRegions[0]).getByRole('button', { name: /CLI evidence/ })).toBeTruthy()
   })
 
   it('uses neutral copy: "no reference currently observed", never "all references"', () => {
@@ -293,7 +310,18 @@ describe('ContextView', () => {
     expect(text).toContain('0 observed')
     expect(text).toContain('store')
     expect(text).toContain('platform')
-    expect(screen.getByRole('note', { name: 'Root actions ready' })).toBeTruthy()
+    expect(screen.getByRole('note', { name: 'Resolved Context status ready' })).toBeTruthy()
+    for (const name of [
+      'Referenced context',
+      'Resolution details',
+      'CLI diagnostics',
+      'CLI evidence',
+    ]) {
+      expect(screen.getByRole('button', { name: new RegExp(name) })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      )
+    }
     expect(screen.getByText('/tmp/data/openspec')).not.toBeVisible()
   })
 
@@ -352,19 +380,22 @@ describe('ContextView', () => {
 
     render(<ContextView />)
 
-    expect(screen.getByRole('note', { name: 'Root actions ready' })).toBeVisible()
+    expect(screen.getByRole('note', { name: 'Resolved Context status ready' })).toBeVisible()
     const warning = screen.getByRole('note', { name: 'Ignored Store declaration warning' })
     expect(warning).toHaveTextContent('Store declaration ignored')
     fireEvent.focus(warning)
-    expect(await screen.findByText('warning · root_pointer_ignored · relationships')).toBeVisible()
-    expect(await screen.findByText('The local root ignores store shared.')).toBeVisible()
-    expect(await screen.findByText('Fix: Remove the store declaration.')).toBeVisible()
+    expect(await screen.findByText(/See CLI diagnostics for the reported fix/)).toBeVisible()
+    expect(screen.getByText('warning · root_pointer_ignored · relationships')).not.toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: /CLI diagnostics/ }))
+    expect(screen.getByText('warning · root_pointer_ignored · relationships')).toBeVisible()
+    expect(screen.getByText('The local root ignores store shared.')).toBeVisible()
+    expect(screen.getByText('Fix: Remove the store declaration.')).toBeVisible()
   })
 
   it('keeps data scope and read-only registry evidence in technical disclosure', () => {
     setState({ data: readyState() })
     const { container } = render(<ContextView />)
-    fireEvent.click(screen.getByRole('button', { name: /Full Root Context evidence/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Resolution details/ }))
     expect(screen.getByText('/tmp/data/openspec')).toBeVisible()
     expect(screen.getByText('Read-only from this project workspace')).toBeVisible()
     // 绝不暗示项目级 registry（AGENTS.md：项目无 project-local registry）。
@@ -381,7 +412,7 @@ describe('ContextView', () => {
               store_id: 'design-system',
               status: [
                 {
-                  severity: 'warning',
+                  severity: 'error',
                   code: 'reference_unresolved',
                   message: 'Reference is not registered.',
                 },
@@ -393,8 +424,10 @@ describe('ContextView', () => {
     })
 
     const { container } = render(<ContextView />)
+    const alert = screen.getByRole('alert')
+    expect(alert).toBeVisible()
+    expect(alert).toHaveTextContent('design-system: Reference is not registered.')
     const text = container.textContent ?? ''
-    expect(text).toContain('design-system')
     expect(text).toContain('reference_unresolved')
     expect(text).not.toMatch(/all references|unreferenced/i)
   })
@@ -434,14 +467,17 @@ describe('ContextView', () => {
 
     render(<ContextView />)
 
-    const trigger = screen.getByRole('button', { name: /Full Root Context evidence/ })
+    const referencedContextTrigger = screen.getByRole('button', { name: /Referenced context/ })
+    const cliEvidenceTrigger = screen.getByRole('button', { name: /CLI evidence/ })
     const member = screen.getByText(/design-system/)
     const stderr = screen.getByText('doctor failed')
-    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(referencedContextTrigger).toHaveAttribute('aria-expanded', 'false')
+    expect(cliEvidenceTrigger).toHaveAttribute('aria-expanded', 'false')
     expect(member).not.toBeVisible()
     expect(stderr).not.toBeVisible()
-    fireEvent.click(trigger)
+    fireEvent.click(referencedContextTrigger)
     expect(member).toBeVisible()
+    fireEvent.click(cliEvidenceTrigger)
     expect(stderr).toBeVisible()
     expect(screen.getByText('root contract drift')).toBeVisible()
     expect(screen.getByText('{"root":null}')).toBeVisible()
@@ -478,13 +514,17 @@ describe('ContextView', () => {
     )
 
     expect(useContextSubscriptionMock).not.toHaveBeenCalled()
-    expect(screen.getByText('project-a')).toBeTruthy()
     expect(screen.getByText('store-a/openspec')).toBeTruthy()
     expect(screen.getByRole('note', { name: 'Published Store writable-a' })).toBeTruthy()
     const staticBoundary = screen.getByRole('note', { name: 'Static Context evidence boundary' })
     fireEvent.focus(staticBoundary)
+    expect(await screen.findByText(/Only publication-safe facts are available/)).toBeVisible()
+    const publicationDetails = screen.getByRole('button', { name: /Publication details/ })
+    expect(publicationDetails).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(publicationDetails)
+    expect(screen.getByText('project-a')).toBeVisible()
     expect(
-      await screen.findByText(/Runtime CLI evidence, registry, and data scope are not published/)
+      screen.getByText(/Runtime CLI evidence, registry, and data scope are not published/)
     ).toBeVisible()
     const referencePolicy = screen.getByRole('button', { name: /Published Reference policy/ })
     expect(referencePolicy).toHaveAttribute('aria-expanded', 'false')

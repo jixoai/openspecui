@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Summarize read-only Root compatibility, selection, and failed-attempt state with links to Context.
  * 2. Summarize Environment Global profile, delivery, drift, and data scope with a link to Config.
  * 3. Preserve settled diagnostic facts during revalidation and use stable skeleton geometry on admission.
@@ -7,6 +7,7 @@
  * Original request (2026-07-20): "Settings diagnostics are read-only."
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-28): Settings should stay concise and defer verbose OpenSpec evidence to its owning routes.
+ * Owner Context direction (2026-07-29): link Root details to Config-owned Resolved Context.
  */
 import { InformationBadge } from '@/components/information-disclosure'
 import { DetailPanelSkeleton, RealtimeRevalidateCue } from '@/components/realtime'
@@ -316,8 +317,8 @@ export function OpenSpecSettingsDiagnosticsSection({
     <TocSection id="settings-openspec-diagnostics" index={index} className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">OpenSpec Diagnostics</h2>
-        <VTLink to="/context" className="text-primary text-xs hover:underline">
-          Root / Doctor / Context details
+        <VTLink to="/config/context" className="text-primary text-xs hover:underline">
+          Resolved Context details
         </VTLink>
       </div>
       <div className="border-border space-y-5 rounded-lg border p-4">

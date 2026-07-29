@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Verify multi-area project navigation, URL canonicalization, and hosted launch parameters.
  * 2. Verify persisted/project layouts remain a complete partition of supported project tabs.
- * 3. Prove retired project routes are discarded while Context remains canonical.
+ * 3. Prove retired Stores/Context tabs are discarded while `/config/context` inherits Config ownership.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
+ * Owner Context direction (2026-07-29): Resolved Context is not a persisted Tab identity.
  */
 import type { RouterHistory } from '@tanstack/react-router'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -37,7 +38,6 @@ const DEFAULT_MAIN_TABS: TabId[] = [
   '/changes',
   '/board',
   '/archive',
-  '/context',
   '/settings',
 ]
 
@@ -49,7 +49,6 @@ const ALL_TABS: TabId[] = [
   '/changes',
   '/board',
   '/archive',
-  '/context',
   '/settings',
   '/terminal',
 ]
@@ -200,7 +199,7 @@ describe('NavController kernel lifecycle', () => {
     assertPartition(nav)
   })
 
-  it('drops a retired Stores tab from persisted layouts while retaining Context', () => {
+  it('drops retired Stores and Context tabs from persisted layouts', () => {
     localStorage.clear()
     window.history.replaceState({}, '', '/dashboard')
     localStorage.setItem(
@@ -214,7 +213,7 @@ describe('NavController kernel lifecycle', () => {
 
     nav = new NavController()
 
-    expect(nav.mainTabs).toContain('/context')
+    expect(nav.mainTabs as readonly string[]).not.toContain('/context')
     expect(nav.mainTabs as readonly string[]).not.toContain('/stores')
     expect(nav.bottomTabs as readonly string[]).not.toContain('/stores')
     assertPartition(nav)
@@ -228,6 +227,14 @@ describe('NavController kernel lifecycle', () => {
     expect(nav.getAreaForPath('/changes')).toBe('bottom')
     expect(nav.getAreaForPath('/changes/123')).toBe('bottom')
     expect(nav.getAreaForPath('/unknown')).toBe('main')
+  })
+
+  it('routes Resolved Context through the current Config area', () => {
+    nav = createController('/dashboard')
+
+    expect(nav.getAreaForPath('/config/context')).toBe('main')
+    nav.moveTab('/config', 'bottom')
+    expect(nav.getAreaForPath('/config/context')).toBe('bottom')
   })
 
   it('routes push to the owning area and notifies cross-area router', () => {

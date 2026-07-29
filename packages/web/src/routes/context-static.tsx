@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Render the static Context route from publication-safe snapshot provenance.
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * 1. Render Config-owned static Resolved Context from publication-safe snapshot provenance.
  * 2. Distinguish none, omitted, included, and legacy-unrecorded Reference policy.
  * 3. State unavailable runtime evidence explicitly without starting live transports.
  *
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
  * Original request (2026-07-28): static source facts stay attributable while verbose policy detail is disclosed on demand.
+ * Owner Context direction (2026-07-29): move static Context to `/config/context` with a direct Config return.
  */
+import { ResolvedContextHeader } from '@/components/config/resolved-context-header'
 import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import {
   selectStaticContextSnapshot,
@@ -14,7 +16,6 @@ import {
 } from '@/lib/static-context'
 import { getInitialData } from '@/lib/static-mode'
 import { useStaticSnapshot } from '@/ssg/static-data-context'
-import { Network } from 'lucide-react'
 
 /** Render only Context facts that were deliberately published in the static snapshot. */
 export function StaticContextView() {
@@ -23,51 +24,66 @@ export function StaticContextView() {
 
   return (
     <div className="space-y-6 p-4">
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <h1 className="font-nav flex min-w-0 items-center gap-2 text-2xl font-bold">
-          <Network className="h-6 w-6 shrink-0" aria-hidden />
-          Context
-        </h1>
-      </div>
+      <ResolvedContextHeader status="static" />
 
       {context ? (
         <div className="space-y-4">
-          <section className="border-border flex min-w-0 flex-wrap items-center gap-2 border-y py-3 text-xs">
-            <span className="font-medium">Published planning root</span>
-            <span className="min-w-0 flex-1 break-all font-mono text-sm">
-              {context.root?.planningRootPath ?? 'No planning root path was published.'}
-            </span>
-            {context.root ? (
+          <section className="border-border min-w-0 border-y py-3">
+            <div className="flex min-w-0 flex-wrap items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-muted-foreground text-xs">Published effective root</div>
+                <div className="mt-1 min-w-0 break-all font-mono text-sm font-medium">
+                  {context.root?.planningRootPath ?? 'No planning root path was published.'}
+                </div>
+              </div>
+              {context.root ? (
+                <InformationBadge
+                  ariaLabel={`Published root source ${context.root.rootSource}`}
+                  tooltip={`OpenSpec reported root source ${context.root.rootSource} at export time.`}
+                >
+                  {context.root.rootSource}
+                </InformationBadge>
+              ) : null}
+              {context.root?.storeId ? (
+                <InformationBadge
+                  ariaLabel={`Published Store ${context.root.storeId}`}
+                  tooltip={`The exported Planning root used Store ${context.root.storeId}.`}
+                >
+                  Store {context.root.storeId}
+                </InformationBadge>
+              ) : null}
               <InformationBadge
-                ariaLabel={`Published root source ${context.root.rootSource}`}
-                tooltip={`Root source: ${context.root.rootSource}`}
+                ariaLabel="Static Context evidence boundary"
+                tooltip="Only publication-safe facts are available; this snapshot has no live authority."
               >
-                {context.root.rootSource}
+                Published facts
               </InformationBadge>
-            ) : null}
-            {context.root?.storeId ? (
-              <InformationBadge
-                ariaLabel={`Published Store ${context.root.storeId}`}
-                tooltip={`The exported Planning root used Store ${context.root.storeId}.`}
-              >
-                Store {context.root.storeId}
-              </InformationBadge>
-            ) : null}
-            <InformationBadge
-              ariaLabel="Published project identity"
-              tooltip={`${context.projectName} · OpenSpecUI ${context.version} · observed ${context.observedAt === null ? 'unavailable' : new Date(context.observedAt).toISOString()}`}
-            >
-              {context.projectName}
-            </InformationBadge>
-            <InformationBadge
-              ariaLabel="Static Context evidence boundary"
-              tooltip="Runtime CLI evidence, registry, and data scope are not published. This snapshot claims no live connection, mutation authority, or current Reference health."
-            >
-              Static snapshot
-            </InformationBadge>
+            </div>
           </section>
 
           <StaticReferencePolicy policy={context.referencePolicy} />
+
+          <EvidenceDisclosure
+            title="Publication details"
+            summary={`${context.projectName} · OpenSpecUI ${context.version}`}
+          >
+            <dl className="text-muted-foreground grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+              <dt>project</dt>
+              <dd className="break-words">{context.projectName}</dd>
+              <dt>OpenSpecUI version</dt>
+              <dd>{context.version}</dd>
+              <dt>observed at</dt>
+              <dd>
+                {context.observedAt === null
+                  ? 'unavailable'
+                  : new Date(context.observedAt).toISOString()}
+              </dd>
+            </dl>
+            <p className="text-muted-foreground mt-3 break-words">
+              Runtime CLI evidence, registry, and data scope are not published. This snapshot claims
+              no live connection, mutation authority, or current Reference health.
+            </p>
+          </EvidenceDisclosure>
         </div>
       ) : (
         <section className="border-border rounded-lg border p-4" role="status">

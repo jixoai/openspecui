@@ -443,6 +443,55 @@ all tests passed. The Owner's `openspec/config.yaml` remains unmodified and excl
 browser fixtures are component preparation evidence only; checkpoint 6.24 remains open for remote PR evidence,
 then final visual acceptance returns to the Owner.
 
+## Config-owned Resolved Context Implementation (2026-07-29)
+
+Context is now the read-only result of Config declarations instead of a persistent workspace tab:
+
+```text
+Config declarations                         CLI-resolved observation
+     /config  -- title action ------------> /config/context
+        ^                                           |
+        +---------------- Config return ------------+
+```
+
+- Live and static route trees, the SSG manifest, Dashboard, Settings, and Root health notifications now target
+  only `/config/context`. The retired `/context` path is neither registered nor generated.
+- `ResolvedContextAction` belongs to the Config title row. The shared live/static header provides the page title,
+  direct authority state, and a predictable return to `/config` without acquiring subscription ownership.
+- Effective Root identity, Launch/Planning relationship, Reference count, authority loss, errors, and contract
+  drift remain direct. The duplicate route-local action-readiness fact was removed because the header now owns
+  the same objective state.
+- Supporting facts are split into independent default-collapsed disclosures: `Referenced context`,
+  `Resolution details`, `CLI diagnostics`, and `CLI evidence`. `root_pointer_ignored` keeps a concise warning
+  Tooltip while its complete message, target, and fix live in `CLI diagnostics`.
+- Static Context keeps the published effective Root direct, retains Reference policy separately, and moves
+  project/version/observation facts plus the publication boundary into `Publication details`. It starts no live
+  owner and publishes no registry, data-home, command, or mutation authority.
+
+### Focused Resolved Context evidence
+
+```text
+Focused Web unit                              11 files / 100 tests passed
+Server unit                                   84 files / 543 tests passed
+Web + Server typecheck                        passed
+Repository lint                               1058 files / 0 warnings / 0 errors
+Scoped formatter                              24 changed TS/TSX/changeset files passed
+SSG client/server build                       passed
+Real CLI export                               88 routes generated
+Exported canonical route                      /config/context/index.html present
+Retired exported route                        /context/index.html absent
+Strict OpenSpec validation                    passed
+git diff --check                              passed
+```
+
+The SSG build retained only the repository's existing `scroll-button` CSS compatibility and ineffective
+dynamic-import warnings. Repository `format:check` inspected the Owner's uncommitted `openspec/config.yaml` and
+reported that file only; it remains unmodified and excluded. The real export was written to
+`/tmp/openspecui-resolved-context-export` without opening a browser.
+
+No agent browser or final visual acceptance was performed. Checkpoint 6.29 remains open until the code is
+committed, PR evidence is current, and the surface returns to the Owner's visual/browser acceptance boundary.
+
 ## Loopback Triggers
 
 - A required failure becomes reachable only by opening an Accordion or focusing a Tooltip.

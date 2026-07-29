@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Attribute Dashboard planning metrics to the active CLI-selected root.
  * 2. Omit the healthy same-root default while preserving decision-relevant scope facts.
  * 3. Keep Root, Reference-error, and Git-binding failures directly visible.
@@ -9,6 +9,7 @@
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-28): restore 5.x-like clarity while keeping 6.x context facts retrievable.
  * Owner same-root direction (2026-07-29): hide redundant Dashboard context when Launch equals Planning.
+ * Owner Context direction (2026-07-29): link secondary Root facts to Config-owned Resolved Context.
  */
 import { InformationBadge } from '@/components/information-disclosure'
 import { RealtimeRevalidateCue, RealtimeSkeletonLine } from '@/components/realtime'
@@ -124,8 +125,8 @@ function LiveDashboardContextSummary() {
             </div>
           </RealtimeRevalidateCue>
         ) : null}
-        <VTLink to="/context" className="text-primary text-xs hover:underline">
-          Context
+        <VTLink to="/config/context" className="text-primary text-xs hover:underline">
+          Resolved Context
         </VTLink>
       </div>
 

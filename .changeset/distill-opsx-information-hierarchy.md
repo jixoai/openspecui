@@ -1,5 +1,6 @@
 ---
 '@openspecui/core': patch
+'@openspecui/server': patch
 '@openspecui/web': patch
 ---
 
@@ -13,3 +14,6 @@ same-root presentation without changing CLI or PTY ownership.
 
 Terminal chrome now scopes neutral text, surfaces, and borders to the active Terminal palette,
 preserving accessible contrast when the application and Terminal themes differ.
+
+Config now owns the canonical Resolved Context entry at `/config/context`. Live, static, Settings,
+Dashboard, and notification entry points share that route while root authority and failures remain direct.

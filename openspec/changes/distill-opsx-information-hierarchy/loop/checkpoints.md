@@ -28,7 +28,7 @@ Owner correction (2026-07-29): navigation, Project Binding, Context, Settings sc
 
 - [x] 3.1 Make Planning identity primary in the shell and move Launch/source/Store detail into indirect space
 - [x] 3.2 Replace the Dashboard three-column Data scopes band with a compact context strip
-- [x] 3.3 Keep Root/Reference/Git failures direct and preserve navigation to `/context`
+- [x] 3.3 Keep Root/Reference/Git failures direct and preserve navigation to the Context owner
 - [x] 3.4 Add focused shell and Dashboard tests for compact summaries and direct failures
 
 ## 4. Change and OPSX Workflow
@@ -72,9 +72,9 @@ Owner correction (2026-07-29): navigation, Project Binding, Context, Settings sc
 - [x] 6.23 Prove built-in contrast, semantic-color preservation, focused unit coverage, and local gates
 - [ ] 6.24 Update PR evidence and return to Owner visual/browser acceptance
 - [x] 6.25 Specify Config-owned Resolved Context routing, hierarchy, and disclosure boundaries
-- [ ] 6.26 Move the canonical live/static Context route and every entry point to `/config/context`
-- [ ] 6.27 Reorganize Resolved Context into direct facts and concern-specific accessible disclosures
-- [ ] 6.28 Prove focused route, Context, static/SSG, typecheck, lint, format, and strict Change evidence
+- [x] 6.26 Move the canonical live/static Context route and every entry point to `/config/context`
+- [x] 6.27 Reorganize Resolved Context into direct facts and concern-specific accessible disclosures
+- [x] 6.28 Prove focused route, Context, static/SSG, typecheck, lint, format, and strict Change evidence
 - [ ] 6.29 Update PR evidence and return to Owner visual/browser acceptance
 
 ## 7. Finalization

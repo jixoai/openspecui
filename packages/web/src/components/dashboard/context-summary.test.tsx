@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Prove Dashboard omits only the healthy same-root default and otherwise attributes Root provenance.
  * 2. Preserve Reference diagnostics through compact scan status without inferred health.
  * 3. Keep Git detail retrievable while binding failures remain directly visible.
@@ -11,6 +11,7 @@
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-28): restore 5.x-like clarity while keeping 6.x context facts retrievable.
  * Owner same-root direction (2026-07-29): hide redundant Dashboard context when Launch equals Planning.
+ * Owner Context direction (2026-07-29): prove Dashboard links to Config-owned Resolved Context.
  */
 import type { GitRepositoryScopes, RootContext, RootContextState } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -143,6 +144,10 @@ describe('DashboardContextSummary', () => {
     expect(screen.getByText('/workspace/planning')).toBeTruthy()
     expect(screen.getByText('Store platform')).toBeTruthy()
     expect(screen.getByText('Git 2 repos')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Resolved Context' })).toHaveAttribute(
+      'href',
+      '/config/context'
+    )
     expect(screen.queryByText('/repos/code')).toBeNull()
 
     fireEvent.focus(

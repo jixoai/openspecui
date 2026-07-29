@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Verify Settings projects shared CLI, Root, Environment, and launch-tool lifecycle truth.
  * 2. Verify Init mode, repair, pending, cancellation, terminal, and convergence behavior.
  *
@@ -7,6 +7,7 @@
  * Owner acceptance boundary (2026-07-20): final end-to-end browser walkthroughs remain owner-owned.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-28): Settings should summarize OpenSpec facts and defer evidence to Context and Config.
+ * Owner Context direction (2026-07-29): Settings links to Config-owned Resolved Context.
  */
 import type { CliRunnerLine, CliStreamTransport, OverallStatus } from '@/lib/use-cli-runner'
 import type { SubscriptionState } from '@/lib/use-subscription'
@@ -516,9 +517,9 @@ describe('OpenSpecSettingsSections', () => {
     expect(
       screen.getByRole('note', { name: 'Environment data scope source xdg-data-home' })
     ).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Root / Doctor / Context details' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Resolved Context details' })).toHaveAttribute(
       'href',
-      '/context'
+      '/config/context'
     )
     expect(screen.getByRole('link', { name: /Environment Global config/ })).toHaveAttribute(
       'href',

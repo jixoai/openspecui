@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Register publication-safe project routes without live terminal surfaces.
- * 2. Preserve compound Spec, Context, and objective readonly Kanban navigation.
+ * 2. Preserve compound Spec, Config-owned Context, and objective readonly Kanban navigation.
  *
  * Original request (2026-07-28): static Board uses the shared ReadonlyKanban.
+ * Owner Context direction (2026-07-29): make `/config/context` the only static Context route.
  */
 import { createRoute, type AnyRootRoute } from '@tanstack/react-router'
 import { ArchiveList } from '../routes/archive-list'
@@ -53,8 +54,11 @@ export function createStaticRouteTree(rootRoute: AnyRootRoute) {
       path: '/archive/$changeId',
       component: ArchiveView,
     }),
-    // 6.9 Context 视图：静态导航不 404；内容是后端 Context 投影占位。
-    createRoute({ getParentRoute: () => rootRoute, path: '/context', component: ContextView }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/config/context',
+      component: ContextView,
+    }),
     createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: SettingsStatic }),
   ])
 }
