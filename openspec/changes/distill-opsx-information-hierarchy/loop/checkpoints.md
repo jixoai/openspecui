@@ -70,12 +70,12 @@ Owner correction (2026-07-29): navigation, Project Binding, Context, Settings sc
 - [x] 6.21 Specify the Terminal palette boundary and reject descendant-wide semantic color flattening
 - [x] 6.22 Scope Terminal neutral tokens to the active palette across tabs, cwd controls, and empty state
 - [x] 6.23 Prove built-in contrast, semantic-color preservation, focused unit coverage, and local gates
-- [ ] 6.24 Update PR evidence and return to Owner visual/browser acceptance
+- [x] 6.24 Update PR evidence and return to Owner visual/browser acceptance
 - [x] 6.25 Specify Config-owned Resolved Context routing, hierarchy, and disclosure boundaries
 - [x] 6.26 Move the canonical live/static Context route and every entry point to `/config/context`
 - [x] 6.27 Reorganize Resolved Context into direct facts and concern-specific accessible disclosures
 - [x] 6.28 Prove focused route, Context, static/SSG, typecheck, lint, format, and strict Change evidence
-- [ ] 6.29 Update PR evidence and return to Owner visual/browser acceptance
+- [x] 6.29 Update PR evidence and return to Owner visual/browser acceptance
 
 ## 7. Finalization
 

@@ -522,8 +522,23 @@ git diff --check                             passed
 
 The complete Web run retained the existing non-failing jsdom Canvas diagnostics. The aggregate Browser Gate in
 run `30435212845` failed only because Fast Gate failed and no browser shard was admitted; it did not expose an
-independent browser regression. Checkpoint 6.29 remains open until the corrected PR HEAD completes its required
-remote checks.
+independent browser regression.
+
+The corrected code-bearing HEAD `e05f1509ee048267e2e13959375a05c75fc9f7b7` then completed PR Quality run
+`30436384317`:
+
+```text
+Changeset Gate                              passed
+CI Scope                                    passed
+Fast Gate                                   passed
+Browser Gate (@openspecui/web)              passed
+Browser Gate                                passed
+PR state                                    OPEN / CLEAN
+```
+
+This exact run covers both the previously delivered Terminal palette boundary and the Config-owned Resolved
+Context correction. Checkpoints 6.24 and 6.29 are complete. No agent visual or end-to-end browser acceptance was
+performed; checkpoints 6.6 and 7.1 remain Owner-owned, and no merge, archive, or release has occurred.
 
 ## Loopback Triggers
 
