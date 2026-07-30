@@ -1052,7 +1052,13 @@ function HostedShellRuntime({
             setShellState((current) => activateHostedTab(current, tabId))
           }}
           onTabClose={(tabId) => {
-            setShellState((current) => removeHostedTab(current, tabId))
+            setShellState((current) => {
+              // Resolve the locator before removing the tab so an unchanged daemon snapshot does not
+              // reopen this Workspace (3.2/3.7). No-op for non-daemon-backed locators.
+              const closing = current.tabs.find((tab) => tab.id === tabId)
+              if (closing) daemonWorkspace.dismissDaemonWorkspace(closing.apiBaseUrl)
+              return removeHostedTab(current, tabId)
+            })
           }}
           onTabOrderChange={(orderedTabIds) => {
             setShellState((current) => reorderHostedTabs(current, orderedTabIds))

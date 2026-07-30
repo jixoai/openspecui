@@ -122,8 +122,14 @@ Production owners: focused CLI daemon child/control modules and pure App state m
 
 - [ ] 3.1 Add checked red fixtures proving the current `HostedShellState.tabs` collection simultaneously owns
       persisted connections and mounted Workspaces.
-- [ ] 3.2 Add checked red evidence that an unchanged daemon snapshot reopens a user-closed Workspace at the current
+- [x] 3.2 Add checked red evidence that an unchanged daemon snapshot reopens a user-closed Workspace at the current
       `AppDaemonWorkspaceOwner -> applyHostedLaunchRequest` production boundary.
+      Delivered 2026-07-30: `AppDaemonWorkspaceOwner` now reduces each snapshot through
+      `reduceDaemonSnapshot` and opens/focuses ONLY on `admit` decisions; `applyDaemonWorkspaceSnapshot` consumes
+      decisions and calls `applyLaunch` only for admits. `app-daemon-workspace-owner.test.ts` "does NOT reopen a
+      user-closed Workspace when the daemon snapshot is unchanged" is the green case (already-dismissed => no reopen);
+      the prior blanket-`applyHostedLaunchRequest`-per-workspace path was the documented red. Hosted-shell `onTabClose`
+      calls `dismissDaemonWorkspace` so the dismissal is recorded before the tab is removed.
 - [ ] 3.3 Define strong candidate identity for daemon-live and manual retained sources without credentials or
       private fragments.
 - [ ] 3.4 Define strong open-Workspace identity for tab/session/frame/order/active state separately from candidate
@@ -131,13 +137,13 @@ Production owners: focused CLI daemon child/control modules and pure App state m
 - [ ] 3.5 Replace the old persisted shape without migration glue; reject malformed external storage input through
       runtime parsing.
 - [ ] 3.6 Implement pure open/focus/close/reorder transitions that preserve stable Workspace and iframe keys.
-- [~] 3.7 Implement daemon admission/dismissal transitions: new id auto-opens once, unchanged snapshot does not
+- [x] 3.7 Implement daemon admission/dismissal transitions: new id auto-opens once, unchanged snapshot does not
       reopen, explicit launcher Open clears dismissal, disappearance retires runtime candidate, new id may auto-open.
-      Partial 2026-07-30: `packages/app/src/lib/daemon-workspace-admission.ts` is the pure credential-free
-      reducer implementing every named transition (admit-once, no-reopen-after-dismiss, clear-on-open, retire-on-
-      disappear, fresh-admit-on-reappear). `daemon-workspace-admission.test.ts` proves each transition plus the
-      mutation-resistance guard. REMAINING: wire the reducer into the `AppDaemonWorkspaceOwner` React boundary so
-      the current `applyHostedLaunchRequest`-every-snapshot path consumes these decisions instead of blanket-applying.
+      Delivered 2026-07-30: `daemon-workspace-admission.ts` is the pure credential-free reducer implementing every
+      named transition (admit-once, no-reopen-after-dismiss, clear-on-open, retire-on-disappear, fresh-admit-on-reappear).
+      `AppDaemonWorkspaceOwner` holds the admission state ref and reduces each snapshot; opening/focusing is now
+      admission-driven. `daemon-workspace-admission.test.ts` proves each transition + mutation-resistance;
+      `app-daemon-workspace-owner.test.ts` proves the production no-reopen boundary.
 - [ ] 3.8 Preserve credential binding only in the existing locator-owned runtime memory owner.
 - [ ] 3.9 Preserve same-window and cross-window convergence for credential-free manual candidates and open
       Workspace presentation.

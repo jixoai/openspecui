@@ -3,8 +3,12 @@
  * 1. Apply daemon Workspace snapshots while keeping current credentials in runtime memory.
  * 2. Bind persisted backend locators to current opaque daemon Workspace ids.
  * 3. Expose same-origin open-in-browser actions and objective failures to the App surface.
+ * 4. Drive admission decisions so an unchanged snapshot never reopens a user-closed Workspace (3.2/3.7).
  *
  * Original request (2026-07-29): "Workspaces 的 tab 可以提供一个 open in browser 的 icon-button。"
+ * Original request (2026-07-30): "Workspace需要记住曾经打开的目录。"
+ *   Closing a Workspace dismisses its daemon admission; an unchanged snapshot produces
+ *   `already-dismissed` and must NOT call applyHostedLaunchRequest to reopen it.
  */
 import type { AppDaemonWorkspaceSnapshot } from '@openspecui/core/app-daemon-control'
 import {
@@ -18,6 +22,13 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  createEmptyAdmissionState,
+  dismissWorkspace,
+  reduceDaemonSnapshot,
+  type DaemonAdmissionDecision,
+  type DaemonWorkspaceAdmissionState,
+} from '../lib/daemon-workspace-admission'
+import {
   createDaemonWorkspaceControl,
   type DaemonWorkspaceControl,
 } from '../lib/daemon-workspace-control'
@@ -29,26 +40,54 @@ interface AppDaemonWorkspaceContextValue {
   error: string | null
   openWorkspaceInBrowser(workspaceId: string): Promise<void>
   resolveWorkspaceId(apiBaseUrl: string): string | null
+  /**
+   * Record that an open Workspace backed by `apiBaseUrl` was closed by the user, so an unchanged
+   * daemon snapshot does not reopen it. No-op for non-daemon-backed locators.
+   */
+  dismissDaemonWorkspace(apiBaseUrl: string): void
 }
 
 const AppDaemonWorkspaceContext = createContext<AppDaemonWorkspaceContextValue | null>(null)
 
-/** Bind runtime authority before applying credential-free launch targets and return opaque ids. */
+/**
+ * Apply one daemon snapshot as admission decisions.
+ *
+ * Credentials are bound/cleared for every currently-published workspace (credential freshness is
+ * independent of admission). The launch target is opened/focused ONLY for `admit` decisions: a
+ * genuinely-new daemon id auto-opens once, while `no-change`/`already-dismissed` never reopen an
+ * existing or user-closed Workspace. `retire` clears the locator credential binding.
+ */
 export function applyDaemonWorkspaceSnapshot(
   snapshot: AppDaemonWorkspaceSnapshot,
+  decisions: readonly DaemonAdmissionDecision[],
   applyLaunch: (apiBaseUrl: string) => void
 ): ReadonlyMap<string, string> {
   const workspaceIds = new Map<string, string>()
+  const byId = new Map(snapshot.workspaces.map((workspace) => [workspace.id, workspace] as const))
+  const admitSet = new Set(
+    decisions
+      .filter((decision) => decision.kind === 'admit')
+      .map((decision) => decision.workspaceId)
+  )
   for (const workspace of snapshot.workspaces) {
     const apiBaseUrl = normalizeHostedApiBaseUrl(workspace.backendUrl)
     if (!apiBaseUrl) continue
+    workspaceIds.set(apiBaseUrl, workspace.id)
     if (workspace.credential !== null) {
       bindLaunchCredential(apiBaseUrl, workspace.credential)
     } else {
       clearLaunchCredential(apiBaseUrl)
     }
-    workspaceIds.set(apiBaseUrl, workspace.id)
-    applyLaunch(apiBaseUrl)
+    if (admitSet.has(workspace.id)) {
+      applyLaunch(apiBaseUrl)
+    }
+  }
+  for (const decision of decisions) {
+    if (decision.kind !== 'retire') continue
+    const workspace = byId.get(decision.workspaceId)
+    if (!workspace) continue
+    const apiBaseUrl = normalizeHostedApiBaseUrl(workspace.backendUrl)
+    if (apiBaseUrl) clearLaunchCredential(apiBaseUrl)
   }
   return workspaceIds
 }
@@ -57,6 +96,9 @@ export function applyDaemonWorkspaceSnapshot(
 export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
   const connectionActions = useConnectionsActions()
   const controlRef = useRef<DaemonWorkspaceControl | null>(null)
+  // Admission state is runtime-only and credential-free; it tracks which daemon ids have been
+  // admitted, dismissed (user-closed), or retired so an unchanged snapshot never reopens a Workspace.
+  const admissionRef = useRef<DaemonWorkspaceAdmissionState>(createEmptyAdmissionState())
   const [workspaceIds, setWorkspaceIds] = useState<ReadonlyMap<string, string>>(() => new Map())
   const [error, setError] = useState<string | null>(null)
 
@@ -64,12 +106,20 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
     const control = createDaemonWorkspaceControl({
       baseUrl: window.location.origin,
       onSnapshot: (snapshot) => {
-        const ids = applyDaemonWorkspaceSnapshot(snapshot, (apiBaseUrl) => {
-          connectionActions.setState(
-            applyHostedLaunchRequest(connectionActions.getState(), { apiBaseUrl })
-          )
-        })
-        setWorkspaceIds(ids)
+        const ids = snapshot.workspaces.map((workspace) => workspace.id)
+        const reduction = reduceDaemonSnapshot(admissionRef.current, ids)
+        admissionRef.current = reduction.state
+        const applied = applyDaemonWorkspaceSnapshot(
+          snapshot,
+          reduction.decisions,
+          (apiBaseUrl) => {
+            // Only `admit` decisions reach here; opening/focusing is admission-driven, not blanket.
+            connectionActions.setState(
+              applyHostedLaunchRequest(connectionActions.getState(), { apiBaseUrl })
+            )
+          }
+        )
+        setWorkspaceIds(applied)
         setError(null)
       },
       onError: (nextError) => setError(nextError.message),
@@ -96,16 +146,27 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const dismissDaemonWorkspace = useCallback(
+    (apiBaseUrl: string) => {
+      const normalized = normalizeHostedApiBaseUrl(apiBaseUrl)
+      const workspaceId = normalized ? workspaceIds.get(normalized) : undefined
+      if (!workspaceId) return
+      admissionRef.current = dismissWorkspace(admissionRef.current, workspaceId)
+    },
+    [workspaceIds]
+  )
+
   const value = useMemo<AppDaemonWorkspaceContextValue>(
     () => ({
       error,
       openWorkspaceInBrowser,
+      dismissDaemonWorkspace,
       resolveWorkspaceId(apiBaseUrl) {
         const normalized = normalizeHostedApiBaseUrl(apiBaseUrl)
         return normalized ? (workspaceIds.get(normalized) ?? null) : null
       },
     }),
-    [error, openWorkspaceInBrowser, workspaceIds]
+    [error, openWorkspaceInBrowser, dismissDaemonWorkspace, workspaceIds]
   )
 
   return (
@@ -124,6 +185,7 @@ export function useAppDaemonWorkspace(): AppDaemonWorkspaceContextValue {
       openWorkspaceInBrowser: async () => {
         throw new Error('OpenSpecUI App daemon is unavailable.')
       },
+      dismissDaemonWorkspace: () => {},
       resolveWorkspaceId: () => null,
     }
   )
