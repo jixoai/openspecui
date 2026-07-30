@@ -34,6 +34,8 @@ export interface StoreDetailUsageEntry {
 export interface StoreDetailSpecsRegion {
   readonly state: 'loading' | 'ready' | 'error' | 'empty'
   readonly entries?: readonly { id: string; requirementCount: number }[]
+  /** Retained entries remain visible while replacement work settles. */
+  readonly refreshing?: boolean
   readonly error?: string
 }
 
@@ -47,6 +49,8 @@ export interface StoreDetailChangesRegion {
     lastModified: string
     status: 'no-tasks' | 'complete' | 'in-progress'
   }[]
+  /** Retained entries remain visible while replacement work settles. */
+  readonly refreshing?: boolean
   readonly error?: string
 }
 
@@ -73,6 +77,8 @@ export interface StoreDetailProjectionInput {
   readonly mutation: StoreDetailMutationState
   readonly mutationError?: string
   readonly repository: StoreDetailRepositoryFacts
+  /** Successful typed Doctor command evidence; collapsed by default. */
+  readonly evidence?: unknown
   /** Whether the current Environment authority is valid for destructive actions. */
   readonly hasAuthority: boolean
 }
@@ -92,9 +98,10 @@ export interface StoreDetailProjection {
   readonly mutation: StoreDetailMutationState
   readonly mutationError?: string
   readonly repository: StoreDetailRepositoryFacts
+  readonly evidence?: unknown
   readonly hasAuthority: boolean
-  /** Whether the destructive unregister/remove action is currently valid (authority + no running mutation). */
-  readonly canRemove: boolean
+  /** Whether unregister/remove can start with current authority and no unsettled mutation. */
+  readonly canCleanUp: boolean
 }
 
 /**
@@ -110,11 +117,8 @@ export function selectStoreDetailProjection(
   const rootForCount = input.usage.filter((entry) => entry.kind === 'root-for').length
   const referencedByCount = input.usage.filter((entry) => entry.kind === 'referenced-by').length
   const blockingDiagnostics = input.blockingDiagnostics ?? []
-  const canRemove =
-    input.hasAuthority &&
-    input.mutation !== 'running' &&
-    input.mutation !== 'indeterminate' &&
-    blockingDiagnostics.length === 0
+  const canCleanUp =
+    input.hasAuthority && input.mutation !== 'running' && input.mutation !== 'indeterminate'
   return {
     identity: input.identity,
     health: input.health,
@@ -128,8 +132,9 @@ export function selectStoreDetailProjection(
     mutation: input.mutation,
     ...(input.mutationError !== undefined ? { mutationError: input.mutationError } : {}),
     repository: input.repository,
+    ...(input.evidence !== undefined ? { evidence: input.evidence } : {}),
     hasAuthority: input.hasAuthority,
-    canRemove,
+    canCleanUp,
   }
 }
 

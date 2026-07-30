@@ -22,18 +22,29 @@ export interface StoreDetailRouteIdentity {
   readonly storeId: string
 }
 
-/** Encode an opaque envUri for safe use as a single route path segment. */
+const ENV_URI_SEGMENT_PREFIX = 'v1-'
+
+/** Encode an opaque envUri for safe use as a single route path segment after router-level URI decoding. */
 export function encodeEnvUriSegment(envUri: string): string {
-  // URI-encode the whole value so any '/', '?', '#' inside the opaque envUri becomes a single path segment.
-  return encodeURIComponent(envUri)
+  const bytes = new TextEncoder().encode(envUri)
+  return `${ENV_URI_SEGMENT_PREFIX}${[...bytes]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')}`
 }
 
 /** Decode an encoded envUri path segment back to its opaque value. */
 export function decodeEnvUriSegment(segment: string): string {
   try {
-    return decodeURIComponent(segment)
+    if (!segment.startsWith(ENV_URI_SEGMENT_PREFIX)) return ''
+    const encoded = segment.slice(ENV_URI_SEGMENT_PREFIX.length)
+    if (encoded.length === 0 || encoded.length % 2 !== 0 || !/^[0-9a-f]+$/u.test(encoded)) return ''
+    const bytes = new Uint8Array(encoded.length / 2)
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Number.parseInt(encoded.slice(index * 2, index * 2 + 2), 16)
+    }
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   } catch {
-    return segment
+    return ''
   }
 }
 

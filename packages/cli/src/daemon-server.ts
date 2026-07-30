@@ -1,12 +1,13 @@
 /**
  * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Own the single-instance daemon IPC bind and credential-memory Workspace ledger.
- * 2. Route validated presentation commands without owning project backend processes.
+ * 2. Route validated presentation commands and exact managed-child control.
  * 3. Recover stale Unix endpoints only after a failed liveness probe.
  * 4. Teardown host, connections, and endpoint in a bounded order even when one owner fails.
  *
  * Original request (2026-07-29): "start/stop/restart 只针对 daemon，不污染 serve 的项目语义。"
  */
+import { createHash } from 'node:crypto'
 import { chmod, mkdir, rm } from 'node:fs/promises'
 import { createServer, type Server, type Socket } from 'node:net'
 import {
@@ -24,7 +25,9 @@ const MAX_DAEMON_MESSAGE_BYTES = 1024 * 1024
 
 interface PrivateWorkspace extends DaemonWorkspace {
   credential: string | null
-  owner: Socket
+  owner: Socket | null
+  git: DaemonWorkspaceBinding['git']
+  shutdown: DaemonWorkspaceBinding['shutdown']
 }
 
 /** Presentation capabilities owned by the daemon host, independent from IPC and backend lifetime. */
@@ -74,12 +77,23 @@ export interface DaemonManagedProjectControl {
     | { ok: false; code: DaemonManagedProjectErrorCode; message: string }
   >
   settleAllForDaemonStop(): Promise<void>
+  captureManagedDirectorySet(): readonly string[]
 }
 
 export interface RunningDaemonServer {
   status: DaemonStatus
   closed: Promise<void>
   openWorkspaceInBrowser(workspaceId: string): Promise<'not-found' | 'opened'>
+  registerManagedWorkspace(startup: {
+    canonicalProjectDir: string
+    backendUrl: string
+    credential: string | null
+    generation: number
+    git: DaemonWorkspaceBinding['git']
+  }): Promise<{ workspace: DaemonWorkspaceBinding; close(): Promise<void> }>
+  resolveManagedWorkspace(generation: number): DaemonWorkspaceBinding | null
+  startManagedProject(rawProjectDir: string): ReturnType<DaemonManagedProjectControl['start']>
+  stopManagedProject(generation: number): ReturnType<DaemonManagedProjectControl['stop']>
   close(): Promise<void>
 }
 
@@ -188,6 +202,12 @@ export async function startDaemonServer(options: {
         id: workspace.id,
         backendUrl: workspace.backendUrl,
         credential: workspace.credential,
+        projectDir: workspace.projectDir,
+        ownership: workspace.ownership,
+        registeredAt: workspace.registeredAt,
+        managedGeneration: workspace.managedGeneration,
+        shutdown: workspace.shutdown,
+        git: workspace.git,
       }))
     )
   const openWorkspaceInBrowser = async (workspaceId: string): Promise<'not-found' | 'opened'> => {
@@ -199,6 +219,85 @@ export async function startDaemonServer(options: {
       credential: workspace.credential,
     })
     return 'opened'
+  }
+  const registerManagedWorkspace: RunningDaemonServer['registerManagedWorkspace'] = async (
+    startup
+  ) => {
+    const id = `workspace-${createHash('sha256')
+      .update(startup.canonicalProjectDir)
+      .digest('hex')
+      .slice(0, 20)}`
+    const workspace: PrivateWorkspace = {
+      id,
+      projectDir: startup.canonicalProjectDir,
+      backendUrl: startup.backendUrl,
+      credential: startup.credential,
+      registeredAt: Date.now(),
+      ownership: 'daemon-managed',
+      managedGeneration: startup.generation,
+      shutdown: 'managed',
+      git: startup.git,
+      owner: null,
+    }
+    workspaces.set(id, workspace)
+    await publishWorkspaces()
+    const publicWorkspace: DaemonWorkspaceBinding = {
+      id,
+      backendUrl: workspace.backendUrl,
+      credential: workspace.credential,
+      projectDir: workspace.projectDir,
+      ownership: workspace.ownership,
+      registeredAt: workspace.registeredAt,
+      managedGeneration: workspace.managedGeneration,
+      shutdown: workspace.shutdown,
+      git: workspace.git,
+    }
+    return {
+      workspace: publicWorkspace,
+      async close() {
+        const current = workspaces.get(id)
+        if (current?.managedGeneration !== startup.generation) return
+        workspaces.delete(id)
+        await publishWorkspaces()
+      },
+    }
+  }
+  const resolveManagedWorkspace = (generation: number): DaemonWorkspaceBinding | null => {
+    const workspace = [...workspaces.values()].find(
+      (candidate) => candidate.managedGeneration === generation
+    )
+    if (!workspace) return null
+    return {
+      id: workspace.id,
+      backendUrl: workspace.backendUrl,
+      credential: workspace.credential,
+      projectDir: workspace.projectDir,
+      ownership: workspace.ownership,
+      registeredAt: workspace.registeredAt,
+      managedGeneration: workspace.managedGeneration,
+      shutdown: workspace.shutdown,
+      git: workspace.git,
+    }
+  }
+  const startManagedProject: RunningDaemonServer['startManagedProject'] = async (rawProjectDir) => {
+    if (!options.managedProject) {
+      return {
+        ok: false,
+        code: 'MANAGED_PROJECT_REMOTE_CALLER',
+        message: 'This App daemon does not own managed project services.',
+      }
+    }
+    return options.managedProject.start(rawProjectDir)
+  }
+  const stopManagedProject: RunningDaemonServer['stopManagedProject'] = async (generation) => {
+    if (!options.managedProject) {
+      return {
+        ok: false,
+        code: 'MANAGED_PROJECT_REMOTE_CALLER',
+        message: 'This App daemon does not own managed project services.',
+      }
+    }
+    return options.managedProject.stop(generation)
   }
 
   const server = createServer((socket) => {
@@ -241,6 +340,10 @@ export async function startDaemonServer(options: {
               workspaces.set(command.workspace.id, {
                 ...command.workspace,
                 registeredAt: Date.now(),
+                ownership: 'external',
+                managedGeneration: null,
+                shutdown: 'close-only',
+                git: null,
                 owner: socket,
               })
               await publishWorkspaces()
@@ -340,6 +443,21 @@ export async function startDaemonServer(options: {
                   ),
                 },
               }
+            } else if (command.type === 'prepare-restart') {
+              response = {
+                protocol: DAEMON_PROTOCOL_VERSION,
+                id: request.id,
+                ok: true,
+                data: {
+                  kind: 'restart-prepared',
+                  projectDirs: [...(options.managedProject?.captureManagedDirectorySet() ?? [])],
+                },
+              }
+              setImmediate(() => {
+                void close().catch(() => {
+                  process.stderr.write('App daemon restart preparation did not settle cleanly.\n')
+                })
+              })
             } else if (command.type === 'open-workspace-in-browser') {
               if ((await openWorkspaceInBrowser(command.workspaceId)) === 'not-found') {
                 response = {
@@ -425,5 +543,14 @@ export async function startDaemonServer(options: {
   server.on('error', (error) => {
     if (!closing) process.stderr.write(`App daemon IPC error: ${error.message}\n`)
   })
-  return { status, closed, openWorkspaceInBrowser, close }
+  return {
+    status,
+    closed,
+    openWorkspaceInBrowser,
+    registerManagedWorkspace,
+    resolveManagedWorkspace,
+    startManagedProject,
+    stopManagedProject,
+    close,
+  }
 }

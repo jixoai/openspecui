@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
- * 1. Confirm destructive Store removal with explicit environment and checkout identity.
- * 2. Submit through the route-owned Store mutation boundary without browser-side deletion.
- * 3. Keep the dialog bound to the full tab identity/generation that opened it.
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Confirm Store unregister/remove with explicit Environment and checkout identity.
+ * 2. Distinguish registry-only unregister from destructive checkout removal.
+ * 3. Keep the dialog bound to the full Environment source identity/generation that opened it.
  * 4. Close only from the matching Server-ledger succeeded record; retain rejection/failure evidence.
  *
  * Original request (2026-07-15): "我仍然需要看到一个初版的 Store Manager。"
@@ -13,50 +13,54 @@ import { Dialog } from '@openspecui/web-src/components/dialog'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BackendStoreMutationRecord } from '../lib/backend-client'
-import type { StoreActionAuthority } from '../lib/store-action'
+import type { EnvironmentActionAuthority } from '../lib/environment-authority'
 import { MutationStatusBadge } from './mutation-status'
 
-const REMOVE_STORE_FORM_ID = 'remove-store-form'
+const CLEANUP_STORE_FORM_ID = 'cleanup-store-form'
+
+export type StoreCleanupKind = 'unregister' | 'remove'
 
 /**
- * Store Remove 确认对话框（9.9）。
+ * Store cleanup 确认对话框（7.12）。
  *
- * 破坏性操作门槛：必须命名 environment、host、Store、checkout path，并要求显式确认。
+ * 操作门槛：必须命名 Environment、host、Store、checkout path，并要求显式确认。
  * 复用 web 共享 Dialog（focus trap / ESC / backdrop / @starting-style 过渡动画）。
  *
  * 关键约束（AGENTS.md）：
- *  - remove 是 stores.mutate 能力的 backend-owned 操作；前端只发请求，不删文件。
+ *  - unregister/remove 都是 backend-owned 操作；前端只发请求，不修改注册表或文件。
  *  - 客户端断开只 detach 观察；不杀 CLI。丢失结果为 indeterminate，不伪造为失败/取消。
  *
  * HTTP 仅返回 admission/rejoin 证据；关闭动作由 matching Server-ledger succeeded record 驱动。
  * 环境身份（envUri）由当前选中环境提供，不是前端构造。
  */
-export function StoreRemoveDialog({
+export function StoreCleanupDialog({
+  kind,
   store,
   envUri,
   authority,
   authorityCurrent = false,
-  removeStore,
+  cleanupStore,
   mutationRecords = [],
-  onRemoved,
+  onCleaned,
   onClose,
 }: {
+  kind: StoreCleanupKind
   store: StoreDoctorStore
   /** Opaque environment identity from the active backend (display-only; never dereferenced). */
   envUri?: string
   /** Exact selected-tab/generation authority evaluated in the submit turn. */
-  authority?: StoreActionAuthority | null
+  authority?: EnvironmentActionAuthority | null
   /** Whether the captured origin still equals the route's current authority. */
   authorityCurrent?: boolean
   /** Route-owned mutation operation; it performs the final production authority check. */
-  removeStore: (
-    authority: StoreActionAuthority | null,
+  cleanupStore: (
+    authority: EnvironmentActionAuthority | null,
     requestId: string,
     storeId: string
   ) => Promise<BackendStoreMutationRecord | null>
   /** Server-owned ledger records for the dialog's captured locator. */
   mutationRecords?: readonly StoreMutationEnvelope[]
-  onRemoved?: (storeId: string) => void
+  onCleaned?: (storeId: string) => void
   onClose: () => void
 }) {
   const [confirmText, setConfirmText] = useState('')
@@ -64,11 +68,20 @@ export function StoreRemoveDialog({
   const [error, setError] = useState<string | null>(null)
   const [requestId, setRequestId] = useState<string | null>(null)
   const expected = store.id ?? ''
+  const removesFiles = kind === 'remove'
+  const actionLabel = removesFiles ? 'Remove Store' : 'Unregister Store'
   const confirmRef = useRef<HTMLInputElement>(null)
   const hasConfirmation = confirmText === expected && expected.length > 0 && !submitting
   const canSubmit = hasConfirmation && Boolean(authority) && authorityCurrent
+  const expectedEnvUri = envUri ?? authority?.envUri
   const observedMutation = requestId
-    ? (mutationRecords.find((record) => record.requestId === requestId) ?? null)
+    ? (mutationRecords.find(
+        (record) =>
+          record.requestId === requestId &&
+          record.kind === kind &&
+          record.storeId === expected &&
+          record.envUri === expectedEnvUri
+      ) ?? null)
     : null
 
   useEffect(() => {
@@ -82,10 +95,11 @@ export function StoreRemoveDialog({
     if (!hasConfirmation || !storeId) return
     setSubmitting(true)
     setError(null)
-    const requestId = `remove:${storeId}:${Date.now()}`
-    removeStore(authority ?? null, requestId, storeId)
+    const requestId = `${kind}:${storeId}:${Date.now()}`
+    cleanupStore(authority ?? null, requestId, storeId)
       .then((mutation) => {
         if (!mutation) {
+          setError('The Environment authority changed before Store cleanup was admitted.')
           setSubmitting(false)
           return
         }
@@ -95,30 +109,34 @@ export function StoreRemoveDialog({
         setError(err instanceof Error ? err.message : String(err))
         setSubmitting(false)
       })
-  }, [hasConfirmation, authority, removeStore, store.id])
+  }, [authority, cleanupStore, hasConfirmation, kind, store.id])
 
   useEffect(() => {
     if (!observedMutation) return
     if (observedMutation.status === 'succeeded') {
-      onRemoved?.(store.id ?? '')
+      onCleaned?.(store.id ?? '')
       onClose()
       return
     }
     if (observedMutation.status === 'failed' || observedMutation.status === 'indeterminate') {
-      setError(observedMutation.result.stderr ?? `Store remove ${observedMutation.status}.`)
+      setError(observedMutation.result.stderr ?? `Store ${kind} ${observedMutation.status}.`)
       setSubmitting(false)
     }
-  }, [observedMutation, onClose, onRemoved, store.id])
+  }, [kind, observedMutation, onCleaned, onClose, store.id])
 
   return (
     <Dialog
       open
-      onClose={onClose}
+      onClose={() => {
+        if (!submitting) onClose()
+      }}
       borderVariant="error"
       title={
         <div className="flex items-center gap-2">
           <AlertTriangle className="text-destructive h-5 w-5 shrink-0" />
-          <span className="text-lg font-semibold">Remove Store files</span>
+          <span className="text-lg font-semibold">
+            {removesFiles ? 'Remove Store files' : 'Unregister Store'}
+          </span>
         </div>
       }
       footer={
@@ -133,19 +151,19 @@ export function StoreRemoveDialog({
           </button>
           <button
             type="submit"
-            form={REMOVE_STORE_FORM_ID}
+            form={CLEANUP_STORE_FORM_ID}
             disabled={!canSubmit}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50"
           >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Remove Store
+            {actionLabel}
           </button>
         </>
       }
     >
       <form
-        id={REMOVE_STORE_FORM_ID}
-        aria-label="Remove Store files"
+        id={CLEANUP_STORE_FORM_ID}
+        aria-label={removesFiles ? 'Remove Store files' : 'Unregister Store'}
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault()
@@ -153,8 +171,10 @@ export function StoreRemoveDialog({
         }}
       >
         <p className="text-muted-foreground text-sm">
-          This deletes the Store checkout on the backend host. The mutation is backend-owned and
-          survives disconnects.
+          {removesFiles
+            ? 'This forgets the registration and deletes the Store checkout on the backend host.'
+            : 'This forgets the Store registration but keeps its checkout files on disk.'}{' '}
+          The mutation is backend-owned and survives disconnects.
         </p>
 
         <dl className="bg-muted/40 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 rounded-md p-3 text-xs">
@@ -173,8 +193,8 @@ export function StoreRemoveDialog({
 
         {authority && !authorityCurrent ? (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700">
-            The environment refreshed after this dialog opened. Close and reopen it before removing
-            files.
+            The environment refreshed after this dialog opened. Close and reopen it before changing
+            this Store registration.
           </p>
         ) : null}
 

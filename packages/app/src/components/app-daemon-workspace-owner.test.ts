@@ -26,6 +26,12 @@ function snapshot(
       id: w.id,
       backendUrl: w.apiBaseUrl,
       credential: w.credential,
+      projectDir: `/projects/${w.id}`,
+      ownership: 'external',
+      registeredAt: 1,
+      managedGeneration: null,
+      shutdown: 'close-only',
+      git: null,
     })),
   }
 }

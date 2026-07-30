@@ -1,9 +1,9 @@
 /**
  * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
- * 1. Orchestrate persistent credential-free project tabs, browser actions, and iframe lifecycle.
+ * 1. Orchestrate fixed Home/project tabs, browser actions, and iframe lifecycle.
  * 2. Coordinate PWA install, display, and update ownership.
  * 3. Publish shell state once and consume exact-tab reachability from the shared observation owner.
- * 4. Keep refresh/retry feedback attached to the affected tab runtime.
+ * 4. Bind Home directory launch and refresh/retry feedback to their exact runtime lifecycle.
  * 5. Preserve cross-window shell-state convergence.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
@@ -43,10 +43,12 @@ import {
   type HostedAppWindowControlsOverlayLike,
 } from '../lib/pwa-runtime'
 import type { HostedTabReachability } from '../lib/reachability'
+import { probeHostedBackend } from '../lib/reachability'
 import {
   activateHostedTab,
   applyHostedLaunchRequest,
   buildHostedEmbeddedUiUrl,
+  normalizeHostedApiBaseUrl,
   removeHostedTab,
   reorderHostedTabs,
   type HostedShellLaunchRequest,
@@ -54,12 +56,15 @@ import {
 } from '../lib/shell-state'
 import { useConnections, useConnectionsActions } from '../lib/use-connections'
 import {
-  loadWorkspaceDirectoryCatalog,
-  recordSuccessfulDirectoryOpen,
-  selectWorkspaceDirectoryCatalogView,
-  setDirectoryFavorite,
-  type WorkspaceDirectoryCatalog,
-} from '../lib/workspace-directory-catalog'
+  useWorkspaceCandidateActions,
+  useWorkspaceCandidates,
+} from '../lib/use-workspace-candidates'
+import {
+  useWorkspaceDirectoryCatalog,
+  useWorkspaceDirectoryCatalogActions,
+} from '../lib/use-workspace-directory-catalog'
+import { composeLauncherCandidates } from '../lib/workspace-candidate-catalog'
+import { selectWorkspaceDirectoryCatalogView } from '../lib/workspace-directory-catalog'
 import { selectWorkspacePathLabel } from '../lib/workspace-path-label'
 import { useAppDaemonWorkspace } from './app-daemon-workspace-owner'
 import { useAppLaunchError } from './app-launch-owner'
@@ -71,6 +76,7 @@ import { WorkspaceTabBrowserAction } from './workspace-tab-browser-action'
 const REFRESH_FEEDBACK_MS = 1200
 const UPDATE_CHECK_INTERVAL_MS = 60000
 const UPDATE_READY_MESSAGE = 'A newer OpenSpec UI App shell is ready.'
+const HOME_TAB_ID = 'workspace-home'
 
 type HostedTabFrameStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
@@ -78,6 +84,7 @@ interface HostedShellProps {
   initialLaunchRequest: HostedShellLaunchRequest | null
   fallbackLaunchRequest?: HostedShellLaunchRequest | null
   initialError: string | null
+  onOpenTaskManager?: () => void
 }
 
 interface HostedTabRuntimeState {
@@ -85,6 +92,7 @@ interface HostedTabRuntimeState {
   projectName: string | null
   /** Canonical project directory from backend health; used for path-first tab labels. */
   projectDir: string | null
+  git: { githubRemote?: string | null; branch?: string | null } | null
   openspecuiVersion: string | null
   embeddedUiUrl: string | null
   errorMessage: string | null
@@ -128,6 +136,7 @@ const DEFAULT_RUNTIME_STATE: HostedTabRuntimeState = {
   reachability: 'checking',
   projectName: null,
   projectDir: null,
+  git: null,
   openspecuiVersion: null,
   embeddedUiUrl: null,
   errorMessage: null,
@@ -409,7 +418,7 @@ function createHostedShellTab(props: {
   // fall back to projectName. host/port stays diagnostic-only (not the primary tab label).
   const pathLabel =
     props.runtime.projectDir !== null
-      ? selectWorkspacePathLabel({ projectPath: props.runtime.projectDir, git: null })
+      ? selectWorkspacePathLabel({ projectPath: props.runtime.projectDir, git: props.runtime.git })
       : null
   const title = pathLabel?.title ?? props.runtime.projectName ?? props.tab.apiBaseUrl
   const subtitle = pathLabel?.subtitle ?? pathLabel?.detail ?? props.tab.apiBaseUrl
@@ -462,6 +471,7 @@ function HostedShellRuntime({
   initialLaunchRequest,
   fallbackLaunchRequest = null,
   initialError,
+  onOpenTaskManager,
 }: HostedShellProps) {
   const appLaunchError = useAppLaunchError()
   const daemonWorkspace = useAppDaemonWorkspace()
@@ -469,6 +479,8 @@ function HostedShellRuntime({
   const connectionOwner = useConnectionObservationOwner()
   const connectionSnapshot = useConnectionObservations()
   const connectionActions = useConnectionsActions()
+  const candidateCatalog = useWorkspaceCandidates()
+  const candidateActions = useWorkspaceCandidateActions()
   const shellState = useConnections()
   const setShellState = useCallback(
     (resolveNext: (current: typeof shellState) => typeof shellState) => {
@@ -483,13 +495,14 @@ function HostedShellRuntime({
   const [openingWorkspaceId, setOpeningWorkspaceId] = useState<string | null>(null)
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
   // Workspace directory catalog (Favorites / Recent) — credential-free, persisted.
-  const [directoryCatalog, setDirectoryCatalog] = useState<WorkspaceDirectoryCatalog>(() =>
-    typeof localStorage !== 'undefined'
-      ? loadWorkspaceDirectoryCatalog(localStorage)
-      : { version: 1, entries: [] }
-  )
+  const directoryCatalog = useWorkspaceDirectoryCatalog()
+  const directoryCatalogActions = useWorkspaceDirectoryCatalogActions()
   const [homePathError, setHomePathError] = useState<string | null>(null)
   const [homePathPending, setHomePathPending] = useState(false)
+  const [selectedWorkspaceTabId, setSelectedWorkspaceTabId] = useState(HOME_TAB_ID)
+  const [candidateReachability, setCandidateReachability] = useState<
+    Readonly<Record<string, HostedTabReachability>>
+  >({})
   const [pwaState, setPwaState] = useState<HostedShellPwaState>(DEFAULT_PWA_STATE)
   const [updateState, setUpdateState] = useState<HostedAppUpdateState>(DEFAULT_UPDATE_STATE)
   const installPromptRef = useRef<BeforeInstallPromptEventLike | null>(null)
@@ -502,6 +515,35 @@ function HostedShellRuntime({
   useEffect(() => {
     if (appLaunchError !== undefined) setErrorMessage(appLaunchError)
   }, [appLaunchError])
+
+  useEffect(() => {
+    setSelectedWorkspaceTabId(shellState.activeTabId ?? HOME_TAB_ID)
+  }, [shellState.activeTabId])
+
+  useEffect(() => {
+    let active = true
+    const closedManual = candidateCatalog.candidates.filter(
+      (candidate) =>
+        candidate.source === 'manual' &&
+        !shellState.tabs.some((tab) => tab.apiBaseUrl === candidate.apiBaseUrl)
+    )
+    for (const candidate of closedManual) {
+      setCandidateReachability((current) => ({
+        ...current,
+        [candidate.apiBaseUrl]: 'checking',
+      }))
+      void probeHostedBackend(candidate.apiBaseUrl).then((result) => {
+        if (!active) return
+        setCandidateReachability((current) => ({
+          ...current,
+          [candidate.apiBaseUrl]: result.reachability,
+        }))
+      })
+    }
+    return () => {
+      active = false
+    }
+  }, [candidateCatalog.candidates, shellState.tabs])
 
   const openAddDialog = useCallback(() => {
     setAddDialogError(null)
@@ -618,6 +660,11 @@ function HostedShellRuntime({
     return Object.fromEntries(
       shellState.tabs.map((tab) => {
         const observation = byTabId.get(tab.id)
+        const daemonBinding = daemonWorkspace.workspaces.find(
+          (workspace) =>
+            normalizeHostedApiBaseUrl(workspace.backendUrl) ===
+            normalizeHostedApiBaseUrl(tab.apiBaseUrl)
+        )
         const health = observation?.health ?? null
         const reachability = observation?.reachability ?? 'checking'
         return [
@@ -625,7 +672,13 @@ function HostedShellRuntime({
           {
             reachability,
             projectName: health?.projectName ?? null,
-            projectDir: health?.projectDir ?? null,
+            projectDir: daemonBinding?.projectDir ?? health?.projectDir ?? null,
+            git: daemonBinding?.git
+              ? {
+                  githubRemote: daemonBinding.git.remoteUrl,
+                  branch: daemonBinding.git.branch,
+                }
+              : null,
             openspecuiVersion: health?.openspecuiVersion ?? null,
             embeddedUiUrl:
               reachability !== 'unsupported' && reachability !== 'authentication-required'
@@ -636,7 +689,52 @@ function HostedShellRuntime({
         ]
       })
     )
-  }, [connectionSnapshot.observations, shellState.tabs])
+  }, [connectionSnapshot.observations, daemonWorkspace.workspaces, shellState.tabs])
+
+  const launcherCandidates = useMemo(
+    () =>
+      composeLauncherCandidates(
+        candidateCatalog,
+        daemonWorkspace.workspaces.map((workspace) => ({
+          apiBaseUrl: workspace.backendUrl,
+          source: 'daemon-live' as const,
+          label: workspace.projectDir,
+        }))
+      ).map((candidate) => {
+        const binding = daemonWorkspace.workspaces.find(
+          (workspace) => workspace.backendUrl === candidate.apiBaseUrl
+        )
+        const tab = shellState.tabs.find(
+          (workspace) => workspace.apiBaseUrl === candidate.apiBaseUrl
+        )
+        const runtime = tab ? tabRuntime[tab.id] : undefined
+        return {
+          apiBaseUrl: candidate.apiBaseUrl,
+          source: candidate.source,
+          reachability:
+            runtime?.reachability ??
+            (binding ? 'online' : (candidateReachability[candidate.apiBaseUrl] ?? 'checking')),
+          label: binding
+            ? selectWorkspacePathLabel({
+                projectPath: binding.projectDir,
+                git: binding.git
+                  ? { githubRemote: binding.git.remoteUrl, branch: binding.git.branch }
+                  : null,
+              })
+            : selectWorkspacePathLabel({
+                projectPath: candidate.label ?? candidate.apiBaseUrl,
+                git: null,
+              }),
+        }
+      }),
+    [
+      candidateCatalog,
+      candidateReachability,
+      daemonWorkspace.workspaces,
+      shellState.tabs,
+      tabRuntime,
+    ]
+  )
 
   useEffect(() => {
     return () => {
@@ -972,14 +1070,15 @@ function HostedShellRuntime({
     }
     const activePathLabel =
       activeRuntime?.projectDir !== null && activeRuntime?.projectDir !== undefined
-        ? selectWorkspacePathLabel({ projectPath: activeRuntime.projectDir, git: null })
+        ? selectWorkspacePathLabel({
+            projectPath: activeRuntime.projectDir,
+            git: activeRuntime.git,
+          })
         : null
     const activeTitle =
       activePathLabel?.title ?? activeRuntime?.projectName ?? activeHostedTab.apiBaseUrl
     document.title = `${activeTitle} - OpenSpec UI App`
   }, [activeHostedTab, activeRuntime])
-
-  const HOME_TAB_ID = 'workspace-home'
 
   const tabs = useMemo(() => {
     const projectTabs = shellState.tabs.map((tab) =>
@@ -1013,56 +1112,50 @@ function HostedShellRuntime({
       content: (
         <WorkspaceHome
           catalog={selectWorkspaceDirectoryCatalogView(directoryCatalog)}
-          launchSupported
+          launchSupported={daemonWorkspace.availability === 'supported'}
           pending={homePathPending}
           error={homePathError}
+          onOpenTaskManager={onOpenTaskManager}
           onSubmitPath={(projectDir) => {
             setHomePathPending(true)
             setHomePathError(null)
-            // Open/focus a Workspace from this locator; the daemon manages the backend.
-            setShellState((current) =>
-              applyHostedLaunchRequest(current, {
-                apiBaseUrl: projectDir.startsWith('http')
-                  ? projectDir
-                  : `http://localhost:0/${encodeURIComponent(projectDir)}`,
+            void daemonWorkspace
+              .startManagedProject(projectDir)
+              .then((workspace) => {
+                directoryCatalogActions.recordSuccessfulOpen(workspace.projectDir)
+                const tab = connectionActions
+                  .getState()
+                  .tabs.find((candidate) => candidate.apiBaseUrl === workspace.backendUrl)
+                setSelectedWorkspaceTabId(tab?.id ?? HOME_TAB_ID)
               })
-            )
-            // Record successful recency in the credential-free catalog.
-            setDirectoryCatalog((prev) => {
-              const next = recordSuccessfulDirectoryOpen(prev, projectDir)
-              if (typeof localStorage !== 'undefined') {
-                import('../lib/workspace-directory-catalog').then(
-                  ({ saveWorkspaceDirectoryCatalog }) => {
-                    saveWorkspaceDirectoryCatalog(localStorage, next)
-                  }
+              .catch((error: unknown) => {
+                setHomePathError(
+                  error instanceof Error ? error.message : 'Managed project failed to start.'
                 )
-              }
-              return next
-            })
-            setHomePathPending(false)
+              })
+              .finally(() => setHomePathPending(false))
           }}
           onToggleFavorite={(canonicalPath, favorite) => {
-            setDirectoryCatalog((prev) => {
-              const next = setDirectoryFavorite(prev, canonicalPath, favorite)
-              if (typeof localStorage !== 'undefined') {
-                import('../lib/workspace-directory-catalog').then(
-                  ({ saveWorkspaceDirectoryCatalog }) => {
-                    saveWorkspaceDirectoryCatalog(localStorage, next)
-                  }
-                )
-              }
-              return next
-            })
+            directoryCatalogActions.setFavorite(canonicalPath, favorite)
           }}
           onOpenDirectory={(canonicalPath) => {
-            // Focus or open the Workspace for this directory.
-            setShellState((current) =>
-              applyHostedLaunchRequest(current, {
-                apiBaseUrl: canonicalPath.startsWith('http')
-                  ? canonicalPath
-                  : `http://localhost:0/${encodeURIComponent(canonicalPath)}`,
+            setHomePathPending(true)
+            setHomePathError(null)
+            void daemonWorkspace
+              .startManagedProject(canonicalPath)
+              .then((workspace) => {
+                directoryCatalogActions.recordSuccessfulOpen(workspace.projectDir)
+                const tab = connectionActions
+                  .getState()
+                  .tabs.find((candidate) => candidate.apiBaseUrl === workspace.backendUrl)
+                setSelectedWorkspaceTabId(tab?.id ?? HOME_TAB_ID)
               })
-            )
+              .catch((error: unknown) => {
+                setHomePathError(
+                  error instanceof Error ? error.message : 'Managed project failed to start.'
+                )
+              })
+              .finally(() => setHomePathPending(false))
           }}
         />
       ),
@@ -1071,9 +1164,15 @@ function HostedShellRuntime({
   }, [
     markFrameErrored,
     markFrameLoaded,
+    connectionActions,
     daemonWorkspace,
+    directoryCatalog,
+    directoryCatalogActions,
+    homePathError,
+    homePathPending,
     handleOpenWorkspaceInBrowser,
     openingWorkspaceId,
+    onOpenTaskManager,
     probeTabs,
     setIframeRef,
     shellState.tabs,
@@ -1144,8 +1243,9 @@ function HostedShellRuntime({
         >
           <TerminalTabs
             tabs={tabs}
-            selectedTab={shellState.activeTabId ?? HOME_TAB_ID}
+            selectedTab={selectedWorkspaceTabId}
             onTabChange={(tabId) => {
+              setSelectedWorkspaceTabId(tabId)
               if (tabId === HOME_TAB_ID) return
               setShellState((current) => activateHostedTab(current, tabId))
             }}
@@ -1157,10 +1257,7 @@ function HostedShellRuntime({
                 const closing = current.tabs.find((tab) => tab.id === tabId)
                 if (closing) daemonWorkspace.dismissDaemonWorkspace(closing.apiBaseUrl)
                 const next = removeHostedTab(current, tabId)
-                // Closing the last project tab falls back to Home.
-                if (next.activeTabId === null) {
-                  return next
-                }
+                setSelectedWorkspaceTabId(next.activeTabId ?? HOME_TAB_ID)
                 return next
               })
             }}
@@ -1193,21 +1290,7 @@ function HostedShellRuntime({
       <WorkspaceLauncherDialog
         open={isAddDialogOpen}
         onClose={() => setIsAddDialogOpen(false)}
-        candidates={shellState.tabs.map((tab) => ({
-          apiBaseUrl: tab.apiBaseUrl,
-          reachability: (tabRuntime[tab.id]?.reachability ?? 'checking') as
-            | 'online'
-            | 'checking'
-            | 'offline'
-            | 'authentication-required'
-            | 'unsupported'
-            | 'failed',
-          source: 'daemon-live' as const,
-          label: selectWorkspacePathLabel({
-            projectPath: tabRuntime[tab.id]?.projectDir ?? tab.apiBaseUrl,
-            git: null,
-          }),
-        }))}
+        candidates={launcherCandidates}
         openWorkspaces={shellState.tabs.map((tab) => ({ apiBaseUrl: tab.apiBaseUrl }))}
         pending={[]}
         onFocus={(apiBaseUrl) => {
@@ -1219,8 +1302,9 @@ function HostedShellRuntime({
           setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl }))
           setIsAddDialogOpen(false)
         }}
-        onForget={() => {}}
+        onForget={(apiBaseUrl) => candidateActions.forgetManualCandidate(apiBaseUrl)}
         onConnect={(apiBaseUrl) => {
+          candidateActions.addManualCandidate(apiBaseUrl)
           setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl }))
           setIsAddDialogOpen(false)
         }}

@@ -20,12 +20,14 @@ import {
 
 interface FakeChild {
   startup: ManagedProjectStartup
-  closed: boolean
+  leaseClosed: boolean
+  serviceSettled: boolean
 }
 
 function createFakes(options?: {
   canonical?: Record<string, string>
   spawnFailsFor?: readonly string[]
+  registerFailsFor?: readonly string[]
 }) {
   const canonicalMap = new Map<string, string>(
     Object.entries(options?.canonical ?? { '/proj/link': '/real/proj' })
@@ -35,6 +37,7 @@ function createFakes(options?: {
   const registerCalls: ManagedProjectStartup[] = []
   let generation = 0
   const spawnFailsFor = new Set(options?.spawnFailsFor ?? [])
+  const registerFailsFor = new Set(options?.registerFailsFor ?? [])
 
   const spawner: ManagedProjectSpawner = {
     async spawn(identity) {
@@ -49,20 +52,31 @@ function createFakes(options?: {
         credential: `cred-${generation}`,
         generation,
       }
+      children.set(identity.canonicalProjectDir, {
+        startup,
+        leaseClosed: false,
+        serviceSettled: false,
+      })
       return startup
+    },
+    async settle(startup) {
+      const child = children.get(startup.identity.canonicalProjectDir)
+      if (child) child.serviceSettled = true
     },
   }
   const registrar: ManagedProjectRegistrar = {
     async register(startup) {
       registerCalls.push(startup)
+      if (registerFailsFor.has(startup.identity.canonicalProjectDir)) {
+        throw new Error(`register failed for ${startup.identity.canonicalProjectDir}`)
+      }
       const lease: ManagedProjectLease = {
         generation: startup.generation,
         async close() {
           const child = children.get(startup.identity.canonicalProjectDir)
-          if (child) child.closed = true
+          if (child) child.leaseClosed = true
         },
       }
-      children.set(startup.identity.canonicalProjectDir, { startup, closed: false })
       return lease
     },
   }
@@ -177,6 +191,18 @@ describe('managed project owner — fixed plan, authenticated local App only (3.
     expect(result.rejection.kind).toBe('spawn-failed')
     expect(owner.captureManagedDirectorySet()).toHaveLength(0)
   })
+
+  it('settles the real child when Workspace registration fails', async () => {
+    const fakes = createFakes({
+      canonical: { '/unadmitted': '/real/unadmitted' },
+      registerFailsFor: ['/real/unadmitted'],
+    })
+    const owner = authenticatedOwner(fakes)
+    const result = await owner.start('/unadmitted')
+    expect(result.ok).toBe(false)
+    expect(fakes.children.get('/real/unadmitted')?.serviceSettled).toBe(true)
+    expect(owner.captureManagedDirectorySet()).toHaveLength(0)
+  })
 })
 
 describe('managed project owner — exact Stop, daemon stop, restart restore (3.0d)', () => {
@@ -215,8 +241,8 @@ describe('managed project owner — exact Stop, daemon stop, restart restore (3.
     const settled = await owner.settleAllForDaemonStop()
     expect(settled).toHaveLength(2)
     expect(owner.captureManagedDirectorySet()).toHaveLength(0)
-    // leases were retired (presentation/credential authority settled).
-    expect([...fakes.children.values()].every((c) => c.closed)).toBe(true)
+    expect([...fakes.children.values()].every((child) => child.leaseClosed)).toBe(true)
+    expect([...fakes.children.values()].every((child) => child.serviceSettled)).toBe(true)
   })
 
   it('restart restores the captured directory set exactly once without duplicating', async () => {
@@ -293,5 +319,6 @@ describe('managed project owner — mutation resistance (3.0f)', () => {
     const result = await owner.stop(a.startup.generation)
     expect(result.ok).toBe(true)
     expect(owner.hasManaged('/real/a')).toBe(false)
+    expect(fakes.children.get('/real/a')?.serviceSettled).toBe(true)
   })
 })

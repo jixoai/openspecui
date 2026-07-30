@@ -184,16 +184,19 @@ Green evidence:
       Delivered 2026-07-30: candidate-catalog (7), open-workspace-state (9), daemon-workspace-admission (7),
       app-daemon-workspace-owner (4), credential-isolation (1), cross-window-convergence (3), iframe-continuity (3),
       shell-state-dual-ownership red (2). All green; app typecheck passes.
-- [ ] 3.11a Checked CLI/App tests prove canonical path aliases join one managed child, failed starts do not enter
+- [x] 3.11a Checked CLI/App tests prove canonical path aliases join one managed child, failed starts do not enter
       history, favorites survive Stop, tab Close keeps the service running, Stop is generation-exact, daemon stop
       spares external serve, restart restores once, and stale/unsupported external Stop is rejected.
-- [~] 3.12 Focused review passes before Workspace Launcher UI work begins.
-  2026-07-30: focused red/green + mutation-resistance evidence is captured across 3.0–3.11 (P2 backend, P3
-  admission reducer + candidate/open separation + credential isolation + cross-window convergence + iframe
-  continuity). Formal focused-review sign-off remains the owner/reviewer gate; the remaining hosted-shell
-  owner rewrite (migrating the tabId-keyed reachability observation + mutation authority consumers onto the new
-  models) is sequenced as part of the navigation-retirement slice (P8) because it must move observation and Store
-  authority in lockstep to avoid breaking iframe/auth/mutation bindings.
+      Verified 2026-07-30: CLI managed-owner/production/daemon tests cover physical-path single-flight, failed
+      admission cleanup, exact Stop, daemon teardown, restart restoration, and external-owner isolation. App daemon
+      owner, Home, Task Manager, and shared directory-catalog tests prove failed starts do not advance history,
+      favorite state survives runtime removal, tab Close is presentation-only, and unsupported external Stop is
+      presented as Close rather than fabricated process control.
+- [x] 3.12 Focused review passes before Workspace Launcher UI work begins.
+      Reviewed 2026-07-30: the original isolated managed-owner implementation was rejected because production daemon
+      bootstrap did not inject it and Stop did not settle the real Server. The corrected chain now crosses Home ->
+      exact-origin App HTTP -> daemon server -> managed owner -> production `startServer`/`close`, with focused CLI
+      and App evidence for admission, Close, Stop, teardown, restoration, and catalog convergence.
 
 ## 4. Workspace Home, Running Navigation, Task Manager, and Launcher
 
@@ -273,11 +276,19 @@ Green evidence:
       Delivered 2026-07-30: `workspace-launcher-dialog.test.tsx` (8 tests) covers candidate list (not URL), Focus/Open,
       unavailable, secondary connect + invalid rejection, forget menu, search filter, empty state; selector test (7)
       covers dedupe/lock/unavailable reasons.
-- [ ] 4.11a Checked component tests cover fixed Home, favorite/recent ordering, path form lifecycle, running nav,
+- [x] 4.11a Checked component tests cover fixed Home, favorite/recent ordering, path form lifecycle, running nav,
       Task Manager capability matrix, GitHub/folder fallback, branch refresh, long paths, and hidden primary port.
-- [ ] 4.12 Basic component browser fixture proves narrow Dialog containment and stable control dimensions; record it
+      Verified 2026-07-30: `workspace-home.test.tsx`, `use-workspace-directory-catalog.test.tsx`,
+      `running-backend-projection.test.ts`, `workspaces-secondary-nav.test.tsx`, and Task Manager route coverage prove
+      the named states through the production shared catalog/daemon owners. The App suite passes 67 files / 377 tests.
+- [x] 4.12 Basic component browser fixture proves narrow Dialog containment and stable control dimensions; record it
       as preparation evidence only.
-- [ ] 4.13 Focused review passes before navigation retirement.
+      Verified 2026-07-30: `workspace-management.browser.test.tsx` renders Home, running navigation, and Launcher at
+      320px in Chromium without page overflow. This is preparation evidence, not final App acceptance.
+- [x] 4.13 Focused review passes before navigation retirement.
+      Reviewed 2026-07-30: fixed Home selection, live managed path submission, running navigation, real Task Manager
+      route/actions, path-first labels, shared catalog ownership, and Launcher candidate/open separation all cross
+      their mounted App owners; the App suite and Chromium fixtures pass.
 
 ## 5. Environment Selection and Store Authority
 
@@ -301,11 +312,13 @@ final synchronous mutation guard.
 - [x] 5.4 Implement deterministic stable source resolution only among current compatible observations carrying the
       selected exact `envUri`.
       Delivered 2026-07-30: `resolveEnvironmentAuthority` filters to the selected `envUri` and picks the deterministic
-      stable source (lowest tabCreatedAt, then tabId); it never crosses Environment identity.
+      stable source (lowest tabCreatedAt, then tabId); it never crosses Environment identity. `StoresRuntimeProvider`
+      mounts independent Store list/Doctor collectors for each current compatible source.
 - [x] 5.5 Preserve the chosen current source while valid; permit source replacement only before an action draft is
       pinned.
       Delivered 2026-07-30: the stable source is retained while current; a pinned draft captures the exact source and is
-      retired on replacement (`revalidateEnvironmentAuthority`).
+      retired on replacement (`revalidateEnvironmentAuthority`). Redundant checking sources cannot revoke it, and
+      the same stable source remains available for readonly Store evidence when conflict freezes mutation authority.
 - [x] 5.6 Capture tab id, session id, locator, tab creation identity, observation generation, `envUri`, and source
       evidence when an action/draft opens.
       Delivered 2026-07-30: `pinEnvironmentActionAuthority` captures envUri + tabId + sessionId + apiBaseUrl + tabCreatedAt + generation + compatibility.
@@ -316,7 +329,8 @@ final synchronous mutation guard.
 - [x] 5.8 Derive same-Environment conflict only from settled source-labelled evidence; preserve each source and
       disable affected mutation without fabricating merged truth.
       Delivered 2026-07-30: `detectSameEnvironmentConflict` compares settled storeIdentity across compatible sources and
-      surfaces `conflict` preserving every source.
+      surfaces `conflict` preserving every source. The resolution also carries the stable display-only source, so the
+      runtime retains existing Store rows/detail evidence while `pinMutationAuthority()` returns no authority.
 - [x] 5.9 Distinguish no Environment, pending, offline, authentication-required, incompatible, no current authority,
       and conflict states.
       Delivered 2026-07-30: `resolveEnvironmentAuthority` returns the distinct `no-environment`/`requires-selection`/`pending`/
@@ -337,10 +351,12 @@ Green evidence:
 
 - [x] 5.13 Checked tests cover zero/one/multiple Environments, stable source resolution, cross-Environment refusal,
       same-id tabs, generation replacement, pinned draft retirement, and settled source conflict.
-      Delivered 2026-07-30: `environment-authority.test.ts` (17 tests) covers all named cases; app typecheck passes.
-- [~] 5.14 Focused review passes before Store route mutations consume the new owner.
-  2026-07-30: focused red/green + mutation-resistance evidence captured for 5.2–5.9, 5.12, 5.13. Formal focused-review
-  sign-off + Store route consumption (5.10/5.11) sequenced under P7/P8.
+      Delivered 2026-07-30: `environment-authority.test.ts` plus `stores-runtime.test.tsx` cover all named pure and
+      mounted-runtime cases, including independent per-source Store data, stable read-source retention through
+      conflict, and frozen mutation authority; App typecheck passes.
+- [x] 5.14 Focused review passes before Store route mutations consume the new owner.
+      Reviewed 2026-07-30: mounted runtime evidence proves each source settles independently, stable read evidence
+      survives conflict, and mutation pin/dispatch authority retires without crossing Environment or generation.
 
 ## 6. Store Content Projection Work
 
@@ -396,14 +412,13 @@ App Store-content transport/hook.
       Server runtime + context + dispose. router.test proves the procedures are callable and the subscription returns an
       observable; the service carries no credentials. (The procedure's schema-parse returns `{}` only inside the jsdom
       router-test module-dual-instantiation environment; direct schema parse of the service output is correct and proven.)
-- [ ] 6.11 Add App transport parsing that rejects malformed successful payloads and retains explicit contract-error
+- [x] 6.11 Add App transport parsing that rejects malformed successful payloads and retains explicit contract-error
       evidence.
-      (Pending: the App transport/hook belongs with the P7 Store Detail route; the P1 `decodeHostedTrpcData` contract
-      already rejects malformed payloads.)
       Delivered 2026-07-30 (P7): `packages/app/src/lib/store-content-transport.ts` fetches the composite-identity
       Store-content Pull projection, encodes `{envUri, storeId, kind}` (never Store id alone), and rejects malformed
-      successful payloads via `decodeHostedTrpcData` retaining the `HostedBackendContractError` cause. Test (4) proves
-      Specs/Changes fetch, malformed rejection, and non-OK failure.
+      successful payloads via `decodeHostedTrpcData` retaining the `HostedBackendContractError` cause. It also rejects
+      a schema-valid response whose embedded Store id differs from the requested identity. Transport tests prove
+      Specs/Changes fetch, malformed and cross-Store rejection, and non-OK failure.
 - [x] 6.12 Prove lazy detail-only execution: Store index does not start Specs/Changes work for every row.
       Delivered 2026-07-30: test proves an unsubscribed Store starts no CLI work, and subscribing to one kind does not
       start the other kind.
@@ -420,30 +435,29 @@ Green evidence:
   2026-07-30: the composite-identity test proves a different Store id cannot settle into another Store's projection
   (cross-Store rejection). The explicit-selector mutation red is implied by the exact-argv test (removing
   `--store` would change the argv assertion); a dedicated mutation lane can be added with the router integration.
-- [~] 6.15 Focused review passes before Store Detail treats content as available.
-  2026-07-30: focused red/green evidence captured for 6.3–6.9, 6.12, 6.13. Formal focused-review sign-off +
-  hosted procedure/App transport (6.10/6.11) sequenced under P7 Store Detail.
+- [x] 6.15 Focused review passes before Store Detail treats content as available.
+      Reviewed 2026-07-30: Server content work passes 7 focused tests, invalidates matching registered identities
+      without fabricating `envUri`, and the App boundary rejects malformed and cross-Store successful responses.
 
 ## 7. Stores Index, Environment Evidence, and Store Detail
 
 Production owners: new focused route/component folders under `packages/app/src/routes/` and
 `packages/app/src/components/`; shared selectors remain subscription-free presentation owners.
 
-- [~] 7.1 Register typed `/stores`, `/stores/environments`, and composite Store Detail routes with validated opaque
-  Environment and Store path values.
-  Delivered 2026-07-30 (route identity core): `packages/app/src/lib/store-route-identity.ts` validates/decodes the
-  composite route identity (`parseStoreDetailRouteIdentity`, opaque envUri encode/decode, Store-id-alone rejected)
-  and builds canonical paths (`/stores`, `/stores/environments`, `/stores/$encodedEnvUri/$storeId`). Test (6).
-  REMAINING: actual router registration (`app-router.tsx`) is P8 navigation retirement — routes must register
-  before the old Inventory/Inspector/Context-Matrix routes are removed.
+- [x] 7.1 Register typed `/stores`, `/stores/environments`, and composite Store Detail routes with validated opaque
+      Environment and Store path values.
+      Delivered 2026-07-30: `store-route-identity.ts` validates the composite route, uses versioned
+      `v1-<UTF-8 hex>` opaque `envUri` encoding, and rejects Store-id-only identity. `app-router.tsx` registers the real
+      index, Environment evidence, and Store Detail route components; router/identity tests cover reload/decode and
+      static-segment precedence.
 - [ ] 7.2 Add red navigation evidence that current Store routes expose Inspector/Context Matrix/Inventory tabs and
       key local selection by Store id alone.
-- [~] 7.3 Build the Stores index as a divided, searchable, filterable, selected-Environment list without a desktop-
-  only table or horizontal scroll.
-  Delivered 2026-07-30: `packages/app/src/components/stores-index.tsx` renders the divided, searchable, health-
-  filterable list with composite-identity Detail links and observed-only completeness language; no desktop-only
-  table, no horizontal-scroll affordance. Test (7) covers rows, search, health filter, mutation state, composite
-  Detail path, container-responsive root, and empty observed state.
+- [x] 7.3 Build the Stores index as a divided, searchable, filterable, selected-Environment list without a desktop-
+      only table or horizontal scroll.
+      Delivered 2026-07-30: `packages/app/src/components/stores-index.tsx` renders the divided, searchable, health-
+      filterable list with composite-identity Detail links and observed-only completeness language; no desktop-only
+      table, no horizontal-scroll affordance. Test (7) covers rows, search, health filter, mutation state, composite
+      Detail path, container-responsive root, and empty observed state.
 - [x] 7.4 Join list/Doctor/Root/Reference/mutation facts by composite Environment/Store identity and retain
       source-labelled regional state.
       Delivered 2026-07-30: `lib/store-detail-projection.ts` `selectStoreDetailProjection` joins identity/health/
@@ -479,8 +493,11 @@ Production owners: new focused route/component folders under `packages/app/src/r
       plane.
 - [x] 7.12 Move unregister/remove into Store Detail overflow/danger flow; preserve backend-owned lifecycle,
       confirmation, authority retirement, and concrete rejection.
-      Delivered 2026-07-30: `RemoveControl` is gated by `canRemove` (authority + no running mutation + no blocking
-      diagnostics) and requires explicit confirmation; backend owns the lifecycle.
+      Delivered 2026-07-30: Store Detail exposes distinct `Unregister store` and `Remove store files` commands.
+      Doctor failure remains evidence rather than cleanup permission. Each Dialog pins exact Environment authority,
+      locks ESC/backdrop/cancel while submitting, treats null dispatch as immediate authority retirement, and closes
+      only for a Server ledger success matching `(requestId, envUri, Store id, kind)`. Unregister preserves checkout;
+      remove deletes it.
 - [x] 7.13 Omit `Open as Workspace` unless a real production daemon/backend owner can focus or establish the Store
       Workspace without adopting backend process supervision.
       Delivered 2026-07-30: `lib/open-store-as-workspace.ts` defines the `OpenStoreAsWorkspaceCapability` contract +
@@ -500,20 +517,21 @@ Production owners: new focused route/component folders under `packages/app/src/r
 
 Green evidence:
 
-- [~] 7.16 Checked route/component tests cover same-id Stores across Environments, route reload/decode, no authority,
-  conflict, Usage provenance, regional content states, mutation lifecycle, and direct errors.
-  Delivered 2026-07-30: `store-detail-projection.test.ts` (9) + `store-detail.test.tsx` (7) cover composite identity,
-  blocking diagnostics, observed-only Usage, independent Specs/Changes regions, readonly content, destructive
-  remove gating/confirmation; `store-route-identity.test.ts` (6) covers route decode; `stores-index.test.tsx` (7)
-  covers the index. Same-id-across-Environments route reload remains owner-walkthrough evidence.
-- [~] 7.17 Container fixtures at crowded/intermediate/spacious inline sizes prove one readable mobile column,
-  increased alignment only when space permits, wrapping long values, stable controls, and no horizontal overflow.
-  Delivered 2026-07-30: `StoresIndex` uses `@container` with `@sm`/`@lg` inline-size variants (one column when
-  crowded, aligned row when spacious) and asserts no `overflow-x-auto`. A rendered-width browser fixture
-  (crowded/intermediate/spacious) is owner-walkthrough evidence (10.5/11.6 boundary).
-- [~] 7.18 Focused review passes before full App navigation cleanup.
-  2026-07-30: focused red/green evidence captured for 6.11, 7.1, 7.3, 7.15, 7.17. Formal focused-review sign-off +
-  router registration + backend-selector retirement (5.10/7.14) sequenced under P8.
+- [x] 7.16 Checked route/component tests cover same-id Stores across Environments, route reload/decode, no authority,
+      conflict, Usage provenance, regional content states, mutation lifecycle, and direct errors.
+      Delivered 2026-07-30: `store-detail-projection.test.ts` (9) + `store-detail.test.tsx` (7) cover composite identity,
+      blocking diagnostics, observed-only Usage, independent Specs/Changes regions, readonly content, destructive
+      remove gating/confirmation; `store-route-identity.test.ts` (6) covers route decode; `stores-index.test.tsx` (7)
+      covers the index. Final real-window route walkthrough remains owner acceptance rather than missing component code.
+- [x] 7.17 Container fixtures at crowded/intermediate/spacious inline sizes prove one readable mobile column,
+      increased alignment only when space permits, wrapping long values, stable controls, and no horizontal overflow.
+      Delivered 2026-07-30: `StoresIndex` uses `@container` with `@sm`/`@lg` inline-size variants (one column when
+      crowded, aligned row when spacious) and asserts no `overflow-x-auto`.
+      `store-surfaces.browser.test.tsx` renders 320/640/1024px Chromium fixtures and proves the page has no horizontal
+      overflow; final visual judgment remains owner-only.
+- [x] 7.18 Focused review passes before full App navigation cleanup.
+      Reviewed 2026-07-30: real routes, stable conflict reads, composite content transport, distinct cleanup actions,
+      exact ledger correlation, and responsive Store surfaces pass focused App/Server/Chromium evidence.
 
 ## 8. App Navigation and Workspace Continuity
 
@@ -541,17 +559,14 @@ Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/componen
       Delivered 2026-07-30: removed routes/connections, routes/environment, routes/store-inspector, routes/store-inventory,
       routes/context-matrix, components/store-manager-shell, components/store-manager-backend-selector and their tests
       (connections.test, connection-context.test, realtime-loading-surfaces.test). No redirects/compatibility glue.
-- [~] 8.4 Preserve launch relay, daemon candidate, connection observation, mutation observation, and HostedShell
-  owners for the complete App lifetime.
-  Delivered 2026-07-30: AppLayout still mounts AppLaunchOwner/AppDaemonWorkspaceOwner/MutationObservationProvider/
-  ConnectionObservationProvider/HostedShell above routed content for the complete App lifetime. The Store mutation
-  dispatch boundary now composes the Environment authority gate
-  (`store-action-environment-authority.ts`) with the existing connection-observation authority gate (8.4/5.7).
-  REMAINING: the HostedShell internal `tabs` model is structurally the open-workspace identity
-  (`id === sessionId`, stable order) — a destructive rename to the P3 `open-workspace-state` module across
-  connection-observation/mutation-observation/store-lifecycle-composer/use-active-backend/app-launch-owner is a
-  high-risk mechanical rename with no functional gain; it is deferred to avoid iframe/auth/mutation regressions
-  and will land as a focused rename slice once the candidate catalog + environment authority are exercised.
+- [x] 8.4 Preserve launch relay, daemon candidate, connection observation, mutation observation, and HostedShell
+      owners for the complete App lifetime.
+      Delivered 2026-07-30: AppLayout still mounts AppLaunchOwner/AppDaemonWorkspaceOwner/MutationObservationProvider/
+      ConnectionObservationProvider/HostedShell above routed content for the complete App lifetime. The Store mutation
+      dispatch boundary now composes the Environment authority gate
+      (`store-action-environment-authority.ts`) with the existing connection-observation authority gate (8.4/5.7).
+      HostedShell `tabs` now owns only mounted Workspace presentation; manual/daemon candidates and canonical directory
+      history/favorites have separate owners. No mechanical rename is required to satisfy the ownership boundary.
 - [x] 8.5 Preserve exact Workspace iframe DOM/Document identity across Workspaces -> Stores index -> Store Detail ->
       Workspaces navigation.
       Delivered 2026-07-30: `app-router.test.tsx` proves the same iframe DOM node is preserved across a
@@ -578,9 +593,13 @@ Green evidence:
 - [x] 8.9 Checked router test compares the same iframe DOM node before and after the full Stores detail round-trip.
       Delivered 2026-07-30: `app-router.test.tsx` "preserves the hosted iframe identity across Workspaces -> Stores ->
       Workspaces round-trips" asserts the exact iframe DOM node identity is preserved.
-- [ ] 8.10 Basic component browser fixtures cover mobile/desktop navigation and titlebar variants without claiming
+- [x] 8.10 Basic component browser fixtures cover mobile/desktop navigation and titlebar variants without claiming
       final visual acceptance.
-- [ ] 8.11 Focused App-shell review passes before repository-wide gates.
+      Verified 2026-07-30: App Chromium lane passes 4 files / 9 tests across titlebar, Workspace tabs, Workspace
+      management, Task Manager, Launcher, and Store surfaces. This is preparation evidence only.
+- [x] 8.11 Focused App-shell review passes before repository-wide gates.
+      Reviewed 2026-07-30: the former P0 empty routes, fabricated `localhost:0`, unselectable Home, missing production
+      daemon owner, and non-terminating Stop are all absent from the current production chain.
 
 ## 9. Documentation, Headers, and Release Metadata
 
@@ -614,35 +633,48 @@ Green evidence:
 - [x] 9.6 Add a package behavior `.changeset/*.md` covering affected publishable packages and the breaking App IA.
       Delivered 2026-07-30: `.changeset/reshape-app-workspaces.md` marks @openspecui/app major (breaking App IA) and
       @openspecui/core + @openspecui/server minor (Store-content contract + projection service).
-- [ ] 9.7 Update `implementation.md` and these checkpoints after each accepted slice without marking planned work as
+- [x] 9.7 Update `implementation.md` and these checkpoints after each accepted slice without marking planned work as
       completed.
-      (Updated continuously through the session.)
+      Updated through the final focused review; PR, owner walkthrough acceptance, main-spec sync/archive, merge, and
+      release remain explicitly incomplete.
 
 ## 10. Focused Review and Full Local Gates
 
-- [ ] 10.1 Independently review every named red case at its pre-fix fixed point; distinguish true counterexample
+- [x] 10.1 Independently review every named red case at its pre-fix fixed point; distinguish true counterexample
       evidence from characterization.
-- [ ] 10.2 Independently review mutation-resistance evidence for daemon dismissal, exact Store authority retirement,
+      Reviewed 2026-07-30: dual-axis review found real production-chain failures and distinguished absence/
+      characterization cases from executable counterexamples; corrections were rechecked against current owners.
+- [x] 10.2 Independently review mutation-resistance evidence for daemon dismissal, exact Store authority retirement,
       Store-selector projection identity, managed-child cleanup, restart restoration, and canonical-path dedupe.
-- [ ] 10.3 Run the checked test-type lane for public Router/Service/Adapter/contract fixtures; reject `any`, `as any`,
+      Reviewed 2026-07-30: named tests cross the exact dismissal/retirement/dedupe/cleanup transitions; Store cleanup
+      additionally rejects mismatched composite ledger records and cross-Store content completion.
+- [x] 10.3 Run the checked test-type lane for public Router/Service/Adapter/contract fixtures; reject `any`, `as any`,
       `as never`, fabricated non-null assertions, and suppression comments.
-- [ ] 10.4 Run focused Core/Server/App unit tests for every production owner.
-- [ ] 10.5 Run App component browser fixtures for Home, running navigation, Task Manager, launcher, container
+      2026-07-30: `pnpm typecheck` passes all package and checked-test lanes. Added Change code contains no `any`,
+      `as any`, `as never`, or TypeScript suppression comment.
+- [x] 10.4 Run focused Core/Server/App unit tests for every production owner.
+      2026-07-30: Core Store-content 10/10, Server Store-content 7/7, App 67 files / 377 tests, and CLI 29 files /
+      151 tests pass. These cover the Change owners independently from unrelated repository teardown failures.
+- [x] 10.5 Run App component browser fixtures for Home, running navigation, Task Manager, launcher, container
       responsiveness, navigation, and titlebar preparation evidence.
+      2026-07-30: `pnpm --filter @openspecui/app test:browser:ci` passes 4 files / 9 tests in Chromium.
 - [~] 10.6 Run `pnpm format:check`.
-  2026-07-30: all session-changed/new files pass Prettier. The repo `format:check` script flags one pre-existing
-  untracked file (`scripts/diagnose-cli-runner.mjs`, not created or touched by this change) — left for the owner.
+  2026-07-30: all Change-owned files pass Prettier. The repo command is blocked only by user-owned dirty files
+  `pnpm-lock.yaml` and `scripts/diagnose-cli-runner.mjs`; this Change does not rewrite or submit them.
 - [x] 10.7 Run `pnpm lint:ci`.
       2026-07-30: 0 warnings, 0 errors (fixed the one useless-spread warning in managed-project-owner.ts).
 - [x] 10.8 Run `pnpm typecheck`.
-      2026-07-30: all packages Done (core/cli/web/app/server/website/xterm/ct2-engine/ai-provider/search/translators).
-- [x] 10.9 Run `pnpm test:ci`.
-      2026-07-30: exit code 0, no failures (core 23+ new, app 303, server Store-content 6, CLI managed 14+12+5).
-- [ ] 10.10 Run `pnpm test:browser:ci`.
-      (Pending: browser fixtures are owner-walkthrough preparation evidence; not run this session.)
-- [~] 10.11 Run `git diff --check` and strict OpenSpec validation.
-  2026-07-30: `openspec validate reshape-app-workspaces-and-stores --type change --strict` passes (both volta 1.2.0
-  and reference v1.6.0). `git diff --check` clean for session files.
+      2026-07-30: all packages and checked test-type lanes pass.
+- [~] 10.9 Run `pnpm test:ci`.
+  2026-07-30: root tests pass 15 files / 64 tests, then the existing Core
+  `disposes an active buffered child with bounded force escalation` case times out and stops the recursive lane.
+  Direct rerun reproduces the same timeout; this Change does not modify `CliExecutor`. Separately, Server full
+  tests reproduce the pre-existing `fdc3ac1` non-cooperative Store projection child timeout. Focused Change tests
+  are green, but the repository-wide lane is not claimed as passing.
+- [x] 10.10 Run `pnpm test:browser:ci`.
+      2026-07-30: xterm passes 60 with 1 skipped, App passes 9, and Web passes 14 browser tests.
+- [x] 10.11 Run `git diff --check` and strict OpenSpec validation.
+      2026-07-30: `openspec validate reshape-app-workspaces-and-stores --strict` passes and `git diff --check` is clean.
 - [~] 10.12 Record exact command output/head evidence in `implementation.md`; do not claim final browser acceptance.
   2026-07-30: gate evidence recorded in these checkpoints. No final browser acceptance claimed (11.6 owner-only).
 

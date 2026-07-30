@@ -33,6 +33,8 @@ export interface EnvironmentSourceObservation {
   readonly compatible: boolean
   /** Optional settled Store-identity evidence (id/root) used for conflict detection. */
   readonly storeIdentity?: { storeId?: string; root?: string } | null
+  /** Canonical settled Store registry/Doctor evidence for source comparison. */
+  readonly storeEvidenceSignature?: string | null
 }
 
 /** Reachability states that produce distinct direct-plane outcomes. */
@@ -129,12 +131,19 @@ export type EnvironmentAuthorityResolution =
   | { kind: 'offline'; envUri: string }
   | { kind: 'authentication-required'; envUri: string }
   | { kind: 'incompatible'; envUri: string }
-  | { kind: 'conflict'; envUri: string; sources: readonly EnvironmentSourceObservation[] }
+  | {
+      kind: 'conflict'
+      envUri: string
+      /** Stable display-only source retained while conflicting evidence revokes mutation authority. */
+      source: EnvironmentSourceObservation
+      sources: readonly EnvironmentSourceObservation[]
+    }
   | { kind: 'no-current-authority'; envUri: string }
 
 export function resolveEnvironmentAuthority(
   selection: EnvironmentSelectionState,
-  observations: readonly EnvironmentSourceObservation[]
+  observations: readonly EnvironmentSourceObservation[],
+  preferredSource: EnvironmentSourceObservation | null = null
 ): EnvironmentAuthorityResolution {
   const resolution = resolveEnvironmentSelection(selection, observations)
   if (resolution.kind === 'no-environment') return { kind: 'no-environment' }
@@ -144,13 +153,13 @@ export function resolveEnvironmentAuthority(
   const inEnv = observations.filter((observation) => observation.envUri === envUri)
   if (inEnv.length === 0) return { kind: 'no-current-authority', envUri }
 
-  // Any checking source is pending.
-  if (inEnv.some((observation) => observation.reachability === 'checking')) {
-    return { kind: 'pending', envUri }
-  }
-
-  const compatible = inEnv.filter((observation) => observation.compatible)
+  const compatible = inEnv.filter(
+    (observation) => observation.compatible && observation.reachability === 'online'
+  )
   if (compatible.length === 0) {
+    if (inEnv.some((observation) => observation.reachability === 'checking')) {
+      return { kind: 'pending', envUri }
+    }
     // Distinguish authentication-required / offline / unsupported among incompatible sources.
     if (inEnv.every((observation) => observation.reachability === 'authentication-required')) {
       return { kind: 'authentication-required', envUri }
@@ -161,13 +170,16 @@ export function resolveEnvironmentAuthority(
     return { kind: 'incompatible', envUri }
   }
 
-  // Deterministic stable source: lowest tabCreatedAt, then tabId tiebreak. Retained while current.
-  const stable = pickStableSource(compatible)
+  // Retain the chosen exact source while current; resolve deterministically only on admission/replacement.
+  const retained = preferredSource
+    ? compatible.find((observation) => isSameSource(observation, preferredSource))
+    : undefined
+  const stable = retained ?? pickStableSource(compatible)
   if (!stable) return { kind: 'no-current-authority', envUri }
 
   // Same-Environment conflict: settled non-equivalent storeIdentity among compatible sources (5.8).
   const conflict = detectSameEnvironmentConflict(compatible)
-  if (conflict) return { kind: 'conflict', envUri, sources: compatible }
+  if (conflict) return { kind: 'conflict', envUri, source: stable, sources: compatible }
 
   return { kind: 'authority', source: stable }
 }
@@ -226,6 +238,7 @@ export function revalidateEnvironmentAuthority(
   if (match.reachability === 'authentication-required') {
     return { kind: 'retired', reason: 'authentication-required' }
   }
+  if (match.reachability !== 'online') return { kind: 'retired', reason: 'incompatible' }
   return { kind: 'valid', source: match }
 }
 
@@ -251,9 +264,29 @@ function pickStableSource(
   })[0]!
 }
 
+function isSameSource(
+  left: EnvironmentSourceObservation,
+  right: EnvironmentSourceObservation
+): boolean {
+  return (
+    left.envUri === right.envUri &&
+    left.tabId === right.tabId &&
+    left.sessionId === right.sessionId &&
+    left.apiBaseUrl === right.apiBaseUrl &&
+    left.tabCreatedAt === right.tabCreatedAt &&
+    left.generation === right.generation
+  )
+}
+
 function detectSameEnvironmentConflict(
   compatible: readonly EnvironmentSourceObservation[]
 ): boolean {
+  const signatures = compatible.flatMap((observation) =>
+    observation.storeEvidenceSignature ? [observation.storeEvidenceSignature] : []
+  )
+  if (signatures.length >= 2 && signatures.some((signature) => signature !== signatures[0])) {
+    return true
+  }
   const settled = compatible.filter((observation) => observation.storeIdentity)
   if (settled.length < 2) return false
   const first = settled[0]!.storeIdentity!

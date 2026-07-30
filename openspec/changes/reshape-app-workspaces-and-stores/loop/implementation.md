@@ -15,31 +15,36 @@ Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果
 
 ## Implementation State
 
-P1–P9 core have landed across 14 commits and pass the repo-wide gates. The remaining work is a deferred
-mechanical hosted-shell rename, the i18n/README docs, browser fixtures, and the owner walkthrough.
+The production implementation is complete through the Workspaces and Stores route families on top of
+`fdc3ac1`. This review pass corrected the final runtime boundaries; repository-wide gates, the scoped commit,
+owner walkthrough, PR, archive/sync, and release remain delivery checkpoints rather than implementation claims.
 
 ```text
 Product decision       approved by manager
 Official CLI research complete against references/openspec v1.6.0
 App ownership research complete against current feat/opentray-app-mode worktree
 Workspace lifecycle correction approved by manager
-P1 typed contracts     landed (Store-content capability + browser-safe projection schemas + checked fixtures)
-P2 managed backend     landed (directory catalog 3.0a; managed owner + daemon IPC + Stop/restart 3.0b–3.0f)
-P3 candidate/open      landed (admission reducer + React integration 3.1–3.7; credential/convergence/iframe 3.8–3.11)
-P4 Workspace Home      landed (Home/running-nav/Task Manager/path-first label 4.0–4.0e)
-P5 Environment authority landed (selection + exact authority owner 5.2–5.9, 5.12–5.13)
-P6 Store content       landed (Server Projection Work service 6.3–6.9, 6.12–6.13)
-P7 Stores index        landed (transport 6.11, route identity 7.1, Stores index 7.3/7.15/7.17)
-P8 navigation          landed (router rewrite + retire routes/selector 8.1/8.2/8.3/8.5/8.8/8.9; dispatch authority 8.4)
-P9 docs/gates          landed (changeset + AGENTS.md 9.1/9.4/9.6; lint:ci/typecheck/test:ci green 10.7–10.9)
-Deferred               hosted-shell 7-file mechanical rename (structural identical, no functional gain);
-                       i18n.zh.md + README (9.2/9.3); browser fixtures (8.10/10.10); owner walkthrough (11.6)
-Repo gates             lint:ci 0/0, typecheck all pass, test:ci exit 0, openspec validate --strict pass
+P1 typed contracts       landed (Store-content capability + browser-safe projection schemas + checked fixtures)
+P2 managed backend       landed (canonical directory catalog, daemon child owner, exact Stop/restart restoration)
+P3 candidate/open        landed (admission/dismissal reducer, credential isolation, iframe continuity)
+P4 Workspace surfaces   landed (fixed Home, running navigation, Task Manager, path-first labels, Launcher)
+P5 Environment runtime  landed (persisted envUri selection, per-source collection, stable authority, conflict gate)
+P6 Store content         landed (demand-driven Server Projection Work, typed Push -> Pull App transport)
+P7 Store product         landed (index, Environment evidence, Detail, Usage, Specs/Changes, unregister/remove)
+P8 navigation            landed (two-domain shell, composite routes, persistent Workspace Documents)
+Review corrections       stable source survives redundant checking; cross-Store responses are rejected;
+                         conflicts retain readonly source; Doctor failures do not block cleanup;
+                         unregister and remove remain distinct composite-ledger actions
+Current focused evidence Core 10; Server content 7; App 67 files / 377; CLI 29 files / 151 tests green
+Repository gates          lint, typecheck, browser, strict validation, and diff-check green
+External dirty blockers   format-check: user lockfile/script; test-ci: pre-existing Core/Server teardown timeouts
+Pending delivery          scoped commit, numbered owner walkthrough, PR, archive/sync
 Owner walkthrough      reserved for final handoff
 ```
 
-Session commit head: `4755386` (feat/opentray-app-mode). 14 implementation commits this session; all package
-typechecks pass; full app suite (303 tests) + core + server + CLI green.
+Working tree base: `fdc3ac1` (`feat/opentray-app-mode`). Store-content Router ownership is already committed in
+`c657aca`; the unrelated dirty `packages/server/src/router.ts` tracing delta is not required by this Change and is
+excluded from its commit.
 
 P2 managed-project backend verification on 2026-07-30:
 
@@ -48,14 +53,18 @@ P2 managed-project backend verification on 2026-07-30:
   restore-once (3.0d), and mutation-resistance for dedupe/Stop-keyed/lease-cleanup (3.0f).
 - `daemon-server.test.ts` (12 tests, +5 managed): authenticated start/stop delegation, structured
   rejection wire codes, unsupported-delivery rejection, and daemon-teardown child settlement.
-- `external-serve-shutdown.test.ts` (5 tests): capability-advertised Stop delegation and the
-  close-only boundary when a lease omits/unavailable owner-handled shutdown (3.0e).
+- External foreground `serve` leases remain physically separate and currently publish `close-only`. The reserved
+  `external-owner` compatibility fact has no callable App shutdown channel in this Change; Task Manager presents
+  that limitation directly instead of fabricating Stop success.
 - `openspecui typecheck` (incl. `tsconfig.command-tests.json` checked lane) passes; the
   `managed-project-production.ts` module wires the fixed `startServer` plan, `fs.realpath`
   canonicalization, and the owner→daemon control adapter.
 - `daemon-protocol.ts` adds the versioned `start-managed-project`/`stop-managed-project` commands and
   `managed-project-started`/`managed-project-stopped` wire data with structured error codes; existing
   daemon workspaces, status, and presentation flows are unchanged.
+- `local-app-server.ts` admits browser start, Stop, and Open POSTs only when `Origin` exactly equals the bundled
+  loopback App origin (and `Sec-Fetch-Site`, when present, is `same-origin`). Cross-origin requests are rejected
+  before any managed child or presentation owner is invoked.
 
 Planning verification on 2026-07-30:
 
@@ -66,6 +75,18 @@ Planning verification on 2026-07-30:
 - The repository Vite+ pre-commit hook cannot run because root `vite.config.ts` has no `staged` configuration. This
   is the same documented repository-local limitation used by the predecessor Change. The planning commit may use
   `--no-verify` only after the named checks pass; hook configuration is outside this Change.
+
+Final focused verification on 2026-07-30:
+
+- `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:browser:ci`, strict Change validation, and `git diff --check` pass.
+- Core Store-content (10), Server Store-content (7), App (67 files / 377), CLI (29 files / 151), and App Chromium
+  (4 files / 9) focused/full package evidence pass.
+- Repository `format:check` reaches only two user-owned dirty failures: `pnpm-lock.yaml` and
+  `scripts/diagnose-cli-runner.mjs`; they are excluded from this Change.
+- Repository `test:ci` stops at the existing Core buffered-child force-escalation timeout. The independent Server
+  full lane also reproduces the non-cooperative Store projection child timeout at clean fixed point `fdc3ac1`.
+  Neither failing production owner is modified by this Change; focused Change tests remain green. These facts block
+  PR creation but not a scoped local implementation commit.
 
 This Change builds on completed owners from `integrate-app-mode-with-opentray` but does not close, rewrite, or claim
 its remaining delivery/owner-acceptance checkpoints. Existing unrelated modifications in
@@ -131,7 +152,7 @@ Required ownership:
 | daemon candidate owner | opaque Workspace id, backend locator, runtime credential binding, snapshot revision | runtime only                             |
 | open Workspace store   | stable tab/session id, locator, order, active id, daemon binding when present       | credential-free presentation persistence |
 | frame runtime          | iframe source/load/error and DOM reference                                          | mounted memory only                      |
-| directory catalog      | canonical path, favorite, successful recency                                        | credential-free local persistence        |
+| directory catalog      | canonical path, favorite, successful recency                                        | credential-free shared local persistence |
 | managed service owner  | physical path, child, readiness, generation, restore intent                         | runtime plus bounded restart intent      |
 
 The exact persisted shape may be replaced without migration glue. Every new/changed module and test retains a
@@ -194,6 +215,10 @@ The first Workspaces tab is fixed Home and cannot close or reorder. Home owns Fa
 Recent, and the `/workspaces/tasks` entry. Workspaces navigation lists every current backend as secondary items;
 Task Manager exposes current detail and only ownership-valid Stop/Close/favorite actions.
 
+Home and Task Manager consume one reactive directory-catalog owner shared across same-origin App windows. They do
+not take independent local-storage snapshots. Favoriting a running canonical directory that has no prior history
+record creates its credential-free catalog entry; only successful daemon admission advances recency.
+
 `HostedShell` keeps orchestration of stable mounted tabs/frames but delegates candidate composition and Dialog UI to
 focused modules. The direct Dialog surface is a searchable candidate list.
 
@@ -228,9 +253,11 @@ Every Store read records its source. Every mutation draft/dialog captures the fu
 the existing synchronous dispatch revalidation. Replacement identity or generation invalidates the authority;
 retained UI data remains display-only.
 
-If current same-Environment sources provide non-equivalent Store identity/root/Doctor evidence after their own
-refreshes settle, the Environment enters `conflict`. Conflict preserves source-labelled evidence and disables the
-affected mutation. It is not rewritten as offline, unknown, or healthy.
+Each compatible source independently settles Store list and Doctor work. If current same-Environment sources then
+provide non-equivalent Store identity/root/Doctor evidence, the Environment enters `conflict`. Conflict preserves
+the stable source and all source-labelled readonly evidence while disabling mutation authority. It is not rewritten
+as offline, unknown, healthy, or an empty Stores surface, and the runtime does not switch read source merely because
+a redundant source is checking.
 
 ### 6. Store content public contract
 
@@ -267,9 +294,10 @@ Canonical routes:
 /stores/$encodedEnvUri/$storeId      Store Detail
 ```
 
-Route validation decodes both path values through typed helpers and treats `envUri` as opaque. Detail loaders/selectors
-require the complete composite identity. Store id alone must never key a row, cache, route transition, mutation
-record selection, or content request.
+Route validation decodes both path values through typed helpers and treats `envUri` as opaque. The canonical route
+encoding is versioned `v1-<UTF-8 hex>`; route code never dereferences or reconstructs the Environment identity.
+Detail loaders/selectors require the complete composite identity. Store id alone must never key a row, cache, route
+transition, mutation record selection, or content request.
 
 Store index is a divided list with one responsive container owner. It does not preserve the old Inventory table or
 three-tab Store Manager shell. Store Detail uses unframed bands and disclosures; it does not nest cards.
@@ -286,8 +314,10 @@ Repository location/Git/metadata facts follow as secondary evidence. Successful 
 collapsed. Failure content is promoted even if its source disclosure is normally collapsed.
 
 The existing setup/register form becomes an index-level `New Store` flow. Unregister and remove live in Store
-Detail's overflow/danger flow and continue using the backend-owned mutation ledger plus authority-aware destructive
-Dialog. Git synchronization remains explicit external/manual behavior.
+Detail's overflow/danger flow and remain different operations: unregister retires registry membership but preserves
+checkout files, while remove also deletes the checkout. Their destructive Dialog pins exact Environment authority,
+cannot close while submitting, and settles only from a Server-ledger record matching the complete
+`(requestId, envUri, Store id, kind)` tuple. Git synchronization remains explicit external/manual behavior.
 
 ### 8. Navigation and lifecycle preservation
 
@@ -333,9 +363,23 @@ update/display behavior or tab/frame presentation rather than add another compro
 
 ## Divergence Notes
 
-No divergence has occurred because Apply has not started.
+Apply exposed four material corrections to the earlier implementation notes:
 
-The following refinements are approved consequences of research, not divergences:
+1. A redundant same-Environment source in `checking` cannot revoke an already-current compatible source. The
+   runtime now retains the exact chosen source while valid and resolves deterministically only on replacement.
+2. A schema-valid Store-content response is still invalid when its embedded `storeId` differs from the requested
+   composite identity. The App transport now rejects it as a hosted contract error.
+3. Doctor health is evidence, not lifecycle permission. An unhealthy Store keeps unregister/remove available when
+   exact Environment authority and mutation settlement allow it.
+4. Official OpenSpec `unregister` preserves checkout files while `remove` deletes them. Store Detail now exposes
+   separate confirmation flows and routes both through the same pinned backend mutation ledger. A null dispatch is
+   immediate authority retirement; a mismatched request, Environment, Store, or kind cannot close the Dialog.
+5. Browser daemon controls are process authority, not ordinary loopback APIs. Managed start/Stop and Workspace Open
+   require the bundled local App's exact origin before reaching the daemon owner.
+6. Home and Task Manager previously held separate directory snapshots. One reactive catalog owner now synchronizes
+   canonical history/favorites within the window and across same-origin windows.
+
+The following are approved consequences of research rather than unimplemented compatibility glue:
 
 - The requested Connections-in-Dialog surface requires candidate/open-state separation; moving the URL form alone
   is insufficient.

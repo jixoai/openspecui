@@ -20,6 +20,12 @@ function snapshotResponse(revision: number, ids: readonly string[]): Response {
         id,
         backendUrl: `http://127.0.0.1:${id === 'workspace-a' ? 3100 : 3200}`,
         credential: `credential-${id}`,
+        projectDir: `/projects/${id}`,
+        ownership: 'external',
+        registeredAt: revision,
+        managedGeneration: null,
+        shutdown: 'close-only',
+        git: null,
       })),
     }),
     { headers: { 'Content-Type': 'application/json; charset=utf-8' } }

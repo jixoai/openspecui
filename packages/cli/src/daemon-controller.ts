@@ -1,17 +1,22 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Control detached daemon start, stop, restart, readiness, and immutable host mode.
- * 2. Project ready backends into daemon memory without transferring process ownership.
+ * 2. Preserve external ownership while transferring only daemon-managed directory intent across restart.
  * 3. Keep daemon spawn arguments and logs free of credentials and private launch URLs.
  *
  * Original request (2026-07-29): "参数变化时提醒用户把 start 改成 restart。"
+ * Owner lifecycle decision (2026-07-30): daemon restart restores the managed running directory set.
  */
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { closeSync, mkdirSync, openSync } from 'node:fs'
 import type { CliDaemonPort, DaemonStatusEvidence, WorkspaceRegistration } from './cli-execution.js'
 import { resolveDaemonPaths, type DaemonPaths } from './daemon-paths.js'
-import { DAEMON_HOST_MODE_ENV, DAEMON_RUN_ENV } from './daemon-process.js'
+import {
+  DAEMON_HOST_MODE_ENV,
+  DAEMON_RESTORE_PROJECTS_ENV,
+  DAEMON_RUN_ENV,
+} from './daemon-process.js'
 import type { DaemonHostMode, DaemonStatus } from './daemon-protocol.js'
 import {
   createDaemonWorkspaceLease,
@@ -79,13 +84,19 @@ export function createDaemonController(options: {
   const paths = options.paths ?? resolveDaemonPaths()
   const platform = options.platform ?? process.platform
 
-  const spawnDaemon = async (requestedHostMode: 'web' | undefined): Promise<DaemonStatus> => {
+  const spawnDaemon = async (
+    requestedHostMode: 'web' | undefined,
+    restoreProjectDirs: readonly string[] = []
+  ): Promise<DaemonStatus> => {
     const hostMode: DaemonHostMode = requestedHostMode ?? (platform === 'linux' ? 'web' : 'native')
     mkdirSync(paths.logsDir, { recursive: true, mode: 0o700 })
     const logFd = openSync(paths.logFile, 'a', 0o600)
     const env = { ...(options.env ?? process.env) }
     env[DAEMON_RUN_ENV] = '1'
     env[DAEMON_HOST_MODE_ENV] = hostMode
+    if (restoreProjectDirs.length > 0) {
+      env[DAEMON_RESTORE_PROJECTS_ENV] = JSON.stringify(restoreProjectDirs)
+    }
     try {
       const child = spawn(
         options.execPath ?? process.execPath,
@@ -139,11 +150,19 @@ export function createDaemonController(options: {
       return true
     },
     async restart(requestedHostMode) {
+      let restoreProjectDirs: readonly string[] = []
       if ((await readStatus(paths)) !== null) {
-        await sendDaemonCommand({ endpoint: paths.endpoint, command: { type: 'stop' } })
+        const prepared = await sendDaemonCommand({
+          endpoint: paths.endpoint,
+          command: { type: 'prepare-restart' },
+        })
+        if (prepared.kind !== 'restart-prepared') {
+          throw new Error('App daemon did not return managed restart state.')
+        }
+        restoreProjectDirs = prepared.projectDirs
         await waitForStop(paths, DAEMON_STOP_TIMEOUT_MS)
       }
-      return toStatusEvidence(await spawnDaemon(requestedHostMode))
+      return toStatusEvidence(await spawnDaemon(requestedHostMode, restoreProjectDirs))
     },
     async registerWorkspace(registration: WorkspaceRegistration) {
       return createDaemonWorkspaceLease({

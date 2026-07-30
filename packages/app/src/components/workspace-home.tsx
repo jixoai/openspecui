@@ -34,6 +34,8 @@ export interface WorkspaceHomeProps {
   readonly onToggleFavorite: (canonicalPath: string, favorite: boolean) => void
   /** Open a directory row (favorite or recent) to focus/restore its Workspace. */
   readonly onOpenDirectory: (canonicalPath: string) => void
+  /** Ask the route owner to open the running-backend Task Manager. */
+  readonly onOpenTaskManager?: () => void
   /** Whether a path submission is currently pending (form loading lock). */
   readonly pending?: boolean
   /** Concrete error from the last submission; cleared by the caller. */
@@ -98,6 +100,7 @@ export function WorkspaceHome({
   onSubmitPath,
   onToggleFavorite,
   onOpenDirectory,
+  onOpenTaskManager = () => {},
   pending = false,
   error = null,
   launchSupported,
@@ -111,24 +114,24 @@ export function WorkspaceHome({
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="flex flex-col gap-6 p-4 md:p-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
           <Folder className="h-6 w-6 shrink-0" />
           Workspaces
         </h1>
-        {/* TODO(P8 navigation retirement): switch to a typed <Link to="/workspaces/tasks"> once the route is registered. */}
-        <a
-          href="/workspaces/tasks"
+        <button
+          type="button"
+          onClick={onOpenTaskManager}
           className="hover:bg-muted inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium"
         >
           <ListTodo className="h-4 w-4" />
           Task Manager
-        </a>
+        </button>
       </div>
 
       {/* Path-input launch form: the repeat-use entry. Locks while pending. */}
-      <section className="space-y-1.5">
+      <section className="order-2 space-y-1.5">
         <label htmlFor="workspace-home-path" className="text-sm font-medium">
           Start from path
         </label>
@@ -166,7 +169,7 @@ export function WorkspaceHome({
       </section>
 
       {/* Favorites above. */}
-      <section className="space-y-2">
+      <section className="order-1 space-y-2">
         <h2 className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
           <Star className="h-3.5 w-3.5" />
           Favorites
@@ -188,7 +191,7 @@ export function WorkspaceHome({
       </section>
 
       {/* Recent below (recency-desc, excluding favorites). */}
-      <section className="space-y-2">
+      <section className="order-3 space-y-2">
         <h2 className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
           <Clock className="h-3.5 w-3.5" />
           Recent

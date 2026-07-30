@@ -3,14 +3,18 @@
  * 1. Pull the daemon's complete runtime Workspace ledger from the same-origin App shell.
  * 2. Convert typed SSE invalidations into serialized replacement Pulls.
  * 3. Treat absent daemon endpoints as unsupported while surfacing real local control failures.
- * 4. Dispatch only opaque Workspace ids through the same-origin browser action.
+ * 4. Dispatch opaque browser actions and typed managed directory start/Stop commands.
  *
  * Original request (2026-07-29): "如果已经有 app daemon，那么默认投递到 app 中。"
  */
 import {
   AppDaemonInvalidationSchema,
   AppDaemonOpenWorkspaceResponseSchema,
+  AppDaemonStartManagedProjectResponseSchema,
+  AppDaemonStopManagedProjectResponseSchema,
   AppDaemonWorkspaceSnapshotSchema,
+  type AppDaemonStartManagedProjectResponse,
+  type AppDaemonStopManagedProjectResponse,
   type AppDaemonWorkspaceSnapshot,
 } from '@openspecui/core/app-daemon-control'
 
@@ -24,6 +28,8 @@ export interface DaemonWorkspaceEventSource {
 
 export interface DaemonWorkspaceControl {
   openWorkspaceInBrowser(workspaceId: string): Promise<void>
+  startManagedProject(projectDir: string): Promise<AppDaemonStartManagedProjectResponse>
+  stopManagedProject(generation: number): Promise<AppDaemonStopManagedProjectResponse>
   start(): Promise<DaemonWorkspaceControlAvailability>
   stop(): void
 }
@@ -63,6 +69,8 @@ export function createDaemonWorkspaceControl(options: {
   const createEventSource = options.createEventSource ?? defaultEventSource
   const snapshotUrl = new URL('/api/daemon/workspaces', options.baseUrl).toString()
   const eventsUrl = new URL('/api/daemon/events', options.baseUrl).toString()
+  const managedStartUrl = new URL('/api/daemon/managed-projects/start', options.baseUrl).toString()
+  const managedStopUrl = new URL('/api/daemon/managed-projects/stop', options.baseUrl).toString()
   let stopped = false
   let currentRevision = -1
   let pullRunning = false
@@ -130,6 +138,52 @@ export function createDaemonWorkspaceControl(options: {
   }
 
   return {
+    async startManagedProject(projectDir) {
+      let response: Response
+      try {
+        response = await fetchSnapshot(managedStartUrl, {
+          method: 'POST',
+          cache: 'no-store',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ projectDir }),
+        })
+      } catch {
+        throw new Error('OpenSpecUI App daemon is unavailable.')
+      }
+      let payload: unknown
+      try {
+        payload = JSON.parse(await response.text())
+      } catch {
+        throw new Error('Daemon managed start returned an invalid response.')
+      }
+      const parsed = AppDaemonStartManagedProjectResponseSchema.safeParse(payload)
+      if (!parsed.success) throw new Error('Daemon managed start returned an invalid response.')
+      return parsed.data
+    },
+    async stopManagedProject(generation) {
+      let response: Response
+      try {
+        response = await fetchSnapshot(managedStopUrl, {
+          method: 'POST',
+          cache: 'no-store',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ generation }),
+        })
+      } catch {
+        throw new Error('OpenSpecUI App daemon is unavailable.')
+      }
+      let payload: unknown
+      try {
+        payload = JSON.parse(await response.text())
+      } catch {
+        throw new Error('Daemon managed Stop returned an invalid response.')
+      }
+      const parsed = AppDaemonStopManagedProjectResponseSchema.safeParse(payload)
+      if (!parsed.success) throw new Error('Daemon managed Stop returned an invalid response.')
+      return parsed.data
+    },
     async openWorkspaceInBrowser(workspaceId) {
       const actionUrl = new URL(
         `/api/daemon/workspaces/${encodeURIComponent(workspaceId)}/open`,

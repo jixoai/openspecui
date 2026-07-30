@@ -44,6 +44,9 @@ function createFixture(execute: (args: string[]) => Promise<CliResult>) {
   const runtime = createServerProjectionWorkRuntime()
   const invalidation = new RuntimeInvalidationIndex()
   const contracts = new OpenSpecCliContractExecutor(execute)
+  let storeObservationListener:
+    | ((change: import('./store-observation-service.js').StoreObservationChange) => void)
+    | null = null
   const service = new StoreContentProjectionService({
     dataScopePath: '/runtime/data/openspec',
     cliExecutor: {
@@ -53,12 +56,24 @@ function createFixture(execute: (args: string[]) => Promise<CliResult>) {
     invalidation,
     storeObservation: {
       reconcile: vi.fn(async () => {}),
-      subscribe: () => () => {},
+      subscribe: (listener) => {
+        storeObservationListener = listener
+        return () => {
+          storeObservationListener = null
+        }
+      },
       dispose: async () => {},
     },
     workOwner: createStoreContentProjectionWorkOwner(runtime),
   })
-  return { invalidation, runtime, service }
+  return {
+    invalidation,
+    runtime,
+    service,
+    emitStoreObservation(change: import('./store-observation-service.js').StoreObservationChange) {
+      storeObservationListener?.(change)
+    },
+  }
 }
 
 afterEach(async () => {
@@ -246,6 +261,64 @@ describe('StoreContentProjectionService (6.4-6.12)', () => {
     } finally {
       sub.unsubscribe()
       setIntervalSpy.mockRestore()
+      fixture.runtime.clear()
+    }
+  })
+
+  it('invalidates matching registered Store identities without fabricating an empty envUri', async () => {
+    const calls: string[][] = []
+    const fixture = createFixture(async (args) => {
+      calls.push(args)
+      return args.includes('--specs') ? cliResult({ specs: [] }) : cliResult({ changes: [] })
+    })
+    const identities: StoreContentIdentity[] = [
+      { envUri: 'env://one', storeId: 'team', kind: 'specs' },
+      { envUri: 'env://two', storeId: 'team', kind: 'specs' },
+      { envUri: 'env://one', storeId: 'team', kind: 'changes' },
+      { envUri: 'env://one', storeId: 'design', kind: 'specs' },
+    ]
+    let readyCount = 0
+    const initialReady = createDeferred<void>()
+    const subscriptions = identities.map((identity) =>
+      fixture.service.subscribeContent(identity, (notice) => {
+        if (notice.state !== 'ready') return
+        readyCount += 1
+        if (readyCount === identities.length) initialReady.resolve()
+      })
+    )
+    try {
+      await initialReady.promise
+      const callsBefore = calls.length
+      const refreshed = createDeferred<void>()
+      let refreshedSpecs = 0
+      const observers = [
+        fixture.service.subscribeContent(identities[0]!, (notice) => {
+          if (notice.state === 'ready' && notice.workGeneration === 2) {
+            refreshedSpecs += 1
+            if (refreshedSpecs === 2) refreshed.resolve()
+          }
+        }),
+        fixture.service.subscribeContent(identities[1]!, (notice) => {
+          if (notice.state === 'ready' && notice.workGeneration === 2) {
+            refreshedSpecs += 1
+            if (refreshedSpecs === 2) refreshed.resolve()
+          }
+        }),
+      ]
+      fixture.emitStoreObservation({ kind: 'spec-root', storeId: 'team', generation: 1 })
+      await refreshed.promise
+      expect(calls).toHaveLength(callsBefore + 2)
+      expect(
+        fixture.service.readContent({ envUri: 'env://one', storeId: 'team', kind: 'changes' })
+          .workGeneration
+      ).toBe(1)
+      expect(
+        fixture.service.readContent({ envUri: 'env://one', storeId: 'design', kind: 'specs' })
+          .workGeneration
+      ).toBe(1)
+      observers.forEach((observer) => observer.unsubscribe())
+    } finally {
+      subscriptions.forEach((subscription) => subscription.unsubscribe())
       fixture.runtime.clear()
     }
   })

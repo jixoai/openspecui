@@ -34,6 +34,7 @@ function entry(overrides: Partial<RunningBackendEntry> & { id: string }): Runnin
     ownership: 'daemon-managed',
     health: 'ready',
     managedGeneration: 1,
+    shutdown: 'managed',
     label: selectWorkspacePathLabel({
       projectPath: '/projects/a',
       git: { githubRemote: 'https://github.com/org/a.git', branch: 'main' },

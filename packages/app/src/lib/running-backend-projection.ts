@@ -11,7 +11,9 @@
  * Port/host remain transport evidence; the path-first label selector owns the display identity.
  */
 
+import type { AppDaemonWorkspaceBinding } from '@openspecui/core/app-daemon-control'
 import type { WorkspacePathLabel } from './workspace-path-label'
+import { selectWorkspacePathLabel } from './workspace-path-label'
 
 /** Ownership of one running backend. */
 export type RunningBackendOwnership = 'daemon-managed' | 'external'
@@ -33,6 +35,8 @@ export interface RunningBackendEntry {
   readonly startedAt?: number
   /** Exact generation when daemon-managed; the exact Stop target. Null for external backends. */
   readonly managedGeneration?: number
+  /** Exact shutdown capability advertised by the owning lease. */
+  readonly shutdown: AppDaemonWorkspaceBinding['shutdown']
   /** Path-first display label derived from objective path + Git facts. */
   readonly label: WorkspacePathLabel
 }
@@ -65,7 +69,7 @@ export function resolveRunningBackendCommands(
     entry.health === 'starting'
   if (entry.ownership === 'daemon-managed' && entry.managedGeneration !== undefined && canStop) {
     commands.push({ kind: 'stop-managed', generation: entry.managedGeneration })
-  } else if (entry.ownership === 'external' && canStop) {
+  } else if (entry.ownership === 'external' && entry.shutdown === 'external-owner' && canStop) {
     commands.push({ kind: 'stop-external' })
   } else {
     commands.push({ kind: 'close-only' })
@@ -74,6 +78,31 @@ export function resolveRunningBackendCommands(
     commands.push({ kind: 'favorite' })
   }
   return commands
+}
+
+/** Project the complete daemon ledger into path-first navigation/Task Manager entries. */
+export function projectDaemonRunningBackends(
+  workspaces: readonly AppDaemonWorkspaceBinding[]
+): readonly RunningBackendEntry[] {
+  return composeRunningBackendNavigation(
+    workspaces.map((workspace) => ({
+      id: workspace.id,
+      projectPath: workspace.projectDir,
+      ownership: workspace.ownership,
+      health: 'ready',
+      startedAt: workspace.registeredAt,
+      ...(workspace.managedGeneration === null
+        ? {}
+        : { managedGeneration: workspace.managedGeneration }),
+      shutdown: workspace.shutdown,
+      label: selectWorkspacePathLabel({
+        projectPath: workspace.projectDir,
+        git: workspace.git
+          ? { githubRemote: workspace.git.remoteUrl, branch: workspace.git.branch }
+          : null,
+      }),
+    }))
+  )
 }
 
 /**

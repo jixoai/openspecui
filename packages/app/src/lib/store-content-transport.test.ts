@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
  * 1. Prove the Store-content transport fetches a composite-identity Pull projection (6.11).
- * 2. Prove malformed successful payloads are rejected with explicit contract-error evidence.
+ * 2. Prove malformed or cross-Store successful payloads are rejected with explicit contract-error evidence.
  * 3. Prove the request encodes the composite identity (envUri + Store id + kind), never Store id alone.
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
@@ -98,6 +98,19 @@ describe('Store-content transport (6.11)', () => {
         { envUri: 'env://1', storeId: 'team', kind: 'specs' }
       )
     ).rejects.toThrow(HostedBackendContractError)
+  })
+
+  it('rejects a schema-valid response carrying another Store identity', async () => {
+    const state = readySpecsState()
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(hostedEnvelope({ ...state, data: { ...state.data, storeId: 'other' } }))
+    )
+    await expect(
+      fetchBackendStoreContentProjection(
+        { apiBaseUrl: 'http://127.0.0.1:3100', fetchImpl },
+        { envUri: 'env://1', storeId: 'team', kind: 'specs' }
+      )
+    ).rejects.toThrow('belongs to another Store')
   })
 
   it('throws on a non-OK response status', async () => {

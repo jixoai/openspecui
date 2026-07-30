@@ -15,6 +15,7 @@
  * directory, optional Access Gate credential, and the fixed Web asset root. `open` is always false.
  */
 import { realpath, stat } from 'node:fs/promises'
+import type { DaemonManagedProjectControl } from './daemon-server.js'
 import type {
   ManagedProjectIdentity,
   ManagedProjectLease,
@@ -65,7 +66,6 @@ export interface ProductionManagedSpawnerOptions {
 /** Build the production spawner that runs the fixed internal `serve` plan per canonical directory. */
 export function createProductionManagedSpawner(options: ProductionManagedSpawnerOptions): {
   spawner: ManagedProjectSpawner
-  closeChild: (canonicalProjectDir: string) => Promise<void>
 } {
   const children = new Map<string, { close: () => Promise<void> }>()
   const spawner: ManagedProjectSpawner = {
@@ -84,14 +84,15 @@ export function createProductionManagedSpawner(options: ProductionManagedSpawner
         generation: options.nextGeneration(),
       }
     },
+    async settle(startup) {
+      const key = startup.identity.canonicalProjectDir
+      const child = children.get(key)
+      if (!child) return
+      children.delete(key)
+      await child.close()
+    },
   }
-  const closeChild = async (canonicalProjectDir: string) => {
-    const child = children.get(canonicalProjectDir)
-    if (!child) return
-    children.delete(canonicalProjectDir)
-    await child.close().catch(() => {})
-  }
-  return { spawner, closeChild }
+  return { spawner }
 }
 
 /**
@@ -99,25 +100,7 @@ export function createProductionManagedSpawner(options: ProductionManagedSpawner
  * rejection/stop codes to their daemon wire error codes. External foreground `serve` leases remain
  * physically distinct and are never routed through this adapter.
  */
-export interface DaemonManagedProjectControlLike {
-  start(rawProjectDir: string): Promise<
-    | {
-        ok: true
-        startup: {
-          canonicalProjectDir: string
-          backendUrl: string
-          credential: string | null
-          generation: number
-        }
-        alreadyRunning: boolean
-      }
-    | { ok: false; code: string; message: string }
-  >
-  stop(
-    generation: number
-  ): Promise<{ ok: true; generation: number } | { ok: false; code: string; message: string }>
-  settleAllForDaemonStop(): Promise<void>
-}
+export type DaemonManagedProjectControlLike = DaemonManagedProjectControl
 
 /** Build the daemon managed-project control from a managed owner. */
 export function adaptOwnerToManagedControl(
@@ -155,6 +138,9 @@ export function adaptOwnerToManagedControl(
     },
     async settleAllForDaemonStop() {
       await owner.settleAllForDaemonStop()
+    },
+    captureManagedDirectorySet() {
+      return owner.captureManagedDirectorySet().map((identity) => identity.canonicalProjectDir)
     },
   }
 }

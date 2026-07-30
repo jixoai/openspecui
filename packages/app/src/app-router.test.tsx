@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAppRouter, type AppRouterContext } from './app-router'
 import { clearLaunchCredential, readLaunchCredential } from './lib/launch-credential'
 import { getHostedShellStorageKey } from './lib/shell-state'
+import { buildStoreDetailPath } from './lib/store-route-identity'
 
 const EMPTY_CONTEXT: AppRouterContext = {
   initialLaunchRequest: null,
@@ -166,6 +167,21 @@ describe('app-router', () => {
     expect(text).toContain('Observed stores only')
   })
 
+  it('renders Environment evidence and direct Store Detail routes instead of blank placeholders', async () => {
+    const router = routerFor(EMPTY_CONTEXT, '/stores/environments')
+    const { container } = await renderAt(<RouterProvider router={router} />)
+    expect(container.textContent).toContain('Environment evidence')
+
+    await act(async () => {
+      await router.navigate({
+        to: buildStoreDetailPath({ envUri: 'env://missing', storeId: 'team' }),
+      })
+    })
+    await waitFor(() => {
+      expect(container.textContent).toContain('not currently observed in this Environment')
+    })
+  })
+
   it('renders the OpenTray titlebar above the Workspaces surface from the global App layout', async () => {
     Object.defineProperty(navigator, 'opentrayWindow', {
       configurable: true,
@@ -293,13 +309,25 @@ describe('app-router', () => {
     const iframe = container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')
     expect(iframe).toBeTruthy()
 
-    // Navigate Workspaces -> Stores -> Workspaces and prove the exact iframe DOM node is preserved (8.5/8.9).
+    // Navigate the complete Stores route family and prove the exact iframe DOM node is preserved (8.5/8.9).
     await act(async () => {
       await router.navigate({ to: '/stores' })
     })
     expect(
       container.querySelector<HTMLElement>('[data-testid="hosted-workspaces-surface"]')?.hidden
     ).toBe(true)
+    expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBe(iframe)
+
+    await act(async () => {
+      await router.navigate({
+        to: buildStoreDetailPath({ envUri: 'env:a', storeId: 'team' }),
+      })
+    })
+    expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBe(iframe)
+
+    await act(async () => {
+      await router.navigate({ to: '/stores/environments' })
+    })
     expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBe(iframe)
 
     await act(async () => {

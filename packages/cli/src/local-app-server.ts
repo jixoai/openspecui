@@ -3,13 +3,22 @@
  * 1. Serve the same-release App shell from a loopback-only HTTP endpoint.
  * 2. Enforce bounded static paths, MIME types, cache policy, and SPA fallback.
  * 3. Publish transient Workspace authority through snapshot Pull, invalidation Push, and open-by-id.
+ * 4. Expose same-origin managed directory start/Stop without accepting executable or port input.
  *
  * Original request (2026-07-29): "daemon 使用随 CLI 发布的本地 App 外壳。"
  */
-import { AppDaemonOpenWorkspaceResponseSchema } from '@openspecui/core/app-daemon-control'
+import {
+  AppDaemonOpenWorkspaceResponseSchema,
+  AppDaemonStartManagedProjectRequestSchema,
+  AppDaemonStartManagedProjectResponseSchema,
+  AppDaemonStopManagedProjectRequestSchema,
+  AppDaemonStopManagedProjectResponseSchema,
+  type AppDaemonStartManagedProjectResponse,
+  type AppDaemonStopManagedProjectResponse,
+} from '@openspecui/core/app-daemon-control'
 import { createReadStream } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
-import type { ServerResponse } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServer } from 'node:http'
 import { extname, join, relative, resolve, sep } from 'node:path'
 import { DaemonWorkspaceSnapshotSchema, type DaemonWorkspaceBinding } from './daemon-protocol.js'
@@ -24,6 +33,7 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
   '.svg': 'image/svg+xml',
   '.webmanifest': 'application/manifest+json; charset=utf-8',
 }
+const MAX_CONTROL_BODY_BYTES = 64 * 1024
 
 export interface LocalAppServer {
   url: string
@@ -44,10 +54,40 @@ async function isFile(path: string): Promise<boolean> {
   }
 }
 
+async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  let body = ''
+  for await (const chunk of request) {
+    body += typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+    if (Buffer.byteLength(body) > MAX_CONTROL_BODY_BYTES) {
+      throw new Error('Managed project request exceeded the body limit.')
+    }
+  }
+  return JSON.parse(body)
+}
+
+function writeJson(response: ServerResponse, status: number, payload: unknown): void {
+  response.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  })
+  response.end(JSON.stringify(payload))
+}
+
+function isExactOriginControl(request: IncomingMessage, serverOrigin: string | null): boolean {
+  if (!serverOrigin) return false
+  const origin = request.headers.origin
+  if (origin !== serverOrigin) return false
+  const fetchSite = request.headers['sec-fetch-site']
+  return fetchSite === undefined || fetchSite === 'same-origin'
+}
+
 /** Start an ephemeral loopback server over one immutable App asset directory. */
 export async function startLocalAppServer(options: {
   assetsDir: string
   openWorkspaceInBrowser(workspaceId: string): Promise<'not-found' | 'opened'>
+  startManagedProject?(projectDir: string): Promise<AppDaemonStartManagedProjectResponse>
+  stopManagedProject?(generation: number): Promise<AppDaemonStopManagedProjectResponse>
   host?: string
   port?: number
 }): Promise<LocalAppServer> {
@@ -57,12 +97,88 @@ export async function startLocalAppServer(options: {
   const eventStreams = new Set<ServerResponse>()
   let revision = 0
   let workspaces: readonly DaemonWorkspaceBinding[] = []
+  let serverOrigin: string | null = null
   const server = createServer((request, response) => {
     void (async () => {
       const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1')
       const openWorkspaceMatch = requestUrl.pathname.match(
         /^\/api\/daemon\/workspaces\/([^/]+)\/open$/
       )
+      const isControlPost =
+        request.method === 'POST' &&
+        (requestUrl.pathname === '/api/daemon/managed-projects/start' ||
+          requestUrl.pathname === '/api/daemon/managed-projects/stop' ||
+          openWorkspaceMatch !== null)
+      if (isControlPost && !isExactOriginControl(request, serverOrigin)) {
+        writeJson(response, 403, { error: 'Daemon control requires the exact local App origin.' })
+        return
+      }
+      if (
+        request.method === 'POST' &&
+        requestUrl.pathname === '/api/daemon/managed-projects/start'
+      ) {
+        let payload: AppDaemonStartManagedProjectResponse
+        try {
+          const input = AppDaemonStartManagedProjectRequestSchema.parse(await readJsonBody(request))
+          payload = options.startManagedProject
+            ? await options.startManagedProject(input.projectDir)
+            : {
+                ok: false,
+                error: {
+                  code: 'UNSUPPORTED',
+                  message: 'This App delivery cannot start local project services.',
+                },
+              }
+        } catch (error) {
+          payload = {
+            ok: false,
+            error: {
+              code: 'INVALID_REQUEST',
+              message: error instanceof Error ? error.message : 'Invalid managed project request.',
+            },
+          }
+        }
+        const parsed = AppDaemonStartManagedProjectResponseSchema.parse(payload)
+        writeJson(
+          response,
+          parsed.ok ? 200 : parsed.error.code === 'UNSUPPORTED' ? 404 : 400,
+          parsed
+        )
+        return
+      }
+      if (
+        request.method === 'POST' &&
+        requestUrl.pathname === '/api/daemon/managed-projects/stop'
+      ) {
+        let payload: AppDaemonStopManagedProjectResponse
+        try {
+          const input = AppDaemonStopManagedProjectRequestSchema.parse(await readJsonBody(request))
+          payload = options.stopManagedProject
+            ? await options.stopManagedProject(input.generation)
+            : {
+                ok: false,
+                error: {
+                  code: 'UNSUPPORTED',
+                  message: 'This App delivery cannot stop local project services.',
+                },
+              }
+        } catch (error) {
+          payload = {
+            ok: false,
+            error: {
+              code: 'INVALID_REQUEST',
+              message: error instanceof Error ? error.message : 'Invalid managed project request.',
+            },
+          }
+        }
+        const parsed = AppDaemonStopManagedProjectResponseSchema.parse(payload)
+        writeJson(
+          response,
+          parsed.ok ? 200 : parsed.error.code === 'UNSUPPORTED' ? 404 : 400,
+          parsed
+        )
+        return
+      }
       if (request.method === 'POST' && openWorkspaceMatch) {
         const workspaceId = decodeURIComponent(openWorkspaceMatch[1] ?? '')
         try {
@@ -75,12 +191,7 @@ export async function startLocalAppServer(options: {
                   error: { code: 'NOT_FOUND', message: 'Workspace is no longer registered.' },
                 }
           )
-          response.writeHead(result === 'opened' ? 200 : 404, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'no-store',
-            'X-Content-Type-Options': 'nosniff',
-          })
-          response.end(JSON.stringify(payload))
+          writeJson(response, result === 'opened' ? 200 : 404, payload)
         } catch {
           const payload = AppDaemonOpenWorkspaceResponseSchema.parse({
             ok: false,
@@ -89,12 +200,7 @@ export async function startLocalAppServer(options: {
               message: 'Failed to open the registered Workspace in the system browser.',
             },
           })
-          response.writeHead(502, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'no-store',
-            'X-Content-Type-Options': 'nosniff',
-          })
-          response.end(JSON.stringify(payload))
+          writeJson(response, 502, payload)
         }
         return
       }
@@ -164,8 +270,9 @@ export async function startLocalAppServer(options: {
     server.close()
     throw new Error('Local App server did not expose a TCP address.')
   }
+  serverOrigin = `http://${host}:${address.port}`
   return {
-    url: `http://${host}:${address.port}`,
+    url: serverOrigin,
     setWorkspaces(nextWorkspaces) {
       workspaces = nextWorkspaces.map((workspace) => ({ ...workspace }))
       revision += 1

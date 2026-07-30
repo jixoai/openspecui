@@ -88,8 +88,16 @@ function createManagedControl() {
   const settleAllForDaemonStop = vi.fn<DaemonManagedProjectControl['settleAllForDaemonStop']>(
     async () => {}
   )
-  const control: DaemonManagedProjectControl = { start, stop, settleAllForDaemonStop }
-  return { control, start, stop, settleAllForDaemonStop }
+  const captureManagedDirectorySet = vi.fn<
+    DaemonManagedProjectControl['captureManagedDirectorySet']
+  >(() => [])
+  const control: DaemonManagedProjectControl = {
+    start,
+    stop,
+    settleAllForDaemonStop,
+    captureManagedDirectorySet,
+  }
+  return { control, start, stop, settleAllForDaemonStop, captureManagedDirectorySet }
 }
 
 describe('daemon IPC server', () => {
@@ -131,6 +139,12 @@ describe('daemon IPC server', () => {
           id: 'workspace-a',
           backendUrl: 'http://127.0.0.1:3100',
           credential: 'private-secret',
+          projectDir: '/projects/a',
+          ownership: 'external',
+          registeredAt: expect.any(Number),
+          managedGeneration: null,
+          shutdown: 'close-only',
+          git: null,
         },
       ])
 

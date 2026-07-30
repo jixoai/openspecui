@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
- * 1. Prove explicit destructive Store confirmation content and typing gate.
- * 2. Prove the dialog submits its captured origin to the route-owned mutation operation.
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Prove unregister/remove copy, explicit confirmation, and typing gates.
+ * 2. Prove the dialog submits its captured Environment authority to the route-owned mutation operation.
  * 3. Prove HTTP rejection stays repairable and only matching ledger success closes the dialog.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
@@ -24,8 +24,8 @@ import { useState, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BackendStoreMutationRequestError } from '../lib/backend-client'
-import type { StoreActionAuthority } from '../lib/store-action'
-import { StoreRemoveDialog } from './store-remove-dialog'
+import type { EnvironmentActionAuthority } from '../lib/environment-authority'
+import { StoreCleanupDialog } from './store-remove-dialog'
 
 const STORE: StoreDoctorStore = {
   id: 'design-system',
@@ -52,12 +52,14 @@ const STORE: StoreDoctorStore = {
   status: [],
 }
 
-const AUTHORITY: StoreActionAuthority = {
+const AUTHORITY: EnvironmentActionAuthority = {
+  envUri: 'openspecui-env://1/aaa',
   tabId: 'tab-a',
   sessionId: 'session-a',
   apiBaseUrl: 'http://localhost:3100',
   tabCreatedAt: 1,
-  observationGeneration: 7,
+  generation: 7,
+  compatible: true,
 }
 
 const rejectRemove = async (): Promise<null> => null
@@ -76,7 +78,7 @@ async function renderAt(element: ReactElement): Promise<{ container: HTMLDivElem
   return { container, root }
 }
 
-// StoreRemoveDialog 使用 lucide-react 但无 router 链接；为安全起见包一层 router。
+// StoreCleanupDialog 使用 lucide-react 但无 router 链接；为安全起见包一层 router。
 function wrapInRouter(element: ReactElement): ReactElement {
   const rootRoute = createRootRouteWithContext<{ dummy: null }>()({ component: () => element })
   const indexRoute = createRoute({
@@ -91,7 +93,7 @@ function wrapInRouter(element: ReactElement): ReactElement {
   return <RouterProvider router={router} />
 }
 
-describe('StoreRemoveDialog', () => {
+describe('StoreCleanupDialog', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
   })
@@ -102,7 +104,12 @@ describe('StoreRemoveDialog', () => {
   it('names environment, host, Store, and checkout path for explicit confirmation', async () => {
     await renderAt(
       wrapInRouter(
-        <StoreRemoveDialog store={STORE} removeStore={rejectRemove} onClose={() => {}} />
+        <StoreCleanupDialog
+          kind="remove"
+          store={STORE}
+          cleanupStore={rejectRemove}
+          onClose={() => {}}
+        />
       )
     )
     const text = document.body.textContent ?? ''
@@ -116,11 +123,12 @@ describe('StoreRemoveDialog', () => {
   it('disables remove until the Store id is typed correctly', async () => {
     await renderAt(
       wrapInRouter(
-        <StoreRemoveDialog
+        <StoreCleanupDialog
+          kind="remove"
           store={STORE}
           authority={AUTHORITY}
           authorityCurrent
-          removeStore={rejectRemove}
+          cleanupStore={rejectRemove}
           onClose={() => {}}
         />
       )
@@ -143,6 +151,33 @@ describe('StoreRemoveDialog', () => {
     expect(removeButton.hasAttribute('disabled')).toBe(false)
   })
 
+  it('keeps checkout files when unregistering and submits an unregister-scoped request', async () => {
+    const cleanupStore = vi.fn(async () => null)
+    await renderAt(
+      wrapInRouter(
+        <StoreCleanupDialog
+          kind="unregister"
+          store={STORE}
+          authority={AUTHORITY}
+          authorityCurrent
+          cleanupStore={cleanupStore}
+          onClose={() => {}}
+        />
+      )
+    )
+    expect(document.body.textContent).toContain('keeps its checkout files on disk')
+    fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
+      target: { value: 'design-system' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Unregister Store' }))
+    await waitFor(() => expect(cleanupStore).toHaveBeenCalledTimes(1))
+    expect(cleanupStore).toHaveBeenCalledWith(
+      AUTHORITY,
+      expect.stringMatching(/^unregister:design-system:/),
+      'design-system'
+    )
+  })
+
   it('does not close from terminal-looking HTTP admission without ledger settlement', async () => {
     let closed = false
     const admission = {
@@ -158,12 +193,13 @@ describe('StoreRemoveDialog', () => {
     const removeStore = vi.fn(async () => admission)
     await renderAt(
       wrapInRouter(
-        <StoreRemoveDialog
+        <StoreCleanupDialog
+          kind="remove"
           store={STORE}
           envUri="openspecui-env://1/aaa"
           authority={AUTHORITY}
           authorityCurrent
-          removeStore={removeStore}
+          cleanupStore={removeStore}
           onClose={() => (closed = true)}
         />
       )
@@ -187,11 +223,12 @@ describe('StoreRemoveDialog', () => {
     })
     await renderAt(
       wrapInRouter(
-        <StoreRemoveDialog
+        <StoreCleanupDialog
+          kind="remove"
           store={STORE}
           authority={AUTHORITY}
           authorityCurrent
-          removeStore={removeStore}
+          cleanupStore={removeStore}
           onClose={() => (closed = true)}
         />
       )
@@ -207,18 +244,95 @@ describe('StoreRemoveDialog', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
+  it('surfaces authority retirement when dispatch returns no admission', async () => {
+    await renderAt(
+      wrapInRouter(
+        <StoreCleanupDialog
+          kind="unregister"
+          store={STORE}
+          envUri={AUTHORITY.envUri}
+          authority={AUTHORITY}
+          authorityCurrent
+          cleanupStore={async () => null}
+          onClose={() => {}}
+        />
+      )
+    )
+    fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
+      target: { value: 'design-system' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Unregister Store' }))
+
+    await screen.findByText('The Environment authority changed before Store cleanup was admitted.')
+    expect(screen.getByRole('form', { name: 'Unregister Store' })).toBeTruthy()
+  })
+
+  it('does not close from a same-request ledger record for another Store cleanup identity', async () => {
+    let closed = false
+
+    function Harness() {
+      const [records, setRecords] = useState<readonly StoreMutationEnvelope[]>([])
+      return (
+        <StoreCleanupDialog
+          kind="remove"
+          store={STORE}
+          envUri={AUTHORITY.envUri}
+          authority={AUTHORITY}
+          authorityCurrent
+          mutationRecords={records}
+          cleanupStore={async (_authority, requestId) => {
+            queueMicrotask(() => {
+              setRecords([
+                {
+                  requestId,
+                  envUri: AUTHORITY.envUri,
+                  kind: 'unregister',
+                  status: 'succeeded',
+                  storeId: 'another-store',
+                  result: { exitStatus: 0 },
+                  observedAt: 2,
+                },
+              ])
+            })
+            return {
+              requestId,
+              envUri: AUTHORITY.envUri,
+              kind: 'remove',
+              status: 'accepted',
+              storeId: 'design-system',
+              observedAt: 1,
+              rejoined: false,
+            }
+          }}
+          onClose={() => (closed = true)}
+        />
+      )
+    }
+
+    await renderAt(wrapInRouter(<Harness />))
+    fireEvent.change(screen.getByLabelText('Type the Store id to confirm'), {
+      target: { value: 'design-system' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Store' }))
+    await act(async () => Promise.resolve())
+
+    expect(closed).toBe(false)
+    expect(screen.getByRole('form', { name: 'Remove Store files' })).toBeTruthy()
+  })
+
   it('closes only after the matching ledger record is observed as succeeded', async () => {
     let closed = false
 
     function Harness() {
       const [records, setRecords] = useState<readonly StoreMutationEnvelope[]>([])
       return (
-        <StoreRemoveDialog
+        <StoreCleanupDialog
+          kind="remove"
           store={STORE}
           authority={AUTHORITY}
           authorityCurrent
           mutationRecords={records}
-          removeStore={async (_authority, requestId) => {
+          cleanupStore={async (_authority, requestId) => {
             queueMicrotask(() => {
               setRecords([
                 {
@@ -262,12 +376,13 @@ describe('StoreRemoveDialog', () => {
     function Harness() {
       const [records, setRecords] = useState<readonly StoreMutationEnvelope[]>([])
       return (
-        <StoreRemoveDialog
+        <StoreCleanupDialog
+          kind="remove"
           store={STORE}
           authority={AUTHORITY}
           authorityCurrent
           mutationRecords={records}
-          removeStore={async (_authority, requestId) => {
+          cleanupStore={async (_authority, requestId) => {
             attempts += 1
             queueMicrotask(() => {
               setRecords([
@@ -311,16 +426,17 @@ describe('StoreRemoveDialog', () => {
   it('renders an actionable message when its captured authority is retired', async () => {
     await renderAt(
       wrapInRouter(
-        <StoreRemoveDialog
+        <StoreCleanupDialog
+          kind="remove"
           store={STORE}
           authority={AUTHORITY}
-          removeStore={rejectRemove}
+          cleanupStore={rejectRemove}
           onClose={() => {}}
         />
       )
     )
     expect(document.body.textContent).toContain(
-      'The environment refreshed after this dialog opened. Close and reopen it before removing files.'
+      'The environment refreshed after this dialog opened. Close and reopen it before changing this Store registration.'
     )
   })
 })

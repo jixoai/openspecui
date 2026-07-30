@@ -2,7 +2,7 @@
  * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
  * 1. Prove Store Detail joins facts by composite identity and surfaces the direct plane (7.4/7.5/7.8).
  * 2. Prove observed-only Usage honesty and independent Specs/Changes regions (7.9/7.10).
- * 3. Prove destructive canRemove requires authority + no running mutation + no blocking diagnostics (7.12).
+ * 3. Prove cleanup authority depends on current authority/lifecycle, not Doctor health (7.12).
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
  */
@@ -100,27 +100,27 @@ describe('Store Detail observed-only Usage (7.9)', () => {
   })
 })
 
-describe('Store Detail destructive canRemove (7.12)', () => {
-  it('allows remove with authority, idle mutation, and no blocking diagnostics', () => {
-    expect(selectStoreDetailProjection(baseInput()).canRemove).toBe(true)
+describe('Store Detail lifecycle cleanup (7.12)', () => {
+  it('allows cleanup with authority and an idle mutation lifecycle', () => {
+    expect(selectStoreDetailProjection(baseInput()).canCleanUp).toBe(true)
   })
 
-  it('blocks remove without authority', () => {
-    expect(selectStoreDetailProjection(baseInput({ hasAuthority: false })).canRemove).toBe(false)
+  it('blocks cleanup without authority', () => {
+    expect(selectStoreDetailProjection(baseInput({ hasAuthority: false })).canCleanUp).toBe(false)
   })
 
-  it('blocks remove while a mutation is running or indeterminate', () => {
-    expect(selectStoreDetailProjection(baseInput({ mutation: 'running' })).canRemove).toBe(false)
-    expect(selectStoreDetailProjection(baseInput({ mutation: 'indeterminate' })).canRemove).toBe(
+  it('blocks cleanup while a mutation is running or indeterminate', () => {
+    expect(selectStoreDetailProjection(baseInput({ mutation: 'running' })).canCleanUp).toBe(false)
+    expect(selectStoreDetailProjection(baseInput({ mutation: 'indeterminate' })).canCleanUp).toBe(
       false
     )
   })
 
-  it('blocks remove when blocking diagnostics are present', () => {
+  it('keeps cleanup available when Doctor reports a broken Store', () => {
     expect(
       selectStoreDetailProjection(
         baseInput({ blockingDiagnostics: [{ severity: 'error', message: 'x' }] })
-      ).canRemove
-    ).toBe(false)
+      ).canCleanUp
+    ).toBe(true)
   })
 })

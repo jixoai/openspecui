@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Parse one production yargs command plan and dispatch serve, daemon, export, or meta execution.
  * 2. Keep each foreground serve process as the sole owner of its project Server and shutdown.
- * 3. Bootstrap the detached App daemon without inheriting project credentials or hosted-shell config.
+ * 3. Bootstrap the detached App daemon and consume only its explicit managed-directory restoration handoff.
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
  * Delivery correction (2026-07-26): process children consume the parent's resolved Web asset root.
  * Owner correction (2026-07-29): bare openspecui is serve; start/stop/restart own only the App daemon.
  * Owner correction (2026-07-30): native appMode cold launch must re-enter the public `start` lifecycle.
+ * Owner lifecycle decision (2026-07-30): daemon restart restores the managed running directory set.
  */
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -20,7 +21,11 @@ import { createBrowserStartCommandPresenter } from './browser-start-command-pres
 import { parseCliCommand } from './cli-command.js'
 import { executeCliCommand } from './cli-execution.js'
 import { createDaemonController } from './daemon-controller.js'
-import { consumeDaemonBootstrap, runDaemonProcess } from './daemon-process.js'
+import {
+  consumeDaemonBootstrap,
+  consumeDaemonRestoreProjects,
+  runDaemonProcess,
+} from './daemon-process.js'
 import { exportStaticSite } from './export.js'
 import { startServer } from './index.js'
 import { readCliPackageVersion } from './package-version.js'
@@ -38,7 +43,13 @@ async function main(): Promise<void> {
   const inheritedWebAssetsDir = consumeWorktreeProcessWebAssetsDir(process.env)
   const daemonHostMode = consumeDaemonBootstrap(process.env)
   if (daemonHostMode) {
-    await runDaemonProcess({ entryPath, hostMode: daemonHostMode, runtimeDir })
+    await runDaemonProcess({
+      entryPath,
+      hostMode: daemonHostMode,
+      runtimeDir,
+      restoreProjectDirs: consumeDaemonRestoreProjects(process.env),
+      startProjectServer: startServer,
+    })
     return
   }
 

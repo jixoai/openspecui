@@ -2,7 +2,7 @@
  * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
  * 1. Prove Store Detail renders the direct plane (identity/health/Usage/content) (7.8/7.9/7.10).
  * 2. Prove blocking diagnostics promote and Specs/Changes render independently (7.10/7.11).
- * 3. Prove destructive remove is gated by authority + lifecycle + confirmation (7.12).
+ * 3. Prove unregister/remove are gated and delegated to route-owned confirmation dialogs (7.12).
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
  */
@@ -107,23 +107,42 @@ describe('StoreDetail (7.8-7.13)', () => {
     expect(screen.getByText('3 requirements')).toBeTruthy()
   })
 
+  it('keeps successful CLI evidence collapsed until requested', async () => {
+    await renderAt(
+      <StoreDetail
+        projection={projection({ evidence: { command: 'store doctor', success: true } })}
+      />
+    )
+    expect(screen.queryByText(/store doctor/)).toBeNull()
+    fireEvent.click(screen.getByText('CLI evidence'))
+    expect(screen.getByText(/store doctor/)).toBeTruthy()
+  })
+
   it('gates destructive remove on authority and lifecycle', async () => {
     const { container } = await renderAt(
       <div>
-        <StoreDetail projection={projection({ hasAuthority: false })} onRemove={() => {}} />
+        <StoreDetail
+          projection={projection({ hasAuthority: false })}
+          onUnregister={() => {}}
+          onRemove={() => {}}
+        />
       </div>
     )
-    expect(container.textContent).toContain('Remove requires current Environment authority')
-    expect(screen.queryByText('Remove store')).toBeNull()
+    expect(container.textContent).toContain('Store cleanup requires current Environment authority')
+    expect(screen.queryByText('Unregister store')).toBeNull()
+    expect(screen.queryByText('Remove store files')).toBeNull()
   })
 
-  it('requires confirmation before removing a Store', async () => {
+  it('delegates both cleanup choices to route-owned dialogs', async () => {
+    const onUnregister = vi.fn()
     const onRemove = vi.fn()
-    await renderAt(<StoreDetail projection={projection()} onRemove={onRemove} />)
-    fireEvent.click(screen.getByText('Remove store'))
-    expect(screen.getByText(/Unregister and remove/)).toBeTruthy()
-    expect(onRemove).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByText('Confirm remove'))
+    await renderAt(
+      <StoreDetail projection={projection()} onUnregister={onUnregister} onRemove={onRemove} />
+    )
+    fireEvent.click(screen.getByText('Unregister store'))
+    fireEvent.click(screen.getByText('Remove store files'))
+    expect(onUnregister).toHaveBeenCalledTimes(1)
     expect(onRemove).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Confirm remove')).toBeNull()
   })
 })

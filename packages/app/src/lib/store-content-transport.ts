@@ -48,6 +48,14 @@ function authHeaders(apiBaseUrl: string): Record<string, string> {
  * Fetch one Store-content Projection Work Pull state. Throws a `HostedBackendContractError` when a successful
  * response carries a malformed payload, retaining the decoder's parse cause (6.11).
  */
+export function fetchBackendStoreContentProjection(
+  options: StoreContentTransportOptions,
+  identity: StoreContentRequestIdentity & { readonly kind: 'specs' }
+): Promise<HostedStoreContentSpecsProjectionState>
+export function fetchBackendStoreContentProjection(
+  options: StoreContentTransportOptions,
+  identity: StoreContentRequestIdentity & { readonly kind: 'changes' }
+): Promise<HostedStoreContentChangesProjectionState>
 export async function fetchBackendStoreContentProjection(
   options: StoreContentTransportOptions,
   identity: StoreContentRequestIdentity
@@ -90,6 +98,16 @@ export async function fetchBackendStoreContentProjection(
     throw new HostedBackendContractError(`Store ${identity.kind} content response is malformed.`, {
       cause: decoded.error,
     })
+  }
+  if (decoded.data.data && decoded.data.data.storeId !== identity.storeId) {
+    throw new HostedBackendContractError(
+      `Store ${identity.kind} content response belongs to another Store.`,
+      {
+        cause: new Error(
+          `Expected Store ${identity.storeId}, received ${decoded.data.data.storeId}.`
+        ),
+      }
+    )
   }
   return decoded.data
 }

@@ -10,7 +10,10 @@
  *   Closing a Workspace dismisses its daemon admission; an unchanged snapshot produces
  *   `already-dismissed` and must NOT call applyHostedLaunchRequest to reopen it.
  */
-import type { AppDaemonWorkspaceSnapshot } from '@openspecui/core/app-daemon-control'
+import type {
+  AppDaemonWorkspaceBinding,
+  AppDaemonWorkspaceSnapshot,
+} from '@openspecui/core/app-daemon-control'
 import {
   createContext,
   useCallback,
@@ -22,6 +25,7 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  clearDismissal,
   createEmptyAdmissionState,
   dismissWorkspace,
   reduceDaemonSnapshot,
@@ -33,12 +37,22 @@ import {
   type DaemonWorkspaceControl,
 } from '../lib/daemon-workspace-control'
 import { bindLaunchCredential, clearLaunchCredential } from '../lib/launch-credential'
-import { applyHostedLaunchRequest, normalizeHostedApiBaseUrl } from '../lib/shell-state'
+import {
+  applyHostedLaunchRequest,
+  normalizeHostedApiBaseUrl,
+  removeHostedTab,
+} from '../lib/shell-state'
 import { useConnectionsActions } from '../lib/use-connections'
 
-interface AppDaemonWorkspaceContextValue {
+export interface AppDaemonWorkspaceContextValue {
   error: string | null
+  availability: 'checking' | 'supported' | 'unsupported'
+  workspaces: readonly AppDaemonWorkspaceBinding[]
   openWorkspaceInBrowser(workspaceId: string): Promise<void>
+  startManagedProject(projectDir: string): Promise<AppDaemonWorkspaceBinding>
+  stopManagedProject(generation: number): Promise<void>
+  focusWorkspace(workspaceId: string): void
+  closeWorkspace(workspaceId: string): void
   resolveWorkspaceId(apiBaseUrl: string): string | null
   /**
    * Record that an open Workspace backed by `apiBaseUrl` was closed by the user, so an unchanged
@@ -100,6 +114,10 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
   // admitted, dismissed (user-closed), or retired so an unchanged snapshot never reopens a Workspace.
   const admissionRef = useRef<DaemonWorkspaceAdmissionState>(createEmptyAdmissionState())
   const [workspaceIds, setWorkspaceIds] = useState<ReadonlyMap<string, string>>(() => new Map())
+  const [workspaces, setWorkspaces] = useState<readonly AppDaemonWorkspaceBinding[]>([])
+  const [availability, setAvailability] = useState<'checking' | 'supported' | 'unsupported'>(
+    'checking'
+  )
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -120,12 +138,13 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
           }
         )
         setWorkspaceIds(applied)
+        setWorkspaces(snapshot.workspaces)
         setError(null)
       },
       onError: (nextError) => setError(nextError.message),
     })
     controlRef.current = control
-    void control.start()
+    void control.start().then(setAvailability)
     return () => {
       controlRef.current = null
       control.stop()
@@ -146,6 +165,88 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const focusWorkspace = useCallback(
+    (workspaceId: string) => {
+      const workspace = workspaces.find((candidate) => candidate.id === workspaceId)
+      if (!workspace) return
+      admissionRef.current = clearDismissal(admissionRef.current, workspace.id)
+      connectionActions.setState(
+        applyHostedLaunchRequest(connectionActions.getState(), {
+          apiBaseUrl: workspace.backendUrl,
+        })
+      )
+    },
+    [connectionActions, workspaces]
+  )
+
+  const startManagedProject = useCallback(
+    async (projectDir: string): Promise<AppDaemonWorkspaceBinding> => {
+      const control = controlRef.current
+      if (!control || availability !== 'supported') {
+        throw new Error('Directory launch is unavailable in this App delivery.')
+      }
+      const result = await control.startManagedProject(projectDir)
+      if (!result.ok) {
+        setError(result.error.message)
+        throw new Error(result.error.message)
+      }
+      if (result.workspace.credential) {
+        bindLaunchCredential(result.workspace.backendUrl, result.workspace.credential)
+      }
+      admissionRef.current = clearDismissal(admissionRef.current, result.workspace.id)
+      connectionActions.setState(
+        applyHostedLaunchRequest(connectionActions.getState(), {
+          apiBaseUrl: result.workspace.backendUrl,
+        })
+      )
+      setError(null)
+      return result.workspace
+    },
+    [availability, connectionActions]
+  )
+
+  const stopManagedProject = useCallback(
+    async (generation: number): Promise<void> => {
+      const control = controlRef.current
+      if (!control || availability !== 'supported') {
+        throw new Error('Managed Stop is unavailable in this App delivery.')
+      }
+      const workspace = workspaces.find((candidate) => candidate.managedGeneration === generation)
+      const result = await control.stopManagedProject(generation)
+      if (!result.ok) {
+        setError(result.error.message)
+        throw new Error(result.error.message)
+      }
+      if (workspace) {
+        clearLaunchCredential(workspace.backendUrl)
+        connectionActions.setState(
+          removeHostedTab(
+            connectionActions.getState(),
+            connectionActions.getState().tabs.find((tab) => tab.apiBaseUrl === workspace.backendUrl)
+              ?.id ?? ''
+          )
+        )
+      }
+      setError(null)
+    },
+    [availability, connectionActions, workspaces]
+  )
+
+  const closeWorkspace = useCallback(
+    (workspaceId: string) => {
+      const workspace = workspaces.find((candidate) => candidate.id === workspaceId)
+      if (!workspace) return
+      admissionRef.current = dismissWorkspace(admissionRef.current, workspace.id)
+      const tab = connectionActions
+        .getState()
+        .tabs.find((candidate) => candidate.apiBaseUrl === workspace.backendUrl)
+      if (tab) {
+        connectionActions.setState(removeHostedTab(connectionActions.getState(), tab.id))
+      }
+    },
+    [connectionActions, workspaces]
+  )
+
   const dismissDaemonWorkspace = useCallback(
     (apiBaseUrl: string) => {
       const normalized = normalizeHostedApiBaseUrl(apiBaseUrl)
@@ -159,14 +260,31 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
   const value = useMemo<AppDaemonWorkspaceContextValue>(
     () => ({
       error,
+      availability,
+      workspaces,
       openWorkspaceInBrowser,
+      startManagedProject,
+      stopManagedProject,
+      focusWorkspace,
+      closeWorkspace,
       dismissDaemonWorkspace,
       resolveWorkspaceId(apiBaseUrl) {
         const normalized = normalizeHostedApiBaseUrl(apiBaseUrl)
         return normalized ? (workspaceIds.get(normalized) ?? null) : null
       },
     }),
-    [error, openWorkspaceInBrowser, dismissDaemonWorkspace, workspaceIds]
+    [
+      error,
+      availability,
+      workspaces,
+      openWorkspaceInBrowser,
+      startManagedProject,
+      stopManagedProject,
+      focusWorkspace,
+      closeWorkspace,
+      dismissDaemonWorkspace,
+      workspaceIds,
+    ]
   )
 
   return (
@@ -182,10 +300,20 @@ export function useAppDaemonWorkspace(): AppDaemonWorkspaceContextValue {
   return (
     value ?? {
       error: null,
+      availability: 'unsupported',
+      workspaces: [],
       openWorkspaceInBrowser: async () => {
         throw new Error('OpenSpecUI App daemon is unavailable.')
       },
       dismissDaemonWorkspace: () => {},
+      startManagedProject: async () => {
+        throw new Error('Directory launch is unavailable in this App delivery.')
+      },
+      stopManagedProject: async () => {
+        throw new Error('Managed Stop is unavailable in this App delivery.')
+      },
+      focusWorkspace: () => {},
+      closeWorkspace: () => {},
       resolveWorkspaceId: () => null,
     }
   )

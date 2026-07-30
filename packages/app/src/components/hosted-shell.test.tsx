@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Prove health metadata creates the canonical authenticated Project Web iframe.
  * 2. Prove explicit refresh, tab switching, and dialog interactions target the intended tab.
  * 3. Preserve per-tab iframe sessions and runtime identity across ordinary shell updates.
@@ -10,6 +10,7 @@
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Owner-reported defect (2026-07-26): "Dashboard加载完成的一瞬间开始reload。"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-30): "Workspace需要记住曾经打开的目录，并且支持收藏。"
  */
 // @vitest-environment jsdom
 
@@ -204,6 +205,7 @@ describe('HostedShell', () => {
           reachability: 'online',
           projectName: 'opsx-project',
           projectDir: '/tmp/opsx-project',
+          git: null,
           openspecuiVersion: '2.0.2',
           embeddedUiUrl: 'http://localhost:3100/dashboard',
           errorMessage: null,
@@ -237,6 +239,7 @@ describe('HostedShell', () => {
           reachability: 'checking',
           projectName: null,
           projectDir: null,
+          git: null,
           openspecuiVersion: null,
           embeddedUiUrl: null,
           errorMessage: null,

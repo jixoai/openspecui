@@ -28,6 +28,7 @@ import {
   type EnvironmentSelectionState,
   type EnvironmentSourceObservation,
 } from './environment-authority'
+import type { HostedShellTab } from './shell-state'
 import { getConnectionsSnapshot } from './use-connections'
 
 export interface StoreEnvironmentAuthorityContext {
@@ -35,6 +36,20 @@ export interface StoreEnvironmentAuthorityContext {
   selection: EnvironmentSelectionState
   /** Current compatible source observations grouped by envUri. */
   observations: readonly EnvironmentSourceObservation[]
+}
+
+/** Match a pinned Environment action to its exact open tab without requiring that tab to be active. */
+export function hasExactEnvironmentAuthorityTab(
+  authority: EnvironmentActionAuthority,
+  tabs: readonly HostedShellTab[]
+): boolean {
+  return tabs.some(
+    (tab) =>
+      tab.id === authority.tabId &&
+      tab.sessionId === authority.sessionId &&
+      tab.apiBaseUrl === authority.apiBaseUrl &&
+      tab.createdAt === authority.tabCreatedAt
+  )
 }
 
 /** Resolve the current Environment authority for the Store action dispatch boundary. */
@@ -83,14 +98,7 @@ export function useStoreEnvironmentMutationDispatcher(
       if (revalidation.kind !== 'valid') return null
       // Gate 2: connection-observation full-identity revalidation (existing boundary, unchanged).
       const connections = getConnectionsSnapshot()
-      const selectedTab = connections.tabs.find((tab) => tab.id === authority.tabId)
-      if (
-        connections.activeTabId !== authority.tabId ||
-        !selectedTab ||
-        selectedTab.sessionId !== authority.sessionId ||
-        selectedTab.apiBaseUrl !== authority.apiBaseUrl ||
-        selectedTab.createdAt !== authority.tabCreatedAt
-      ) {
+      if (!hasExactEnvironmentAuthorityTab(authority, connections.tabs)) {
         return null
       }
       if (

@@ -19,9 +19,12 @@ import {
   redirect,
 } from '@tanstack/react-router'
 import { AppLayout } from './components/app-layout'
-import { StoresIndex } from './components/stores-index'
 import type { HostedShellLaunchRequest } from './lib/shell-state'
 import { SettingsRoute } from './routes/settings'
+import { StoreDetailRoute } from './routes/store-detail'
+import { StoresEnvironmentsRoute } from './routes/stores-environments'
+import { StoresIndexRoute } from './routes/stores-index'
+import { WorkspaceTaskManagerRoute } from './routes/workspace-task-manager'
 import { WorkspacesRoute } from './routes/workspaces'
 
 /**
@@ -60,38 +63,26 @@ const workspacesRoute = createRoute({
 const workspacesTasksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/workspaces/tasks',
-  // Task Manager detail is owned by the running-backend projection; render placeholder until the route is wired
-  // into the layout surface. Static segment takes precedence over the Stores detail dynamic match.
-  component: () => null,
+  component: WorkspaceTaskManagerRoute,
 })
 
 // --- Stores：selected-Environment index + Environment evidence + composite-identity Detail ---
 const storesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/stores',
-  component: () => (
-    <StoresIndex
-      rows={[]}
-      envUri=""
-      // TODO(P7 Store Detail): wire live Store rows + Environment authority here.
-    />
-  ),
+  component: StoresIndexRoute,
 })
 
 const storesEnvironmentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/stores/environments',
-  // Environment evidence subpage: connected projects, CLI versions, capability facts, source conflict (7.7).
-  // TODO(P7): wire Environment evidence component.
-  component: () => null,
+  component: StoresEnvironmentsRoute,
 })
 
 const storeDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/stores/$encodedEnvUri/$storeId',
-  // Composite-identity Store Detail. The route params are decoded by the Store Detail component via
-  // parseStoreDetailRouteIdentity; envUri stays opaque. TODO(P7): wire Store Detail component.
-  component: () => null,
+  component: StoreDetailRoute,
 })
 
 const settingsRoute = createRoute({

@@ -20,6 +20,7 @@ function entry(overrides: Partial<RunningBackendEntry> & { id: string }): Runnin
     ownership: 'daemon-managed',
     health: 'ready',
     managedGeneration: 1,
+    shutdown: 'managed',
     label: selectWorkspacePathLabel({
       projectPath: '/projects/a',
       git: { githubRemote: 'https://github.com/org/a.git', branch: 'main' },
@@ -70,6 +71,7 @@ describe('running backend Task Manager commands (4.0d)', () => {
         ownership: 'external',
         health: 'ready',
         managedGeneration: undefined,
+        shutdown: 'external-owner',
         projectPath: '/p',
       })
     )
@@ -82,6 +84,7 @@ describe('running backend Task Manager commands (4.0d)', () => {
         ownership: 'daemon-managed',
         health: 'unknown',
         managedGeneration: undefined,
+        shutdown: 'close-only',
         projectPath: '/p',
       })
     )

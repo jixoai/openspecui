@@ -27,6 +27,8 @@ export const DaemonWorkspaceSchema = z.object({
   projectDir: z.string().min(1),
   backendUrl: z.string().url(),
   registeredAt: z.number().int().nonnegative(),
+  ownership: z.enum(['daemon-managed', 'external']).default('external'),
+  managedGeneration: z.number().int().nonnegative().nullable().default(null),
 })
 export type DaemonWorkspace = z.infer<typeof DaemonWorkspaceSchema>
 
@@ -86,6 +88,7 @@ export const DaemonCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('unregister-workspace'), workspaceId: z.string().min(1) }),
   z.object({ type: z.literal('open-workspace-in-browser'), workspaceId: z.string().min(1) }),
   z.object({ type: z.literal('list-workspaces') }),
+  z.object({ type: z.literal('prepare-restart') }),
   z.object({ type: z.literal('stop') }),
 ])
 export type DaemonCommand = z.infer<typeof DaemonCommandSchema>
@@ -115,6 +118,7 @@ const DaemonSuccessDataSchema = z.union([
   z.object({ kind: z.literal('ack') }),
   z.object({ kind: z.literal('stopped') }),
   z.object({ kind: z.literal('workspaces'), workspaces: z.array(DaemonWorkspaceSchema) }),
+  z.object({ kind: z.literal('restart-prepared'), projectDirs: z.array(z.string().min(1)) }),
   z.object({
     kind: z.literal('managed-project-started'),
     startup: ManagedProjectStartupDataSchema,

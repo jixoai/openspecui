@@ -1,7 +1,8 @@
 /**
  * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
  * 1. Prove Store dispatch authority resolution + revalidation gates the dispatch boundary (8.4/5.7/5.12).
- * 2. Mutation resistance: a stale generation/identity/envUri authority is rejected, not combined.
+ * 2. Prove Environment authority does not depend on the global active Workspace tab.
+ * 3. Mutation resistance: a stale generation/identity/envUri authority is rejected, not combined.
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
  * The dispatcher consumes `resolveStoreEnvironmentAuthority` + `revalidateEnvironmentAuthority` as its pure
@@ -13,7 +14,10 @@ import {
   revalidateEnvironmentAuthority,
   type EnvironmentSourceObservation,
 } from './environment-authority'
-import { resolveStoreEnvironmentAuthority } from './store-action-environment-authority'
+import {
+  hasExactEnvironmentAuthorityTab,
+  resolveStoreEnvironmentAuthority,
+} from './store-action-environment-authority'
 
 function obs(
   overrides: Partial<EnvironmentSourceObservation> & { envUri: string; tabId: string }
@@ -57,6 +61,57 @@ describe('resolveStoreEnvironmentAuthority (8.4)', () => {
       observations: [],
     })
     expect(result.kind).toBe('no-authority')
+  })
+})
+
+describe('Environment dispatch tab identity (5.10)', () => {
+  it('accepts the exact Environment source even when another Workspace is globally active', () => {
+    const authority = pinEnvironmentActionAuthority(
+      obs({
+        envUri: 'env://1',
+        tabId: 'environment-source',
+        sessionId: 'session-source',
+        apiBaseUrl: 'http://environment-source',
+        tabCreatedAt: 10,
+      })
+    )
+    const tabs = [
+      {
+        id: 'active-other',
+        sessionId: 'session-other',
+        apiBaseUrl: 'http://active-other',
+        createdAt: 1,
+      },
+      {
+        id: 'environment-source',
+        sessionId: 'session-source',
+        apiBaseUrl: 'http://environment-source',
+        createdAt: 10,
+      },
+    ]
+    expect(hasExactEnvironmentAuthorityTab(authority, tabs)).toBe(true)
+  })
+
+  it('rejects a tab identity replacement even when the locator is unchanged', () => {
+    const authority = pinEnvironmentActionAuthority(
+      obs({
+        envUri: 'env://1',
+        tabId: 'source',
+        sessionId: 'old-session',
+        apiBaseUrl: 'http://source',
+        tabCreatedAt: 10,
+      })
+    )
+    expect(
+      hasExactEnvironmentAuthorityTab(authority, [
+        {
+          id: 'source',
+          sessionId: 'replacement-session',
+          apiBaseUrl: 'http://source',
+          createdAt: 11,
+        },
+      ])
+    ).toBe(false)
   })
 })
 

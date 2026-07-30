@@ -264,16 +264,17 @@ export class StoreContentProjectionService {
   }
 
   private invalidateStoreContent(change: StoreObservationChange): void {
-    if (change.kind === 'spec-root') return
-    const storeIds = change.kind === 'doctor-root' ? [change.storeId] : change.storeIds
-    for (const storeId of storeIds) {
-      for (const kind of ['specs', 'changes'] as const) {
-        this.options.workOwner.registry.invalidate(
-          this.contentIdentity({ envUri: '', storeId, kind }),
-          'dependency'
-        )
-      }
-    }
+    const selectedStoreIds = new Set(
+      change.kind === 'inventory' ? change.storeIds : [change.storeId]
+    )
+    this.options.workOwner.registry.invalidateMatching((identity) => {
+      if (!selectedStoreIds.has(identity.planningRoot.storeSelector ?? '')) return false
+      if (change.kind === 'spec-root') return identity.projectionKind === 'store-content-specs'
+      return (
+        identity.projectionKind === 'store-content-specs' ||
+        identity.projectionKind === 'store-content-changes'
+      )
+    }, 'dependency')
   }
 
   private invalidateAllStoreContent(): void {

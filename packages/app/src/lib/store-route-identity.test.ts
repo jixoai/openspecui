@@ -17,7 +17,7 @@ import {
 
 describe('Store route identity (7.1)', () => {
   it('encodes and decodes an opaque envUri as a single path segment', () => {
-    const envUri = 'openspecui-env://1/host+data-home'
+    const envUri = 'openspecui-env://1/host+data-home/\u76ee\u5f55'
     const encoded = encodeEnvUriSegment(envUri)
     expect(encoded).not.toContain('/')
     expect(decodeEnvUriSegment(encoded)).toBe(envUri)
@@ -39,6 +39,7 @@ describe('Store route identity (7.1)', () => {
     expect(parseStoreDetailRouteIdentity(encodeEnvUriSegment('env://1'), '')).toBeNull()
     // A segment containing a raw '/' is invalid.
     expect(parseStoreDetailRouteIdentity('env//1', 'team')).toBeNull()
+    expect(parseStoreDetailRouteIdentity('v1-not-hex', 'team')).toBeNull()
   })
 
   it('builds canonical Store routes from a composite identity', () => {
@@ -47,6 +48,7 @@ describe('Store route identity (7.1)', () => {
     const path = buildStoreDetailPath({ envUri: 'env://1', storeId: 'team' })
     expect(path).toBe(`/stores/${encodeEnvUriSegment('env://1')}/team`)
     expect(path.startsWith('/stores/')).toBe(true)
+    expect(decodeURIComponent(path.split('/')[2] ?? '')).toBe(encodeEnvUriSegment('env://1'))
   })
 
   it('treats the envUri as opaque: a URL-shaped envUri is not dereferenced', () => {

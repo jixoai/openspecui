@@ -3,10 +3,17 @@
  * 1. Prove the loopback App server owns immutable assets, SPA fallback, and bounded paths.
  * 2. Prove Workspace control follows invalidation Push then typed replacement Pull.
  * 3. Prove browser actions carry only encoded opaque Workspace ids to daemon authority.
+ * 4. Prove managed directory start/Stop is runtime-parsed and delegated only when locally supported.
  *
  * Original request (2026-07-29): "daemon 使用随 CLI 发布的本地 App 外壳。"
  */
-import { AppDaemonOpenWorkspaceResponseSchema } from '@openspecui/core/app-daemon-control'
+import {
+  AppDaemonOpenWorkspaceResponseSchema,
+  AppDaemonStartManagedProjectResponseSchema,
+  AppDaemonStopManagedProjectResponseSchema,
+  type AppDaemonStartManagedProjectResponse,
+  type AppDaemonStopManagedProjectResponse,
+} from '@openspecui/core/app-daemon-control'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { request } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -24,15 +31,23 @@ afterEach(async () => {
 })
 
 async function startFixture(
-  openWorkspaceInBrowser: (workspaceId: string) => Promise<'not-found' | 'opened'> = async () =>
-    'not-found'
+  options: {
+    openWorkspaceInBrowser?: (workspaceId: string) => Promise<'not-found' | 'opened'>
+    startManagedProject?: (projectDir: string) => Promise<AppDaemonStartManagedProjectResponse>
+    stopManagedProject?: (generation: number) => Promise<AppDaemonStopManagedProjectResponse>
+  } = {}
 ): Promise<LocalAppServer> {
   const assetsDir = await mkdtemp(join(tmpdir(), 'openspecui-local-app-'))
   tempDirs.push(assetsDir)
   await mkdir(join(assetsDir, 'assets'))
   await writeFile(join(assetsDir, 'index.html'), '<main>OpenSpecUI App</main>')
   await writeFile(join(assetsDir, 'assets', 'app-a1b2c3.js'), 'globalThis.appReady = true')
-  const server = await startLocalAppServer({ assetsDir, openWorkspaceInBrowser })
+  const server = await startLocalAppServer({
+    assetsDir,
+    openWorkspaceInBrowser: options.openWorkspaceInBrowser ?? (async () => 'not-found'),
+    startManagedProject: options.startManagedProject,
+    stopManagedProject: options.stopManagedProject,
+  })
   servers.push(server)
   return server
 }
@@ -106,6 +121,12 @@ describe('local App server', () => {
       id: 'workspace-a',
       backendUrl: 'http://127.0.0.1:3100',
       credential: 'runtime-only',
+      projectDir: '/projects/a',
+      ownership: 'daemon-managed' as const,
+      registeredAt: 1,
+      managedGeneration: 7,
+      shutdown: 'managed' as const,
+      git: null,
     }
     server.setWorkspaces([binding])
     binding.credential = 'mutated-after-publication'
@@ -120,6 +141,12 @@ describe('local App server', () => {
           id: 'workspace-a',
           backendUrl: 'http://127.0.0.1:3100',
           credential: 'runtime-only',
+          projectDir: '/projects/a',
+          ownership: 'daemon-managed',
+          registeredAt: 1,
+          managedGeneration: 7,
+          shutdown: 'managed',
+          git: null,
         },
       ],
     })
@@ -129,19 +156,23 @@ describe('local App server', () => {
 
   it('opens only an encoded opaque Workspace id and reports stale authority', async () => {
     const received: string[] = []
-    const server = await startFixture(async (workspaceId) => {
-      received.push(workspaceId)
-      return workspaceId === 'workspace/a' ? 'opened' : 'not-found'
+    const server = await startFixture({
+      openWorkspaceInBrowser: async (workspaceId) => {
+        received.push(workspaceId)
+        return workspaceId === 'workspace/a' ? 'opened' : 'not-found'
+      },
     })
 
     const opened = await fetch(`${server.url}/api/daemon/workspaces/workspace%2Fa/open`, {
       method: 'POST',
+      headers: { Origin: server.url },
     })
     expect(AppDaemonOpenWorkspaceResponseSchema.parse(await opened.json())).toEqual({ ok: true })
     expect(received).toEqual(['workspace/a'])
 
     const stale = await fetch(`${server.url}/api/daemon/workspaces/https%3A%2F%2Fevil.test/open`, {
       method: 'POST',
+      headers: { Origin: server.url },
     })
     expect(stale.status).toBe(404)
     expect(AppDaemonOpenWorkspaceResponseSchema.parse(await stale.json())).toMatchObject({
@@ -149,5 +180,100 @@ describe('local App server', () => {
       error: { code: 'NOT_FOUND' },
     })
     expect(received).toEqual(['workspace/a', 'https://evil.test'])
+  })
+
+  it('delegates managed directory start and exact Stop through typed same-origin controls', async () => {
+    const starts: string[] = []
+    const stops: number[] = []
+    const workspace = {
+      id: 'managed-a',
+      backendUrl: 'http://127.0.0.1:3100',
+      credential: 'runtime-only',
+      projectDir: '/real/project-a',
+      ownership: 'daemon-managed' as const,
+      registeredAt: 1,
+      managedGeneration: 7,
+      shutdown: 'managed' as const,
+      git: null,
+    }
+    const server = await startFixture({
+      startManagedProject: async (projectDir) => {
+        starts.push(projectDir)
+        return { ok: true, workspace, alreadyRunning: false }
+      },
+      stopManagedProject: async (generation) => {
+        stops.push(generation)
+        return { ok: true, generation }
+      },
+    })
+
+    const started = await fetch(`${server.url}/api/daemon/managed-projects/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: server.url },
+      body: JSON.stringify({ projectDir: '/project-a' }),
+    })
+    expect(started.status).toBe(200)
+    expect(AppDaemonStartManagedProjectResponseSchema.parse(await started.json())).toEqual({
+      ok: true,
+      workspace,
+      alreadyRunning: false,
+    })
+    expect(starts).toEqual(['/project-a'])
+
+    const stopped = await fetch(`${server.url}/api/daemon/managed-projects/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: server.url },
+      body: JSON.stringify({ generation: 7 }),
+    })
+    expect(stopped.status).toBe(200)
+    expect(AppDaemonStopManagedProjectResponseSchema.parse(await stopped.json())).toEqual({
+      ok: true,
+      generation: 7,
+    })
+    expect(stops).toEqual([7])
+  })
+
+  it('rejects malformed and unsupported managed controls without invoking an owner', async () => {
+    const server = await startFixture()
+    const malformed = await fetch(`${server.url}/api/daemon/managed-projects/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: server.url },
+      body: JSON.stringify({ projectDir: '' }),
+    })
+    expect(malformed.status).toBe(400)
+    expect(AppDaemonStartManagedProjectResponseSchema.parse(await malformed.json())).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_REQUEST' },
+    })
+
+    const unsupported = await fetch(`${server.url}/api/daemon/managed-projects/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: server.url },
+      body: JSON.stringify({ generation: 1 }),
+    })
+    expect(unsupported.status).toBe(404)
+    expect(AppDaemonStopManagedProjectResponseSchema.parse(await unsupported.json())).toMatchObject(
+      {
+        ok: false,
+        error: { code: 'UNSUPPORTED' },
+      }
+    )
+  })
+
+  it('rejects cross-origin control before invoking a managed owner', async () => {
+    const startManagedProject = vi.fn(async () => ({
+      ok: false as const,
+      error: { code: 'SPAWN_FAILED' as const, message: 'must not run' },
+    }))
+    const server = await startFixture({ startManagedProject })
+
+    const response = await fetch(`${server.url}/api/daemon/managed-projects/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain', Origin: 'https://attacker.example' },
+      body: JSON.stringify({ projectDir: '/project-a' }),
+    })
+
+    expect(response.status).toBe(403)
+    expect(startManagedProject).not.toHaveBeenCalled()
   })
 })

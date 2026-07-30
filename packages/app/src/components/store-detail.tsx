@@ -2,7 +2,8 @@
  * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
  * 1. Render the Store Detail direct plane: identity, usability, observed Usage, readonly content, lifecycle (7.8-7.10).
  * 2. Promote blocking diagnostics; keep repository/Git/raw evidence secondary (7.11).
- * 3. Destructive unregister/remove in an overflow/danger flow gated by authority + lifecycle (7.12).
+ * 3. Launch route-owned unregister/remove dialogs only when authority and lifecycle permit them (7.12).
+ * 4. Preserve retained content while showing regional refresh and failure evidence.
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
  * Spec: hosted-app-distribution › "Open Store Detail" / "Store Detail loads readonly content".
@@ -10,21 +11,34 @@
  * Pure presentation composed by the Stores route; the caller supplies the projection + authority + callbacks.
  * Observed-only Usage never claims machine-wide completeness. Specs/Changes regions render independently.
  */
-import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, LoaderCircle, Trash2, Unlink2 } from 'lucide-react'
 import { useState } from 'react'
 import { usageCompletenessLabel, type StoreDetailProjection } from '../lib/store-detail-projection'
 
 export interface StoreDetailProps {
   projection: StoreDetailProjection
-  /** Remove/unregister the Store (destructive; gated by projection.canRemove). */
+  /** Open the route-owned registry-only unregister confirmation dialog. */
+  onUnregister?: () => void
+  /** Open the route-owned destructive checkout removal confirmation dialog. */
   onRemove?: () => void
+  onBack?: () => void
 }
 
-export function StoreDetail({ projection, onRemove }: StoreDetailProps) {
+export function StoreDetail({ projection, onUnregister, onRemove, onBack }: StoreDetailProps) {
   return (
     <div className="@container min-w-0 space-y-6 p-4 md:p-6">
       {/* Direct plane: identity + health + authority (7.8). */}
       <header className="space-y-1">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-muted-foreground hover:text-foreground -ml-1 inline-flex items-center gap-1 text-sm"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Stores
+          </button>
+        ) : null}
         <h1 className="font-nav text-2xl font-bold">{projection.identity.storeId}</h1>
         <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
           <HealthBadge health={projection.health} />
@@ -79,6 +93,7 @@ export function StoreDetail({ projection, onRemove }: StoreDetailProps) {
         <ContentRegion
           state={projection.specs.state}
           error={projection.specs.error}
+          refreshing={projection.specs.refreshing}
           renderEntries={() =>
             projection.specs.entries?.map((spec) => (
               <li key={spec.id} className="text-muted-foreground flex justify-between text-sm">
@@ -98,6 +113,7 @@ export function StoreDetail({ projection, onRemove }: StoreDetailProps) {
         <ContentRegion
           state={projection.changes.state}
           error={projection.changes.error}
+          refreshing={projection.changes.refreshing}
           renderEntries={() =>
             projection.changes.entries?.map((change) => (
               <li key={change.name} className="text-muted-foreground text-sm">
@@ -138,17 +154,37 @@ export function StoreDetail({ projection, onRemove }: StoreDetailProps) {
         </dl>
       </DisclosureSection>
 
-      {/* Destructive remove (overflow/danger) gated by authority + lifecycle (7.12). */}
-      {onRemove ? (
+      {projection.evidence !== undefined && projection.evidence !== null ? (
+        <DisclosureSection title="CLI evidence">
+          <pre className="bg-muted/40 max-w-full overflow-hidden whitespace-pre-wrap break-words rounded-md p-3 text-xs">
+            {formatEvidence(projection.evidence)}
+          </pre>
+        </DisclosureSection>
+      ) : null}
+
+      {/* Registry cleanup is distinct from destructive checkout removal (7.12). */}
+      {onUnregister || onRemove ? (
         <section className="space-y-1">
           <h2 className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
             Danger zone
           </h2>
-          <RemoveControl projection={projection} onRemove={onRemove} />
+          <CleanupControls
+            projection={projection}
+            onUnregister={onUnregister}
+            onRemove={onRemove}
+          />
         </section>
       ) : null}
     </div>
   )
+}
+
+function formatEvidence(evidence: unknown): string {
+  try {
+    return JSON.stringify(evidence, null, 2) ?? String(evidence)
+  } catch {
+    return 'CLI evidence could not be rendered.'
+  }
 }
 
 function HealthBadge({ health }: { health: StoreDetailProjection['health'] }) {
@@ -164,17 +200,40 @@ function HealthBadge({ health }: { health: StoreDetailProjection['health'] }) {
 function ContentRegion({
   state,
   error,
+  refreshing,
   renderEntries,
 }: {
   state: 'loading' | 'ready' | 'error' | 'empty'
   error?: string
+  refreshing?: boolean
   renderEntries: () => React.ReactNode | undefined
 }) {
-  if (state === 'loading') return <p className="text-muted-foreground text-sm">Loading…</p>
+  if (state === 'loading') {
+    return (
+      <div aria-label="Loading content" className="flex items-center gap-2 py-1">
+        <LoaderCircle className="text-muted-foreground h-4 w-4 animate-spin" />
+        <span className="bg-muted h-3 w-32 animate-pulse rounded" />
+      </div>
+    )
+  }
   if (state === 'error')
     return <p className="text-destructive text-sm">{error ?? 'Failed to load.'}</p>
-  if (state === 'empty') return <p className="text-muted-foreground text-sm">None observed.</p>
-  return <ul className="space-y-1">{renderEntries()}</ul>
+  return (
+    <div className="space-y-1">
+      {error ? <p className="text-destructive text-sm">{error}</p> : null}
+      {refreshing ? (
+        <LoaderCircle
+          aria-label="Refreshing content"
+          className="text-muted-foreground h-3.5 w-3.5 animate-spin"
+        />
+      ) : null}
+      {state === 'empty' ? (
+        <p className="text-muted-foreground text-sm">None observed.</p>
+      ) : (
+        <ul className="space-y-1">{renderEntries()}</ul>
+      )}
+    </div>
+  )
 }
 
 function DisclosureSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -194,59 +253,44 @@ function DisclosureSection({ title, children }: { title: string; children: React
   )
 }
 
-function RemoveControl({
+function CleanupControls({
   projection,
+  onUnregister,
   onRemove,
 }: {
   projection: StoreDetailProjection
-  onRemove: () => void
+  onUnregister?: () => void
+  onRemove?: () => void
 }) {
-  const [confirming, setConfirming] = useState(false)
-  if (!projection.canRemove) {
+  if (!projection.canCleanUp) {
     return (
       <p className="text-muted-foreground text-xs">
-        Remove requires current Environment authority, no running mutation, and no blocking
-        diagnostics.
+        Store cleanup requires current Environment authority and no unsettled mutation.
       </p>
-    )
-  }
-  if (!confirming) {
-    return (
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        className="text-muted-foreground hover:bg-muted hover:text-destructive inline-flex items-center gap-1.5 rounded-md border border-dashed px-3 py-1.5 text-sm"
-      >
-        <Trash2 className="h-4 w-4" />
-        Remove store
-      </button>
     )
   }
   return (
-    <div className="space-y-2">
-      <p className="text-destructive text-sm">
-        Unregister and remove this Store? The backend owns the lifecycle; this cannot be undone from
-        here.
-      </p>
-      <div className="flex gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      {onUnregister ? (
         <button
           type="button"
-          onClick={() => {
-            onRemove()
-            setConfirming(false)
-          }}
-          className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-md px-3 py-1.5 text-sm font-medium"
+          onClick={onUnregister}
+          className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm"
         >
-          Confirm remove
+          <Unlink2 className="h-4 w-4" />
+          Unregister store
         </button>
+      ) : null}
+      {onRemove ? (
         <button
           type="button"
-          onClick={() => setConfirming(false)}
-          className="hover:bg-muted rounded-md px-3 py-1.5 text-sm"
+          onClick={onRemove}
+          className="text-muted-foreground hover:bg-muted hover:text-destructive inline-flex items-center gap-1.5 rounded-md border border-dashed px-3 py-1.5 text-sm"
         >
-          Cancel
+          <Trash2 className="h-4 w-4" />
+          Remove store files
         </button>
-      </div>
+      ) : null}
     </div>
   )
 }

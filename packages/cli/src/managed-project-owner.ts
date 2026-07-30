@@ -47,6 +47,8 @@ export interface ManagedProjectSpawner {
     identity: ManagedProjectIdentity,
     options?: { accessGateCredential?: string | null; webAssetsDir?: string | null }
   ): Promise<ManagedProjectStartup>
+  /** Terminate and settle the exact child previously returned by `spawn`. */
+  settle(startup: ManagedProjectStartup): Promise<void>
 }
 
 /**
@@ -151,7 +153,13 @@ export function createManagedProjectOwner(
         accessGateCredential: options.accessGateCredential,
         webAssetsDir: options.webAssetsDir,
       })
-      const lease = await options.registrar.register(startup)
+      let lease: ManagedProjectLease
+      try {
+        lease = await options.registrar.register(startup)
+      } catch (error) {
+        await options.spawner.settle(startup).catch(() => {})
+        throw error
+      }
       childrenByKey.set(identity.canonicalProjectDir, { identity, startup, lease })
       return { ok: true, startup, alreadyRunning: false }
     } catch (error) {
@@ -206,11 +214,11 @@ export function createManagedProjectOwner(
     async stop(generation) {
       for (const [key, child] of childrenByKey) {
         if (child.startup.generation !== generation) continue
-        // Exact generation match: retire the lease and drop the child. The lease close retires
-        // presentation/credential authority; the spawner's child teardown is owned by its spawn.
+        // Exact generation match: retire presentation authority and settle the owned process.
         await child.lease.close().catch(() => {
           // lease retirement failure must not leak the child as still-managed
         })
+        await options.spawner.settle(child.startup)
         childrenByKey.delete(key)
         return { ok: true, generation }
       }
@@ -251,6 +259,7 @@ export function createManagedProjectOwner(
       const results: ManagedProjectStopResult[] = []
       for (const [key, child] of childrenByKey.entries()) {
         await child.lease.close().catch(() => {})
+        await options.spawner.settle(child.startup).catch(() => {})
         childrenByKey.delete(key)
         results.push({ ok: true, generation: child.startup.generation })
       }

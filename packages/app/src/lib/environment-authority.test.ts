@@ -121,6 +121,39 @@ describe('Environment authority resolution (5.4/5.5/5.9)', () => {
       ]).kind
     ).toBe('incompatible')
   })
+
+  it('never treats an offline source as authority even when compatibility was previously observed', () => {
+    const selected = selectEnvironment(createEmptyEnvironmentSelection(), 'env://off')
+    const resolution = resolveEnvironmentAuthority(selected, [
+      obs({ envUri: 'env://off', tabId: 'a', reachability: 'offline', compatible: true }),
+    ])
+    expect(resolution.kind).toBe('offline')
+  })
+
+  it('keeps an online source authoritative while a redundant source is still checking', () => {
+    const selected = selectEnvironment(createEmptyEnvironmentSelection(), 'env://stable')
+    const stable = obs({ envUri: 'env://stable', tabId: 'stable', tabCreatedAt: 20 })
+    const resolution = resolveEnvironmentAuthority(selected, [
+      stable,
+      obs({
+        envUri: 'env://stable',
+        tabId: 'joining',
+        tabCreatedAt: 10,
+        reachability: 'checking',
+      }),
+    ])
+    expect(resolution).toEqual({ kind: 'authority', source: stable })
+  })
+
+  it('retains the preferred exact source while it remains current', () => {
+    const selected = selectEnvironment(createEmptyEnvironmentSelection(), 'env://stable')
+    const retained = obs({ envUri: 'env://stable', tabId: 'retained', tabCreatedAt: 20 })
+    const earlier = obs({ envUri: 'env://stable', tabId: 'earlier', tabCreatedAt: 10 })
+    expect(resolveEnvironmentAuthority(selected, [earlier, retained], retained)).toEqual({
+      kind: 'authority',
+      source: retained,
+    })
+  })
 })
 
 describe('same-Environment conflict (5.8)', () => {
@@ -160,6 +193,36 @@ describe('same-Environment conflict (5.8)', () => {
       }),
     ])
     expect(resolution.kind).toBe('authority')
+  })
+
+  it('surfaces conflict from non-equivalent settled Store registry/Doctor signatures', () => {
+    const selected = selectEnvironment(createEmptyEnvironmentSelection(), 'env://1')
+    const resolution = resolveEnvironmentAuthority(selected, [
+      obs({ envUri: 'env://1', tabId: 'a', storeEvidenceSignature: '{"stores":["a"]}' }),
+      obs({ envUri: 'env://1', tabId: 'b', storeEvidenceSignature: '{"stores":["b"]}' }),
+    ])
+    expect(resolution.kind).toBe('conflict')
+  })
+
+  it('keeps the preferred source as display evidence when conflict revokes mutation authority', () => {
+    const selected = selectEnvironment(createEmptyEnvironmentSelection(), 'env://1')
+    const earlier = obs({
+      envUri: 'env://1',
+      tabId: 'earlier',
+      tabCreatedAt: 1,
+      storeEvidenceSignature: '{"stores":["a"]}',
+    })
+    const retained = obs({
+      envUri: 'env://1',
+      tabId: 'retained',
+      tabCreatedAt: 2,
+      storeEvidenceSignature: '{"stores":["b"]}',
+    })
+
+    const resolution = resolveEnvironmentAuthority(selected, [earlier, retained], retained)
+
+    expect(resolution.kind).toBe('conflict')
+    if (resolution.kind === 'conflict') expect(resolution.source).toBe(retained)
   })
 })
 
@@ -209,6 +272,9 @@ describe('pinned authority revalidation at dispatch (5.6/5.7/5.12)', () => {
       kind: 'retired',
       reason: 'incompatible',
     })
+    expect(
+      revalidateEnvironmentAuthority(authority, [{ ...source, reachability: 'unsupported' }])
+    ).toEqual({ kind: 'retired', reason: 'incompatible' })
   })
 
   it('retires when the source disappears entirely', () => {
