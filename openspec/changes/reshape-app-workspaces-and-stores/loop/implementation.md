@@ -38,7 +38,8 @@ Review corrections       stable source survives redundant checking; cross-Store 
 Current focused evidence Core 10; Server content 7; App 67 files / 377; CLI 29 files / 151 tests green
 Repository gates          lint, typecheck, browser, strict validation, and diff-check green
 External dirty blockers   format-check: user lockfile/script; test-ci: pre-existing Core/Server teardown timeouts
-Pending delivery          scoped commit, numbered owner walkthrough, PR, archive/sync
+Implementation commit    bb9e82e (Change-owned files only)
+Pending delivery          owner walkthrough result, PR, archive/sync
 Owner walkthrough      reserved for final handoff
 ```
 
@@ -87,6 +88,9 @@ Final focused verification on 2026-07-30:
   full lane also reproduces the non-cooperative Store projection child timeout at clean fixed point `fdc3ac1`.
   Neither failing production owner is modified by this Change; focused Change tests remain green. These facts block
   PR creation but not a scoped local implementation commit.
+- `loop/owner-walkthrough.md` binds 10 numbered final cases to implementation head
+  `bb9e82e08dcbc17d80b2d6e9a28b394a14a6768c`; it contains no credentials, Authorization headers, or private
+  fragments. Owner acceptance remains pending.
 
 This Change builds on completed owners from `integrate-app-mode-with-opentray` but does not close, rewrite, or claim
 its remaining delivery/owner-acceptance checkpoints. Existing unrelated modifications in

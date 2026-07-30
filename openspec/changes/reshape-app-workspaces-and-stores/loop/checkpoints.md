@@ -675,22 +675,27 @@ Green evidence:
       2026-07-30: xterm passes 60 with 1 skipped, App passes 9, and Web passes 14 browser tests.
 - [x] 10.11 Run `git diff --check` and strict OpenSpec validation.
       2026-07-30: `openspec validate reshape-app-workspaces-and-stores --strict` passes and `git diff --check` is clean.
-- [~] 10.12 Record exact command output/head evidence in `implementation.md`; do not claim final browser acceptance.
-  2026-07-30: gate evidence recorded in these checkpoints. No final browser acceptance claimed (11.6 owner-only).
+- [x] 10.12 Record exact command output/head evidence in `implementation.md`; do not claim final browser acceptance.
+      2026-07-30: focused/gate evidence and implementation head `bb9e82e08dcbc17d80b2d6e9a28b394a14a6768c`
+      are recorded. No final browser acceptance is claimed (11.6 owner-only).
 
 ## 11. PR, Owner Acceptance, Merge, and Release Gates
 
-- [ ] 11.1 Create scoped implementation/test commits with matching checkpoint updates; keep spec, implementation,
+- [x] 11.1 Create scoped implementation/test commits with matching checkpoint updates; keep spec, implementation,
       and archive stages separate.
+      2026-07-30: `bb9e82e` contains only Change-owned implementation/tests/law/checkpoint updates. User tracing,
+      lockfile, ct2 binding, and diagnostic-script changes are excluded. Archive remains a later dedicated stage.
 - [ ] 11.2 Open/update a feature-branch PR only after local CI-equivalent checks pass; never push directly to `main`.
 - [ ] 11.3 Wait for required PR checks on the exact head and resolve independent review findings through spec-first
       corrections.
-- [ ] 11.4 Prepare numbered production-boundary walkthrough cases for Home/favorite/history, path start/dedupe,
+- [x] 11.4 Prepare numbered production-boundary walkthrough cases for Home/favorite/history, path start/dedupe,
       managed Close/Stop/daemon restart, external-owner isolation, running navigation/Task Manager, path-first labels,
       daemon auto-open/close/reopen, manual connect, multiple Environments/same Store id, Store Detail retained/
       regional states, destructive authority retirement, responsive containers, and iframe continuity.
-- [ ] 11.5 Include exact setup, trigger, PASS/FAIL observation, restore commands, and tested head; exclude credentials,
+- [x] 11.5 Include exact setup, trigger, PASS/FAIL observation, restore commands, and tested head; exclude credentials,
       Authorization headers, and private launch fragments.
+      Delivered 2026-07-30: `loop/owner-walkthrough.md` provides 10 numbered production cases, fixed `/tmp` fixture
+      paths, exact CLI commands, explicit PASS/FAIL observations, cleanup commands, and implementation head `bb9e82e`.
 - [ ] 11.6 Owner performs and accepts the final end-to-end browser walkthrough. Automated fixtures cannot complete
       this checkpoint.
 - [ ] 11.7 Complete OpenSpec archive/sync in a dedicated documentation commit after implementation and owner
