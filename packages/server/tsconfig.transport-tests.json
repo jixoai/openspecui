@@ -17,6 +17,7 @@
     "src/store-doctor-dependency-observer.test.ts",
     "src/store-observation-service.test.ts",
     "src/store-projection-service.test.ts",
+    "src/store-content-projection-service.test.ts",
     "src/planning-config-project-binding-write.test.ts",
     "src/planning-config-router.test.ts",
     "src/root-context-notification-bridge.test.ts",

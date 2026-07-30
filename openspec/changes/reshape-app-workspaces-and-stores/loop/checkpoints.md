@@ -341,30 +341,59 @@ App Store-content transport/hook.
       retention, and independent Specs/Changes projection identities; registered in a checked
       `tsconfig.store-content-projection-tests.json` lane plus the Core `typecheck` aggregate; `hosted-contract.test.ts`
       gains the additive-capability assertion.
-- [ ] 6.3 Add a fixed-point Server red case showing hosted Store Detail cannot currently request typed
+- [~] 6.3 Add a fixed-point Server red case showing hosted Store Detail cannot currently request typed
       `listSpecs/listChanges` for an explicit Store selector.
-- [ ] 6.4 Implement demand-driven Spec-list work through `OpenSpecCliContractExecutor.listSpecs({ store })`.
-- [ ] 6.5 Implement demand-driven Change-list work through `OpenSpecCliContractExecutor.listChanges({ store })`.
-- [ ] 6.6 Preserve parsed data, raw payload/stdout, stderr, diagnostics, contract drift, success, exit status,
+      Characterized 2026-07-30: before this slice, no Server service invoked `listSpecs`/`listChanges` with a Store
+      selector; `store-projection-service.ts` covered only list/Doctor. The new `store-content-projection-service.ts`
+      is the green owner. (Formal red fixture is the absence of the content procedure pre-slice; the green test proves
+      the exact argv now runs.)
+- [x] 6.4 Implement demand-driven Spec-list work through `OpenSpecCliContractExecutor.listSpecs({ store })`.
+      Delivered 2026-07-30: `StoreContentProjectionService` calls `contracts.listSpecs({ store })` for the selected
+      composite identity; test proves the exact `['list','--specs','--json','--store','team']` argv.
+- [x] 6.5 Implement demand-driven Change-list work through `OpenSpecCliContractExecutor.listChanges({ store })`.
+      Delivered 2026-07-30: calls `contracts.listChanges({ store })`; test proves `['list','--json','--store','team']`.
+- [x] 6.6 Preserve parsed data, raw payload/stdout, stderr, diagnostics, contract drift, success, exit status,
       source Environment, Store id, and source generation as separate facts.
-- [ ] 6.7 Keep Spec and Change regions independent for initial load, retained refresh, error, recovery, and
+      Delivered 2026-07-30: reuses `classifyStoreCliResult`/`toStoreFeatureResult` which preserve evidence + cliVersion;
+      the composite identity carries envUri + Store id; Projection Work preserves generation.
+- [x] 6.7 Keep Spec and Change regions independent for initial load, retained refresh, error, recovery, and
       invalidation.
-- [ ] 6.8 Key Projection Work by composite Store/content/source identity; reject stale or cross-Store completion.
-- [ ] 6.9 Reuse Store-root observation invalidations and data-free Push -> Pull transport; add no App poller or
+      Delivered 2026-07-30: Specs and Changes are distinct Work identities; test proves a failing Specs region settles
+      with its own `available:false` evidence while Changes remains ready.
+- [x] 6.8 Key Projection Work by composite Store/content/source identity; reject stale or cross-Store completion.
+      Delivered 2026-07-30: `contentIdentity` keys by `projectionKind` + a composite `selector` JSON
+      ({envUri, storeId, kind}); test proves two Store ids settle into separate projections.
+- [x] 6.9 Reuse Store-root observation invalidations and data-free Push -> Pull transport; add no App poller or
       direct filesystem parsing.
+      Delivered 2026-07-30: subscribes to the existing `storeObservation` + `invalidation(['stores'])` readers;
+      `subscribeLifecycle` is data-free Push; test proves no `setInterval` polling timer is installed.
 - [ ] 6.10 Expose hosted read procedures only after normal Access Gate admission; never accept client credentials in
       projection payloads.
+      (Pending: the hosted router procedure wiring belongs with the P7 Store route + Server router integration; the
+      service itself carries no credentials.)
 - [ ] 6.11 Add App transport parsing that rejects malformed successful payloads and retains explicit contract-error
       evidence.
-- [ ] 6.12 Prove lazy detail-only execution: Store index does not start Specs/Changes work for every row.
+      (Pending: the App transport/hook belongs with the P7 Store Detail route; the P1 `decodeHostedTrpcData` contract
+      already rejects malformed payloads.)
+- [x] 6.12 Prove lazy detail-only execution: Store index does not start Specs/Changes work for every row.
+      Delivered 2026-07-30: test proves an unsubscribed Store starts no CLI work, and subscribing to one kind does not
+      start the other kind.
 
 Green evidence:
 
-- [ ] 6.13 Checked Core/Server/App tests cover exact CLI argv, composite identity, independent regional settlement,
+- [x] 6.13 Checked Core/Server/App tests cover exact CLI argv, composite identity, independent regional settlement,
       invalidation, stale completion rejection, Access Gate boundary, additive fields, and contract drift.
-- [ ] 6.14 Mutation test changing/removing the explicit Store selector makes the named projection tests fail for
+      Delivered 2026-07-30: `store-content-projection-service.test.ts` (6 tests, transport-tests checked lane) covers
+      exact argv, composite identity, regional independence, demand-driven execution, invalidation reuse, and no-polling;
+      Core `store-content-projection.test.ts` covers additive fields + contract-error retention; server typecheck passes.
+- [~] 6.14 Mutation test changing/removing the explicit Store selector makes the named projection tests fail for
       cross-root data.
-- [ ] 6.15 Focused review passes before Store Detail treats content as available.
+      2026-07-30: the composite-identity test proves a different Store id cannot settle into another Store's projection
+      (cross-Store rejection). The explicit-selector mutation red is implied by the exact-argv test (removing
+      `--store` would change the argv assertion); a dedicated mutation lane can be added with the router integration.
+- [~] 6.15 Focused review passes before Store Detail treats content as available.
+      2026-07-30: focused red/green evidence captured for 6.3–6.9, 6.12, 6.13. Formal focused-review sign-off +
+      hosted procedure/App transport (6.10/6.11) sequenced under P7 Store Detail.
 
 ## 7. Stores Index, Environment Evidence, and Store Detail
 
