@@ -227,6 +227,9 @@ importers:
       '@parcel/watcher':
         specifier: ^2.5.1
         version: 2.5.1
+      cross-spawn:
+        specifier: ^7.0.6
+        version: 7.0.6
       mdast-util-from-markdown:
         specifier: ^2.0.2
         version: 2.0.2
@@ -249,6 +252,9 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      '@types/cross-spawn':
+        specifier: ^6.0.6
+        version: 6.0.6
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
@@ -368,7 +374,7 @@ importers:
         version: 0.20.0
       '@tanstack/ai-openai':
         specifier: ^0.9.4
-        version: 0.9.4(@tanstack/ai-client@0.11.2)(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@3.25.76)
+        version: 0.9.4(@tanstack/ai-client@0.11.2)(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@4.4.3)
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -6001,6 +6007,12 @@ packages:
     resolution:
       {
         integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==,
+      }
+
+  '@types/cross-spawn@6.0.6':
+    resolution:
+      {
+        integrity: sha512-fXRhhUkG4H3TQk5dBhQ7m/JDdSNHKwR2BBia62lhwEIq9xGiQKLxd6LymNhn47SjXhsUEPmxi+PKw2OkW4LLjA==,
       }
 
   '@types/debug@4.1.12':
@@ -15360,14 +15372,14 @@ snapshots:
       '@tanstack/ai': 0.20.0
       '@tanstack/devtools-event-client': 0.4.3
 
-  '@tanstack/ai-openai@0.9.4(@tanstack/ai-client@0.11.2)(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@3.25.76)':
+  '@tanstack/ai-openai@0.9.4(@tanstack/ai-client@0.11.2)(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@4.4.3)':
     dependencies:
       '@tanstack/ai': 0.20.0
       '@tanstack/ai-client': 0.11.2
       '@tanstack/ai-utils': 0.2.0
-      '@tanstack/openai-base': 0.3.3(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@3.25.76)
-      openai: 6.38.0(ws@8.19.0)(zod@3.25.76)
-      zod: 3.25.76
+      '@tanstack/openai-base': 0.3.3(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@4.4.3)
+      openai: 6.38.0(ws@8.19.0)(zod@4.4.3)
+      zod: 4.4.3
     transitivePeerDependencies:
       - ws
 
@@ -15383,11 +15395,11 @@ snapshots:
 
   '@tanstack/history@1.139.0': {}
 
-  '@tanstack/openai-base@0.3.3(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@3.25.76)':
+  '@tanstack/openai-base@0.3.3(@tanstack/ai@0.20.0)(ws@8.19.0)(zod@4.4.3)':
     dependencies:
       '@tanstack/ai': 0.20.0
       '@tanstack/ai-utils': 0.2.0
-      openai: 6.38.0(ws@8.19.0)(zod@3.25.76)
+      openai: 6.38.0(ws@8.19.0)(zod@4.4.3)
     transitivePeerDependencies:
       - ws
       - zod
@@ -15521,6 +15533,10 @@ snapshots:
       assertion-error: 2.0.1
 
   '@types/cookie@0.6.0': {}
+
+  '@types/cross-spawn@6.0.6':
+    dependencies:
+      '@types/node': 22.19.1
 
   '@types/debug@4.1.12':
     dependencies:
@@ -17834,10 +17850,10 @@ snapshots:
       powershell-utils: 0.1.0
       wsl-utils: 0.3.1
 
-  openai@6.38.0(ws@8.19.0)(zod@3.25.76):
+  openai@6.38.0(ws@8.19.0)(zod@4.4.3):
     optionalDependencies:
       ws: 8.19.0
-      zod: 3.25.76
+      zod: 4.4.3
 
   ora@8.2.0:
     dependencies:

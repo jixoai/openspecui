@@ -201,6 +201,7 @@
   },
   "dependencies": {
     "@parcel/watcher": "^2.5.1",
+    "cross-spawn": "^7.0.6",
     "mdast-util-from-markdown": "^2.0.2",
     "mdast-util-gfm": "^3.1.0",
     "mdast-util-to-string": "^4.0.0",
@@ -210,6 +211,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
     "@types/mdast": "^4.0.4",
     "@types/unist": "^3.0.3",
     "@vitest/coverage-v8": "^4.1.0",
