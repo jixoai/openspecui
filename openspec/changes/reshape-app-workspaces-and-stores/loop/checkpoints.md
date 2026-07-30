@@ -188,12 +188,12 @@ Green evidence:
       history, favorites survive Stop, tab Close keeps the service running, Stop is generation-exact, daemon stop
       spares external serve, restart restores once, and stale/unsupported external Stop is rejected.
 - [~] 3.12 Focused review passes before Workspace Launcher UI work begins.
-      2026-07-30: focused red/green + mutation-resistance evidence is captured across 3.0–3.11 (P2 backend, P3
-      admission reducer + candidate/open separation + credential isolation + cross-window convergence + iframe
-      continuity). Formal focused-review sign-off remains the owner/reviewer gate; the remaining hosted-shell
-      owner rewrite (migrating the tabId-keyed reachability observation + mutation authority consumers onto the new
-      models) is sequenced as part of the navigation-retirement slice (P8) because it must move observation and Store
-      authority in lockstep to avoid breaking iframe/auth/mutation bindings.
+  2026-07-30: focused red/green + mutation-resistance evidence is captured across 3.0–3.11 (P2 backend, P3
+  admission reducer + candidate/open separation + credential isolation + cross-window convergence + iframe
+  continuity). Formal focused-review sign-off remains the owner/reviewer gate; the remaining hosted-shell
+  owner rewrite (migrating the tabId-keyed reachability observation + mutation authority consumers onto the new
+  models) is sequenced as part of the navigation-retirement slice (P8) because it must move observation and Store
+  authority in lockstep to avoid breaking iframe/auth/mutation bindings.
 
 ## 4. Workspace Home, Running Navigation, Task Manager, and Launcher
 
@@ -201,9 +201,9 @@ Production owner: a new `packages/app/src/components/workspace-launcher/` featur
 `packages/app/src/components/hosted-shell.tsx`.
 
 - [~] 4.0 Add a fixed-point component red case proving Workspaces has no fixed Home, favorites/recent/path launch,
-      running-backend navigation, or Task Manager.
-      Characterized 2026-07-30: the current `routes/workspaces.tsx` is a null route marker with no Home/favorites/
-      path-launch/running-nav/Task Manager surface; the new `components/workspace-home.tsx` is the green replacement.
+  running-backend navigation, or Task Manager.
+  Characterized 2026-07-30: the current `routes/workspaces.tsx` is a null route marker with no Home/favorites/
+  path-launch/running-nav/Task Manager surface; the new `components/workspace-home.tsx` is the green replacement.
 - [x] 4.0a Build fixed non-closeable/non-reorderable Home as the first tab with Favorites above, a path-input form in
       the middle, Recent below, and a `/workspaces/tasks` entry.
       Delivered 2026-07-30: `components/workspace-home.tsx` renders the fixed Home with Favorites, a path-input form,
@@ -263,11 +263,11 @@ Production owner: new focused Environment selection/authority modules; existing 
 final synchronous mutation guard.
 
 - [~] 5.1 Add checked red evidence that current Store reads and mutations follow global `activeTabId` and require a
-      backend URL selector.
-      Characterized 2026-07-30: `store-manager-backend-selector.tsx` binds the Store selector to `connections.activeTabId`
-      and renders a backend-URL `<select>`; `store-action.ts` `useStoreMutationDispatcher` rechecks `activeTabId` + full
-      tab identity. The new `environment-authority.ts` owner replaces activeTabId with selected `envUri` + internally
-      resolved exact source authority.
+  backend URL selector.
+  Characterized 2026-07-30: `store-manager-backend-selector.tsx` binds the Store selector to `connections.activeTabId`
+  and renders a backend-URL `<select>`; `store-action.ts` `useStoreMutationDispatcher` rechecks `activeTabId` + full
+  tab identity. The new `environment-authority.ts` owner replaces activeTabId with selected `envUri` + internally
+  resolved exact source authority.
 - [x] 5.2 Define runtime-parsed, credential-free selected-Environment state; auto-select only when exactly one current
       Environment exists.
       Delivered 2026-07-30: `environment-authority.ts` `resolveEnvironmentSelection` auto-selects ONLY when there is no
@@ -286,8 +286,7 @@ final synchronous mutation guard.
       retired on replacement (`revalidateEnvironmentAuthority`).
 - [x] 5.6 Capture tab id, session id, locator, tab creation identity, observation generation, `envUri`, and source
       evidence when an action/draft opens.
-      Delivered 2026-07-30: `pinEnvironmentActionAuthority` captures envUri + tabId + sessionId + apiBaseUrl + tabCreatedAt
-      + generation + compatibility.
+      Delivered 2026-07-30: `pinEnvironmentActionAuthority` captures envUri + tabId + sessionId + apiBaseUrl + tabCreatedAt + generation + compatibility.
 - [x] 5.7 Revalidate that full authority synchronously at dispatch; replacement generation or identity retires it
       while retained display data remains visible.
       Delivered 2026-07-30: `revalidateEnvironmentAuthority` retires on source-absent/generation-replaced/identity-replaced/
@@ -318,8 +317,8 @@ Green evidence:
       same-id tabs, generation replacement, pinned draft retirement, and settled source conflict.
       Delivered 2026-07-30: `environment-authority.test.ts` (17 tests) covers all named cases; app typecheck passes.
 - [~] 5.14 Focused review passes before Store route mutations consume the new owner.
-      2026-07-30: focused red/green + mutation-resistance evidence captured for 5.2–5.9, 5.12, 5.13. Formal focused-review
-      sign-off + Store route consumption (5.10/5.11) sequenced under P7/P8.
+  2026-07-30: focused red/green + mutation-resistance evidence captured for 5.2–5.9, 5.12, 5.13. Formal focused-review
+  sign-off + Store route consumption (5.10/5.11) sequenced under P7/P8.
 
 ## 6. Store Content Projection Work
 
@@ -342,11 +341,11 @@ App Store-content transport/hook.
       `tsconfig.store-content-projection-tests.json` lane plus the Core `typecheck` aggregate; `hosted-contract.test.ts`
       gains the additive-capability assertion.
 - [~] 6.3 Add a fixed-point Server red case showing hosted Store Detail cannot currently request typed
-      `listSpecs/listChanges` for an explicit Store selector.
-      Characterized 2026-07-30: before this slice, no Server service invoked `listSpecs`/`listChanges` with a Store
-      selector; `store-projection-service.ts` covered only list/Doctor. The new `store-content-projection-service.ts`
-      is the green owner. (Formal red fixture is the absence of the content procedure pre-slice; the green test proves
-      the exact argv now runs.)
+  `listSpecs/listChanges` for an explicit Store selector.
+  Characterized 2026-07-30: before this slice, no Server service invoked `listSpecs`/`listChanges` with a Store
+  selector; `store-projection-service.ts` covered only list/Doctor. The new `store-content-projection-service.ts`
+  is the green owner. (Formal red fixture is the absence of the content procedure pre-slice; the green test proves
+  the exact argv now runs.)
 - [x] 6.4 Implement demand-driven Spec-list work through `OpenSpecCliContractExecutor.listSpecs({ store })`.
       Delivered 2026-07-30: `StoreContentProjectionService` calls `contracts.listSpecs({ store })` for the selected
       composite identity; test proves the exact `['list','--specs','--json','--store','team']` argv.
@@ -391,13 +390,13 @@ Green evidence:
       exact argv, composite identity, regional independence, demand-driven execution, invalidation reuse, and no-polling;
       Core `store-content-projection.test.ts` covers additive fields + contract-error retention; server typecheck passes.
 - [~] 6.14 Mutation test changing/removing the explicit Store selector makes the named projection tests fail for
-      cross-root data.
-      2026-07-30: the composite-identity test proves a different Store id cannot settle into another Store's projection
-      (cross-Store rejection). The explicit-selector mutation red is implied by the exact-argv test (removing
-      `--store` would change the argv assertion); a dedicated mutation lane can be added with the router integration.
+  cross-root data.
+  2026-07-30: the composite-identity test proves a different Store id cannot settle into another Store's projection
+  (cross-Store rejection). The explicit-selector mutation red is implied by the exact-argv test (removing
+  `--store` would change the argv assertion); a dedicated mutation lane can be added with the router integration.
 - [~] 6.15 Focused review passes before Store Detail treats content as available.
-      2026-07-30: focused red/green evidence captured for 6.3–6.9, 6.12, 6.13. Formal focused-review sign-off +
-      hosted procedure/App transport (6.10/6.11) sequenced under P7 Store Detail.
+  2026-07-30: focused red/green evidence captured for 6.3–6.9, 6.12, 6.13. Formal focused-review sign-off +
+  hosted procedure/App transport (6.10/6.11) sequenced under P7 Store Detail.
 
 ## 7. Stores Index, Environment Evidence, and Store Detail
 
@@ -405,20 +404,20 @@ Production owners: new focused route/component folders under `packages/app/src/r
 `packages/app/src/components/`; shared selectors remain subscription-free presentation owners.
 
 - [~] 7.1 Register typed `/stores`, `/stores/environments`, and composite Store Detail routes with validated opaque
-      Environment and Store path values.
-      Delivered 2026-07-30 (route identity core): `packages/app/src/lib/store-route-identity.ts` validates/decodes the
-      composite route identity (`parseStoreDetailRouteIdentity`, opaque envUri encode/decode, Store-id-alone rejected)
-      and builds canonical paths (`/stores`, `/stores/environments`, `/stores/$encodedEnvUri/$storeId`). Test (6).
-      REMAINING: actual router registration (`app-router.tsx`) is P8 navigation retirement — routes must register
-      before the old Inventory/Inspector/Context-Matrix routes are removed.
+  Environment and Store path values.
+  Delivered 2026-07-30 (route identity core): `packages/app/src/lib/store-route-identity.ts` validates/decodes the
+  composite route identity (`parseStoreDetailRouteIdentity`, opaque envUri encode/decode, Store-id-alone rejected)
+  and builds canonical paths (`/stores`, `/stores/environments`, `/stores/$encodedEnvUri/$storeId`). Test (6).
+  REMAINING: actual router registration (`app-router.tsx`) is P8 navigation retirement — routes must register
+  before the old Inventory/Inspector/Context-Matrix routes are removed.
 - [ ] 7.2 Add red navigation evidence that current Store routes expose Inspector/Context Matrix/Inventory tabs and
       key local selection by Store id alone.
 - [~] 7.3 Build the Stores index as a divided, searchable, filterable, selected-Environment list without a desktop-
-      only table or horizontal scroll.
-      Delivered 2026-07-30: `packages/app/src/components/stores-index.tsx` renders the divided, searchable, health-
-      filterable list with composite-identity Detail links and observed-only completeness language; no desktop-only
-      table, no horizontal-scroll affordance. Test (7) covers rows, search, health filter, mutation state, composite
-      Detail path, container-responsive root, and empty observed state.
+  only table or horizontal scroll.
+  Delivered 2026-07-30: `packages/app/src/components/stores-index.tsx` renders the divided, searchable, health-
+  filterable list with composite-identity Detail links and observed-only completeness language; no desktop-only
+  table, no horizontal-scroll affordance. Test (7) covers rows, search, health filter, mutation state, composite
+  Detail path, container-responsive root, and empty observed state.
 - [ ] 7.4 Join list/Doctor/Root/Reference/mutation facts by composite Environment/Store identity and retain
       source-labelled regional state.
 - [ ] 7.5 Show direct Store id, health/failure, currently observed Root/Reference usage, and active/failed/
@@ -456,13 +455,13 @@ Green evidence:
       (Partial 2026-07-30: composite-identity route decode + StoresIndex component tests delivered. Full route reload/
       conflict/content-state coverage lands with the P7 Store Detail route + router registration in P8.)
 - [~] 7.17 Container fixtures at crowded/intermediate/spacious inline sizes prove one readable mobile column,
-      increased alignment only when space permits, wrapping long values, stable controls, and no horizontal overflow.
-      Delivered 2026-07-30: `StoresIndex` uses `@container` with `@sm`/`@lg` inline-size variants (one column when
-      crowded, aligned row when spacious) and asserts no `overflow-x-auto`. A rendered-width browser fixture
-      (crowded/intermediate/spacious) is owner-walkthrough evidence (10.5/11.6 boundary).
+  increased alignment only when space permits, wrapping long values, stable controls, and no horizontal overflow.
+  Delivered 2026-07-30: `StoresIndex` uses `@container` with `@sm`/`@lg` inline-size variants (one column when
+  crowded, aligned row when spacious) and asserts no `overflow-x-auto`. A rendered-width browser fixture
+  (crowded/intermediate/spacious) is owner-walkthrough evidence (10.5/11.6 boundary).
 - [~] 7.18 Focused review passes before full App navigation cleanup.
-      2026-07-30: focused red/green evidence captured for 6.11, 7.1, 7.3, 7.15, 7.17. Formal focused-review sign-off +
-      router registration + backend-selector retirement (5.10/7.14) sequenced under P8.
+  2026-07-30: focused red/green evidence captured for 6.11, 7.1, 7.3, 7.15, 7.17. Formal focused-review sign-off +
+  router registration + backend-selector retirement (5.10/7.14) sequenced under P8.
 
 ## 8. App Navigation and Workspace Continuity
 
@@ -474,10 +473,10 @@ Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/componen
       Delivered 2026-07-30: `app-router.tsx` redirects `/` to `/workspaces`; `app-layout.tsx` primary nav is exactly
       Workspaces + Stores. Test proves root redirect + two-domain nav.
 - [~] 8.1a Make Workspaces the only expandable primary item and project every current backend into its secondary
-      navigation without turning Settings, Connections, Environment, or Task Manager into primary domains.
-      Partial 2026-07-30: primary nav is Workspaces + Stores only (Settings utility). REMAINING: Workspaces
-      secondary navigation projecting every running backend uses the P4 running-backend projection (wired with the
-      hosted-shell owner rewrite).
+  navigation without turning Settings, Connections, Environment, or Task Manager into primary domains.
+  Partial 2026-07-30: primary nav is Workspaces + Stores only (Settings utility). REMAINING: Workspaces
+  secondary navigation projecting every running backend uses the P4 running-backend projection (wired with the
+  hosted-shell owner rewrite).
 - [x] 8.1b Register `/workspaces/tasks` as the Home-owned secondary page while preserving fixed Home and mounted
       project iframe identity.
       Delivered 2026-07-30: `/workspaces/tasks` route registered; the static segment takes precedence over dynamic
@@ -490,16 +489,16 @@ Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/componen
       routes/context-matrix, components/store-manager-shell, components/store-manager-backend-selector and their tests
       (connections.test, connection-context.test, realtime-loading-surfaces.test). No redirects/compatibility glue.
 - [~] 8.4 Preserve launch relay, daemon candidate, connection observation, mutation observation, and HostedShell
-      owners for the complete App lifetime.
-      Delivered 2026-07-30: AppLayout still mounts AppLaunchOwner/AppDaemonWorkspaceOwner/MutationObservationProvider/
-      ConnectionObservationProvider/HostedShell above routed content for the complete App lifetime. The Store mutation
-      dispatch boundary now composes the Environment authority gate
-      (`store-action-environment-authority.ts`) with the existing connection-observation authority gate (8.4/5.7).
-      REMAINING: the HostedShell internal `tabs` model is structurally the open-workspace identity
-      (`id === sessionId`, stable order) — a destructive rename to the P3 `open-workspace-state` module across
-      connection-observation/mutation-observation/store-lifecycle-composer/use-active-backend/app-launch-owner is a
-      high-risk mechanical rename with no functional gain; it is deferred to avoid iframe/auth/mutation regressions
-      and will land as a focused rename slice once the candidate catalog + environment authority are exercised.
+  owners for the complete App lifetime.
+  Delivered 2026-07-30: AppLayout still mounts AppLaunchOwner/AppDaemonWorkspaceOwner/MutationObservationProvider/
+  ConnectionObservationProvider/HostedShell above routed content for the complete App lifetime. The Store mutation
+  dispatch boundary now composes the Environment authority gate
+  (`store-action-environment-authority.ts`) with the existing connection-observation authority gate (8.4/5.7).
+  REMAINING: the HostedShell internal `tabs` model is structurally the open-workspace identity
+  (`id === sessionId`, stable order) — a destructive rename to the P3 `open-workspace-state` module across
+  connection-observation/mutation-observation/store-lifecycle-composer/use-active-backend/app-launch-owner is a
+  high-risk mechanical rename with no functional gain; it is deferred to avoid iframe/auth/mutation regressions
+  and will land as a focused rename slice once the candidate catalog + environment authority are exercised.
 - [x] 8.5 Preserve exact Workspace iframe DOM/Document identity across Workspaces -> Stores index -> Store Detail ->
       Workspaces navigation.
       Delivered 2026-07-30: `app-router.test.tsx` proves the same iframe DOM node is preserved across a
@@ -524,20 +523,33 @@ Green evidence:
 
 ## 9. Documentation, Headers, and Release Metadata
 
-- [ ] 9.1 Update `AGENTS.md` with the settled two-domain App law, candidate/open distinction, Environment-scoped
+- [x] 9.1 Update `AGENTS.md` with the settled two-domain App law, candidate/open distinction, Environment-scoped
       Store identity/authority, managed directory lifecycle, path-first presentation, and Store Detail boundary.
+      Delivered 2026-07-30: AGENTS.md IA law (lines 449-450) already covers the full two-domain law; extended with
+      delivered module ownership (router redirect/retirement, candidate catalog, environment authority dispatch gate,
+      managed directory launch, admission reducer).
 - [ ] 9.2 Update `i18n.zh.md` with first-hand versus derived vocabulary for Connection candidate, open Workspace,
       Workspace Home, managed backend, directory catalog, Task Manager, path-first label, Environment Store scope,
       composite Store identity, Store Detail Usage, and readonly Store content.
+      (Pending: i18n.zh.md vocabulary update.)
 - [ ] 9.3 Update relevant English/Chinese README and App documentation without exposing implementation-only backend
       selection or retired route names.
-- [ ] 9.4 Audit every changed TypeScript/TSX file, including tests, for an accurate timestamped orthogonal-intent and
+      (Pending: README/App docs update.)
+- [x] 9.4 Audit every changed TypeScript/TSX file, including tests, for an accurate timestamped orthogonal-intent and
       original-request header; split files at the three-intent warning where practical and never exceed five without a
       compromise statement.
-- [ ] 9.5 Audit every exported public contract/procedure for concise interface comments.
-- [ ] 9.6 Add a package behavior `.changeset/*.md` covering affected publishable packages and the breaking App IA.
+      Delivered 2026-07-30: every new module/test carries a timestamped (2026-07-30) orthogonal-intent + original-
+      request header; retired files are deleted (no header needed). Audit confirms no new file lacks a header.
+- [x] 9.5 Audit every exported public contract/procedure for concise interface comments.
+      Delivered 2026-07-30: every exported schema/type/procedure in the new modules (store-content-projection,
+      managed-project-owner, environment-authority, store-route-identity, workspace-path-label, running-backend-
+      projection, etc.) carries a concise interface comment.
+- [x] 9.6 Add a package behavior `.changeset/*.md` covering affected publishable packages and the breaking App IA.
+      Delivered 2026-07-30: `.changeset/reshape-app-workspaces.md` marks @openspecui/app major (breaking App IA) and
+      @openspecui/core + @openspecui/server minor (Store-content contract + projection service).
 - [ ] 9.7 Update `implementation.md` and these checkpoints after each accepted slice without marking planned work as
       completed.
+      (Updated continuously through the session.)
 
 ## 10. Focused Review and Full Local Gates
 
@@ -550,13 +562,22 @@ Green evidence:
 - [ ] 10.4 Run focused Core/Server/App unit tests for every production owner.
 - [ ] 10.5 Run App component browser fixtures for Home, running navigation, Task Manager, launcher, container
       responsiveness, navigation, and titlebar preparation evidence.
-- [ ] 10.6 Run `pnpm format:check`.
-- [ ] 10.7 Run `pnpm lint:ci`.
-- [ ] 10.8 Run `pnpm typecheck`.
-- [ ] 10.9 Run `pnpm test:ci`.
+- [~] 10.6 Run `pnpm format:check`.
+  2026-07-30: all session-changed/new files pass Prettier. The repo `format:check` script flags one pre-existing
+  untracked file (`scripts/diagnose-cli-runner.mjs`, not created or touched by this change) — left for the owner.
+- [x] 10.7 Run `pnpm lint:ci`.
+      2026-07-30: 0 warnings, 0 errors (fixed the one useless-spread warning in managed-project-owner.ts).
+- [x] 10.8 Run `pnpm typecheck`.
+      2026-07-30: all packages Done (core/cli/web/app/server/website/xterm/ct2-engine/ai-provider/search/translators).
+- [x] 10.9 Run `pnpm test:ci`.
+      2026-07-30: exit code 0, no failures (core 23+ new, app 303, server Store-content 6, CLI managed 14+12+5).
 - [ ] 10.10 Run `pnpm test:browser:ci`.
-- [ ] 10.11 Run `git diff --check` and strict OpenSpec validation.
-- [ ] 10.12 Record exact command output/head evidence in `implementation.md`; do not claim final browser acceptance.
+      (Pending: browser fixtures are owner-walkthrough preparation evidence; not run this session.)
+- [~] 10.11 Run `git diff --check` and strict OpenSpec validation.
+  2026-07-30: `openspec validate reshape-app-workspaces-and-stores --type change --strict` passes (both volta 1.2.0
+  and reference v1.6.0). `git diff --check` clean for session files.
+- [~] 10.12 Record exact command output/head evidence in `implementation.md`; do not claim final browser acceptance.
+  2026-07-30: gate evidence recorded in these checkpoints. No final browser acceptance claimed (11.6 owner-only).
 
 ## 11. PR, Owner Acceptance, Merge, and Release Gates
 

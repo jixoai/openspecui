@@ -15,8 +15,8 @@ Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果
 
 ## Implementation State
 
-Planning is apply-ready. P1 typed-public-contract code (6.1–6.2) and the P2 managed-project backend
-(3.0a–3.0f) have landed and are checked; the remaining P3–P9 production owners have not started.
+P1–P9 core have landed across 14 commits and pass the repo-wide gates. The remaining work is a deferred
+mechanical hosted-shell rename, the i18n/README docs, browser fixtures, and the owner walkthrough.
 
 ```text
 Product decision       approved by manager
@@ -25,11 +25,21 @@ App ownership research complete against current feat/opentray-app-mode worktree
 Workspace lifecycle correction approved by manager
 P1 typed contracts     landed (Store-content capability + browser-safe projection schemas + checked fixtures)
 P2 managed backend     landed (directory catalog 3.0a; managed owner + daemon IPC + Stop/restart 3.0b–3.0f)
-P3–P9 production code  not started
-Focused red evidence   P1+P2 green captured; remaining owners not yet captured
-Focused green evidence P1 (6.1–6.2) + P2 (3.0a, 3.0b–3.0f) captured; remaining owners not yet captured
+P3 candidate/open      landed (admission reducer + React integration 3.1–3.7; credential/convergence/iframe 3.8–3.11)
+P4 Workspace Home      landed (Home/running-nav/Task Manager/path-first label 4.0–4.0e)
+P5 Environment authority landed (selection + exact authority owner 5.2–5.9, 5.12–5.13)
+P6 Store content       landed (Server Projection Work service 6.3–6.9, 6.12–6.13)
+P7 Stores index        landed (transport 6.11, route identity 7.1, Stores index 7.3/7.15/7.17)
+P8 navigation          landed (router rewrite + retire routes/selector 8.1/8.2/8.3/8.5/8.8/8.9; dispatch authority 8.4)
+P9 docs/gates          landed (changeset + AGENTS.md 9.1/9.4/9.6; lint:ci/typecheck/test:ci green 10.7–10.9)
+Deferred               hosted-shell 7-file mechanical rename (structural identical, no functional gain);
+                       i18n.zh.md + README (9.2/9.3); browser fixtures (8.10/10.10); owner walkthrough (11.6)
+Repo gates             lint:ci 0/0, typecheck all pass, test:ci exit 0, openspec validate --strict pass
 Owner walkthrough      reserved for final handoff
 ```
+
+Session commit head: `4755386` (feat/opentray-app-mode). 14 implementation commits this session; all package
+typechecks pass; full app suite (303 tests) + core + server + CLI green.
 
 P2 managed-project backend verification on 2026-07-30:
 
