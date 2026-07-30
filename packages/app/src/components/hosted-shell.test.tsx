@@ -297,22 +297,13 @@ describe('HostedShell', () => {
     ).toBe(initialIframe)
   })
 
-  it('opens the add dialog when the empty shell header is double-clicked', async () => {
+  it('renders the fixed Home pinned tab when no project backends are open', async () => {
     const { container } = await renderShell(
       <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
     )
-
-    const strip = container.querySelector('.tabs-strip')
-    expect(strip).toBeTruthy()
-
-    await act(async () => {
-      if (strip) {
-        fireEvent.doubleClick(strip)
-      }
-    })
-
-    expect(document.querySelector('dialog[open]')).toBeTruthy()
-    expect(screen.getByLabelText('API URL')).toBeTruthy()
+    // Home is a pinned, non-closeable tab that replaces the old empty shell state.
+    expect(screen.getByText('Home')).toBeTruthy()
+    expect(screen.getByText('Start from path')).toBeTruthy()
   })
 
   it('opens the add dialog when the tabs bar empty space is double-clicked', async () => {

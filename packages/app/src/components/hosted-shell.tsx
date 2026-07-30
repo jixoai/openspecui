@@ -19,7 +19,16 @@ import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realti
 import { RealtimeSkeleton } from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { type Tab } from '@openspecui/web-src/components/tabs'
 import { TerminalTabs } from '@openspecui/web-src/components/terminal/terminal-tabs'
-import { AlertCircle, Download, Link2, LoaderCircle, Plus, RefreshCw, Unlink2 } from 'lucide-react'
+import {
+  AlertCircle,
+  Download,
+  Home,
+  Link2,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  Unlink2,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ConnectionObservationBoundary,
@@ -49,6 +58,7 @@ import { selectWorkspacePathLabel } from '../lib/workspace-path-label'
 import { useAppDaemonWorkspace } from './app-daemon-workspace-owner'
 import { useAppLaunchError } from './app-launch-owner'
 import { HostedShellThemeBootstrap } from './hosted-shell-theme'
+import { WorkspaceHome } from './workspace-home'
 import { WorkspaceTabBrowserAction } from './workspace-tab-browser-action'
 
 const REFRESH_FEEDBACK_MS = 1200
@@ -960,39 +970,60 @@ function HostedShellRuntime({
     document.title = `${activeTitle} - OpenSpec UI App`
   }, [activeHostedTab, activeRuntime])
 
-  const tabs = useMemo(
-    () =>
-      shellState.tabs.map((tab) =>
-        createHostedShellTab({
-          tab,
-          runtime: tabRuntime[tab.id] ?? DEFAULT_RUNTIME_STATE,
-          frameState: tabFrames[tab.id] ?? DEFAULT_FRAME_STATE,
-          onRetry: (tabId) => {
-            void probeTabs({ tabIds: [tabId], visualFeedback: true })
-          },
-          onSetIframeRef: setIframeRef,
-          onFrameLoad: markFrameLoaded,
-          onFrameError: markFrameErrored,
-          workspaceId: daemonWorkspace.resolveWorkspaceId(tab.apiBaseUrl),
-          isOpeningInBrowser:
-            openingWorkspaceId !== null &&
-            daemonWorkspace.resolveWorkspaceId(tab.apiBaseUrl) === openingWorkspaceId,
-          onOpenInBrowser: handleOpenWorkspaceInBrowser,
-        })
+  const HOME_TAB_ID = 'workspace-home'
+
+  const tabs = useMemo(() => {
+    const projectTabs = shellState.tabs.map((tab) =>
+      createHostedShellTab({
+        tab,
+        runtime: tabRuntime[tab.id] ?? DEFAULT_RUNTIME_STATE,
+        frameState: tabFrames[tab.id] ?? DEFAULT_FRAME_STATE,
+        onRetry: (tabId) => {
+          void probeTabs({ tabIds: [tabId], visualFeedback: true })
+        },
+        onSetIframeRef: setIframeRef,
+        onFrameLoad: markFrameLoaded,
+        onFrameError: markFrameErrored,
+        workspaceId: daemonWorkspace.resolveWorkspaceId(tab.apiBaseUrl),
+        isOpeningInBrowser:
+          openingWorkspaceId !== null &&
+          daemonWorkspace.resolveWorkspaceId(tab.apiBaseUrl) === openingWorkspaceId,
+        onOpenInBrowser: handleOpenWorkspaceInBrowser,
+      })
+    )
+    // Fixed, non-closeable Home tab as the first Workspace tab (4.0a).
+    const homeTab: Tab = {
+      id: HOME_TAB_ID,
+      closable: false,
+      label: (
+        <div className="flex min-w-0 items-center gap-1 py-0.5 text-left">
+          <Home className="h-3 w-3 shrink-0" />
+          <span className="font-nav min-w-0 truncate text-xs">Home</span>
+        </div>
       ),
-    [
-      markFrameErrored,
-      markFrameLoaded,
-      daemonWorkspace,
-      handleOpenWorkspaceInBrowser,
-      openingWorkspaceId,
-      probeTabs,
-      setIframeRef,
-      shellState.tabs,
-      tabFrames,
-      tabRuntime,
-    ]
-  )
+      content: (
+        <WorkspaceHome
+          catalog={{ favorites: [], recent: [] }}
+          launchSupported={false}
+          onSubmitPath={() => {}}
+          onToggleFavorite={() => {}}
+          onOpenDirectory={() => {}}
+        />
+      ),
+    }
+    return [homeTab, ...projectTabs]
+  }, [
+    markFrameErrored,
+    markFrameLoaded,
+    daemonWorkspace,
+    handleOpenWorkspaceInBrowser,
+    openingWorkspaceId,
+    probeTabs,
+    setIframeRef,
+    shellState.tabs,
+    tabFrames,
+    tabRuntime,
+  ])
 
   const handleAddSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -1065,21 +1096,30 @@ function HostedShellRuntime({
       ) : (
         <TerminalTabs
           tabs={tabs}
-          selectedTab={shellState.activeTabId ?? tabs[0]?.id}
+          selectedTab={shellState.activeTabId ?? HOME_TAB_ID}
           onTabChange={(tabId) => {
+            if (tabId === HOME_TAB_ID) return
             setShellState((current) => activateHostedTab(current, tabId))
           }}
           onTabClose={(tabId) => {
+            if (tabId === HOME_TAB_ID) return
             setShellState((current) => {
               // Resolve the locator before removing the tab so an unchanged daemon snapshot does not
               // reopen this Workspace (3.2/3.7). No-op for non-daemon-backed locators.
               const closing = current.tabs.find((tab) => tab.id === tabId)
               if (closing) daemonWorkspace.dismissDaemonWorkspace(closing.apiBaseUrl)
-              return removeHostedTab(current, tabId)
+              const next = removeHostedTab(current, tabId)
+              // Closing the last project tab falls back to Home.
+              if (next.activeTabId === null) {
+                return next
+              }
+              return next
             })
           }}
           onTabOrderChange={(orderedTabIds) => {
-            setShellState((current) => reorderHostedTabs(current, orderedTabIds))
+            // Home tab stays first; filter it out before reordering project tabs.
+            const projectIds = orderedTabIds.filter((id) => id !== HOME_TAB_ID)
+            setShellState((current) => reorderHostedTabs(current, projectIds))
           }}
           onTabBarDoubleClick={openAddDialog}
           actions={
