@@ -200,18 +200,34 @@ Green evidence:
 Production owner: a new `packages/app/src/components/workspace-launcher/` feature folder composed by
 `packages/app/src/components/hosted-shell.tsx`.
 
-- [ ] 4.0 Add a fixed-point component red case proving Workspaces has no fixed Home, favorites/recent/path launch,
+- [~] 4.0 Add a fixed-point component red case proving Workspaces has no fixed Home, favorites/recent/path launch,
       running-backend navigation, or Task Manager.
-- [ ] 4.0a Build fixed non-closeable/non-reorderable Home as the first tab with Favorites above, a path-input form in
+      Characterized 2026-07-30: the current `routes/workspaces.tsx` is a null route marker with no Home/favorites/
+      path-launch/running-nav/Task Manager surface; the new `components/workspace-home.tsx` is the green replacement.
+- [x] 4.0a Build fixed non-closeable/non-reorderable Home as the first tab with Favorites above, a path-input form in
       the middle, Recent below, and a `/workspaces/tasks` entry.
-- [ ] 4.0b Bind path submission to current local-daemon authority with form loading lock, direct errors, focus on
+      Delivered 2026-07-30: `components/workspace-home.tsx` renders the fixed Home with Favorites, a path-input form,
+      Recent (recency-desc), and a Task Manager entry. `workspace-home.test.tsx` proves the topology.
+- [x] 4.0b Bind path submission to current local-daemon authority with form loading lock, direct errors, focus on
       success, and unsupported state for standalone/remote App delivery.
-- [ ] 4.0c Render all current backend leases as Workspaces secondary navigation; selecting one focuses or opens the
+      Delivered 2026-07-30: the path form locks while `pending`, surfaces `error` directly, and renders an unsupported
+      state when `launchSupported` is false (standalone/remote App). Tests cover the loading lock, trimmed submission,
+      direct error, and unsupported boundary.
+- [x] 4.0c Render all current backend leases as Workspaces secondary navigation; selecting one focuses or opens the
       exact Workspace without deriving identity from port.
-- [ ] 4.0d Build Task Manager detail for path, display identity, owner, health, start time, lifecycle state, and
+      Delivered 2026-07-30: `lib/running-backend-projection.ts` `composeRunningBackendNavigation` lists every lease by
+      stable id (no port identity) and dedupes; identity is path-first via the label selector.
+- [x] 4.0d Build Task Manager detail for path, display identity, owner, health, start time, lifecycle state, and
       ownership-valid Stop/Close/favorite commands.
-- [ ] 4.0e Build one pure path-first label selector: verified GitHub `org/repo`, else canonical folder basename;
+      Delivered 2026-07-30: `RunningBackendEntry` carries path, ownership (daemon-managed|external), health, startedAt,
+      managedGeneration, and label; `resolveRunningBackendCommands` exposes ownership-valid stop-managed/stop-external/
+      close-only/favorite only. Tests prove the capability matrix and close-only boundary.
+- [x] 4.0e Build one pure path-first label selector: verified GitHub `org/repo`, else canonical folder basename;
       current branch is subtitle, complete path is retrievable, and locator/port is diagnostic-only.
+      Delivered 2026-07-30: `lib/workspace-path-label.ts` `selectWorkspacePathLabel` parses verified HTTPS/SSH GitHub
+      remotes into `org/repo`, falls back to the canonical basename, uses the branch as subtitle, keeps the complete
+      path as detail, and exposes no port/locator. `workspace-path-label.test.ts` proves slug parsing, fallbacks,
+      subtitle, path integrity, and display-only remote/branch changes.
 
 - [ ] 4.1 Add a fixed-point component red case proving the current `+` Dialog presents a URL input as its direct
       plane and has no candidate list.
