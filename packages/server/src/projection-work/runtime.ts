@@ -28,7 +28,9 @@ export const serverProjectionWorkCacheBudget = {
   maxBytes: 2 * 1024 * 1024,
   maxWorkEntries: 64,
   traceCapacity: 256,
-  maxRegistryCount: 9,
+  // Dashboard, Changes, Store list/Doctor, Planning CLI, Environment Global, Store content, Root Context,
+  // plus Planning-root service-manager per-root owners. The Store-content owner (P6) raised this from 9 to 10.
+  maxRegistryCount: 10,
 } as const
 
 interface ClearableProjectionWorkRegistry {
