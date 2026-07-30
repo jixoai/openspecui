@@ -15,16 +15,18 @@ Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果
 
 ## Implementation State
 
-Planning is apply-ready; production implementation has not started in this Change.
+Planning is apply-ready. P1 typed-public-contract code (checkpoints 6.1–6.2) has landed; the remaining
+P2–P9 production owners have not started.
 
 ```text
 Product decision       approved by manager
 Official CLI research complete against references/openspec v1.6.0
 App ownership research complete against current feat/opentray-app-mode worktree
 Workspace lifecycle correction approved by manager
-Production code        not modified by this planning commit
-Focused red evidence   not yet captured
-Focused green evidence not yet captured
+P1 typed contracts     landed (Store-content capability + browser-safe projection schemas + checked fixtures)
+P2–P9 production code  not started
+Focused red evidence   P1 green captured; remaining owners not yet captured
+Focused green evidence P1 captured (6.1–6.2); remaining owners not yet captured
 Owner walkthrough      reserved for final handoff
 ```
 

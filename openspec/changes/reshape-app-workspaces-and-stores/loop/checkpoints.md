@@ -201,9 +201,21 @@ Green evidence:
 Production owners: browser-safe Core hosted contract, focused Server Store-content projection service/router, and
 App Store-content transport/hook.
 
-- [ ] 6.1 Add an additive Store-content compatibility fact and browser-safe typed Spec/Change projection schemas;
+- [x] 6.1 Add an additive Store-content compatibility fact and browser-safe typed Spec/Change projection schemas;
       keep capability visibility distinct from action permission.
-- [ ] 6.2 Add public interface comments and checked contract fixtures for every exported schema/type/procedure.
+      Delivered 2026-07-30: `packages/core/src/store-content-projection.ts` publishes browser-safe lenient
+      Spec/active-Change entry schemas, content kind, and hosted Specs/Changes envelopes;
+      `hosted-contract.ts` adds `HOSTED_STORE_CONTENT_CAPABILITY` (additive `stores.content.inspect`, distinct
+      from baseline `HOSTED_STORE_CAPABILITIES`), `HOSTED_STORE_ADVERTISED_CAPABILITIES`, content kind, and
+      `HostedStoreContent{Specs,Changes}ProjectionStateSchema` over the shared CLI Projection Work lifecycle;
+      `hosted-app.ts` advertises the additive capability only when `storeContentProjectionEnabled`; capability
+      visibility remains a compatibility fact, never permission.
+- [x] 6.2 Add public interface comments and checked contract fixtures for every exported schema/type/procedure.
+      Delivered 2026-07-30: `packages/core/src/store-content-projection.test.ts` proves additive tolerance,
+      content-kind vocabulary, additive-vs-baseline capability distinction, envelope decode, contract-error
+      retention, and independent Specs/Changes projection identities; registered in a checked
+      `tsconfig.store-content-projection-tests.json` lane plus the Core `typecheck` aggregate; `hosted-contract.test.ts`
+      gains the additive-capability assertion.
 - [ ] 6.3 Add a fixed-point Server red case showing hosted Store Detail cannot currently request typed
       `listSpecs/listChanges` for an explicit Store selector.
 - [ ] 6.4 Implement demand-driven Spec-list work through `OpenSpecCliContractExecutor.listSpecs({ store })`.
