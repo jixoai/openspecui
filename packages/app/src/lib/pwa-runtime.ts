@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Classify Browser, standalone, and Window Controls Overlay display modes.
+ * 2. Convert overlay geometry into control-safe horizontal titlebar insets.
+ * 3. Preserve install-prompt and inactive-overlay runtime guards.
+ *
+ * Owner correction (2026-07-30): follow skill-creator-v2 horizontal window-controls safe-area behavior.
+ */
 export type HostedAppDisplayMode = 'browser' | 'standalone' | 'window-controls-overlay'
 
 export interface BeforeInstallPromptChoice {
@@ -45,6 +53,15 @@ export const EMPTY_TITLEBAR_INSETS: HostedAppTitlebarInsets = {
   height: 0,
 }
 
+export const DEFAULT_OVERLAY_TITLEBAR_INSETS: HostedAppTitlebarInsets = {
+  left: 8,
+  right: 8,
+  top: 0,
+  height: 0,
+}
+
+const WINDOW_CONTROL_MARGIN = 4
+
 export function isBeforeInstallPromptEvent(value: unknown): value is BeforeInstallPromptEventLike {
   return (
     value instanceof Event &&
@@ -75,14 +92,14 @@ export function computeTitlebarInsets(
   rect: HostedAppTitlebarAreaRect,
   viewportWidth: number
 ): HostedAppTitlebarInsets {
-  const left = Math.max(Math.round(rect.x), 0)
-  const right = Math.max(Math.round(viewportWidth - rect.x - rect.width), 0)
+  const leftControlInset = Math.max(Math.round(rect.x), 0)
+  const rightControlInset = Math.max(Math.round(viewportWidth - rect.x - rect.width), 0)
   const top = Math.max(Math.round(rect.y), 0)
   const height = Math.max(Math.round(rect.height), 0)
 
   return {
-    left,
-    right,
+    left: leftControlInset + (leftControlInset > 0 ? WINDOW_CONTROL_MARGIN : 0),
+    right: rightControlInset + (rightControlInset > 0 ? WINDOW_CONTROL_MARGIN : 0),
     top,
     height,
   }

@@ -1,19 +1,33 @@
 /**
  * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
- * 1. Select and operate the Web or retained Native App presentation lifecycle.
+ * 1. Select and operate the branded Web or retained Native App presentation lifecycle.
  * 2. Keep native/browser authority credential-safe and preserve truthful browser-capable fallback.
  * 3. Center only the first retained native window without overriding later user placement.
+ * 4. Open native DevTools only for an explicitly identified development runtime.
+ * 5. Persist cold launch only for Native appMode while delegating warm reopen to the extension.
  *
  * Original request (2026-07-29): "使用 appMode，并且 --web 只在最开始 start 的时候定好。"
  * Original request (2026-07-30): "初始使用placement center的窗口位置。"
+ * Owner correction (2026-07-30): "pnpm openspecui这种开发模式下，应该要启动 opentray 的 devtools。"
+ * Owner correction (2026-07-30): "logo要全面应用：titlebar中、appIcon中、trayIcon中。"
+ * Owner correction (2026-07-30): appMode must follow the complete skill-creator-v2/OpenTray lifecycle contract.
+ * Owner diagnostic decision (2026-07-30): use OpenTray's local source selector so its window bridge is injected.
  */
 import type { WebviewNativeApiPolicy, WebviewWindowOptions } from '@opentray/ext-webview'
-import type { CreateTrayMenu, CreateTrayOptions, OpenTrayRuntimeOptions } from 'opentray'
+import type {
+  AppIcon,
+  CreateTrayMenu,
+  CreateTrayOptions,
+  Icon,
+  OpenTrayAppLaunchOptions,
+  OpenTrayRuntimeOptions,
+} from 'opentray'
 import type { DaemonExternalUrlOpener } from './browser-daemon-host.js'
 import type { DaemonHostMode } from './daemon-protocol.js'
 import type { DaemonPresentationHost } from './daemon-server.js'
 import { buildDirectWebLaunchUrl } from './hosted-app.js'
 import type { LocalAppServer } from './local-app-server.js'
+import { resolveOpenTrayBrandAssets } from './opentray-brand-assets.js'
 import {
   productionOpenTrayPresenterDriver,
   type OpenTrayPresenterDriver,
@@ -29,8 +43,6 @@ const OPEN_ITEM_ID = 1
 const QUIT_ITEM_ID = 2
 const WINDOW_WIDTH = 1280
 const WINDOW_HEIGHT = 840
-
-type NativeApiOrigin = `http://${string}`
 
 export interface DaemonPresenterDiagnostic {
   code:
@@ -63,41 +75,62 @@ function trayMenu(visible: boolean): CreateTrayMenu {
   }
 }
 
-function trayOptions(): CreateTrayOptions {
+function trayOptions(icon: Icon): CreateTrayOptions {
   return {
     id: TRAY_ID,
-    icon: { 'text-only': 'OS' },
+    icon,
     tooltip: { title: APP_TITLE, description: 'OpenSpec project workspaces' },
     menu: trayMenu(false),
   }
 }
 
-function runtimeOptions(version: string): OpenTrayRuntimeOptions {
-  return { appId: APP_ID, appName: APP_TITLE, packageVersion: version }
+function runtimeOptions(
+  version: string,
+  appIcon: AppIcon | null,
+  appLaunch?: OpenTrayAppLaunchOptions
+): OpenTrayRuntimeOptions {
+  return {
+    appId: APP_ID,
+    appName: APP_TITLE,
+    packageVersion: version,
+    ...(appIcon === null ? {} : { appIcon }),
+    ...(appLaunch === undefined ? {} : { appLaunch }),
+  }
 }
 
-function requireLoopbackOrigin(appUrl: string): NativeApiOrigin {
+function assertLoopbackAppUrl(appUrl: string): void {
   const parsed = new URL(appUrl)
   if (parsed.protocol !== 'http:' || parsed.hostname !== '127.0.0.1') {
     throw new Error('The daemon App presenter requires an IPv4 loopback HTTP origin.')
   }
-  return `http://${parsed.host}`
 }
 
-function nativeWindowOptions(appUrl: string, platform: NodeJS.Platform): WebviewWindowOptions {
-  const appOrigin = requireLoopbackOrigin(appUrl)
+function buildNativeAppUrl(appUrl: string, platform: NodeJS.Platform): string {
+  if (platform === 'win32') return appUrl
+  const url = new URL(appUrl)
+  url.searchParams.set('appMode', 'opentray-overlay')
+  return url.toString()
+}
+
+function nativeWindowOptions(
+  appUrl: string,
+  platform: NodeJS.Platform,
+  enableDevtools: boolean
+): WebviewWindowOptions {
+  assertLoopbackAppUrl(appUrl)
   const nativeApiPolicy: WebviewNativeApiPolicy = {
     defaultSrc: ["'none'"],
-    window: [appOrigin],
+    window: ["'local'"],
   }
   return {
-    url: appUrl,
+    url: buildNativeAppUrl(appUrl, platform),
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
     title: APP_TITLE,
     nativeWindowApi: true,
     windowControlsOverlay: platform !== 'win32',
     nativeApiPolicy,
+    ...(enableDevtools ? { devtools: true } : {}),
     style: {
       appMode: true,
       frameless: false,
@@ -160,20 +193,23 @@ function createProjectionMethods(options: {
 }
 
 async function createWebPresenter(options: {
+  appAssetsDir: string
   appServer: LocalAppServer
   driver: OpenTrayPresenterDriver
   openExternalUrl: DaemonExternalUrlOpener
   onStopRequested: () => void
+  platform: NodeJS.Platform
   report: (diagnostic: DaemonPresenterDiagnostic) => void
   version: string
 }): Promise<DaemonPresentationHost> {
+  const brand = resolveOpenTrayBrandAssets(options.appAssetsDir, options.platform)
   let tray: PresenterTray | null = null
   const unlisten: Array<() => void> = []
   let closePromise: Promise<void> | null = null
   try {
     tray = await options.driver.createWebTray({
-      tray: trayOptions(),
-      runtime: runtimeOptions(options.version),
+      tray: trayOptions(brand.trayIcon),
+      runtime: runtimeOptions(options.version, brand.appIcon),
     })
     const activateFromEvent = () => {
       void activate().catch(reportEventFailure(options.report, 'web-activate'))
@@ -231,24 +267,39 @@ async function createWebPresenter(options: {
 }
 
 async function createNativePresenter(options: {
+  appAssetsDir: string
+  appLaunch: OpenTrayAppLaunchOptions
   appServer: LocalAppServer
   driver: OpenTrayPresenterDriver
   openExternalUrl: DaemonExternalUrlOpener
   onStopRequested: () => void
   platform: NodeJS.Platform
+  enableDevtools: boolean
   report: (diagnostic: DaemonPresenterDiagnostic) => void
   version: string
 }): Promise<DaemonPresentationHost> {
+  const brand = resolveOpenTrayBrandAssets(options.appAssetsDir, options.platform)
   const resources = await options.driver.createNative({
-    tray: trayOptions(),
-    runtime: runtimeOptions(options.version),
-    window: nativeWindowOptions(options.appServer.url, options.platform),
+    tray: trayOptions(brand.trayIcon),
+    runtime: runtimeOptions(options.version, brand.appIcon, options.appLaunch),
+    window: nativeWindowOptions(options.appServer.url, options.platform, options.enableDevtools),
   })
   try {
     await resources.window.show()
   } catch (error) {
     await runTeardown([() => resources.window.destroy(), () => resources.tray.destroy()])
     throw error
+  }
+  if (options.enableDevtools) {
+    try {
+      await resources.window.openDevtools()
+    } catch {
+      options.report({
+        code: 'presenter-event-failed',
+        stage: 'native-devtools-open',
+        message: 'Native App DevTools could not be opened.',
+      })
+    }
   }
   try {
     await resources.window.placeAtScreenCenter({ width: WINDOW_WIDTH, height: WINDOW_HEIGHT })
@@ -296,6 +347,7 @@ async function createNativePresenter(options: {
     void activate().catch(reportEventFailure(options.report, 'native-activate'))
   }
 
+  // The WebView extension owns warm Dock reopen for retained appMode windows.
   try {
     unlisten.push(
       resources.window.listenVisible((nextVisible) => {
@@ -308,8 +360,7 @@ async function createNativePresenter(options: {
         }
         if (itemId === QUIT_ITEM_ID) options.onStopRequested()
       }),
-      resources.tray.onTrayClick(activateFromEvent),
-      resources.tray.onAppReopenRequested(activateFromEvent)
+      resources.tray.onTrayClick(activateFromEvent)
     )
     await updateMenu()
   } catch (error) {
@@ -341,6 +392,8 @@ async function createNativePresenter(options: {
 
 /** Create and initially present the daemon-owned App through the selected OpenTray host. */
 export async function createOpenTrayDaemonPresenter(options: {
+  appAssetsDir: string
+  appLaunch: OpenTrayAppLaunchOptions
   appServer: LocalAppServer
   requestedHostMode: DaemonHostMode
   version: string
@@ -349,6 +402,7 @@ export async function createOpenTrayDaemonPresenter(options: {
   platform?: NodeJS.Platform
   driver?: OpenTrayPresenterDriver
   reportDiagnostic?: (diagnostic: DaemonPresenterDiagnostic) => void
+  enableDevtools?: boolean
 }): Promise<OpenTrayDaemonPresenterResolution> {
   const diagnostics: DaemonPresenterDiagnostic[] = []
   const report = (diagnostic: DaemonPresenterDiagnostic) => {
@@ -357,7 +411,13 @@ export async function createOpenTrayDaemonPresenter(options: {
   }
   const platform = options.platform ?? process.platform
   const driver = options.driver ?? productionOpenTrayPresenterDriver
-  const common = { ...options, driver, platform, report }
+  const common = {
+    ...options,
+    driver,
+    platform,
+    report,
+    enableDevtools: options.enableDevtools === true,
+  }
 
   if (options.requestedHostMode === 'native' && presenterSupportsNative(platform)) {
     try {

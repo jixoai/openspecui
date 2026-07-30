@@ -1,7 +1,17 @@
+/**
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Prove launch parsing, sanitization, and credential-free URL cleanup.
+ * 2. Prove native presentation capture is explicit and closed to unknown values.
+ * 3. Prove service-worker registration remains production-only and eagerly refreshed.
+ *
+ * Original request (2026-07-15): "app 模式提供了多标签管理。"
+ * Owner correction (2026-07-30): the self-drawn titlebar must survive App route navigation.
+ */
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from 'vitest'
 import {
+  parseHostedAppPresentation,
   parseHostedLaunchParams,
   registerHostedServiceWorker,
   stripHostedLaunchParams,
@@ -10,6 +20,12 @@ import {
 } from './bootstrap'
 
 describe('hosted app bootstrap helpers', () => {
+  it('captures only the declared OpenTray overlay presentation', () => {
+    expect(parseHostedAppPresentation('?appMode=opentray-overlay')).toBe('opentray-overlay')
+    expect(parseHostedAppPresentation('?appMode=browser')).toBeUndefined()
+    expect(parseHostedAppPresentation('')).toBeUndefined()
+  })
+
   it('parses api-based launch parameters', () => {
     expect(parseHostedLaunchParams('?api=http://localhost:13000/')).toEqual({
       request: {

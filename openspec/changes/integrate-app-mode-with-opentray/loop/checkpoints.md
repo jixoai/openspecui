@@ -81,6 +81,10 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 - [x] 6.8 Presenter tests prove one bootstrap, repeated retained activation, ordered teardown, Web import isolation, platform selection, and structured native failure fallback.
 - [x] 6.9 Packed-package verification proves CLI daemon entry, App assets, OpenTray runtime closure, and platform-optional installation are present without direct platform-package imports.
 - [x] 6.10 Update `implementation.md`, pass focused presenter/package tests, and commit this checkpoint before App chrome changes.
+- [x] 6.11 Persist an explicit Native `appLaunch` vector to the public `openspecui start` lifecycle entry; source execution retains its TypeScript loader, packaged execution uses `dist/cli.mjs`, and Web mode publishes no cold-launch vector.
+- [x] 6.12 Delegate warm Dock reopen to the WebView extension's appMode MRU owner and prove runtime options plus teardown no longer install a duplicate native reopen listener.
+- [x] 6.13 Use `openTrayAppIconPlugin` as the App identity asset owner in Vite dev/build; CLI runtime consumes generated ICNS/ICO/Linux paths while tray artwork remains independent.
+- [x] 6.14 Use OpenTray 0.18.0's local Window source selector for bridge injection while retaining CLI-owned IPv4-loopback bootstrap validation; record the exact-origin limitation explicitly.
 
 ## 7. Workspaces and Titlebar Host State
 
@@ -95,6 +99,10 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 - [x] 7.9 Keep the verified Windows native-frame baseline unless separate capability evidence and Owner acceptance authorize Windows overlay expansion.
 - [x] 7.10 Component tests cover container/narrow layouts, Open in browser states, no horizontal overflow, every titlebar variant, geometry replacement, and zero double-inset.
 - [x] 7.11 Update `implementation.md`, pass App focused Vitest/basic component Playwright, and commit this checkpoint before broad gates.
+- [x] 7.12 Follow the reference control-safe-area model: keep a fixed 32px titlebar, apply geometry only to horizontal padding, add 4px beside present native controls, and retain 8px edge fallback before measurement.
+- [x] 7.13 Prove compact height, measured safe padding, geometry replacement, and interactive drag exclusion through focused Vitest and Chromium component evidence.
+- [x] 7.14 Resolve every compatible native window projection and use bounded post-mount retry so a host-declared overlay converges from fallback to measured geometry.
+- [x] 7.15 Copy the accepted skill-creator-v2 measurement boundary: once a host-declared overlay bridge exists, measure its safe area regardless of the overlay `visible` hint.
 
 ## 8. Specifications, Documentation, and Package Contract
 
@@ -105,6 +113,7 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 - [x] 8.5 Add Changesets for every affected publishable package; do not publish 6.1.x in this Change.
 - [x] 8.6 Run strict OpenSpec validation and tests that compare documented command examples against parser behavior.
 - [x] 8.7 Update `implementation.md` with deleted public contracts, package impact, and residual limitations; commit this checkpoint.
+- [x] 8.8 Correct upstream `skills/opentray` consumer routing and references with the official App icon plugin and implementation-ready overlay safe-area/readiness contracts.
 
 ## 9. Integrated Automated Verification
 

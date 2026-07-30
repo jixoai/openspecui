@@ -4,10 +4,12 @@
  * 2. Prove launch ownership remains active outside the Workspaces route.
  * 3. Prove route round-trips preserve the AppLayout-owned iframe Document identity.
  * 4. Prove persistent Workspaces consumes the App shell's remaining mobile viewport budget.
+ * 5. Prove overlay window chrome remains globally visible outside Workspaces.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Owner-reported defect (2026-07-26): opening B or C eventually makes older tabs lose authentication.
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Owner correction (2026-07-30): overlay Settings moves into the compact titlebar without removing non-overlay navigation fallback.
  */
 // @vitest-environment jsdom
 
@@ -16,7 +18,7 @@ import { RouterProvider } from '@tanstack/react-router'
 import { act, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAppRouter, type AppRouterContext } from './app-router'
 import { clearLaunchCredential, readLaunchCredential } from './lib/launch-credential'
 import { getHostedShellStorageKey } from './lib/shell-state'
@@ -31,6 +33,7 @@ const renderedRoots = new Set<Root>()
 const originalBroadcastChannel = globalThis.BroadcastChannel
 const originalMatchMedia = window.matchMedia
 const originalFetch = global.fetch
+const originalOpenTrayWindow = Object.getOwnPropertyDescriptor(navigator, 'opentrayWindow')
 
 class TestBroadcastChannel {
   static readonly channels = new Map<string, Set<TestBroadcastChannel>>()
@@ -89,6 +92,7 @@ function routerFor(context: AppRouterContext, initialPath: string) {
 describe('app-router', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
+    window.history.replaceState({}, '', '/')
     localStorage.clear()
     TestBroadcastChannel.channels.clear()
     Object.defineProperty(globalThis, 'BroadcastChannel', {
@@ -125,6 +129,11 @@ describe('app-router', () => {
       value: originalMatchMedia,
     })
     global.fetch = originalFetch
+    if (originalOpenTrayWindow) {
+      Object.defineProperty(navigator, 'opentrayWindow', originalOpenTrayWindow)
+    } else {
+      Reflect.deleteProperty(navigator, 'opentrayWindow')
+    }
     document.body.innerHTML = ''
   })
 
@@ -135,6 +144,8 @@ describe('app-router', () => {
     // 侧栏导航存在。
     expect(container.textContent ?? '').toContain('Connections')
     expect(container.textContent ?? '').toContain('Environment')
+    expect(container.querySelector('a[href="/settings"]')).toBeTruthy()
+    expect(container.querySelector('button[aria-label="Settings"]')).toBeNull()
   })
 
   it('renders Connections as home', async () => {
@@ -142,6 +153,50 @@ describe('app-router', () => {
     const { container } = await renderAt(<RouterProvider router={router} />)
     expect(container.textContent ?? '').toContain('Connections')
     expect(container.textContent ?? '').toContain('No backend connections yet')
+  })
+
+  it('renders the OpenTray titlebar above Connections from the global App layout', async () => {
+    Object.defineProperty(navigator, 'opentrayWindow', {
+      configurable: true,
+      value: {
+        overlay: {
+          visible: true,
+          getTitlebarAreaRect: vi.fn(async () => ({ x: 72, y: 0, width: 1128, height: 40 })),
+        },
+        startAppRegionDrag: vi.fn(),
+      },
+    })
+    const router = routerFor(EMPTY_CONTEXT, '/connections')
+    const { container } = await renderAt(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-app-titlebar="true"]')).toBeTruthy()
+    })
+    const layout = container.querySelector('[data-testid="app-layout"]')
+    const titlebar = container.querySelector('[data-app-titlebar="true"]')
+    expect(layout?.getAttribute('data-titlebar-presentation')).toBe('opentray')
+    expect(layout?.firstElementChild).toBe(titlebar)
+    expect(container.textContent).toContain('Connections')
+  })
+
+  it('renders the declared OpenTray titlebar before the native bridge is observable', async () => {
+    const router = routerFor(
+      { ...EMPTY_CONTEXT, appPresentation: 'opentray-overlay' },
+      '/connections'
+    )
+    const { container } = await renderAt(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-app-titlebar="true"]')).toBeTruthy()
+    })
+    expect(container.querySelector('[data-testid="app-layout"]')?.firstElementChild).toBe(
+      container.querySelector('[data-app-titlebar="true"]')
+    )
+    expect(container.querySelector('a[href="/settings"]')).toBeNull()
+    const settings = container.querySelector<HTMLButtonElement>('button[aria-label="Settings"]')
+    expect(settings).toBeTruthy()
+    await act(async () => settings?.click())
+    expect(router.state.location.pathname).toBe('/settings')
   })
 
   it('renders Environment Center with neutral (observed-only) copy', async () => {

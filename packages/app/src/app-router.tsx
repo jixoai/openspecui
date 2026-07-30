@@ -1,9 +1,10 @@
 /**
  * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Register App-native Connections, Environment, Workspaces, Settings, and Store routes.
- * 2. Preserve one typed launch context across the App route tree.
+ * 2. Preserve typed launch and host-presentation context across the App route tree.
  *
  * Original request (2026-07-15): "在没有后端的基础上，先把前端的初步工作先完成。"
+ * Owner correction (2026-07-30): the self-drawn titlebar belongs above every App route.
  */
 import {
   createRootRouteWithContext,
@@ -30,6 +31,7 @@ export interface AppRouterContext {
   initialLaunchRequest: HostedShellLaunchRequest | null
   fallbackLaunchRequest: HostedShellLaunchRequest | null
   initialError: string | null
+  appPresentation?: 'opentray-overlay'
 }
 
 const rootRoute = createRootRouteWithContext<AppRouterContext>()({

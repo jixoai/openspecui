@@ -1,17 +1,22 @@
 /**
  * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
- * 1. Prove native bootstrap and retained activation through the production presenter factory.
- * 2. Prove hide-versus-destroy semantics and exact final teardown order.
+ * 1. Prove branded native appMode/DevTools bootstrap and one-shot placement through the production presenter.
+ * 2. Prove retained activation, hide-versus-destroy semantics, and exact final teardown order.
  * 3. Prove Web import isolation, platform selection, and native fallback truth.
- * 4. Prove native page authority is bound to the exact loopback App origin.
- * 5. Prove initial screen-center placement follows first show and never replays on activation.
+ * 4. Prove native page authority uses OpenTray local matching while bootstrap remains IPv4-loopback-only.
+ * 5. Preserve exact lifecycle event evidence for mutation-resistant review.
  *
  * Compromise: these five assertion groups share one checked driver fixture because splitting the
  * fixture would duplicate the same retained-window state-machine seam and weaken mutation evidence.
  *
  * Original request (2026-07-29): "多次执行 openspecui --app 只是在激活同一个 daemon。"
  * Original request (2026-07-30): "初始使用placement center的窗口位置。"
+ * Owner correction (2026-07-30): "pnpm openspecui这种开发模式下，应该要启动 opentray 的 devtools。"
+ * Owner correction (2026-07-30): "logo要全面应用：titlebar中、appIcon中、trayIcon中。"
+ * Owner correction (2026-07-30): Native appMode persists public cold launch and delegates warm reopen.
+ * Owner diagnostic decision (2026-07-30): use OpenTray's local source selector so its window bridge is injected.
  */
+import type { OpenTrayAppLaunchOptions } from 'opentray'
 import { describe, expect, it, vi } from 'vitest'
 import type { LocalAppServer } from './local-app-server.js'
 import {
@@ -21,6 +26,12 @@ import {
 
 type NativeCreateOptions = Parameters<OpenTrayPresenterDriver['createNative']>[0]
 type WebCreateOptions = Parameters<OpenTrayPresenterDriver['createWebTray']>[0]
+
+const APP_LAUNCH: OpenTrayAppLaunchOptions = {
+  command: '/runtime/node',
+  args: ['/package/dist/cli.mjs', 'start'],
+  cwd: '/package',
+}
 
 function createFixture(
   options: {
@@ -53,6 +64,9 @@ function createFixture(
     show: vi.fn(async () => {
       events.push('show')
       if (options.showFailure) throw new Error('native show fixture failure')
+    }),
+    openDevtools: vi.fn(async () => {
+      events.push('open:devtools')
     }),
     placeAtScreenCenter: vi.fn(async () => {
       events.push('screen-center')
@@ -122,6 +136,8 @@ describe('OpenTray daemon presenter', () => {
   it('bootstraps one native appMode window and reuses it through ordered activation', async () => {
     const fixture = createFixture()
     const resolution = await createOpenTrayDaemonPresenter({
+      appAssetsDir: '/package/app',
+      appLaunch: APP_LAUNCH,
       appServer: fixture.appServer,
       requestedHostMode: 'native',
       version: '6.1.0',
@@ -133,6 +149,30 @@ describe('OpenTray daemon presenter', () => {
 
     expect(resolution.effectiveHostMode).toBe('native')
     expect(fixture.nativeCalls).toHaveLength(1)
+    expect(fixture.nativeCalls[0]?.runtime.appIcon).toEqual([
+      expect.objectContaining({
+        platform: 'darwin',
+        format: 'icns',
+        source: { type: 'file', path: '/package/app/native-icons/app-icon.icns' },
+      }),
+    ])
+    expect(fixture.nativeCalls[0]?.runtime.appLaunch).toEqual(APP_LAUNCH)
+    expect(fixture.tray.onAppReopenRequested).not.toHaveBeenCalled()
+    expect(fixture.nativeCalls[0]?.tray.icon).toEqual({
+      'darwin-icon-only': {
+        type: 'file',
+        path: '/package/app/native-icons/tray-icon.png',
+        isTemplate: true,
+      },
+      'win32-icon-only': {
+        type: 'file',
+        path: '/package/app/native-icons/tray-icon.png',
+      },
+      'linux-icon-only': {
+        type: 'file',
+        path: '/package/app/native-icons/tray-icon.png',
+      },
+    })
     expect(fixture.nativeCalls[0]).toEqual(
       expect.objectContaining({
         runtime: expect.objectContaining({
@@ -141,14 +181,14 @@ describe('OpenTray daemon presenter', () => {
           packageVersion: '6.1.0',
         }),
         window: expect.objectContaining({
-          url: fixture.appServer.url,
+          url: `${fixture.appServer.url}/?appMode=opentray-overlay`,
           width: 1280,
           height: 840,
           nativeWindowApi: true,
           windowControlsOverlay: true,
           nativeApiPolicy: {
             defaultSrc: ["'none'"],
-            window: ['http://127.0.0.1:43121'],
+            window: ["'local'"],
           },
           style: {
             appMode: true,
@@ -178,6 +218,8 @@ describe('OpenTray daemon presenter', () => {
   it('retains native presentation when initial placement fails', async () => {
     const fixture = createFixture({ placementFailure: true })
     const resolution = await createOpenTrayDaemonPresenter({
+      appAssetsDir: '/package/app',
+      appLaunch: APP_LAUNCH,
       appServer: fixture.appServer,
       requestedHostMode: 'native',
       version: '6.1.0',
@@ -201,9 +243,32 @@ describe('OpenTray daemon presenter', () => {
     await resolution.host.close()
   })
 
+  it('opens instance DevTools between first show and initial placement in development', async () => {
+    const fixture = createFixture()
+    const resolution = await createOpenTrayDaemonPresenter({
+      appAssetsDir: '/package/app',
+      appLaunch: APP_LAUNCH,
+      appServer: fixture.appServer,
+      requestedHostMode: 'native',
+      version: '6.1.0',
+      openExternalUrl: fixture.openExternalUrl,
+      onStopRequested: vi.fn(),
+      platform: 'darwin',
+      driver: fixture.driver,
+      enableDevtools: true,
+    })
+
+    expect(fixture.nativeCalls[0]?.window.devtools).toBe(true)
+    expect(fixture.window.openDevtools).toHaveBeenCalledOnce()
+    expect(fixture.events.slice(0, 3)).toEqual(['show', 'open:devtools', 'screen-center'])
+    await resolution.host.close()
+  })
+
   it('hides the retained window without destroying it and tears down in owner order', async () => {
     const fixture = createFixture()
     const { host } = await createOpenTrayDaemonPresenter({
+      appAssetsDir: '/package/app',
+      appLaunch: APP_LAUNCH,
       appServer: fixture.appServer,
       requestedHostMode: 'native',
       version: '6.1.0',
@@ -223,7 +288,6 @@ describe('OpenTray daemon presenter', () => {
       'off:window',
       'off:menu',
       'off:tray',
-      'off:reopen',
       'destroy:window',
       'destroy:tray',
       'close:app-server',
@@ -233,6 +297,8 @@ describe('OpenTray daemon presenter', () => {
   it('keeps Web mode isolated from native creation and opens the local App', async () => {
     const fixture = createFixture()
     const resolution = await createOpenTrayDaemonPresenter({
+      appAssetsDir: '/package/app',
+      appLaunch: APP_LAUNCH,
       appServer: fixture.appServer,
       requestedHostMode: 'web',
       version: '6.1.0',
@@ -244,6 +310,7 @@ describe('OpenTray daemon presenter', () => {
 
     expect(resolution.effectiveHostMode).toBe('web')
     expect(fixture.webCalls).toHaveLength(1)
+    expect(fixture.webCalls[0]?.runtime.appLaunch).toBeUndefined()
     expect(fixture.nativeCalls).toHaveLength(0)
     expect(fixture.opened).toEqual([fixture.appServer.url])
     await resolution.host.close()
@@ -252,6 +319,8 @@ describe('OpenTray daemon presenter', () => {
   it('selects Web on Linux before attempting native creation', async () => {
     const fixture = createFixture()
     const resolution = await createOpenTrayDaemonPresenter({
+      appAssetsDir: '/package/app',
+      appLaunch: APP_LAUNCH,
       appServer: fixture.appServer,
       requestedHostMode: 'native',
       version: '6.1.0',
@@ -275,6 +344,8 @@ describe('OpenTray daemon presenter', () => {
   it('keeps the Windows native frame while preserving the same appMode contract', async () => {
     const fixture = createFixture()
     const resolution = await createOpenTrayDaemonPresenter({
+      appAssetsDir: '/package/app',
+      appLaunch: APP_LAUNCH,
       appServer: fixture.appServer,
       requestedHostMode: 'native',
       version: '6.1.0',
@@ -285,6 +356,7 @@ describe('OpenTray daemon presenter', () => {
     })
 
     expect(fixture.nativeCalls[0]?.window).toMatchObject({
+      url: fixture.appServer.url,
       windowControlsOverlay: false,
       style: { appMode: true, frameless: false, resizable: true, autoHide: false },
     })
@@ -294,6 +366,8 @@ describe('OpenTray daemon presenter', () => {
   it('keeps browser capability when the base Web tray is unavailable', async () => {
     const fixture = createFixture({ webFailure: true })
     const resolution = await createOpenTrayDaemonPresenter({
+      appAssetsDir: '/package/app',
+      appLaunch: APP_LAUNCH,
       appServer: fixture.appServer,
       requestedHostMode: 'web',
       version: '6.1.0',
@@ -314,6 +388,8 @@ describe('OpenTray daemon presenter', () => {
   it('cleans a failed native bootstrap and falls back to browser-capable Web truth', async () => {
     const fixture = createFixture({ showFailure: true })
     const resolution = await createOpenTrayDaemonPresenter({
+      appAssetsDir: '/package/app',
+      appLaunch: APP_LAUNCH,
       appServer: fixture.appServer,
       requestedHostMode: 'native',
       version: '6.1.0',

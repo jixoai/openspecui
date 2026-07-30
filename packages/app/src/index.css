@@ -1,13 +1,19 @@
+/*
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Compose App and shared Project Web style layers.
+ * 2. Render compact overlay chrome with window-control-safe horizontal content.
+ * 3. Preserve hosted Workspace tab affordances across application themes.
+ *
+ * Owner correction (2026-07-30): follow skill-creator-v2's fixed 32px titlebar and horizontal safe area.
+ */
 @import '../../web/src/index.css';
 @import '../../web/src/styles/realtime.css';
 @source './';
 @source '../../web/src';
 
 :root {
-  --app-titlebar-left: 0px;
-  --app-titlebar-right: 0px;
-  --app-titlebar-top: 0px;
-  --app-titlebar-height: 0px;
+  --app-titlebar-left: 8px;
+  --app-titlebar-right: 8px;
 }
 
 .app-titlebar {
@@ -15,14 +21,14 @@
   z-index: 30;
   display: flex;
   min-width: 0;
-  min-height: max(2.5rem, calc(var(--app-titlebar-top) + var(--app-titlebar-height)));
+  height: 2rem;
+  min-height: 2rem;
   flex-shrink: 0;
   align-items: center;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   background-color: color-mix(in srgb, var(--background) 92%, var(--muted));
   box-shadow: 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
   color: var(--foreground);
-  padding-block-start: var(--app-titlebar-top);
   padding-inline-start: var(--app-titlebar-left);
   padding-inline-end: var(--app-titlebar-right);
   user-select: none;
@@ -52,35 +58,76 @@
   display: flex;
   width: 100%;
   min-width: 0;
-  min-height: 2.5rem;
+  min-height: 2rem;
   align-items: center;
   justify-content: space-between;
   pointer-events: none;
 }
 
 .app-titlebar-mark {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+.app-titlebar-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.app-titlebar-logo-dark {
+  display: none;
+}
+
+html.dark .app-titlebar-logo-light {
+  display: none;
+}
+
+html.dark .app-titlebar-logo-dark {
+  display: block;
+}
+
+.app-titlebar-settings {
   display: grid;
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1.625rem;
+  height: 1.625rem;
+  margin-inline: 0.1875rem 0.375rem;
+  padding: 0;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
-  background-color: color-mix(in srgb, var(--muted) 82%, transparent);
-  color: color-mix(in srgb, var(--foreground) 82%, transparent);
+  border: 0;
+  border-radius: 0.25rem;
+  background-color: transparent;
+  color: color-mix(in srgb, var(--foreground) 64%, transparent);
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
-.app-titlebar-drag-cue {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.1875rem;
-  padding-inline: 0.875rem;
+.app-titlebar-settings:hover {
+  background-color: color-mix(in srgb, var(--muted) 84%, transparent);
+  color: var(--foreground);
 }
 
-.app-titlebar-drag-cue span {
-  width: 0.1875rem;
-  height: 0.1875rem;
-  border-radius: 999px;
-  background-color: color-mix(in srgb, var(--foreground) 32%, transparent);
+.app-titlebar-settings:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.app-titlebar-settings[data-active='true'] {
+  background-color: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+
+.app-titlebar-settings:active {
+  background-color: color-mix(in srgb, var(--muted) 96%, transparent);
 }
 
 .hosted-shell-root .hosted-shell-tabs .tabs-button {

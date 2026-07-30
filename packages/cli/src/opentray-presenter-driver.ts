@@ -3,9 +3,11 @@
  * 1. Isolate the Web facade import from the Native facade-plus-WebView import boundary.
  * 2. Adapt OpenTray public handles into the narrow lifecycle ports consumed by the App presenter.
  * 3. Apply one screen-center placement through the Native-only WebView facade.
+ * 4. Expose instance-owned DevTools without leaking the native WebView handle.
  *
  * Original request (2026-07-29): "--web 这个模式只在最开始 start 的时候定好。"
  * Original request (2026-07-30): "初始使用placement center的窗口位置。"
+ * Owner correction (2026-07-30): "pnpm openspecui这种开发模式下，应该要启动 opentray 的 devtools。"
  */
 import type { WebviewWindowHandle, WebviewWindowOptions } from '@opentray/ext-webview'
 import type {
@@ -25,6 +27,7 @@ export interface PresenterTray {
 
 export interface PresenterWindow {
   show(): Promise<void>
+  openDevtools(): Promise<void>
   placeAtScreenCenter(size: { width: number; height: number }): Promise<void>
   close(): Promise<void>
   destroy(): Promise<void>
@@ -67,6 +70,7 @@ function adaptWindow(
 ): PresenterWindow {
   return {
     show: () => window.show(),
+    openDevtools: () => window.devtools.open(),
     placeAtScreenCenter,
     close: () => window.close(),
     destroy: () => window.destroy(),

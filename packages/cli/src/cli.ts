@@ -10,6 +10,7 @@
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
  * Delivery correction (2026-07-26): process children consume the parent's resolved Web asset root.
  * Owner correction (2026-07-29): bare openspecui is serve; start/stop/restart own only the App daemon.
+ * Owner correction (2026-07-30): native appMode cold launch must re-enter the public `start` lifecycle.
  */
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -29,14 +30,15 @@ import {
   consumeWorktreeProcessWebAssetsDir,
 } from './worktree-server-worker.js'
 
-const runtimeDir = dirname(fileURLToPath(import.meta.url))
+const entryPath = fileURLToPath(import.meta.url)
+const runtimeDir = dirname(entryPath)
 
 async function main(): Promise<void> {
   const inheritedAccessGateCredential = consumeWorktreeProcessAccessGateCredential(process.env)
   const inheritedWebAssetsDir = consumeWorktreeProcessWebAssetsDir(process.env)
   const daemonHostMode = consumeDaemonBootstrap(process.env)
   if (daemonHostMode) {
-    await runDaemonProcess({ hostMode: daemonHostMode, runtimeDir })
+    await runDaemonProcess({ entryPath, hostMode: daemonHostMode, runtimeDir })
     return
   }
 

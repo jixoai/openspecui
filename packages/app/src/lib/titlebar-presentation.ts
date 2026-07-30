@@ -3,11 +3,18 @@
  * 1. Select exactly one Browser, PWA overlay, OpenTray overlay, or native-frame titlebar owner.
  * 2. Retire stale geometry listeners and reject late async measurements across source changes.
  * 3. Dispatch native drag only from the designated non-interactive titlebar surface.
+ * 4. Preserve compact chrome by projecting geometry only into horizontal control-safe insets.
  *
  * Original request (2026-07-29): "对 opentray 的窗口 overlay-window-controls 的样式适配。"
  * Original request (2026-07-30): "顶部区域缺少一个自绘制的 titlebar 区域，它是通过 overlay-window-controls 得来的，主语它可以拖拽窗口。"
+ * Owner correction (2026-07-30): follow skill-creator-v2 window-controls safe-area behavior.
+ * Owner correction (2026-07-30): copy skill-creator-v2's declared-overlay measurement boundary exactly.
  */
-import { computeTitlebarInsets, EMPTY_TITLEBAR_INSETS } from './pwa-runtime'
+import {
+  computeTitlebarInsets,
+  DEFAULT_OVERLAY_TITLEBAR_INSETS,
+  EMPTY_TITLEBAR_INSETS,
+} from './pwa-runtime'
 
 interface TitlebarAreaRect {
   x: number
@@ -48,6 +55,7 @@ export interface PwaTitlebarOverlayLike {
 
 export interface AppTitlebarRuntime {
   viewportWidth: number
+  declaredOpenTrayOverlay?: boolean
   openTrayWindow?: OpenTrayWindowLike
   pwaOverlay?: PwaTitlebarOverlayLike
 }
@@ -89,7 +97,7 @@ function titlebarPresentation(
   if (kind === 'native-frame') return { kind, insets: EMPTY_TITLEBAR_INSETS }
   return {
     kind,
-    insets: rect ? computeTitlebarInsets(rect, viewportWidth) : EMPTY_TITLEBAR_INSETS,
+    insets: rect ? computeTitlebarInsets(rect, viewportWidth) : DEFAULT_OVERLAY_TITLEBAR_INSETS,
   }
 }
 
@@ -108,6 +116,7 @@ export function createAppTitlebarPresentationOwner(options: {
   readRuntime(): AppTitlebarRuntime
   onChange(presentation: AppTitlebarPresentation): void
   onError?(message: string): void
+  onNativeGeometry?(): void
 }): AppTitlebarPresentationOwner {
   let generation = 0
   let cleanup: TitlebarCleanup | null = null
@@ -140,16 +149,18 @@ export function createAppTitlebarPresentationOwner(options: {
     const nativeWindow = runtime.openTrayWindow
     const nativeOverlay = nativeWindow?.overlay
 
-    if (nativeWindow) {
-      if (!nativeOverlay || nativeOverlay.visible === false) {
+    if (runtime.declaredOpenTrayOverlay || nativeOverlay) {
+      if (!runtime.declaredOpenTrayOverlay && nativeOverlay?.visible === false) {
         publish(titlebarPresentation('native-frame', null, runtime.viewportWidth))
         return
       }
       publish(titlebarPresentation('opentray', null, runtime.viewportWidth))
+      if (!nativeOverlay) return
       try {
         const rect = await nativeOverlay.getTitlebarAreaRect()
         if (selectedGeneration !== generation) return
         publish(titlebarPresentation('opentray', rect, options.readRuntime().viewportWidth))
+        options.onNativeGeometry?.()
         const onGeometryChange = (event: OpenTrayGeometryEvent) => {
           if (selectedGeneration !== generation) return
           publish(
@@ -176,6 +187,11 @@ export function createAppTitlebarPresentationOwner(options: {
       } catch {
         if (selectedGeneration === generation) report()
       }
+      return
+    }
+
+    if (nativeWindow) {
+      publish(titlebarPresentation('native-frame', null, runtime.viewportWidth))
       return
     }
 

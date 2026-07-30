@@ -1,11 +1,15 @@
 /**
  * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
- * 1. Configure the hosted App, PWA assets, and development shell endpoints.
+ * 1. Configure hosted App, PWA, CLI runtime projection, and development endpoints.
  * 2. Resolve browser-safe workspace source entries, including the Store mutation protocol.
+ * 3. Generate platform-native App identity assets from the canonical brand symbol.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Owner direction (2026-07-29): the bundled App consumes the shared daemon control contract.
+ * Owner correction (2026-07-30): every App build projects its assets into the CLI package.
+ * Owner correction (2026-07-30): App identity assets are owned by openTrayAppIconPlugin.
  */
+import { openTrayAppIconPlugin } from '@opentray/vite-plugin'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { createHash } from 'node:crypto'
@@ -68,7 +72,21 @@ export default defineConfig({
   define: {
     __OPENSPECUI_APP_SHELL_REVISION__: JSON.stringify(collectHostedShellRevisionSeed(__dirname)),
   },
-  plugins: [react(), tailwindcss(), hostedAppDevPlugin(), hostedAppPlugin()],
+  plugins: [
+    openTrayAppIconPlugin({
+      sourcePath: resolve(__dirname, 'public/icon.svg'),
+      outputPath: resolve(__dirname, 'public/native-icons/app-icon.png'),
+      icnsOutputPath: resolve(__dirname, 'public/native-icons/app-icon.icns'),
+      icoOutputPath: resolve(__dirname, 'public/native-icons/app-icon.ico'),
+      linuxOutputDirectory: resolve(__dirname, 'public/native-icons/linux'),
+      manifestOutputPath: resolve(__dirname, 'public/native-icons/app-icon.json'),
+      cachePath: resolve(__dirname, 'node_modules/.cache/opentray/app-icon.json'),
+    }),
+    react(),
+    tailwindcss(),
+    hostedAppDevPlugin(),
+    hostedAppPlugin(),
+  ],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),

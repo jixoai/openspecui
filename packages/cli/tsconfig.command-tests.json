@@ -17,6 +17,8 @@
     "src/daemon-server.test.ts",
     "src/local-app-server.test.ts",
     "src/opentray-daemon-presenter.test.ts",
+    "src/opentray-app-launch.test.ts",
+    "src/opentray-brand-assets.test.ts",
     "src/serve-presentation-plan.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts",
     "../server/src/huggingface-transformers.d.ts"
