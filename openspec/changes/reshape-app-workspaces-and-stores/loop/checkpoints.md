@@ -131,8 +131,13 @@ Production owners: focused CLI daemon child/control modules and pure App state m
 - [ ] 3.5 Replace the old persisted shape without migration glue; reject malformed external storage input through
       runtime parsing.
 - [ ] 3.6 Implement pure open/focus/close/reorder transitions that preserve stable Workspace and iframe keys.
-- [ ] 3.7 Implement daemon admission/dismissal transitions: new id auto-opens once, unchanged snapshot does not
+- [~] 3.7 Implement daemon admission/dismissal transitions: new id auto-opens once, unchanged snapshot does not
       reopen, explicit launcher Open clears dismissal, disappearance retires runtime candidate, new id may auto-open.
+      Partial 2026-07-30: `packages/app/src/lib/daemon-workspace-admission.ts` is the pure credential-free
+      reducer implementing every named transition (admit-once, no-reopen-after-dismiss, clear-on-open, retire-on-
+      disappear, fresh-admit-on-reappear). `daemon-workspace-admission.test.ts` proves each transition plus the
+      mutation-resistance guard. REMAINING: wire the reducer into the `AppDaemonWorkspaceOwner` React boundary so
+      the current `applyHostedLaunchRequest`-every-snapshot path consumes these decisions instead of blanket-applying.
 - [ ] 3.8 Preserve credential binding only in the existing locator-owned runtime memory owner.
 - [ ] 3.9 Preserve same-window and cross-window convergence for credential-free manual candidates and open
       Workspace presentation.
