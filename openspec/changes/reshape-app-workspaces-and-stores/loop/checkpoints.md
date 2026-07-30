@@ -83,16 +83,42 @@ Production owners: focused CLI daemon child/control modules and pure App state m
       favorite ordering independent of recency/runtime. `selectWorkspaceDirectoryCatalogView` projects
       Favorites-then-recent. Checked `workspace-directory-catalog.test.ts` proves no
       credential/URL/port/generation/pid leakage, favorite independence, and malformed rejection.
-- [ ] 3.0b Physically canonicalize and validate the directory before spawn; single-flight concurrent aliases and key
+- [ ] 3.0 Add checked red evidence that the current daemon cannot start one project from an authenticated directory
+      intent and current persistence has no canonical favorite/recent catalog.
+      (Characterized 2026-07-30: the current daemon protocol exposes only `register-workspace` and has no
+      `start-managed-project` command; `daemon-server.ts` routes presentation only and never spawns. The new
+      `managed-project-owner.test.ts` "remote-caller" and "invalid-directory" cases prove a start request is rejected
+      before spawn, and `daemon-server.test.ts` "rejects managed-project start when the daemon owns no managed control"
+      proves the unsupported-delivery boundary. 3.0a catalog covers the missing-persistence half.)
+- [x] 3.0b Physically canonicalize and validate the directory before spawn; single-flight concurrent aliases and key
       managed ownership by physical identity.
-- [ ] 3.0c Start only a fixed internal serve plan, await readiness, admit one lease, and expose concrete startup state;
+      Delivered 2026-07-30: `managed-project-owner.ts` keys children by `canonicalProjectDir`, single-flights concurrent
+      starts per identity, and rejects invalid/non-directory targets before spawn. Production canonicalizer
+      (`canonicalizeProjectDirectory`) resolves `fs.realpath` + `stat.isDirectory`. `managed-project-owner.test.ts`
+      proves symlink/repeat alias join one child and concurrent submissions spawn exactly once.
+- [x] 3.0c Start only a fixed internal serve plan, await readiness, admit one lease, and expose concrete startup state;
       reject caller-supplied command vectors and remote App authority.
-- [ ] 3.0d Implement exact managed Stop, daemon-stop child settlement, and restart-only capture/restore of the
+      Delivered 2026-07-30: `createProductionManagedSpawner` runs the fixed `startServer` plan (projectDir +
+      accessGateCredential + webAssetsDir only; no caller argv/port; `open:false`) and the owner admits one Workspace
+      lease per settled startup. Remote callers are rejected before canonicalization. `daemon-protocol.ts` adds the
+      authenticated `start-managed-project`/`stop-managed-project` commands and `managed-project-started/stopped`
+      wire data; `daemon-server.ts` delegates to an injected `DaemonManagedProjectControl` and rejects when absent.
+- [x] 3.0d Implement exact managed Stop, daemon-stop child settlement, and restart-only capture/restore of the
       previously running managed directory set.
-- [ ] 3.0e Extend external serve leases with optional owner-handled shutdown; never infer or signal an external
+      Delivered 2026-07-30: `ManagedProjectOwner.stop(generation)` targets exactly one generation (rejects stale);
+      `settleAllForDaemonStop()` retires every managed child on daemon teardown; `captureManagedDirectorySet()` +
+      `restoreManagedDirectorySet()` restore the captured set exactly once (alreadyRunning joins without respawning).
+      `daemon-server.ts` close() calls `settleAllForDaemonStop()`. Proven across owner + daemon-server tests.
+- [x] 3.0e Extend external serve leases with optional owner-handled shutdown; never infer or signal an external
       process. Without capability, expose presentation Close only.
-- [ ] 3.0f Add mutation-resistance evidence for physical-path duplicate gating, managed-child cleanup, restart
+      Delivered 2026-07-30: `external-serve-shutdown.ts` defines `ExternalServeShutdownCapability` and
+      `resolveExternalServeTaskCommand` — Stop is offered only when the exact current lease advertises owner-handled
+      shutdown; absence resolves to presentation Close only and never infers/signals a process.
+      `external-serve-shutdown.test.ts` proves delegation, the unsupported boundary, and the unavailable boundary.
+- [x] 3.0f Add mutation-resistance evidence for physical-path duplicate gating, managed-child cleanup, restart
       restoration, and external-owner isolation.
+      Delivered 2026-07-30: `managed-project-owner.test.ts` mutation-resistance suite proves canonical-dedupe gating,
+      generation-keyed Stop isolation, lease-failure cleanup does not leak a child, and restart restore-once.
 
 - [ ] 3.1 Add checked red fixtures proving the current `HostedShellState.tabs` collection simultaneously owns
       persisted connections and mounted Workspaces.

@@ -15,8 +15,8 @@ Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果
 
 ## Implementation State
 
-Planning is apply-ready. P1 typed-public-contract code (checkpoints 6.1–6.2) has landed; the remaining
-P2–P9 production owners have not started.
+Planning is apply-ready. P1 typed-public-contract code (6.1–6.2) and the P2 managed-project backend
+(3.0a–3.0f) have landed and are checked; the remaining P3–P9 production owners have not started.
 
 ```text
 Product decision       approved by manager
@@ -24,11 +24,28 @@ Official CLI research complete against references/openspec v1.6.0
 App ownership research complete against current feat/opentray-app-mode worktree
 Workspace lifecycle correction approved by manager
 P1 typed contracts     landed (Store-content capability + browser-safe projection schemas + checked fixtures)
-P2–P9 production code  not started
-Focused red evidence   P1 green captured; remaining owners not yet captured
-Focused green evidence P1 captured (6.1–6.2); remaining owners not yet captured
+P2 managed backend     landed (directory catalog 3.0a; managed owner + daemon IPC + Stop/restart 3.0b–3.0f)
+P3–P9 production code  not started
+Focused red evidence   P1+P2 green captured; remaining owners not yet captured
+Focused green evidence P1 (6.1–6.2) + P2 (3.0a, 3.0b–3.0f) captured; remaining owners not yet captured
 Owner walkthrough      reserved for final handoff
 ```
+
+P2 managed-project backend verification on 2026-07-30:
+
+- `managed-project-owner.test.ts` (14 tests): canonical dedupe/single-flight (3.0b), fixed-plan
+  authenticated-local-App-only + readiness/lease (3.0c), exact Stop + daemon-stop + restart
+  restore-once (3.0d), and mutation-resistance for dedupe/Stop-keyed/lease-cleanup (3.0f).
+- `daemon-server.test.ts` (12 tests, +5 managed): authenticated start/stop delegation, structured
+  rejection wire codes, unsupported-delivery rejection, and daemon-teardown child settlement.
+- `external-serve-shutdown.test.ts` (5 tests): capability-advertised Stop delegation and the
+  close-only boundary when a lease omits/unavailable owner-handled shutdown (3.0e).
+- `openspecui typecheck` (incl. `tsconfig.command-tests.json` checked lane) passes; the
+  `managed-project-production.ts` module wires the fixed `startServer` plan, `fs.realpath`
+  canonicalization, and the owner→daemon control adapter.
+- `daemon-protocol.ts` adds the versioned `start-managed-project`/`stop-managed-project` commands and
+  `managed-project-started`/`managed-project-stopped` wire data with structured error codes; existing
+  daemon workspaces, status, and presentation flows are unchanged.
 
 Planning verification on 2026-07-30:
 

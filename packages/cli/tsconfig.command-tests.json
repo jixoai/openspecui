@@ -1,7 +1,8 @@
 {
-  // Orthogonal intents (created 2026-07-29 Asia/Shanghai):
-  // 1. Typecheck CLI command, daemon, App-control, OpenTray presentation, and prompt evidence instead of relying on transpilation.
+  // Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+  // 1. Typecheck CLI command, daemon, App-control, OpenTray presentation, prompt, and managed-project owner evidence instead of relying on transpilation.
   // Original request (2026-07-29): "openspecui --web == openspecui serve --web。"
+  // Original request (2026-07-30): "关键是，支持直接从目录直接启动 openspecui 服务。"
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "types": ["node", "vitest/globals"]
@@ -12,10 +13,12 @@
     "src/cli-command.test.ts",
     "src/cli-documentation.test.ts",
     "src/cli-execution.test.ts",
+    "src/external-serve-shutdown.test.ts",
     "src/daemon-paths.test.ts",
     "src/daemon-controller.test.ts",
     "src/daemon-server.test.ts",
     "src/local-app-server.test.ts",
+    "src/managed-project-owner.test.ts",
     "src/opentray-daemon-presenter.test.ts",
     "src/opentray-app-launch.test.ts",
     "src/opentray-brand-assets.test.ts",

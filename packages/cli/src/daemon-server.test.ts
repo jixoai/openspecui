@@ -1,18 +1,24 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Prove IPC bind ownership, mode-0600 Unix endpoints, and stale-socket recovery.
  * 2. Prove Workspace credentials remain private while opaque-id browser actions resolve server-side.
  * 3. Prove stop tears down only daemon host and endpoint state.
  * 4. Prove endpoint authority is released even when host teardown reports a failure.
+ * 5. Prove the authenticated managed-project start/stop IPC surface delegates to its owner and rejects without one.
  *
  * Original request (2026-07-29): "daemon 不应该拥有或关闭每个 backend。"
+ * Original request (2026-07-30): "关键是，支持直接从目录直接启动 openspecui 服务。"
  */
 import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DaemonPresentationHost, RunningDaemonServer } from './daemon-server.js'
+import type {
+  DaemonManagedProjectControl,
+  DaemonPresentationHost,
+  RunningDaemonServer,
+} from './daemon-server.js'
 import { DaemonAlreadyRunningError, startDaemonServer } from './daemon-server.js'
 import { createDaemonWorkspaceLease, sendDaemonCommand } from './daemon-transport.js'
 
@@ -42,7 +48,11 @@ function createHost() {
   return { host, opened, activate, close }
 }
 
-async function startFixture(tempDir: string, host: DaemonPresentationHost) {
+async function startFixture(
+  tempDir: string,
+  host: DaemonPresentationHost,
+  options?: { managedProject?: DaemonManagedProjectControl }
+) {
   const runDir = join(tempDir, 'run')
   const endpoint = join(runDir, 'daemon.sock')
   const server = await startDaemonServer({
@@ -51,10 +61,35 @@ async function startFixture(tempDir: string, host: DaemonPresentationHost) {
     version: '6.1.0',
     hostMode: 'web',
     host,
+    managedProject: options?.managedProject,
     platform: 'darwin',
   })
   runningServers.push(server)
   return { server, endpoint, runDir }
+}
+
+function createManagedControl() {
+  const start = vi.fn<DaemonManagedProjectControl['start']>(async (rawProjectDir: string) => {
+    return {
+      ok: true as const,
+      startup: {
+        canonicalProjectDir: `/real${rawProjectDir}`,
+        backendUrl: 'http://127.0.0.1:3100',
+        credential: 'managed-cred',
+        generation: 1,
+      },
+      alreadyRunning: false,
+    }
+  })
+  const stop = vi.fn<DaemonManagedProjectControl['stop']>(async (generation: number) => ({
+    ok: true as const,
+    generation,
+  }))
+  const settleAllForDaemonStop = vi.fn<DaemonManagedProjectControl['settleAllForDaemonStop']>(
+    async () => {}
+  )
+  const control: DaemonManagedProjectControl = { start, stop, settleAllForDaemonStop }
+  return { control, start, stop, settleAllForDaemonStop }
 }
 
 describe('daemon IPC server', () => {
@@ -302,4 +337,106 @@ describe('daemon IPC server', () => {
       await cleanupTempDir(tempDir)
     }
   }, 500)
+
+  it('delegates an authenticated managed-project start to its owner and returns concrete startup', async () => {
+    const tempDir = await createTempDir()
+    try {
+      const harness = createHost()
+      const managed = createManagedControl()
+      const { endpoint } = await startFixture(tempDir, harness.host, {
+        managedProject: managed.control,
+      })
+      const response = await sendDaemonCommand({
+        endpoint,
+        command: { type: 'start-managed-project', projectDir: '/projects/managed' },
+      })
+      expect(response).toMatchObject({
+        kind: 'managed-project-started',
+        startup: {
+          canonicalProjectDir: '/real/projects/managed',
+          backendUrl: 'http://127.0.0.1:3100',
+          generation: 1,
+          alreadyRunning: false,
+        },
+      })
+      expect(managed.start).toHaveBeenCalledWith('/projects/managed')
+      // A start publishes the replacement Workspace ledger.
+      expect(harness.host.setWorkspaces).toHaveBeenCalled()
+    } finally {
+      await cleanupTempDir(tempDir)
+    }
+  })
+
+  it('delegates an authenticated managed-project Stop to its owner by exact generation', async () => {
+    const tempDir = await createTempDir()
+    try {
+      const harness = createHost()
+      const managed = createManagedControl()
+      const { endpoint } = await startFixture(tempDir, harness.host, {
+        managedProject: managed.control,
+      })
+      const response = await sendDaemonCommand({
+        endpoint,
+        command: { type: 'stop-managed-project', generation: 7 },
+      })
+      expect(response).toMatchObject({ kind: 'managed-project-stopped', generation: 7 })
+      expect(managed.stop).toHaveBeenCalledWith(7)
+    } finally {
+      await cleanupTempDir(tempDir)
+    }
+  })
+
+  it('surfaces a managed-project rejection with its structured wire error code', async () => {
+    const tempDir = await createTempDir()
+    try {
+      const harness = createHost()
+      const managed = createManagedControl()
+      managed.start.mockResolvedValueOnce({
+        ok: false,
+        code: 'MANAGED_PROJECT_INVALID_DIRECTORY',
+        message: 'not a directory',
+      })
+      const { endpoint } = await startFixture(tempDir, harness.host, {
+        managedProject: managed.control,
+      })
+      await expect(
+        sendDaemonCommand({
+          endpoint,
+          command: { type: 'start-managed-project', projectDir: '/bad' },
+        })
+      ).rejects.toThrow('not a directory')
+    } finally {
+      await cleanupTempDir(tempDir)
+    }
+  })
+
+  it('rejects managed-project start when the daemon owns no managed control (unsupported delivery)', async () => {
+    const tempDir = await createTempDir()
+    try {
+      const harness = createHost()
+      // No managedProject provided: standalone/remote App delivery with no local daemon authority.
+      const { endpoint } = await startFixture(tempDir, harness.host)
+      await expect(
+        sendDaemonCommand({
+          endpoint,
+          command: { type: 'start-managed-project', projectDir: '/projects/x' },
+        })
+      ).rejects.toThrow('does not own managed project services')
+    } finally {
+      await cleanupTempDir(tempDir)
+    }
+  })
+
+  it('settles managed children during daemon teardown', async () => {
+    const tempDir = await createTempDir()
+    try {
+      const harness = createHost()
+      const managed = createManagedControl()
+      const fixture = await startFixture(tempDir, harness.host, { managedProject: managed.control })
+      await fixture.server.close()
+      expect(managed.settleAllForDaemonStop).toHaveBeenCalledTimes(1)
+    } finally {
+      await cleanupTempDir(tempDir)
+    }
+  })
 })

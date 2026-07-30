@@ -41,6 +41,41 @@ export interface DaemonPresentationHost {
   close(): Promise<void>
 }
 
+/** Daemon wire error codes a managed-project control surface may emit. */
+export type DaemonManagedProjectErrorCode =
+  | 'MANAGED_PROJECT_INVALID_DIRECTORY'
+  | 'MANAGED_PROJECT_REMOTE_CALLER'
+  | 'MANAGED_PROJECT_SPAWN_FAILED'
+  | 'MANAGED_PROJECT_GENERATION_MISMATCH'
+
+/**
+ * Authenticated managed-project control delegated to the daemon IPC server. The server forwards
+ * directory-start/stop intents to this owner; it never spawns children itself. External foreground
+ * `serve` leases remain physically distinct and are never adopted through this surface.
+ */
+export interface DaemonManagedProjectControl {
+  start(rawProjectDir: string): Promise<
+    | {
+        ok: true
+        startup: {
+          canonicalProjectDir: string
+          backendUrl: string
+          credential: string | null
+          generation: number
+        }
+        alreadyRunning: boolean
+      }
+    | { ok: false; code: DaemonManagedProjectErrorCode; message: string }
+  >
+  stop(
+    generation: number
+  ): Promise<
+    | { ok: true; generation: number }
+    | { ok: false; code: DaemonManagedProjectErrorCode; message: string }
+  >
+  settleAllForDaemonStop(): Promise<void>
+}
+
 export interface RunningDaemonServer {
   status: DaemonStatus
   closed: Promise<void>
@@ -123,6 +158,11 @@ export async function startDaemonServer(options: {
   version: string
   hostMode: DaemonHostMode
   host: DaemonPresentationHost
+  /**
+   * Optional authenticated managed-project control. When absent, managed start/stop commands are
+   * rejected as unsupported (e.g. a standalone/remote App delivery with no local daemon authority).
+   */
+  managedProject?: DaemonManagedProjectControl
   platform?: NodeJS.Platform
 }): Promise<RunningDaemonServer> {
   const platform = options.platform ?? process.platform
@@ -210,6 +250,75 @@ export async function startDaemonServer(options: {
                 ok: true,
                 data: { kind: 'ack' },
               }
+            } else if (command.type === 'start-managed-project') {
+              if (!options.managedProject) {
+                response = {
+                  protocol: DAEMON_PROTOCOL_VERSION,
+                  id: request.id,
+                  ok: false,
+                  error: {
+                    code: 'MANAGED_PROJECT_REMOTE_CALLER',
+                    message: 'This App daemon does not own managed project services.',
+                  },
+                }
+              } else {
+                const result = await options.managedProject.start(command.projectDir)
+                if (result.ok) {
+                  await publishWorkspaces()
+                  response = {
+                    protocol: DAEMON_PROTOCOL_VERSION,
+                    id: request.id,
+                    ok: true,
+                    data: {
+                      kind: 'managed-project-started',
+                      startup: {
+                        canonicalProjectDir: result.startup.canonicalProjectDir,
+                        backendUrl: result.startup.backendUrl,
+                        credential: result.startup.credential,
+                        generation: result.startup.generation,
+                        alreadyRunning: result.alreadyRunning,
+                      },
+                    },
+                  }
+                } else {
+                  response = {
+                    protocol: DAEMON_PROTOCOL_VERSION,
+                    id: request.id,
+                    ok: false,
+                    error: { code: result.code, message: result.message },
+                  }
+                }
+              }
+            } else if (command.type === 'stop-managed-project') {
+              if (!options.managedProject) {
+                response = {
+                  protocol: DAEMON_PROTOCOL_VERSION,
+                  id: request.id,
+                  ok: false,
+                  error: {
+                    code: 'MANAGED_PROJECT_REMOTE_CALLER',
+                    message: 'This App daemon does not own managed project services.',
+                  },
+                }
+              } else {
+                const result = await options.managedProject.stop(command.generation)
+                if (result.ok) {
+                  await publishWorkspaces()
+                  response = {
+                    protocol: DAEMON_PROTOCOL_VERSION,
+                    id: request.id,
+                    ok: true,
+                    data: { kind: 'managed-project-stopped', generation: result.generation },
+                  }
+                } else {
+                  response = {
+                    protocol: DAEMON_PROTOCOL_VERSION,
+                    id: request.id,
+                    ok: false,
+                    error: { code: result.code, message: result.message },
+                  }
+                }
+              }
             } else if (command.type === 'unregister-workspace') {
               workspaces.delete(command.workspaceId)
               await publishWorkspaces()
@@ -295,6 +404,11 @@ export async function startDaemonServer(options: {
       }
       for (const socket of sockets) socket.destroy()
       await attempt(() => new Promise<void>((resolve) => server.close(() => resolve())))
+      // Settle every daemon-managed project child before releasing presentation. External foreground
+      // `serve` leases are untouched; they remain owned by their own processes.
+      if (options.managedProject) {
+        await attempt(() => options.managedProject!.settleAllForDaemonStop())
+      }
       workspaces.clear()
       await attempt(async () => void (await publishWorkspaces()))
       await attempt(() => options.host.close())
