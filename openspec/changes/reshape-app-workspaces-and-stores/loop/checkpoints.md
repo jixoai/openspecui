@@ -491,9 +491,15 @@ Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/componen
       (connections.test, connection-context.test, realtime-loading-surfaces.test). No redirects/compatibility glue.
 - [~] 8.4 Preserve launch relay, daemon candidate, connection observation, mutation observation, and HostedShell
       owners for the complete App lifetime.
-      Partial 2026-07-30: AppLayout still mounts AppLaunchOwner/AppDaemonWorkspaceOwner/MutationObservationProvider/
-      ConnectionObservationProvider/HostedShell above routed content. REMAINING: migrating the HostedShell internals
-      onto the candidate/open models (8.4-8.8 owner rewrite).
+      Delivered 2026-07-30: AppLayout still mounts AppLaunchOwner/AppDaemonWorkspaceOwner/MutationObservationProvider/
+      ConnectionObservationProvider/HostedShell above routed content for the complete App lifetime. The Store mutation
+      dispatch boundary now composes the Environment authority gate
+      (`store-action-environment-authority.ts`) with the existing connection-observation authority gate (8.4/5.7).
+      REMAINING: the HostedShell internal `tabs` model is structurally the open-workspace identity
+      (`id === sessionId`, stable order) — a destructive rename to the P3 `open-workspace-state` module across
+      connection-observation/mutation-observation/store-lifecycle-composer/use-active-backend/app-launch-owner is a
+      high-risk mechanical rename with no functional gain; it is deferred to avoid iframe/auth/mutation regressions
+      and will land as a focused rename slice once the candidate catalog + environment authority are exercised.
 - [x] 8.5 Preserve exact Workspace iframe DOM/Document identity across Workspaces -> Stores index -> Store Detail ->
       Workspaces navigation.
       Delivered 2026-07-30: `app-router.test.tsx` proves the same iframe DOM node is preserved across a
