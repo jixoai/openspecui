@@ -47,8 +47,10 @@ style: {
 ```
 
 - OpenTray's window law is retained-session based. The first `show()` bootstraps width, height, content, style, and native capability. Later activation uses `toVisible()` and `focus()`; `close()` hides while retaining page state; `destroy()` is final teardown.
+- `style.appMode: true` is not a complete application lifecycle by itself. Native mode must persist an explicit shell-free `appLaunch` vector to the public `openspecui start` lifecycle entry; otherwise OpenTray snapshots the internal detached-daemon invocation, whose private bootstrap environment is unavailable during a later cold Dock launch. Web mode has no native app window and therefore publishes no `appLaunch`. Warm Dock reopen remains owned by the WebView extension's most-recently-active appMode selection rather than a duplicate consumer listener.
 - OpenTray `App`, `Tray`, and WebView extension state are owned by the live caller session. Disconnect cleanup removes caller-owned visible state. Equal `appId` values do not authorize several `serve` processes to share one WebView session. A separate long-lived App daemon is therefore required.
 - `navigator.opentrayWindow.overlay.getTitlebarAreaRect()`, `overlay.listen('geometrychange', ...)`, and `startAppRegionDrag()` are asynchronous OpenTray APIs. Browser/PWA `navigator.windowControlsOverlay` is a different synchronous/event-target API. They require adapters into one App-shell state rather than structural duck typing.
+- The `../skill-creator-v2` titlebar keeps a fixed 32px application row and uses overlay geometry only to derive horizontal control-safe padding. A positive left/right control inset receives an additional 4px content margin; before geometry settles, each edge retains an 8px fallback. The overlay rectangle height is observation evidence, not permission to expand the product titlebar.
 - The reference implementation enables content overlay on macOS and retains the native frame on Windows. Linux/headless cannot load the native WebView extension and must use Web presentation.
 
 ### Distribution and configuration
