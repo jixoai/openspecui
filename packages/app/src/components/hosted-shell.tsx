@@ -38,7 +38,6 @@ import {
   activateHostedTab,
   applyHostedLaunchRequest,
   buildHostedEmbeddedUiUrl,
-  getHostedTabLabel,
   normalizeHostedApiBaseUrl,
   removeHostedTab,
   reorderHostedTabs,
@@ -46,6 +45,7 @@ import {
   type HostedShellTab,
 } from '../lib/shell-state'
 import { useConnections, useConnectionsActions } from '../lib/use-connections'
+import { selectWorkspacePathLabel } from '../lib/workspace-path-label'
 import { useAppDaemonWorkspace } from './app-daemon-workspace-owner'
 import { useAppLaunchError } from './app-launch-owner'
 import { HostedShellThemeBootstrap } from './hosted-shell-theme'
@@ -66,6 +66,8 @@ interface HostedShellProps {
 interface HostedTabRuntimeState {
   reachability: HostedTabReachability
   projectName: string | null
+  /** Canonical project directory from backend health; used for path-first tab labels. */
+  projectDir: string | null
   openspecuiVersion: string | null
   embeddedUiUrl: string | null
   errorMessage: string | null
@@ -108,6 +110,7 @@ interface HostedShellTabContentProps {
 const DEFAULT_RUNTIME_STATE: HostedTabRuntimeState = {
   reachability: 'checking',
   projectName: null,
+  projectDir: null,
   openspecuiVersion: null,
   embeddedUiUrl: null,
   errorMessage: null,
@@ -253,7 +256,11 @@ export function HostedShellTabContent({
   onFrameLoad,
   onFrameError,
 }: HostedShellTabContentProps) {
-  const title = runtime.projectName ?? getHostedTabLabel(tab)
+  const pathLabel =
+    runtime.projectDir !== null
+      ? selectWorkspacePathLabel({ projectPath: runtime.projectDir, git: null })
+      : null
+  const title = pathLabel?.title ?? runtime.projectName ?? tab.apiBaseUrl
   const iframeTitle = `Hosted OpenSpec UI ${title}`
   const iframeSrc = buildHostedTabIframeSrc(tab, runtime)
   const showInlineError =
@@ -381,7 +388,14 @@ function createHostedShellTab(props: {
   isOpeningInBrowser: boolean
   onOpenInBrowser: (workspaceId: string) => void
 }): Tab {
-  const title = props.runtime.projectName ?? getHostedTabLabel(props.tab)
+  // Path-first label: verified GitHub org/repo or directory basename when projectDir is known;
+  // fall back to projectName. host/port stays diagnostic-only (not the primary tab label).
+  const pathLabel =
+    props.runtime.projectDir !== null
+      ? selectWorkspacePathLabel({ projectPath: props.runtime.projectDir, git: null })
+      : null
+  const title = pathLabel?.title ?? props.runtime.projectName ?? props.tab.apiBaseUrl
+  const subtitle = pathLabel?.subtitle ?? pathLabel?.detail ?? props.tab.apiBaseUrl
 
   return {
     id: props.tab.id,
@@ -411,9 +425,7 @@ function createHostedShellTab(props: {
             )}
             <span className="font-nav min-w-0 truncate text-xs">{title}</span>
           </span>
-          <span className="text-muted-foreground max-w-72 truncate text-[10px]">
-            {props.tab.apiBaseUrl}
-          </span>
+          <span className="text-muted-foreground max-w-72 truncate text-[10px]">{subtitle}</span>
         </span>
       </div>
     ),
@@ -594,6 +606,7 @@ function HostedShellRuntime({
           {
             reachability,
             projectName: health?.projectName ?? null,
+            projectDir: health?.projectDir ?? null,
             openspecuiVersion: health?.openspecuiVersion ?? null,
             embeddedUiUrl:
               reachability !== 'unsupported' && reachability !== 'authentication-required'
@@ -938,8 +951,13 @@ function HostedShellRuntime({
       document.title = 'OpenSpec UI App'
       return
     }
-    const title = activeRuntime?.projectName ?? getHostedTabLabel(activeHostedTab)
-    document.title = `${title} - OpenSpec UI App`
+    const activePathLabel =
+      activeRuntime?.projectDir !== null && activeRuntime?.projectDir !== undefined
+        ? selectWorkspacePathLabel({ projectPath: activeRuntime.projectDir, git: null })
+        : null
+    const activeTitle =
+      activePathLabel?.title ?? activeRuntime?.projectName ?? activeHostedTab.apiBaseUrl
+    document.title = `${activeTitle} - OpenSpec UI App`
   }, [activeHostedTab, activeRuntime])
 
   const tabs = useMemo(

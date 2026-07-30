@@ -203,6 +203,7 @@ describe('HostedShell', () => {
         runtime={{
           reachability: 'online',
           projectName: 'opsx-project',
+          projectDir: '/tmp/opsx-project',
           openspecuiVersion: '2.0.2',
           embeddedUiUrl: 'http://localhost:3100/dashboard',
           errorMessage: null,
@@ -235,6 +236,7 @@ describe('HostedShell', () => {
         runtime={{
           reachability: 'checking',
           projectName: null,
+          projectDir: null,
           openspecuiVersion: null,
           embeddedUiUrl: null,
           errorMessage: null,
@@ -464,7 +466,7 @@ describe('HostedShell', () => {
     expect(betaPanel?.getAttribute('data-tab-panel-state')).toBe('inactive')
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /beta.*localhost:3200/i }))
+      fireEvent.click(screen.getByRole('button', { name: /beta.*\/tmp\/beta/i }))
     })
 
     expect(alphaFrame?.src).toContain('session=session-alpha')
