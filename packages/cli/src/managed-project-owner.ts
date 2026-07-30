@@ -249,7 +249,7 @@ export function createManagedProjectOwner(
 
     async settleAllForDaemonStop() {
       const results: ManagedProjectStopResult[] = []
-      for (const [key, child] of [...childrenByKey.entries()]) {
+      for (const [key, child] of childrenByKey.entries()) {
         await child.lease.close().catch(() => {})
         childrenByKey.delete(key)
         results.push({ ok: true, generation: child.startup.generation })

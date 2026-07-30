@@ -38,9 +38,7 @@ export interface StoreEnvironmentAuthorityContext {
 }
 
 /** Resolve the current Environment authority for the Store action dispatch boundary. */
-export function resolveStoreEnvironmentAuthority(
-  context: StoreEnvironmentAuthorityContext
-):
+export function resolveStoreEnvironmentAuthority(context: StoreEnvironmentAuthorityContext):
   | {
       kind: 'authority'
       authority: EnvironmentActionAuthority
