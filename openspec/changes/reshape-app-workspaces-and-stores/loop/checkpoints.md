@@ -160,20 +160,40 @@ Production owners: focused CLI daemon child/control modules and pure App state m
       `AppDaemonWorkspaceOwner` holds the admission state ref and reduces each snapshot; opening/focusing is now
       admission-driven. `daemon-workspace-admission.test.ts` proves each transition + mutation-resistance;
       `app-daemon-workspace-owner.test.ts` proves the production no-reopen boundary.
-- [ ] 3.8 Preserve credential binding only in the existing locator-owned runtime memory owner.
-- [ ] 3.9 Preserve same-window and cross-window convergence for credential-free manual candidates and open
+- [x] 3.8 Preserve credential binding only in the existing locator-owned runtime memory owner.
+      Confirmed 2026-07-30: `workspace-credential-isolation.test.ts` proves the credential stays only in the
+      locator-owned `launch-credential.ts` runtime Map and never enters persisted candidate catalog, open-workspace
+      state, or legacy shell state. The new candidate/open models carry no credential fields by construction.
+- [x] 3.9 Preserve same-window and cross-window convergence for credential-free manual candidates and open
       Workspace presentation.
-- [ ] 3.10 Add mutation-resistance evidence by bypassing/removing the dismissal transition and proving the named
+      Confirmed 2026-07-30: `workspace-cross-window-convergence.test.ts` proves a manual candidate written in one
+      window converges into another via the candidate-catalog storage key, open-Workspace presentation converges
+      credential-free, and credential-leaking payloads are rejected during convergence. `use-workspace-candidates.ts`
+      provides the reactive store mirroring the shell-state storage-event convergence pattern.
+- [x] 3.10 Add mutation-resistance evidence by bypassing/removing the dismissal transition and proving the named
       unchanged-snapshot test fails for unwanted reopen.
+      Delivered 2026-07-30: `daemon-workspace-admission.test.ts` mutation-resistance suite proves removing the
+      dismissal guard would reopen a closed Workspace; `app-daemon-workspace-owner.test.ts` proves the production
+      no-reopen boundary. `workspace-iframe-continuity.test.ts` proves the stable id (iframe key) is preserved
+      across open/focus/reorder/close and a persist->reload->reopen navigation round-trip.
 
 Green evidence:
 
-- [ ] 3.11 Checked unit tests prove candidate/open separation, stable identity, duplicate suppression, close/reopen,
+- [x] 3.11 Checked unit tests prove candidate/open separation, stable identity, duplicate suppression, close/reopen,
       daemon disappearance/reappearance, malformed storage rejection, and zero credential persistence.
+      Delivered 2026-07-30: candidate-catalog (7), open-workspace-state (9), daemon-workspace-admission (7),
+      app-daemon-workspace-owner (4), credential-isolation (1), cross-window-convergence (3), iframe-continuity (3),
+      shell-state-dual-ownership red (2). All green; app typecheck passes.
 - [ ] 3.11a Checked CLI/App tests prove canonical path aliases join one managed child, failed starts do not enter
       history, favorites survive Stop, tab Close keeps the service running, Stop is generation-exact, daemon stop
       spares external serve, restart restores once, and stale/unsupported external Stop is rejected.
-- [ ] 3.12 Focused review passes before Workspace Launcher UI work begins.
+- [~] 3.12 Focused review passes before Workspace Launcher UI work begins.
+      2026-07-30: focused red/green + mutation-resistance evidence is captured across 3.0–3.11 (P2 backend, P3
+      admission reducer + candidate/open separation + credential isolation + cross-window convergence + iframe
+      continuity). Formal focused-review sign-off remains the owner/reviewer gate; the remaining hosted-shell
+      owner rewrite (migrating the tabId-keyed reachability observation + mutation authority consumers onto the new
+      models) is sequenced as part of the navigation-retirement slice (P8) because it must move observation and Store
+      authority in lockstep to avoid breaking iframe/auth/mutation bindings.
 
 ## 4. Workspace Home, Running Navigation, Task Manager, and Launcher
 
