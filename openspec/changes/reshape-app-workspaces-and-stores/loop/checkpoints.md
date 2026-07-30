@@ -514,11 +514,12 @@ Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/componen
       domain navigation.
       Delivered 2026-07-30: `app-router.tsx` redirects `/` to `/workspaces`; `app-layout.tsx` primary nav is exactly
       Workspaces + Stores. Test proves root redirect + two-domain nav.
-- [~] 8.1a Make Workspaces the only expandable primary item and project every current backend into its secondary
-  navigation without turning Settings, Connections, Environment, or Task Manager into primary domains.
-  Partial 2026-07-30: primary nav is Workspaces + Stores only (Settings utility). REMAINING: Workspaces
-  secondary navigation projecting every running backend uses the P4 running-backend projection (wired with the
-  hosted-shell owner rewrite).
+- [x] 8.1a Make Workspaces the only expandable primary item and project every current backend into its secondary
+      navigation without turning Settings, Connections, Environment, or Task Manager into primary domains.
+      Delivered 2026-07-30: `components/workspaces-secondary-nav.tsx` renders every running backend as an expandable
+      path-first item under Workspaces (no port identity), with health dots, external markers, active highlighting, and
+      focus/open selection. Test (6) proves projection, selection, active mark, external marker, collapse, and empty state.
+      Primary nav is Workspaces + Stores only (Settings utility); Connections/Environment/Task Manager are not primary.
 - [x] 8.1b Register `/workspaces/tasks` as the Home-owned secondary page while preserving fixed Home and mounted
       project iframe identity.
       Delivered 2026-07-30: `/workspaces/tasks` route registered; the static segment takes precedence over dynamic
