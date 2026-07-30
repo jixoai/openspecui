@@ -991,6 +991,7 @@ export async function getConfig(): Promise<OpenSpecUIConfig> {
   const snapshot = await loadSnapshot()
   const defaultConfig: OpenSpecUIConfig = {
     cli: { command: 'openspecui' },
+    appBaseUrl: '',
     theme: 'system',
     codeEditor: {
       theme: 'github',

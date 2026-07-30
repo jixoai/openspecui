@@ -89,6 +89,7 @@ export function runBufferedCommand(options: {
   cwd: string
   env: NodeJS.ProcessEnv
   timeoutMs?: number
+  signal?: AbortSignal
 }): Promise<BufferedSpawnResult> {
   return new Promise((resolve) => {
     const started = spawnSafe(options.command, options.args, {
@@ -121,6 +122,17 @@ export function runBufferedCommand(options: {
         killChild(child)
       }, options.timeoutMs)
       clearTimer = () => clearTimeout(timer)
+    }
+
+    if (options.signal) {
+      const onAbort = () => {
+        killChild(child)
+      }
+      if (options.signal.aborted) {
+        onAbort()
+      } else {
+        options.signal.addEventListener('abort', onAbort, { once: true })
+      }
     }
 
     const finish = (result: BufferedSpawnResult) => {
