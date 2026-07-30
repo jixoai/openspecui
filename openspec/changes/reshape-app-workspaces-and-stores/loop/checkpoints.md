@@ -10,6 +10,7 @@ Original request (2026-07-30): "所有正在运行中的backend都会显示在�
 Original request (2026-07-30): "任务管理器...可以杀掉Workspace，或者收藏、取消收藏"
 Original request (2026-07-30): "弱化端口这个概念，重点强调 path的概念。"
 Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果没有就使用path的foldername；subtitle写git分支名"
+Original request (2026-07-30): "我让另外一个 Agent 做了个开头，但我觉得它们做偏了，请你直接接手任务，review，并真正完成相关工作，我来做最终的 review"
 Owner correction (2026-07-21): "每项先明确一个生产 owner、一个精准红例、一个绿例。focused review 未通过，不跑全量门禁。"
 -->
 
@@ -248,18 +249,18 @@ Production owner: a new `packages/app/src/components/workspace-launcher/` featur
 - [x] 4.4 Make Focus activate the existing exact Workspace without creating a tab/session/frame.
       Delivered 2026-07-30: Focus is emitted only for candidates with an existing open Workspace; the caller
       activates it (no new tab/session/frame in the dialog).
-- [x] 4.5 Make Open create exactly one Workspace and bind loading/error feedback to that row without resizing the
+- [ ] 4.5 Make Open create exactly one Workspace and bind loading/error feedback to that row without resizing the
       Dialog or tab strip.
-      Delivered 2026-07-30: Open emits for reachable non-open candidates; pending locks the row button (loading
-      spinner) without resizing the dialog. The dialog carries an optional error.
+      Reopened 2026-07-30: `HostedShell` passes `pending={[]}` and closes synchronously, so the selector-level
+      loading fixture does not cross the production owner.
 - [x] 4.6 Render checking, offline, authentication-required, unsupported, and concrete operation failures directly;
       do not hide them in Tooltip or rewrite them as generic offline.
       Delivered 2026-07-30: unavailable reasons surface as direct row text (capitalized); no Open/Focus button;
       no Tooltip hiding.
-- [x] 4.7 Move manual URL input into `Connect another backend...`; implement back/cancel/success transitions while
+- [ ] 4.7 Move manual URL input into `Connect another backend...`; implement back/cancel/success transitions while
       preserving list search and live candidate updates.
-      Delivered 2026-07-30: secondary connect mode with back/cancel/connect; search state preserved on return;
-      URL normalized + validated.
+      Reopened 2026-07-30: the secondary form exists, but `HostedShell` persists the candidate and fabricates an
+      open tab before reachability/compatibility succeeds.
 - [x] 4.8 Put forget/remove connection actions in row menus and distinguish them from closing an open Workspace.
       Delivered 2026-07-30: row "More actions" menu offers "Forget connection"; distinct from Focus/Open.
 - [~] 4.9 Preserve keyboard focus, accessible names, Dialog focus trapping, icon tooltips, and loading locks.
@@ -271,7 +272,7 @@ Production owner: a new `packages/app/src/components/workspace-launcher/` featur
 
 Green evidence:
 
-- [x] 4.11 Checked component tests cover candidate list, Focus, Open, duplicate suppression, secondary URL flow,
+- [ ] 4.11 Checked component tests cover candidate list, Focus, Open, duplicate suppression, secondary URL flow,
       unavailable states, live row updates, failure, cancel/back, and focus restoration.
       Delivered 2026-07-30: `workspace-launcher-dialog.test.tsx` (8 tests) covers candidate list (not URL), Focus/Open,
       unavailable, secondary connect + invalid rejection, forget menu, search filter, empty state; selector test (7)
@@ -285,10 +286,8 @@ Green evidence:
       as preparation evidence only.
       Verified 2026-07-30: `workspace-management.browser.test.tsx` renders Home, running navigation, and Launcher at
       320px in Chromium without page overflow. This is preparation evidence, not final App acceptance.
-- [x] 4.13 Focused review passes before navigation retirement.
-      Reviewed 2026-07-30: fixed Home selection, live managed path submission, running navigation, real Task Manager
-      route/actions, path-first labels, shared catalog ownership, and Launcher candidate/open separation all cross
-      their mounted App owners; the App suite and Chromium fixtures pass.
+- [ ] 4.13 Focused review passes before navigation retirement.
+      Reopened 2026-07-30: production Launcher pending/success semantics failed independent review.
 
 ## 5. Environment Selection and Store Authority
 
@@ -477,8 +476,9 @@ Production owners: new focused route/component folders under `packages/app/src/r
       Delivered 2026-07-30: `components/stores-environment-evidence.tsx` renders observed environments, connected
       projects (label + CLI version + capabilities), source conflict, and observed-only completeness. Test proves
       rendering, empty state, and conflict surfacing.
-- [x] 7.8 Build Store Detail header and direct usability/failure plane from composite identity and current authority.
-      Delivered 2026-07-30: `components/store-detail.tsx` header shows Store id + envUri + health + authority state.
+- [ ] 7.8 Build Store Detail header and direct usability/failure plane from composite identity and current authority.
+      Reopened 2026-07-30: Store Detail reduces every non-authority outcome, including source conflict, to a generic
+      `No current Environment authority` label.
 - [x] 7.9 Project `Root for` and `Referenced by` only from currently observed source-labelled Workspace Context;
       label completeness honestly and preserve retained stale/error evidence.
       Delivered 2026-07-30: `usageCompletenessLabel` labels observed-only counts (never "all"/"unreferenced"); the
@@ -517,7 +517,7 @@ Production owners: new focused route/component folders under `packages/app/src/r
 
 Green evidence:
 
-- [x] 7.16 Checked route/component tests cover same-id Stores across Environments, route reload/decode, no authority,
+- [ ] 7.16 Checked route/component tests cover same-id Stores across Environments, route reload/decode, no authority,
       conflict, Usage provenance, regional content states, mutation lifecycle, and direct errors.
       Delivered 2026-07-30: `store-detail-projection.test.ts` (9) + `store-detail.test.tsx` (7) cover composite identity,
       blocking diagnostics, observed-only Usage, independent Specs/Changes regions, readonly content, destructive
@@ -529,9 +529,8 @@ Green evidence:
       crowded, aligned row when spacious) and asserts no `overflow-x-auto`.
       `store-surfaces.browser.test.tsx` renders 320/640/1024px Chromium fixtures and proves the page has no horizontal
       overflow; final visual judgment remains owner-only.
-- [x] 7.18 Focused review passes before full App navigation cleanup.
-      Reviewed 2026-07-30: real routes, stable conflict reads, composite content transport, distinct cleanup actions,
-      exact ledger correlation, and responsive Store surfaces pass focused App/Server/Chromium evidence.
+- [ ] 7.18 Focused review passes before full App navigation cleanup.
+      Reopened 2026-07-30: conflict remains preserved in the runtime but is lost at the Detail presentation boundary.
 
 ## 8. App Navigation and Workspace Continuity
 
@@ -542,12 +541,13 @@ Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/componen
       domain navigation.
       Delivered 2026-07-30: `app-router.tsx` redirects `/` to `/workspaces`; `app-layout.tsx` primary nav is exactly
       Workspaces + Stores. Test proves root redirect + two-domain nav.
-- [x] 8.1a Make Workspaces the only expandable primary item and project every current backend into its secondary
+- [ ] 8.1a Make Workspaces the only expandable primary item and project every current backend into its secondary
       navigation without turning Settings, Connections, Environment, or Task Manager into primary domains.
       Delivered 2026-07-30: `components/workspaces-secondary-nav.tsx` renders every running backend as an expandable
       path-first item under Workspaces (no port identity), with health dots, external markers, active highlighting, and
       focus/open selection. Test (6) proves projection, selection, active mark, external marker, collapse, and empty state.
-      Primary nav is Workspaces + Stores only (Settings utility); Connections/Environment/Task Manager are not primary.
+      Reopened 2026-07-30: the secondary projection is mounted only in the desktop `md:flex` sidebar; mobile primary
+      navigation has no expandable running-backend projection.
 - [x] 8.1b Register `/workspaces/tasks` as the Home-owned secondary page while preserving fixed Home and mounted
       project iframe identity.
       Delivered 2026-07-30: `/workspaces/tasks` route registered; the static segment takes precedence over dynamic
@@ -593,13 +593,12 @@ Green evidence:
 - [x] 8.9 Checked router test compares the same iframe DOM node before and after the full Stores detail round-trip.
       Delivered 2026-07-30: `app-router.test.tsx` "preserves the hosted iframe identity across Workspaces -> Stores ->
       Workspaces round-trips" asserts the exact iframe DOM node identity is preserved.
-- [x] 8.10 Basic component browser fixtures cover mobile/desktop navigation and titlebar variants without claiming
+- [ ] 8.10 Basic component browser fixtures cover mobile/desktop navigation and titlebar variants without claiming
       final visual acceptance.
       Verified 2026-07-30: App Chromium lane passes 4 files / 9 tests across titlebar, Workspace tabs, Workspace
       management, Task Manager, Launcher, and Store surfaces. This is preparation evidence only.
-- [x] 8.11 Focused App-shell review passes before repository-wide gates.
-      Reviewed 2026-07-30: the former P0 empty routes, fabricated `localhost:0`, unselectable Home, missing production
-      daemon owner, and non-terminating Stop are all absent from the current production chain.
+- [ ] 8.11 Focused App-shell review passes before repository-wide gates.
+      Reopened 2026-07-30: mobile running-backend navigation is absent from the mounted shell.
 
 ## 9. Documentation, Headers, and Release Metadata
 
@@ -648,22 +647,22 @@ Green evidence:
       Store-selector projection identity, managed-child cleanup, restart restoration, and canonical-path dedupe.
       Reviewed 2026-07-30: named tests cross the exact dismissal/retirement/dedupe/cleanup transitions; Store cleanup
       additionally rejects mismatched composite ledger records and cross-Store content completion.
-- [x] 10.3 Run the checked test-type lane for public Router/Service/Adapter/contract fixtures; reject `any`, `as any`,
+- [ ] 10.3 Run the checked test-type lane for public Router/Service/Adapter/contract fixtures; reject `any`, `as any`,
       `as never`, fabricated non-null assertions, and suppression comments.
       2026-07-30: `pnpm typecheck` passes all package and checked-test lanes. Added Change code contains no `any`,
       `as any`, `as never`, or TypeScript suppression comment.
-- [x] 10.4 Run focused Core/Server/App unit tests for every production owner.
+- [ ] 10.4 Run focused Core/Server/App unit tests for every production owner.
       2026-07-30: Core Store-content 10/10, Server Store-content 7/7, App 67 files / 377 tests, and CLI 29 files /
       151 tests pass. These cover the Change owners independently from unrelated repository teardown failures.
-- [x] 10.5 Run App component browser fixtures for Home, running navigation, Task Manager, launcher, container
+- [ ] 10.5 Run App component browser fixtures for Home, running navigation, Task Manager, launcher, container
       responsiveness, navigation, and titlebar preparation evidence.
       2026-07-30: `pnpm --filter @openspecui/app test:browser:ci` passes 4 files / 9 tests in Chromium.
 - [~] 10.6 Run `pnpm format:check`.
   2026-07-30: all Change-owned files pass Prettier. The repo command is blocked only by user-owned dirty files
   `pnpm-lock.yaml` and `scripts/diagnose-cli-runner.mjs`; this Change does not rewrite or submit them.
-- [x] 10.7 Run `pnpm lint:ci`.
+- [ ] 10.7 Run `pnpm lint:ci`.
       2026-07-30: 0 warnings, 0 errors (fixed the one useless-spread warning in managed-project-owner.ts).
-- [x] 10.8 Run `pnpm typecheck`.
+- [ ] 10.8 Run `pnpm typecheck`.
       2026-07-30: all packages and checked test-type lanes pass.
 - [~] 10.9 Run `pnpm test:ci`.
   2026-07-30: root tests pass 15 files / 64 tests, then the existing Core
@@ -671,17 +670,17 @@ Green evidence:
   Direct rerun reproduces the same timeout; this Change does not modify `CliExecutor`. Separately, Server full
   tests reproduce the pre-existing `fdc3ac1` non-cooperative Store projection child timeout. Focused Change tests
   are green, but the repository-wide lane is not claimed as passing.
-- [x] 10.10 Run `pnpm test:browser:ci`.
+- [ ] 10.10 Run `pnpm test:browser:ci`.
       2026-07-30: xterm passes 60 with 1 skipped, App passes 9, and Web passes 14 browser tests.
-- [x] 10.11 Run `git diff --check` and strict OpenSpec validation.
+- [ ] 10.11 Run `git diff --check` and strict OpenSpec validation.
       2026-07-30: `openspec validate reshape-app-workspaces-and-stores --strict` passes and `git diff --check` is clean.
-- [x] 10.12 Record exact command output/head evidence in `implementation.md`; do not claim final browser acceptance.
+- [ ] 10.12 Record exact command output/head evidence in `implementation.md`; do not claim final browser acceptance.
       2026-07-30: focused/gate evidence and implementation head `bb9e82e08dcbc17d80b2d6e9a28b394a14a6768c`
       are recorded. No final browser acceptance is claimed (11.6 owner-only).
 
 ## 11. PR, Owner Acceptance, Merge, and Release Gates
 
-- [x] 11.1 Create scoped implementation/test commits with matching checkpoint updates; keep spec, implementation,
+- [ ] 11.1 Create scoped implementation/test commits with matching checkpoint updates; keep spec, implementation,
       and archive stages separate.
       2026-07-30: `bb9e82e` contains only Change-owned implementation/tests/law/checkpoint updates. User tracing,
       lockfile, ct2 binding, and diagnostic-script changes are excluded. Archive remains a later dedicated stage.

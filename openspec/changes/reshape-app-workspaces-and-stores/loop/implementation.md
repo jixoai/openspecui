@@ -11,13 +11,16 @@ Owner lifecycle decision (2026-07-30): closing a tab preserves a managed service
 Original request (2026-07-30): "所有正在运行中的backend都会显示在这里。"
 Original request (2026-07-30): "任务管理器...可以杀掉Workspace，或者收藏、取消收藏"
 Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果没有就使用path的foldername；subtitle写git分支名"
+Original request (2026-07-30): "我让另外一个 Agent 做了个开头，但我觉得它们做偏了，请你直接接手任务，review，并真正完成相关工作，我来做最终的 review"
 -->
 
 ## Implementation State
 
-The production implementation is complete through the Workspaces and Stores route families on top of
-`fdc3ac1`. This review pass corrected the final runtime boundaries; repository-wide gates, the scoped commit,
-owner walkthrough, PR, archive/sync, and release remain delivery checkpoints rather than implementation claims.
+The production implementation reached the Workspaces and Stores route families on top of `fdc3ac1`, but an
+independent review of `bb9e82e` found four remaining production gaps. Launcher Open/Connect has no real pending
+transition, manual candidates persist before reachability succeeds, running-backend secondary navigation is absent
+from mobile, and Store Detail collapses exact Environment conflict into generic authority loss. Those checkpoints
+are reopened until implementation, checked evidence, and the owner walkthrough handoff are corrected.
 
 ```text
 Product decision       approved by manager
@@ -27,18 +30,18 @@ Workspace lifecycle correction approved by manager
 P1 typed contracts       landed (Store-content capability + browser-safe projection schemas + checked fixtures)
 P2 managed backend       landed (canonical directory catalog, daemon child owner, exact Stop/restart restoration)
 P3 candidate/open        landed (admission/dismissal reducer, credential isolation, iframe continuity)
-P4 Workspace surfaces   landed (fixed Home, running navigation, Task Manager, path-first labels, Launcher)
+P4 Workspace surfaces   correction pending (Launcher transition + mobile running navigation)
 P5 Environment runtime  landed (persisted envUri selection, per-source collection, stable authority, conflict gate)
 P6 Store content         landed (demand-driven Server Projection Work, typed Push -> Pull App transport)
-P7 Store product         landed (index, Environment evidence, Detail, Usage, Specs/Changes, unregister/remove)
-P8 navigation            landed (two-domain shell, composite routes, persistent Workspace Documents)
+P7 Store product         correction pending (Detail must preserve exact authority/conflict reason)
+P8 navigation            correction pending (mobile must expose running Workspace secondary navigation)
 Review corrections       stable source survives redundant checking; cross-Store responses are rejected;
                          conflicts retain readonly source; Doctor failures do not block cleanup;
                          unregister and remove remain distinct composite-ledger actions
-Current focused evidence Core 10; Server content 7; App 67 files / 377; CLI 29 files / 151 tests green
-Repository gates          lint, typecheck, browser, strict validation, and diff-check green
+Current focused evidence prior-head evidence only; affected App owners require rerun after correction
+Repository gates          prior-head evidence only; rerun scoped gates after correction
 External dirty blockers   format-check: user lockfile/script; test-ci: pre-existing Core/Server teardown timeouts
-Implementation commit    bb9e82e (Change-owned files only)
+Implementation commit    bb9e82e (review fixed point; correction commit pending)
 Pending delivery          owner walkthrough result, PR, archive/sync
 Owner walkthrough      reserved for final handoff
 ```
