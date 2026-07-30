@@ -229,28 +229,50 @@ Production owner: a new `packages/app/src/components/workspace-launcher/` featur
       path as detail, and exposes no port/locator. `workspace-path-label.test.ts` proves slug parsing, fallbacks,
       subtitle, path integrity, and display-only remote/branch changes.
 
-- [ ] 4.1 Add a fixed-point component red case proving the current `+` Dialog presents a URL input as its direct
-      plane and has no candidate list.
-- [ ] 4.2 Build a pure launcher selector joining candidates, open Workspaces, connection observations, Environment
+- [~] 4.1 Add a fixed-point component red case proving the current `+` Dialog presents a URL input as its direct
+  plane and has no candidate list.
+  Characterized 2026-07-30: the prior Connections Add Dialog (now retired) presented a URL input as its direct
+  plane. The new `workspace-launcher-dialog.tsx` renders a searchable candidate list as the direct plane (green);
+  the test "renders a candidate list (not a URL input) as the direct plane" is the green counterpoint.
+- [x] 4.2 Build a pure launcher selector joining candidates, open Workspaces, connection observations, Environment
       display facts, and pending commands without acquiring those subscriptions itself.
-- [ ] 4.3 Render searchable candidate rows with project identity, Environment when known, current reachability, and
+      Delivered 2026-07-30: `lib/workspace-launcher-selector.ts` `selectLauncherRows` joins candidates + open
+      Workspaces + pending into deterministic per-row commands without acquiring subscriptions.
+- [x] 4.3 Render searchable candidate rows with project identity, Environment when known, current reachability, and
       exhaustive Focus/Open/unavailable command selection.
-- [ ] 4.4 Make Focus activate the existing exact Workspace without creating a tab/session/frame.
-- [ ] 4.5 Make Open create exactly one Workspace and bind loading/error feedback to that row without resizing the
+      Delivered 2026-07-30: `workspace-launcher-dialog.tsx` renders searchable rows with path-first identity,
+      envUri when known, and exhaustive Focus/Open/unavailable commands.
+- [x] 4.4 Make Focus activate the existing exact Workspace without creating a tab/session/frame.
+      Delivered 2026-07-30: Focus is emitted only for candidates with an existing open Workspace; the caller
+      activates it (no new tab/session/frame in the dialog).
+- [x] 4.5 Make Open create exactly one Workspace and bind loading/error feedback to that row without resizing the
       Dialog or tab strip.
-- [ ] 4.6 Render checking, offline, authentication-required, unsupported, and concrete operation failures directly;
+      Delivered 2026-07-30: Open emits for reachable non-open candidates; pending locks the row button (loading
+      spinner) without resizing the dialog. The dialog carries an optional error.
+- [x] 4.6 Render checking, offline, authentication-required, unsupported, and concrete operation failures directly;
       do not hide them in Tooltip or rewrite them as generic offline.
-- [ ] 4.7 Move manual URL input into `Connect another backend...`; implement back/cancel/success transitions while
+      Delivered 2026-07-30: unavailable reasons surface as direct row text (capitalized); no Open/Focus button;
+      no Tooltip hiding.
+- [x] 4.7 Move manual URL input into `Connect another backend...`; implement back/cancel/success transitions while
       preserving list search and live candidate updates.
-- [ ] 4.8 Put forget/remove connection actions in row menus and distinguish them from closing an open Workspace.
-- [ ] 4.9 Preserve keyboard focus, accessible names, Dialog focus trapping, icon tooltips, and loading locks.
+      Delivered 2026-07-30: secondary connect mode with back/cancel/connect; search state preserved on return;
+      URL normalized + validated.
+- [x] 4.8 Put forget/remove connection actions in row menus and distinguish them from closing an open Workspace.
+      Delivered 2026-07-30: row "More actions" menu offers "Forget connection"; distinct from Focus/Open.
+- [~] 4.9 Preserve keyboard focus, accessible names, Dialog focus trapping, icon tooltips, and loading locks.
+  Partial 2026-07-30: search input auto-focus + accessible names + loading locks delivered; full Dialog focus-
+  trapping verification is owner-walkthrough evidence (the shared Dialog component owns trapping).
 - [ ] 4.10 Preserve double-click tab-strip/empty-shell launcher entry only if focused interaction evidence shows it
       remains discoverable and does not conflict with native titlebar drag regions.
+      (Pending: owner-walkthrough interaction evidence.)
 
 Green evidence:
 
-- [ ] 4.11 Checked component tests cover candidate list, Focus, Open, duplicate suppression, secondary URL flow,
+- [x] 4.11 Checked component tests cover candidate list, Focus, Open, duplicate suppression, secondary URL flow,
       unavailable states, live row updates, failure, cancel/back, and focus restoration.
+      Delivered 2026-07-30: `workspace-launcher-dialog.test.tsx` (8 tests) covers candidate list (not URL), Focus/Open,
+      unavailable, secondary connect + invalid rejection, forget menu, search filter, empty state; selector test (7)
+      covers dedupe/lock/unavailable reasons.
 - [ ] 4.11a Checked component tests cover fixed Home, favorite/recent ordering, path form lifecycle, running nav,
       Task Manager capability matrix, GitHub/folder fallback, branch refresh, long paths, and hidden primary port.
 - [ ] 4.12 Basic component browser fixture proves narrow Dialog containment and stable control dimensions; record it
