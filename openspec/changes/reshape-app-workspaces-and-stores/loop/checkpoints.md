@@ -453,10 +453,16 @@ Production owners: new focused route/component folders under `packages/app/src/r
       indeterminate mutation; keep path/Git/metadata/raw evidence secondary.
       Delivered 2026-07-30: `components/store-detail.tsx` renders Store id + health + Usage + mutation error directly;
       repository/Git/metadata in a collapsed secondary disclosure.
-- [ ] 7.6 Move setup/register into an index-level `New Store` flow with current authority pinning and lifecycle
+- [x] 7.6 Move setup/register into an index-level `New Store` flow with current authority pinning and lifecycle
       feedback.
-- [ ] 7.7 Build Environment evidence as a Stores title action/subpage showing connected projects, CLI versions,
+      Delivered 2026-07-30: `components/new-store-dialog.tsx` provides the index-level setup/register flow gated on
+      current Environment authority + lifecycle (pending lock, error, success). Test proves authority gating, pending
+      lock, and register submission with path + storeId.
+- [x] 7.7 Build Environment evidence as a Stores title action/subpage showing connected projects, CLI versions,
       compatibility facts, and source conflict without becoming primary navigation.
+      Delivered 2026-07-30: `components/stores-environment-evidence.tsx` renders observed environments, connected
+      projects (label + CLI version + capabilities), source conflict, and observed-only completeness. Test proves
+      rendering, empty state, and conflict surfacing.
 - [x] 7.8 Build Store Detail header and direct usability/failure plane from composite identity and current authority.
       Delivered 2026-07-30: `components/store-detail.tsx` header shows Store id + envUri + health + authority state.
 - [x] 7.9 Project `Root for` and `Referenced by` only from currently observed source-labelled Workspace Context;
@@ -475,8 +481,12 @@ Production owners: new focused route/component folders under `packages/app/src/r
       confirmation, authority retirement, and concrete rejection.
       Delivered 2026-07-30: `RemoveControl` is gated by `canRemove` (authority + no running mutation + no blocking
       diagnostics) and requires explicit confirmation; backend owns the lifecycle.
-- [ ] 7.13 Omit `Open as Workspace` unless a real production daemon/backend owner can focus or establish the Store
+- [x] 7.13 Omit `Open as Workspace` unless a real production daemon/backend owner can focus or establish the Store
       Workspace without adopting backend process supervision.
+      Delivered 2026-07-30: `lib/open-store-as-workspace.ts` defines the `OpenStoreAsWorkspaceCapability` contract +
+      `resolveOpenStoreAsWorkspace` resolver. The action is `available` only when a real owner advertises the
+      capability for the Store root; otherwise `unavailable` and the Store Detail omits the action (no disabled
+      promise). Test proves available/unavailable/cannot-open resolution.
 - [x] 7.14 Retire Store Manager shell, Inspector, Inventory, Context Matrix, backend selector, obsolete tests, and
       technical projection terminology.
       Delivered 2026-07-30 (P8): removed `store-manager-shell.tsx`, `store-manager-backend-selector.tsx`,
