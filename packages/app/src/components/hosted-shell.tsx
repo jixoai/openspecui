@@ -54,6 +54,13 @@ import {
   type HostedShellTab,
 } from '../lib/shell-state'
 import { useConnections, useConnectionsActions } from '../lib/use-connections'
+import {
+  loadWorkspaceDirectoryCatalog,
+  recordSuccessfulDirectoryOpen,
+  selectWorkspaceDirectoryCatalogView,
+  setDirectoryFavorite,
+  type WorkspaceDirectoryCatalog,
+} from '../lib/workspace-directory-catalog'
 import { selectWorkspacePathLabel } from '../lib/workspace-path-label'
 import { useAppDaemonWorkspace } from './app-daemon-workspace-owner'
 import { useAppLaunchError } from './app-launch-owner'
@@ -476,6 +483,14 @@ function HostedShellRuntime({
   const [openingWorkspaceId, setOpeningWorkspaceId] = useState<string | null>(null)
   const [apiDraft, setApiDraft] = useState('')
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
+  // Workspace directory catalog (Favorites / Recent) — credential-free, persisted.
+  const [directoryCatalog, setDirectoryCatalog] = useState<WorkspaceDirectoryCatalog>(() =>
+    typeof localStorage !== 'undefined'
+      ? loadWorkspaceDirectoryCatalog(localStorage)
+      : { version: 1, entries: [] }
+  )
+  const [homePathError, setHomePathError] = useState<string | null>(null)
+  const [homePathPending, setHomePathPending] = useState(false)
   const [pwaState, setPwaState] = useState<HostedShellPwaState>(DEFAULT_PWA_STATE)
   const [updateState, setUpdateState] = useState<HostedAppUpdateState>(DEFAULT_UPDATE_STATE)
   const installPromptRef = useRef<BeforeInstallPromptEventLike | null>(null)
@@ -1003,11 +1018,58 @@ function HostedShellRuntime({
       ),
       content: (
         <WorkspaceHome
-          catalog={{ favorites: [], recent: [] }}
-          launchSupported={false}
-          onSubmitPath={() => {}}
-          onToggleFavorite={() => {}}
-          onOpenDirectory={() => {}}
+          catalog={selectWorkspaceDirectoryCatalogView(directoryCatalog)}
+          launchSupported
+          pending={homePathPending}
+          error={homePathError}
+          onSubmitPath={(projectDir) => {
+            setHomePathPending(true)
+            setHomePathError(null)
+            // Open/focus a Workspace from this locator; the daemon manages the backend.
+            setShellState((current) =>
+              applyHostedLaunchRequest(current, {
+                apiBaseUrl: projectDir.startsWith('http')
+                  ? projectDir
+                  : `http://localhost:0/${encodeURIComponent(projectDir)}`,
+              })
+            )
+            // Record successful recency in the credential-free catalog.
+            setDirectoryCatalog((prev) => {
+              const next = recordSuccessfulDirectoryOpen(prev, projectDir)
+              if (typeof localStorage !== 'undefined') {
+                import('../lib/workspace-directory-catalog').then(
+                  ({ saveWorkspaceDirectoryCatalog }) => {
+                    saveWorkspaceDirectoryCatalog(localStorage, next)
+                  }
+                )
+              }
+              return next
+            })
+            setHomePathPending(false)
+          }}
+          onToggleFavorite={(canonicalPath, favorite) => {
+            setDirectoryCatalog((prev) => {
+              const next = setDirectoryFavorite(prev, canonicalPath, favorite)
+              if (typeof localStorage !== 'undefined') {
+                import('../lib/workspace-directory-catalog').then(
+                  ({ saveWorkspaceDirectoryCatalog }) => {
+                    saveWorkspaceDirectoryCatalog(localStorage, next)
+                  }
+                )
+              }
+              return next
+            })
+          }}
+          onOpenDirectory={(canonicalPath) => {
+            // Focus or open the Workspace for this directory.
+            setShellState((current) =>
+              applyHostedLaunchRequest(current, {
+                apiBaseUrl: canonicalPath.startsWith('http')
+                  ? canonicalPath
+                  : `http://localhost:0/${encodeURIComponent(canonicalPath)}`,
+              })
+            )
+          }}
         />
       ),
     }

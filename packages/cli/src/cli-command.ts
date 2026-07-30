@@ -19,6 +19,10 @@ export interface ServeCommandPlan {
   web: boolean
   auth: boolean
   password: string | true | undefined
+  /** Enable backend OpenTelemetry tracing (diagnostic only). */
+  otel?: boolean
+  /** OTLP/HTTP Collector base URL. Absent ⇒ console exporter fallback. */
+  otelEndpoint?: string
 }
 
 export interface DaemonCommandPlan {
@@ -109,7 +113,19 @@ export async function parseCliCommand(
             type: 'string',
             coerce: (value) => (value === '' ? true : value),
           })
-          .conflicts('auth', 'password'),
+          .conflicts('auth', 'password')
+          .option('otel', {
+            describe:
+              'Enable backend OpenTelemetry tracing to diagnose slow loads. ' +
+              'Without --otel-endpoint, spans are printed to the server console.',
+            type: 'boolean',
+          })
+          .option('otel-endpoint', {
+            describe:
+              'OTLP/HTTP Collector base URL (e.g. http://localhost:4318/v1/traces). ' +
+              'Implies --otel.',
+            type: 'string',
+          }),
       (argv) => {
         plan = {
           kind: 'serve',
@@ -121,6 +137,8 @@ export async function parseCliCommand(
           web: argv.web === true,
           auth: argv.auth === true,
           password: argv.password,
+          otel: argv.otel === true || !!argv['otel-endpoint'],
+          otelEndpoint: argv['otel-endpoint'],
         }
       }
     )

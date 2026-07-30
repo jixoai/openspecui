@@ -298,7 +298,7 @@ describe('HostedShell', () => {
   })
 
   it('renders the fixed Home pinned tab when no project backends are open', async () => {
-    const { container } = await renderShell(
+    await renderShell(
       <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
     )
     // Home is a pinned, non-closeable tab that replaces the old empty shell state.
