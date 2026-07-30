@@ -1,11 +1,16 @@
 <!--
-Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
 1. Keep implementation reality distinct from the approved product/research plan.
 2. Authorize an ordered worker Apply across App state, hosted protocol, Server projections, and product routes.
 3. Preserve exact red/green, focused-review, predecessor-Change, and owner-acceptance stop boundaries.
 4. Define objective loopback triggers for discoveries that invalidate the approved design.
 
 Original request (2026-07-30): "那么请你开始撰写这份change，如果没有疑问，可以一步到位，并提交。"
+Original request (2026-07-30): "Workspace需要记住曾经打开的目录，并且支持收藏。关键是，支持直接从目录直接启动 openspecui 服务。"
+Owner lifecycle decision (2026-07-30): closing a tab preserves a managed service; explicit Stop terminates it; daemon stop affects only managed services; daemon restart restores the managed running set.
+Original request (2026-07-30): "所有正在运行中的backend都会显示在这里。"
+Original request (2026-07-30): "任务管理器...可以杀掉Workspace，或者收藏、取消收藏"
+Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果没有就使用path的foldername；subtitle写git分支名"
 -->
 
 ## Implementation State
@@ -16,6 +21,7 @@ Planning is apply-ready; production implementation has not started in this Chang
 Product decision       approved by manager
 Official CLI research complete against references/openspec v1.6.0
 App ownership research complete against current feat/opentray-app-mode worktree
+Workspace lifecycle correction approved by manager
 Production code        not modified by this planning commit
 Focused red evidence   not yet captured
 Focused green evidence not yet captured
@@ -25,9 +31,9 @@ Owner walkthrough      reserved for final handoff
 Planning verification on 2026-07-30:
 
 - `openspec status --change reshape-app-workspaces-and-stores` reports `4/4 artifacts complete`.
-- `openspec validate reshape-app-workspaces-and-stores --strict` passes after adding the required
-  `hosted-app-distribution` and `hosted-environment-delivery` delta specs.
-- Targeted Prettier check and staged `git diff --check` pass for every planning/terminology file.
+- `openspec validate reshape-app-workspaces-and-stores --strict` passes after the path-launch correction adds the
+  `cli-commands` delta beside `hosted-app-distribution` and `hosted-environment-delivery`.
+- Targeted Prettier write/check and `git diff --check` pass for every planning/terminology file.
 - The repository Vite+ pre-commit hook cannot run because root `vite.config.ts` has no `staged` configuration. This
   is the same documented repository-local limitation used by the predecessor Change. The planning commit may use
   `--no-verify` only after the named checks pass; hook configuration is outside this Change.
@@ -42,19 +48,21 @@ implementation evidence.
 ```text
 P1  main spec law + typed public contract
  ↓
-P2  candidate catalog / open Workspace state separation
+P2  managed local service owner / canonical directory catalog
  ↓
-P3  daemon candidate admission + Workspace Launcher
+P3  candidate catalog / open Workspace state separation
  ↓
-P4  Environment selection / exact authority owner
+P4  Workspace Home / running navigation / Task Manager / Launcher
  ↓
-P5  Store content Projection Work + hosted transport
+P5  Environment selection / exact authority owner
  ↓
-P6  Stores index / Environment evidence / Store Detail
+P6  Store content Projection Work + hosted transport
  ↓
-P7  navigation retirement + responsive/browser fixtures
+P7  Stores index / Environment evidence / Store Detail
  ↓
-P8  full gates + owner walkthrough handoff
+P8  navigation retirement + responsive/browser fixtures
+ ↓
+P9  full gates + owner walkthrough handoff
 ```
 
 Each phase must land its focused checked red/green evidence before the next dependent phase. Independent phases may
@@ -66,7 +74,11 @@ checkpoint updates, scoped commits, and PR delivery; it must not return another 
 ### 1. Product ontology
 
 ```text
+Workspace Home       fixed first Workspaces tab for directory launch and return
 Workspace            one open project work surface with stable tab/session/frame identity
+Workspace directory  canonical physical local project identity with favorite/recency facts
+Managed backend      one daemon-owned project service started from Workspace Home
+External backend     one foreground serve-owned project service registered by exact lease
 Connection candidate one possible backend source for opening/focusing a Workspace
 Environment          opaque backend-issued Store registry/data-home scope
 Store                one registered standalone OpenSpec root inside an Environment
@@ -90,6 +102,8 @@ Required ownership:
 | daemon candidate owner | opaque Workspace id, backend locator, runtime credential binding, snapshot revision | runtime only                             |
 | open Workspace store   | stable tab/session id, locator, order, active id, daemon binding when present       | credential-free presentation persistence |
 | frame runtime          | iframe source/load/error and DOM reference                                          | mounted memory only                      |
+| directory catalog      | canonical path, favorite, successful recency                                        | credential-free local persistence        |
+| managed service owner  | physical path, child, readiness, generation, restore intent                         | runtime plus bounded restart intent      |
 
 The exact persisted shape may be replaced without migration glue. Every new/changed module and test retains a
 timestamped intent/original-request header.
@@ -108,7 +122,48 @@ new daemon id later appears -> new admission may auto-open once
 If the daemon id cannot objectively distinguish a new admission after disappearance, the worker must return to the
 research plan rather than infer it from URL or snapshot revision.
 
-### 3. Workspace Launcher interaction
+### 3. Managed local backend lifecycle and path-first presentation
+
+The local App daemon receives only an authenticated project-directory intent. It physically canonicalizes and
+validates the directory, builds a fixed internal `serve` plan, and owns one child per physical identity. Client-
+supplied commands, arguments, ports, process ids, and credentials are forbidden. Start is single-flight across
+concurrent Home submissions and restart restoration.
+
+```text
+Home submit path
+  -> canonicalize physical directory
+  -> join existing start/running owner OR spawn fixed managed serve plan
+  -> await readiness + admit lease
+  -> publish invalidation
+  -> App Pulls complete running snapshot
+  -> focus exactly one Workspace
+```
+
+Closing a project tab changes only presentation. Explicit Task Manager Stop retires the exact managed generation,
+settles the child, invalidates the running projection, and closes its Workspace/frame while retaining catalog
+history/favorite. Ordinary daemon stop settles all managed children and clears their running intent. Daemon restart
+captures the managed directory set, settles children, replaces the daemon, and restores each physical identity
+once. Externally owned foreground services are never adopted; Stop is available only through a lease-advertised
+owner shutdown protocol.
+
+One pure presentation selector derives title and subtitle:
+
+```text
+title     verified github.com remote -> org/repo
+          otherwise                  -> canonical directory basename
+subtitle current Git branch when available
+detail   complete canonical path
+evidence backend locator / host / port / raw Git facts
+```
+
+Changing remote or branch updates display only. It never changes directory, backend, tab, frame, or mutation
+identity.
+
+### 4. Workspace Home and Launcher interaction
+
+The first Workspaces tab is fixed Home and cannot close or reorder. Home owns Favorites, a path-input start form,
+Recent, and the `/workspaces/tasks` entry. Workspaces navigation lists every current backend as secondary items;
+Task Manager exposes current detail and only ownership-valid Stop/Close/favorite actions.
 
 `HostedShell` keeps orchestration of stable mounted tabs/frames but delegates candidate composition and Dialog UI to
 focused modules. The direct Dialog surface is a searchable candidate list.
@@ -129,7 +184,7 @@ action pending                           same-size locked control
 adds one candidate and opens/focuses it. Cancel/back returns to the candidate list without losing search or live
 updates. Familiar icon buttons use Lucide icons and tooltips; the primary row command may use icon + text.
 
-### 4. Environment scope and authority
+### 5. Environment scope and authority
 
 Store route state selects `envUri`, never a backend URL. Selection is credential-free and may persist. With exactly
 one current observed Environment, the Stores index may select it automatically. With multiple Environments and no
@@ -148,7 +203,7 @@ If current same-Environment sources provide non-equivalent Store identity/root/D
 refreshes settle, the Environment enters `conflict`. Conflict preserves source-labelled evidence and disables the
 affected mutation. It is not rewritten as offline, unknown, or healthy.
 
-### 5. Store content public contract
+### 6. Store content public contract
 
 The worker extends browser-safe hosted protocol modules without runtime-importing the Node-bearing Core root entry.
 A capability such as `stores.content.inspect` advertises the new hosted procedure; it remains a compatibility fact,
@@ -173,7 +228,7 @@ revalidation.
 Store-root observation/invalidation triggers the normal data-free Push -> Pull cycle. No App component starts a
 poller, reads files, reparses stdout, or copies Project Web adapters.
 
-### 6. Stores routes and page composition
+### 7. Stores routes and page composition
 
 Canonical routes:
 
@@ -205,7 +260,7 @@ The existing setup/register form becomes an index-level `New Store` flow. Unregi
 Detail's overflow/danger flow and continue using the backend-owned mutation ledger plus authority-aware destructive
 Dialog. Git synchronization remains explicit external/manual behavior.
 
-### 7. Navigation and lifecycle preservation
+### 8. Navigation and lifecycle preservation
 
 `AppLayout` makes `/workspaces` the root destination, exposes Workspaces and Stores as the only primary nav items,
 and keeps Settings at the utility edge. Old product routes are removed rather than redirected.
@@ -223,22 +278,26 @@ persistent HostedShell / iframe Documents
 Navigating Workspaces -> Stores -> Workspaces must return the exact same iframe DOM nodes and Documents. Store
 route loading or Environment changes cannot clear or reconstruct Workspace surfaces.
 
-### 8. Planned file ownership
+### 9. Planned file ownership
 
 Exact filenames may refine during Apply, but ownership must remain physically separated:
 
-| Area                            | Existing/new production owner                                                             |
-| ------------------------------- | ----------------------------------------------------------------------------------------- |
-| App route/navigation            | `packages/app/src/app-router.tsx`, `components/app-layout.tsx`                            |
-| candidate/open state            | new focused modules under `packages/app/src/lib/`                                         |
-| daemon candidate projection     | `components/app-daemon-workspace-owner.tsx` plus focused pure transition module           |
-| launcher                        | new `components/workspace-launcher/` folder; `hosted-shell.tsx` only composes it          |
-| Environment selection/authority | new focused Environment owner/selectors; retire `store-manager-backend-selector.tsx`      |
-| browser protocol                | safe Core subpath contracts and checked tests                                             |
-| Store content work              | focused Server service/router transport and tests                                         |
-| Store index/detail              | new route/component folders; retire Inspector/Inventory/Context Matrix route owners       |
-| responsive evidence             | App component browser fixtures at rendered container widths                               |
-| product law                     | `hosted-app-distribution`, `hosted-environment-delivery`, AGENTS.md, `i18n.zh.md`, README |
+| Area                            | Existing/new production owner                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------ |
+| App route/navigation            | `packages/app/src/app-router.tsx`, `components/app-layout.tsx`                       |
+| directory catalog/Home          | focused App state/schema and `components/workspace-home/`                            |
+| managed service lifecycle       | focused CLI daemon child owner/control protocol; never `HostedShell`                 |
+| running backend/Task Manager    | typed daemon snapshot/control plus focused App route/components                      |
+| path-first display facts        | pure shared App selector over project path and typed Git facts                       |
+| candidate/open state            | new focused modules under `packages/app/src/lib/`                                    |
+| daemon candidate projection     | `components/app-daemon-workspace-owner.tsx` plus focused pure transition module      |
+| launcher                        | new `components/workspace-launcher/` folder; `hosted-shell.tsx` only composes it     |
+| Environment selection/authority | new focused Environment owner/selectors; retire `store-manager-backend-selector.tsx` |
+| browser protocol                | safe Core subpath contracts and checked tests                                        |
+| Store content work              | focused Server service/router transport and tests                                    |
+| Store index/detail              | new route/component folders; retire Inspector/Inventory/Context Matrix route owners  |
+| responsive evidence             | App component browser fixtures at rendered container widths                          |
+| product law                     | `cli-commands`, hosted App/Environment specs, AGENTS.md, `i18n.zh.md`, README        |
 
 If `hosted-shell.tsx` would exceed five orthogonal intents after launcher integration, the worker must extract PWA
 update/display behavior or tab/frame presentation rather than add another compromise to that file.
@@ -256,6 +315,10 @@ The following refinements are approved consequences of research, not divergences
   selectable root; it does not add editing or a second Project Web.
 - The old explicit backend selector is replaced by explicit Environment selection plus internally exact authority;
   this requires a deliberate main-spec update.
+- The original presentation-only daemon boundary is superseded for one narrow case: the daemon owns only project
+  services explicitly launched from Workspace Home. External foreground `serve` ownership remains unchanged.
+- Ports and backend URLs remain transport evidence, while canonical path plus verified GitHub/branch facts become
+  the Workspace presentation hierarchy.
 
 Implementation updates this section after every accepted plan change, failed assumption, or material file-owner
 change. It must never record planned work as completed evidence.
@@ -268,7 +331,8 @@ Return to `intake.md` and manager decision when:
 2. Store Detail needs editable Specs/Changes, Apply/Archive, or an embedded Project Web rather than readonly
    governance/content overview.
 3. The product must merge or compare Store identities across distinct `envUri` values.
-4. `Open as Workspace` requires the App daemon to start/supervise backend processes.
+4. Directory launch must clone, download, or infer a local path from a GitHub `org/repo` slug.
+5. Product requirements demand that daemon stop preserve managed children as orphaned background services.
 
 Return to `research-plan.md` and independent review when:
 
@@ -288,6 +352,9 @@ Return to `research-plan.md` and independent review when:
    cleanup transition is masked by another guard.
 9. Implementing this Change requires modifying unfinished OpenTray distribution/release ownership from
    `integrate-app-mode-with-opentray` rather than consuming its established boundary.
+10. Existing daemon IPC cannot carry authenticated directory start/stop or owner-handled external shutdown without
+    widening authority to remote App deployments.
+11. Canonical physical directory identity cannot be obtained before child spawn on a supported platform.
 
 Stop before full CI and return to the failed phase whenever its focused review is not green. Stop before final
 completion with numbered owner walkthrough cases still pending; automated fixtures cannot close that boundary.

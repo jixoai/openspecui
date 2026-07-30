@@ -1,13 +1,18 @@
 <!--
-Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
 1. Record official OpenSpec Store facts and current App ownership constraints that bound the redesign.
 2. Tell the Workspaces/Stores product story before deriving routes, protocols, state owners, and implementation slices.
-3. Define the Environment-scoped Store index/detail interaction and readonly content boundary.
-4. Provide risk, verification, and final owner-acceptance strategy for approval.
+3. Define path-first Workspace launch/runtime management and Environment-scoped Store interaction.
+4. Define the Store readonly content boundary, risks, verification, and final owner acceptance.
 
 Original request (2026-07-30): "左侧只留下 Workspaces + Stores。"
 Original request (2026-07-30): "Workspaces融合了Connections，点击`+`，那么弹出的Dialog就会包含Connnections列表，而不是一个URL-Input"
 Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西，就跟 Config 和 Context 的关系一样。"
+Original request (2026-07-30): "Workspace需要记住曾经打开的目录，并且支持收藏。关键是，支持直接从目录直接启动 openspecui 服务。"
+Original request (2026-07-30): "所有正在运行中的backend都会显示在这里。"
+Original request (2026-07-30): "任务管理器，打开后，可以看到所有正在运行中backend的详情，并可以杀掉Workspace，或者收藏、取消收藏"
+Original request (2026-07-30): "弱化端口这个概念，重点强调 path的概念。"
+Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果没有就使用path的foldername；subtitle写git分支名"
 -->
 
 ## Research Findings
@@ -152,6 +157,34 @@ Open-in-browser action, and titlebar host geometry are prerequisites, not redesi
 App navigation and Workspace presentation state after those owners, but must not absorb remaining release,
 OpenTray distribution, or owner-walkthrough checkpoints from that Change.
 
+### 8. Directory launch deliberately changes daemon ownership
+
+Current main law says the App daemon owns only presentation and never owns a project backend. Current `start`,
+`stop`, and `restart` commands are also explicitly project-free. The approved directory-launch interaction cannot
+be implemented as a frontend-only shortcut: some production owner must create, observe, stop, and restore the
+backend process.
+
+The corrected ownership model is asymmetric rather than globally supervisory:
+
+```text
+external `openspecui serve /project`       App Home submits `/project`
+───────────────────────────────────       ───────────────────────────
+foreground CLI owns Server                App daemon owns one managed child
+registers current serve lease             keys it by canonical physical directory
+may advertise owner-handled Stop          stops it explicitly or during daemon teardown
+re-registers after daemon replacement     restores it only during daemon restart
+```
+
+The daemon never discovers, adopts, or signals a process by path, port, URL, or PID inference. Task Manager can
+request an external Stop only through an exact current lease capability; otherwise it can close only the Workspace
+presentation. This preserves objective process ownership while satisfying one control surface for all running
+backends.
+
+Workspace identity and presentation also need a path-first hierarchy. Server health already carries project path,
+while Git repository facts can objectively derive a GitHub `org/repo` slug and current branch. The slug is display
+metadata, not a clone target or filesystem identity. Canonical physical directory remains the durable local identity;
+host and port remain internal locator/diagnostic facts.
+
 ## Decision & Plan (For Approval)
 
 The manager approved this direction during intake. Implementation follows the product story below and then derives
@@ -162,21 +195,30 @@ the minimum architecture required to make that story true.
 ```text
 Open App
   │
-  ├─ existing open Workspace(s) -> preserve tab and iframe identity
-  │
-  └─ press +
-       │
-       ▼
-  Workspace Launcher
-  ├─ Open now       reachable known candidate not currently open
-  ├─ Focus          candidate already represented by an open Workspace
-  ├─ Unavailable    offline / auth required / incompatible / checking
-  └─ Connect another backend... -> secondary URL form
+  └─ Workspaces
+      ├─ fixed Home tab
+      │   ├─ Favorites
+      │   ├─ path input -> start/focus one managed backend
+      │   ├─ Recent directories
+      │   └─ Task Manager -> all running backend detail/actions
+      ├─ secondary navigation -> every running backend
+      ├─ project tabs -> org/repo | folder name + branch subtitle
+      └─ press + -> connection candidate launcher
+          ├─ Open now
+          ├─ Focus
+          ├─ Unavailable
+          └─ Connect another backend... -> secondary URL form
 ```
 
-The launcher direct plane is a searchable list, not a URL form. Each candidate row contains project identity,
-Environment when known, objective connection state, and one deterministic command. Removal/forget actions live in
-the row menu. Opening and connecting buttons lock while their action is pending.
+Home is the repeat-use entry, while `+` remains the heterogeneous connection escape hatch. Favorites and Recent are
+canonical directory records, not backend locators or open tabs. A successful path launch updates recency; favorite
+state survives Stop and tab closure. Closing a project tab does not stop a managed service. Task Manager owns
+explicit lifecycle control and distinguishes daemon-managed Stop, lease-mediated external Stop, and presentation-
+only Close.
+
+The launcher direct plane remains a searchable candidate list, not a URL form. Each candidate row contains
+path-first project identity, Environment when known, objective connection state, and one deterministic command.
+Removal/forget actions live in the row menu. Opening and connecting buttons lock while pending.
 
 ### Product story B: understand and govern Stores
 
@@ -208,7 +250,9 @@ names do not survive as sibling navigation or compatibility routes.
 └─ redirect -> /workspaces
 
 /workspaces
-└─ persistent HostedShell + Workspace Launcher
+├─ fixed Home + persistent project frames
+├─ /tasks
+└─ Workspace Launcher
 
 /stores
 ├─ Environment-scoped Store index
@@ -265,50 +309,62 @@ Content is deliberately bounded:
 ### Architecture slices
 
 1. **Law and public contract**
-   - Update `hosted-app-distribution` and `hosted-environment-delivery` specifications before product code.
+   - Update `cli-commands`, `hosted-app-distribution`, and `hosted-environment-delivery` before product code.
+   - Replace the absolute no-supervision rule with explicit managed-child versus external-lease ownership.
    - Replace backend-tab selection language with Environment selection plus internally exact authority.
    - Add browser-safe Store-content compatibility and typed projection contracts without weakening existing CLI
      schemas.
 
-2. **Workspace candidate/open-state separation**
+2. **Managed local service owner and directory catalog**
+   - Add authenticated daemon control for canonical directory start/stop and exact managed ownership.
+   - Persist canonical credential-free favorites, successful recency, and restart-only running-set intent.
+   - Keep daemon stop and restart distinct: stop clears managed services; restart snapshots and restores its managed
+     running set. External foreground serve processes remain untouched.
+   - Extend exact serve leases with optional owner-handled shutdown rather than signaling inferred processes.
+
+3. **Workspace candidate/open-state separation**
    - Introduce a pure candidate/open-Workspace state model with different identities and persistence laws.
    - Project daemon snapshot bindings as runtime candidates while preserving first admission auto-open/focus.
    - Retain manual credential-free connection candidates separately from mounted Workspace tab/session/frame state.
    - Make closing, reopening, duplicate suppression, daemon disappearance/reappearance, and cross-window
      convergence explicit transitions.
 
-3. **Workspace Launcher**
+4. **Workspace Home, running navigation, Task Manager, and Launcher**
+   - Make Home a fixed first tab with Favorites, path form, Recent, and Task Manager entry.
+   - Project every current lease into Workspaces secondary navigation and Task Manager.
+   - Derive tab/nav title from verified GitHub `org/repo` or folder basename and subtitle from branch; keep full path
+     available and port diagnostic-only.
    - Extract the current Add-API form from `HostedShell` into a feature-complete launcher Dialog.
    - Compose daemon, retained manual, observation, and open-Workspace facts through a pure selector.
    - Keep the URL form as a secondary nested flow and preserve loading/error focus behavior.
 
-4. **Environment scope and authority**
+5. **Environment scope and authority**
    - Replace `activeTabId` as the Store product selector with a persisted credential-free `envUri` selection.
    - Add a pure Environment authority resolver over current connection observations.
    - Pin full tab/session/creation/generation identity for every draft/destructive Dialog and revalidate it at
      dispatch. Never persist that authority.
    - Compare already-observed same-Environment facts and surface source conflict without inventing merged truth.
 
-5. **Store content projection**
+6. **Store content projection**
    - Add demand-driven Server Projection Work for typed Spec/Change lists under an explicit Store selector.
    - Publish data-free invalidation notices and typed Pull state through the hosted REST/tRPC boundary.
    - Key retained work by source Environment, Store id, content kind, authority generation, and protocol version;
      keep Spec and Change regional failures independent.
 
-6. **Stores product routes**
+7. **Stores product routes**
    - Replace current Store Manager shell and three route views with index, Environment evidence, and detail routes.
    - Reuse existing Doctor, mutation ledger, Root/Reference evidence, realtime primitives, and destructive Dialog
      owners instead of cloning their behavior into page components.
    - Use a route-level Store selector only for display identity; every current read/action resolves through the
      Environment owner.
 
-7. **Navigation and retirement**
+8. **Navigation and retirement**
    - Reduce persistent App navigation to Workspaces and Stores; keep Settings secondary.
    - Retire Connections/Environment/Inspector/Inventory/Context Matrix routes and tests in the same slice.
    - Preserve App-lifetime launch, daemon, connection observation, mutation observation, and iframe owners above
      routed content.
 
-8. **Documentation and handoff**
+9. **Documentation and handoff**
    - Update README/product terminology, AGENTS.md, `i18n.zh.md`, specs, and affected public API comments.
    - Produce numbered production-boundary owner walkthrough cases with setup, trigger, observation, and restore
      steps. Do not record credentials or private fragments.
@@ -318,6 +374,10 @@ Content is deliberately bounded:
 ### New or Expanded Behavior
 
 - Workspace Launcher with connection candidate, focus/open, unavailable, and secondary manual-connect flows.
+- Fixed Workspace Home with Favorites, path launch, Recent, and Task Manager.
+- Canonical directory catalog and daemon-managed local project service lifecycle.
+- Running-backend secondary navigation and path-first GitHub/folder plus branch labels.
+- Exact owner-handled external Stop capability without daemon process adoption.
 - Separate candidate and open-Workspace state/projection ownership.
 - Environment-selected Store index and composite Environment/Store detail identity.
 - Automatic internal Store access-authority selection with exact dispatch-time pinning.
@@ -334,6 +394,10 @@ Content is deliberately bounded:
 - Store selection changes from a backend URL/tab UI to an Environment UI while preserving exact internal
   authority.
 - Existing daemon bindings become launcher candidates in addition to first-admission Workspace launch intents.
+- The App daemon changes from presentation-only to the exclusive owner of project services launched through Home;
+  external foreground `serve` ownership remains unchanged.
+- Workspace primary identity changes from backend locator/port presentation to canonical directory identity with
+  objective Git display metadata.
 - Store content compatibility becomes an explicit hosted protocol fact.
 
 ## Risks and Mitigations
@@ -352,6 +416,12 @@ Content is deliberately bounded:
 | Route removal strands stale bookmarks/local state                     | This is an intentional breaking App IA update; retire old routes and state rather than add compatibility glue.                            |
 | New work overlaps unfinished OpenTray Change                          | Treat daemon ledger/titlebar as upstream prerequisites and leave its remaining delivery/acceptance checkpoints untouched.                 |
 | Responsive Store evidence becomes a desktop table                     | Verify container widths directly; use stacked/aligned list topology with no horizontal scroll.                                            |
+| Canonical-path aliases start duplicate managed Servers                | Resolve physical identity before spawn; key in-flight/running/restoration state by that identity and mutation-test the gate.              |
+| Daemon restart or crash leaks managed children                        | One child owner records exact state, settles teardown, and distinguishes restart restoration from ordinary stop/crash recovery.           |
+| Task Manager kills an external process without authority              | Require exact current lease-advertised shutdown; otherwise expose presentation Close only.                                                |
+| Favorites/history leak credentials or transient runtime facts         | Persist only canonical path, favorite, and recency through a runtime-validated versioned schema.                                          |
+| Git remote/branch changes destabilize Workspace identity              | Use Git facts only for display; canonical physical directory and opaque Workspace generation remain authoritative.                        |
+| Running navigation and tabs become redundant port lists               | Share one path-first label selector; hide host/port in secondary diagnostics and keep different click outcomes explicit.                  |
 
 ## Verification Strategy
 
@@ -360,28 +430,38 @@ Content is deliberately bounded:
 Each implementation slice names one production owner, one precise pre-fix red case, and one green case. Focused
 review must pass before full gates.
 
-1. **Workspace state owner**
+1. **Managed service and directory catalog owner**
+   - Red: repeated/symlink path submissions start duplicate children, daemon stop kills external serve, or restart
+     loses/duplicates the managed running set.
+   - Green: one physical path has one managed owner, Stop affects only owned children, restart restores exactly
+     once, and favorites/history contain no runtime authority.
+2. **Workspace state owner**
    - Red: closing a daemon-opened Workspace and receiving the unchanged snapshot reopens it, or candidates and
      mounted tabs remain the same collection.
    - Green: candidate remains selectable, iframe stays closed, explicit Open restores one tab, and a genuinely new
      daemon id auto-opens once.
-2. **Workspace Launcher owner**
+3. **Workspace Home and Task Manager owner**
+   - Red: first tab is closeable, path launch has no current daemon authority, ports dominate labels, or Task
+     Manager offers process Stop without lifecycle ownership.
+   - Green: fixed Home topology, running nav, capability-exact actions, GitHub/folder title, branch subtitle, and
+     path evidence remain coherent across narrow and wide containers.
+4. **Workspace Launcher owner**
    - Red: `+` renders URL input as the direct surface or creates a duplicate for an already-open candidate.
    - Green: launcher renders Focus/Open/unavailable outcomes and secondary manual connect with loading locks.
-3. **Environment authority owner**
+5. **Environment authority owner**
    - Red: Store read/mutation follows global active tab, first online locator, stale generation, or same-id
      replacement.
    - Green: selected Environment resolves/pins exact current authority; conflict/missing authority disables action
      with direct evidence.
-4. **Store content projection owner**
+6. **Store content projection owner**
    - Red: selected Store detail cannot obtain typed content, or a different Store/environment result enters its
      retained state.
    - Green: explicit Store selector produces independent retained Spec/Change regions with raw typed evidence.
-5. **Stores route presentation owner**
+7. **Stores route presentation owner**
    - Red: same-id Stores collapse, errors hide in Tooltip/Accordion, or narrow containers overflow.
    - Green: composite identity, direct failure, observed-only Usage, readonly Contents, and narrow/intermediate/
      spacious container topology remain correct.
-6. **Router/App shell owner**
+8. **Router/App shell owner**
    - Red: retired routes remain primary, Workspace iframe remounts on Stores navigation, or Settings becomes a
      third domain destination.
    - Green: only Workspaces/Stores are primary and route round-trips preserve the exact iframe DOM identity.
@@ -411,13 +491,16 @@ not final browser acceptance.
 
 The final handoff supplies numbered cases covering:
 
-1. initial daemon Workspace auto-open and close/reopen through the launcher;
-2. manual connection secondary flow without credential persistence;
-3. multiple Environments and same Store id isolation;
-4. Store Detail Usage/Contents/diagnostics under retained refresh and regional failure;
-5. authority retirement during a destructive action;
-6. narrow/mobile, intermediate, and spacious Store containers;
-7. Workspaces -> Stores -> Workspaces iframe continuity.
+1. fixed Home topology, favorite/recent persistence, and canonical-path duplicate suppression;
+2. managed directory start, tab close without Stop, explicit Stop, daemon stop isolation, and restart restoration;
+3. running-backend navigation, Task Manager ownership/action states, and path-first tab labels;
+4. initial external daemon Workspace auto-open and close/reopen through the launcher;
+5. manual connection secondary flow without credential persistence;
+6. multiple Environments and same Store id isolation;
+7. Store Detail Usage/Contents/diagnostics under retained refresh and regional failure;
+8. authority retirement during a destructive action;
+9. narrow/mobile, intermediate, and spacious Workspace/Store containers;
+10. Workspaces -> Stores -> Workspaces iframe continuity.
 
 Each case records exact setup, trigger, PASS/FAIL observations, restore commands, and the tested commit head. The
 owner performs and accepts this final walkthrough.

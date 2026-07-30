@@ -1,10 +1,15 @@
 <!--
-Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
 1. Track apply-ready Workspaces/Stores delivery as verifiable owner/red/green checkpoints.
 2. Enforce spec-first, focused-review, type-safe evidence, PR, owner-acceptance, and archive boundaries.
 3. Keep completed planning evidence distinct from pending implementation and delivery work.
 
 Original request (2026-07-30): "那么请你开始撰写这份change，如果没有疑问，可以一步到位，并提交。"
+Original request (2026-07-30): "Workspace需要记住曾经打开的目录，并且支持收藏。关键是，支持直接从目录直接启动 openspecui 服务。"
+Original request (2026-07-30): "所有正在运行中的backend都会显示在这里。"
+Original request (2026-07-30): "任务管理器...可以杀掉Workspace，或者收藏、取消收藏"
+Original request (2026-07-30): "弱化端口这个概念，重点强调 path的概念。"
+Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果没有就使用path的foldername；subtitle写git分支名"
 Owner correction (2026-07-21): "每项先明确一个生产 owner、一个精准红例、一个绿例。focused review 未通过，不跑全量门禁。"
 -->
 
@@ -21,16 +26,24 @@ Owner correction (2026-07-21): "每项先明确一个生产 owner、一个精准
       owner-only final browser boundary.
 - [x] 1.6 Manager approves one-pass Change creation and the `governance + readonly content overview` boundary.
 - [x] 1.7 Record implementation reality as `not started`; do not claim planned code or tests as evidence.
+- [x] 1.8 Record the manager-approved managed lifecycle: tab Close preserves service, explicit Stop terminates,
+      daemon stop affects only managed services, and daemon restart restores the managed running set.
+- [x] 1.9 Audit current presentation-only daemon/project-free CLI law and record the required managed-child versus
+      external-lease correction before implementation.
 
 ## 2. Main Spec Law and Public Boundary
 
-Production owners: `openspec/specs/hosted-app-distribution/spec.md`,
+Production owners: `openspec/specs/cli-commands/spec.md`, `openspec/specs/hosted-app-distribution/spec.md`,
 `openspec/specs/hosted-environment-delivery/spec.md`, and affected browser-safe hosted contract modules.
 
 - [ ] 2.1 Update main hosted-App law so Workspaces and Stores are the only primary App domain destinations,
       Settings is secondary, and Connections/Environment are indirect facts.
 - [ ] 2.2 Specify the candidate-backed Workspace Launcher, secondary manual URL flow, Focus/Open/unavailable outcomes,
       duplicate suppression, daemon first-admission auto-open, and close/reopen behavior.
+- [ ] 2.2a Specify fixed Home, canonical directory launch, favorites/history, running navigation, Task Manager,
+      path-first labels, and managed versus external lifecycle authority.
+- [ ] 2.2b Modify project ownership law so external commands remain foreground-owned while authenticated local App
+      launch creates daemon-managed children; define stop/restart restoration without process inference.
 - [ ] 2.3 Replace user-selected backend-tab Store targeting with explicit Environment selection plus internally exact
       source authority, action pinning, dispatch revalidation, and conflict behavior.
 - [ ] 2.4 Specify composite `(envUri, Store id)` identity and prohibit Store-id-only routes, caches, joins, or
@@ -51,12 +64,28 @@ Red evidence:
 Green evidence:
 
 - [ ] 2.10 Prove the updated scenarios exhaustively define launcher, Environment authority, composite Store
-      identity, readonly content, realtime, and retirement outcomes without weakening credential or mutation law.
+      identity, readonly content, managed lifecycle, path presentation, realtime, and retirement outcomes without
+      weakening credential or mutation law.
 
-## 3. Connection Candidates and Open Workspace State
+## 3. Directory Catalog, Managed Backends, Candidates, and Open State
 
-Production owner: new focused pure state modules under `packages/app/src/lib/`; `HostedShell` consumes but does not
-redefine their transitions.
+Production owners: focused CLI daemon child/control modules and pure App state modules under `packages/app/src/lib/`;
+`HostedShell` consumes but does not redefine their transitions.
+
+- [ ] 3.0 Add checked red evidence that the current daemon cannot start one project from an authenticated directory
+      intent and current persistence has no canonical favorite/recent catalog.
+- [ ] 3.0a Define a runtime-parsed versioned directory catalog containing only canonical path, favorite, and recency;
+      reject credentials, URLs, ports, process ids, and generation authority.
+- [ ] 3.0b Physically canonicalize and validate the directory before spawn; single-flight concurrent aliases and key
+      managed ownership by physical identity.
+- [ ] 3.0c Start only a fixed internal serve plan, await readiness, admit one lease, and expose concrete startup state;
+      reject caller-supplied command vectors and remote App authority.
+- [ ] 3.0d Implement exact managed Stop, daemon-stop child settlement, and restart-only capture/restore of the
+      previously running managed directory set.
+- [ ] 3.0e Extend external serve leases with optional owner-handled shutdown; never infer or signal an external
+      process. Without capability, expose presentation Close only.
+- [ ] 3.0f Add mutation-resistance evidence for physical-path duplicate gating, managed-child cleanup, restart
+      restoration, and external-owner isolation.
 
 - [ ] 3.1 Add checked red fixtures proving the current `HostedShellState.tabs` collection simultaneously owns
       persisted connections and mounted Workspaces.
@@ -81,12 +110,28 @@ Green evidence:
 
 - [ ] 3.11 Checked unit tests prove candidate/open separation, stable identity, duplicate suppression, close/reopen,
       daemon disappearance/reappearance, malformed storage rejection, and zero credential persistence.
+- [ ] 3.11a Checked CLI/App tests prove canonical path aliases join one managed child, failed starts do not enter
+      history, favorites survive Stop, tab Close keeps the service running, Stop is generation-exact, daemon stop
+      spares external serve, restart restores once, and stale/unsupported external Stop is rejected.
 - [ ] 3.12 Focused review passes before Workspace Launcher UI work begins.
 
-## 4. Workspace Launcher
+## 4. Workspace Home, Running Navigation, Task Manager, and Launcher
 
 Production owner: a new `packages/app/src/components/workspace-launcher/` feature folder composed by
 `packages/app/src/components/hosted-shell.tsx`.
+
+- [ ] 4.0 Add a fixed-point component red case proving Workspaces has no fixed Home, favorites/recent/path launch,
+      running-backend navigation, or Task Manager.
+- [ ] 4.0a Build fixed non-closeable/non-reorderable Home as the first tab with Favorites above, a path-input form in
+      the middle, Recent below, and a `/workspaces/tasks` entry.
+- [ ] 4.0b Bind path submission to current local-daemon authority with form loading lock, direct errors, focus on
+      success, and unsupported state for standalone/remote App delivery.
+- [ ] 4.0c Render all current backend leases as Workspaces secondary navigation; selecting one focuses or opens the
+      exact Workspace without deriving identity from port.
+- [ ] 4.0d Build Task Manager detail for path, display identity, owner, health, start time, lifecycle state, and
+      ownership-valid Stop/Close/favorite commands.
+- [ ] 4.0e Build one pure path-first label selector: verified GitHub `org/repo`, else canonical folder basename;
+      current branch is subtitle, complete path is retrievable, and locator/port is diagnostic-only.
 
 - [ ] 4.1 Add a fixed-point component red case proving the current `+` Dialog presents a URL input as its direct
       plane and has no candidate list.
@@ -110,6 +155,8 @@ Green evidence:
 
 - [ ] 4.11 Checked component tests cover candidate list, Focus, Open, duplicate suppression, secondary URL flow,
       unavailable states, live row updates, failure, cancel/back, and focus restoration.
+- [ ] 4.11a Checked component tests cover fixed Home, favorite/recent ordering, path form lifecycle, running nav,
+      Task Manager capability matrix, GitHub/folder fallback, branch refresh, long paths, and hidden primary port.
 - [ ] 4.12 Basic component browser fixture proves narrow Dialog containment and stable control dimensions; record it
       as preparation evidence only.
 - [ ] 4.13 Focused review passes before navigation retirement.
@@ -232,6 +279,10 @@ Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/componen
 
 - [ ] 8.1 Make `/` canonicalize to `/workspaces` and expose Workspaces/Stores as the only primary desktop/mobile
       domain navigation.
+- [ ] 8.1a Make Workspaces the only expandable primary item and project every current backend into its secondary
+      navigation without turning Settings, Connections, Environment, or Task Manager into primary domains.
+- [ ] 8.1b Register `/workspaces/tasks` as the Home-owned secondary page while preserving fixed Home and mounted
+      project iframe identity.
 - [ ] 8.2 Keep Settings at the utility edge without presenting it as a third domain destination.
 - [ ] 8.3 Remove `/connections`, `/environment`, and old nested Store routes without redirects or compatibility
       components.
@@ -242,6 +293,8 @@ Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/componen
 - [ ] 8.6 Preserve OpenTray/browser/PWA/native-frame titlebar geometry, drag boundaries, overlay controls, Workspace
       Open in browser, and shell block-size ownership.
 - [ ] 8.7 Audit mobile header labels/icons and stable dimensions for only the retained destinations.
+- [ ] 8.7a Keep GitHub/folder titles and branch subtitles readable at narrow widths; expose full path without letting
+      paths, ports, badges, or controls overlap or create a second inline scroll owner.
 - [ ] 8.8 Remove stale Connections/Environment copy, imports, route tests, and generated/bundled App assumptions.
 
 Green evidence:
@@ -254,9 +307,10 @@ Green evidence:
 ## 9. Documentation, Headers, and Release Metadata
 
 - [ ] 9.1 Update `AGENTS.md` with the settled two-domain App law, candidate/open distinction, Environment-scoped
-      Store identity/authority, and Store Detail boundary.
+      Store identity/authority, managed directory lifecycle, path-first presentation, and Store Detail boundary.
 - [ ] 9.2 Update `i18n.zh.md` with first-hand versus derived vocabulary for Connection candidate, open Workspace,
-      Environment Store scope, composite Store identity, Store Detail Usage, and readonly Store content.
+      Workspace Home, managed backend, directory catalog, Task Manager, path-first label, Environment Store scope,
+      composite Store identity, Store Detail Usage, and readonly Store content.
 - [ ] 9.3 Update relevant English/Chinese README and App documentation without exposing implementation-only backend
       selection or retired route names.
 - [ ] 9.4 Audit every changed TypeScript/TSX file, including tests, for an accurate timestamped orthogonal-intent and
@@ -272,12 +326,12 @@ Green evidence:
 - [ ] 10.1 Independently review every named red case at its pre-fix fixed point; distinguish true counterexample
       evidence from characterization.
 - [ ] 10.2 Independently review mutation-resistance evidence for daemon dismissal, exact Store authority retirement,
-      and Store-selector projection identity.
+      Store-selector projection identity, managed-child cleanup, restart restoration, and canonical-path dedupe.
 - [ ] 10.3 Run the checked test-type lane for public Router/Service/Adapter/contract fixtures; reject `any`, `as any`,
       `as never`, fabricated non-null assertions, and suppression comments.
 - [ ] 10.4 Run focused Core/Server/App unit tests for every production owner.
-- [ ] 10.5 Run App component browser fixtures for launcher, container responsiveness, navigation, and titlebar
-      preparation evidence.
+- [ ] 10.5 Run App component browser fixtures for Home, running navigation, Task Manager, launcher, container
+      responsiveness, navigation, and titlebar preparation evidence.
 - [ ] 10.6 Run `pnpm format:check`.
 - [ ] 10.7 Run `pnpm lint:ci`.
 - [ ] 10.8 Run `pnpm typecheck`.
@@ -293,9 +347,10 @@ Green evidence:
 - [ ] 11.2 Open/update a feature-branch PR only after local CI-equivalent checks pass; never push directly to `main`.
 - [ ] 11.3 Wait for required PR checks on the exact head and resolve independent review findings through spec-first
       corrections.
-- [ ] 11.4 Prepare numbered production-boundary walkthrough cases for daemon auto-open/close/reopen, manual connect,
-      multiple Environments/same Store id, Store Detail retained/regional states, destructive authority retirement,
-      responsive containers, and iframe continuity.
+- [ ] 11.4 Prepare numbered production-boundary walkthrough cases for Home/favorite/history, path start/dedupe,
+      managed Close/Stop/daemon restart, external-owner isolation, running navigation/Task Manager, path-first labels,
+      daemon auto-open/close/reopen, manual connect, multiple Environments/same Store id, Store Detail retained/
+      regional states, destructive authority retirement, responsive containers, and iframe continuity.
 - [ ] 11.5 Include exact setup, trigger, PASS/FAIL observation, restore commands, and tested head; exclude credentials,
       Authorization headers, and private launch fragments.
 - [ ] 11.6 Owner performs and accepts the final end-to-end browser walkthrough. Automated fixtures cannot complete
