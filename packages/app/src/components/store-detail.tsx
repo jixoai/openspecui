@@ -45,11 +45,20 @@ export function StoreDetail({ projection, onUnregister, onRemove, onBack }: Stor
           <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
             {projection.identity.envUri}
           </span>
-          {!projection.hasAuthority ? (
-            <span className="text-xs text-amber-600">No current Environment authority</span>
-          ) : null}
         </div>
       </header>
+
+      {projection.authorityIssue ? (
+        <p
+          className={
+            projection.authorityIssue.severity === 'error'
+              ? 'border-destructive/40 bg-destructive/5 text-destructive rounded-md border px-3 py-2 text-sm'
+              : 'rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm text-amber-700'
+          }
+        >
+          {projection.authorityIssue.message}
+        </p>
+      ) : null}
 
       {/* Blocking diagnostics promoted to the direct plane (7.11). */}
       {projection.hasBlockingDiagnostics ? (

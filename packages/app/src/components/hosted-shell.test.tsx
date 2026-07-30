@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Prove health metadata creates the canonical authenticated Project Web iframe.
- * 2. Prove explicit refresh, tab switching, and dialog interactions target the intended tab.
+ * 2. Prove refresh, tab switching, and Launcher transition/persistence target the intended Workspace.
  * 3. Preserve per-tab iframe sessions and runtime identity across ordinary shell updates.
  * 4. Keep a rendered iframe mounted while backend health is revalidated or temporarily offline, with
  *    distinct visual loading and terminal frame-error evidence.
@@ -15,11 +15,12 @@
 // @vitest-environment jsdom
 
 import { buildBackendHealthPayload } from '@openspecui/core/hosted-app'
-import { act, fireEvent, screen } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getHostedShellStorageKey } from '../lib/shell-state'
+import { getWorkspaceCandidateCatalogStorageKey } from '../lib/workspace-candidate-catalog'
 import { HostedShell, HostedShellTabContent } from './hosted-shell'
 
 const originalFetch = global.fetch
@@ -149,6 +150,9 @@ describe('HostedShell', () => {
     })
     document.body.innerHTML = ''
     localStorage.clear()
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: getWorkspaceCandidateCatalogStorageKey() })
+    )
     setSuccessfulFetch()
   })
 
@@ -329,6 +333,96 @@ describe('HostedShell', () => {
     })
 
     expect(document.querySelector('dialog[open]')).toBeTruthy()
+  })
+
+  it('does not persist or open a manual candidate before a successful backend probe', async () => {
+    const healthRequest = deferred<Response>()
+    global.fetch = vi.fn(() => healthRequest.promise) as typeof fetch
+    const { container } = await renderShell(
+      <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
+    )
+
+    fireEvent.click(screen.getByLabelText('Add backend API'))
+    fireEvent.click(screen.getByText('Connect another backend...'))
+    fireEvent.change(screen.getByPlaceholderText('http://localhost:3100'), {
+      target: { value: 'http://localhost:3999' },
+    })
+    fireEvent.click(screen.getByText('Connect'))
+
+    expect(screen.getByText('Connect').closest('button')?.disabled).toBe(true)
+    expect(localStorage.getItem(getWorkspaceCandidateCatalogStorageKey())).toBeNull()
+    expect(container.querySelector('iframe')).toBeNull()
+
+    act(() => {
+      healthRequest.resolve(new Response(null, { status: 503 }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('This backend is currently offline.')).toBeTruthy()
+      expect(screen.getByText('Connect').closest('button')?.disabled).toBe(false)
+    })
+    expect(localStorage.getItem(getWorkspaceCandidateCatalogStorageKey())).toBeNull()
+    expect(container.querySelector('iframe')).toBeNull()
+  })
+
+  it('persists and opens a manual candidate only after its backend probe succeeds', async () => {
+    const healthRequest = deferred<Response>()
+    let healthRequestCount = 0
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (!url.endsWith('/api/health')) throw new Error(`Unexpected fetch: ${url}`)
+      healthRequestCount += 1
+      if (healthRequestCount === 1) return healthRequest.promise
+      return new Response(
+        JSON.stringify(
+          buildBackendHealthPayload({
+            projectDir: '/tmp/manual-project',
+            projectName: 'manual-project',
+            watcherEnabled: true,
+            openspecuiVersion: '6.0.0',
+            embeddedUiUrl: 'http://localhost:3998/dashboard',
+          })
+        ),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    }) as typeof fetch
+    const { container } = await renderShell(
+      <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
+    )
+
+    fireEvent.click(screen.getByLabelText('Add backend API'))
+    fireEvent.click(screen.getByText('Connect another backend...'))
+    fireEvent.change(screen.getByPlaceholderText('http://localhost:3100'), {
+      target: { value: 'http://localhost:3998' },
+    })
+    fireEvent.click(screen.getByText('Connect'))
+    expect(localStorage.getItem(getWorkspaceCandidateCatalogStorageKey())).toBeNull()
+
+    act(() => {
+      healthRequest.resolve(
+        new Response(
+          JSON.stringify(
+            buildBackendHealthPayload({
+              projectDir: '/tmp/manual-project',
+              projectName: 'manual-project',
+              watcherEnabled: true,
+              openspecuiVersion: '6.0.0',
+              embeddedUiUrl: 'http://localhost:3998/dashboard',
+            })
+          ),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+    })
+
+    await waitFor(() => {
+      expect(document.querySelector('dialog[open]')).toBeNull()
+      expect(localStorage.getItem(getWorkspaceCandidateCatalogStorageKey())).toContain(
+        'http://localhost:3998'
+      )
+      expect(container.querySelector('iframe')).toBeTruthy()
+    })
   })
 
   it('reloads only the current active iframe when the refresh action is clicked', async () => {

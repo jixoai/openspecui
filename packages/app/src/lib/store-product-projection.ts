@@ -15,6 +15,7 @@ import type {
   StoreInspectorProjection,
   StoreInventoryProjection,
 } from '../types/root-context'
+import type { EnvironmentAuthorityIssue } from './environment-authority-presentation'
 import type {
   StoreDetailChangesRegion,
   StoreDetailProjectionInput,
@@ -165,6 +166,7 @@ export function projectStoreDetailInput(input: {
   readonly specs: StoreDetailSpecsRegion
   readonly changes: StoreDetailChangesRegion
   readonly hasAuthority: boolean
+  readonly authorityIssue?: EnvironmentAuthorityIssue | null
 }): StoreDetailProjectionInput {
   const doctor = selectStoreDoctor(input.inspector, input.storeId)
   const inventoryStore = input.inventory?.stores.find((store) => store.id === input.storeId)
@@ -205,5 +207,6 @@ export function projectStoreDetailInput(input: {
     },
     ...(input.inspector?.evidence !== undefined ? { evidence: input.inspector.evidence } : {}),
     hasAuthority: input.hasAuthority,
+    ...(input.authorityIssue !== undefined ? { authorityIssue: input.authorityIssue } : {}),
   }
 }

@@ -126,6 +126,7 @@ describe('workspace candidate catalog (3.3)', () => {
         { apiBaseUrl: 'http://a', source: 'manual', lastConnectedAt: 2 },
         { apiBaseUrl: 'http://leak', source: 'manual', credential: 'secret' },
         { apiBaseUrl: 'http://token', source: 'manual', token: 'x' },
+        { apiBaseUrl: 'http://operator:secret@localhost:3100', source: 'manual' },
         { apiBaseUrl: '', source: 'manual' },
       ],
     })

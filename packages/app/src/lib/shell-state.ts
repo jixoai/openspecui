@@ -48,6 +48,10 @@ export function normalizeHostedApiBaseUrl(input: string): string | null {
     return null
   }
 
+  // A locator is a durable, credential-free identity. URL userinfo would otherwise survive
+  // normalization and be written to the tab/candidate catalogs.
+  if (url.username || url.password) return null
+
   url.hash = ''
   url.search = ''
   const pathname = url.pathname.replace(/\/+$/, '')

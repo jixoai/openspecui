@@ -45,14 +45,23 @@ import {
 import { useConnectionsActions } from '../lib/use-connections'
 
 export interface AppDaemonWorkspaceContextValue {
+  /** Latest concrete daemon-control failure. */
   error: string | null
+  /** Whether the current App delivery owns the local daemon control surface. */
   availability: 'checking' | 'supported' | 'unsupported'
+  /** Complete current daemon Workspace ledger. */
   workspaces: readonly AppDaemonWorkspaceBinding[]
+  /** Ask the daemon to open one opaque current Workspace in the system browser. */
   openWorkspaceInBrowser(workspaceId: string): Promise<void>
+  /** Start or join one daemon-managed backend by canonical local directory. */
   startManagedProject(projectDir: string): Promise<AppDaemonWorkspaceBinding>
+  /** Stop and settle one exact daemon-managed generation. */
   stopManagedProject(generation: number): Promise<void>
+  /** Focus or open the exact Workspace represented by one current daemon id. */
   focusWorkspace(workspaceId: string): void
+  /** Close Workspace presentation without claiming external process ownership. */
   closeWorkspace(workspaceId: string): void
+  /** Resolve a normalized backend locator to its opaque current daemon Workspace id. */
   resolveWorkspaceId(apiBaseUrl: string): string | null
   /**
    * Record that an open Workspace backed by `apiBaseUrl` was closed by the user, so an unchanged
@@ -62,6 +71,25 @@ export interface AppDaemonWorkspaceContextValue {
 }
 
 const AppDaemonWorkspaceContext = createContext<AppDaemonWorkspaceContextValue | null>(null)
+
+const UNSUPPORTED_APP_DAEMON_WORKSPACE_CONTEXT: AppDaemonWorkspaceContextValue = {
+  error: null,
+  availability: 'unsupported',
+  workspaces: [],
+  openWorkspaceInBrowser: async () => {
+    throw new Error('OpenSpecUI App daemon is unavailable.')
+  },
+  dismissDaemonWorkspace: () => {},
+  startManagedProject: async () => {
+    throw new Error('Directory launch is unavailable in this App delivery.')
+  },
+  stopManagedProject: async () => {
+    throw new Error('Managed Stop is unavailable in this App delivery.')
+  },
+  focusWorkspace: () => {},
+  closeWorkspace: () => {},
+  resolveWorkspaceId: () => null,
+}
 
 /**
  * Apply one daemon snapshot as admission decisions.
@@ -297,24 +325,5 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
 /** Read daemon Workspace authority; isolated mounts remain objectively unsupported. */
 export function useAppDaemonWorkspace(): AppDaemonWorkspaceContextValue {
   const value = useContext(AppDaemonWorkspaceContext)
-  return (
-    value ?? {
-      error: null,
-      availability: 'unsupported',
-      workspaces: [],
-      openWorkspaceInBrowser: async () => {
-        throw new Error('OpenSpecUI App daemon is unavailable.')
-      },
-      dismissDaemonWorkspace: () => {},
-      startManagedProject: async () => {
-        throw new Error('Directory launch is unavailable in this App delivery.')
-      },
-      stopManagedProject: async () => {
-        throw new Error('Managed Stop is unavailable in this App delivery.')
-      },
-      focusWorkspace: () => {},
-      closeWorkspace: () => {},
-      resolveWorkspaceId: () => null,
-    }
-  )
+  return value ?? UNSUPPORTED_APP_DAEMON_WORKSPACE_CONTEXT
 }

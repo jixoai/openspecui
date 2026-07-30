@@ -1,7 +1,8 @@
 /**
  * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
  * 1. Audit the mobile/desktop header for only the retained destinations (8.6/8.7).
- * 2. Prove the mobile header renders Workspaces + Stores (+ Settings when no overlay) with stable icon+label geometry.
+ * 2. Prove mobile renders Workspaces + Stores plus the expandable running-backend secondary navigation.
+ * 3. Preserve stable mobile icon+label geometry.
  *
  * Original request (2026-07-30): "左侧只留下 Workspaces + Stores 就行了。"
  * Owner direction (2026-07-29): mobile-first visual priority, container-query responsive.
@@ -21,11 +22,13 @@ const EMPTY_CONTEXT: AppRouterContext = {
 }
 
 const originalMatchMedia = window.matchMedia
+const renderedRoots = new Set<Root>()
 
 async function renderAt(element: ReactElement): Promise<{ container: HTMLDivElement; root: Root }> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
+  renderedRoots.add(root)
   await act(async () => {
     root.render(element)
   })
@@ -57,7 +60,11 @@ describe('App header audit (8.6/8.7)', () => {
       dispatchEvent: () => false,
     }))
   })
-  afterEach(() => {
+  afterEach(async () => {
+    await act(async () => {
+      for (const root of renderedRoots) root.unmount()
+    })
+    renderedRoots.clear()
     window.matchMedia = originalMatchMedia
     document.body.innerHTML = ''
   })
@@ -84,6 +91,15 @@ describe('App header audit (8.6/8.7)', () => {
     // No retired links in the mobile header.
     expect(mobileHeader?.querySelector('a[href="/connections"]')).toBeNull()
     expect(mobileHeader?.querySelector('a[href="/environment"]')).toBeNull()
+  })
+
+  it('mounts Workspaces running-backend secondary navigation on mobile', async () => {
+    const { container } = await renderAt(<RouterProvider router={routerFor('/workspaces')} />)
+    const mobileSecondary = container.querySelector(
+      '[data-testid="mobile-workspaces-secondary-nav"]'
+    )
+    expect(mobileSecondary).toBeTruthy()
+    expect(mobileSecondary?.textContent).toContain('Running (0)')
   })
 
   it('mobile header icons have stable dimensions (h-3.5 w-3.5)', async () => {

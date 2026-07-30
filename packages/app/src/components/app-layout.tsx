@@ -161,6 +161,21 @@ function AppLayoutSurface() {
               }
             )}
           </header>
+          {isActive('/workspaces') ? (
+            <div
+              className="border-border bg-background max-h-40 overflow-y-auto border-b px-2 py-1 md:hidden"
+              data-testid="mobile-workspaces-secondary-nav"
+            >
+              <WorkspacesSecondaryNav
+                entries={runningBackends}
+                activeId={activeBackendId}
+                onSelect={(entryId) => {
+                  daemonWorkspace.focusWorkspace(entryId)
+                  void navigate({ to: '/workspaces' })
+                }}
+              />
+            </div>
+          ) : null}
           <main
             className={`min-h-0 min-w-0 flex-1 ${workspacesVisible ? 'overflow-hidden' : 'overflow-auto'}`}
             data-testid="app-main"

@@ -72,6 +72,17 @@ describe('Store Detail projection (7.4/7.5/7.8)', () => {
     expect(projection.hasBlockingDiagnostics).toBe(true)
     expect(projection.blockingDiagnostics[0]?.message).toBe('root unhealthy')
   })
+
+  it('preserves exact authority-loss evidence in the composed direct plane', () => {
+    const projection = selectStoreDetailProjection(
+      baseInput({
+        hasAuthority: false,
+        authorityIssue: { severity: 'error', message: 'sources conflict' },
+      })
+    )
+    expect(projection.authorityIssue).toEqual({ severity: 'error', message: 'sources conflict' })
+    expect(projection.canCleanUp).toBe(false)
+  })
 })
 
 describe('Store Detail observed-only Usage (7.9)', () => {

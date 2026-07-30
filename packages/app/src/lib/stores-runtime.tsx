@@ -14,6 +14,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -46,22 +47,37 @@ import { deriveProjectContexts, projectRootObservation } from './use-environment
 import { useStoreData, type StoreDataState } from './use-store-data'
 
 export interface StoresRuntimeValue {
+  /** Complete current backend observations retained for product evidence. */
   readonly observations: readonly ConnectionObservation[]
+  /** Environment-scoped sources derived from typed backend observations. */
   readonly environmentSources: readonly EnvironmentSourceObservation[]
+  /** Connected-project evidence grouped by opaque Environment identity. */
   readonly environments: readonly EnvironmentEvidenceEntry[]
+  /** Credential-free persisted Environment selection. */
   readonly selection: EnvironmentSelectionState
+  /** Effective selected Environment, including a retained unavailable selection. */
   readonly selectedEnvUri: string | null
+  /** Current readonly/mutation authority outcome for the selected Environment. */
   readonly authority: EnvironmentAuthorityResolution
   /** Deterministic current source used for reads; conflict removes mutation authority, not evidence. */
   readonly readSource: EnvironmentSourceObservation | null
+  /** Store list/Doctor lifecycle for the retained read source. */
   readonly storeData: StoreDataState
+  /** Source-labelled connected Workspace Context used for observed-only Usage. */
   readonly projectContexts: readonly ProjectContextObservation[]
+  /** Product rows joined by composite Environment/Store identity. */
   readonly rows: readonly StoreIndexRow[]
+  /** Current mutation ledger records for the retained source. */
   readonly mutationRecords: readonly StoreMutationEnvelope[]
+  /** Compatibility fact for readonly Store content; never an action permission. */
   readonly contentSupported: boolean
+  /** Select one opaque Environment identity. */
   selectEnvironment(envUri: string): void
+  /** Pin exact current mutation authority, or null when mutation is not currently safe. */
   pinMutationAuthority(): EnvironmentActionAuthority | null
+  /** Revalidate a pinned draft against the last committed observation snapshot. */
   isMutationAuthorityCurrent(authority: EnvironmentActionAuthority | null): boolean
+  /** Dispatch one Store mutation only after exact committed-authority revalidation. */
   mutate(
     authority: EnvironmentActionAuthority | null,
     input: BackendStoreMutateInput
@@ -217,7 +233,9 @@ export function StoresRuntimeProvider({
         retainedReadSource.current
       )
     : ({ kind: 'no-environment' } satisfies EnvironmentAuthorityResolution)
-  if (authority.kind === 'authority') retainedReadSource.current = authority.source
+  useLayoutEffect(() => {
+    if (authority.kind === 'authority') retainedReadSource.current = authority.source
+  }, [authority])
   const selectedSources = environmentSources
     .filter(
       (source) =>
@@ -249,7 +267,12 @@ export function StoresRuntimeProvider({
     selection: effectiveSelection,
     observations: environmentSources,
   })
-  authorityContextRef.current = { selection: effectiveSelection, observations: environmentSources }
+  useLayoutEffect(() => {
+    authorityContextRef.current = {
+      selection: effectiveSelection,
+      observations: environmentSources,
+    }
+  }, [effectiveSelection, environmentSources])
   const resolveAuthorityContext = useCallback(() => authorityContextRef.current, [])
   const dispatch = useStoreEnvironmentMutationDispatcher(resolveAuthorityContext)
   const mutate = useCallback(

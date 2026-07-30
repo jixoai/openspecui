@@ -56,6 +56,8 @@ export function WorkspaceLauncherDialog({
   const [mode, setMode] = useState<'list' | 'connect'>('list')
   const [connectUrl, setConnectUrl] = useState('')
   const [connectError, setConnectError] = useState<string | null>(null)
+  const connectPending = pending.some((command) => command.kind === 'connect')
+  const anyPending = pending.length > 0
 
   const rows = useMemo(
     () => selectLauncherRows({ candidates, openWorkspaces, pending }),
@@ -75,6 +77,7 @@ export function WorkspaceLauncherDialog({
   }, [rows, query])
 
   const close = () => {
+    if (anyPending) return
     setMode('list')
     setQuery('')
     setConnectUrl('')
@@ -110,8 +113,9 @@ export function WorkspaceLauncherDialog({
         ) : (
           <button
             type="button"
+            disabled={connectPending}
             onClick={() => setMode('list')}
-            className="hover:bg-muted inline-flex items-center gap-1.5 rounded-md text-lg font-semibold"
+            className="hover:bg-muted inline-flex items-center gap-1.5 rounded-md text-lg font-semibold disabled:opacity-50"
           >
             <ArrowLeft className="h-4 w-4" />
             Connect another backend
@@ -123,15 +127,17 @@ export function WorkspaceLauncherDialog({
           <>
             <button
               type="button"
+              disabled={anyPending}
               onClick={close}
-              className="hover:bg-muted rounded-md px-3 py-1.5 text-sm"
+              className="hover:bg-muted rounded-md px-3 py-1.5 text-sm disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="button"
+              disabled={anyPending}
               onClick={() => setMode('connect')}
-              className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm"
+              className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
               Connect another backend...
@@ -141,16 +147,19 @@ export function WorkspaceLauncherDialog({
           <>
             <button
               type="button"
+              disabled={connectPending}
               onClick={() => setMode('list')}
-              className="hover:bg-muted rounded-md px-3 py-1.5 text-sm"
+              className="hover:bg-muted rounded-md px-3 py-1.5 text-sm disabled:opacity-50"
             >
               Back
             </button>
             <button
               type="button"
+              disabled={connectPending}
               onClick={submitConnect}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex min-w-24 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50"
             >
+              {connectPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               Connect
             </button>
           </>
@@ -204,17 +213,19 @@ export function WorkspaceLauncherDialog({
             id="launcher-connect-url"
             type="url"
             value={connectUrl}
+            disabled={connectPending}
             onChange={(event) => {
               setConnectUrl(event.target.value)
               setConnectError(null)
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') submitConnect()
+              if (event.key === 'Enter' && !connectPending) submitConnect()
             }}
             placeholder="http://localhost:3100"
-            className="border-border bg-background focus:border-primary w-full rounded-md border px-3 py-2 text-sm outline-none"
+            className="border-border bg-background focus:border-primary w-full rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-60"
           />
           {connectError ? <p className="text-destructive text-xs">{connectError}</p> : null}
+          {error ? <p className="text-destructive text-xs">{error}</p> : null}
         </div>
       )}
     </Dialog>
@@ -262,7 +273,7 @@ function LauncherRowView({
             onClick={() =>
               command.kind === 'focus' ? onFocus(command.apiBaseUrl) : onOpen(command.apiBaseUrl)
             }
-            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium disabled:opacity-50"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex min-w-16 items-center justify-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium disabled:opacity-50"
           >
             {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             {command.kind === 'focus' ? 'Focus' : 'Open'}
@@ -271,9 +282,10 @@ function LauncherRowView({
         <div className="relative">
           <button
             type="button"
+            disabled={pending}
             aria-label={`More actions for ${candidate.apiBaseUrl}`}
             onClick={() => setMenuOpen((value) => !value)}
-            className="text-muted-foreground hover:text-foreground rounded-md p-1"
+            className="text-muted-foreground hover:text-foreground rounded-md p-1 disabled:opacity-50"
           >
             <MoreVertical className="h-4 w-4" />
           </button>

@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Prove hosted tab state normalizes durable credential-free backend locators and ordering.
+ * 2. Preserve iframe entrypoint and active-tab transition behavior.
+ * 3. Reject persisted URL userinfo so locators cannot leak credentials into storage.
+ *
+ * Original request (2026-07-30): "Workspaces融合了Connections。"
+ * Review correction (2026-07-30): credential-free candidate locators must reject URL userinfo.
+ */
 import { describe, expect, it } from 'vitest'
 import {
   applyHostedLaunchRequest,
@@ -5,6 +14,7 @@ import {
   buildHostedEmbeddedUiUrl,
   createEmptyHostedShellState,
   getHostedTabLabel,
+  normalizeHostedApiBaseUrl,
   parseHostedShellState,
   removeHostedTab,
   reorderHostedTabs,
@@ -68,6 +78,23 @@ describe('hosted shell state helpers', () => {
 
     expect(parsed.activeTabId).toBe('session-a')
     expect(parsed.tabs[0]?.apiBaseUrl).toBe('http://localhost:13000')
+  })
+
+  it('rejects URL userinfo from normalized and persisted backend locators', () => {
+    expect(normalizeHostedApiBaseUrl('http://operator:secret@localhost:13000')).toBeNull()
+    expect(
+      parseHostedShellState({
+        activeTabId: 'session-a',
+        tabs: [
+          {
+            id: 'session-a',
+            sessionId: 'session-a',
+            apiBaseUrl: 'http://operator:secret@localhost:13000',
+            createdAt: 1,
+          },
+        ],
+      })
+    ).toEqual(createEmptyHostedShellState())
   })
 
   it('picks a nearby tab when the active tab is removed', () => {

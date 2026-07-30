@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Pull typed Store list/Doctor state on admission and after lifecycle-only Push.
  * 2. Retain same-locator Store data during revalidation, but mask it before a replacement locator's first render.
  * 3. Revoke Store mutation authority unless the Doctor projection and transport are current.
@@ -28,13 +28,21 @@ import {
 } from './cli-projection-transport'
 
 export interface StoreDataState {
+  /** Last renderable Doctor projection for the current locator. */
   inspector: StoreInspectorProjection | undefined
+  /** Last renderable Store-list projection for the current locator. */
   inventory: StoreInventoryProjection | undefined
+  /** True before the current locator has initial Doctor data. */
   isInspectorLoading: boolean
+  /** True before the current locator has initial Store-list data. */
   isInventoryLoading: boolean
+  /** True while retained Doctor data is being replaced or an explicit refresh is pending. */
   isInspectorUpdating: boolean
+  /** True while retained Store-list data is being replaced or an explicit refresh is pending. */
   isInventoryUpdating: boolean
+  /** Current Store-list transport or projection failure. */
   inventoryError: Error | null
+  /** Current Doctor transport or projection failure. */
   inspectorError: Error | null
   /** True only when current Doctor CLI truth and its lifecycle transport can authorize a mutation. */
   canMutate: boolean
@@ -42,6 +50,7 @@ export interface StoreDataState {
 }
 
 export interface UseStoreDataOptions {
+  /** Exact current backend locator; null keeps the owner dormant. */
   apiBaseUrl?: string | null
 }
 
@@ -132,7 +141,9 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
     doctor: null,
   })
   const [transportError, setTransportError] = useState<LocatorProjectionError | null>(null)
+  const [isRefreshPending, setIsRefreshPending] = useState(false)
   const requestEpoch = useRef(0)
+  const refreshInFlight = useRef<{ apiBaseUrl: string; promise: Promise<void> } | null>(null)
   const pullSequence = useRef({ list: 0, doctor: 0 })
   const admissionPulls = useRef<Record<'list' | 'doctor', StoreAdmissionPull | null>>({
     list: null,
@@ -194,12 +205,33 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
     [apiBaseUrl]
   )
 
-  const refresh = useCallback(async (): Promise<void> => {
-    if (!apiBaseUrl) return
-    setNotices({ list: null, doctor: null })
-    setTransportCurrent({ list: null, doctor: null })
-    await refreshBackendStoreProjections({ apiBaseUrl })
-    await Promise.all([pull('list'), pull('doctor')])
+  const refresh = useCallback((): Promise<void> => {
+    if (!apiBaseUrl) return Promise.resolve()
+    const current = refreshInFlight.current
+    if (current?.apiBaseUrl === apiBaseUrl) return current.promise
+
+    setIsRefreshPending(true)
+    const promise = (async () => {
+      try {
+        setNotices({ list: null, doctor: null })
+        setTransportCurrent({ list: null, doctor: null })
+        setTransportError(null)
+        await refreshBackendStoreProjections({ apiBaseUrl })
+        await Promise.all([pull('list'), pull('doctor')])
+      } catch (caught) {
+        setTransportError({
+          apiBaseUrl,
+          kind: 'list',
+          value: caught instanceof Error ? caught : new Error(String(caught)),
+        })
+      }
+    })().finally(() => {
+      if (refreshInFlight.current?.promise !== promise) return
+      refreshInFlight.current = null
+      setIsRefreshPending(false)
+    })
+    refreshInFlight.current = { apiBaseUrl, promise }
+    return promise
   }, [apiBaseUrl, pull])
 
   useEffect(() => {
@@ -209,6 +241,8 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
     setNotices({ list: null, doctor: null })
     setTransportCurrent({ list: null, doctor: null })
     setTransportError(null)
+    setIsRefreshPending(false)
+    refreshInFlight.current = null
     latestProjectionState.current = { list: undefined, doctor: undefined }
     if (!apiBaseUrl) return
 
@@ -300,9 +334,13 @@ export function useStoreData(options: UseStoreDataOptions = {}): StoreDataState 
   const isInspectorLoading =
     Boolean(apiBaseUrl) && (!inspectorState || inspectorState.state === 'loading')
   const isInventoryUpdating =
-    listNotice?.state === 'revalidating' || inventoryState?.state === 'revalidating'
+    isRefreshPending ||
+    listNotice?.state === 'revalidating' ||
+    inventoryState?.state === 'revalidating'
   const isInspectorUpdating =
-    doctorNotice?.state === 'revalidating' || inspectorState?.state === 'revalidating'
+    isRefreshPending ||
+    doctorNotice?.state === 'revalidating' ||
+    inspectorState?.state === 'revalidating'
   const canMutate =
     transportCurrent.doctor === apiBaseUrl &&
     noticeMatchesReadyState(doctorNotice, inspectorState) &&

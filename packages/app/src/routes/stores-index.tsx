@@ -12,33 +12,9 @@ import { useEffect, useRef, useState } from 'react'
 import { NewStoreDialog, type NewStoreLifecycleState } from '../components/new-store-dialog'
 import { StoresIndex } from '../components/stores-index'
 import type { EnvironmentActionAuthority } from '../lib/environment-authority'
+import { selectEnvironmentAuthorityIssue } from '../lib/environment-authority-presentation'
 import { buildStoresEnvironmentsPath } from '../lib/store-route-identity'
 import { useStoresRuntime } from '../lib/stores-runtime'
-
-function authorityMessage(
-  kind: ReturnType<typeof useStoresRuntime>['authority']['kind']
-): string | null {
-  switch (kind) {
-    case 'no-environment':
-      return 'Open a compatible Workspace to observe its runtime Environment.'
-    case 'requires-selection':
-      return 'Select an Environment before inspecting Stores.'
-    case 'pending':
-      return 'The selected Environment is refreshing.'
-    case 'offline':
-      return 'Every observed source for this Environment is offline.'
-    case 'authentication-required':
-      return 'The selected Environment requires authentication.'
-    case 'incompatible':
-      return 'No observed source supports the Store protocol.'
-    case 'conflict':
-      return 'Current sources disagree on Store evidence for this Environment.'
-    case 'no-current-authority':
-      return 'The selected Environment has no current access source.'
-    case 'authority':
-      return null
-  }
-}
 
 /** Production route owner for `/stores`. */
 export function StoresIndexRoute() {
@@ -102,7 +78,7 @@ export function StoresIndexRoute() {
         envUri={runtime.selectedEnvUri ?? ''}
         environmentLabel={runtime.selectedEnvUri ?? undefined}
         environments={environmentOptions}
-        authorityMessage={authorityMessage(runtime.authority.kind)}
+        authorityMessage={selectEnvironmentAuthorityIssue(runtime.authority.kind)?.message ?? null}
         isLoading={runtime.storeData.isInventoryLoading}
         isUpdating={runtime.storeData.isInventoryUpdating || runtime.storeData.isInspectorUpdating}
         error={errors || null}

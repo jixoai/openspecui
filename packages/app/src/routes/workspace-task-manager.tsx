@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Render every current daemon lease as path-first Task Manager evidence.
  * 2. Expose exact managed Stop, presentation Close, and canonical-path favorite actions.
  * 3. Bind destructive commands to pending/error states without presenting port as identity.
+ * 4. Preserve physical continuity while daemon backend rows enter, leave, or reorder.
  *
  * Original request (2026-07-30): "任务管理器，打开后，可以看到所有正在运行中backend的详情，并可以杀掉Workspace，或者收藏、取消收藏"
  */
@@ -18,6 +19,7 @@ import {
   useWorkspaceDirectoryCatalog,
   useWorkspaceDirectoryCatalogActions,
 } from '../lib/use-workspace-directory-catalog'
+import { useListFlowAnimation } from '../lib/use-list-flow-animation'
 
 /** Home-owned running backend manager. */
 export function WorkspaceTaskManagerRoute() {
@@ -26,6 +28,8 @@ export function WorkspaceTaskManagerRoute() {
     () => projectDaemonRunningBackends(daemon.workspaces),
     [daemon.workspaces]
   )
+  const entryIds = useMemo(() => entries.map((entry) => entry.id), [entries])
+  const listItemRef = useListFlowAnimation(entryIds)
   const catalog = useWorkspaceDirectoryCatalog()
   const catalogActions = useWorkspaceDirectoryCatalogActions()
   const [pendingId, setPendingId] = useState<string | null>(null)
@@ -77,6 +81,7 @@ export function WorkspaceTaskManagerRoute() {
             const externalStop = commands.some((command) => command.kind === 'stop-external')
             return (
               <li
+                ref={listItemRef(entry.id)}
                 key={entry.id}
                 className="@lg:grid-cols-[minmax(0,1fr)_auto] grid min-w-0 gap-3 py-4"
               >

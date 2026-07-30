@@ -11,6 +11,7 @@
  * this module never acquires subscriptions or invents health/completeness/ownership. Errors and blockers stay direct;
  * healthy raw evidence and repository facts are secondary.
  */
+import type { EnvironmentAuthorityIssue } from './environment-authority-presentation'
 
 /** Composite Store Detail identity (decoded from the route). */
 export interface StoreDetailIdentity {
@@ -81,6 +82,8 @@ export interface StoreDetailProjectionInput {
   readonly evidence?: unknown
   /** Whether the current Environment authority is valid for destructive actions. */
   readonly hasAuthority: boolean
+  /** Exact direct-plane reason current Environment authority is unavailable. */
+  readonly authorityIssue?: EnvironmentAuthorityIssue | null
 }
 
 /** The composed Store Detail direct plane. */
@@ -100,6 +103,7 @@ export interface StoreDetailProjection {
   readonly repository: StoreDetailRepositoryFacts
   readonly evidence?: unknown
   readonly hasAuthority: boolean
+  readonly authorityIssue: EnvironmentAuthorityIssue | null
   /** Whether unregister/remove can start with current authority and no unsettled mutation. */
   readonly canCleanUp: boolean
 }
@@ -134,6 +138,12 @@ export function selectStoreDetailProjection(
     repository: input.repository,
     ...(input.evidence !== undefined ? { evidence: input.evidence } : {}),
     hasAuthority: input.hasAuthority,
+    authorityIssue: input.hasAuthority
+      ? null
+      : (input.authorityIssue ?? {
+          severity: 'warning',
+          message: 'No current Environment authority.',
+        }),
     canCleanUp,
   }
 }

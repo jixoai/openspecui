@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Render a divided, searchable, filterable, selected-Environment Stores index (7.3).
  * 2. Container-responsive: one readable column when crowded, added density when spacious; no horizontal scroll (7.17).
  * 3. Render Environment selection, title actions, and retained projection lifecycle without owning data.
  * 4. Keep direct Store id/health/usage/mutation state; secondary evidence remains indirect.
+ * 5. Animate Store row insertion and layout movement without changing product identity or selection.
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
  * Spec: hosted-app-distribution › "Scan Stores in an Environment" and the container-responsive law.
@@ -15,6 +16,7 @@
 import { LoaderCircle, Network, Plus, RefreshCw, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { buildStoreDetailPath } from '../lib/store-route-identity'
+import { useListFlowAnimation } from '../lib/use-list-flow-animation'
 
 /** Health of one Store row, observed-only. */
 export type StoreRowHealth = 'healthy' | 'unhealthy' | 'unknown'
@@ -101,6 +103,8 @@ export function StoresIndex({
       return row.storeId.toLowerCase().includes(q) || (row.root?.toLowerCase().includes(q) ?? false)
     })
   }, [rows, query, healthFilter])
+  const filteredKeys = useMemo(() => filtered.map((row) => row.storeId), [filtered])
+  const listItemRef = useListFlowAnimation(filteredKeys)
 
   return (
     <div className="@container min-w-0 space-y-4 p-4 md:p-6">
@@ -230,7 +234,7 @@ export function StoresIndex({
           {filtered.map((row) => {
             const detailPath = buildStoreDetailPath({ envUri, storeId: row.storeId })
             return (
-              <li key={row.storeId} className="min-w-0">
+              <li ref={listItemRef(row.storeId)} key={row.storeId} className="min-w-0">
                 <button
                   type="button"
                   onClick={() => onOpenDetail?.(detailPath)}

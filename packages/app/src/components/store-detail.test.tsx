@@ -75,6 +75,24 @@ describe('StoreDetail (7.8-7.13)', () => {
     expect(screen.getByText('root unhealthy')).toBeTruthy()
   })
 
+  it('preserves an Environment source conflict as direct Detail evidence', async () => {
+    await renderAt(
+      <StoreDetail
+        projection={projection({
+          hasAuthority: false,
+          authorityIssue: {
+            severity: 'error',
+            message: 'Current sources disagree on Store evidence for this Environment.',
+          },
+        })}
+      />
+    )
+    expect(
+      screen.getByText('Current sources disagree on Store evidence for this Environment.')
+    ).toBeTruthy()
+    expect(screen.queryByText('No current Environment authority')).toBeNull()
+  })
+
   it('renders observed-only Usage honestly', async () => {
     await renderAt(<StoreDetail projection={projection()} />)
     expect(screen.getByText('No reference currently observed.')).toBeTruthy()

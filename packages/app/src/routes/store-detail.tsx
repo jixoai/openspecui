@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react'
 import { StoreDetail } from '../components/store-detail'
 import { StoreCleanupDialog, type StoreCleanupKind } from '../components/store-remove-dialog'
 import type { EnvironmentActionAuthority } from '../lib/environment-authority'
+import { selectEnvironmentAuthorityIssue } from '../lib/environment-authority-presentation'
 import { selectStoreDetailProjection } from '../lib/store-detail-projection'
 import { projectStoreDetailInput, selectStoreDoctor } from '../lib/store-product-projection'
 import { buildStoresIndexPath, parseStoreDetailRouteIdentity } from '../lib/store-route-identity'
@@ -95,6 +96,7 @@ export function StoreDetailRoute() {
       specs: content.specs,
       changes: content.changes,
       hasAuthority: runtime.pinMutationAuthority() !== null,
+      authorityIssue: selectEnvironmentAuthorityIssue(runtime.authority.kind),
     })
   )
   const dialogStore: StoreDoctorStore = doctor ?? {

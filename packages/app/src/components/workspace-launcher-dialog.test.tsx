@@ -2,7 +2,7 @@
  * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
  * 1. Prove the Launcher Dialog renders a candidate list (not a URL input) as its direct plane (4.1 red -> green).
  * 2. Prove Focus/Open/unavailable command selection and the secondary connect flow (4.3-4.7).
- * 3. Prove forget/remove is distinct from closing an open Workspace (4.8).
+ * 3. Prove pending locks row/manual commands without resizing and forget remains distinct from Close (4.5/4.8).
  *
  * Original request (2026-07-30): "Workspaces融合了Connections，点击`+`，弹出的Dialog包含Connnections列表。"
  */
@@ -140,6 +140,25 @@ describe('Workspace Launcher Dialog (4.1/4.3-4.9)', () => {
     fireEvent.change(input, { target: { value: 'http://localhost:3200/' } })
     fireEvent.click(screen.getByText('Connect'))
     expect(onConnect).toHaveBeenCalledWith('http://localhost:3200')
+  })
+
+  it('locks the complete manual connect form while its backend probe is pending', async () => {
+    const props = baseProps()
+    const { root } = await renderAt(<WorkspaceLauncherDialog {...props} />)
+    fireEvent.click(screen.getByText('Connect another backend...'))
+    await act(async () => {
+      root.render(
+        <WorkspaceLauncherDialog
+          {...props}
+          pending={[{ apiBaseUrl: 'http://localhost:3200', kind: 'connect' }]}
+        />
+      )
+    })
+    const input = screen.getByPlaceholderText('http://localhost:3100') as HTMLInputElement
+    const connect = screen.getByText('Connect').closest('button')
+    expect(input.disabled).toBe(true)
+    expect(connect?.disabled).toBe(true)
+    expect(connect?.querySelector('.animate-spin')).toBeTruthy()
   })
 
   it('rejects an invalid connect URL with a direct error', async () => {

@@ -2,6 +2,7 @@
 '@openspecui/core': minor
 '@openspecui/server': minor
 '@openspecui/app': major
+openspecui: minor
 ---
 
 Reshape the App information architecture around Workspaces and Stores.

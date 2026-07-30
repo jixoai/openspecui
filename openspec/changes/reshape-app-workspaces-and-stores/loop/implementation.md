@@ -16,11 +16,12 @@ Original request (2026-07-30): "我让另外一个 Agent 做了个开头，但�
 
 ## Implementation State
 
-The production implementation reached the Workspaces and Stores route families on top of `fdc3ac1`, but an
-independent review of `bb9e82e` found four remaining production gaps. Launcher Open/Connect has no real pending
-transition, manual candidates persist before reachability succeeds, running-backend secondary navigation is absent
-from mobile, and Store Detail collapses exact Environment conflict into generic authority loss. Those checkpoints
-are reopened until implementation, checked evidence, and the owner walkthrough handoff are corrected.
+The production implementation reached the Workspaces and Stores route families on top of `fdc3ac1`. Independent
+review of `bb9e82e` found four production gaps: Launcher Open/Connect had no real pending transition, manual
+candidates persisted before reachability succeeded, mobile omitted running-backend secondary navigation, and Store
+Detail collapsed exact Environment conflict into generic authority loss. The current correction closes all four,
+also makes isolated daemon fallback identity stable (preventing a candidate-probe render loop), rejects URL userinfo
+from credential-free persistence, and gives dynamic Stores/Task rows physical layout continuity.
 
 ```text
 Product decision       approved by manager
@@ -30,16 +31,16 @@ Workspace lifecycle correction approved by manager
 P1 typed contracts       landed (Store-content capability + browser-safe projection schemas + checked fixtures)
 P2 managed backend       landed (canonical directory catalog, daemon child owner, exact Stop/restart restoration)
 P3 candidate/open        landed (admission/dismissal reducer, credential isolation, iframe continuity)
-P4 Workspace surfaces   correction pending (Launcher transition + mobile running navigation)
+P4 Workspace surfaces   corrected (probe-before-persist + mobile running navigation)
 P5 Environment runtime  landed (persisted envUri selection, per-source collection, stable authority, conflict gate)
 P6 Store content         landed (demand-driven Server Projection Work, typed Push -> Pull App transport)
-P7 Store product         correction pending (Detail must preserve exact authority/conflict reason)
-P8 navigation            correction pending (mobile must expose running Workspace secondary navigation)
+P7 Store product         corrected (Detail preserves exact authority/conflict reason)
+P8 navigation            corrected (mobile exposes running Workspace secondary navigation)
 Review corrections       stable source survives redundant checking; cross-Store responses are rejected;
                          conflicts retain readonly source; Doctor failures do not block cleanup;
                          unregister and remove remain distinct composite-ledger actions
-Current focused evidence prior-head evidence only; affected App owners require rerun after correction
-Repository gates          prior-head evidence only; rerun scoped gates after correction
+Current focused evidence App correction suite passes on the current worktree
+Repository gates          full repository evidence remains prior-head; scoped correction evidence is current
 External dirty blockers   format-check: user lockfile/script; test-ci: pre-existing Core/Server teardown timeouts
 Implementation commit    bb9e82e (review fixed point; correction commit pending)
 Pending delivery          owner walkthrough result, PR, archive/sync
@@ -80,7 +81,7 @@ Planning verification on 2026-07-30:
   is the same documented repository-local limitation used by the predecessor Change. The planning commit may use
   `--no-verify` only after the named checks pass; hook configuration is outside this Change.
 
-Final focused verification on 2026-07-30:
+Final focused verification on 2026-07-30 (prior implementation head):
 
 - `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:browser:ci`, strict Change validation, and `git diff --check` pass.
 - Core Store-content (10), Server Store-content (7), App (67 files / 377), CLI (29 files / 151), and App Chromium
@@ -94,6 +95,19 @@ Final focused verification on 2026-07-30:
 - `loop/owner-walkthrough.md` binds 10 numbered final cases to implementation head
   `bb9e82e08dcbc17d80b2d6e9a28b394a14a6768c`; it contains no credentials, Authorization headers, or private
   fragments. Owner acceptance remains pending.
+
+Correction verification on 2026-07-31 (uncommitted correction worktree):
+
+- `pnpm --filter @openspecui/app typecheck` passes, including all checked App fixture lanes.
+- `pnpm --filter @openspecui/app test --reporter=dot` passes: 68 files, 388 tests.
+- `pnpm --filter @openspecui/app test:browser:ci` passes: 4 files, 9 component fixtures. This is preparation
+  evidence only, not the owner browser walkthrough.
+- The targeted correction suite passes: 10 files, 74 tests across Launcher pending/probe/persistence, mobile
+  navigation, Store authority, Store refresh single-flight, persisted userinfo rejection, and list rendering.
+- `openspec validate reshape-app-workspaces-and-stores --strict` and `git diff --check` pass.
+- Full repository `format:check`, `test:ci`, and the full root lint/typecheck gates are not re-claimed here;
+  the known user-owned lockfile/script formatting delta and pre-existing Core/Server teardown timeouts still block
+  PR delivery until independently resolved.
 
 This Change builds on completed owners from `integrate-app-mode-with-opentray` but does not close, rewrite, or claim
 its remaining delivery/owner-acceptance checkpoints. Existing unrelated modifications in

@@ -65,6 +65,7 @@ import {
 } from '../lib/use-workspace-directory-catalog'
 import { composeLauncherCandidates } from '../lib/workspace-candidate-catalog'
 import { selectWorkspaceDirectoryCatalogView } from '../lib/workspace-directory-catalog'
+import type { LauncherPendingCommand } from '../lib/workspace-launcher-selector'
 import { selectWorkspacePathLabel } from '../lib/workspace-path-label'
 import { useAppDaemonWorkspace } from './app-daemon-workspace-owner'
 import { useAppLaunchError } from './app-launch-owner'
@@ -77,6 +78,22 @@ const REFRESH_FEEDBACK_MS = 1200
 const UPDATE_CHECK_INTERVAL_MS = 60000
 const UPDATE_READY_MESSAGE = 'A newer OpenSpec UI App shell is ready.'
 const HOME_TAB_ID = 'workspace-home'
+
+function launcherProbeFailure(result: Awaited<ReturnType<typeof probeHostedBackend>>): string {
+  if (result.errorMessage) return result.errorMessage
+  switch (result.reachability) {
+    case 'offline':
+      return 'This backend is currently offline.'
+    case 'authentication-required':
+      return 'This backend requires a valid launch credential.'
+    case 'unsupported':
+      return 'This backend is not compatible with this App.'
+    case 'checking':
+      return 'This backend is still being checked.'
+    case 'online':
+      return 'The Workspace could not be opened.'
+  }
+}
 
 type HostedTabFrameStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
@@ -494,6 +511,8 @@ function HostedShellRuntime({
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [openingWorkspaceId, setOpeningWorkspaceId] = useState<string | null>(null)
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
+  const [launcherPending, setLauncherPending] = useState<readonly LauncherPendingCommand[]>([])
+  const launcherPendingRef = useRef(new Map<string, LauncherPendingCommand>())
   // Workspace directory catalog (Favorites / Recent) — credential-free, persisted.
   const directoryCatalog = useWorkspaceDirectoryCatalog()
   const directoryCatalogActions = useWorkspaceDirectoryCatalogActions()
@@ -522,12 +541,15 @@ function HostedShellRuntime({
 
   useEffect(() => {
     let active = true
-    const closedManual = candidateCatalog.candidates.filter(
-      (candidate) =>
-        candidate.source === 'manual' &&
-        !shellState.tabs.some((tab) => tab.apiBaseUrl === candidate.apiBaseUrl)
-    )
-    for (const candidate of closedManual) {
+    const closedCandidates = composeLauncherCandidates(
+      candidateCatalog,
+      daemonWorkspace.workspaces.map((workspace) => ({
+        apiBaseUrl: workspace.backendUrl,
+        source: 'daemon-live' as const,
+        label: workspace.projectDir,
+      }))
+    ).filter((candidate) => !shellState.tabs.some((tab) => tab.apiBaseUrl === candidate.apiBaseUrl))
+    for (const candidate of closedCandidates) {
       setCandidateReachability((current) => ({
         ...current,
         [candidate.apiBaseUrl]: 'checking',
@@ -543,12 +565,55 @@ function HostedShellRuntime({
     return () => {
       active = false
     }
-  }, [candidateCatalog.candidates, shellState.tabs])
+  }, [candidateCatalog, daemonWorkspace.workspaces, shellState.tabs])
 
   const openAddDialog = useCallback(() => {
     setAddDialogError(null)
     setIsAddDialogOpen(true)
   }, [])
+
+  const runLauncherTransition = useCallback(
+    (apiBaseUrl: string, kind: LauncherPendingCommand['kind']) => {
+      const normalized = normalizeHostedApiBaseUrl(apiBaseUrl)
+      if (!normalized) {
+        setAddDialogError('Enter a valid backend API URL.')
+        return
+      }
+      if (launcherPendingRef.current.has(normalized)) return
+
+      const command = { apiBaseUrl: normalized, kind } satisfies LauncherPendingCommand
+      launcherPendingRef.current.set(normalized, command)
+      setLauncherPending([...launcherPendingRef.current.values()])
+      setAddDialogError(null)
+
+      void probeHostedBackend(normalized)
+        .then((result) => {
+          setCandidateReachability((current) => ({
+            ...current,
+            [normalized]: result.reachability,
+          }))
+          if (result.reachability !== 'online') {
+            setAddDialogError(launcherProbeFailure(result))
+            return
+          }
+          if (kind === 'connect') {
+            candidateActions.addManualCandidate(normalized, result.health?.projectName)
+          }
+          setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl: normalized }))
+          setIsAddDialogOpen(false)
+        })
+        .catch((error: unknown) => {
+          setAddDialogError(
+            error instanceof Error ? error.message : 'The Workspace could not be opened.'
+          )
+        })
+        .finally(() => {
+          launcherPendingRef.current.delete(normalized)
+          setLauncherPending([...launcherPendingRef.current.values()])
+        })
+    },
+    [candidateActions, setShellState]
+  )
 
   const updateTabFrameState = useCallback(
     (tabId: string, resolveNext: (previous: HostedTabFrameState) => HostedTabFrameState) => {
@@ -713,7 +778,8 @@ function HostedShellRuntime({
           source: candidate.source,
           reachability:
             runtime?.reachability ??
-            (binding ? 'online' : (candidateReachability[candidate.apiBaseUrl] ?? 'checking')),
+            candidateReachability[candidate.apiBaseUrl] ??
+            (binding ? 'online' : 'checking'),
           label: binding
             ? selectWorkspacePathLabel({
                 projectPath: binding.projectDir,
@@ -1289,24 +1355,23 @@ function HostedShellRuntime({
 
       <WorkspaceLauncherDialog
         open={isAddDialogOpen}
-        onClose={() => setIsAddDialogOpen(false)}
+        onClose={() => {
+          if (launcherPending.length === 0) setIsAddDialogOpen(false)
+        }}
         candidates={launcherCandidates}
         openWorkspaces={shellState.tabs.map((tab) => ({ apiBaseUrl: tab.apiBaseUrl }))}
-        pending={[]}
+        pending={launcherPending}
         onFocus={(apiBaseUrl) => {
           const tab = shellState.tabs.find((t) => t.apiBaseUrl === apiBaseUrl)
           if (tab) setShellState((current) => activateHostedTab(current, tab.id))
           setIsAddDialogOpen(false)
         }}
         onOpen={(apiBaseUrl) => {
-          setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl }))
-          setIsAddDialogOpen(false)
+          runLauncherTransition(apiBaseUrl, 'open')
         }}
         onForget={(apiBaseUrl) => candidateActions.forgetManualCandidate(apiBaseUrl)}
         onConnect={(apiBaseUrl) => {
-          candidateActions.addManualCandidate(apiBaseUrl)
-          setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl }))
-          setIsAddDialogOpen(false)
+          runLauncherTransition(apiBaseUrl, 'connect')
         }}
         error={addDialogError}
       />
