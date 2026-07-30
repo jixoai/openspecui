@@ -444,23 +444,37 @@ Production owners: new focused route/component folders under `packages/app/src/r
   filterable list with composite-identity Detail links and observed-only completeness language; no desktop-only
   table, no horizontal-scroll affordance. Test (7) covers rows, search, health filter, mutation state, composite
   Detail path, container-responsive root, and empty observed state.
-- [ ] 7.4 Join list/Doctor/Root/Reference/mutation facts by composite Environment/Store identity and retain
+- [x] 7.4 Join list/Doctor/Root/Reference/mutation facts by composite Environment/Store identity and retain
       source-labelled regional state.
-- [ ] 7.5 Show direct Store id, health/failure, currently observed Root/Reference usage, and active/failed/
+      Delivered 2026-07-30: `lib/store-detail-projection.ts` `selectStoreDetailProjection` joins identity/health/
+      usage/content/mutation/repository by composite identity into the direct plane; retains independent Specs/Changes
+      regional state.
+- [x] 7.5 Show direct Store id, health/failure, currently observed Root/Reference usage, and active/failed/
       indeterminate mutation; keep path/Git/metadata/raw evidence secondary.
+      Delivered 2026-07-30: `components/store-detail.tsx` renders Store id + health + Usage + mutation error directly;
+      repository/Git/metadata in a collapsed secondary disclosure.
 - [ ] 7.6 Move setup/register into an index-level `New Store` flow with current authority pinning and lifecycle
       feedback.
 - [ ] 7.7 Build Environment evidence as a Stores title action/subpage showing connected projects, CLI versions,
       compatibility facts, and source conflict without becoming primary navigation.
-- [ ] 7.8 Build Store Detail header and direct usability/failure plane from composite identity and current authority.
-- [ ] 7.9 Project `Root for` and `Referenced by` only from currently observed source-labelled Workspace Context;
+- [x] 7.8 Build Store Detail header and direct usability/failure plane from composite identity and current authority.
+      Delivered 2026-07-30: `components/store-detail.tsx` header shows Store id + envUri + health + authority state.
+- [x] 7.9 Project `Root for` and `Referenced by` only from currently observed source-labelled Workspace Context;
       label completeness honestly and preserve retained stale/error evidence.
-- [ ] 7.10 Render readonly Specs with requirement counts and active Changes with task progress/status/last-modified;
+      Delivered 2026-07-30: `usageCompletenessLabel` labels observed-only counts (never "all"/"unreferenced"); the
+      projection counts Root-for/Referenced-by from observed usage.
+- [x] 7.10 Render readonly Specs with requirement counts and active Changes with task progress/status/last-modified;
       keep their loading/error/recovery states independent.
-- [ ] 7.11 Render repository root, metadata, Git facts, and successful Doctor/raw CLI envelopes in secondary
+      Delivered 2026-07-30: `ContentRegion` renders Specs (id + requirementCount) and Changes (name + tasks + status +
+      lastModified) as independent regions with distinct loading/error/empty/ready states.
+- [x] 7.11 Render repository root, metadata, Git facts, and successful Doctor/raw CLI envelopes in secondary
       disclosures; promote every blocking diagnostic.
-- [ ] 7.12 Move unregister/remove into Store Detail overflow/danger flow; preserve backend-owned lifecycle,
+      Delivered 2026-07-30: `DisclosureSection` collapses repository facts; blocking diagnostics promote to the direct
+      plane.
+- [x] 7.12 Move unregister/remove into Store Detail overflow/danger flow; preserve backend-owned lifecycle,
       confirmation, authority retirement, and concrete rejection.
+      Delivered 2026-07-30: `RemoveControl` is gated by `canRemove` (authority + no running mutation + no blocking
+      diagnostics) and requires explicit confirmation; backend owns the lifecycle.
 - [ ] 7.13 Omit `Open as Workspace` unless a real production daemon/backend owner can focus or establish the Store
       Workspace without adopting backend process supervision.
 - [x] 7.14 Retire Store Manager shell, Inspector, Inventory, Context Matrix, backend selector, obsolete tests, and
@@ -476,10 +490,12 @@ Production owners: new focused route/component folders under `packages/app/src/r
 
 Green evidence:
 
-- [ ] 7.16 Checked route/component tests cover same-id Stores across Environments, route reload/decode, no authority,
-      conflict, Usage provenance, regional content states, mutation lifecycle, and direct errors.
-      (Partial 2026-07-30: composite-identity route decode + StoresIndex component tests delivered. Full route reload/
-      conflict/content-state coverage lands with the P7 Store Detail route + router registration in P8.)
+- [~] 7.16 Checked route/component tests cover same-id Stores across Environments, route reload/decode, no authority,
+  conflict, Usage provenance, regional content states, mutation lifecycle, and direct errors.
+  Delivered 2026-07-30: `store-detail-projection.test.ts` (9) + `store-detail.test.tsx` (7) cover composite identity,
+  blocking diagnostics, observed-only Usage, independent Specs/Changes regions, readonly content, destructive
+  remove gating/confirmation; `store-route-identity.test.ts` (6) covers route decode; `stores-index.test.tsx` (7)
+  covers the index. Same-id-across-Environments route reload remains owner-walkthrough evidence.
 - [~] 7.17 Container fixtures at crowded/intermediate/spacious inline sizes prove one readable mobile column,
   increased alignment only when space permits, wrapping long values, stable controls, and no horizontal overflow.
   Delivered 2026-07-30: `StoresIndex` uses `@container` with `@sm`/`@lg` inline-size variants (one column when
