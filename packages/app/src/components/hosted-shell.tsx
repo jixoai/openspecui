@@ -29,7 +29,15 @@ import {
   RefreshCw,
   Unlink2,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from 'react'
 import {
   ConnectionObservationBoundary,
   useConnectionObservationOwner,
@@ -1121,15 +1129,15 @@ function HostedShellRuntime({
       )}
 
       {tabs.length === 0 ? (
-        <div className="flex h-full min-h-0 min-w-0 flex-col">
-          <div className="tabs-header border-border bg-terminal text-terminal-foreground flex min-w-0 items-stretch border-b">
+        <div className="flex h-full min-w-0 flex-col">
+          <div className="tabs-header border-border bg-muted/40 text-foreground flex min-w-0 items-stretch border-b">
             <div
-              className="tabs-strip bg-terminal min-w-0 flex-1 px-4 py-3"
+              className="tabs-strip bg-muted/40 min-w-0 flex-1 px-4 py-3"
               onDoubleClick={openAddDialog}
             >
               <p className="font-nav text-xs uppercase tracking-[0.16em]">OpenSpec UI App</p>
             </div>
-            <div className="tabs-actions border-border bg-terminal text-terminal-foreground flex shrink-0 items-center border-l">
+            <div className="tabs-actions border-border bg-muted/40 text-foreground flex shrink-0 items-center border-l">
               <HostedShellActions
                 isRefreshing={false}
                 isRefreshFeedbackActive={false}
@@ -1156,51 +1164,61 @@ function HostedShellRuntime({
           </div>
         </div>
       ) : (
-        <TerminalTabs
-          tabs={tabs}
-          selectedTab={shellState.activeTabId ?? HOME_TAB_ID}
-          onTabChange={(tabId) => {
-            if (tabId === HOME_TAB_ID) return
-            setShellState((current) => activateHostedTab(current, tabId))
-          }}
-          onTabClose={(tabId) => {
-            if (tabId === HOME_TAB_ID) return
-            setShellState((current) => {
-              // Resolve the locator before removing the tab so an unchanged daemon snapshot does not
-              // reopen this Workspace (3.2/3.7). No-op for non-daemon-backed locators.
-              const closing = current.tabs.find((tab) => tab.id === tabId)
-              if (closing) daemonWorkspace.dismissDaemonWorkspace(closing.apiBaseUrl)
-              const next = removeHostedTab(current, tabId)
-              // Closing the last project tab falls back to Home.
-              if (next.activeTabId === null) {
-                return next
-              }
-              return next
-            })
-          }}
-          onTabOrderChange={(orderedTabIds) => {
-            // Home tab stays first; filter it out before reordering project tabs.
-            const projectIds = orderedTabIds.filter((id) => id !== HOME_TAB_ID)
-            setShellState((current) => reorderHostedTabs(current, projectIds))
-          }}
-          onTabBarDoubleClick={openAddDialog}
-          actions={
-            <HostedShellActions
-              isRefreshing={isRefreshing}
-              isRefreshFeedbackActive={isRefreshFeedbackActive}
-              onRefresh={handleRefreshCurrentTab}
-              onAdd={openAddDialog}
-              canInstall={pwaState.canInstall}
-              isInstalling={pwaState.isInstalling}
-              onInstall={() => {
-                void handleInstall()
-              }}
-              onApplyUpdate={handleApplyHostedUpdate}
-              updateStatus={updateState.status}
-            />
+        <div
+          className="h-full min-h-0"
+          style={
+            {
+              '--terminal': 'var(--background)',
+              '--terminal-foreground': 'var(--foreground)',
+            } as CSSProperties
           }
-          className="hosted-shell-tabs h-full min-h-0"
-        />
+        >
+          <TerminalTabs
+            tabs={tabs}
+            selectedTab={shellState.activeTabId ?? HOME_TAB_ID}
+            onTabChange={(tabId) => {
+              if (tabId === HOME_TAB_ID) return
+              setShellState((current) => activateHostedTab(current, tabId))
+            }}
+            onTabClose={(tabId) => {
+              if (tabId === HOME_TAB_ID) return
+              setShellState((current) => {
+                // Resolve the locator before removing the tab so an unchanged daemon snapshot does not
+                // reopen this Workspace (3.2/3.7). No-op for non-daemon-backed locators.
+                const closing = current.tabs.find((tab) => tab.id === tabId)
+                if (closing) daemonWorkspace.dismissDaemonWorkspace(closing.apiBaseUrl)
+                const next = removeHostedTab(current, tabId)
+                // Closing the last project tab falls back to Home.
+                if (next.activeTabId === null) {
+                  return next
+                }
+                return next
+              })
+            }}
+            onTabOrderChange={(orderedTabIds) => {
+              // Home tab stays first; filter it out before reordering project tabs.
+              const projectIds = orderedTabIds.filter((id) => id !== HOME_TAB_ID)
+              setShellState((current) => reorderHostedTabs(current, projectIds))
+            }}
+            onTabBarDoubleClick={openAddDialog}
+            actions={
+              <HostedShellActions
+                isRefreshing={isRefreshing}
+                isRefreshFeedbackActive={isRefreshFeedbackActive}
+                onRefresh={handleRefreshCurrentTab}
+                onAdd={openAddDialog}
+                canInstall={pwaState.canInstall}
+                isInstalling={pwaState.isInstalling}
+                onInstall={() => {
+                  void handleInstall()
+                }}
+                onApplyUpdate={handleApplyHostedUpdate}
+                updateStatus={updateState.status}
+              />
+            }
+            className="hosted-shell-tabs h-full min-h-0"
+          />
+        </div>
       )}
 
       <Dialog
