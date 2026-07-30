@@ -120,8 +120,12 @@ Production owners: focused CLI daemon child/control modules and pure App state m
       Delivered 2026-07-30: `managed-project-owner.test.ts` mutation-resistance suite proves canonical-dedupe gating,
       generation-keyed Stop isolation, lease-failure cleanup does not leak a child, and restart restore-once.
 
-- [ ] 3.1 Add checked red fixtures proving the current `HostedShellState.tabs` collection simultaneously owns
+- [x] 3.1 Add checked red fixtures proving the current `HostedShellState.tabs` collection simultaneously owns
       persisted connections and mounted Workspaces.
+      Delivered 2026-07-30: `shell-state-dual-ownership.test.ts` characterizes the current defect — one `tabs`
+      collection is both the persisted connection list and the mounted Workspace set, so a closed tab drops the
+      candidate entirely and candidate/open identity cannot be separated by moving a field. The replacement models
+      live in `workspace-candidate-catalog.ts` (candidate) and `open-workspace-state.ts` (open Workspace).
 - [x] 3.2 Add checked red evidence that an unchanged daemon snapshot reopens a user-closed Workspace at the current
       `AppDaemonWorkspaceOwner -> applyHostedLaunchRequest` production boundary.
       Delivered 2026-07-30: `AppDaemonWorkspaceOwner` now reduces each snapshot through
@@ -130,13 +134,25 @@ Production owners: focused CLI daemon child/control modules and pure App state m
       user-closed Workspace when the daemon snapshot is unchanged" is the green case (already-dismissed => no reopen);
       the prior blanket-`applyHostedLaunchRequest`-per-workspace path was the documented red. Hosted-shell `onTabClose`
       calls `dismissDaemonWorkspace` so the dismissal is recorded before the tab is removed.
-- [ ] 3.3 Define strong candidate identity for daemon-live and manual retained sources without credentials or
+- [x] 3.3 Define strong candidate identity for daemon-live and manual retained sources without credentials or
       private fragments.
-- [ ] 3.4 Define strong open-Workspace identity for tab/session/frame/order/active state separately from candidate
+      Delivered 2026-07-30: `workspace-candidate-catalog.ts` defines `WorkspaceCandidateEntry` (normalized
+      credential-free locator + source `daemon-live|manual` + optional display label/recency) and rejects
+      credential/token/fragment/password/authorization fields from persisted storage. Daemon-live candidates are
+      runtime-only and never persist; `composeLauncherCandidates` joins manual + daemon-live by locator.
+- [x] 3.4 Define strong open-Workspace identity for tab/session/frame/order/active state separately from candidate
       identity.
-- [ ] 3.5 Replace the old persisted shape without migration glue; reject malformed external storage input through
+      Delivered 2026-07-30: `open-workspace-state.ts` defines `OpenWorkspaceTab` (stable id + sessionId + locator +
+      createdAt) and `OpenWorkspaceState` (ordered tabs + active id), independent of candidate identity.
+- [x] 3.5 Replace the old persisted shape without migration glue; reject malformed external storage input through
       runtime parsing.
-- [ ] 3.6 Implement pure open/focus/close/reorder transitions that preserve stable Workspace and iframe keys.
+      Delivered 2026-07-30: both new catalogs use versioned runtime parsing that rejects wrong-version/malformed
+      storage as empty (no repair/migration): `parseWorkspaceCandidateCatalog` and `parseOpenWorkspaceState` drop
+      malformed entries, dedupe/normalize locators, and reject credential-leaking fields.
+- [x] 3.6 Implement pure open/focus/close/reorder transitions that preserve stable Workspace and iframe keys.
+      Delivered 2026-07-30: `open-workspace-state.ts` provides `openOrFocusWorkspace` (reuses stable id/session on
+      refocus, no remount), `closeWorkspace`, `activateWorkspace`, `reorderWorkspaces` — all preserve stable tab
+      identity. `open-workspace-state.test.ts` proves iframe-stable identity across every transition.
 - [x] 3.7 Implement daemon admission/dismissal transitions: new id auto-opens once, unchanged snapshot does not
       reopen, explicit launcher Open clears dismissal, disappearance retires runtime candidate, new id may auto-open.
       Delivered 2026-07-30: `daemon-workspace-admission.ts` is the pure credential-free reducer implementing every
