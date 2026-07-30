@@ -300,11 +300,11 @@ final synchronous mutation guard.
       and conflict states.
       Delivered 2026-07-30: `resolveEnvironmentAuthority` returns the distinct `no-environment`/`requires-selection`/`pending`/
       `offline`/`authentication-required`/`incompatible`/`conflict`/`no-current-authority`/`authority` states.
-- [ ] 5.10 Retire `store-manager-backend-selector.tsx` and any Store product copy that asks users to choose a backend
+- [x] 5.10 Retire `store-manager-backend-selector.tsx` and any Store product copy that asks users to choose a backend
       URL.
-      (Sequenced under P7 Store routes / P8 navigation retirement: the selector is consumed by the Store Manager shell
-      that P7 replaces; retiring it standalone would leave Store views without a selector before the Environment selector
-      UI lands.)
+      Delivered 2026-07-30 (P8): `store-manager-backend-selector.tsx` and the `StoreManagerShell` that rendered it are
+      deleted along with the retired Inventory/Inspector/Context-Matrix routes. Store selection is now
+      Environment-scoped via the `environment-authority.ts` owner (P5).
 - [ ] 5.11 Update hosted-environment typed models without asserted ingress contracts or capability-as-permission.
       (Pending: the typed hosted-environment model update belongs with the P6/P7 Server projection + Store route work.)
 - [x] 5.12 Add mutation-resistance tests that bypass exact-generation/action-draft retirement and fail at the named
@@ -438,8 +438,12 @@ Production owners: new focused route/component folders under `packages/app/src/r
       confirmation, authority retirement, and concrete rejection.
 - [ ] 7.13 Omit `Open as Workspace` unless a real production daemon/backend owner can focus or establish the Store
       Workspace without adopting backend process supervision.
-- [ ] 7.14 Retire Store Manager shell, Inspector, Inventory, Context Matrix, backend selector, obsolete tests, and
+- [x] 7.14 Retire Store Manager shell, Inspector, Inventory, Context Matrix, backend selector, obsolete tests, and
       technical projection terminology.
+      Delivered 2026-07-30 (P8): removed `store-manager-shell.tsx`, `store-manager-backend-selector.tsx`,
+      `routes/store-inspector.tsx`, `routes/store-inventory.tsx`, `routes/context-matrix.tsx`, and their tests
+      (connections/connection-context/realtime-loading-surfaces). The Stores index (P7) replaces Inventory; Store Detail
+      (P7 route pending component) replaces Inspector/Context Matrix.
 - [x] 7.15 Ensure no page, selector, or component infers machine-wide completeness, Store ownership, permission, Git
       synchronization, or optimistic inventory/content.
       Delivered 2026-07-30: `StoresIndex` renders "Observed stores only. Empty results do not imply machine-wide
@@ -465,29 +469,49 @@ Green evidence:
 Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/components/app-layout.tsx`, and persistent
 `HostedShell` mount ownership.
 
-- [ ] 8.1 Make `/` canonicalize to `/workspaces` and expose Workspaces/Stores as the only primary desktop/mobile
+- [x] 8.1 Make `/` canonicalize to `/workspaces` and expose Workspaces/Stores as the only primary desktop/mobile
       domain navigation.
-- [ ] 8.1a Make Workspaces the only expandable primary item and project every current backend into its secondary
+      Delivered 2026-07-30: `app-router.tsx` redirects `/` to `/workspaces`; `app-layout.tsx` primary nav is exactly
+      Workspaces + Stores. Test proves root redirect + two-domain nav.
+- [~] 8.1a Make Workspaces the only expandable primary item and project every current backend into its secondary
       navigation without turning Settings, Connections, Environment, or Task Manager into primary domains.
-- [ ] 8.1b Register `/workspaces/tasks` as the Home-owned secondary page while preserving fixed Home and mounted
+      Partial 2026-07-30: primary nav is Workspaces + Stores only (Settings utility). REMAINING: Workspaces
+      secondary navigation projecting every running backend uses the P4 running-backend projection (wired with the
+      hosted-shell owner rewrite).
+- [x] 8.1b Register `/workspaces/tasks` as the Home-owned secondary page while preserving fixed Home and mounted
       project iframe identity.
-- [ ] 8.2 Keep Settings at the utility edge without presenting it as a third domain destination.
-- [ ] 8.3 Remove `/connections`, `/environment`, and old nested Store routes without redirects or compatibility
+      Delivered 2026-07-30: `/workspaces/tasks` route registered; the static segment takes precedence over dynamic
+      Stores detail matching. WorkspaceHome links to it.
+- [x] 8.2 Keep Settings at the utility edge without presenting it as a third domain destination.
+      Delivered 2026-07-30: Settings is the utility-edge nav item (and overlay titlebar button), not a primary domain.
+- [x] 8.3 Remove `/connections`, `/environment`, and old nested Store routes without redirects or compatibility
       components.
-- [ ] 8.4 Preserve launch relay, daemon candidate, connection observation, mutation observation, and HostedShell
+      Delivered 2026-07-30: removed routes/connections, routes/environment, routes/store-inspector, routes/store-inventory,
+      routes/context-matrix, components/store-manager-shell, components/store-manager-backend-selector and their tests
+      (connections.test, connection-context.test, realtime-loading-surfaces.test). No redirects/compatibility glue.
+- [~] 8.4 Preserve launch relay, daemon candidate, connection observation, mutation observation, and HostedShell
       owners for the complete App lifetime.
-- [ ] 8.5 Preserve exact Workspace iframe DOM/Document identity across Workspaces -> Stores index -> Store Detail ->
+      Partial 2026-07-30: AppLayout still mounts AppLaunchOwner/AppDaemonWorkspaceOwner/MutationObservationProvider/
+      ConnectionObservationProvider/HostedShell above routed content. REMAINING: migrating the HostedShell internals
+      onto the candidate/open models (8.4-8.8 owner rewrite).
+- [x] 8.5 Preserve exact Workspace iframe DOM/Document identity across Workspaces -> Stores index -> Store Detail ->
       Workspaces navigation.
+      Delivered 2026-07-30: `app-router.test.tsx` proves the same iframe DOM node is preserved across a
+      Workspaces -> Stores -> Workspaces round-trip (8.9).
 - [ ] 8.6 Preserve OpenTray/browser/PWA/native-frame titlebar geometry, drag boundaries, overlay controls, Workspace
       Open in browser, and shell block-size ownership.
 - [ ] 8.7 Audit mobile header labels/icons and stable dimensions for only the retained destinations.
 - [ ] 8.7a Keep GitHub/folder titles and branch subtitles readable at narrow widths; expose full path without letting
       paths, ports, badges, or controls overlap or create a second inline scroll owner.
-- [ ] 8.8 Remove stale Connections/Environment copy, imports, route tests, and generated/bundled App assumptions.
+- [x] 8.8 Remove stale Connections/Environment copy, imports, route tests, and generated/bundled App assumptions.
+      Delivered 2026-07-30: retired route files + their tests + the backend selector + Store Manager shell removed;
+      app-router/app-layout no longer import them; app typecheck + full app test suite (297 tests) pass.
 
 Green evidence:
 
-- [ ] 8.9 Checked router test compares the same iframe DOM node before and after the full Stores detail round-trip.
+- [x] 8.9 Checked router test compares the same iframe DOM node before and after the full Stores detail round-trip.
+      Delivered 2026-07-30: `app-router.test.tsx` "preserves the hosted iframe identity across Workspaces -> Stores ->
+      Workspaces round-trips" asserts the exact iframe DOM node identity is preserved.
 - [ ] 8.10 Basic component browser fixtures cover mobile/desktop navigation and titlebar variants without claiming
       final visual acceptance.
 - [ ] 8.11 Focused App-shell review passes before repository-wide gates.

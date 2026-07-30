@@ -1,10 +1,16 @@
 /**
  * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
- * 1. Register App-native Connections, Environment, Workspaces, Settings, and Store routes.
- * 2. Preserve typed launch and host-presentation context across the App route tree.
+ * 1. Register App-native Workspaces and Stores as the only primary domain routes (8.1/8.3).
+ * 2. Redirect the root to Workspaces; keep Settings as a secondary utility route (8.2).
+ * 3. Preserve typed launch and host-presentation context across the App route tree.
  *
  * Original request (2026-07-15): "在没有后端的基础上，先把前端的初步工作先完成。"
- * Owner correction (2026-07-30): the self-drawn titlebar belongs above every App route.
+ * Original request (2026-07-30): "左侧只留下 Workspaces + Stores 就行了。"
+ * Spec: hosted-app-distribution › "Workspaces And Stores App Information Architecture".
+ *
+ * Retired routes (removed without compatibility glue): /connections, /environment, /environment/stores/*
+ * (Inspector/Inventory/Context Matrix). Workspaces and Stores are the only primary destinations; Settings is a
+ * secondary utility route. /workspaces/tasks is the Home-owned Task Manager secondary page (8.1b).
  */
 import {
   createRootRouteWithContext,
@@ -13,13 +19,9 @@ import {
   redirect,
 } from '@tanstack/react-router'
 import { AppLayout } from './components/app-layout'
+import { StoresIndex } from './components/stores-index'
 import type { HostedShellLaunchRequest } from './lib/shell-state'
-import { ConnectionsRoute } from './routes/connections'
-import { ContextMatrixRoute } from './routes/context-matrix'
-import { EnvironmentRoute } from './routes/environment'
 import { SettingsRoute } from './routes/settings'
-import { StoreInspectorRoute } from './routes/store-inspector'
-import { StoreInventoryRoute } from './routes/store-inventory'
 import { WorkspacesRoute } from './routes/workspaces'
 
 /**
@@ -42,28 +44,54 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   beforeLoad: () => {
-    // 首页重定向到 Connections（Home/Connections 是 App 的主入口）。
-    throw redirect({ to: '/connections' })
+    // 首页重定向到 Workspaces（Workspaces Home 是 App 的主入口）。
+    throw redirect({ to: '/workspaces' })
   },
 })
 
-const connectionsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/connections',
-  component: ConnectionsRoute,
-})
-
-const environmentRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/environment',
-  component: EnvironmentRoute,
-})
-
-// --- Workspaces：现有 iframe 多标签 HostedShell，作为项目工作面入口 ---
+// --- Workspaces：固定 Home + 项目工作面 + Task Manager ---
 const workspacesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/workspaces',
   component: WorkspacesRoute,
+})
+
+// Home-owned Task Manager secondary page. The Workspaces shell remains mounted above routed content (8.1b).
+const workspacesTasksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/workspaces/tasks',
+  // Task Manager detail is owned by the running-backend projection; render placeholder until the route is wired
+  // into the layout surface. Static segment takes precedence over the Stores detail dynamic match.
+  component: () => null,
+})
+
+// --- Stores：selected-Environment index + Environment evidence + composite-identity Detail ---
+const storesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/stores',
+  component: () => (
+    <StoresIndex
+      rows={[]}
+      envUri=""
+      // TODO(P7 Store Detail): wire live Store rows + Environment authority here.
+    />
+  ),
+})
+
+const storesEnvironmentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/stores/environments',
+  // Environment evidence subpage: connected projects, CLI versions, capability facts, source conflict (7.7).
+  // TODO(P7): wire Environment evidence component.
+  component: () => null,
+})
+
+const storeDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/stores/$encodedEnvUri/$storeId',
+  // Composite-identity Store Detail. The route params are decoded by the Store Detail component via
+  // parseStoreDetailRouteIdentity; envUri stays opaque. TODO(P7): wire Store Detail component.
+  component: () => null,
 })
 
 const settingsRoute = createRoute({
@@ -72,44 +100,14 @@ const settingsRoute = createRoute({
   component: SettingsRoute,
 })
 
-// --- 实验性 Store Manager（扁平路由，与 web 包 route-tree 模式一致） ---
-// 路由说明：/environment/stores 是 Store Manager 根，默认重定向到 Inspector（B 视图为首选）。
-const storeManagerRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/environment/stores',
-  beforeLoad: () => {
-    throw redirect({ to: '/environment/stores/inspector' })
-  },
-})
-
-const storeInspectorRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/environment/stores/inspector',
-  component: StoreInspectorRoute,
-})
-
-const contextMatrixRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/environment/stores/context',
-  component: ContextMatrixRoute,
-})
-
-const storeInventoryRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/environment/stores/inventory',
-  component: StoreInventoryRoute,
-})
-
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  connectionsRoute,
-  environmentRoute,
   workspacesRoute,
+  workspacesTasksRoute,
+  storesRoute,
+  storesEnvironmentsRoute,
+  storeDetailRoute,
   settingsRoute,
-  storeManagerRoute,
-  storeInspectorRoute,
-  contextMatrixRoute,
-  storeInventoryRoute,
 ])
 
 /** Create one App router instance with its launch context injected at the root. */

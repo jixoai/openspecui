@@ -11,7 +11,7 @@
  * Owner correction (2026-07-30): Settings belongs in the overlay titlebar, with navigation fallback for non-overlay hosts.
  */
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
-import { Boxes, Home, MonitorSmartphone, Settings, Store, type LucideIcon } from 'lucide-react'
+import { Boxes, Settings, Store, type LucideIcon } from 'lucide-react'
 import { useEffect, useState, type CSSProperties } from 'react'
 import { ConnectionObservationProvider } from '../lib/connection-observation'
 import { MutationObservationProvider } from '../lib/mutation-observation-provider'
@@ -34,14 +34,13 @@ interface AppLayoutStyle extends CSSProperties {
 }
 
 /**
- * App 级主导航（二八空间法则：高频 Home/Environment/Workspaces 在直接空间；Settings 收纳）。
+ * App 主导航（二八空间法则）：Workspaces 与 Stores 是仅有的两个主域入口；Settings 收纳为辅助（8.1/8.2）。
  *
  * 注意：Workspaces 是 iframe 多标签项目工作面，HostedShell 保持 App 生命周期挂载。
  */
 const APP_NAV_ITEMS: AppNavItem[] = [
-  { to: '/connections', icon: Home, label: 'Connections' },
-  { to: '/environment', icon: MonitorSmartphone, label: 'Environment' },
   { to: '/workspaces', icon: Boxes, label: 'Workspaces' },
+  { to: '/stores', icon: Store, label: 'Stores' },
 ]
 
 const SETTINGS_ITEM: AppNavItem = { to: '/settings', icon: Settings, label: 'Settings' }
@@ -59,9 +58,11 @@ export function AppLayout() {
   useEffect(() => {
     if (workspacesVisible) setWorkspacesMounted(true)
   }, [workspacesVisible])
-  // /environment/stores 下的任意子路由都高亮 Environment。
+  // Workspaces/Stores 主域高亮：/workspaces/* 高亮 Workspaces；/stores/* 高亮 Stores。
   const isActive = (to: string) =>
-    pathname === to || (to === '/environment' && pathname.startsWith('/environment'))
+    pathname === to ||
+    (to === '/workspaces' && pathname.startsWith('/workspaces')) ||
+    (to === '/stores' && pathname.startsWith('/stores'))
   const rootStyle: AppLayoutStyle = {
     '--app-titlebar-left': `${titlebar.presentation.insets.left}px`,
     '--app-titlebar-right': `${titlebar.presentation.insets.right}px`,
