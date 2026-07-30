@@ -1,4 +1,19 @@
-import { spawn, type ChildProcess, type SpawnOptionsWithoutStdio } from 'child_process'
+/**
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Spawn non-shell child processes without converting synchronous failures into thrown control flow.
+ * 2. Buffer stdout/stderr and preserve exit, timeout, and spawn-error evidence.
+ * 3. Retire cancelled buffered children through bounded SIGTERM-to-SIGKILL escalation.
+ * 4. Resolve commands cross-platform via cross-spawn so Windows npm-global extension-less shims
+ *    (`openspec` without `.cmd`) don't fail with ENOENT under `shell:false`.
+ *
+ * Original request (2026-07-29): "继续打磨 app 模式，我们需要将它适配对接 opentray。"
+ * Hotfix (2026-07-30, issue #209): Windows `spawn({shell:false})` cannot execute the npm-global
+ *   extension-less shim returned first by `where openspec`. `cross-spawn` resolves PATHEXT
+ *   (`openspec.cmd`) while keeping `shell:false`, so the security model in cli-executor.ts is
+ *   unchanged.
+ */
+import type { ChildProcess, SpawnOptionsWithoutStdio } from 'child_process'
+import crossSpawn from 'cross-spawn'
 
 export interface SpawnErrorInfo {
   code?: string
@@ -50,7 +65,7 @@ export function spawnSafe(
   try {
     return {
       ok: true,
-      child: spawn(command, [...args], options),
+      child: crossSpawn(command, [...args], options),
     }
   } catch (err) {
     return {

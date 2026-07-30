@@ -21,6 +21,7 @@ import {
   DEFAULT_CONFIG,
   OpenSpecUIConfigSchema,
   buildCliRunnerCandidates,
+  pickWindowsExecutablePath,
 } from './config.js'
 import * as reactiveFs from './reactive-fs/index.js'
 import { clearCache } from './reactive-fs/index.js'
@@ -708,6 +709,29 @@ describe('ConfigManager', () => {
         process.env.PATH = previousPath
         process.env.SHELL = previousShell
       }
+    })
+
+    it('pickWindowsExecutablePath prefers a PATHEXT-matching entry over the extension-less shim', () => {
+      // Reproduces the issue #209 `where openspec` shape: extension-less shim first, then .cmd.
+      const lines = [
+        'C:\\Users\\dev\\AppData\\Roaming\\npm\\openspec',
+        'C:\\Users\\dev\\AppData\\Roaming\\npm\\openspec.cmd',
+        'C:\\Users\\dev\\AppData\\Roaming\\npm\\openspec.ps1',
+      ]
+      const pathExt = '.COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC'
+      expect(pickWindowsExecutablePath(lines, pathExt)).toBe(
+        'C:\\Users\\dev\\AppData\\Roaming\\npm\\openspec.cmd'
+      )
+    })
+
+    it('pickWindowsExecutablePath falls back to the first line when no PATHEXT match exists', () => {
+      const lines = ['C:\\bin\\openspec', 'C:\\bin\\openspec.sh']
+      expect(pickWindowsExecutablePath(lines, '.COM;.EXE;.CMD')).toBe('C:\\bin\\openspec')
+    })
+
+    it('pickWindowsExecutablePath returns null for empty where output', () => {
+      expect(pickWindowsExecutablePath([], '.COM;.EXE;.CMD')).toBeNull()
+      expect(pickWindowsExecutablePath(['', '  '], '.COM;.EXE;.CMD')).toBeNull()
     })
 
     it('does not let an invalidated in-flight runner replace its newer owner', async () => {
