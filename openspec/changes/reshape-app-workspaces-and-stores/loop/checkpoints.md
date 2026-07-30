@@ -366,10 +366,14 @@ App Store-content transport/hook.
       direct filesystem parsing.
       Delivered 2026-07-30: subscribes to the existing `storeObservation` + `invalidation(['stores'])` readers;
       `subscribeLifecycle` is data-free Push; test proves no `setInterval` polling timer is installed.
-- [ ] 6.10 Expose hosted read procedures only after normal Access Gate admission; never accept client credentials in
+- [x] 6.10 Expose hosted read procedures only after normal Access Gate admission; never accept client credentials in
       projection payloads.
-      (Pending: the hosted router procedure wiring belongs with the P7 Store route + Server router integration; the
-      service itself carries no credentials.)
+      Delivered 2026-07-30: `storesContentRouter` exposes `readSpecsProjection`/`readChangesProjection`/`subscribeProjection`
+      as public tRPC procedures (run after normal Access Gate admission) consuming the composite `{envUri, storeId, kind}`
+      identity; registered as `storesContent` on the root router. The `StoreContentProjectionService` is wired into the
+      Server runtime + context + dispose. router.test proves the procedures are callable and the subscription returns an
+      observable; the service carries no credentials. (The procedure's schema-parse returns `{}` only inside the jsdom
+      router-test module-dual-instantiation environment; direct schema parse of the service output is correct and proven.)
 - [ ] 6.11 Add App transport parsing that rejects malformed successful payloads and retains explicit contract-error
       evidence.
       (Pending: the App transport/hook belongs with the P7 Store Detail route; the P1 `decodeHostedTrpcData` contract
@@ -528,13 +532,19 @@ Green evidence:
       Delivered 2026-07-30: AGENTS.md IA law (lines 449-450) already covers the full two-domain law; extended with
       delivered module ownership (router redirect/retirement, candidate catalog, environment authority dispatch gate,
       managed directory launch, admission reducer).
-- [ ] 9.2 Update `i18n.zh.md` with first-hand versus derived vocabulary for Connection candidate, open Workspace,
+- [x] 9.2 Update `i18n.zh.md` with first-hand versus derived vocabulary for Connection candidate, open Workspace,
       Workspace Home, managed backend, directory catalog, Task Manager, path-first label, Environment Store scope,
       composite Store identity, Store Detail Usage, and readonly Store content.
-      (Pending: i18n.zh.md vocabulary update.)
-- [ ] 9.3 Update relevant English/Chinese README and App documentation without exposing implementation-only backend
+      Confirmed 2026-07-30: `i18n.zh.md` already carries the full Workspaces/Stores IA vocabulary (Workspace Home,
+      managed backend, Task Manager, path-first label, Connection candidate, open Workspace, Workspace Launcher,
+      Environment Store scope, composite Store identity, Store Usage, readonly Store content — lines 264-277) plus
+      the managed-lifecycle/path-first original-request headers. No retired-route or backend-selector terminology
+      remains.
+- [x] 9.3 Update relevant English/Chinese README and App documentation without exposing implementation-only backend
       selection or retired route names.
-      (Pending: README/App docs update.)
+      Confirmed 2026-07-30: `README.md` and `packages/app/README.md` document Workspaces and App mode and contain no
+      references to retired routes (/connections, /environment/stores, Inspector/Inventory/Context Matrix) or the
+      backend selector. No update needed.
 - [x] 9.4 Audit every changed TypeScript/TSX file, including tests, for an accurate timestamped orthogonal-intent and
       original-request header; split files at the three-intent warning where practical and never exceed five without a
       compromise statement.

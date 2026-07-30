@@ -120,6 +120,8 @@ import {
   HostedCliProjectionNoticeSchema,
   HostedRootContextProjectionStateSchema,
   HostedRootContextResolvedStateSchema,
+  HostedStoreContentChangesProjectionStateSchema,
+  HostedStoreContentSpecsProjectionStateSchema,
   HostedStoreDoctorEnvelopeSchema,
   HostedStoreDoctorProjectionStateSchema,
   HostedStoreListEnvelopeSchema,
@@ -189,6 +191,7 @@ import type { RootContextProjectionService } from './root-context-projection-ser
 import { resolveServerRootContext } from './root-context-service.js'
 import { parseSchemaMutationAction, type SchemaMutationAction } from './schema-mutation-service.js'
 import { SpecCatalogIdentityNotFoundError } from './spec-catalog-service.js'
+import type { StoreContentProjectionService } from './store-content-projection-service.js'
 import { StoreMutationService, type StartStoreMutationInput } from './store-mutation-service.js'
 import type { StoreObservationReconciler } from './store-observation-service.js'
 import type { StoreProjectionService } from './store-projection-service.js'
@@ -212,6 +215,8 @@ export interface Context {
   storeObservation: StoreObservationReconciler
   /** CLI-backed cached Store list/Doctor Work and lifecycle owner. */
   storeProjectionService: StoreProjectionService
+  /** Demand-driven readonly Store-content (Specs/active Changes) Work owner (P6/6.10). */
+  storeContentProjectionService: StoreContentProjectionService
   /** CLI-backed cached Root Context Work and lifecycle owner. */
   rootContextProjectionService: RootContextProjectionService
   /** CLI-backed runtime-environment config/profile Work and lifecycle owner. */
@@ -3278,6 +3283,56 @@ export const storesRouter = router({
     }),
 })
 
+/**
+ * Demand-driven readonly Store-content (Specs/active Changes) Projection Work router (6.10).
+ *
+ * Read procedures expose the hosted typed Pull state for one composite `(envUri, Store id, kind)` identity; Store id
+ * alone is never accepted as sufficient. The composite identity is validated and the envUri treated as opaque.
+ * Procedures run only after normal Access Gate admission and never accept client credentials in projection payloads.
+ */
+const storeContentIdentityInput = z.object({
+  envUri: z.string().min(1),
+  storeId: z.string().min(1),
+  kind: z.enum(['specs', 'changes']),
+})
+
+export const storesContentRouter = router({
+  /** Immediate Store Specs-content Pull state for one composite identity. */
+  readSpecsProjection: publicProcedure.input(storeContentIdentityInput).query(({ ctx, input }) =>
+    HostedStoreContentSpecsProjectionStateSchema.parse(
+      ctx.storeContentProjectionService.readContent({
+        envUri: input.envUri,
+        storeId: input.storeId,
+        kind: 'specs',
+      })
+    )
+  ),
+
+  /** Immediate Store active-Changes-content Pull state for one composite identity. */
+  readChangesProjection: publicProcedure.input(storeContentIdentityInput).query(({ ctx, input }) =>
+    HostedStoreContentChangesProjectionStateSchema.parse(
+      ctx.storeContentProjectionService.readContent({
+        envUri: input.envUri,
+        storeId: input.storeId,
+        kind: 'changes',
+      })
+    )
+  ),
+
+  /** Lifecycle-only Push for one composite Store-content Work item; clients Pull data after each wake-up. */
+  subscribeProjection: publicProcedure
+    .input(storeContentIdentityInput)
+    .subscription(({ ctx, input }) =>
+      observable<import('@openspecui/core').CliProjectionNotice>((emit) => {
+        const subscription = ctx.storeContentProjectionService.subscribeContent(
+          { envUri: input.envUri, storeId: input.storeId, kind: input.kind },
+          (notice) => emit.next(notice)
+        )
+        return () => subscription.unsubscribe()
+      })
+    ),
+})
+
 const runtimeInvalidationFacetSchema = z.enum(RUNTIME_INVALIDATION_FACETS)
 
 /** Push identity-only invalidation tokens; every client pulls its authoritative projection. */
@@ -3521,6 +3576,7 @@ export const appRouter = router({
   planningCliProjection: planningCliProjectionRouter,
   opsx: opsxRouter,
   stores: storesRouter,
+  storesContent: storesContentRouter,
   kv: kvRouter,
   search: searchRouter,
   system: systemRouter,

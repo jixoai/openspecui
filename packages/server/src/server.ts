@@ -126,6 +126,10 @@ import {
   resolveDefaultServerHostIdentity,
   type ServerHostIdentityProvider,
 } from './server-host-identity.js'
+import {
+  createStoreContentProjectionWorkOwner,
+  StoreContentProjectionService,
+} from './store-content-projection-service.js'
 import { StoreMutationService } from './store-mutation-service.js'
 import { StoreObservationFallbackService } from './store-observation-fallback.js'
 import { StoreObservationService } from './store-observation-service.js'
@@ -271,6 +275,14 @@ export function createServer(config: ServerConfig) {
     invalidation: runtimeInvalidation,
     storeObservation,
     workOwner: storeProjectionWorkOwner,
+  })
+  // Demand-driven readonly Store-content (Specs/active Changes) Projection Work (P6/6.10).
+  const storeContentProjectionService = new StoreContentProjectionService({
+    dataScopePath: dataScope.path,
+    cliExecutor,
+    invalidation: runtimeInvalidation,
+    storeObservation,
+    workOwner: createStoreContentProjectionWorkOwner(projectionWorkRuntime),
   })
   const planningRootServices = new PlanningRootServiceManager({
     launchProjectDir: config.projectDir,
@@ -541,6 +553,7 @@ export function createServer(config: ServerConfig) {
         runtimeInvalidation,
         storeObservation,
         storeProjectionService,
+        storeContentProjectionService,
         rootContextProjectionService,
         environmentGlobalProjectionService,
         storeMutationService,
@@ -588,6 +601,7 @@ export function createServer(config: ServerConfig) {
       runtimeInvalidation,
       storeObservation,
       storeProjectionService,
+      storeContentProjectionService,
       rootContextProjectionService,
       environmentGlobalProjectionService,
       storeMutationService,
@@ -623,6 +637,7 @@ export function createServer(config: ServerConfig) {
     dataHomeObserver,
     storeObservation,
     storeProjectionService,
+    storeContentProjectionService,
     rootContextProjectionService,
     environmentGlobalProjectionService,
     storeObservationFallback,
@@ -784,6 +799,7 @@ export async function createWebSocketServer(
         await settleCleanupPhase(failures, [() => server.storeMutationService.dispose()])
         await settleCleanupPhase(failures, [() => server.rootContextNotificationBridge.dispose()])
         await settleCleanupPhase(failures, [() => server.storeProjectionService.dispose()])
+        await settleCleanupPhase(failures, [() => server.storeContentProjectionService.dispose()])
         await settleCleanupPhase(failures, [
           () => server.environmentGlobalProjectionService.dispose(),
         ])

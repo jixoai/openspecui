@@ -14,12 +14,11 @@
  */
 import {
   classifyStoreCliResult,
-  toStoreFeatureResult,
   type CliExecutor,
   type CliProjectionNotice,
   type CliProjectionState,
   type RuntimeInvalidationReader,
-  type StoreFeatureResult,
+  type StoreClassification,
 } from '@openspecui/core'
 import {
   StoreContentChangeListSchema,
@@ -44,11 +43,27 @@ import type {
 /** One readonly Store content kind: Specs or active Changes. */
 export type StoreContentKind = 'specs' | 'changes'
 
-export type StoreContentSpecsProjection = StoreFeatureResult<StoreContentSpecEntry[]>
-export type StoreContentChangesProjection = StoreFeatureResult<StoreContentChangeEntry[]>
+/** Specs-content envelope matching the hosted HostedStoreContentSpecsEnvelope shape. */
+export interface StoreContentSpecsProjection {
+  available: boolean
+  specs: StoreContentSpecEntry[]
+  storeId: string
+  evidence?: unknown
+  error?: { kind: string; message: string; cliVersion?: string }
+  cliVersion?: string
+}
 
-type StoreContentEntry = StoreContentSpecEntry | StoreContentChangeEntry
-type StoreContentProjection = StoreFeatureResult<StoreContentEntry[]>
+/** Changes-content envelope matching the hosted HostedStoreContentChangesEnvelope shape. */
+export interface StoreContentChangesProjection {
+  available: boolean
+  changes: StoreContentChangeEntry[]
+  storeId: string
+  evidence?: unknown
+  error?: { kind: string; message: string; cliVersion?: string }
+  cliVersion?: string
+}
+
+type StoreContentProjection = StoreContentSpecsProjection | StoreContentChangesProjection
 
 type StoreContentData =
   | { kind: 'specs'; value: StoreContentSpecsProjection }
@@ -167,39 +182,28 @@ export class StoreContentProjectionService {
       load: async ({ reportStage }) => {
         reportStage('root-ready')
         const cliVersion = await this.resolveCliVersion()
+        const storeId = identity.storeId
         // Official CLI contract with the explicit Store selector; never parse files or reparse stdout (6.6).
         if (identity.kind === 'specs') {
-          const result = await this.options.cliExecutor.contracts.listSpecs({
-            store: identity.storeId,
-          })
+          const result = await this.options.cliExecutor.contracts.listSpecs({ store: storeId })
           const classification = classifyStoreCliResult({
             result,
             schema: StoreContentSpecListSchema,
             cliVersion,
           })
-          const projection = toStoreFeatureResult(classification, {
-            fromData: (data) => data.specs,
-            fallback: [],
-            cliVersion,
-          })
+          const projection = this.toSpecsEnvelope(classification, storeId, cliVersion)
           reportStage('leaf-settled')
-          return { kind: 'specs', value: projection as StoreContentSpecsProjection }
+          return { kind: 'specs', value: projection }
         }
-        const result = await this.options.cliExecutor.contracts.listChanges({
-          store: identity.storeId,
-        })
+        const result = await this.options.cliExecutor.contracts.listChanges({ store: storeId })
         const classification = classifyStoreCliResult({
           result,
           schema: StoreContentChangeListSchema,
           cliVersion,
         })
-        const projection = toStoreFeatureResult(classification, {
-          fromData: (data) => data.changes,
-          fallback: [],
-          cliVersion,
-        })
+        const projection = this.toChangesEnvelope(classification, storeId, cliVersion)
         reportStage('leaf-settled')
-        return { kind: 'changes', value: projection as StoreContentChangesProjection }
+        return { kind: 'changes', value: projection }
       },
     }
   }
@@ -210,6 +214,52 @@ export class StoreContentProjectionService {
       return availability.available ? availability.version : undefined
     } catch {
       return undefined
+    }
+  }
+
+  /** Build the Specs-content envelope from a CLI classification, matching the hosted schema. */
+  private toSpecsEnvelope(
+    classification: StoreClassification<{ specs: StoreContentSpecEntry[] }>,
+    storeId: string,
+    cliVersion: string | undefined
+  ): StoreContentSpecsProjection {
+    if (classification.kind === 'ok') {
+      return {
+        available: true,
+        specs: classification.data.specs,
+        storeId,
+        ...(cliVersion ? { cliVersion } : {}),
+      }
+    }
+    return {
+      available: false,
+      specs: [],
+      storeId,
+      error: { kind: classification.kind, message: classification.message },
+      ...(classification.cliVersion ? { cliVersion: classification.cliVersion } : {}),
+    }
+  }
+
+  /** Build the active-Changes-content envelope from a CLI classification, matching the hosted schema. */
+  private toChangesEnvelope(
+    classification: StoreClassification<{ changes: StoreContentChangeEntry[] }>,
+    storeId: string,
+    cliVersion: string | undefined
+  ): StoreContentChangesProjection {
+    if (classification.kind === 'ok') {
+      return {
+        available: true,
+        changes: classification.data.changes,
+        storeId,
+        ...(cliVersion ? { cliVersion } : {}),
+      }
+    }
+    return {
+      available: false,
+      changes: [],
+      storeId,
+      error: { kind: classification.kind, message: classification.message },
+      ...(classification.cliVersion ? { cliVersion: classification.cliVersion } : {}),
     }
   }
 

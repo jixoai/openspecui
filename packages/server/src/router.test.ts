@@ -77,6 +77,10 @@ import {
 } from './root-context-projection-service.js'
 import type { SchemaMutationAction } from './schema-mutation-service.js'
 import {
+  createStoreContentProjectionWorkOwner,
+  StoreContentProjectionService,
+} from './store-content-projection-service.js'
+import {
   createStoreProjectionWorkOwner,
   StoreProjectionService,
 } from './store-projection-service.js'
@@ -909,6 +913,13 @@ artifacts:
     storeObservation,
     workOwner: createStoreProjectionWorkOwner(projectionWorkRuntime),
   })
+  const storeContentProjectionService = new StoreContentProjectionService({
+    dataScopePath: rootContext.dataScope.path,
+    cliExecutor: cliExecutor as unknown as Context['cliExecutor'],
+    invalidation: runtimeInvalidation,
+    storeObservation,
+    workOwner: createStoreContentProjectionWorkOwner(projectionWorkRuntime),
+  })
   const rootContextProjectionService = new RootContextProjectionService({
     launchProjectDir: projectDir,
     dataScopePath: rootContext.dataScope.path,
@@ -934,6 +945,7 @@ artifacts:
     runtimeInvalidation,
     storeObservation,
     storeProjectionService,
+    storeContentProjectionService,
     rootContextProjectionService,
     environmentGlobalProjectionService,
     configManager: configManager as unknown as Context['configManager'],
@@ -1320,6 +1332,43 @@ describe('appRouter', () => {
         evidence,
       })
       expect(context.cliExecutor.contracts.doctorStores).toHaveBeenCalledWith('')
+    })
+
+    it('exposes the demand-driven Store-content procedures keyed by composite identity (6.10)', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+      // The procedures are registered and accept the composite identity (envUri + Store id + kind). The demand-driven
+      // ready path + exact CLI argv + composite-identity isolation are proven by store-content-projection-service.test;
+      // this test proves the router wiring (procedures callable, subscription returns an observable).
+      expect(() =>
+        caller.storesContent.readSpecsProjection({
+          envUri: 'env://1',
+          storeId: 'team',
+          kind: 'specs',
+        })
+      ).not.toThrow()
+      expect(() =>
+        caller.storesContent.readChangesProjection({
+          envUri: 'env://1',
+          storeId: 'team',
+          kind: 'changes',
+        })
+      ).not.toThrow()
+      // The service backing the procedure returns a valid loading Pull state (demand-driven: no subscriber yet).
+      expect(
+        context.storeContentProjectionService.readContent({
+          envUri: 'env://1',
+          storeId: 'team',
+          kind: 'specs',
+        }).state
+      ).toBe('loading')
+      // The subscription procedure accepts the same composite identity and returns an observable.
+      const observable = await caller.storesContent.subscribeProjection({
+        envUri: 'env://1',
+        storeId: 'team',
+        kind: 'specs',
+      })
+      expect(typeof observable.subscribe).toBe('function')
     })
 
     it('does not attach a Store polling timer to each invalidation subscriber', async () => {

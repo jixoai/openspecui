@@ -85,7 +85,7 @@ describe('StoreContentProjectionService (6.4-6.12)', () => {
       expect(calls).toContainEqual(['list', '--specs', '--json', '--store', 'team'])
       expect(fixture.service.readContent(SPECS_ID)).toMatchObject({
         state: 'ready',
-        data: { available: true, stores: [{ id: 'auth', requirementCount: 3 }] },
+        data: { available: true, specs: [{ id: 'auth', requirementCount: 3 }], storeId: 'team' },
       })
     } finally {
       sub.unsubscribe()
@@ -186,10 +186,10 @@ describe('StoreContentProjectionService (6.4-6.12)', () => {
       // Each Store's content is keyed by its own composite identity (6.8).
       expect(
         fixture.service.readContent({ envUri: 'env://1', storeId: 'team', kind: 'specs' }).data
-      ).toMatchObject({ stores: [{ id: 'team-spec', requirementCount: 1 }] })
+      ).toMatchObject({ specs: [{ id: 'team-spec', requirementCount: 1 }], storeId: 'team' })
       expect(
         fixture.service.readContent({ envUri: 'env://1', storeId: 'design', kind: 'specs' }).data
-      ).toMatchObject({ stores: [{ id: 'design-spec', requirementCount: 2 }] })
+      ).toMatchObject({ specs: [{ id: 'design-spec', requirementCount: 2 }], storeId: 'design' })
     } finally {
       team.unsubscribe()
       design.unsubscribe()
