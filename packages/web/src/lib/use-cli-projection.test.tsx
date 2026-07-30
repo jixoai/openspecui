@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (created 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Map all five typed CLI Projection states into display, typed failure evidence, and authority state.
  * 2. Correlate refresh settlement by exact Work identity and generation.
  * 3. Reject a pending refresh when its selector/source generation rebinds.
+ * 4. Prove initial List and Detail Pulls are independent from delayed lifecycle Push notices without superseding synchronous replay.
  *
  * Original request (2026-07-26): "覆盖五态、revalidating 保留 display data 但 authority 非 current、refresh identity+generation、selector/source rebind 不得错误 resolve 老 waiter。"
  * Original request (2026-07-26): "cliEvidence null only for infrastructure errors."
+ * Original request (2026-07-31): "Detail页面卡有个前置条件，就是访问过Dashboard页面。"
  */
 import type { CliProjectionCommandEvidence, CliProjectionState } from '@openspecui/core'
 import {
@@ -231,6 +233,37 @@ function useHarnessProjection(harness: ProjectionHarness, sourceKey: string, cac
 describe('useCliProjectionLifecycle', () => {
   afterEach(() => cleanup())
 
+  it('starts the initial List and Detail Pull without waiting for a delayed lifecycle Push notice', async () => {
+    const identity = 'projection:detail-after-dashboard'
+    const harness = createProjectionHarness(ready(identity, 1, 'detail'))
+
+    renderHook(() =>
+      useHarnessProjection(harness, identity, 'test.cli-projection.detail-after-dashboard')
+    )
+
+    // Dashboard work can delay the selector subscription's first notice. Initial data discovery
+    // must not inherit that delay: List and Detail Pulls are independent HTTP requests.
+    await act(async () => {})
+
+    expect(harness.readMock).toHaveBeenCalledOnce()
+  })
+
+  it('does not supersede a synchronously replayed notice Pull with a redundant admission Pull', async () => {
+    const identity = 'projection:synchronous-replay'
+    const harness = createProjectionHarness(ready(identity, 1, 'replayed'))
+    harness.source.subscribe = (callbacks) => {
+      callbacks.onNotice()
+      return { unsubscribe() {} }
+    }
+
+    const { result } = renderHook(() =>
+      useHarnessProjection(harness, identity, 'test.cli-projection.synchronous-replay')
+    )
+
+    await waitFor(() => expect(result.current.data).toBe('replayed'))
+    expect(harness.readMock).toHaveBeenCalledOnce()
+  })
+
   it('maps loading, ready, revalidating, refresh-error, and error without losing settled display data', async () => {
     const identity = 'projection:five-states'
     const harness = createProjectionHarness(loading(identity, 1))
@@ -238,7 +271,6 @@ describe('useCliProjectionLifecycle', () => {
       useHarnessProjection(harness, identity, 'test.cli-projection.five-states')
     )
 
-    act(() => harness.emitNotice())
     await waitFor(() => {
       expect(result.current).toMatchObject({
         data: undefined,
@@ -322,7 +354,6 @@ describe('useCliProjectionLifecycle', () => {
     const { result } = renderHook(() =>
       useHarnessProjection(harness, identity, 'test.cli-projection.refresh-correlation')
     )
-    act(() => harness.emitNotice())
     await waitFor(() => expect(result.current.authority).toEqual({ state: 'current' }))
 
     const replacement = revalidating(identity, 2, 'A')
@@ -372,7 +403,6 @@ describe('useCliProjectionLifecycle', () => {
         useHarnessProjection(harness, sourceKey, 'test.cli-projection.rebind'),
       { initialProps: { harness: sourceA, sourceKey: 'selector:A' } }
     )
-    act(() => sourceA.emitNotice())
     await waitFor(() => expect(view.result.current.data).toBe('A'))
 
     const replacementA = revalidating('projection:A', 2, 'A')
@@ -395,7 +425,6 @@ describe('useCliProjectionLifecycle', () => {
     await waitFor(() => expect(view.result.current.refreshPending).toBe(false))
 
     act(() => sourceA.emitNotice())
-    act(() => sourceB.emitNotice())
     await waitFor(() => {
       expect(view.result.current).toMatchObject({
         data: 'B',

@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (created 2026-07-26 Asia/Shanghai):
- * 1. Adapt lifecycle-only CLI Push into selector-exact typed Pulls.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Admit one notice-free initial typed Pull, then adapt lifecycle-only CLI Push into selector-exact replacement Pulls.
  * 2. Retain settled data during revalidation while revoking mutation authority.
  * 3. Retire late Pulls and resolve explicit refresh only after terminal state commits.
  * 4. Preserve static loaders without inventing live CLI lifecycle evidence.
@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
  * Original request (2026-07-26): "public Pull retains full CliProjection failure evidence."
+ * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
  */
 import type {
   CliProjectionCommandEvidence,
@@ -141,6 +142,7 @@ export function useCliProjectionLifecycle<TProjectionData, T>(
         return { unsubscribe() {} }
       }
       let retired = false
+      let noticeObservedDuringAdmission = false
       const reportTransportError = (cause: unknown): void => {
         const error = infrastructureProjectionError(cause)
         callbacks.onError(error)
@@ -182,6 +184,7 @@ export function useCliProjectionLifecycle<TProjectionData, T>(
 
       const subscription = options.source.subscribe({
         onNotice() {
+          noticeObservedDuringAdmission = true
           callbacks.onConnectionStateChange({ state: 'pending', error: null })
           void pull()
         },
@@ -196,6 +199,7 @@ export function useCliProjectionLifecycle<TProjectionData, T>(
           rejectRefresh(new Error('CLI projection subscription completed during refresh.'))
         },
       })
+      if (!noticeObservedDuringAdmission) void pull()
 
       return {
         unsubscribe() {

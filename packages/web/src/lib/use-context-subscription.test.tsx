@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove cached Root Context remains displayable but cannot authorize writes during a live rebind.
  * 2. Drive lifecycle-only Push followed by typed Root Projection Pull.
  * 3. Prove revalidation/refresh-error and retired Pulls cannot restore mutation authority.
+ * 4. Prove initial Root Context discovery does not wait for a lifecycle notice or supersede synchronous replay.
  *
  * Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等。"
  * Original request (2026-07-26): "即便现在有正在的任务，界面上仍然可以读到缓存。"
+ * Original request (2026-07-31): "所有可能其它页面都有类似的问题。"
  */
 import type {
   HostedRootContext,
@@ -160,6 +162,55 @@ describe('useContextSubscription current authority', () => {
     staticModeMock.mockReturnValue(false)
     rootContextReadProjectionMock.mockReset()
     rootContextSubscribeProjectionMock.mockReset()
+  })
+
+  it('pulls the initial Root Context without waiting for a lifecycle notice', async () => {
+    const root = ready('/planning-current', 1)
+    rootContextReadProjectionMock.mockResolvedValue(projection(root))
+    rootContextSubscribeProjectionMock.mockReturnValue({ unsubscribe: vi.fn() })
+
+    const mounted = renderHook(() => useContextSubscription())
+
+    await waitFor(() => expect(rootContextReadProjectionMock).toHaveBeenCalledOnce())
+    await waitFor(() => {
+      expect(mounted.result.current).toMatchObject({
+        data: root,
+        isLoading: false,
+        authority: { state: 'current' },
+      })
+    })
+    expect(rootContextSubscribeProjectionMock).toHaveBeenCalledOnce()
+    mounted.unmount()
+  })
+
+  it('uses a synchronously replayed notice as admission instead of starting a second Pull', async () => {
+    const root = ready('/planning-replayed', 1)
+    rootContextReadProjectionMock.mockResolvedValue(projection(root))
+    rootContextSubscribeProjectionMock.mockImplementation((_input, callbacks) => {
+      callbacks.onData(NOTICE)
+      return { unsubscribe: vi.fn() }
+    })
+
+    const mounted = renderHook(() => useContextSubscription())
+
+    await waitFor(() => expect(mounted.result.current.data).toEqual(root))
+    expect(rootContextReadProjectionMock).toHaveBeenCalledOnce()
+    mounted.unmount()
+  })
+
+  it('does not let a malformed synchronous notice suppress the admission Pull', async () => {
+    const root = ready('/planning-after-malformed-notice', 1)
+    rootContextReadProjectionMock.mockResolvedValue(projection(root))
+    rootContextSubscribeProjectionMock.mockImplementation((_input, callbacks) => {
+      callbacks.onData({ malformed: true })
+      return { unsubscribe: vi.fn() }
+    })
+
+    const mounted = renderHook(() => useContextSubscription())
+
+    await waitFor(() => expect(rootContextReadProjectionMock).toHaveBeenCalledOnce())
+    await waitFor(() => expect(mounted.result.current.data).toEqual(root))
+    mounted.unmount()
   })
 
   it('keeps cached A displayable and root actions locked through lifecycle states until current B Pull arrives', async () => {

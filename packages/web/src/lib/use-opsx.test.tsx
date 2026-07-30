@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove deferred aggregate OPSX hooks do not start Planning CLI Projection work before route admission.
  * 2. Prove admission uses selector-exact lifecycle subscriptions and retirement unsubscribes both generations.
  * 3. Prove Change enumeration uses the generic CLI lifecycle instead of a full-payload OPSX stream.
+ * 4. Prove each admitted selector starts one typed Pull without waiting for its first lifecycle notice.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "旧测试仍 mock 已删除订阅。请按真实类型/合同迁移测试。"
+ * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。"
  */
 import type { PlanningCliProjectionSelector } from '@openspecui/core/planning-cli-projection'
 import { renderHook, waitFor } from '@testing-library/react'
@@ -64,6 +66,16 @@ describe('deferred aggregate OPSX projections', () => {
   beforeEach(() => {
     configUnsubscribeMock.mockReset()
     projectionReadMock.mockReset()
+    projectionReadMock.mockImplementation(async (selector) => ({
+      state: 'loading',
+      identity: JSON.stringify(selector),
+      workGeneration: 1,
+      invalidationCause: 'initial',
+      data: null,
+      freshness: null,
+      snapshotGeneration: null,
+      error: null,
+    }))
     projectionRefreshMock.mockReset()
     projectionSubscribeMock.mockReset().mockImplementation((selector) => {
       if (selector.kind === 'opsx-config-bundle') {
@@ -94,7 +106,8 @@ describe('deferred aggregate OPSX projections', () => {
       { kind: 'opsx-change-list' },
       expect.any(Object)
     )
-    expect(projectionReadMock).not.toHaveBeenCalled()
+    await waitFor(() => expect(projectionReadMock).toHaveBeenCalledOnce())
+    expect(projectionReadMock).toHaveBeenLastCalledWith({ kind: 'opsx-change-list' })
 
     enabled = true
     view.rerender()
@@ -105,7 +118,12 @@ describe('deferred aggregate OPSX projections', () => {
       { kind: 'opsx-config-bundle' },
       { kind: 'opsx-status-list' },
     ])
-    expect(projectionReadMock).not.toHaveBeenCalled()
+    await waitFor(() => expect(projectionReadMock).toHaveBeenCalledTimes(3))
+    expect(projectionReadMock.mock.calls.map(([selector]) => selector)).toEqual([
+      { kind: 'opsx-change-list' },
+      { kind: 'opsx-config-bundle' },
+      { kind: 'opsx-status-list' },
+    ])
 
     enabled = false
     view.rerender()

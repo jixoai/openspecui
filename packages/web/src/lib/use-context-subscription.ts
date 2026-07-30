@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
- * 1. Wake typed Root Context Pulls from lifecycle-only Projection Work notices.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Admit one notice-free initial Root Context Pull, then wake replacement Pulls from lifecycle-only Projection Work notices.
  * 2. Keep cached Root Context display separate from current root-mutation authority.
  * 3. Preserve loading, revalidating, refresh-error, failed-attempt, and transport lifecycle evidence.
  * 4. Keep static mode on an explicit pending projection until snapshot parity lands.
  *
  * Original request (2026-07-15): "项目 Web surface may show Store and Reference diagnostics but must not imply that its registry is project-local."
  * Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等。"
+ * Original request (2026-07-31): "所有可能其它页面都有类似的问题。"
  */
 import type { RootContext, RootContextState } from '@openspecui/core'
 import {
@@ -69,6 +70,7 @@ function subscribeRootProjection(callbacks: AuthoritativeSubscriptionCallbacks<R
 } {
   let retired = false
   let pullEpoch = 0
+  let noticeObservedDuringAdmission = false
 
   const pull = async (): Promise<void> => {
     const epoch = ++pullEpoch
@@ -94,6 +96,7 @@ function subscribeRootProjection(callbacks: AuthoritativeSubscriptionCallbacks<R
         callbacks.onError(new Error(`Malformed Root Context notice: ${decoded.error.message}`))
         return
       }
+      noticeObservedDuringAdmission = true
       callbacks.onConnectionStateChange({ state: 'pending', error: null })
       void pull()
     },
@@ -103,6 +106,7 @@ function subscribeRootProjection(callbacks: AuthoritativeSubscriptionCallbacks<R
     onStopped: callbacks.onStopped,
     onComplete: callbacks.onComplete,
   })
+  if (!noticeObservedDuringAdmission) void pull()
 
   return {
     unsubscribe() {
