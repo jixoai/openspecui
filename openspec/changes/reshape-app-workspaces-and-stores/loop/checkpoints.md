@@ -556,11 +556,19 @@ Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/componen
       Workspaces navigation.
       Delivered 2026-07-30: `app-router.test.tsx` proves the same iframe DOM node is preserved across a
       Workspaces -> Stores -> Workspaces round-trip (8.9).
-- [ ] 8.6 Preserve OpenTray/browser/PWA/native-frame titlebar geometry, drag boundaries, overlay controls, Workspace
-      Open in browser, and shell block-size ownership.
-- [ ] 8.7 Audit mobile header labels/icons and stable dimensions for only the retained destinations.
-- [ ] 8.7a Keep GitHub/folder titles and branch subtitles readable at narrow widths; expose full path without letting
-      paths, ports, badges, or controls overlap or create a second inline scroll owner.
+- [~] 8.6 Preserve OpenTray/browser/PWA/native-frame titlebar geometry, drag boundaries, overlay controls, Workspace
+  Open in browser, and shell block-size ownership.
+  Audited 2026-07-30: the AppLayout titlebar (AppTitlebar) geometry/drag/overlay is unchanged by this change; the
+  shell block-size ownership (h-dvh + overflow-hidden on Workspaces route) is verified by app-router.test iframe
+  continuity. Titlebar visual variants are owner-walkthrough evidence (8.10/11.6).
+- [x] 8.7 Audit mobile header labels/icons and stable dimensions for only the retained destinations.
+      Audited 2026-07-30: `app-layout-header-audit.test.tsx` proves the desktop sidebar + mobile header render only
+      Workspaces + Stores (+ Settings utility), with no retired links, and mobile icons use stable h-3.5 w-3.5 geometry.
+- [~] 8.7a Keep GitHub/folder titles and branch subtitles readable at narrow widths; expose full path without letting
+  paths, ports, badges, or controls overlap or create a second inline scroll owner.
+  Audited 2026-07-30: Workspaces tabs use the path-first label selector (4.0e) with `truncate` for long paths; the
+  secondary nav + tabs expose detail via title attributes. Narrow-width readability of GitHub/branch labels under
+  real content is owner-walkthrough evidence (11.6).
 - [x] 8.8 Remove stale Connections/Environment copy, imports, route tests, and generated/bundled App assumptions.
       Delivered 2026-07-30: retired route files + their tests + the backend selector + Store Manager shell removed;
       app-router/app-layout no longer import them; app typecheck + full app test suite (297 tests) pass.
