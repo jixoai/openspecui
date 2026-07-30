@@ -74,8 +74,15 @@ Production owners: focused CLI daemon child/control modules and pure App state m
 
 - [ ] 3.0 Add checked red evidence that the current daemon cannot start one project from an authenticated directory
       intent and current persistence has no canonical favorite/recent catalog.
-- [ ] 3.0a Define a runtime-parsed versioned directory catalog containing only canonical path, favorite, and recency;
+- [x] 3.0a Define a runtime-parsed versioned directory catalog containing only canonical path, favorite, and recency;
       reject credentials, URLs, ports, process ids, and generation authority.
+      Delivered 2026-07-30: `packages/app/src/lib/workspace-directory-catalog.ts` owns the versioned
+      credential-free catalog (canonical path + favorite + recency). `parseWorkspaceDirectoryCatalog`
+      rejects wrong-version/malformed storage as empty (no repair), dedupes by canonical path, and drops
+      malformed entries. `recordSuccessfulDirectoryOpen`/`setDirectoryFavorite`/`removeDirectoryEntry` keep
+      favorite ordering independent of recency/runtime. `selectWorkspaceDirectoryCatalogView` projects
+      Favorites-then-recent. Checked `workspace-directory-catalog.test.ts` proves no
+      credential/URL/port/generation/pid leakage, favorite independence, and malformed rejection.
 - [ ] 3.0b Physically canonicalize and validate the directory before spawn; single-flight concurrent aliases and key
       managed ownership by physical identity.
 - [ ] 3.0c Start only a fixed internal serve plan, await readiness, admit one lease, and expose concrete startup state;
