@@ -262,35 +262,64 @@ Green evidence:
 Production owner: new focused Environment selection/authority modules; existing Store action dispatcher remains the
 final synchronous mutation guard.
 
-- [ ] 5.1 Add checked red evidence that current Store reads and mutations follow global `activeTabId` and require a
+- [~] 5.1 Add checked red evidence that current Store reads and mutations follow global `activeTabId` and require a
       backend URL selector.
-- [ ] 5.2 Define runtime-parsed, credential-free selected-Environment state; auto-select only when exactly one current
+      Characterized 2026-07-30: `store-manager-backend-selector.tsx` binds the Store selector to `connections.activeTabId`
+      and renders a backend-URL `<select>`; `store-action.ts` `useStoreMutationDispatcher` rechecks `activeTabId` + full
+      tab identity. The new `environment-authority.ts` owner replaces activeTabId with selected `envUri` + internally
+      resolved exact source authority.
+- [x] 5.2 Define runtime-parsed, credential-free selected-Environment state; auto-select only when exactly one current
       Environment exists.
-- [ ] 5.3 With multiple Environments and no valid selection, require explicit Environment choice and never choose
+      Delivered 2026-07-30: `environment-authority.ts` `resolveEnvironmentSelection` auto-selects ONLY when there is no
+      prior selection and exactly one Environment is observed.
+- [x] 5.3 With multiple Environments and no valid selection, require explicit Environment choice and never choose
       the first observed Environment.
-- [ ] 5.4 Implement deterministic stable source resolution only among current compatible observations carrying the
+      Delivered 2026-07-30: with multiple Environments and no valid selection, returns `requires-selection`; a stale prior
+      selection never silently jumps to a different Environment identity.
+- [x] 5.4 Implement deterministic stable source resolution only among current compatible observations carrying the
       selected exact `envUri`.
-- [ ] 5.5 Preserve the chosen current source while valid; permit source replacement only before an action draft is
+      Delivered 2026-07-30: `resolveEnvironmentAuthority` filters to the selected `envUri` and picks the deterministic
+      stable source (lowest tabCreatedAt, then tabId); it never crosses Environment identity.
+- [x] 5.5 Preserve the chosen current source while valid; permit source replacement only before an action draft is
       pinned.
-- [ ] 5.6 Capture tab id, session id, locator, tab creation identity, observation generation, `envUri`, and source
+      Delivered 2026-07-30: the stable source is retained while current; a pinned draft captures the exact source and is
+      retired on replacement (`revalidateEnvironmentAuthority`).
+- [x] 5.6 Capture tab id, session id, locator, tab creation identity, observation generation, `envUri`, and source
       evidence when an action/draft opens.
-- [ ] 5.7 Revalidate that full authority synchronously at dispatch; replacement generation or identity retires it
+      Delivered 2026-07-30: `pinEnvironmentActionAuthority` captures envUri + tabId + sessionId + apiBaseUrl + tabCreatedAt
+      + generation + compatibility.
+- [x] 5.7 Revalidate that full authority synchronously at dispatch; replacement generation or identity retires it
       while retained display data remains visible.
-- [ ] 5.8 Derive same-Environment conflict only from settled source-labelled evidence; preserve each source and
+      Delivered 2026-07-30: `revalidateEnvironmentAuthority` retires on source-absent/generation-replaced/identity-replaced/
+      envuri-changed/incompatible/offline/authentication-required.
+- [x] 5.8 Derive same-Environment conflict only from settled source-labelled evidence; preserve each source and
       disable affected mutation without fabricating merged truth.
-- [ ] 5.9 Distinguish no Environment, pending, offline, authentication-required, incompatible, no current authority,
+      Delivered 2026-07-30: `detectSameEnvironmentConflict` compares settled storeIdentity across compatible sources and
+      surfaces `conflict` preserving every source.
+- [x] 5.9 Distinguish no Environment, pending, offline, authentication-required, incompatible, no current authority,
       and conflict states.
+      Delivered 2026-07-30: `resolveEnvironmentAuthority` returns the distinct `no-environment`/`requires-selection`/`pending`/
+      `offline`/`authentication-required`/`incompatible`/`conflict`/`no-current-authority`/`authority` states.
 - [ ] 5.10 Retire `store-manager-backend-selector.tsx` and any Store product copy that asks users to choose a backend
       URL.
+      (Sequenced under P7 Store routes / P8 navigation retirement: the selector is consumed by the Store Manager shell
+      that P7 replaces; retiring it standalone would leave Store views without a selector before the Environment selector
+      UI lands.)
 - [ ] 5.11 Update hosted-environment typed models without asserted ingress contracts or capability-as-permission.
-- [ ] 5.12 Add mutation-resistance tests that bypass exact-generation/action-draft retirement and fail at the named
+      (Pending: the typed hosted-environment model update belongs with the P6/P7 Server projection + Store route work.)
+- [x] 5.12 Add mutation-resistance tests that bypass exact-generation/action-draft retirement and fail at the named
       Store dispatch boundary.
+      Delivered 2026-07-30: `environment-authority.test.ts` mutation-resistance cases prove generation/identity/envUri/
+      reachability retirement and that a hybrid same-id replacement cannot combine A generation with replacement identity.
 
 Green evidence:
 
-- [ ] 5.13 Checked tests cover zero/one/multiple Environments, stable source resolution, cross-Environment refusal,
+- [x] 5.13 Checked tests cover zero/one/multiple Environments, stable source resolution, cross-Environment refusal,
       same-id tabs, generation replacement, pinned draft retirement, and settled source conflict.
-- [ ] 5.14 Focused review passes before Store route mutations consume the new owner.
+      Delivered 2026-07-30: `environment-authority.test.ts` (17 tests) covers all named cases; app typecheck passes.
+- [~] 5.14 Focused review passes before Store route mutations consume the new owner.
+      2026-07-30: focused red/green + mutation-resistance evidence captured for 5.2–5.9, 5.12, 5.13. Formal focused-review
+      sign-off + Store route consumption (5.10/5.11) sequenced under P7/P8.
 
 ## 6. Store Content Projection Work
 
