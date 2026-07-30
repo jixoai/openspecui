@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
 1. Give the owner exact production-boundary setup, trigger, PASS/FAIL, and restore steps.
 2. Cover managed Workspace lifecycle, path-first presentation, Environment-scoped Stores, and continuity.
 3. Record the tested implementation head without credentials or private launch fragments.
@@ -10,7 +10,7 @@ Original request (2026-07-30): "我让另外一个 Agent 做了个开头，但�
 
 # Owner Walkthrough: Workspaces and Stores
 
-Implementation head under review: `bb9e82e08dcbc17d80b2d6e9a28b394a14a6768c`.
+Implementation head under review: `cce6c4c6eade1172964a5975a829d0b86ff75a9b`.
 
 Automated preparation is green for the Change-owned Core, Server content, App, CLI, and Chromium fixtures. These
 cases are the final production walkthrough and remain owner-only acceptance.
@@ -215,5 +215,5 @@ rm -rf /tmp/openspecui-owner-env-b
 rm -rf /tmp/openspecui-owner-store-b
 ```
 
-Record PASS/FAIL per case against implementation head `bb9e82e08dcbc17d80b2d6e9a28b394a14a6768c`. Do not
+Record PASS/FAIL per case against implementation head `cce6c4c6eade1172964a5975a829d0b86ff75a9b`. Do not
 record credentials, Authorization headers, private launch fragments, or daemon runtime snapshots in the result ledger.

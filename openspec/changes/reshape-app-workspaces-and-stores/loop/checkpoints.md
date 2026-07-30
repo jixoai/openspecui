@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
 1. Track apply-ready Workspaces/Stores delivery as verifiable owner/red/green checkpoints.
 2. Enforce spec-first, focused-review, type-safe evidence, PR, owner-acceptance, and archive boundaries.
 3. Keep completed planning evidence distinct from pending implementation and delivery work.
@@ -692,7 +692,7 @@ Green evidence:
       and archive stages separate.
       2026-07-30: `bb9e82e` contains only Change-owned implementation/tests/law/checkpoint updates. User tracing,
       lockfile, ct2 binding, and diagnostic-script changes are excluded. Archive remains a later dedicated stage.
-      2026-07-31: `a414f78` closes independent review findings with App tests, Change checkpoints, and the CLI
+      2026-07-31: `cce6c4c` closes independent review findings with App tests, Change checkpoints, and the CLI
       changeset entry only; user-owned tracing and lockfile changes remain unstaged.
 - [ ] 11.2 Open/update a feature-branch PR only after local CI-equivalent checks pass; never push directly to `main`.
 - [ ] 11.3 Wait for required PR checks on the exact head and resolve independent review findings through spec-first

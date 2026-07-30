@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
 1. Keep implementation reality distinct from the approved product/research plan.
 2. Authorize an ordered worker Apply across App state, hosted protocol, Server projections, and product routes.
 3. Preserve exact red/green, focused-review, predecessor-Change, and owner-acceptance stop boundaries.
@@ -96,7 +96,7 @@ Final focused verification on 2026-07-30 (prior implementation head):
   `bb9e82e08dcbc17d80b2d6e9a28b394a14a6768c`; it contains no credentials, Authorization headers, or private
   fragments. Owner acceptance remains pending.
 
-Correction verification on 2026-07-31 (uncommitted correction worktree):
+Correction verification on 2026-07-31 (implementation commit `cce6c4c6eade1172964a5975a829d0b86ff75a9b`):
 
 - `pnpm --filter @openspecui/app typecheck` passes, including all checked App fixture lanes.
 - `pnpm --filter @openspecui/app test --reporter=dot` passes: 68 files, 388 tests.
