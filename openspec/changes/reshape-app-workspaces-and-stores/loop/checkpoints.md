@@ -375,6 +375,10 @@ App Store-content transport/hook.
       evidence.
       (Pending: the App transport/hook belongs with the P7 Store Detail route; the P1 `decodeHostedTrpcData` contract
       already rejects malformed payloads.)
+      Delivered 2026-07-30 (P7): `packages/app/src/lib/store-content-transport.ts` fetches the composite-identity
+      Store-content Pull projection, encodes `{envUri, storeId, kind}` (never Store id alone), and rejects malformed
+      successful payloads via `decodeHostedTrpcData` retaining the `HostedBackendContractError` cause. Test (4) proves
+      Specs/Changes fetch, malformed rejection, and non-OK failure.
 - [x] 6.12 Prove lazy detail-only execution: Store index does not start Specs/Changes work for every row.
       Delivered 2026-07-30: test proves an unsubscribed Store starts no CLI work, and subscribing to one kind does not
       start the other kind.
@@ -400,12 +404,21 @@ Green evidence:
 Production owners: new focused route/component folders under `packages/app/src/routes/` and
 `packages/app/src/components/`; shared selectors remain subscription-free presentation owners.
 
-- [ ] 7.1 Register typed `/stores`, `/stores/environments`, and composite Store Detail routes with validated opaque
+- [~] 7.1 Register typed `/stores`, `/stores/environments`, and composite Store Detail routes with validated opaque
       Environment and Store path values.
+      Delivered 2026-07-30 (route identity core): `packages/app/src/lib/store-route-identity.ts` validates/decodes the
+      composite route identity (`parseStoreDetailRouteIdentity`, opaque envUri encode/decode, Store-id-alone rejected)
+      and builds canonical paths (`/stores`, `/stores/environments`, `/stores/$encodedEnvUri/$storeId`). Test (6).
+      REMAINING: actual router registration (`app-router.tsx`) is P8 navigation retirement — routes must register
+      before the old Inventory/Inspector/Context-Matrix routes are removed.
 - [ ] 7.2 Add red navigation evidence that current Store routes expose Inspector/Context Matrix/Inventory tabs and
       key local selection by Store id alone.
-- [ ] 7.3 Build the Stores index as a divided, searchable, filterable, selected-Environment list without a desktop-
+- [~] 7.3 Build the Stores index as a divided, searchable, filterable, selected-Environment list without a desktop-
       only table or horizontal scroll.
+      Delivered 2026-07-30: `packages/app/src/components/stores-index.tsx` renders the divided, searchable, health-
+      filterable list with composite-identity Detail links and observed-only completeness language; no desktop-only
+      table, no horizontal-scroll affordance. Test (7) covers rows, search, health filter, mutation state, composite
+      Detail path, container-responsive root, and empty observed state.
 - [ ] 7.4 Join list/Doctor/Root/Reference/mutation facts by composite Environment/Store identity and retain
       source-labelled regional state.
 - [ ] 7.5 Show direct Store id, health/failure, currently observed Root/Reference usage, and active/failed/
@@ -427,16 +440,25 @@ Production owners: new focused route/component folders under `packages/app/src/r
       Workspace without adopting backend process supervision.
 - [ ] 7.14 Retire Store Manager shell, Inspector, Inventory, Context Matrix, backend selector, obsolete tests, and
       technical projection terminology.
-- [ ] 7.15 Ensure no page, selector, or component infers machine-wide completeness, Store ownership, permission, Git
+- [x] 7.15 Ensure no page, selector, or component infers machine-wide completeness, Store ownership, permission, Git
       synchronization, or optimistic inventory/content.
+      Delivered 2026-07-30: `StoresIndex` renders "Observed stores only. Empty results do not imply machine-wide
+      completeness." and observed-only usage; the Environment authority owner surfaces conflict instead of merging.
 
 Green evidence:
 
 - [ ] 7.16 Checked route/component tests cover same-id Stores across Environments, route reload/decode, no authority,
       conflict, Usage provenance, regional content states, mutation lifecycle, and direct errors.
-- [ ] 7.17 Container fixtures at crowded/intermediate/spacious inline sizes prove one readable mobile column,
+      (Partial 2026-07-30: composite-identity route decode + StoresIndex component tests delivered. Full route reload/
+      conflict/content-state coverage lands with the P7 Store Detail route + router registration in P8.)
+- [~] 7.17 Container fixtures at crowded/intermediate/spacious inline sizes prove one readable mobile column,
       increased alignment only when space permits, wrapping long values, stable controls, and no horizontal overflow.
-- [ ] 7.18 Focused review passes before full App navigation cleanup.
+      Delivered 2026-07-30: `StoresIndex` uses `@container` with `@sm`/`@lg` inline-size variants (one column when
+      crowded, aligned row when spacious) and asserts no `overflow-x-auto`. A rendered-width browser fixture
+      (crowded/intermediate/spacious) is owner-walkthrough evidence (10.5/11.6 boundary).
+- [~] 7.18 Focused review passes before full App navigation cleanup.
+      2026-07-30: focused red/green evidence captured for 6.11, 7.1, 7.3, 7.15, 7.17. Formal focused-review sign-off +
+      router registration + backend-selector retirement (5.10/7.14) sequenced under P8.
 
 ## 8. App Navigation and Workspace Continuity
 
