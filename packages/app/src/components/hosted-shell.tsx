@@ -14,7 +14,7 @@
  * Compromise: tab, frame, and PWA display lifecycles remain co-located because they settle in one mounted
  * shell; launch, health, and Root observation are physically extracted into App-lifetime owners.
  */
-import { Dialog } from '@openspecui/web-src/components/dialog'
+
 import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
 import { RealtimeSkeleton } from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { type Tab } from '@openspecui/web-src/components/tabs'
@@ -29,15 +29,7 @@ import {
   RefreshCw,
   Unlink2,
 } from 'lucide-react'
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type FormEvent,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   ConnectionObservationBoundary,
   useConnectionObservationOwner,
@@ -55,7 +47,6 @@ import {
   activateHostedTab,
   applyHostedLaunchRequest,
   buildHostedEmbeddedUiUrl,
-  normalizeHostedApiBaseUrl,
   removeHostedTab,
   reorderHostedTabs,
   type HostedShellLaunchRequest,
@@ -74,6 +65,7 @@ import { useAppDaemonWorkspace } from './app-daemon-workspace-owner'
 import { useAppLaunchError } from './app-launch-owner'
 import { HostedShellThemeBootstrap } from './hosted-shell-theme'
 import { WorkspaceHome } from './workspace-home'
+import { WorkspaceLauncherDialog } from './workspace-launcher-dialog'
 import { WorkspaceTabBrowserAction } from './workspace-tab-browser-action'
 
 const REFRESH_FEEDBACK_MS = 1200
@@ -489,7 +481,6 @@ function HostedShellRuntime({
   const [isRefreshFeedbackActive, setIsRefreshFeedbackActive] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [openingWorkspaceId, setOpeningWorkspaceId] = useState<string | null>(null)
-  const [apiDraft, setApiDraft] = useState('')
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
   // Workspace directory catalog (Favorites / Recent) — credential-free, persisted.
   const [directoryCatalog, setDirectoryCatalog] = useState<WorkspaceDirectoryCatalog>(() =>
@@ -595,11 +586,6 @@ function HostedShellRuntime({
     },
     [updateTabFrameState]
   )
-
-  const submitApi = useCallback((apiBaseUrl: string) => {
-    setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl }))
-    setErrorMessage(null)
-  }, [])
 
   const startRefreshFeedback = useCallback(() => {
     setIsRefreshFeedbackActive(true)
@@ -1095,23 +1081,6 @@ function HostedShellRuntime({
     tabRuntime,
   ])
 
-  const handleAddSubmit = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault()
-      const normalizedApiBaseUrl = normalizeHostedApiBaseUrl(apiDraft)
-      if (!normalizedApiBaseUrl) {
-        setAddDialogError('Enter a valid API URL, for example http://localhost:3100')
-        return
-      }
-
-      submitApi(normalizedApiBaseUrl)
-      setApiDraft('')
-      setAddDialogError(null)
-      setIsAddDialogOpen(false)
-    },
-    [apiDraft, submitApi]
-  )
-
   return (
     <div className="hosted-shell-root bg-background text-foreground flex h-full min-h-0 min-w-0 flex-col">
       <HostedShellThemeBootstrap />
@@ -1221,54 +1190,42 @@ function HostedShellRuntime({
         </div>
       )}
 
-      <Dialog
+      <WorkspaceLauncherDialog
         open={isAddDialogOpen}
         onClose={() => setIsAddDialogOpen(false)}
-        title={
-          <span className="font-nav text-sm uppercase tracking-[0.14em]">Add Backend API</span>
-        }
-        footer={
-          <>
-            <button
-              type="button"
-              onClick={() => setIsAddDialogOpen(false)}
-              className="border-border bg-background text-foreground hover:bg-muted border px-3 py-1.5 text-sm transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="hosted-shell-add-api"
-              className="bg-primary text-primary-foreground px-3 py-1.5 text-sm transition hover:opacity-90"
-            >
-              Add
-            </button>
-          </>
-        }
-      >
-        <form id="hosted-shell-add-api" onSubmit={handleAddSubmit} className="space-y-3">
-          <div className="space-y-2">
-            <label htmlFor="hosted-shell-api" className="text-sm font-medium">
-              API URL
-            </label>
-            <input
-              id="hosted-shell-api"
-              type="text"
-              autoFocus
-              value={apiDraft}
-              onChange={(event) => {
-                setApiDraft(event.target.value)
-                if (addDialogError) {
-                  setAddDialogError(null)
-                }
-              }}
-              placeholder="http://localhost:3100"
-              className="border-border bg-background w-full border px-3 py-2 font-mono text-sm"
-            />
-          </div>
-          {addDialogError && <p className="text-xs text-red-500">{addDialogError}</p>}
-        </form>
-      </Dialog>
+        candidates={shellState.tabs.map((tab) => ({
+          apiBaseUrl: tab.apiBaseUrl,
+          reachability: (tabRuntime[tab.id]?.reachability ?? 'checking') as
+            | 'online'
+            | 'checking'
+            | 'offline'
+            | 'authentication-required'
+            | 'unsupported'
+            | 'failed',
+          source: 'daemon-live' as const,
+          label: selectWorkspacePathLabel({
+            projectPath: tabRuntime[tab.id]?.projectDir ?? tab.apiBaseUrl,
+            git: null,
+          }),
+        }))}
+        openWorkspaces={shellState.tabs.map((tab) => ({ apiBaseUrl: tab.apiBaseUrl }))}
+        pending={[]}
+        onFocus={(apiBaseUrl) => {
+          const tab = shellState.tabs.find((t) => t.apiBaseUrl === apiBaseUrl)
+          if (tab) setShellState((current) => activateHostedTab(current, tab.id))
+          setIsAddDialogOpen(false)
+        }}
+        onOpen={(apiBaseUrl) => {
+          setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl }))
+          setIsAddDialogOpen(false)
+        }}
+        onForget={() => {}}
+        onConnect={(apiBaseUrl) => {
+          setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl }))
+          setIsAddDialogOpen(false)
+        }}
+        error={addDialogError}
+      />
     </div>
   )
 }
