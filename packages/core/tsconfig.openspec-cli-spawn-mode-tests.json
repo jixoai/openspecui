@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/openspec-cli-spawn-mode.test.ts"],
+  "exclude": ["node_modules", "dist"]
+}

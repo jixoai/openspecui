@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Verify buffered and streaming CLI execution, bounded runner probes, disposal, and error behavior.
  * 2. Preserve the launch process environment without loading project-owned environment files.
  * 3. Verify OpenSpec lifecycle command construction and cancellation.
@@ -11,6 +11,7 @@
  * Original request (2026-07-17): "Cover repeated cancel/dispose and a late close after forced-timeout rejection."
  * Original request (2026-07-17): "Make late-child-close bookkeeping proof resistant to the exact missing-cleanup mutation."
  * Built-runtime correction (2026-07-30): foreground Server shutdown must retire buffered projection children and settled probe timers.
+ * Owner diagnosis (2026-07-31): explicit process-mode lifecycle evidence must tolerate the observed Node startup tail.
  */
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import { ChildProcess } from 'node:child_process'
@@ -191,14 +192,15 @@ describe('CliExecutor', () => {
       'disposes an active buffered child with bounded force escalation',
       async () => {
         const readyPath = join(tempDir, 'buffered-child-ready')
-        await configManager.writeConfig({ cli: { command: process.execPath } })
-        clearCache()
+        vi.spyOn(configManager, 'getCliCommand').mockResolvedValue([process.execPath])
         const execution = cliExecutor.execute([
           '-e',
           `require('node:fs').writeFileSync(${JSON.stringify(readyPath)}, 'ready'); process.on('SIGTERM', () => {}); setInterval(() => {}, 1_000)`,
         ])
 
-        await vi.waitFor(async () => expect(await readFile(readyPath, 'utf8')).toBe('ready'))
+        await vi.waitFor(async () => expect(await readFile(readyPath, 'utf8')).toBe('ready'), {
+          timeout: 20_000,
+        })
         const disposeStartedAt = Date.now()
         await cliExecutor.dispose()
 
@@ -207,7 +209,8 @@ describe('CliExecutor', () => {
           exitCode: null,
         })
         expect(Date.now() - disposeStartedAt).toBeGreaterThanOrEqual(900)
-      }
+      },
+      20_000
     )
   })
 

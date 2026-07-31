@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Execute checked CLI plans while preserving foreground project Server ownership.
  * 2. Apply the approved App admission matrix through daemon and Browser presentation ports.
  * 3. Keep export execution independent from daemon lifecycle.
  *
  * Original request (2026-07-29): "openspecui 启动当前项目其实是 openspecui serve 的缩写；start/stop/restart 针对 daemon。"
+ * Owner acceptance (2026-07-31): daemon status publishes the immutable OpenSpec process/Worker mode.
  */
+import type { OpenSpecSpawnMode } from '@openspecui/core'
 import { resolve } from 'node:path'
 import type { StartCommandPresenter } from './browser-start-command-presenter.js'
 import type {
@@ -27,6 +29,7 @@ export type DaemonHostMode = 'native' | 'web'
 export interface DaemonStatusEvidence {
   version: string
   hostMode: DaemonHostMode
+  openSpecSpawnMode: OpenSpecSpawnMode
   appUrl: string | null
 }
 
@@ -88,7 +91,7 @@ async function executeDaemonPlan(
       ? await dependencies.daemon.restart(plan.requestedHostMode)
       : await dependencies.daemon.start(plan.requestedHostMode)
   dependencies.write(
-    `OpenSpecUI App daemon ${plan.action === 'restart' ? 'restarted' : 'ready'} (${status.hostMode}, v${status.version}).`
+    `OpenSpecUI App daemon ${plan.action === 'restart' ? 'restarted' : 'ready'} (${status.hostMode}, OpenSpec ${status.openSpecSpawnMode}, v${status.version}).`
   )
   return { kind: 'complete' }
 }

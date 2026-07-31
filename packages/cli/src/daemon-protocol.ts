@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Define the versioned daemon IPC request and response envelopes.
  * 2. Bound Workspace registration and browser-opening authority to opaque ids.
  * 3. Publish credential-free daemon status and structured failures.
@@ -21,6 +21,8 @@ import { z } from 'zod'
 export const DAEMON_PROTOCOL_VERSION = 1 as const
 export const DaemonHostModeSchema = z.enum(['native', 'web'])
 export type DaemonHostMode = z.infer<typeof DaemonHostModeSchema>
+export const OpenSpecSpawnModeSchema = z.enum(['process', 'worker'])
+export type OpenSpecSpawnMode = z.infer<typeof OpenSpecSpawnModeSchema>
 
 export const DaemonWorkspaceSchema = z.object({
   id: z.string().min(1),
@@ -43,6 +45,8 @@ export const DaemonStatusSchema = z.object({
   version: z.string().min(1),
   pid: z.number().int().positive(),
   hostMode: DaemonHostModeSchema,
+  // A pre-Worker daemon can only have used process execution, so the default is objective evidence.
+  openSpecSpawnMode: OpenSpecSpawnModeSchema.default('process'),
   appUrl: z.string().url().nullable(),
   capabilities: z.object({
     browser: z.boolean(),

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove IPC bind ownership, mode-0600 Unix endpoints, and stale-socket recovery.
  * 2. Prove Workspace credentials remain private while opaque-id browser actions resolve server-side.
  * 3. Prove stop tears down only daemon host and endpoint state.
@@ -110,7 +110,12 @@ describe('daemon IPC server', () => {
 
       expect(response).toMatchObject({
         kind: 'status',
-        status: { version: '6.1.0', hostMode: 'web', appUrl: host.appUrl },
+        status: {
+          version: '6.1.0',
+          hostMode: 'web',
+          openSpecSpawnMode: 'process',
+          appUrl: host.appUrl,
+        },
       })
       expect((await stat(endpoint)).mode & 0o777).toBe(0o600)
       expect(JSON.stringify(response)).not.toContain('credential')

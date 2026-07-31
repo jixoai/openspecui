@@ -7,6 +7,7 @@
     "bench/live-projection-loading.bench.ts",
     "src/access-gate.test.ts",
     "src/archive-router-subscription.test.ts",
+    "src/cli-executor-tracing.test.ts",
     "src/hosted-admission.test.ts",
     "src/store-mutation-ledger-transport.test.ts",
     "src/environment-global-projection-service.test.ts",

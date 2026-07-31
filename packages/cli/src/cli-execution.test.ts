@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove production CLI execution preserves Server ownership and the presentation matrix.
  * 2. Prove no-open bypasses every daemon, prompt, registration, activation, and Browser effect.
  * 3. Prove daemon-only commands never start a project Server.
@@ -55,6 +55,7 @@ function createHarness(daemonStatus: DaemonStatusEvidence | null = null) {
       return {
         version: '6.1.0',
         hostMode: 'native',
+        openSpecSpawnMode: 'process',
         appUrl: 'http://127.0.0.1:14000',
       } satisfies DaemonStatusEvidence
     }),
@@ -67,6 +68,7 @@ function createHarness(daemonStatus: DaemonStatusEvidence | null = null) {
       return {
         version: '6.1.0',
         hostMode: 'native',
+        openSpecSpawnMode: 'process',
         appUrl: 'http://127.0.0.1:14000',
       } satisfies DaemonStatusEvidence
     }),
@@ -154,6 +156,7 @@ describe('CLI execution owner', () => {
     const harness = createHarness({
       version: '6.1.0',
       hostMode: 'native',
+      openSpecSpawnMode: 'process',
       appUrl: 'http://127.0.0.1:14000',
     })
     await executeCliCommand(servePlan({ web: true }), harness.dependencies)

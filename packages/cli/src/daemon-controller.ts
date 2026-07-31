@@ -1,12 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
- * 1. Control detached daemon start, stop, restart, readiness, and immutable host mode.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Control detached daemon start, stop, restart, readiness, and immutable host/OpenSpec execution modes.
  * 2. Preserve external ownership while transferring only daemon-managed directory intent across restart.
  * 3. Keep daemon spawn arguments and logs free of credentials and private launch URLs.
  *
  * Original request (2026-07-29): "参数变化时提醒用户把 start 改成 restart。"
  * Owner lifecycle decision (2026-07-30): daemon restart restores the managed running directory set.
+ * Original request (2026-07-31): "通过 OPENSPEC_SPAWN_MODE=process|worker 来进行区分两种模式。"
  */
+import {
+  OPENSPEC_SPAWN_MODE_ENV,
+  resolveOpenSpecSpawnMode,
+  type OpenSpecSpawnMode,
+} from '@openspecui/core'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { closeSync, mkdirSync, openSync } from 'node:fs'
@@ -28,7 +34,12 @@ const DAEMON_START_TIMEOUT_MS = 10_000
 const DAEMON_STOP_TIMEOUT_MS = 5_000
 
 function toStatusEvidence(status: DaemonStatus): DaemonStatusEvidence {
-  return { version: status.version, hostMode: status.hostMode, appUrl: status.appUrl }
+  return {
+    version: status.version,
+    hostMode: status.hostMode,
+    openSpecSpawnMode: status.openSpecSpawnMode,
+    appUrl: status.appUrl,
+  }
 }
 
 function workspaceIdFor(projectDir: string): string {
@@ -71,6 +82,14 @@ function correctiveRestartCommand(mode: DaemonHostMode): string {
   return mode === 'web' ? 'openspecui restart --web' : 'openspecui restart'
 }
 
+function correctiveSpawnModeRestartCommand(
+  spawnMode: OpenSpecSpawnMode,
+  hostMode: DaemonHostMode
+): string {
+  const command = correctiveRestartCommand(hostMode)
+  return spawnMode === 'worker' ? command : `${OPENSPEC_SPAWN_MODE_ENV}=process ${command}`
+}
+
 /** Create the production daemon controller for this CLI entry and user. */
 export function createDaemonController(options: {
   version: string
@@ -83,6 +102,10 @@ export function createDaemonController(options: {
 }): CliDaemonPort {
   const paths = options.paths ?? resolveDaemonPaths()
   const platform = options.platform ?? process.platform
+  const controllerEnv = options.env ?? process.env
+  const requestedOpenSpecSpawnMode = resolveOpenSpecSpawnMode(
+    controllerEnv[OPENSPEC_SPAWN_MODE_ENV]
+  )
 
   const spawnDaemon = async (
     requestedHostMode: 'web' | undefined,
@@ -91,7 +114,8 @@ export function createDaemonController(options: {
     const hostMode: DaemonHostMode = requestedHostMode ?? (platform === 'linux' ? 'web' : 'native')
     mkdirSync(paths.logsDir, { recursive: true, mode: 0o700 })
     const logFd = openSync(paths.logFile, 'a', 0o600)
-    const env = { ...(options.env ?? process.env) }
+    const env = { ...controllerEnv }
+    env[OPENSPEC_SPAWN_MODE_ENV] = requestedOpenSpecSpawnMode
     env[DAEMON_RUN_ENV] = '1'
     env[DAEMON_HOST_MODE_ENV] = hostMode
     if (restoreProjectDirs.length > 0) {
@@ -117,6 +141,11 @@ export function createDaemonController(options: {
         `App daemon v${status.version} does not match CLI v${options.version}. Run ${correctiveRestartCommand(status.hostMode)}.`
       )
     }
+    if (status.openSpecSpawnMode !== requestedOpenSpecSpawnMode) {
+      throw new Error(
+        `App daemon started with OpenSpec ${status.openSpecSpawnMode} execution instead of ${requestedOpenSpecSpawnMode}.`
+      )
+    }
     return status
   }
 
@@ -136,6 +165,11 @@ export function createDaemonController(options: {
         if (requestedHostMode && current.hostMode !== requestedHostMode) {
           throw new Error(
             `OpenSpecUI App daemon is running in ${current.hostMode} mode. Run ${correctiveRestartCommand(requestedHostMode)} to change startup mode.`
+          )
+        }
+        if (current.openSpecSpawnMode !== requestedOpenSpecSpawnMode) {
+          throw new Error(
+            `OpenSpecUI App daemon is running with OpenSpec ${current.openSpecSpawnMode} execution. Run ${correctiveSpawnModeRestartCommand(requestedOpenSpecSpawnMode, current.hostMode)} to change execution mode.`
           )
         }
         await sendDaemonCommand({ endpoint: paths.endpoint, command: { type: 'activate' } })

@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
- * 1. Bootstrap the detached App daemon from explicit environment-owned startup evidence.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Bootstrap the detached App daemon from explicit environment-owned startup evidence and freeze its OpenSpec execution mode.
  * 2. Compose local App HTTP, presentation host, and IPC lifecycle in teardown order.
  * 3. Own local-directory project children through the managed daemon control boundary.
  * 4. Project source or packaged CLI execution into the public native cold-launch lifecycle.
@@ -9,7 +9,9 @@
  * Original request (2026-07-29): "多次执行 openspecui --app 只是在激活同一个 daemon。"
  * Owner correction (2026-07-30): "pnpm openspecui这种开发模式下，应该要启动 opentray 的 devtools。"
  * Owner correction (2026-07-30): appMode must include the durable `openspecui start` cold-launch vector.
+ * Owner acceptance (2026-07-31): Worker is the default buffered OpenSpec execution mode.
  */
+import { resolveOpenSpecSpawnMode } from '@openspecui/core'
 import type { AppDaemonWorkspaceBinding } from '@openspecui/core/app-daemon-control'
 import { execFile } from 'node:child_process'
 import { basename, dirname } from 'node:path'
@@ -109,6 +111,7 @@ export async function runDaemonProcess(options: {
   startProjectServer: (options: CLIOptions) => Promise<RunningServer>
   openExternalUrl?: (target: string) => Promise<unknown>
 }): Promise<void> {
+  const openSpecSpawnMode = resolveOpenSpecSpawnMode()
   const runtimeDir = options.runtimeDir ?? dirname(fileURLToPath(import.meta.url))
   const appLaunch = resolveOpenTrayAppLaunch({
     entryPath: options.entryPath ?? process.argv[1] ?? fileURLToPath(import.meta.url),
@@ -241,6 +244,7 @@ export async function runDaemonProcess(options: {
       runDir: paths.runDir,
       version,
       hostMode: presentation.effectiveHostMode,
+      openSpecSpawnMode,
       host: presentation.host,
       managedProject,
     })

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Own the single-instance daemon IPC bind and credential-memory Workspace ledger.
  * 2. Route validated presentation commands and exact managed-child control.
  * 3. Recover stale Unix endpoints only after a failed liveness probe.
@@ -18,6 +18,7 @@ import {
   type DaemonStatus,
   type DaemonWorkspace,
   type DaemonWorkspaceBinding,
+  type OpenSpecSpawnMode,
 } from './daemon-protocol.js'
 import { DaemonUnavailableError, sendDaemonCommand } from './daemon-transport.js'
 
@@ -171,6 +172,7 @@ export async function startDaemonServer(options: {
   runDir: string
   version: string
   hostMode: DaemonHostMode
+  openSpecSpawnMode?: OpenSpecSpawnMode
   host: DaemonPresentationHost
   /**
    * Optional authenticated managed-project control. When absent, managed start/stop commands are
@@ -193,6 +195,7 @@ export async function startDaemonServer(options: {
     version: options.version,
     pid: process.pid,
     hostMode: options.hostMode,
+    openSpecSpawnMode: options.openSpecSpawnMode ?? 'process',
     appUrl: options.host.appUrl,
     capabilities: options.host.capabilities,
   }

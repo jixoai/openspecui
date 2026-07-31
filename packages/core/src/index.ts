@@ -594,6 +594,12 @@ export {
 } from './cli-executor.js'
 
 export {
+  OPENSPEC_SPAWN_MODE_ENV,
+  resolveOpenSpecSpawnMode,
+  type OpenSpecSpawnMode,
+} from './openspec-cli-worker.js'
+
+export {
   createPhysicalReactiveDirectory,
   removePhysicalReactivePath,
   runPhysicalReactivePathMutation,

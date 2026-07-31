@@ -208,11 +208,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck:store-mutation-tests": "tsc -p tsconfig.store-mutation-tests.json --noEmit",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.reactive-context-tests.json --noEmit && tsc -p tsconfig.store-mutation-tests.json --noEmit && tsc -p tsconfig.hosted-contract-tests.json --noEmit && tsc -p tsconfig.cli-projection-tests.json --noEmit && tsc -p tsconfig.store-content-projection-tests.json --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.reactive-context-tests.json --noEmit && tsc -p tsconfig.store-mutation-tests.json --noEmit && tsc -p tsconfig.hosted-contract-tests.json --noEmit && tsc -p tsconfig.cli-projection-tests.json --noEmit && tsc -p tsconfig.store-content-projection-tests.json --noEmit && tsc -p tsconfig.spawn-safe-tests.json --noEmit && tsc -p tsconfig.cli-executor-admission-tests.json --noEmit && tsc -p tsconfig.openspec-cli-spawn-mode-tests.json --noEmit",
     "typecheck:hosted-contract-tests": "tsc -p tsconfig.hosted-contract-tests.json --noEmit",
-    "typecheck:store-content-projection-tests": "tsc -p tsconfig.store-content-projection-tests.json --noEmit"
+    "typecheck:store-content-projection-tests": "tsc -p tsconfig.store-content-projection-tests.json --noEmit",
+    "typecheck:spawn-safe-tests": "tsc -p tsconfig.spawn-safe-tests.json --noEmit",
+    "typecheck:cli-executor-admission-tests": "tsc -p tsconfig.cli-executor-admission-tests.json --noEmit",
+    "typecheck:openspec-cli-spawn-mode-tests": "tsc -p tsconfig.openspec-cli-spawn-mode-tests.json --noEmit"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "@parcel/watcher": "^2.5.1",
     "cross-spawn": "^7.0.6",
     "mdast-util-from-markdown": "^2.0.2",
