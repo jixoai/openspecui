@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove ReadonlyKanban renders exact lane facts and navigation.
  * 2. Prove the shared readonly surface exposes no operation or drag affordance.
  * 3. Lock its self-owned 1/2/4-column container topology without horizontal scrolling.
+ * 4. Prove compact Pending geometry stays fixed while every lane owns vertical scrolling.
  *
  * Original request (2026-07-28): add ReadonlyKanban to Dashboard.
  * Owner correction (2026-07-28): use container queries for 4x1, 2x2, and 1x4 without horizontal scrolling.
+ * Original request (2026-07-31): "Kanban 的高度可以固定下来，并且要让每个group都可以独立滚动"
  */
 import { createTrackedTaskProgress } from '@openspecui/core/task-progress'
 import { cleanup, render, screen } from '@testing-library/react'
@@ -85,5 +87,37 @@ describe('ReadonlyKanban', () => {
     expect(screen.getByText('Archived change')).toBeTruthy()
     expect(container.querySelector('button')).toBeNull()
     expect(container.querySelector('[draggable="true"]')).toBeNull()
+  })
+
+  it('keeps compact Pending geometry fixed and gives every lane one scroll owner', () => {
+    const { container } = render(
+      <ReadonlyKanban
+        activeItems={[]}
+        archivedItems={[]}
+        activeCounts={{ 'no-tasks': 0, 'in-progress': 0, complete: 0 }}
+        archivedCount={0}
+        variant="compact"
+        pending
+      />
+    )
+
+    const kanban = screen.getByTestId('readonly-kanban')
+    expect(kanban).toHaveAttribute('aria-busy', 'true')
+    expect(kanban.className).toContain('h-[46rem]')
+    expect(kanban.className).toContain('@[32rem]:h-[32rem]')
+    expect(kanban.className).toContain('@[64rem]:h-72')
+
+    const grid = screen.getByTestId('readonly-kanban-grid')
+    expect(grid.className).toContain('grid-rows-4')
+    expect(grid.className).toContain('@[32rem]:grid-rows-2')
+    expect(grid.className).toContain('@[64rem]:grid-rows-1')
+
+    const laneScrollOwners = container.querySelectorAll('[data-kanban-lane-scroll]')
+    expect(laneScrollOwners).toHaveLength(4)
+    for (const lane of laneScrollOwners) {
+      expect(lane.className).toContain('overflow-y-auto')
+      expect(lane.className).toContain('min-h-0')
+    }
+    expect(container.querySelectorAll('.rt-skeleton').length).toBeGreaterThan(0)
   })
 })

@@ -1,9 +1,9 @@
 /**
  * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Render independent Dashboard Summary, objective Kanban, trends, and Code Git projections.
- * 2. Keep Dashboard-owned Code Git actions separate from Planning-root readiness.
- * 3. Carry the Code Git binding token through dashboard detail handoff navigation.
- * 4. Bind refresh and detached-worktree removal to the rendered Code snapshot generation.
+ * 1. Render independent Dashboard projections inside stable region-owned Pending geometry.
+ * 2. Keep Dashboard-owned readonly Code Git refresh separate from Planning-root mutation authority.
+ * 3. Curate Code Git activity while preserving binding-token detail handoff provenance.
+ * 4. Bind readonly refresh to the rendered Code snapshot generation.
  * 5. Retain stable regional snapshots beside their own loading, updating, and error evidence.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
@@ -16,6 +16,8 @@
  * Owner-reported regression (2026-07-31): "Git Snapshot 界面上的代码？我现在手动刷新不了。"
  * Original request (2026-07-31): "优化 Dashboard，目前是 Kanban / Code Git Snapshot / Active Changes / Specifications。改成 Kanban 独占一行，然后移除 Specifications，接着就是 Active Changes / Code Git Snapshot 两个一行"
  * Original request (2026-07-31): "这个看板底部加一个border"
+ * Original request (2026-07-31): "基于真实的布局去做骨架屏，或者说是直接让卡片自身去支持 Pending 样式"
+ * Original request (2026-07-31): "Code Git Snapshot 的 Other Worktrees 默认隐藏 (detached)。然后commitList这里默认显示5个就好"
  */
 import { Badge } from '@/components/badge'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'
@@ -26,16 +28,14 @@ import {
   getGitEntrySharedHandoff,
   GIT_WORKTREE_LINE_CLASS,
   GitEntryRow,
-  isHttpUrl,
   WorktreeRow,
 } from '@/components/git/git-shared'
 import { ReadonlyKanban } from '@/components/kanban/readonly-kanban'
 import {
   ChangeListSkeleton,
-  DashboardSummarySkeleton,
-  DashboardTrendsSkeleton,
   GitWorktreeSkeleton,
   RealtimeRevalidateCue,
+  RealtimeSkeleton,
 } from '@/components/realtime'
 import type { SelectOption } from '@/components/select'
 import {
@@ -54,12 +54,7 @@ import {
 import { formatRelativeTime } from '@/lib/format-time'
 import { buildGitEntryHrefFromEntry } from '@/lib/git-panel'
 import { isStaticMode } from '@/lib/static-mode'
-import {
-  refreshDashboardGitSnapshot,
-  removeDetachedDashboardWorktree,
-  useDashboardGitTaskStatusSubscription,
-  useDashboardOverviewSubscription,
-} from '@/lib/use-dashboard'
+import { refreshDashboardGitSnapshot, useDashboardOverviewSubscription } from '@/lib/use-dashboard'
 import { useGitRepositoryScopes } from '@/lib/use-git-repository-scope'
 import { useOpsxConfigBundleSubscription, useOpsxStatusListSubscription } from '@/lib/use-opsx'
 import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
@@ -69,7 +64,7 @@ import {
 } from '@/lib/view-transitions/shared-elements'
 import type {
   DashboardCardAvailability,
-  DashboardGitWorktree,
+  DashboardGitEntry,
   DashboardMetricKey,
   DashboardTrendKind,
 } from '@openspecui/core'
@@ -137,6 +132,22 @@ function createDefaultTrendKinds(): Record<DashboardMetricKey, DashboardTrendKin
   }
 }
 
+function hasUncommittedChanges(entry: DashboardGitEntry): boolean {
+  return (
+    entry.type === 'uncommitted' &&
+    (entry.diff.files > 0 || entry.diff.insertions > 0 || entry.diff.deletions > 0)
+  )
+}
+
+function selectDashboardGitEntries(entries: DashboardGitEntry[]): DashboardGitEntry[] {
+  const sorted = sortDashboardGitEntries(entries)
+  const uncommitted = sorted.find((entry) => entry.type === 'uncommitted')
+  const commits = sorted.filter((entry) => entry.type === 'commit')
+  return uncommitted && hasUncommittedChanges(uncommitted)
+    ? [uncommitted, ...commits.slice(0, 4)]
+    : commits.slice(0, 5)
+}
+
 export function Dashboard() {
   const staticMode = isStaticMode()
   const dashboardState = useDashboardOverviewSubscription()
@@ -172,15 +183,17 @@ export function Dashboard() {
   const summaryError = summaryRegion?.error ?? error
   const trendsIsLoading = trendsRegion?.isLoading ?? (isLoading && !overview)
   const trendsIsUpdating = trendsRegion?.isUpdating ?? false
-  const trendsError = trendsRegion?.error ?? (overview ? null : error)
+  const trendsError = trendsRegion?.error ?? null
   const gitIsLoading = gitRegion?.isLoading ?? (isLoading && !overview)
   const gitIsUpdating = gitRegion?.isUpdating ?? false
-  const gitError = gitRegion?.error ?? (overview ? null : error)
+  const gitError = gitRegion?.error ?? null
+  const summaryPending = summaryIsLoading && summaryProjection === undefined
+  const trendsPending = summaryPending || (trendsIsLoading && trendsProjection === undefined)
+  const gitPending = summaryPending || (gitIsLoading && dashboardGit === null)
   const admitSecondaryProjections = summaryProjection !== undefined
   const { data: gitScopes, authority: gitScopesAuthority } = useGitRepositoryScopes(
     !staticMode && admitSecondaryProjections
   )
-  const { data: gitTaskStatus } = useDashboardGitTaskStatusSubscription()
   const { data: statuses } = useOpsxStatusListSubscription(admitSecondaryProjections)
   const { data: configBundle } = useOpsxConfigBundleSubscription(admitSecondaryProjections)
   const [gitAutoRefreshPreset, setGitAutoRefreshPreset] = useState<DashboardGitAutoRefreshPreset>(
@@ -223,9 +236,9 @@ export function Dashboard() {
     [dashboardGitBindingToken]
   )
 
-  const [removingWorktreePath, setRemovingWorktreePath] = useState<string | null>(null)
+  const focusRefreshAtRef = useRef(0)
   const gitAutoRefreshTimerRef = useRef<number | null>(null)
-  const gitTaskStatusRef = useRef(gitTaskStatus)
+  const gitRefreshRequestRef = useRef(gitRefreshRequest)
   const gitRefreshReason = gitRefreshRequest?.reason ?? null
 
   const clearGitAutoRefreshTimer = useCallback(() => {
@@ -241,8 +254,6 @@ export function Dashboard() {
 
       void triggerGitRefresh(reason)
         .then(() => {
-          const latestTaskStatus = gitTaskStatusRef.current
-          if (latestTaskStatus?.running) return
           setGitRefreshRequest((current) =>
             current?.reason === reason && current.requestedAt === requestedAt ? null : current
           )
@@ -306,78 +317,46 @@ export function Dashboard() {
     runDashboardGitRefresh('manual-button')
   }, [clearGitAutoRefreshTimer, dashboardGitBindingToken, runDashboardGitRefresh])
 
-  const handleRemoveDetachedWorktree = useCallback(
-    async (worktree: DashboardGitWorktree) => {
-      if (
-        dashboardGitBindingToken === null ||
-        isStaticMode() ||
-        worktree.isCurrent ||
-        !worktree.detached ||
-        isHttpUrl(worktree.path)
-      ) {
-        return
-      }
-
-      const confirmed = window.confirm(
-        [
-          'Remove detached worktree?',
-          '',
-          worktree.path,
-          '',
-          'This runs git worktree remove --force.',
-        ].join('\n')
-      )
-      if (!confirmed) return
-
-      setRemovingWorktreePath(worktree.path)
-      setGitActionError(null)
-      try {
-        await removeDetachedDashboardWorktree(worktree.path, dashboardGitBindingToken)
-      } catch (error) {
-        console.error('[Dashboard] Failed to remove detached worktree:', error)
-        setGitActionError(formatGitActionError(error))
-        window.alert(error instanceof Error ? error.message : 'Failed to remove detached worktree.')
-      } finally {
-        setRemovingWorktreePath((current) => (current === worktree.path ? null : current))
-      }
-    },
-    [dashboardGitBindingToken]
-  )
+  useEffect(() => {
+    gitRefreshRequestRef.current = gitRefreshRequest
+  }, [gitRefreshRequest])
 
   useEffect(() => {
     if (staticMode) return
 
-    const onVisibilityChange = () => {
-      setIsDocumentVisible(document.visibilityState === 'visible')
+    const triggerOnce = (reason: string) => {
+      if (gitRefreshRequestRef.current !== null) return
+      const now = Date.now()
+      if (now - focusRefreshAtRef.current < 700) return
+      focusRefreshAtRef.current = now
+      clearGitAutoRefreshTimer()
+      setGitAutoRefreshCycleStartedAt(null)
+      setGitAutoRefreshNow(Date.now())
+      runDashboardGitRefresh(reason)
     }
 
+    const onFocus = () => {
+      triggerOnce('window-focus')
+    }
+
+    const onVisibilityChange = () => {
+      const visible = document.visibilityState === 'visible'
+      setIsDocumentVisible(visible)
+      if (visible) {
+        triggerOnce('document-visible')
+      }
+    }
+
+    window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisibilityChange)
 
+    triggerOnce('dashboard-mount')
+
     return () => {
+      window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [staticMode])
-
-  useEffect(() => {
-    gitTaskStatusRef.current = gitTaskStatus
-  }, [gitTaskStatus])
-
-  useEffect(() => {
-    if (!gitRefreshRequest || !gitTaskStatus) return
-
-    const finishedAfterRequest =
-      gitTaskStatus.running === false &&
-      (gitTaskStatus.lastFinishedAt ?? 0) >= gitRefreshRequest.requestedAt
-
-    if (!finishedAfterRequest) return
-
-    setGitRefreshRequest((current) =>
-      current?.reason === gitRefreshRequest.reason &&
-      current.requestedAt === gitRefreshRequest.requestedAt
-        ? null
-        : current
-    )
-  }, [gitRefreshRequest, gitTaskStatus])
+  }, [clearGitAutoRefreshTimer, runDashboardGitRefresh, staticMode])
 
   useEffect(() => {
     if (staticMode) return
@@ -428,32 +407,6 @@ export function Dashboard() {
     return tracked
   }, [configBundle])
 
-  if (summaryIsLoading && !summaryProjection) {
-    // Preserve page chrome (header/nav) and render a stable skeleton body rather than a full-tree barrier,
-    // so the surrounding layout and navigation do not flash on the first dashboard visit.
-    return (
-      <div className="min-w-0 space-y-6 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
-            <LayoutDashboard className="h-6 w-6 shrink-0" />
-            Dashboard
-          </h1>
-        </div>
-        <DashboardSummarySkeleton count={6} />
-        <ChangeListSkeleton count={3} />
-      </div>
-    )
-  }
-
-  if (summaryError && !summaryProjection) {
-    return (
-      <div role="alert" className="text-destructive flex items-center gap-2">
-        <AlertCircle className="h-5 w-5" />
-        Error loading dashboard: {summaryError.message}
-      </div>
-    )
-  }
-
   const summary = summaryProjection?.summary ?? {
     specifications: 0,
     requirements: 0,
@@ -492,6 +445,10 @@ export function Dashboard() {
   const hasChanges = activeChanges.length > 0
   const currentWorktree = git.worktrees.find((worktree) => worktree.isCurrent) ?? null
   const otherWorktrees = git.worktrees.filter((worktree) => !worktree.isCurrent)
+  const visibleOtherWorktrees = otherWorktrees.filter((worktree) => !worktree.detached)
+  const visibleCurrentEntries = currentWorktree
+    ? selectDashboardGitEntries(currentWorktree.entries)
+    : []
   const gitAutoRefreshIntervalMs = getDashboardGitAutoRefreshIntervalMs(gitAutoRefreshPreset)
   const gitAutoRefreshProgress =
     gitRefreshRequest !== null
@@ -508,11 +465,6 @@ export function Dashboard() {
 
   const renderHistoryCards = () => (
     <div className="space-y-2">
-      {trendsIsLoading && !trendsProjection ? (
-        <div aria-busy="true">
-          <DashboardTrendsSkeleton count={2} />
-        </div>
-      ) : null}
       {trendsError ? (
         <div
           role="alert"
@@ -532,7 +484,8 @@ export function Dashboard() {
             trendKind={trendKinds.specifications}
             points={trendsProjection?.trends.specifications ?? []}
             triColorPoints={[]}
-            className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
+            pending={trendsPending}
+            className="h-44 sm:h-48 lg:h-52 xl:h-56"
           />
           <DashboardMetricCard
             label="Archived Changes / Completed Tasks"
@@ -542,7 +495,8 @@ export function Dashboard() {
             trendKind={trendKinds.completedChanges}
             points={trendsProjection?.trends.completedChanges ?? []}
             triColorPoints={[]}
-            className="min-h-44 sm:min-h-48 lg:min-h-52 xl:min-h-56"
+            pending={trendsPending}
+            className="h-44 sm:h-48 lg:h-52 xl:h-56"
           />
         </div>
       </RealtimeRevalidateCue>
@@ -567,6 +521,7 @@ export function Dashboard() {
       </div>
       <ReadonlyKanban
         variant="compact"
+        pending={summaryPending}
         activeItems={activeChanges}
         archivedItems={summaryProjection?.recentArchives ?? []}
         activeCounts={
@@ -583,7 +538,7 @@ export function Dashboard() {
 
   const renderGitSnapshotSection = () =>
     showGitRegion ? (
-      <section className="min-w-0 space-y-2">
+      <section data-testid="dashboard-git-snapshot" className="min-w-0 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="font-medium">Code Git Snapshot</h2>
@@ -606,7 +561,6 @@ export function Dashboard() {
             />
           ) : null}
         </div>
-        {gitIsLoading && !dashboardGit ? <GitWorktreeSkeleton count={3} /> : null}
         {gitError ? (
           <div
             role="alert"
@@ -616,7 +570,19 @@ export function Dashboard() {
             <span>Code Git snapshot failed: {gitError.message}</span>
           </div>
         ) : null}
-        {!showGitSnapshot && dashboardGit && !gitIsLoading && !gitError ? (
+        {gitPending ? (
+          <div
+            aria-busy="true"
+            className="border-border/80 bg-card min-w-0 space-y-3 rounded-lg border p-3"
+          >
+            <div className="flex items-center gap-1.5" aria-hidden="true">
+              <RealtimeSkeleton className="size-4 shrink-0 rounded-full" />
+              <RealtimeSkeleton className="h-3 w-36" />
+            </div>
+            <GitWorktreeSkeleton count={3} />
+          </div>
+        ) : null}
+        {!showGitSnapshot && dashboardGit && !gitPending && !gitError ? (
           <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
             Waiting for the current Code Git binding.
           </div>
@@ -633,14 +599,9 @@ export function Dashboard() {
 
               {currentWorktree ? (
                 <div className="space-y-0">
-                  <WorktreeRow
-                    worktree={currentWorktree}
-                    emphasize
-                    removing={removingWorktreePath === currentWorktree.path}
-                    onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
-                  />
+                  <WorktreeRow worktree={currentWorktree} emphasize />
                   <div className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}>
-                    {sortDashboardGitEntries(currentWorktree.entries).map((entry) => (
+                    {visibleCurrentEntries.map((entry) => (
                       <GitEntryRow
                         key={
                           entry.type === 'commit'
@@ -677,19 +638,13 @@ export function Dashboard() {
                 </div>
               )}
 
-              {otherWorktrees.length > 0 && (
+              {visibleOtherWorktrees.length > 0 && (
                 <div className="border-border/70 mt-3 space-y-1 border-t pt-2">
                   <div className="text-muted-foreground text-xs uppercase tracking-wide">
                     Other Worktrees
                   </div>
-                  {otherWorktrees.map((worktree) => (
-                    <WorktreeRow
-                      key={worktree.path}
-                      worktree={worktree}
-                      emphasize={false}
-                      removing={removingWorktreePath === worktree.path}
-                      onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
-                    />
+                  {visibleOtherWorktrees.map((worktree) => (
+                    <WorktreeRow key={worktree.path} worktree={worktree} emphasize={false} />
                   ))}
                 </div>
               )}
@@ -700,108 +655,120 @@ export function Dashboard() {
     ) : null
 
   const renderActiveChangesSection = () => (
-    <section className="border-border flex min-w-0 flex-col rounded-t-lg border">
+    <section
+      data-testid="dashboard-active-changes"
+      className="border-border flex min-w-0 flex-col rounded-t-lg border"
+    >
       <div className="border-border flex min-w-0 flex-wrap items-center justify-between gap-1.5 border-b px-4 py-3">
         <h2 className="font-medium">Active Changes</h2>
-        <span className="text-muted-foreground text-xs sm:text-sm">
-          {summary.activeChanges} active
-        </span>
+        {summaryPending ? (
+          <RealtimeSkeleton className="h-4 w-16" />
+        ) : (
+          <span className="text-muted-foreground text-xs sm:text-sm">
+            {summary.activeChanges} active
+          </span>
+        )}
       </div>
       <div className="bg-card divide-border flex min-w-0 flex-1 flex-col divide-y">
-        {activeChanges.map((change) => {
-          const progress = change.trackedTaskProgress
-          const taskPercent =
-            progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
-          const status = activeStatuses.find((item) => item.changeName === change.id)
-          const doneArtifacts =
-            status?.artifacts.filter((artifact) => artifact.status === 'done').length ?? 0
-          const totalArtifacts = status?.artifacts.length ?? 0
-          const trackedArtifactId = status
-            ? applyTrackedArtifactBySchema.get(status.schemaName)
-            : undefined
-          const trackedArtifactStatus =
-            trackedArtifactId && status
-              ? (status.artifacts.find((artifact) => artifact.id === trackedArtifactId)?.status ??
-                inferTrackedArtifactStatus(status.artifacts.map((artifact) => artifact.status)))
-              : inferTrackedArtifactStatus(
-                  status?.artifacts.map((artifact) => artifact.status) ?? []
-                )
-          const phase = classifyChangeWorkflowPhase({
-            hasStatus: Boolean(status),
-            isComplete: status?.isComplete ?? false,
-            trackedTaskPhase: progress.phase,
-            trackedArtifactStatus,
-          })
+        {summaryPending ? <ChangeListSkeleton count={3} /> : null}
+        {!summaryPending &&
+          activeChanges.map((change) => {
+            const progress = change.trackedTaskProgress
+            const taskPercent =
+              progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
+            const status = activeStatuses.find((item) => item.changeName === change.id)
+            const doneArtifacts =
+              status?.artifacts.filter((artifact) => artifact.status === 'done').length ?? 0
+            const totalArtifacts = status?.artifacts.length ?? 0
+            const trackedArtifactId = status
+              ? applyTrackedArtifactBySchema.get(status.schemaName)
+              : undefined
+            const trackedArtifactStatus =
+              trackedArtifactId && status
+                ? (status.artifacts.find((artifact) => artifact.id === trackedArtifactId)?.status ??
+                  inferTrackedArtifactStatus(status.artifacts.map((artifact) => artifact.status)))
+                : inferTrackedArtifactStatus(
+                    status?.artifacts.map((artifact) => artifact.status) ?? []
+                  )
+            const phase = classifyChangeWorkflowPhase({
+              hasStatus: Boolean(status),
+              isComplete: status?.isComplete ?? false,
+              trackedTaskPhase: progress.phase,
+              trackedArtifactStatus,
+            })
 
-          return (
-            <VTLink
-              key={change.id}
-              to="/changes/$changeId"
-              params={{ changeId: change.id }}
-              state={(prev) => ({
-                ...prev,
-                __vtHandoff: {
-                  family: 'changes',
-                  entityId: change.id,
-                  title: change.name,
-                  subtitle: change.id,
-                },
-              })}
-              vt={{ sharedElements: { family: 'changes', entityId: change.id } }}
-              {...getSharedElementBinding({ family: 'changes', entityId: change.id }, 'container')}
-              className="hover:bg-muted/50 block min-w-0 px-4 py-3"
-            >
-              <div className="mb-2 flex min-w-0 flex-wrap items-start justify-between gap-3 sm:flex-nowrap sm:items-center">
-                <div className="min-w-0 flex-1">
-                  <div
-                    {...getSharedElementBinding(
-                      { family: 'changes', entityId: change.id },
-                      'title'
-                    )}
-                    className="truncate font-medium"
-                  >
-                    {change.name}
-                  </div>
-                  <div className="text-muted-foreground truncate text-xs">
-                    {change.updatedAt > 0 && <>{formatRelativeTime(change.updatedAt)} · </>}
-                    {change.id}
-                  </div>
-                </div>
-                <div className="shrink-0 text-right text-sm">
-                  <Badge
-                    tone="custom"
-                    size="sm"
-                    shape="box"
-                    className={`border ${phase.toneClass}`}
-                  >
-                    {phase.label}
-                  </Badge>
-                  <div className="font-medium">
-                    {progress.completed}/{progress.total}
-                  </div>
-                  <div className="text-muted-foreground text-xs">tasks</div>
-                </div>
-              </div>
-              <div className="bg-muted h-1.5 rounded-full">
-                <div
-                  className="bg-primary h-full rounded-full transition-all"
-                  style={{ width: `${taskPercent}%` }}
-                />
-              </div>
-              <div className="text-muted-foreground mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="shrink-0">{taskPercent}% task completion</span>
-                {status ? (
-                  <span className="min-w-0 truncate text-right">
-                    {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
-                  </span>
-                ) : (
-                  <span>Artifacts status unavailable</span>
+            return (
+              <VTLink
+                key={change.id}
+                to="/changes/$changeId"
+                params={{ changeId: change.id }}
+                state={(prev) => ({
+                  ...prev,
+                  __vtHandoff: {
+                    family: 'changes',
+                    entityId: change.id,
+                    title: change.name,
+                    subtitle: change.id,
+                  },
+                })}
+                vt={{ sharedElements: { family: 'changes', entityId: change.id } }}
+                {...getSharedElementBinding(
+                  { family: 'changes', entityId: change.id },
+                  'container'
                 )}
-              </div>
-            </VTLink>
-          )
-        })}
-        {!hasChanges && (
+                className="hover:bg-muted/50 block min-w-0 px-4 py-3"
+              >
+                <div className="mb-2 flex min-w-0 flex-wrap items-start justify-between gap-3 sm:flex-nowrap sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <div
+                      {...getSharedElementBinding(
+                        { family: 'changes', entityId: change.id },
+                        'title'
+                      )}
+                      className="truncate font-medium"
+                    >
+                      {change.name}
+                    </div>
+                    <div className="text-muted-foreground truncate text-xs">
+                      {change.updatedAt > 0 && <>{formatRelativeTime(change.updatedAt)} · </>}
+                      {change.id}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right text-sm">
+                    <Badge
+                      tone="custom"
+                      size="sm"
+                      shape="box"
+                      className={`border ${phase.toneClass}`}
+                    >
+                      {phase.label}
+                    </Badge>
+                    <div className="font-medium">
+                      {progress.completed}/{progress.total}
+                    </div>
+                    <div className="text-muted-foreground text-xs">tasks</div>
+                  </div>
+                </div>
+                <div className="bg-muted h-1.5 rounded-full">
+                  <div
+                    className="bg-primary h-full rounded-full transition-all"
+                    style={{ width: `${taskPercent}%` }}
+                  />
+                </div>
+                <div className="text-muted-foreground mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="shrink-0">{taskPercent}% task completion</span>
+                  {status ? (
+                    <span className="min-w-0 truncate text-right">
+                      {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
+                    </span>
+                  ) : (
+                    <span>Artifacts status unavailable</span>
+                  )}
+                </div>
+              </VTLink>
+            )
+          })}
+        {!summaryPending && !hasChanges && (
           <div className="text-muted-foreground px-4 py-6 text-center text-sm">
             <div>No active changes.</div>
             <div className="mt-1 text-xs">Recommended workflow start: Quick Propose</div>
