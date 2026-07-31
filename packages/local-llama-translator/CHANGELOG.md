@@ -1,5 +1,17 @@
 # @openspecui/local-llama-translator
 
+## 6.1.0
+
+### Patch Changes
+
+- a8315e5: Declare CTranslate2 and node-llama-cpp as optional peers instead of install-time dependencies. Local translation runtime admission installs them only when selected.
+- Updated dependencies [701bfe8]
+- Updated dependencies [ff2218a]
+- Updated dependencies [b1bd34f]
+- Updated dependencies [4755386]
+- Updated dependencies [752addc]
+  - @openspecui/core@6.1.0
+
 ## 6.0.1
 
 ### Patch Changes

@@ -1,5 +1,50 @@
 # @openspecui/server
 
+## 6.1.0
+
+### Minor Changes
+
+- 4755386: Reshape the App information architecture around Workspaces and Stores.
+  - Workspaces becomes a path-first project launcher: fixed Home (Favorites +
+    path-input + Recent + Task Manager), daemon-managed directory launch with
+    canonical-path dedupe / exact Stop / restart restoration, direct favorite
+    secondary navigation, Health + WebSocket verified Running evidence, and
+    path-first labels (GitHub org/repo or folder basename + branch subtitle).
+    Favorites and Recent are persisted by the user-level daemon and converge
+    across App windows through invalidation Push followed by snapshot Pull.
+  - Stores becomes the only other primary domain: Environment-scoped Store
+    index with composite-identity Detail, demand-driven readonly Store-content
+    (Specs/active Changes) Projection Work, and explicit Environment selection
+    replacing backend-URL Store targeting.
+  - App IA reset: retires the Connections, Environment, Store Manager
+    (Inspector/Inventory/Context Matrix) routes and the backend selector without
+    compatibility redirects. Candidate/open Workspace state is separated; an
+    unchanged daemon snapshot no longer reopens a user-closed Workspace.
+  - App distribution reset: retires PWA install prompts, manifest and icon
+    assets, service-worker cache/update ownership, PWA launch roles, and PWA
+    overlay chrome. Browser Web and OpenTray remain the supported App hosts; the
+    sidebar brand now uses the canonical App logo.
+
+- 752addc: Add the local App daemon, OpenTray native presentation, Browser Web mode, and persistent multi-project Workspaces.
+
+### Patch Changes
+
+- 701bfe8: Default buffered OpenSpec commands to Worker execution, fall back to process only when the importable CLI JavaScript module is absent, publish the daemon-owned execution mode, and expose requested, effective, module, fallback, and lifecycle evidence through OpenTelemetry.
+- ff2218a: Classify observation refresh procedures as readonly queries, preserve one absolute Dashboard auto-refresh deadline across visibility changes, keep Dashboard manual refresh independent from background Git work, stabilize Dashboard regional Pending geometry with fixed Historical Trends and independently scrolling compact Kanban lanes, curate the default Git activity window to five meaningful current-worktree rows, compute summary-only data for visible Other Worktrees, skip detached or unavailable hidden Git detail, propagate cancellation into Git subprocesses, and trace Projection Work queue admission separately from leaf execution. Also trace Planning-root lock queue/blocker timing with explicit sources and stacks, single-flight same-generation Root cache misses outside short generation-checked write commits, serialize buffered CLI execution at the real `CliExecutor` boundary, submit aggregate Status/Schema/Spec reads lazily, default buffered OpenSpec execution to Worker with process fallback only when its importable JavaScript module is absent, freeze and report daemon-managed execution policy across restart, and separate CLI admission, response, mode-specific process/Worker, and parent event-loop phase evidence without writing late events to ended spans.
+- a8315e5: Declare CTranslate2 and node-llama-cpp as optional peers instead of install-time dependencies. Local translation runtime admission installs them only when selected.
+- Updated dependencies [701bfe8]
+- Updated dependencies [ff2218a]
+- Updated dependencies [b1bd34f]
+- Updated dependencies [4755386]
+- Updated dependencies [752addc]
+- Updated dependencies [a8315e5]
+  - @openspecui/core@6.1.0
+  - @openspecui/local-ct2-translator@6.1.0
+  - @openspecui/local-llama-translator@6.1.0
+  - @openspecui/local-translator@6.1.0
+  - @openspecui/openai-completion-translator@6.1.0
+  - @openspecui/search@6.1.0
+
 ## 6.0.1
 
 ### Patch Changes
