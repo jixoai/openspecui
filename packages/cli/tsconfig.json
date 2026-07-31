@@ -1,4 +1,8 @@
 {
+  // Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+  // 1. Typecheck CLI against workspace source contracts without generated-package artifacts.
+  // 2. Preserve CLI-local module path mappings while mirroring required Core subpaths.
+  // Release correction (2026-07-31): resolve Store-content Core source types in clean CI.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
@@ -23,6 +27,7 @@
       "@openspecui/core/spec-catalog": ["../core/src/spec-catalog.ts"],
       "@openspecui/core/sounds": ["../core/src/sounds.ts"],
       "@openspecui/core/store-types": ["../core/src/store-types.ts"],
+      "@openspecui/core/store-content-projection": ["../core/src/store-content-projection.ts"],
       "@openspecui/search": ["../search/src/index.ts"],
       "@openspecui/search/node": ["../search/src/node.ts"],
       "@openspecui/local-translator": ["../local-translator/src/index.ts"],
