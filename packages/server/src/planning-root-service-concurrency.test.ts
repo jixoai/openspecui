@@ -3,9 +3,11 @@
  * 1. Prove same-generation readonly cache misses share one lock-free Root Context resolution.
  * 2. Prove a newer invalidation generation resolves independently and rejects a late stale result.
  * 3. Prove replacement waits for an admitted operation outside the short detach write lock.
+ * 4. Prove imperative snapshots require one dependency-tracked validation before reactive replay.
  *
  * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
  * Owner diagnosis (2026-07-31): readonly cache misses must single-flight before a short generation-checked write commit.
+ * Full-gate correction (2026-07-31): imperative snapshots must not mask a later reactive Planning-root failure or replacement.
  */
 import {
   CliExecutor,
@@ -129,6 +131,31 @@ afterEach(async () => {
 })
 
 describe('PlanningRootServiceManager concurrency', () => {
+  it('revalidates an imperative snapshot once before granting reactive replay authority', async () => {
+    const fixture = await createFixture()
+    fixture.doctorRoot
+      .mockResolvedValueOnce(rootDoctor(fixture.rootA))
+      .mockResolvedValueOnce(rootDoctor(fixture.rootB))
+    fixture.contextCommand
+      .mockResolvedValueOnce(rootContext(fixture.rootA))
+      .mockResolvedValueOnce(rootContext(fixture.rootB))
+
+    await expect(
+      fixture.manager.runOperation(({ rootContext: current }) => current)
+    ).resolves.toMatchObject({ planningRoot: { path: fixture.rootA } })
+    await expect(
+      fixture.manager.runReactiveOperation(({ rootContext: current }) => current)
+    ).resolves.toMatchObject({ planningRoot: { path: fixture.rootB } })
+    await expect(
+      fixture.manager.runReactiveOperation(({ rootContext: current }) => current)
+    ).resolves.toMatchObject({ planningRoot: { path: fixture.rootB } })
+
+    expect(fixture.doctorRoot).toHaveBeenCalledTimes(2)
+    expect(fixture.contextCommand).toHaveBeenCalledTimes(2)
+
+    await fixture.manager.dispose()
+  })
+
   it('single-flights same-generation cache misses without holding a write lock during CLI I/O', async () => {
     const fixture = await createFixture()
     const doctor = createDeferred<CliCommandResult<CliDoctor>>()

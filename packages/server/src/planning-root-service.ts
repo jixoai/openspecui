@@ -17,6 +17,7 @@
  * Built-runtime correction (2026-07-30): retiring a Planning root must retire its buffered CLI children.
  * Original request (2026-07-31): "把所有write-lock打印上时间日志和来源堆栈，使用otel来进行trace。"
  * Owner diagnosis (2026-07-31): readonly cache misses must merge before lock admission, and slow async work must remain outside write locks.
+ * Full-gate correction (2026-07-31): imperative snapshots cannot become reactive replay authority before dependency-tracked validation.
  */
 import {
   CliExecutor,
@@ -109,6 +110,7 @@ interface CurrentRootContextSnapshot {
   invalidationKey: string
   state: Extract<RootContextResolvedState, { state: 'ready' }>
   services: PlanningRootServiceRecord
+  reactiveReplayEligible: boolean
 }
 
 type PlanningRootTransitionResult =
@@ -702,6 +704,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
           invalidationKey,
           state: resolvedState,
           services: active,
+          reactiveReplayEligible: false,
         }
         return { status: 'current' as const, state: resolvedState, services: active }
       })
@@ -745,6 +748,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
           invalidationKey,
           state: resolvedState,
           services: created,
+          reactiveReplayEligible: false,
         }
         return true
       })
@@ -778,6 +782,22 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     await trackRootContextDependencies({ projectDir: this.options.launchProjectDir }, state)
   }
 
+  private promoteReactiveSnapshot(
+    invalidationKey: string,
+    services: PlanningRootServiceRecord | null
+  ): void {
+    const snapshot = this.currentRootContextSnapshot
+    if (
+      !services ||
+      snapshot?.invalidationKey !== invalidationKey ||
+      snapshot.services !== services ||
+      this.activeRecord !== services
+    ) {
+      return
+    }
+    snapshot.reactiveReplayEligible = true
+  }
+
   private async resolveTransition(
     reactive: boolean,
     useRuntimeInvalidationCache = true,
@@ -792,7 +812,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       const invalidationKey = this.currentRootContextInvalidationKey()
       if (useRuntimeInvalidationCache && cacheEligible) {
         const cached = await this.readCurrentSnapshot(invalidationKey)
-        if (cached) {
+        if (cached && (!reactive || cached.reactiveReplayEligible)) {
           this.traceRootContextCacheHit()
           if (reactive) await this.trackReactiveRootContext(cached.state)
           return { state: cached.state, services: cached.services }
@@ -801,7 +821,10 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
 
       const transition = await this.awaitRootTransition(invalidationKey)
       if (transition.status === 'stale') continue
-      if (reactive) await this.trackReactiveRootContext(transition.state)
+      if (reactive) {
+        await this.trackReactiveRootContext(transition.state)
+        this.promoteReactiveSnapshot(invalidationKey, transition.services)
+      }
       return transition
     }
   }
@@ -838,7 +861,8 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
               const snapshot = this.currentRootContextSnapshot
               if (
                 snapshot?.invalidationKey !== invalidationKey ||
-                snapshot.services !== this.activeRecord
+                snapshot.services !== this.activeRecord ||
+                (reactive && !snapshot.reactiveReplayEligible)
               ) {
                 return null
               }
@@ -874,7 +898,10 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       })
       if (!admitted) continue
       try {
-        if (reactive) await this.trackReactiveRootContext(transition.state)
+        if (reactive) {
+          await this.trackReactiveRootContext(transition.state)
+          this.promoteReactiveSnapshot(invalidationKey, admitted.record)
+        }
         return admitted
       } catch (error) {
         await admitted.lease.release()

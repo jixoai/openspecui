@@ -23,6 +23,7 @@
  * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
  * Owner correction (2026-07-29): App shell location is daemon-owned and is not writable project config.
  * Owner correction (2026-07-31): Observation refresh remains readonly when internal cache or stamp maintenance is required.
+ * Full-gate correction (2026-07-31): Dashboard Git invalidation must re-confirm Planning authority instead of replaying a stale Root snapshot.
  */
 import type {
   ChangeFile,
@@ -2933,7 +2934,7 @@ export const dashboardRouter = router({
 })
 
 function invalidateCurrentDashboardGitProjection(ctx: Context): void {
-  void runPlanningRootRead(ctx, ({ dashboardProjectionService }) =>
+  void runPlanningRoot(ctx, ({ dashboardProjectionService }) =>
     dashboardProjectionService.invalidateGit()
   ).catch(() => {
     // Code Git remains independent; Root Context surfaces planning projection failures.
