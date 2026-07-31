@@ -1,8 +1,10 @@
 /**
- * Orthogonal intents (created 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Render compact lifecycle and compatibility status labels for Settings OpenSpec surfaces.
+ * 2. Present accepted compatible CLI lines as verified facts rather than warnings.
  *
  * Original request (2026-07-20): "Keep dense operational presentation."
+ * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  */
 import { AlertTriangle, CheckCircle, CircleDot, Loader2, XCircle } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -10,19 +12,14 @@ import type { ReactNode } from 'react'
 function statusTone(status: string): string {
   if (
     status === 'current' ||
+    status === 'compatible' ||
     status === 'ready' ||
     status === 'initialized' ||
     status === 'in-sync'
   ) {
     return 'text-emerald-600 dark:text-emerald-300'
   }
-  if (
-    status === 'legacy-compatible' ||
-    status === 'refreshing' ||
-    status === 'partial' ||
-    status === 'drift' ||
-    status === 'stale'
-  ) {
+  if (status === 'refreshing' || status === 'partial' || status === 'drift' || status === 'stale') {
     return 'text-amber-600 dark:text-amber-300'
   }
   if (
@@ -39,14 +36,15 @@ function statusTone(status: string): string {
 /** Compact icon-plus-text state label shared by diagnostics and initialization. */
 export function SettingsStatusLabel({ status, children }: { status: string; children: ReactNode }) {
   const Icon =
-    status === 'current' || status === 'ready' || status === 'initialized' || status === 'in-sync'
+    status === 'current' ||
+    status === 'compatible' ||
+    status === 'ready' ||
+    status === 'initialized' ||
+    status === 'in-sync'
       ? CheckCircle
       : status === 'loading' || status === 'refreshing'
         ? Loader2
-        : status === 'legacy-compatible' ||
-            status === 'partial' ||
-            status === 'drift' ||
-            status === 'stale'
+        : status === 'partial' || status === 'drift' || status === 'stale'
           ? AlertTriangle
           : status === 'pending' || status === 'unknown' || status === 'uninitialized'
             ? CircleDot

@@ -8,6 +8,7 @@
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
  * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
+ * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  * Owner correction (2026-07-31): Root observation refresh is readonly despite internal cache invalidation.
  */
 import { isStaticMode } from '@/lib/static-mode'
@@ -17,8 +18,6 @@ import { useConfigSubscription } from '@/lib/use-subscription'
 import {
   classifyOpenSpecCliVersion,
   OPENSPEC_CLI_ACCEPTED_RANGE,
-  OPENSPEC_CLI_RECOMMENDED_RANGE,
-  OPENSPECUI_TARGET_MAJOR,
 } from '@openspecui/core/openspec-compat'
 import { useMutation } from '@tanstack/react-query'
 import { AlertCircle, Loader2, ShieldAlert, Terminal } from 'lucide-react'
@@ -75,25 +74,11 @@ export function CliHealthGate() {
 
   const compatibility = classifyOpenSpecCliVersion(data?.version)
 
-  if (data?.available && (compatibility.status === 'current' || forceBypassed)) {
+  if (
+    data?.available &&
+    (compatibility.status === 'current' || compatibility.status === 'compatible' || forceBypassed)
+  ) {
     return null
-  }
-
-  if (data?.available && compatibility.status === 'legacy-compatible') {
-    return (
-      <div className="fixed bottom-4 right-4 z-40 mx-4 max-w-sm rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm shadow-lg backdrop-blur-sm">
-        <div className="flex items-start gap-2">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
-          <div className="space-y-1">
-            <div className="font-medium">OpenSpec CLI {data.version} is legacy-compatible</div>
-            <p className="text-muted-foreground text-xs">
-              OpenSpecUI {OPENSPECUI_TARGET_MAJOR}.x accepts {OPENSPEC_CLI_ACCEPTED_RANGE}. Upgrade
-              to {OPENSPEC_CLI_RECOMMENDED_RANGE} for the current line.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   const checking =

@@ -5,6 +5,7 @@
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
+ * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  */
 import type { WebsiteContent } from '$lib/i18n/schema'
 
@@ -61,8 +62,7 @@ export const en = {
       'Start the project backend and explicitly open Direct Project Web. A running daemon also retains the Workspace.',
     exportLabel: 'Static export',
     exportSummary: 'Generate a deployable snapshot for docs hosting or offline review.',
-    compatibility:
-      'OpenSpecUI 6.1 targets OpenSpec CLI 1.7.x and accepts 1.6.x as legacy-compatible.',
+    compatibility: 'OpenSpecUI 6.1 targets OpenSpec CLI 1.6.x and accepts 1.7.x as compatible.',
   },
   modes: {
     title: 'Choose the right surface',

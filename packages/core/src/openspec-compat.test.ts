@@ -1,10 +1,11 @@
 /**
  * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove parsing of real OpenSpec CLI version output.
- * 2. Prove OpenSpecUI 6.1 targets CLI 1.7 while retaining CLI 1.6 as legacy-compatible.
+ * 2. Prove OpenSpecUI 6.1 targets CLI 1.6 while accepting CLI 1.7 as compatible.
  * 3. Prove older, future, and unknown CLI versions remain blocked.
  *
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
+ * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -23,8 +24,8 @@ describe('openspec CLI compatibility law', () => {
     })
   })
 
-  it('classifies the 1.7 target line as the current OpenSpecUI 6.1 target line', () => {
-    expect(classifyOpenSpecCliVersion('1.7.0')).toMatchObject({
+  it('classifies the 1.6 target line as the current OpenSpecUI 6.1 target line', () => {
+    expect(classifyOpenSpecCliVersion('1.6.0')).toMatchObject({
       status: 'current',
       supported: true,
       recommended: true,
@@ -32,9 +33,9 @@ describe('openspec CLI compatibility law', () => {
     })
   })
 
-  it('classifies the prior 1.6 line as legacy-compatible but not recommended', () => {
-    expect(classifyOpenSpecCliVersion('1.6.0')).toMatchObject({
-      status: 'legacy-compatible',
+  it('classifies the 1.7 line as compatible but not adapted', () => {
+    expect(classifyOpenSpecCliVersion('1.7.0')).toMatchObject({
+      status: 'compatible',
       supported: true,
       recommended: false,
       blocksCoreInteractions: false,

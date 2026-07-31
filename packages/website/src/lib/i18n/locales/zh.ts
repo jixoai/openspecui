@@ -5,6 +5,7 @@
  *
  * Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
+ * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  */
 import type { WebsiteContent } from '$lib/i18n/schema'
 
@@ -59,7 +60,7 @@ export const zh = {
       '启动项目 backend 并显式打开 Direct Project Web；若 daemon 已运行，也会保留该 Workspace。',
     exportLabel: '静态导出',
     exportSummary: '生成可部署的静态快照，用于文档站点或离线审阅。',
-    compatibility: 'OpenSpecUI 6.1 面向 OpenSpec CLI 1.7.x，并将 1.6.x 作为旧兼容线。',
+    compatibility: 'OpenSpecUI 6.1 面向 OpenSpec CLI 1.6.x，并将 1.7.x 作为兼容线。',
   },
   modes: {
     title: '选择合适的界面',

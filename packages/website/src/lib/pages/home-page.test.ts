@@ -5,6 +5,7 @@
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
+ * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  */
 import { en } from '$lib/i18n/locales/en'
 import HomePage from '$lib/pages/home-page.svelte'
@@ -22,9 +23,7 @@ describe('HomePage', () => {
     expect(screen.getAllByText('npx openspecui@latest --app')).toHaveLength(2)
     expect(screen.getByText('npx openspecui@latest export -o ./dist')).toBeVisible()
     expect(
-      screen.getByText(
-        'OpenSpecUI 6.1 targets OpenSpec CLI 1.7.x and accepts 1.6.x as legacy-compatible.'
-      )
+      screen.getByText('OpenSpecUI 6.1 targets OpenSpec CLI 1.6.x and accepts 1.7.x as compatible.')
     ).toBeVisible()
 
     await fireEvent.change(screen.getByLabelText('Runner'), { target: { value: 'pnpm' } })
