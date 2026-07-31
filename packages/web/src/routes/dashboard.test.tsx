@@ -197,10 +197,6 @@ describe('Dashboard', () => {
     return { promise, resolve, reject }
   }
 
-  function isDisabled(name: string): boolean {
-    return (screen.getByRole('button', { name }) as HTMLButtonElement).disabled
-  }
-
   function createOverviewData() {
     return {
       summary: {
@@ -727,16 +723,13 @@ describe('Dashboard', () => {
     expect(screen.queryByText('Commit 1')).toBeNull()
   })
 
-  it('issues the readonly Git refresh when Dashboard enters its lifecycle', async () => {
+  it('does not invalidate Git merely because Dashboard mounts', async () => {
     staticModeMock.mockReturnValue(false)
 
     render(<Dashboard />)
-    await waitFor(() =>
-      expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith(
-        'dashboard-mount',
-        'code-binding'
-      )
-    )
+    await act(async () => undefined)
+
+    expect(refreshDashboardGitSnapshotMock).not.toHaveBeenCalled()
   })
 
   it('issues an automatic Git refresh only after the user-selected interval elapses', async () => {
@@ -746,8 +739,7 @@ describe('Dashboard', () => {
 
     render(<Dashboard />)
     await act(async () => undefined)
-    expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith('dashboard-mount', 'code-binding')
-    refreshDashboardGitSnapshotMock.mockClear()
+    expect(refreshDashboardGitSnapshotMock).not.toHaveBeenCalled()
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000)
@@ -757,142 +749,62 @@ describe('Dashboard', () => {
     expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith('auto-refresh:30s', 'code-binding')
   })
 
-  it('supports auto refresh presets and locks manual refresh only until its query settles', async () => {
+  it('pauses hidden timers and refreshes immediately only when the absolute deadline elapsed', async () => {
     staticModeMock.mockReturnValue(false)
-    const now = 1_000
-    const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(now)
-    let gitTaskStatus = {
-      running: false,
-      inFlight: 0,
-      lastStartedAt: null as number | null,
-      lastFinishedAt: null as number | null,
-      lastReason: null as string | null,
-      lastError: null as string | null,
-    }
-    dashboardGitTaskStatusMock.mockImplementation(() => ({ data: gitTaskStatus }))
+    localStorage.setItem('openspecui:dashboard:git-auto-refresh', '30s')
+    vi.useFakeTimers()
     refreshDashboardGitSnapshotMock.mockResolvedValue(undefined)
-
-    const view = render(<Dashboard />)
-    await waitFor(() =>
-      expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith(
-        'dashboard-mount',
-        'code-binding'
-      )
-    )
-
-    gitTaskStatus = {
-      ...gitTaskStatus,
-      lastStartedAt: now,
-      lastFinishedAt: now + 10,
-      lastReason: 'dashboard-mount',
-    }
-    view.rerender(<Dashboard />)
-    await waitFor(() => expect(isDisabled('Refresh')).toBe(false))
-
-    refreshDashboardGitSnapshotMock.mockClear()
-
-    fireEvent.click(screen.getByRole('combobox', { name: 'Git auto refresh' }))
-    const option = screen.getByRole('option', { name: '30s' })
-    fireEvent.mouseMove(option)
-    fireEvent.click(option)
-
-    expect(localStorage.getItem('openspecui:dashboard:git-auto-refresh')).toBe('30s')
-
-    gitTaskStatus = {
-      ...gitTaskStatus,
-      running: true,
-      inFlight: 1,
-      lastStartedAt: now + 20,
-      lastFinishedAt: now + 10,
-      lastReason: 'watcher-change',
-    }
-    view.rerender(<Dashboard />)
-
-    const manualRefresh = createDeferred<void>()
-    refreshDashboardGitSnapshotMock.mockReturnValueOnce(manualRefresh.promise)
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
-    expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith('manual-button', 'code-binding')
-    await waitFor(() => expect(isDisabled('Refresh')).toBe(true))
-    expect(view.container.querySelector('svg.animate-spin')).toBeTruthy()
 
     await act(async () => {
-      manualRefresh.resolve()
-      await manualRefresh.promise
+      vi.setSystemTime(0)
     })
-    await waitFor(() => expect(isDisabled('Refresh')).toBe(false))
-    dateNowSpy.mockRestore()
-  })
-
-  it('does not immediately retrigger dashboard-mount refresh after the first request settles', async () => {
-    staticModeMock.mockReturnValue(false)
-
-    let gitTaskStatus = {
-      running: false,
-      inFlight: 0,
-      lastStartedAt: null as number | null,
-      lastFinishedAt: null as number | null,
-      lastReason: null as string | null,
-      lastError: null as string | null,
-    }
-    dashboardGitTaskStatusMock.mockImplementation(() => ({ data: gitTaskStatus }))
-    refreshDashboardGitSnapshotMock.mockResolvedValue(undefined)
-
-    const view = render(<Dashboard />)
-
-    await waitFor(() => {
-      expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledTimes(1)
-      expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith(
-        'dashboard-mount',
-        'code-binding'
-      )
-    })
-
-    gitTaskStatus = {
-      ...gitTaskStatus,
-      lastStartedAt: 1_000,
-      lastFinishedAt: 2_000,
-      lastReason: 'dashboard-mount',
-    }
-    view.rerender(<Dashboard />)
-
-    await waitFor(() => expect(isDisabled('Refresh')).toBe(false))
-    expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('releases the lifecycle request when its readonly query settles even while watcher work runs', async () => {
-    staticModeMock.mockReturnValue(false)
-    dashboardGitTaskStatusMock.mockReturnValue({
-      data: {
-        running: true,
-        inFlight: 1,
-        lastStartedAt: 1,
-        lastFinishedAt: null,
-        lastReason: 'watcher-change',
-        lastError: null,
-      },
-    })
-    const lifecycleRefresh = createDeferred<void>()
-    refreshDashboardGitSnapshotMock.mockReturnValueOnce(lifecycleRefresh.promise)
-
     render(<Dashboard />)
-    await waitFor(() =>
-      expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith(
-        'dashboard-mount',
-        'code-binding'
-      )
-    )
-    expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled()
+    await act(async () => undefined)
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden',
+    })
+    fireEvent(document, new Event('visibilitychange'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000)
+    })
+    expect(refreshDashboardGitSnapshotMock).not.toHaveBeenCalled()
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+    fireEvent(document, new Event('visibilitychange'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9_999)
+    })
+    expect(refreshDashboardGitSnapshotMock).not.toHaveBeenCalled()
 
     await act(async () => {
-      lifecycleRefresh.resolve()
-      await lifecycleRefresh.promise
+      await vi.advanceTimersByTimeAsync(1)
     })
+    expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith('auto-refresh:30s', 'code-binding')
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled())
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden',
+    })
+    fireEvent(document, new Event('visibilitychange'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(31_000)
+    })
     refreshDashboardGitSnapshotMock.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
 
-    expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith('manual-button', 'code-binding')
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+    fireEvent(document, new Event('visibilitychange'))
+    await act(async () => undefined)
+
+    expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledOnce()
+    expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith('auto-refresh:30s', 'code-binding')
   })
 
   it('opens current git snapshot entries with their own Code binding provenance', async () => {
@@ -1066,14 +978,7 @@ describe('Dashboard', () => {
     dashboardOverviewMock.mockReturnValue({ data: snapshotA, isLoading: false, error: null })
 
     const view = render(<Dashboard />)
-    await waitFor(() =>
-      expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith(
-        'dashboard-mount',
-        'code-binding-a'
-      )
-    )
     await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled())
-    refreshDashboardGitSnapshotMock.mockClear()
     dashboardGitRefreshControlRenderMock.mockClear()
     view.rerender(<Dashboard />)
     const refreshA = latestRefreshControl().onRefresh

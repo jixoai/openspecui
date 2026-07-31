@@ -1,10 +1,10 @@
 /**
  * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Render independent Dashboard projections inside stable region-owned Pending geometry.
- * 2. Keep Dashboard-owned readonly Code Git refresh separate from Planning-root mutation authority.
+ * 2. Keep Dashboard-owned readonly Code Git refresh bound to rendered provenance and separate from Planning-root mutation authority.
  * 3. Curate Code Git activity while preserving binding-token detail handoff provenance.
- * 4. Bind readonly refresh to the rendered Code snapshot generation.
- * 5. Retain stable regional snapshots beside their own loading, updating, and error evidence.
+ * 4. Retain stable regional snapshots beside their own loading, updating, and error evidence.
+ * 5. Pause auto-refresh while hidden while preserving one absolute next-refresh deadline.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff and action provenance.
@@ -18,6 +18,7 @@
  * Original request (2026-07-31): "这个看板底部加一个border"
  * Original request (2026-07-31): "基于真实的布局去做骨架屏，或者说是直接让卡片自身去支持 Pending 样式"
  * Original request (2026-07-31): "Code Git Snapshot 的 Other Worktrees 默认隐藏 (detached)。然后commitList这里默认显示5个就好"
+ * Owner correction (2026-07-31): Hidden documents pause the timer; visibility resumes the remaining delay or refreshes once when the absolute deadline elapsed.
  */
 import { Badge } from '@/components/badge'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'
@@ -199,9 +200,7 @@ export function Dashboard() {
   const [gitAutoRefreshPreset, setGitAutoRefreshPreset] = useState<DashboardGitAutoRefreshPreset>(
     () => loadDashboardGitAutoRefreshPreset()
   )
-  const [gitAutoRefreshCycleStartedAt, setGitAutoRefreshCycleStartedAt] = useState<number | null>(
-    null
-  )
+  const [gitAutoRefreshDeadlineAt, setGitAutoRefreshDeadlineAt] = useState<number | null>(null)
   const [gitAutoRefreshNow, setGitAutoRefreshNow] = useState(() => Date.now())
   const [isDocumentVisible, setIsDocumentVisible] = useState(() =>
     typeof document === 'undefined' ? true : document.visibilityState === 'visible'
@@ -236,9 +235,8 @@ export function Dashboard() {
     [dashboardGitBindingToken]
   )
 
-  const focusRefreshAtRef = useRef(0)
   const gitAutoRefreshTimerRef = useRef<number | null>(null)
-  const gitRefreshRequestRef = useRef(gitRefreshRequest)
+  const gitAutoRefreshPresetRef = useRef(gitAutoRefreshPreset)
   const gitRefreshReason = gitRefreshRequest?.reason ?? null
 
   const clearGitAutoRefreshTimer = useCallback(() => {
@@ -250,6 +248,8 @@ export function Dashboard() {
   const runDashboardGitRefresh = useCallback(
     (reason: string) => {
       const requestedAt = Date.now()
+      const intervalMs = getDashboardGitAutoRefreshIntervalMs(gitAutoRefreshPreset)
+      setGitAutoRefreshDeadlineAt(intervalMs === null ? null : requestedAt + intervalMs)
       setGitRefreshRequest({ reason, requestedAt })
 
       void triggerGitRefresh(reason)
@@ -266,7 +266,7 @@ export function Dashboard() {
           )
         })
     },
-    [triggerGitRefresh]
+    [gitAutoRefreshPreset, triggerGitRefresh]
   )
 
   const scheduleGitAutoRefresh = useCallback(() => {
@@ -283,27 +283,34 @@ export function Dashboard() {
       intervalMs === null ||
       autoRefreshReason === null ||
       gitRefreshRequest !== null ||
+      gitIsUpdating ||
       !isDocumentVisible
     ) {
-      setGitAutoRefreshCycleStartedAt(null)
       return
     }
 
-    const startedAt = Date.now()
-    setGitAutoRefreshCycleStartedAt(startedAt)
-    setGitAutoRefreshNow(startedAt)
+    const now = Date.now()
+    const deadlineAt = gitAutoRefreshDeadlineAt ?? now + intervalMs
+    if (gitAutoRefreshDeadlineAt === null) setGitAutoRefreshDeadlineAt(deadlineAt)
+    setGitAutoRefreshNow(now)
+
+    if (now >= deadlineAt) {
+      runDashboardGitRefresh(autoRefreshReason)
+      return
+    }
 
     gitAutoRefreshTimerRef.current = window.setTimeout(() => {
       gitAutoRefreshTimerRef.current = null
-      setGitAutoRefreshCycleStartedAt(null)
       setGitAutoRefreshNow(Date.now())
       runDashboardGitRefresh(autoRefreshReason)
-    }, intervalMs)
+    }, deadlineAt - now)
   }, [
     clearGitAutoRefreshTimer,
     dashboardGitBindingToken,
+    gitAutoRefreshDeadlineAt,
     gitAutoRefreshPreset,
     gitRefreshRequest,
+    gitIsUpdating,
     isDocumentVisible,
     runDashboardGitRefresh,
     staticMode,
@@ -312,55 +319,34 @@ export function Dashboard() {
   const handleManualGitRefresh = useCallback(() => {
     if (dashboardGitBindingToken === null) return
     clearGitAutoRefreshTimer()
-    setGitAutoRefreshCycleStartedAt(null)
     setGitAutoRefreshNow(Date.now())
     runDashboardGitRefresh('manual-button')
   }, [clearGitAutoRefreshTimer, dashboardGitBindingToken, runDashboardGitRefresh])
 
   useEffect(() => {
-    gitRefreshRequestRef.current = gitRefreshRequest
-  }, [gitRefreshRequest])
-
-  useEffect(() => {
     if (staticMode) return
-
-    const triggerOnce = (reason: string) => {
-      if (gitRefreshRequestRef.current !== null) return
-      const now = Date.now()
-      if (now - focusRefreshAtRef.current < 700) return
-      focusRefreshAtRef.current = now
-      clearGitAutoRefreshTimer()
-      setGitAutoRefreshCycleStartedAt(null)
-      setGitAutoRefreshNow(Date.now())
-      runDashboardGitRefresh(reason)
-    }
-
-    const onFocus = () => {
-      triggerOnce('window-focus')
-    }
 
     const onVisibilityChange = () => {
       const visible = document.visibilityState === 'visible'
       setIsDocumentVisible(visible)
-      if (visible) {
-        triggerOnce('document-visible')
-      }
+      if (!visible) clearGitAutoRefreshTimer()
     }
 
-    window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisibilityChange)
 
-    triggerOnce('dashboard-mount')
-
     return () => {
-      window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [clearGitAutoRefreshTimer, runDashboardGitRefresh, staticMode])
+  }, [clearGitAutoRefreshTimer, staticMode])
 
   useEffect(() => {
     if (staticMode) return
     persistDashboardGitAutoRefreshPreset(gitAutoRefreshPreset)
+    if (gitAutoRefreshPresetRef.current !== gitAutoRefreshPreset) {
+      gitAutoRefreshPresetRef.current = gitAutoRefreshPreset
+      const intervalMs = getDashboardGitAutoRefreshIntervalMs(gitAutoRefreshPreset)
+      setGitAutoRefreshDeadlineAt(intervalMs === null ? null : Date.now() + intervalMs)
+    }
   }, [gitAutoRefreshPreset, staticMode])
 
   useEffect(() => {
@@ -373,7 +359,7 @@ export function Dashboard() {
 
   useEffect(() => {
     const intervalMs = getDashboardGitAutoRefreshIntervalMs(gitAutoRefreshPreset)
-    if (staticMode || intervalMs === null || gitAutoRefreshCycleStartedAt === null) return
+    if (staticMode || intervalMs === null || gitAutoRefreshDeadlineAt === null) return
 
     const updateNow = () => {
       setGitAutoRefreshNow(Date.now())
@@ -384,7 +370,7 @@ export function Dashboard() {
     return () => {
       window.clearInterval(timer)
     }
-  }, [gitAutoRefreshCycleStartedAt, gitAutoRefreshPreset, staticMode])
+  }, [gitAutoRefreshDeadlineAt, gitAutoRefreshPreset, staticMode])
 
   const activeChanges = summaryProjection?.activeChanges ?? []
   const activeChangeIdSet = useMemo(
@@ -450,6 +436,10 @@ export function Dashboard() {
     ? selectDashboardGitEntries(currentWorktree.entries)
     : []
   const gitAutoRefreshIntervalMs = getDashboardGitAutoRefreshIntervalMs(gitAutoRefreshPreset)
+  const gitAutoRefreshCycleStartedAt =
+    gitAutoRefreshDeadlineAt !== null && gitAutoRefreshIntervalMs !== null
+      ? gitAutoRefreshDeadlineAt - gitAutoRefreshIntervalMs
+      : null
   const gitAutoRefreshProgress =
     gitRefreshRequest !== null
       ? 0
@@ -461,7 +451,8 @@ export function Dashboard() {
   const showGitRefreshProgress = gitAutoRefreshIntervalMs !== null && gitRefreshRequest === null
   const animateRefreshButton =
     gitRefreshRequest !== null && isAnimatedGitRefreshReason(gitRefreshReason)
-  const disableRefreshButton = gitRefreshRequest !== null || dashboardGitBindingToken === null
+  const disableRefreshButton =
+    gitRefreshRequest !== null || gitIsUpdating || dashboardGitBindingToken === null
 
   const renderHistoryCards = () => (
     <div className="space-y-2">
