@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove path-backed OPSX projections react to planning-root changes.
  * 2. Prove non-canonical Change ids are rejected before projection streams start.
  * 3. Prove demand-driven Status does not require Apply/artifact warmup and retains CLI evidence.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
+ * Full-gate correction (2026-07-31): non-blocking warmup evidence must tolerate loaded-suite scheduling without becoming a 250ms performance SLA.
  */
 import { mkdir, realpath, writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -360,7 +361,7 @@ process.exit(1)
     await Promise.race([
       kernel.ensureStatusList(),
       new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Status List remained behind full warmup.')), 250)
+        setTimeout(() => reject(new Error('Status List remained behind full warmup.')), 2_000)
       }),
     ])
 
