@@ -2,10 +2,11 @@
  * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
  * 1. Drive Environment Global lifecycle-only Push through typed Pull endpoints.
  * 2. Prove revalidating data remains displayable while write authority is revoked.
- * 3. Prove refresh-error keeps stale data visible, settles refresh, and cannot authorize writes.
+ * 3. Prove readonly refresh-error keeps stale data visible, settles refresh, and cannot authorize writes.
  *
  * Original request (2026-07-18): "Refresh locking must span the asynchronous subscription rebind."
  * Original request (2026-07-26): "Environment Global stale/refresh-error 不得授权写入（在 hook 可观测边界证明）。"
+ * Owner correction (2026-07-31): Projection refresh uses readonly query transport.
  */
 import type {
   EnvironmentGlobalFileProjectionData,
@@ -51,10 +52,10 @@ vi.mock('./trpc', () => ({
   trpcClient: {
     planningConfig: {
       readEnvironmentGlobalProjection: { query: projectionReadMock },
-      refreshEnvironmentGlobalProjection: { mutate: projectionRefreshMock },
+      refreshEnvironmentGlobalProjection: { query: projectionRefreshMock },
       subscribeEnvironmentGlobalProjection: { subscribe: projectionSubscribeMock },
       readEnvironmentGlobalFileProjection: { query: fileProjectionReadMock },
-      refreshEnvironmentGlobalFileProjection: { mutate: fileProjectionRefreshMock },
+      refreshEnvironmentGlobalFileProjection: { query: fileProjectionRefreshMock },
       subscribeEnvironmentGlobalFileProjection: { subscribe: fileProjectionSubscribeMock },
     },
   },

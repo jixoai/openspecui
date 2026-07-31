@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove notice-free Summary admission precedes lower-priority Trends and Git subscriptions without superseding synchronous replay.
- * 2. Prove a later backend binding cannot relabel an already captured refresh or removal intent.
+ * 2. Prove a later backend binding cannot relabel an already captured readonly refresh or removal intent.
  * 3. Prove a stale Dashboard region is display-only while its current replacement is pending.
  * 4. Prove a late Summary A pull cannot overwrite the matching root-rebind B pull.
  * 5. Prove cached or Server-retained Summary data becomes display-only before matching current convergence.
@@ -12,6 +12,7 @@
  * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
  * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
  * Original request (2026-07-31): "所有可能其它页面都有类似的问题。"
+ * Owner correction (2026-07-31): Dashboard refresh is a readonly query despite internal stamp maintenance.
  */
 import type { DashboardSummaryProjection } from '@openspecui/core'
 import type {
@@ -157,13 +158,13 @@ vi.mock('./trpc', () => ({
       getSummary: { query: getSummaryQueryMock },
       subscribeTrends: { subscribe: subscribeTrendsMock },
       subscribeGit: { subscribe: subscribeGitMock },
-      refreshGitSnapshot: { mutate: refreshMock },
+      refreshGitSnapshot: { query: refreshMock },
       removeDetachedWorktree: { mutate: removeMock },
     },
   },
 }))
 
-describe('Dashboard Git mutation provenance', () => {
+describe('Dashboard Git command provenance', () => {
   beforeEach(() => {
     codeQueryMock.mockClear()
     refreshMock.mockReset()

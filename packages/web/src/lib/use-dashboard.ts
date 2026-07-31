@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Admit Dashboard Summary through a notice-free initial Pull before independently delivering objective Kanban, trends, and Code Git projections.
- * 2. Execute Dashboard Git mutations against the stable Launch-owned Code binding.
+ * 2. Execute readonly Dashboard Git refreshes and domain mutations against the stable Launch-owned Code binding.
  * 3. Translate current and stale Projection Work snapshots into honest region display and updating state.
  * 4. Retire late initial or replacement Summary v2 Pulls and require current wake identity/generation for replacements.
  * 5. Render Server-retained Summary data as display-only in a fresh browser Document.
@@ -13,6 +13,7 @@
  * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  * Original request (2026-07-31): "所有可能其它页面都有类似的问题。"
+ * Owner correction (2026-07-31): Observation refresh is readonly even when it maintains an internal stamp.
  */
 import type {
   DashboardGitSnapshot,
@@ -352,7 +353,7 @@ export async function refreshDashboardGitSnapshot(
   expectedBindingToken: string
 ): Promise<void> {
   if (isStaticMode()) return
-  await trpcClient.dashboard.refreshGitSnapshot.mutate({
+  await trpcClient.dashboard.refreshGitSnapshot.query({
     scope: 'code',
     expectedBindingToken,
     reason,

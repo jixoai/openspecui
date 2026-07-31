@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove filesystem services read and mutate only the CLI-selected planning root.
  * 2. Prove failed Root Context resolution creates no root-dependent actions.
- * 3. Prove root identity transitions await child settlement before retiring services, leases, and previews.
+ * 3. Prove unresolved admissions can be superseded while admitted roots settle before retirement.
  * 4. Prove planning roots own reactive dependencies, current snapshots, and leave zero observation/invalidation residue.
  * 5. Prove Change/Archive lists and Dashboard metrics remain scoped to the selected planning root.
  *
@@ -11,6 +11,7 @@
  * Original request (2026-07-17): "Prove the transition was already blocked on A before disposal began."
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Owner diagnosis (2026-07-31): a late unresolved generation cannot overwrite or delay the newer Root generation.
  */
 import {
   CliExecutor,
@@ -1492,7 +1493,7 @@ describe('PlanningRootServiceManager', () => {
     expect(getWatcherRuntimeStatus()).toBeNull()
   })
 
-  it('serializes concurrent root transitions in request order', async () => {
+  it('lets a newer Root generation supersede an unresolved operation admission', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-services-concurrent-'))
     tempDirs.push(tempDir)
     const rootA = join(tempDir, 'root-a')
@@ -1571,10 +1572,10 @@ describe('PlanningRootServiceManager', () => {
     )
 
     const [rootContextA, stateB] = await Promise.all([resolvingA, resolvingB])
-    expect(callsBeforeFirstSettled).toBe(1)
-    expect(rootContextA.planningRoot?.path).toBe(rootA)
+    expect(callsBeforeFirstSettled).toBe(2)
+    expect(rootContextA.planningRoot?.path).toBe(rootB)
     expect(stateB).toMatchObject({ state: 'ready', data: { planningRoot: { path: rootB } } })
-    expect(observationEnvironment.acquireRoot).toHaveBeenCalledTimes(2)
+    expect(observationEnvironment.acquireRoot).toHaveBeenCalledOnce()
 
     await manager.dispose()
   })

@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Define the checked command-plan union consumed by CLI execution.
  * 2. Parse the production yargs command registry without executing runtime side effects.
- * 3. Preserve bare serve aliases while isolating daemon lifecycle commands.
+ * 3. Preserve bare serve aliases, daemon lifecycle commands, and diagnostic tracing options.
  *
  * Original request (2026-07-29): "openspecui 启动当前项目其实是 openspecui serve 的缩写；start/stop/restart 针对 daemon。"
+ * Original request (2026-07-30): "通过 --otel --otel-endpoint 来开启。"
  */
 import yargs from 'yargs'
 import type { ExportFormat } from './export.js'
@@ -117,13 +118,14 @@ export async function parseCliCommand(
           .option('otel', {
             describe:
               'Enable backend OpenTelemetry tracing to diagnose slow loads. ' +
-              'Without --otel-endpoint, spans are printed to the server console.',
+              'Configure the exporter via standard OTEL_* env vars ' +
+              '(OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS, ...).',
             type: 'boolean',
           })
           .option('otel-endpoint', {
             describe:
-              'OTLP/HTTP Collector base URL (e.g. http://localhost:4318/v1/traces). ' +
-              'Implies --otel.',
+              'OTLP/HTTP Collector base URL convenience override (e.g. http://localhost:4318/v1/traces). ' +
+              'Implies --otel; otherwise the SDK reads OTEL_EXPORTER_OTLP_ENDPOINT.',
             type: 'string',
           }),
       (argv) => {

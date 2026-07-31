@@ -2,11 +2,12 @@
  * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Gate Web compatibility from the shared Root Context CLI evidence only.
  * 2. Preserve session-only bypass and execute-path repair controls.
- * 3. Revalidate the shared Root Context Work after explicit repair or refresh.
+ * 3. Revalidate the shared Root Context Work through readonly refresh after explicit repair.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
  * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
+ * Owner correction (2026-07-31): Root observation refresh is readonly despite internal cache invalidation.
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
@@ -50,14 +51,14 @@ export function CliHealthGate() {
   }, [savedCliCommand])
 
   const recheckCliMutation = useMutation({
-    mutationFn: () => trpcClient.rootContext.refreshProjection.mutate(),
+    mutationFn: () => trpcClient.rootContext.refreshProjection.query(),
   })
 
   const saveCliCommandMutation = useMutation({
     mutationFn: (command: string) => trpcClient.config.update.mutate({ cli: { command } }),
     onSuccess: async () => {
       await Promise.allSettled([
-        trpcClient.rootContext.refreshProjection.mutate(),
+        trpcClient.rootContext.refreshProjection.query(),
         queryClient.invalidateQueries(trpc.config.getEffectiveCliCommand.queryFilter()),
       ])
     },

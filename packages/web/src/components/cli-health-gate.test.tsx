@@ -2,9 +2,10 @@
  * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Lock the Web compatibility gate to the OpenSpecUI 6.x / CLI 1.6 line.
  * 2. Prove the 1.5 legacy notice and unsupported-version escape hatch behavior.
- * 3. Prove shared Root Context is the gate's only CLI availability truth.
+ * 3. Prove shared Root Context is the gate's only CLI availability truth and refresh is readonly.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
+ * Owner correction (2026-07-31): Root observation refresh uses query transport.
  */
 import type { RootContext, RootContextState } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -96,7 +97,7 @@ vi.mock('@/lib/trpc', () => ({
     },
     rootContext: {
       refreshProjection: {
-        mutate: async () => {
+        query: async () => {
           rootRefreshCalls += 1
           return { state: 'loading' }
         },

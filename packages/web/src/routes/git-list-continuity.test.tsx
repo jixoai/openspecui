@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-23): "List mutations and route changes preserve physical continuity through existing motion/View Transition patterns."
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Owner correction (2026-07-31): Git refresh uses readonly query transport.
  */
 import type { DashboardGitEntry, GitRepositoryScopes, RootContextState } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -72,7 +73,7 @@ vi.mock('@/lib/trpc', () => ({
       overview: { query: overviewQueryMock },
       listEntries: { query: listEntriesQueryMock },
       switchWorktree: { mutate: vi.fn() },
-      refresh: { mutate: vi.fn() },
+      refresh: { query: vi.fn() },
       removeDetachedWorktree: { mutate: vi.fn() },
     },
     rootContext: {

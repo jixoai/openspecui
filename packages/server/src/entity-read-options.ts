@@ -1,3 +1,16 @@
+/**
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Resolve the OPSX Schema detail and diagnostic metadata for one change/archive entity.
+ * 2. Delegate schema resolution through the Kernel ensure contract while tolerating missing schemas.
+ * 3. Never block on Kernel warmup: schema diagnostics are optional display enrichment, so return
+ *    cached/empty data immediately and let reactive invalidation fill them after warmup settles.
+ *
+ * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
+ * Performance correction (2026-07-23): Status must not block on Kernel warmup; schema diagnostics are optional.
+ * Hotpath correction (2026-07-31): `buildEntityReadOptions` removed `waitForWarmup()` blocking because
+ *   `fetchSchemas` (~1.2s) dominated detail-page latency. Schema data is now read opportunistically
+ *   from whatever the Kernel has already cached; reactive invalidation fills the rest.
+ */
 import {
   parseOpsxEntityMetadata,
   parseOpsxSchemaDetail,
@@ -35,16 +48,17 @@ export async function buildEntityReadOptions(
   if (!schemaName) return {}
 
   try {
-    await ctx.kernel.waitForWarmup()
-    await ctx.kernel.ensureSchemaDetail(schemaName)
-    await ctx.kernel.ensureSchemaYaml(schemaName)
-    const schemaYaml = ctx.kernel.getSchemaYaml(schemaName)
+    // Read opportunistically from whatever the Kernel has already cached. Do NOT await warmup:
+    // on first detail-page load the Kernel has not warmed up yet, and `fetchSchemas` (~1.2s)
+    // would block the entire response. Reactive invalidation re-emits once schemas are ready.
+    const schemaDetail = ctx.kernel.tryGetSchemaDetail(schemaName)
+    const schemaYaml = ctx.kernel.tryGetSchemaYaml(schemaName)
     const diagnostics = schemaYaml
       ? parseOpsxSchemaDetail(schemaYaml, schemaName, { path: `schema:${schemaName}` }).diagnostics
       : []
     return {
-      schemas: { [schemaName]: ctx.kernel.getSchemaDetail(schemaName) },
-      schemaDiagnostics: diagnostics.length > 0 ? { [schemaName]: diagnostics } : undefined,
+      ...(schemaDetail ? { schemas: { [schemaName]: schemaDetail } } : {}),
+      ...(diagnostics.length > 0 ? { schemaDiagnostics: { [schemaName]: diagnostics } } : {}),
     }
   } catch {
     return { schemas: {} }

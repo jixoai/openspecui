@@ -2,13 +2,14 @@
  * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Admit one notice-free initial typed Pull, then adapt lifecycle-only CLI Push into selector-exact replacement Pulls.
  * 2. Retain settled data during revalidation while revoking mutation authority.
- * 3. Retire late Pulls and resolve explicit refresh only after terminal state commits.
+ * 3. Retire late Pulls and resolve explicit readonly refresh only after terminal state commits.
  * 4. Preserve static loaders without inventing live CLI lifecycle evidence.
  * 5. Preserve typed CLI failure evidence at the public Web error boundary.
  *
  * Original request (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
  * Original request (2026-07-26): "public Pull retains full CliProjection failure evidence."
  * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
+ * Owner correction (2026-07-31): Refresh cache maintenance does not make an observation a mutation.
  */
 import type {
   CliProjectionCommandEvidence,
@@ -322,7 +323,7 @@ export function useCliProjectionSubscription<T>(
   const source = useMemo<CliProjectionLifecycleSource<PlanningCliProjectionData>>(
     () => ({
       read: () => trpcClient.planningCliProjection.read.query(selector),
-      refresh: () => trpcClient.planningCliProjection.refresh.mutate(selector),
+      refresh: () => trpcClient.planningCliProjection.refresh.query(selector),
       parseState: (raw) => PlanningCliProjectionStateSchema.parse(raw),
       subscribe(callbacks) {
         return trpcClient.planningCliProjection.subscribe.subscribe(selector, {

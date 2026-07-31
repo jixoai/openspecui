@@ -14,6 +14,7 @@
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
+ * Owner correction (2026-07-31): Observation refresh is a query even when it maintains internal cache or stamp state.
  */
 import {
   CliExecutor,
@@ -701,6 +702,20 @@ const createMockContext = (
       applyRequires: [],
     }),
     getSchemaYaml: vi.fn().mockReturnValue(`
+name: custom-audit
+artifacts:
+  - id: summary
+    generates: reports/summary.md
+  - id: broken
+    futureOutput:
+      path: reports/broken.md
+`),
+    tryGetSchemaDetail: vi.fn().mockReturnValue({
+      name: 'custom-audit',
+      artifacts: [{ id: 'summary', outputPath: 'reports/summary.md', requires: [] }],
+      applyRequires: [],
+    }),
+    tryGetSchemaYaml: vi.fn().mockReturnValue(`
 name: custom-audit
 artifacts:
   - id: summary
@@ -2216,7 +2231,7 @@ apply:
       ).rejects.toThrow(/Planning repository scope is unavailable or identical/)
     })
 
-    it('keeps status, history, detail, and refresh mutations inside the selected repository', async () => {
+    it('keeps status, history, detail, and readonly refresh inside the selected repository', async () => {
       const codeRepository = await createTempProjectDir('openspecui-router-git-code-repo-')
       const planningRepository = await createTempProjectDir('openspecui-router-git-planning-repo-')
       await Promise.all([initGitRepo(codeRepository), initGitRepo(planningRepository)])

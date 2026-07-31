@@ -5,7 +5,6 @@
  * 3. Keep export execution independent from daemon lifecycle.
  *
  * Original request (2026-07-29): "openspecui 启动当前项目其实是 openspecui serve 的缩写；start/stop/restart 针对 daemon。"
- * Owner acceptance (2026-07-31): daemon status publishes the immutable OpenSpec process/Worker mode.
  */
 import type { OpenSpecSpawnMode } from '@openspecui/core'
 import { resolve } from 'node:path'
@@ -186,6 +185,8 @@ async function executeServePlan(
       : undefined,
     accessGateCredential: dependencies.inheritedAccessGateCredential ?? undefined,
     webAssetsDir: dependencies.inheritedWebAssetsDir ?? undefined,
+    otel: plan.otel ? true : undefined,
+    otelEndpoint: plan.otelEndpoint,
     onBrowserLaunchCredential: (value) => {
       credential = value
     },

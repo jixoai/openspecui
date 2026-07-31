@@ -2,13 +2,14 @@
  * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
  * 1. Project ownership-specific planning-config facets into reactive Web state.
  * 2. Keep static Active Root content available without inventing owner provenance.
- * 3. Let Environment Global consumers explicitly refresh the CLI-owned reactive projection.
+ * 3. Let Environment Global consumers explicitly refresh the CLI-owned reactive projection through readonly queries.
  * 4. Keep refresh pending until the replacement projection commits, then resolve awaiters.
  * 5. Compose CLI facts with the separate file-native Environment Global projection.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Refresh completion must follow the committed subscription projection so Apply can safely dispatch its second operation."
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Owner correction (2026-07-31): Projection refresh remains readonly despite internal cache maintenance.
  */
 import type {
   ActiveRootConfig,
@@ -104,7 +105,7 @@ export function useEnvironmentGlobalConfigSubscription(): RefreshableSubscriptio
   const cliSource = useMemo<CliProjectionLifecycleSource<EnvironmentGlobalProjectionData>>(
     () => ({
       read: () => trpcClient.planningConfig.readEnvironmentGlobalProjection.query(),
-      refresh: () => trpcClient.planningConfig.refreshEnvironmentGlobalProjection.mutate(),
+      refresh: () => trpcClient.planningConfig.refreshEnvironmentGlobalProjection.query(),
       parseState: (raw) => EnvironmentGlobalProjectionStateSchema.parse(raw),
       subscribe(callbacks) {
         return trpcClient.planningConfig.subscribeEnvironmentGlobalProjection.subscribe(undefined, {
@@ -139,7 +140,7 @@ export function useEnvironmentGlobalConfigSubscription(): RefreshableSubscriptio
   const fileSource = useMemo<CliProjectionLifecycleSource<EnvironmentGlobalFileProjectionData>>(
     () => ({
       read: () => trpcClient.planningConfig.readEnvironmentGlobalFileProjection.query(),
-      refresh: () => trpcClient.planningConfig.refreshEnvironmentGlobalFileProjection.mutate(),
+      refresh: () => trpcClient.planningConfig.refreshEnvironmentGlobalFileProjection.query(),
       parseState: (raw) => EnvironmentGlobalFileProjectionStateSchema.parse(raw),
       subscribe(callbacks) {
         return trpcClient.planningConfig.subscribeEnvironmentGlobalFileProjection.subscribe(

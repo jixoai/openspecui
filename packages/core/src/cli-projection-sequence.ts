@@ -1,0 +1,19 @@
+/**
+ * Orthogonal intents (created 2026-07-31 Asia/Shanghai):
+ * 1. Submit aggregate CLI projection entities lazily while preserving source order.
+ * 2. Prevent one aggregate read from pre-filling the shared buffered CLI admission queue.
+ *
+ * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
+ */
+
+/** Map CLI-backed projection entities in order, admitting only the current entity. */
+export async function mapCliProjectionSeries<TInput, TOutput>(
+  inputs: readonly TInput[],
+  project: (input: TInput, index: number) => Promise<TOutput>
+): Promise<TOutput[]> {
+  const outputs: TOutput[] = []
+  for (const [index, input] of inputs.entries()) {
+    outputs.push(await project(input, index))
+  }
+  return outputs
+}

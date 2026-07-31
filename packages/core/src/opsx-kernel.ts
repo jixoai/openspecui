@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Maintain reactive CLI-backed projections and their direct typed Projection Work readers.
  * 2. Share and release per-entity streams through one planning-root kernel lifecycle.
  * 3. Keep OpenSpec configuration ownership outside the workflow projection cache.
@@ -9,6 +9,7 @@
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
  */
 import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
@@ -23,6 +24,7 @@ import {
   type CliRootSelector,
 } from './cli-contracts/index.js'
 import type { CliExecutor } from './cli-executor.js'
+import { mapCliProjectionSeries } from './cli-projection-sequence.js'
 import {
   CliProjectionCommandError,
   toCliProjectionCommandEvidence,
@@ -532,6 +534,17 @@ export class OpsxKernel {
     return state.get()
   }
 
+  /** Non-throwing schema detail read; returns null when the schema is not yet loaded. */
+  tryGetSchemaDetail(name: string): SchemaDetail | null {
+    return this.peekSchemaDetail(name)
+  }
+
+  /** Non-throwing schema yaml read; returns null when the schema is not yet loaded. */
+  tryGetSchemaYaml(name: string): string | null {
+    const state = this._schemaYamls.get(name)
+    return state ? state.get() : null
+  }
+
   getChangeMetadata(changeId: string): string | null {
     const state = this._changeMetadata.get(changeId)
     if (!state) return null
@@ -1012,7 +1025,7 @@ export class OpsxKernel {
   private async fetchStatusList(): Promise<ChangeStatus[]> {
     await this.ensureChangeIds()
     const changeIds = this._changeIds.get()
-    await Promise.all(changeIds.map((id) => this.ensureStatus(id)))
+    await mapCliProjectionSeries(changeIds, (id) => this.ensureStatus(id))
     return changeIds.map((id) => this.getStatus(id))
   }
 
@@ -1241,7 +1254,9 @@ export class OpsxKernel {
   }> {
     const changeList = await this.fetchChangeListProjection()
     return {
-      value: await Promise.all(changeList.value.map((changeId) => this.fetchStatus(changeId))),
+      value: await mapCliProjectionSeries(changeList.value, (changeId) =>
+        this.fetchStatus(changeId)
+      ),
       evidence: changeList.evidence,
     }
   }
@@ -1269,15 +1284,13 @@ export class OpsxKernel {
     }
   }> {
     const schemasProjection = await this.fetchSchemasProjection()
-    const details = await Promise.all(
-      schemasProjection.value.map(async ({ name }) => {
-        const resolution = await this.fetchSchemaResolutionProjection(name)
-        const detail = await this.fetchSchemaDetailAtResolution(name, resolution.value).catch(
-          () => null
-        )
-        return { name, detail, resolution }
-      })
-    )
+    const details = await mapCliProjectionSeries(schemasProjection.value, async ({ name }) => {
+      const resolution = await this.fetchSchemaResolutionProjection(name)
+      const detail = await this.fetchSchemaDetailAtResolution(name, resolution.value).catch(
+        () => null
+      )
+      return { name, detail, resolution }
+    })
     return {
       value: {
         schemas: schemasProjection.value,

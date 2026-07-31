@@ -12,6 +12,7 @@
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
  * Owner correction (2026-07-29): Settings delegates scrolling to the shell and field density to its container.
  * Owner correction (2026-07-29): Settings no longer renders project-owned Hosted App URL configuration.
+ * Owner correction (2026-07-31): Observed model metadata refresh uses readonly query transport.
  */
 import type {
   LocalModelAssetLog,
@@ -2441,7 +2442,7 @@ vi.mock('@/lib/trpc', () => ({
         mutate: localModelsMock.delete,
       },
       refreshArtifacts: {
-        mutate: localModelsMock.refreshArtifacts,
+        query: localModelsMock.refreshArtifacts,
       },
     },
     localCt2Models: {
@@ -2479,7 +2480,7 @@ vi.mock('@/lib/trpc', () => ({
         mutate: localCt2ModelsMock.delete,
       },
       refreshArtifacts: {
-        mutate: localCt2ModelsMock.refreshArtifacts,
+        query: localCt2ModelsMock.refreshArtifacts,
       },
     },
     localLlamaModels: {
@@ -2517,7 +2518,7 @@ vi.mock('@/lib/trpc', () => ({
         mutate: localLlamaModelsMock.delete,
       },
       refreshArtifacts: {
-        mutate: localLlamaModelsMock.refreshArtifacts,
+        query: localLlamaModelsMock.refreshArtifacts,
       },
     },
   },

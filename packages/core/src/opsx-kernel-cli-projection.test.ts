@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove OPSX Change enumeration comes from the executable typed OpenSpec CLI contract.
  * 2. Prove physical Change directories remain invalidation evidence rather than projected business truth.
  * 3. Preserve the exact Store-selected CLI payload and process evidence in the retained projection.
+ * 4. Prove aggregate CLI projections submit entity work lazily instead of monopolizing admission.
  *
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
+ * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
  */
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -208,6 +210,107 @@ process.exit(2)
       expect(rawTemplates).not.toHaveBeenCalled()
     } finally {
       kernel.dispose()
+    }
+  })
+})
+
+describe('OpsxKernel aggregate CLI admission', () => {
+  it('submits Status reads lazily so later critical CLI work can enter between entities', async () => {
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-opsx-status-admission-'))
+    tempDirs.push(projectDir)
+    const changes = ['change-a', 'change-b', 'change-c']
+    await mkdir(join(projectDir, 'openspec', 'schemas'), { recursive: true })
+    await Promise.all(
+      changes.map((changeId) =>
+        mkdir(join(projectDir, 'openspec', 'changes', changeId), { recursive: true })
+      )
+    )
+
+    const cliPath = join(projectDir, 'fake-openspec.mjs')
+    await writeFile(
+      cliPath,
+      `
+const args = process.argv.slice(2)
+const projectDir = ${JSON.stringify(projectDir)}
+const changes = ${JSON.stringify(changes)}
+if (args.includes('--version')) {
+  console.log('1.6.0')
+  process.exit(0)
+}
+if (args[0] === 'list' && args.includes('--json')) {
+  console.log(JSON.stringify({
+    changes: changes.map((name) => ({
+      name,
+      completedTasks: 0,
+      totalTasks: 1,
+      lastModified: '2026-07-31T00:00:00.000Z',
+      status: 'in-progress',
+    })),
+    root: { path: projectDir, source: 'nearest' },
+    status: [],
+  }))
+  process.exit(0)
+}
+if (args[0] === 'status' && args.includes('--json')) {
+  const changeName = args[args.indexOf('--change') + 1]
+  console.log(JSON.stringify({
+    changeName,
+    schemaName: 'spec-driven',
+    planningHome: {
+      kind: 'repo',
+      root: projectDir,
+      changesDir: projectDir + '/openspec/changes',
+      defaultSchema: 'spec-driven',
+    },
+    changeRoot: projectDir + '/openspec/changes/' + changeName,
+    artifactPaths: {},
+    isComplete: false,
+    applyRequires: [],
+    nextSteps: [],
+    actionContext: {
+      mode: 'repo-local',
+      sourceOfTruth: 'repo',
+      planningArtifacts: [],
+      linkedContext: [],
+      allowedEditRoots: [],
+      requiresAffectedAreaSelection: false,
+      constraints: [],
+    },
+    artifacts: [],
+    root: { path: projectDir, source: 'nearest' },
+  }))
+  process.exit(0)
+}
+process.exit(2)
+`.trimStart(),
+      'utf8'
+    )
+
+    const config = new ConfigManager(projectDir)
+    await config.writeConfig({ cli: { command: process.execPath, args: [cliPath] } })
+    const executor = new CliExecutor(config, projectDir)
+    const kernel = new OpsxKernel(projectDir, executor, new RuntimeInvalidationIndex(), {})
+    const executeStatus = executor.contracts.workflowStatus.bind(executor.contracts)
+    let activeStatusCalls = 0
+    let peakActiveStatusCalls = 0
+    vi.spyOn(executor.contracts, 'workflowStatus').mockImplementation(async (...args) => {
+      activeStatusCalls += 1
+      peakActiveStatusCalls = Math.max(peakActiveStatusCalls, activeStatusCalls)
+      try {
+        return await executeStatus(...args)
+      } finally {
+        activeStatusCalls -= 1
+      }
+    })
+
+    try {
+      const projection = await kernel.readStatusListProjection()
+
+      expect(projection.value.map((status) => status.changeName)).toEqual(changes)
+      expect(peakActiveStatusCalls).toBe(1)
+    } finally {
+      kernel.dispose()
+      await executor.dispose()
     }
   })
 })
