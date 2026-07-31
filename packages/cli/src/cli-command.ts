@@ -147,7 +147,7 @@ export async function parseCliCommand(
       'Start or activate the OpenSpecUI App daemon',
       (parser) =>
         parser.option('web', {
-          describe: 'Use the Browser/PWA App host instead of the native OpenTray window',
+          describe: 'Use the Browser App host instead of the native OpenTray window',
           type: 'boolean',
         }),
       (argv) => {
@@ -171,7 +171,7 @@ export async function parseCliCommand(
       'Restart the OpenSpecUI App daemon',
       (parser) =>
         parser.option('web', {
-          describe: 'Use the Browser/PWA App host instead of the native OpenTray window',
+          describe: 'Use the Browser App host instead of the native OpenTray window',
           type: 'boolean',
         }),
       (argv) => {

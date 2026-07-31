@@ -12,7 +12,7 @@ import type { LocalAppServer } from './local-app-server.js'
 
 export type DaemonExternalUrlOpener = (target: string) => Promise<unknown>
 
-/** Create the Browser/PWA host around one daemon-owned local App server. */
+/** Create the Browser host around one daemon-owned local App server. */
 export function createBrowserDaemonHost(options: {
   appServer: LocalAppServer
   openExternalUrl: DaemonExternalUrlOpener

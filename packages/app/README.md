@@ -2,7 +2,7 @@
 Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
 1. Document the bundled daemon-owned App shell and CLI command contract.
 2. Document Workspaces, runtime-only authority, and local development.
-3. Preserve standalone Browser/PWA deployment as an optional manual capability.
+3. Document Browser Web deployment without installable-app or service-worker semantics.
 
 Original request (2026-07-29): "App 使用 Workspaces；不再考虑 App 外壳部署位置；README 补充 daemon、serve、--app 和 --web。"
 -->
@@ -20,7 +20,7 @@ foreground `openspecui serve`
   -> project backend + reconnecting Workspace lease
   -> user-level App daemon
   -> bundled @openspecui/app assets
-  -> native OpenTray window or Browser/PWA host
+  -> native OpenTray window or Browser host
 ```
 
 The daemon owns the App endpoint, tray, retained window, and transient Workspace ledger. Each foreground `serve` process remains the sole owner of its project backend.
@@ -48,7 +48,7 @@ openspecui restart
 openspecui restart --web
 ```
 
-Native mode uses a retained OpenTray window. Daemon `--web` mode uses the Browser/PWA presenter and never loads the native WebView extension. The selected host mode is immutable until `restart`.
+Native mode uses a retained OpenTray window. Daemon `--web` mode uses the Browser presenter and never loads the native WebView extension. The selected host mode is immutable until `restart`.
 
 The CLI does not select a remote App URL. The local daemon always serves the shell packed with the same CLI release.
 
@@ -57,8 +57,6 @@ The CLI does not select a remote App URL. The local daemon always serves the she
 The workspace emits:
 
 - `index.html`
-- `service-worker.js`
-- `manifest.webmanifest`
 - hashed App assets
 
 The shell restores Workspaces, probes backend health, and mounts backend-owned OpenSpecUI pages in persistent iframe tabs. In daemon delivery it receives Workspace snapshots through same-origin typed control endpoints. Runtime credentials stay in memory and are not persisted with tabs.
@@ -73,9 +71,10 @@ pnpm openspecui --app
 
 Repository tooling may resolve the local App build while developing the workspace. This is an internal development path, not a user-facing shell-location option.
 
-## Optional Standalone Browser/PWA Deployment
+## Browser Web Deployment
 
-The same static output can be deployed manually as a standalone browser or PWA shell. This remains useful for a fixed web deployment, but it is not the destination of CLI App mode.
+The same static output can be deployed manually as a browser shell. It is a normal web document, not an installable
+app: the build emits no web manifest, service worker, install prompt, or background update owner.
 
 A standalone deployment may accept an initial backend through:
 
@@ -109,16 +108,6 @@ server {
   listen 80;
   root /srv/openspecui-app;
 
-  location = /service-worker.js {
-    add_header Cache-Control "public, max-age=0, must-revalidate";
-    try_files $uri =404;
-  }
-
-  location = /manifest.webmanifest {
-    add_header Cache-Control "public, max-age=0, must-revalidate";
-    try_files $uri =404;
-  }
-
   location / {
     try_files $uri $uri/ /index.html;
   }
@@ -131,7 +120,7 @@ server {
 app.example.com {
   root * /srv/openspecui-app
 
-  @mutable path / /index.html /manifest.webmanifest /service-worker.js
+  @mutable path / /index.html
   header @mutable Cache-Control "public, max-age=0, must-revalidate"
 
   try_files {path} /index.html
@@ -140,5 +129,3 @@ app.example.com {
 ```
 
 Mutable shell entrypoints should revalidate. Hashed `/assets/*` files may use long-lived immutable caching. The included `public/_headers` file applies this split for Cloudflare Pages.
-
-If a newer service worker waits while a Workspace is open, the shell exposes an update action instead of interrupting the active document. With no open Workspace, it may promote the update immediately.

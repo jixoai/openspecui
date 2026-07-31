@@ -29,7 +29,7 @@ function buildBrowserPresentationTarget(request: ProjectWebPresentationRequest):
   })
 }
 
-/** Create the Browser/PWA adapter for the host-neutral start presentation contract. */
+/** Create the Browser adapter for the host-neutral start presentation contract. */
 export function createBrowserStartCommandPresenter(
   openExternalUrl: ExternalUrlOpener
 ): StartCommandPresenter {

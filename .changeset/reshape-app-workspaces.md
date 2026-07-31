@@ -20,3 +20,7 @@ Reshape the App information architecture around Workspaces and Stores.
   (Inspector/Inventory/Context Matrix) routes and the backend selector without
   compatibility redirects. Candidate/open Workspace state is separated; an
   unchanged daemon snapshot no longer reopens a user-closed Workspace.
+- BREAKING App distribution: retires PWA install prompts, manifest and icon
+  assets, service-worker cache/update ownership, PWA launch roles, and PWA
+  overlay chrome. Browser Web and OpenTray remain the supported App hosts; the
+  sidebar brand now uses the canonical App logo.

@@ -225,7 +225,7 @@ describe('app-router', () => {
   it('keeps the launch owner active while Stores is the current route', async () => {
     const router = routerFor(EMPTY_CONTEXT, '/stores')
     await renderAt(<RouterProvider router={router} />)
-    const launcher = new TestBroadcastChannel('openspecui-app:pwa-launch')
+    const launcher = new TestBroadcastChannel('openspecui-app:browser-launch')
 
     await act(async () => {
       launcher.postMessage({

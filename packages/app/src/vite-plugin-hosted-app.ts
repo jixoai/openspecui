@@ -1,15 +1,14 @@
 /**
  * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
- * 1. Publish the hosted App manifest into every completed App build.
- * 2. Project every completed App build into the CLI-owned runtime asset directory.
+ * 1. Project every completed App build into the CLI-owned runtime asset directory.
  *
  * Original request (2026-07-30): "app项目自身的构建本身就要有这个copy行为。"
+ * Owner correction (2026-07-31): PWA manifest generation is retired.
  */
 import { randomUUID } from 'node:crypto'
-import { cp, mkdir, rename, rm, writeFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { cp, rename, rm } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import type { Plugin, ResolvedConfig } from 'vite'
-import { createHostedAppPwaManifest } from './lib/pwa-manifest'
 
 function isMissingPath(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
@@ -56,13 +55,6 @@ export function hostedAppPlugin(): Plugin {
       }
 
       const outDir = resolve(config.root, config.build.outDir)
-      const pwaManifest = createHostedAppPwaManifest()
-      await mkdir(outDir, { recursive: true })
-      await writeFile(
-        join(outDir, 'manifest.webmanifest'),
-        `${JSON.stringify(pwaManifest, null, 2)}\n`,
-        'utf8'
-      )
       await projectAppBuildToCli(outDir, resolve(config.root, '../cli/app'))
     },
   }

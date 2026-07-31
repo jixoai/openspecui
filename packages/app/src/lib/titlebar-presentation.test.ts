@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
- * 1. Prove exhaustive declared/available titlebar source selection and zero double-inset behavior.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Prove exhaustive Browser/OpenTray/native-frame titlebar source selection.
  * 2. Prove source replacement retires listeners and rejects late async geometry.
  * 3. Prove OpenTray drag is exclusive to the dedicated App titlebar.
  * 4. Prove measured controls receive margin while pending overlay geometry keeps edge fallback.
@@ -9,6 +9,7 @@
  * Original request (2026-07-30): "顶部区域缺少一个自绘制的 titlebar 区域，它是通过 overlay-window-controls 得来的，主语它可以拖拽窗口。"
  * Owner correction (2026-07-30): follow skill-creator-v2 horizontal window-controls safe-area behavior.
  * Owner correction (2026-07-30): a host declaration outranks an overlay visible hint for measurement.
+ * Owner correction (2026-07-31): PWA overlay presentation is retired.
  */
 // @vitest-environment jsdom
 
@@ -60,34 +61,11 @@ describe('App titlebar presentation owner', () => {
   })
 
   it('selects one source, replaces rather than adds insets, and retires each listener', async () => {
-    const pwaListeners = new Set<EventListener>()
-    const removePwa = vi.fn((listener: EventListener) => pwaListeners.delete(listener))
     const nativeListener: { current: ((event: OpenTrayGeometryEvent) => void) | null } = {
       current: null,
     }
     const stopNative = vi.fn(async () => {})
     let runtime: AppTitlebarRuntime = {
-      viewportWidth: 1200,
-      pwaOverlay: {
-        visible: true,
-        getTitlebarAreaRect: () => ({ x: 72, y: 0, width: 1000, height: 48 }),
-        addEventListener: (_type, listener) => pwaListeners.add(listener),
-        removeEventListener: (_type, listener) => removePwa(listener),
-      },
-    }
-    const changes: AppTitlebarPresentation[] = []
-    const owner = createAppTitlebarPresentationOwner({
-      readRuntime: () => runtime,
-      onChange: (presentation) => changes.push(presentation),
-    })
-
-    await owner.start()
-    expect(changes.at(-1)).toEqual({
-      kind: 'pwa-overlay',
-      insets: { left: 76, right: 132, top: 0, height: 48 },
-    })
-
-    runtime = {
       viewportWidth: 1200,
       openTrayWindow: {
         overlay: {
@@ -99,8 +77,13 @@ describe('App titlebar presentation owner', () => {
         },
       },
     }
-    await owner.refresh()
-    expect(removePwa).toHaveBeenCalledOnce()
+    const changes: AppTitlebarPresentation[] = []
+    const owner = createAppTitlebarPresentationOwner({
+      readRuntime: () => runtime,
+      onChange: (presentation) => changes.push(presentation),
+    })
+
+    await owner.start()
     expect(changes.at(-1)).toEqual({
       kind: 'opentray',
       insets: { left: 84, right: 124, top: 0, height: 44 },
@@ -148,31 +131,6 @@ describe('App titlebar presentation owner', () => {
 
     expect(changes.at(-1)).toEqual({ kind: 'browser', insets: expectZeroInsets() })
     expect(listen).not.toHaveBeenCalled()
-    owner.stop()
-  })
-
-  it('retains a zero-inset PWA overlay when browser geometry throws', async () => {
-    const onError = vi.fn()
-    const changes: AppTitlebarPresentation[] = []
-    const owner = createAppTitlebarPresentationOwner({
-      readRuntime: () => ({
-        viewportWidth: 1000,
-        pwaOverlay: {
-          visible: true,
-          getTitlebarAreaRect: () => {
-            throw new Error('unavailable')
-          },
-          addEventListener: vi.fn(),
-          removeEventListener: vi.fn(),
-        },
-      }),
-      onChange: (presentation) => changes.push(presentation),
-      onError,
-    })
-
-    await expect(owner.start()).resolves.toBeUndefined()
-    expect(changes.at(-1)).toEqual({ kind: 'pwa-overlay', insets: expectOverlayFallback() })
-    expect(onError).toHaveBeenCalledWith('Native titlebar geometry is unavailable.')
     owner.stop()
   })
 
@@ -229,8 +187,4 @@ describe('App titlebar presentation owner', () => {
 
 function expectZeroInsets() {
   return { left: 0, right: 0, top: 0, height: 0 }
-}
-
-function expectOverlayFallback() {
-  return { left: 8, right: 8, top: 0, height: 0 }
 }

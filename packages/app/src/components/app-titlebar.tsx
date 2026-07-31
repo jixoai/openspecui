@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Render a dedicated self-drawn titlebar only for overlay-capable App hosts.
  * 2. Keep the titlebar's blank surface as the sole pointer entry for native window dragging.
  * 3. Reserve the geometry published by the exclusive titlebar presentation owner.
@@ -8,6 +8,7 @@
  * Original request (2026-07-30): "顶部区域缺少一个自绘制的 titlebar 区域，它是通过 overlay-window-controls 得来的，主语它可以拖拽窗口。"
  * Owner correction (2026-07-30): "Settings 入口挪到titlebar右上角；logo要全面应用。"
  * Owner correction (2026-07-30): "titlebar的高度过高，适当压缩到合理的高度。"
+ * Owner correction (2026-07-31): PWA overlay presentation is retired.
  */
 import { Settings } from 'lucide-react'
 import type { PointerEventHandler } from 'react'
@@ -27,7 +28,7 @@ export function AppTitlebar({
   onPointerDown,
   settingsActive,
 }: AppTitlebarProps) {
-  if (presentation.kind !== 'opentray' && presentation.kind !== 'pwa-overlay') {
+  if (presentation.kind !== 'opentray') {
     return null
   }
 

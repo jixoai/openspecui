@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
- * 1. Bind declared host presentation and measured geometry to browser media, resize, and React lifecycle events.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Bind declared host presentation and measured geometry to resize and React lifecycle events.
  * 2. Forward pointer input from the dedicated App titlebar without giving Workspace controls drag authority.
  * 3. Converge host-declared chrome when the native bridge becomes observable after React mount.
  *
@@ -9,12 +9,10 @@
  * Owner correction (2026-07-30): declared OpenTray chrome must render before native bridge observation settles.
  * Owner correction (2026-07-30): unknown overlay geometry retains the reference 8px edge fallback.
  * Owner correction (2026-07-30): a declared native overlay must not remain permanently on fallback padding.
+ * Owner correction (2026-07-31): PWA overlay presentation is retired.
  */
 import { useCallback, useEffect, useRef, useState, type PointerEventHandler } from 'react'
-import {
-  DEFAULT_OVERLAY_TITLEBAR_INSETS,
-  type HostedAppWindowControlsOverlayLike,
-} from './pwa-runtime'
+import { DEFAULT_OVERLAY_TITLEBAR_INSETS } from './titlebar-geometry'
 import {
   createAppTitlebarPresentationOwner,
   type AppTitlebarPresentation,
@@ -26,7 +24,6 @@ export interface TitlebarNavigatorLike {
   opentray?: { window?: OpenTrayWindowLike }
   opentrayWindow?: OpenTrayWindowLike
   window?: OpenTrayWindowLike
-  windowControlsOverlay?: HostedAppWindowControlsOverlayLike
 }
 
 const NATIVE_BRIDGE_RETRY_DELAY_MS = 50
@@ -73,7 +70,6 @@ export function useTitlebarPresentation(declaredOpenTrayOverlay = false): {
         viewportWidth: window.innerWidth,
         declaredOpenTrayOverlay,
         openTrayWindow: resolveTitlebarOpenTrayWindow(runtimeNavigator),
-        pwaOverlay: runtimeNavigator.windowControlsOverlay,
       }
     }
     const owner = createAppTitlebarPresentationOwner({
@@ -104,10 +100,6 @@ export function useTitlebarPresentation(declaredOpenTrayOverlay = false): {
     void owner.start().finally(retryNativeGeometry)
 
     const refresh = () => void owner.refresh()
-    const standaloneMedia = window.matchMedia?.('(display-mode: standalone)')
-    const overlayMedia = window.matchMedia?.('(display-mode: window-controls-overlay)')
-    standaloneMedia?.addEventListener('change', refresh)
-    overlayMedia?.addEventListener('change', refresh)
     window.addEventListener('resize', refresh)
     window.addEventListener('load', refresh)
 
@@ -115,8 +107,6 @@ export function useTitlebarPresentation(declaredOpenTrayOverlay = false): {
       active = false
       clearRetry()
       ownerRef.current = null
-      standaloneMedia?.removeEventListener('change', refresh)
-      overlayMedia?.removeEventListener('change', refresh)
       window.removeEventListener('resize', refresh)
       window.removeEventListener('load', refresh)
       owner.stop()

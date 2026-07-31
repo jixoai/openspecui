@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove health metadata creates the canonical authenticated Project Web iframe.
  * 2. Prove refresh, tab switching, and Launcher transition/persistence target the intended Workspace.
  * 3. Preserve per-tab iframe sessions and runtime identity across ordinary shell updates.
@@ -11,6 +11,9 @@
  * Owner-reported defect (2026-07-26): "Dashboard加载完成的一瞬间开始reload。"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  * Original request (2026-07-30): "Workspace需要记住曾经打开的目录，并且支持收藏。"
+ * Owner correction (2026-07-31): Open in browser occupies the global action slot; Home exposes neither it nor Refresh.
+ * Owner-reported defect (2026-07-31): offline Workspace recovery must not duplicate banner and waiting states.
+ * Owner correction (2026-07-31): PWA is retired; Home must ignore browser install prompts.
  */
 // @vitest-environment jsdom
 
@@ -186,6 +189,12 @@ describe('HostedShell', () => {
     )
     expect(iframe?.getAttribute('allow')).toBe('clipboard-read; clipboard-write')
     expect(container.querySelector('.rt-skeleton')).toBeTruthy()
+    const projectItem = container.querySelector('[data-tab-id]:not([data-tab-id="workspace-home"])')
+    expect(projectItem?.querySelector('[data-workspace-browser-action="true"]')).toBeNull()
+    expect(
+      container.querySelector('[data-tabs-actions="true"] [data-workspace-browser-action="true"]')
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reload current tab' })).toBeTruthy()
 
     await act(async () => {
       if (iframe) {
@@ -311,6 +320,18 @@ describe('HostedShell', () => {
     // Home is a pinned, non-closeable tab that replaces the old empty shell state.
     expect(screen.getByText('Home')).toBeTruthy()
     expect(screen.getByText('Start from path')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Reload current tab' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Open .* in browser/ })).toBeNull()
+
+    const installPrompt = new Event('beforeinstallprompt') as Event & {
+      prompt(): Promise<void>
+      userChoice: Promise<{ outcome: 'accepted'; platform: string }>
+    }
+    installPrompt.prompt = vi.fn(async () => undefined)
+    installPrompt.userChoice = Promise.resolve({ outcome: 'accepted', platform: 'fixture' })
+    await act(async () => window.dispatchEvent(installPrompt))
+
+    expect(screen.queryByRole('button', { name: 'Install OpenSpec UI App' })).toBeNull()
   })
 
   it('opens the add dialog when the tabs bar empty space is double-clicked', async () => {
@@ -564,7 +585,7 @@ describe('HostedShell', () => {
     expect(document.title).toBe('beta - OpenSpec UI App')
   })
 
-  it('keeps offline tabs visible and shows retry guidance', async () => {
+  it('keeps offline tabs visible with one coherent retry state', async () => {
     setSuccessfulFetch({ online: false })
 
     const { container } = await renderShell(
@@ -579,6 +600,8 @@ describe('HostedShell', () => {
     await flushEffects()
 
     expect(container.textContent ?? '').toContain('Backend unreachable')
+    expect(container.textContent?.match(/Backend unreachable/g)).toHaveLength(1)
+    expect(container.textContent ?? '').not.toContain('Waiting for this backend to come online')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
     expect(container.querySelectorAll('[data-hosted-reachability="offline"]')).toHaveLength(2)
   })

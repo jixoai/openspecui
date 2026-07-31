@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Own the global App titlebar, navigation, and mobile-safe routed viewport budget.
  * 2. Install shared connection, daemon Workspace, Store-mutation, and launch owners above every route.
  * 3. Keep project Workspaces separate from environment-scoped administration.
@@ -71,8 +71,7 @@ function AppLayoutSurface() {
   const { appPresentation } = useRouterContext()
   const titlebar = useTitlebarPresentation(appPresentation === 'opentray-overlay')
   const workspacesVisible = pathname === '/workspaces'
-  const hasOverlayTitlebar =
-    titlebar.presentation.kind === 'opentray' || titlebar.presentation.kind === 'pwa-overlay'
+  const hasOverlayTitlebar = titlebar.presentation.kind === 'opentray'
   const [workspacesMounted, setWorkspacesMounted] = useState(workspacesVisible)
   const daemonWorkspace = useAppDaemonWorkspace()
   const connections = useConnections()
@@ -112,8 +111,11 @@ function AppLayoutSurface() {
 
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <aside className="border-border bg-muted/30 hidden w-56 shrink-0 flex-col gap-1 border-r p-3 md:flex">
-          <div className="text-muted-foreground mb-4 flex items-center gap-2 px-2 text-xs font-semibold uppercase tracking-wide">
-            <Store className="h-4 w-4" />
+          <div
+            className="text-muted-foreground mb-4 flex items-center gap-2 px-2 text-xs font-semibold uppercase tracking-wide"
+            data-app-sidebar-brand
+          >
+            <img aria-hidden="true" className="h-4 w-4 shrink-0" src="/icon.svg" alt="" />
             OpenSpecUI App
           </div>
           <nav className="flex min-h-0 flex-col gap-1">

@@ -1,47 +1,39 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Orchestrate fixed Home/project tabs, browser actions, and iframe lifecycle.
- * 2. Coordinate PWA install, display, and update ownership.
- * 3. Publish shell state once and consume exact-tab reachability from the shared observation owner.
- * 4. Bind Home directory launch and refresh/retry feedback to their exact runtime lifecycle.
- * 5. Preserve cross-window shell-state convergence.
+ * 2. Publish shell state once and consume exact-tab reachability from the shared observation owner.
+ * 3. Bind Home directory launch and refresh/retry feedback to their exact runtime lifecycle.
+ * 4. Preserve cross-window shell-state convergence.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
  * Original request (2026-07-29): "Workspaces 的 tab 可以提供一个 open in browser 的 icon-button。"
+ * Owner correction (2026-07-31): Home is content-sized; Refresh and Open in browser are project-only global actions.
+ * Owner-reported defect (2026-07-31): an offline Workspace must render one coherent recovery state.
+ * Owner correction (2026-07-31): PWA is fully retired; the shell owns no install or service-worker update flow.
  * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
- * Compromise: tab, frame, and PWA display lifecycles remain co-located because they settle in one mounted
- * shell; launch, health, and Root observation are physically extracted into App-lifetime owners.
  */
 
 import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
 import { RealtimeSkeleton } from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { type Tab } from '@openspecui/web-src/components/tabs'
 import { TerminalTabs } from '@openspecui/web-src/components/terminal/terminal-tabs'
+import { AlertCircle, Home, Link2, LoaderCircle, Plus, RefreshCw, Unlink2 } from 'lucide-react'
 import {
-  AlertCircle,
-  Download,
-  Home,
-  Link2,
-  LoaderCircle,
-  Plus,
-  RefreshCw,
-  Unlink2,
-} from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import {
   ConnectionObservationBoundary,
   useConnectionObservationOwner,
   useConnectionObservations,
 } from '../lib/connection-observation'
-import {
-  computeHostedAppDisplayMode,
-  isBeforeInstallPromptEvent,
-  type BeforeInstallPromptEventLike,
-  type HostedAppDisplayMode,
-  type HostedAppWindowControlsOverlayLike,
-} from '../lib/pwa-runtime'
 import type { HostedTabReachability } from '../lib/reachability'
 import { probeHostedBackend } from '../lib/reachability'
 import {
@@ -75,8 +67,6 @@ import { WorkspaceLauncherDialog } from './workspace-launcher-dialog'
 import { WorkspaceTabBrowserAction } from './workspace-tab-browser-action'
 
 const REFRESH_FEEDBACK_MS = 1200
-const UPDATE_CHECK_INTERVAL_MS = 60000
-const UPDATE_READY_MESSAGE = 'A newer OpenSpec UI App shell is ready.'
 const HOME_TAB_ID = 'workspace-home'
 
 function launcherProbeFailure(result: Awaited<ReturnType<typeof probeHostedBackend>>): string {
@@ -120,25 +110,6 @@ interface HostedTabFrameState {
   status: HostedTabFrameStatus
 }
 
-interface HostedShellPwaState {
-  canInstall: boolean
-  isInstalling: boolean
-  isInstalled: boolean
-  displayMode: HostedAppDisplayMode
-}
-
-type HostedAppUpdateStatus = 'idle' | 'ready'
-
-interface HostedAppUpdateState {
-  status: HostedAppUpdateStatus
-  errorMessage: string | null
-}
-
-interface HostedNavigator extends Navigator {
-  standalone?: boolean
-  windowControlsOverlay?: HostedAppWindowControlsOverlayLike
-}
-
 interface HostedShellTabContentProps {
   tab: HostedShellTab
   runtime: HostedTabRuntimeState
@@ -164,37 +135,8 @@ const DEFAULT_FRAME_STATE: HostedTabFrameState = {
   status: 'idle',
 }
 
-const DEFAULT_PWA_STATE: HostedShellPwaState = {
-  canInstall: false,
-  isInstalling: false,
-  isInstalled: false,
-  displayMode: 'browser',
-}
-
-const DEFAULT_UPDATE_STATE: HostedAppUpdateState = {
-  status: 'idle',
-  errorMessage: null,
-}
-
 function cx(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(' ')
-}
-
-function shouldExposeHostedAppUpdate(options: {
-  hasTabs: boolean
-  registration: Pick<ServiceWorkerRegistration, 'waiting'>
-}): HostedAppUpdateState {
-  if (options.registration.waiting && options.hasTabs) {
-    return { status: 'ready', errorMessage: null }
-  }
-  return { status: 'idle', errorMessage: null }
-}
-
-function shouldAutoApplyHostedAppUpdate(options: {
-  hasTabs: boolean
-  registration: Pick<ServiceWorkerRegistration, 'waiting'>
-}): boolean {
-  return !options.hasTabs && Boolean(options.registration.waiting)
 }
 
 function buildHostedTabIframeSrc(
@@ -204,37 +146,12 @@ function buildHostedTabIframeSrc(
   return runtime.embeddedUiUrl ? buildHostedEmbeddedUiUrl(tab, runtime.embeddedUiUrl) : null
 }
 
-function createBrowserPwaSnapshot(deferredPrompt: BeforeInstallPromptEventLike | null) {
-  const hostedNavigator = navigator as HostedNavigator
-  const runtime = {
-    matchMedia: (query: string) => window.matchMedia(query),
-    innerWidth: window.innerWidth,
-    navigatorStandalone: hostedNavigator.standalone,
-    windowControlsOverlay: hostedNavigator.windowControlsOverlay,
-  }
-  const displayMode = computeHostedAppDisplayMode(runtime)
-  return {
-    canInstall: deferredPrompt !== null && displayMode === 'browser',
-    isInstalling: false,
-    isInstalled: displayMode !== 'browser',
-    displayMode,
-  } satisfies HostedShellPwaState
-}
-
-function HostedShellUpdateIcon() {
-  return <RefreshCw className="h-3.5 w-3.5" />
-}
-
 function HostedShellActions(props: {
   isRefreshing: boolean
   isRefreshFeedbackActive: boolean
   onRefresh: () => void
   onAdd: () => void
-  canInstall: boolean
-  isInstalling: boolean
-  onInstall: () => void
-  onApplyUpdate: () => void
-  updateStatus: HostedAppUpdateStatus
+  browserAction?: ReactNode
   showRefresh?: boolean
 }) {
   const buttonClassName =
@@ -254,29 +171,7 @@ function HostedShellActions(props: {
           <RefreshCw className={cx('h-3.5 w-3.5', refreshActive && 'animate-spin')} />
         </button>
       )}
-      {props.updateStatus === 'ready' ? (
-        <button
-          type="button"
-          onClick={props.onApplyUpdate}
-          className={buttonClassName}
-          aria-label="Apply app update"
-          title="Apply app update"
-        >
-          <HostedShellUpdateIcon />
-        </button>
-      ) : (
-        props.canInstall && (
-          <button
-            type="button"
-            onClick={props.onInstall}
-            className={buttonClassName}
-            aria-label="Install OpenSpec UI App"
-            title="Install OpenSpec UI App"
-          >
-            <Download className={cx('h-4 w-4', props.isInstalling && 'animate-pulse')} />
-          </button>
-        )
-      )}
+      {props.browserAction}
       <button
         type="button"
         onClick={props.onAdd}
@@ -427,9 +322,6 @@ function createHostedShellTab(props: {
   onSetIframeRef: (tabId: string, node: HTMLIFrameElement | null) => void
   onFrameLoad: (tabId: string) => void
   onFrameError: (tabId: string) => void
-  workspaceId: string | null
-  isOpeningInBrowser: boolean
-  onOpenInBrowser: (workspaceId: string) => void
 }): Tab {
   // Path-first label: verified GitHub org/repo or directory basename when projectDir is known;
   // fall back to projectName. host/port stays diagnostic-only (not the primary tab label).
@@ -471,14 +363,6 @@ function createHostedShellTab(props: {
           <span className="text-muted-foreground max-w-72 truncate text-[10px]">{subtitle}</span>
         </span>
       </div>
-    ),
-    action: (
-      <WorkspaceTabBrowserAction
-        label={title}
-        workspaceId={props.workspaceId}
-        pending={props.isOpeningInBrowser}
-        onOpen={props.onOpenInBrowser}
-      />
     ),
     content: <HostedShellTabContent {...props} />,
   }
@@ -522,14 +406,9 @@ function HostedShellRuntime({
   const [candidateReachability, setCandidateReachability] = useState<
     Readonly<Record<string, HostedTabReachability>>
   >({})
-  const [pwaState, setPwaState] = useState<HostedShellPwaState>(DEFAULT_PWA_STATE)
-  const [updateState, setUpdateState] = useState<HostedAppUpdateState>(DEFAULT_UPDATE_STATE)
-  const installPromptRef = useRef<BeforeInstallPromptEventLike | null>(null)
   const isolatedLaunchHandledRef = useRef(false)
   const refreshFeedbackTimerRef = useRef<number | null>(null)
   const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
-  const serviceWorkerRegistrationRef = useRef<ServiceWorkerRegistration | null>(null)
-  const shouldReloadForUpdateRef = useRef(false)
 
   useEffect(() => {
     if (appLaunchError !== undefined) setErrorMessage(appLaunchError)
@@ -843,76 +722,6 @@ function HostedShellRuntime({
     })
   }, [shellState.tabs, tabRuntime])
 
-  const syncPwaState = useCallback(() => {
-    setPwaState((current) => ({
-      ...createBrowserPwaSnapshot(installPromptRef.current),
-      isInstalling: current.isInstalling,
-    }))
-  }, [])
-
-  useEffect(() => {
-    syncPwaState()
-
-    const onDisplayChange = () => {
-      syncPwaState()
-    }
-    const onBeforeInstallPrompt = (event: Event) => {
-      if (!isBeforeInstallPromptEvent(event)) {
-        return
-      }
-      event.preventDefault()
-      installPromptRef.current = event
-      setPwaState((current) => ({
-        ...createBrowserPwaSnapshot(event),
-        isInstalling: current.isInstalling,
-      }))
-    }
-    const onAppInstalled = () => {
-      installPromptRef.current = null
-      setPwaState(() => ({
-        ...createBrowserPwaSnapshot(null),
-        isInstalling: false,
-        isInstalled: true,
-      }))
-    }
-
-    const standaloneMedia = window.matchMedia('(display-mode: standalone)')
-    const overlayMedia = window.matchMedia('(display-mode: window-controls-overlay)')
-    standaloneMedia.addEventListener('change', onDisplayChange)
-    overlayMedia.addEventListener('change', onDisplayChange)
-    window.addEventListener('resize', onDisplayChange)
-    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
-    window.addEventListener('appinstalled', onAppInstalled)
-
-    return () => {
-      standaloneMedia.removeEventListener('change', onDisplayChange)
-      overlayMedia.removeEventListener('change', onDisplayChange)
-      window.removeEventListener('resize', onDisplayChange)
-      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
-      window.removeEventListener('appinstalled', onAppInstalled)
-    }
-  }, [syncPwaState])
-
-  const handleInstall = useCallback(async () => {
-    const promptEvent = installPromptRef.current
-    if (!promptEvent) {
-      return
-    }
-
-    setPwaState((current) => ({ ...current, isInstalling: true }))
-    installPromptRef.current = null
-
-    try {
-      await promptEvent.prompt()
-      await promptEvent.userChoice
-    } finally {
-      setPwaState(() => ({
-        ...createBrowserPwaSnapshot(installPromptRef.current),
-        isInstalling: false,
-      }))
-    }
-  }, [])
-
   const probeTabs = useCallback(
     async (options?: { tabIds?: readonly string[]; visualFeedback?: boolean }) => {
       const targets = shellState.tabs.filter(
@@ -938,156 +747,23 @@ function HostedShellRuntime({
     [connectionOwner, shellState.tabs, startRefreshFeedback]
   )
 
-  const activateWaitingHostedAppUpdate = useCallback((registration: ServiceWorkerRegistration) => {
-    if (!registration.waiting || shouldReloadForUpdateRef.current) {
-      return false
-    }
-
-    shouldReloadForUpdateRef.current = true
-    registration.waiting.postMessage({ type: 'SKIP_WAITING' })
-    return true
-  }, [])
-
-  const syncUpdateStateFromRegistration = useCallback(
-    (registration: ServiceWorkerRegistration, options?: { hasTabsOverride?: boolean }) => {
-      serviceWorkerRegistrationRef.current = registration
-      const hasTabs = options?.hasTabsOverride ?? shellState.tabs.length > 0
-      if (shouldAutoApplyHostedAppUpdate({ hasTabs, registration })) {
-        if (activateWaitingHostedAppUpdate(registration)) {
-          setUpdateState({ status: 'idle', errorMessage: null })
-        }
-        return
-      }
-      setUpdateState(shouldExposeHostedAppUpdate({ hasTabs, registration }))
-    },
-    [activateWaitingHostedAppUpdate, shellState.tabs.length]
-  )
-
-  const checkForHostedAppUpdate = useCallback(async () => {
-    if (
-      typeof navigator === 'undefined' ||
-      typeof navigator.serviceWorker === 'undefined' ||
-      typeof navigator.serviceWorker.getRegistration !== 'function'
-    ) {
-      return
-    }
-
-    const registration =
-      serviceWorkerRegistrationRef.current ?? (await navigator.serviceWorker.getRegistration())
-    if (!registration) {
-      return
-    }
-
-    serviceWorkerRegistrationRef.current = registration
-    await registration.update().catch(() => {})
-    syncUpdateStateFromRegistration(registration)
-  }, [syncUpdateStateFromRegistration])
-
-  useEffect(() => {
-    if (
-      typeof navigator === 'undefined' ||
-      typeof navigator.serviceWorker === 'undefined' ||
-      typeof navigator.serviceWorker.getRegistration !== 'function' ||
-      typeof navigator.serviceWorker.addEventListener !== 'function'
-    ) {
-      return
-    }
-
-    let disposed = false
-    let cleanupRegistrationListener = () => {}
-
-    const bindRegistration = (registration: ServiceWorkerRegistration) => {
-      const onUpdateFound = () => {
-        const installing = registration.installing
-        if (!installing) {
-          return
-        }
-
-        const onStateChange = () => {
-          if (installing.state !== 'installed') {
-            return
-          }
-
-          if (!navigator.serviceWorker.controller) {
-            syncUpdateStateFromRegistration(registration, { hasTabsOverride: false })
-            return
-          }
-
-          if (shellState.tabs.length === 0) {
-            activateWaitingHostedAppUpdate(registration)
-            return
-          }
-
-          syncUpdateStateFromRegistration(registration, { hasTabsOverride: true })
-        }
-
-        installing.addEventListener('statechange', onStateChange)
-      }
-
-      registration.addEventListener('updatefound', onUpdateFound)
-      syncUpdateStateFromRegistration(registration)
-
-      return () => {
-        registration.removeEventListener('updatefound', onUpdateFound)
-      }
-    }
-
-    const initialize = async () => {
-      const registration = await navigator.serviceWorker.getRegistration()
-      if (disposed || !registration) {
-        return
-      }
-
-      cleanupRegistrationListener()
-      cleanupRegistrationListener = bindRegistration(registration)
-    }
-
-    const onControllerChange = () => {
-      if (shouldReloadForUpdateRef.current) {
-        shouldReloadForUpdateRef.current = false
-        window.location.reload()
-      }
-    }
-
-    const onFocus = () => {
-      void checkForHostedAppUpdate()
-    }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void checkForHostedAppUpdate()
-      }
-    }
-
-    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    void initialize()
-
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void checkForHostedAppUpdate()
-      }
-    }, UPDATE_CHECK_INTERVAL_MS)
-
-    return () => {
-      disposed = true
-      cleanupRegistrationListener()
-      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      window.clearInterval(interval)
-    }
-  }, [
-    activateWaitingHostedAppUpdate,
-    checkForHostedAppUpdate,
-    shellState.tabs.length,
-    syncUpdateStateFromRegistration,
-  ])
-
   const activeHostedTab =
     shellState.tabs.find((tab) => tab.id === shellState.activeTabId) ?? shellState.tabs[0] ?? null
   const activeRuntime = activeHostedTab
     ? (tabRuntime[activeHostedTab.id] ?? DEFAULT_RUNTIME_STATE)
+    : null
+  const activePathLabel =
+    activeRuntime?.projectDir !== null && activeRuntime?.projectDir !== undefined
+      ? selectWorkspacePathLabel({
+          projectPath: activeRuntime.projectDir,
+          git: activeRuntime.git,
+        })
+      : null
+  const activeWorkspaceTitle = activeHostedTab
+    ? (activePathLabel?.title ?? activeRuntime?.projectName ?? activeHostedTab.apiBaseUrl)
+    : null
+  const activeWorkspaceId = activeHostedTab
+    ? daemonWorkspace.resolveWorkspaceId(activeHostedTab.apiBaseUrl)
     : null
 
   const handleRefreshCurrentTab = useCallback(() => {
@@ -1101,19 +777,7 @@ function HostedShellRuntime({
       tabIds: [activeHostedTab.id],
       visualFeedback: true,
     })
-    void checkForHostedAppUpdate()
-  }, [activeHostedTab, checkForHostedAppUpdate, probeTabs, reloadHostedTab])
-
-  const handleApplyHostedUpdate = useCallback(() => {
-    const registration = serviceWorkerRegistrationRef.current
-    if (!registration?.waiting) {
-      window.location.reload()
-      return
-    }
-
-    shouldReloadForUpdateRef.current = true
-    registration.waiting.postMessage({ type: 'SKIP_WAITING' })
-  }, [])
+  }, [activeHostedTab, probeTabs, reloadHostedTab])
 
   const handleOpenWorkspaceInBrowser = useCallback(
     (workspaceId: string) => {
@@ -1158,11 +822,6 @@ function HostedShellRuntime({
         onSetIframeRef: setIframeRef,
         onFrameLoad: markFrameLoaded,
         onFrameError: markFrameErrored,
-        workspaceId: daemonWorkspace.resolveWorkspaceId(tab.apiBaseUrl),
-        isOpeningInBrowser:
-          openingWorkspaceId !== null &&
-          daemonWorkspace.resolveWorkspaceId(tab.apiBaseUrl) === openingWorkspaceId,
-        onOpenInBrowser: handleOpenWorkspaceInBrowser,
       })
     )
     // Fixed, non-closeable Home tab as the first Workspace tab (4.0a).
@@ -1250,12 +909,6 @@ function HostedShellRuntime({
     <div className="hosted-shell-root bg-background text-foreground flex h-full min-h-0 min-w-0 flex-col">
       <HostedShellThemeBootstrap />
 
-      {updateState.status === 'ready' && (
-        <div className="border-border bg-muted/30 text-muted-foreground border-b px-3 py-2 text-xs">
-          {updateState.errorMessage ?? UPDATE_READY_MESSAGE}
-        </div>
-      )}
-
       {(daemonWorkspace.error ?? errorMessage) && (
         <div className="border-border bg-muted/30 border-b px-3 py-2 text-xs">
           {daemonWorkspace.error ?? errorMessage}
@@ -1277,13 +930,6 @@ function HostedShellRuntime({
                 isRefreshFeedbackActive={false}
                 onRefresh={() => {}}
                 onAdd={openAddDialog}
-                canInstall={pwaState.canInstall}
-                isInstalling={pwaState.isInstalling}
-                onInstall={() => {
-                  void handleInstall()
-                }}
-                onApplyUpdate={handleApplyHostedUpdate}
-                updateStatus={updateState.status}
                 showRefresh={false}
               />
             </div>
@@ -1339,13 +985,19 @@ function HostedShellRuntime({
                 isRefreshFeedbackActive={isRefreshFeedbackActive}
                 onRefresh={handleRefreshCurrentTab}
                 onAdd={openAddDialog}
-                canInstall={pwaState.canInstall}
-                isInstalling={pwaState.isInstalling}
-                onInstall={() => {
-                  void handleInstall()
-                }}
-                onApplyUpdate={handleApplyHostedUpdate}
-                updateStatus={updateState.status}
+                showRefresh={selectedWorkspaceTabId !== HOME_TAB_ID}
+                browserAction={
+                  selectedWorkspaceTabId !== HOME_TAB_ID && activeWorkspaceTitle ? (
+                    <WorkspaceTabBrowserAction
+                      label={activeWorkspaceTitle}
+                      workspaceId={activeWorkspaceId}
+                      pending={
+                        activeWorkspaceId !== null && openingWorkspaceId === activeWorkspaceId
+                      }
+                      onOpen={handleOpenWorkspaceInBrowser}
+                    />
+                  ) : undefined
+                }
               />
             }
             className="hosted-shell-tabs h-full min-h-0"

@@ -98,7 +98,7 @@ openspecui restart --web
 ```
 
 daemon 的宿主模式在启动时固定：native 使用保留式 OpenTray 窗口，`--web` 使用
-Browser/PWA 宿主。若重复 `start` 显式请求了另一种模式，请执行 CLI 提示的精确
+普通 Browser Web 宿主。若重复 `start` 显式请求了另一种模式，请执行 CLI 提示的精确
 `restart` 命令。`serve --no-open` 不会询问、启动 daemon、注册 Workspace 或打开浏览器。
 带 URL 的 App 模式与项目级 App shell 地址设置已不再支持；daemon 只提供与当前 CLI
 同版本打包的 App shell。每个 Workspace 标签都可以请求 daemon 在系统浏览器中打开当前

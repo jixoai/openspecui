@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Audit the mobile/desktop header for only the retained destinations (8.6/8.7).
  * 2. Prove mobile renders Workspaces + Stores plus the expandable running-backend secondary navigation.
  * 3. Preserve stable mobile icon+label geometry.
  *
  * Original request (2026-07-30): "左侧只留下 Workspaces + Stores 就行了。"
  * Owner direction (2026-07-29): mobile-first visual priority, container-query responsive.
+ * Owner correction (2026-07-31): no Running/Favorites accordion; favorites are direct second-level rows.
+ * Owner correction (2026-07-31): replace the OpenSpecUI App sidebar glyph with the product logo.
  */
 // @vitest-environment jsdom
 import { RouterProvider } from '@tanstack/react-router'
@@ -79,6 +81,7 @@ describe('App header audit (8.6/8.7)', () => {
     expect(container.querySelector('a[href="/workspaces"]')).toBeTruthy()
     expect(container.querySelector('a[href="/stores"]')).toBeTruthy()
     expect(container.querySelector('a[href="/settings"]')).toBeTruthy()
+    expect(container.querySelector('[data-app-sidebar-brand] img[src="/icon.svg"]')).toBeTruthy()
   })
 
   it('mobile header renders only the retained destinations (Workspaces + Stores)', async () => {

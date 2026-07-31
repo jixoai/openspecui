@@ -1,10 +1,12 @@
 /*
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Compose App and shared Project Web style layers.
  * 2. Render compact overlay chrome with window-control-safe horizontal content.
- * 3. Preserve hosted Workspace tab affordances across application themes.
+ * 3. Preserve hosted Workspace tab affordances and content-sized Home identity across application themes.
  *
  * Owner correction (2026-07-30): follow skill-creator-v2's fixed 32px titlebar and horizontal safe area.
+ * Owner correction (2026-07-31): Home uses only the width required by its icon and label.
+ * Owner correction (2026-07-31): PWA overlay chrome is retired.
  */
 @import '../../web/src/index.css';
 @import '../../web/src/styles/realtime.css';
@@ -34,11 +36,6 @@
   user-select: none;
   -webkit-app-region: no-drag;
   app-region: no-drag;
-}
-
-.app-titlebar[data-app-titlebar-kind='pwa-overlay'] {
-  -webkit-app-region: drag;
-  app-region: drag;
 }
 
 .app-titlebar-brand {
@@ -134,7 +131,16 @@ html.dark .app-titlebar-logo-dark {
   padding-block-start: 0.5rem;
 }
 
+.hosted-shell-root .hosted-shell-tabs [data-tab-item='true'][data-tab-id='workspace-home'] {
+  width: auto;
+  min-width: max-content;
+}
+
 html.dark .hosted-shell-root .hosted-shell-tabs [data-tab-trigger='true'].tab-selected {
   background-color: var(--primary);
   color: var(--primary-foreground);
+}
+
+iframe {
+  user-select: none;
 }

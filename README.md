@@ -99,7 +99,7 @@ openspecui restart --web
 ```
 
 Daemon host mode is fixed at startup: native uses a retained OpenTray window; `--web` uses the
-Browser/PWA host. If a repeated `start` explicitly requests another mode, use the exact `restart`
+Browser host. If a repeated `start` explicitly requests another mode, use the exact `restart`
 command reported by the CLI. `serve --no-open` performs no prompt, daemon start, Workspace
 registration, or Browser opening. URL-valued App mode and project-level shell-location settings are
 no longer supported; the daemon serves the App shell bundled with the same CLI release. Every
