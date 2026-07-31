@@ -7,7 +7,7 @@
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
- * Full-gate correction (2026-07-31): non-blocking warmup evidence must tolerate loaded-suite scheduling without becoming a 250ms performance SLA.
+ * Full-gate correction (2026-07-31): prove warmup independence by immediate rejection if touched, not a loaded-suite timing race.
  */
 import { mkdir, realpath, writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -356,14 +356,9 @@ process.exit(1)
     const { kernel } = await prepareKernel('result.md')
     const pendingWarmup = vi
       .spyOn(kernel, 'waitForWarmup')
-      .mockImplementation(() => new Promise<void>(() => {}))
+      .mockRejectedValue(new Error('Status List must not wait for full warmup.'))
 
-    await Promise.race([
-      kernel.ensureStatusList(),
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Status List remained behind full warmup.')), 2_000)
-      }),
-    ])
+    await expect(kernel.ensureStatusList()).resolves.toBeUndefined()
 
     expect(kernel.getStatusList().map((status) => status.changeName)).toEqual(['demo-change'])
     expect(pendingWarmup).not.toHaveBeenCalled()
