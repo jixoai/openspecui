@@ -34,6 +34,9 @@
     "@openspecui/local-translator": "workspace:*",
     "@openspecui/openai-completion-translator": "workspace:*",
     "@openspecui/search": "workspace:*",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
     "@trpc/server": "^11.0.0",
     "better-sqlite3": "^12.5.0",
     "hono": "^4.7.3",
@@ -44,9 +47,17 @@
   },
   "// runtime-note": "Translation runtimes are installed on demand from the settings panel instead of being pulled in during startup.",
   "// bundle-note": "The translator engine packages keep heavyweight runtime imports external in tsdown output, so this host package resolves install ranges on demand when the user chooses a local engine.",
-  "optionalDependencies": {
+  "peerDependencies": {
     "ctranslate2": "workspace:*",
     "node-llama-cpp": "~3.18.1"
+  },
+  "peerDependenciesMeta": {
+    "ctranslate2": {
+      "optional": true
+    },
+    "node-llama-cpp": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@trpc/client": "^11.7.2",

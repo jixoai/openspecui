@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Render persistent, reorderable tab triggers and state-preserving content panels.
+ * 2. Keep tab-local actions as accessible siblings instead of nested interactive controls.
+ * 3. Own selection-indicator geometry and the tab strip's bounded horizontal scroll.
+ *
+ * Owner direction (2026-07-29): Workspace tabs expose an Open in browser icon button.
+ * Owner correction (2026-07-31): Inactive Workspace color fills the complete tab item, including sibling controls.
+ */
 import { X } from 'lucide-react'
 import {
   forwardRef,
@@ -20,6 +29,8 @@ import { useHeadStyle } from './use-head-style'
 export interface Tab {
   id: string
   label: ReactNode
+  /** Interactive controls rendered beside, never inside, the tab trigger. */
+  action?: ReactNode
   /** Native hover title for the whole tab trigger */
   title?: string
   icon?: ReactNode
@@ -41,12 +52,16 @@ export interface TabsClassNames {
   headerFrame?: string
   strip?: string
   list?: string
+  item?: string
+  activeItem?: string
+  inactiveItem?: string
   buttonBase?: string
   buttonInner?: string
   activeButton?: string
   inactiveButton?: string
   activeButtonInner?: string
   inactiveButtonInner?: string
+  tabActions?: string
   actions?: string
   actionsDivider?: string
   closeButtonActive?: string
@@ -108,9 +123,8 @@ const tabsStyleText = (id: string) => {
       position: relative;
     }
 
-    #${id} .tabs-button > button {
+    #${id} .tabs-button > [data-tab-item='true'] {
       scroll-snap-align: start;
-      text-align: center;
     }
 
     #${id} .tabs-button::scroll-button(*) {
@@ -260,12 +274,14 @@ function TabsImpl(
     const indicator = selectionIndicatorRef.current
     const strip = stripRef.current ?? headerFrameRef.current
     const activeTrigger = activeTab ? triggerRefs.current.get(activeTab) : null
+    const activeAnchor =
+      activeTrigger?.closest<HTMLElement>('[data-tab-item="true"]') ?? activeTrigger
 
     if (!indicator) {
       return
     }
 
-    if (!showSelectionIndicator || !strip || !activeTrigger) {
+    if (!showSelectionIndicator || !strip || !activeAnchor) {
       indicator.style.opacity = '0'
       indicator.style.width = '0px'
       indicator.style.height = selectionIndicatorLayout === 'overlay' ? '0px' : ''
@@ -275,7 +291,7 @@ function TabsImpl(
     }
 
     const stripRect = strip.getBoundingClientRect()
-    const triggerRect = activeTrigger.getBoundingClientRect()
+    const triggerRect = activeAnchor.getBoundingClientRect()
 
     if (selectionIndicatorLayout === 'underline') {
       const indicatorStyle = getComputedStyle(indicator)
@@ -343,8 +359,10 @@ function TabsImpl(
     }
 
     const activeTrigger = activeTab ? triggerRefs.current.get(activeTab) : null
-    if (activeTrigger) {
-      observer.observe(activeTrigger)
+    const activeAnchor =
+      activeTrigger?.closest<HTMLElement>('[data-tab-item="true"]') ?? activeTrigger
+    if (activeAnchor) {
+      observer.observe(activeAnchor)
     }
 
     return () => {
@@ -505,8 +523,15 @@ function TabsImpl(
     classNames?.list
   )
 
+  const itemClassName = cn(
+    'group relative z-10 flex h-full shrink-0 items-stretch',
+    classNames?.item
+  )
+  const activeItemClassName = cn(classNames?.activeItem)
+  const inactiveItemClassName = cn(classNames?.inactiveItem)
+
   const buttonBaseClassName = cn(
-    'group relative z-10 m-0 flex h-full shrink-0 px-2 py-2 text-sm font-medium transition-colors',
+    'relative m-0 flex h-full min-w-0 flex-1 px-2 py-2 text-center text-sm font-medium transition-colors',
     classNames?.buttonBase
   )
 
@@ -525,6 +550,8 @@ function TabsImpl(
   const activeButtonInnerClassName = cn(classNames?.activeButtonInner)
 
   const inactiveButtonInnerClassName = cn(classNames?.inactiveButtonInner)
+
+  const tabActionsClassName = cn('relative z-20 flex shrink-0 items-center', classNames?.tabActions)
 
   const actionsClassName = cn(
     'tabs-actions relative flex shrink-0 items-center px-1',
@@ -573,71 +600,88 @@ function TabsImpl(
         : undefined
 
     return (
-      <button
+      <div
         key={tab.id}
-        ref={(element) => {
-          triggerRefs.current.set(tab.id, element)
-        }}
         data-tab-item="true"
         data-tab-id={tab.id}
-        draggable={reorderable}
-        onClick={() => handleChange(tab.id)}
-        onDragStart={(event) => handleDragStart(event, tab.id)}
-        onDragEnd={handleDragEnd}
-        onDragOver={(event) => handleItemDragOver(event, tab.id)}
-        onDrop={(event) => handleItemDrop(event, tab.id)}
-        className={`${buttonBaseClassName} ${
-          activeTab === tab.id ? activeButtonClassName : inactiveButtonClassName
-        } ${reorderable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        className={cn(
+          itemClassName,
+          activeTab === tab.id ? activeItemClassName : inactiveItemClassName
+        )}
         style={dragIndicatorStyle}
-        title={tab.title}
       >
-        <span
-          data-tabs-button-inner="true"
-          className={`${buttonInnerClassName} ${
-            activeTab === tab.id ? activeButtonInnerClassName : inactiveButtonInnerClassName
-          }`}
+        <button
+          ref={(element) => {
+            triggerRefs.current.set(tab.id, element)
+          }}
+          data-tab-trigger="true"
+          data-tab-id={tab.id}
+          draggable={reorderable}
+          onClick={() => handleChange(tab.id)}
+          onDragStart={(event) => handleDragStart(event, tab.id)}
+          onDragEnd={handleDragEnd}
+          onDragOver={(event) => handleItemDragOver(event, tab.id)}
+          onDrop={(event) => handleItemDrop(event, tab.id)}
+          className={`${buttonBaseClassName} ${
+            activeTab === tab.id ? activeButtonClassName : inactiveButtonClassName
+          } ${reorderable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+          title={tab.title}
         >
-          {tab.icon}
-          {tab.label}
-          {tab.closable && onTabClose && (
+          <span
+            data-tabs-button-inner="true"
+            className={`${buttonInnerClassName} ${
+              activeTab === tab.id ? activeButtonInnerClassName : inactiveButtonInnerClassName
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </span>
+          {tab.badge && (
             <span
-              role="button"
-              tabIndex={0}
-              onClick={(event) => {
-                event.stopPropagation()
-                onTabClose(tab.id)
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.stopPropagation()
-                  onTabClose(tab.id)
-                }
-              }}
-              draggable={false}
-              className={`-mr-1 rounded p-0.5 transition ${
-                tab.closeButtonVisibility === 'always'
-                  ? 'opacity-100'
-                  : 'opacity-0 group-hover:opacity-100 [button:hover>&]:opacity-100'
-              } ${
-                activeTab === tab.id
-                  ? cn('text-current/80 hover:text-foreground', classNames?.closeButtonActive)
-                  : cn(
-                      'text-muted-foreground hover:text-foreground',
-                      classNames?.closeButtonInactive
-                    )
-              }`}
+              data-tabs-badge="true"
+              className="pointer-events-none absolute right-0 top-0 z-30"
             >
-              <X className="h-3 w-3" />
+              {tab.badge}
             </span>
           )}
-        </span>
-        {tab.badge && (
-          <span data-tabs-badge="true" className="pointer-events-none absolute right-0 top-0 z-30">
-            {tab.badge}
+        </button>
+        {(tab.action || (tab.closable && onTabClose)) && (
+          <span data-tabs-tab-actions="true" className={tabActionsClassName}>
+            {tab.action}
+            {tab.closable && onTabClose && (
+              <button
+                type="button"
+                aria-label={`Close ${tab.title ?? tab.id}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onTabClose(tab.id)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.stopPropagation()
+                    onTabClose(tab.id)
+                  }
+                }}
+                draggable={false}
+                className={`rounded-[var(--tabs-close-radius,0.25rem)] p-1 transition ${
+                  tab.closeButtonVisibility === 'always'
+                    ? 'opacity-100'
+                    : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100'
+                } ${
+                  activeTab === tab.id
+                    ? cn('text-current/80 hover:text-foreground', classNames?.closeButtonActive)
+                    : cn(
+                        'text-muted-foreground hover:text-foreground',
+                        classNames?.closeButtonInactive
+                      )
+                }`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </span>
         )}
-      </button>
+      </div>
     )
   })
 

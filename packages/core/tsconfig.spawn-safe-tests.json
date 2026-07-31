@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/spawn-safe.test.ts"],
+  "exclude": ["node_modules", "dist"]
+}

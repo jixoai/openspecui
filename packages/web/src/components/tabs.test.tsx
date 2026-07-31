@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Prove shared tab selection, indicator geometry, reorder, and content persistence.
+ * 2. Prove tab-local actions and close controls are accessible siblings of the trigger.
+ * 3. Prove slot styling and head-owned scroll affordances remain stable.
+ *
+ * Owner direction (2026-07-29): Workspace tabs expose an Open in browser icon button.
+ */
 import { createEvent, fireEvent, render, within } from '@testing-library/react'
 import { createRef, useEffect } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -68,6 +76,45 @@ describe('Tabs double-click behavior', () => {
     expect(trigger.tagName).toBe('BUTTON')
     expect(getByLabelText('Alpha badge').closest('[data-tabs-badge="true"]')).toBeTruthy()
     expect(container.querySelector('[data-tabs-badge="true"]')?.parentElement).toBe(trigger)
+  })
+
+  it('renders tab-local actions and close as sibling buttons without selecting the tab', () => {
+    const onTabChange = vi.fn()
+    const onTabClose = vi.fn()
+    const onAction = vi.fn()
+    const { container } = render(
+      <Tabs
+        tabs={[
+          {
+            id: 'a',
+            label: 'Alpha',
+            title: 'Alpha',
+            action: (
+              <button type="button" aria-label="Open Alpha" onClick={onAction}>
+                Open
+              </button>
+            ),
+            closable: true,
+            content: <div>A</div>,
+          },
+        ]}
+        selectedTab="a"
+        onTabChange={onTabChange}
+        onTabClose={onTabClose}
+      />
+    )
+
+    const trigger = within(container).getByRole('button', { name: 'Alpha' })
+    const open = within(container).getByRole('button', { name: 'Open Alpha' })
+    const close = within(container).getByRole('button', { name: 'Close Alpha' })
+    expect(open.closest('[data-tab-item="true"]')).toContainElement(trigger)
+    expect(open.closest('button')).toBe(open)
+
+    fireEvent.click(open)
+    fireEvent.click(close)
+    expect(onAction).toHaveBeenCalledOnce()
+    expect(onTabClose).toHaveBeenCalledWith('a')
+    expect(onTabChange).not.toHaveBeenCalled()
   })
 
   it('supports slot-style class overrides and indicator toggles', () => {

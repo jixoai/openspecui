@@ -2,12 +2,13 @@
  * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
  * 1. Own document-translation preferences and engine selection.
  * 2. Project browser, remote, and local translation-engine availability.
- * 3. Manage local model discovery, download, deletion, and objective progress evidence.
+ * 3. Manage readonly local-model discovery plus download, deletion, and objective progress evidence.
  * 4. Run translation smoke tests and preserve their raw result/error lifecycle.
  * 5. Keep routine preference saves visual while retaining explicit engine/download progress.
  *
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  * Original request (2026-07-28): "数据已经是旧的，即将会发生更新。"
+ * Owner correction (2026-07-31): Refreshing observed model metadata is readonly cache maintenance.
  * Compromise: engine catalogs, model asset management, preferences, and smoke tests remain co-located because
  * their current state machine shares one settings draft and mutation graph. Splitting it is a separate refactor.
  */
@@ -633,10 +634,10 @@ function refreshManagedLocalArtifacts(
   input: { modelId?: string }
 ): Promise<LocalPanelStateData> {
   return engineId === 'local'
-    ? trpcClient.localModels.refreshArtifacts.mutate(input)
+    ? trpcClient.localModels.refreshArtifacts.query(input)
     : engineId === 'local-ct2'
-      ? trpcClient.localCt2Models.refreshArtifacts.mutate(input)
-      : trpcClient.localLlamaModels.refreshArtifacts.mutate(input)
+      ? trpcClient.localCt2Models.refreshArtifacts.query(input)
+      : trpcClient.localLlamaModels.refreshArtifacts.query(input)
 }
 
 function cacheManagedLocalPanelState(input: {

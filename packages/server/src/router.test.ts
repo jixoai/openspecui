@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove public Router owner boundaries and Planning-root stream settlement.
  * 2. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
@@ -14,6 +14,8 @@
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
+ * Owner correction (2026-07-31): Observation refresh is a query even when it maintains internal cache or stamp state.
+ * Original request (2026-07-31): "手动刷新报错：Code Git snapshot failed: Invalid Dashboard projection Work event."
  */
 import {
   CliExecutor,
@@ -76,6 +78,10 @@ import {
   RootContextProjectionService,
 } from './root-context-projection-service.js'
 import type { SchemaMutationAction } from './schema-mutation-service.js'
+import {
+  createStoreContentProjectionWorkOwner,
+  StoreContentProjectionService,
+} from './store-content-projection-service.js'
 import {
   createStoreProjectionWorkOwner,
   StoreProjectionService,
@@ -705,6 +711,20 @@ artifacts:
     futureOutput:
       path: reports/broken.md
 `),
+    tryGetSchemaDetail: vi.fn().mockReturnValue({
+      name: 'custom-audit',
+      artifacts: [{ id: 'summary', outputPath: 'reports/summary.md', requires: [] }],
+      applyRequires: [],
+    }),
+    tryGetSchemaYaml: vi.fn().mockReturnValue(`
+name: custom-audit
+artifacts:
+  - id: summary
+    generates: reports/summary.md
+  - id: broken
+    futureOutput:
+      path: reports/broken.md
+`),
   }
 
   const searchService = {
@@ -909,6 +929,13 @@ artifacts:
     storeObservation,
     workOwner: createStoreProjectionWorkOwner(projectionWorkRuntime),
   })
+  const storeContentProjectionService = new StoreContentProjectionService({
+    dataScopePath: rootContext.dataScope.path,
+    cliExecutor: cliExecutor as unknown as Context['cliExecutor'],
+    invalidation: runtimeInvalidation,
+    storeObservation,
+    workOwner: createStoreContentProjectionWorkOwner(projectionWorkRuntime),
+  })
   const rootContextProjectionService = new RootContextProjectionService({
     launchProjectDir: projectDir,
     dataScopePath: rootContext.dataScope.path,
@@ -934,6 +961,7 @@ artifacts:
     runtimeInvalidation,
     storeObservation,
     storeProjectionService,
+    storeContentProjectionService,
     rootContextProjectionService,
     environmentGlobalProjectionService,
     configManager: configManager as unknown as Context['configManager'],
@@ -1320,6 +1348,43 @@ describe('appRouter', () => {
         evidence,
       })
       expect(context.cliExecutor.contracts.doctorStores).toHaveBeenCalledWith('')
+    })
+
+    it('exposes the demand-driven Store-content procedures keyed by composite identity (6.10)', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+      // The procedures are registered and accept the composite identity (envUri + Store id + kind). The demand-driven
+      // ready path + exact CLI argv + composite-identity isolation are proven by store-content-projection-service.test;
+      // this test proves the router wiring (procedures callable, subscription returns an observable).
+      expect(() =>
+        caller.storesContent.readSpecsProjection({
+          envUri: 'env://1',
+          storeId: 'team',
+          kind: 'specs',
+        })
+      ).not.toThrow()
+      expect(() =>
+        caller.storesContent.readChangesProjection({
+          envUri: 'env://1',
+          storeId: 'team',
+          kind: 'changes',
+        })
+      ).not.toThrow()
+      // The service backing the procedure returns a valid loading Pull state (demand-driven: no subscriber yet).
+      expect(
+        context.storeContentProjectionService.readContent({
+          envUri: 'env://1',
+          storeId: 'team',
+          kind: 'specs',
+        }).state
+      ).toBe('loading')
+      // The subscription procedure accepts the same composite identity and returns an observable.
+      const observable = await caller.storesContent.subscribeProjection({
+        envUri: 'env://1',
+        storeId: 'team',
+        kind: 'specs',
+      })
+      expect(typeof observable.subscribe).toBe('function')
     })
 
     it('does not attach a Store polling timer to each invalidation subscriber', async () => {
@@ -1858,6 +1923,32 @@ apply:
       expect(git.defaultBranch).toBe('origin/main')
     })
 
+    it('accepts scheduler queue and resource-admission stages on Dashboard subscriptions', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      planning.dashboardProjectionService.subscribeGit = (listener) => {
+        listener({ type: 'stage', phase: 'queue-enter', workGeneration: 1 })
+        listener({ type: 'stage', phase: 'resource-admitted', workGeneration: 1 })
+        return { unsubscribe() {} }
+      }
+      const caller = appRouter.createCaller(context)
+      const observable = await caller.dashboard.subscribeGit()
+      const events: unknown[] = []
+      const errors: Error[] = []
+      const subscription = observable.subscribe({
+        next: (event) => events.push(event),
+        error: (error) => errors.push(error instanceof Error ? error : new Error(String(error))),
+      })
+
+      await vi.waitFor(() => expect(events).toHaveLength(2))
+      expect(errors).toEqual([])
+      expect(events).toEqual([
+        { type: 'stage', phase: 'queue-enter', workGeneration: 1 },
+        { type: 'stage', phase: 'resource-admitted', workGeneration: 1 },
+      ])
+      subscription.unsubscribe()
+    })
+
     it('replays the legacy Dashboard subscription without forcing a refresh', async () => {
       const context = createMockContext()
       const planning = await resolveMockPlanningRoot(context)
@@ -2167,7 +2258,7 @@ apply:
       ).rejects.toThrow(/Planning repository scope is unavailable or identical/)
     })
 
-    it('keeps status, history, detail, and refresh mutations inside the selected repository', async () => {
+    it('keeps status, history, detail, and readonly refresh inside the selected repository', async () => {
       const codeRepository = await createTempProjectDir('openspecui-router-git-code-repo-')
       const planningRepository = await createTempProjectDir('openspecui-router-git-planning-repo-')
       await Promise.all([initGitRepo(codeRepository), initGitRepo(planningRepository)])

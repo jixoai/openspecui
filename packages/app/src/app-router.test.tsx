@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Prove the App router renders every first-party product surface.
- * 2. Prove launch ownership remains active outside the Sessions route.
- * 3. Prove route round-trips preserve the AppLayout-owned iframe Document identity.
- * 4. Prove persistent Sessions consumes the App shell's remaining mobile viewport budget.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Prove the App router renders the two-domain (Workspaces + Stores) surface (8.1).
+ * 2. Prove the root redirects to Workspaces, Task Manager remains an overlay, and Settings remains a secondary utility route (8.1/8.2).
+ * 3. Prove retired routes (Connections/Environment/Store Manager) are gone (8.3).
+ * 4. Prove route round-trips preserve the AppLayout-owned iframe Document identity (8.5/8.9).
+ * 5. Prove overlay window chrome remains globally visible outside Workspaces.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
- * Owner-reported defect (2026-07-26): opening B or C eventually makes older tabs lose authentication.
- * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-30): "左侧只留下 Workspaces + Stores 就行了。"
+ * Owner correction (2026-07-31): "TaskManagerPage 改成 TaskManagerDialog"
  */
 // @vitest-environment jsdom
 
@@ -16,10 +17,11 @@ import { RouterProvider } from '@tanstack/react-router'
 import { act, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAppRouter, type AppRouterContext } from './app-router'
 import { clearLaunchCredential, readLaunchCredential } from './lib/launch-credential'
 import { getHostedShellStorageKey } from './lib/shell-state'
+import { buildStoreDetailPath } from './lib/store-route-identity'
 
 const EMPTY_CONTEXT: AppRouterContext = {
   initialLaunchRequest: null,
@@ -31,6 +33,7 @@ const renderedRoots = new Set<Root>()
 const originalBroadcastChannel = globalThis.BroadcastChannel
 const originalMatchMedia = window.matchMedia
 const originalFetch = global.fetch
+const originalOpenTrayWindow = Object.getOwnPropertyDescriptor(navigator, 'opentrayWindow')
 
 class TestBroadcastChannel {
   static readonly channels = new Map<string, Set<TestBroadcastChannel>>()
@@ -81,7 +84,6 @@ async function renderAt(element: ReactElement): Promise<{ container: HTMLDivElem
 
 function routerFor(context: AppRouterContext, initialPath: string) {
   const router = createAppRouter(context)
-  // 直接设置历史位置，避免依赖浏览器地址栏。
   router.history.push(initialPath)
   return router
 }
@@ -89,6 +91,7 @@ function routerFor(context: AppRouterContext, initialPath: string) {
 describe('app-router', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
+    window.history.replaceState({}, '', '/')
     localStorage.clear()
     TestBroadcastChannel.channels.clear()
     Object.defineProperty(globalThis, 'BroadcastChannel', {
@@ -125,38 +128,125 @@ describe('app-router', () => {
       value: originalMatchMedia,
     })
     global.fetch = originalFetch
+    if (originalOpenTrayWindow) {
+      Object.defineProperty(navigator, 'opentrayWindow', originalOpenTrayWindow)
+    } else {
+      Reflect.deleteProperty(navigator, 'opentrayWindow')
+    }
     document.body.innerHTML = ''
   })
 
-  it('renders the App layout shell', async () => {
+  it('renders the two-domain App shell with only Workspaces + Stores navigation', async () => {
     const router = routerFor(EMPTY_CONTEXT, '/settings')
     const { container } = await renderAt(<RouterProvider router={router} />)
-    expect(container.textContent ?? '').toContain('Settings')
-    // 侧栏导航存在。
-    expect(container.textContent ?? '').toContain('Connections')
-    expect(container.textContent ?? '').toContain('Environment')
+    const text = container.textContent ?? ''
+    // Primary navigation is exactly Workspaces + Stores.
+    expect(text).toContain('Workspaces')
+    expect(text).toContain('Stores')
+    // Retired primary navigation links are gone.
+    expect(container.querySelector('a[href="/connections"]')).toBeNull()
+    expect(container.querySelector('a[href="/environment"]')).toBeNull()
+    expect(container.querySelector('a[href="/environment/stores/inspector"]')).toBeNull()
+    expect(container.querySelector('a[href="/settings"]')).toBeTruthy()
   })
 
-  it('renders Connections as home', async () => {
-    const router = routerFor(EMPTY_CONTEXT, '/connections')
+  it('redirects the root route to Workspaces', async () => {
+    const router = routerFor(EMPTY_CONTEXT, '/')
+    await renderAt(<RouterProvider router={router} />)
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(router.state.location.pathname).toBe('/workspaces')
+  })
+
+  it('opens Task Manager as an App-owned Dialog without changing routes', async () => {
+    const router = routerFor(EMPTY_CONTEXT, '/workspaces')
     const { container } = await renderAt(<RouterProvider router={router} />)
-    expect(container.textContent ?? '').toContain('Connections')
-    expect(container.textContent ?? '').toContain('No backend connections yet')
+    const taskManagerButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Task Manager'
+    )
+    expect(taskManagerButton).toBeTruthy()
+
+    await act(async () => taskManagerButton?.click())
+
+    await waitFor(() => {
+      expect(
+        Array.from(container.querySelectorAll('dialog[open]')).some((dialog) =>
+          dialog.textContent?.includes('Task Manager')
+        )
+      ).toBe(true)
+    })
+    expect(router.state.location.pathname).toBe('/workspaces')
   })
 
-  it('renders Environment Center with neutral (observed-only) copy', async () => {
-    const router = routerFor(EMPTY_CONTEXT, '/environment')
+  it('renders the Stores index route with observed-only language', async () => {
+    const router = routerFor(EMPTY_CONTEXT, '/stores')
     const { container } = await renderAt(<RouterProvider router={router} />)
     const text = container.textContent ?? ''
-    // envUri 中性表达：不声称全集。
-    expect(text).not.toMatch(/all references|unreferenced/i)
-    expect(text).toContain('No runtime environments observed')
+    expect(text).toContain('Stores')
+    expect(text).toContain('Observed stores only')
   })
 
-  it('keeps the launch owner active while Environment is the current route', async () => {
-    const router = routerFor(EMPTY_CONTEXT, '/environment')
+  it('renders Environment evidence and direct Store Detail routes instead of blank placeholders', async () => {
+    const router = routerFor(EMPTY_CONTEXT, '/stores/environments')
+    const { container } = await renderAt(<RouterProvider router={router} />)
+    expect(container.textContent).toContain('Environment evidence')
+
+    await act(async () => {
+      await router.navigate({
+        to: buildStoreDetailPath({ envUri: 'env://missing', storeId: 'team' }),
+      })
+    })
+    await waitFor(() => {
+      expect(container.textContent).toContain('not currently observed in this Environment')
+    })
+  })
+
+  it('renders the OpenTray titlebar above the Workspaces surface from the global App layout', async () => {
+    Object.defineProperty(navigator, 'opentrayWindow', {
+      configurable: true,
+      value: {
+        overlay: {
+          visible: true,
+          getTitlebarAreaRect: vi.fn(async () => ({ x: 72, y: 0, width: 1128, height: 40 })),
+        },
+        startAppRegionDrag: vi.fn(),
+      },
+    })
+    const router = routerFor(EMPTY_CONTEXT, '/workspaces')
+    const { container } = await renderAt(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-app-titlebar="true"]')).toBeTruthy()
+    })
+    const layout = container.querySelector('[data-testid="app-layout"]')
+    const titlebar = container.querySelector('[data-app-titlebar="true"]')
+    expect(layout?.getAttribute('data-titlebar-presentation')).toBe('opentray')
+    expect(layout?.firstElementChild).toBe(titlebar)
+  })
+
+  it('moves Settings into the compact titlebar for overlay presentation', async () => {
+    const router = routerFor(
+      { ...EMPTY_CONTEXT, appPresentation: 'opentray-overlay' },
+      '/workspaces'
+    )
+    const { container } = await renderAt(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-app-titlebar="true"]')).toBeTruthy()
+    })
+    expect(container.querySelector('a[href="/settings"]')).toBeNull()
+    const settings = container.querySelector<HTMLButtonElement>('button[aria-label="Settings"]')
+    expect(settings).toBeTruthy()
+    await act(async () => settings?.click())
+    expect(router.state.location.pathname).toBe('/settings')
+  })
+
+  it('keeps the launch owner active while Stores is the current route', async () => {
+    const router = routerFor(EMPTY_CONTEXT, '/stores')
     await renderAt(<RouterProvider router={router} />)
-    const launcher = new TestBroadcastChannel('openspecui-app:pwa-launch')
+    const launcher = new TestBroadcastChannel('openspecui-app:browser-launch')
 
     await act(async () => {
       launcher.postMessage({
@@ -177,13 +267,13 @@ describe('app-router', () => {
     launcher.close()
   })
 
-  it('preserves an App-lifetime launch error for the Sessions surface', async () => {
+  it('preserves an App-lifetime launch error for the Workspaces surface', async () => {
     const router = routerFor(
       {
         ...EMPTY_CONTEXT,
         initialError: 'The launch credential requires a valid backend locator.',
       },
-      '/sessions'
+      '/workspaces'
     )
     const { container } = await renderAt(<RouterProvider router={router} />)
 
@@ -192,7 +282,7 @@ describe('app-router', () => {
     )
   })
 
-  it('preserves the hosted iframe identity across Sessions route round-trips', async () => {
+  it('preserves the hosted iframe identity across Workspaces -> Stores -> Workspaces round-trips', async () => {
     localStorage.setItem(
       getHostedShellStorageKey(),
       JSON.stringify({
@@ -232,77 +322,41 @@ describe('app-router', () => {
       })
     }) as typeof fetch
 
-    const router = routerFor(EMPTY_CONTEXT, '/sessions')
+    const router = routerFor(EMPTY_CONTEXT, '/workspaces')
     const { container } = await renderAt(<RouterProvider router={router} />)
     await waitFor(() => {
       expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBeTruthy()
     })
     const iframe = container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')
     expect(iframe).toBeTruthy()
-    expect(container.querySelector('[data-testid="app-layout"]')?.className).toContain('h-dvh')
-    expect(container.querySelector('[data-testid="app-main"]')?.className).toContain(
-      'overflow-hidden'
-    )
-    expect(container.querySelector('[data-testid="hosted-sessions-surface"]')?.className).toContain(
-      'h-full'
-    )
-    expect(container.querySelector('.hosted-shell-root')?.className).toContain('h-full')
-    expect(container.querySelector('.hosted-shell-tabs')?.className).toContain('h-full')
 
+    // Navigate the complete Stores route family and prove the exact iframe DOM node is preserved (8.5/8.9).
     await act(async () => {
-      await router.navigate({ to: '/environment' })
+      await router.navigate({ to: '/stores' })
     })
     expect(
-      container.querySelector<HTMLElement>('[data-testid="hosted-sessions-surface"]')?.hidden
+      container.querySelector<HTMLElement>('[data-testid="hosted-workspaces-surface"]')?.hidden
     ).toBe(true)
     expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBe(iframe)
 
     await act(async () => {
-      await router.navigate({ to: '/sessions' })
+      await router.navigate({
+        to: buildStoreDetailPath({ envUri: 'env:a', storeId: 'team' }),
+      })
+    })
+    expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBe(iframe)
+
+    await act(async () => {
+      await router.navigate({ to: '/stores/environments' })
+    })
+    expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBe(iframe)
+
+    await act(async () => {
+      await router.navigate({ to: '/workspaces' })
     })
     expect(
-      container.querySelector<HTMLElement>('[data-testid="hosted-sessions-surface"]')?.hidden
+      container.querySelector<HTMLElement>('[data-testid="hosted-workspaces-surface"]')?.hidden
     ).toBe(false)
     expect(container.querySelector('iframe[title="Hosted OpenSpec UI project-a"]')).toBe(iframe)
-  })
-
-  it('redirects Store Manager root to Inspector', async () => {
-    const router = routerFor(EMPTY_CONTEXT, '/environment/stores')
-    await renderAt(<RouterProvider router={router} />)
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    // 重定向后落在 inspector。
-    expect(router.state.location.pathname).toBe('/environment/stores/inspector')
-  })
-
-  it('renders Store Manager Inspector with Experimental marker', async () => {
-    const router = routerFor(EMPTY_CONTEXT, '/environment/stores/inspector')
-    const { container } = await renderAt(<RouterProvider router={router} />)
-    const text = container.textContent ?? ''
-    expect(text).toContain('Store Manager')
-    expect(text).toContain('Experimental')
-    expect(text).toContain('Inspector')
-    expect(text).toContain('No Stores registered')
-  })
-
-  it('renders Context Matrix view with neutral empty-state copy', async () => {
-    const router = routerFor(EMPTY_CONTEXT, '/environment/stores/context')
-    const { container } = await renderAt(<RouterProvider router={router} />)
-    const text = container.textContent ?? ''
-    expect(text).toContain('Context Matrix')
-    expect(text).toContain('Experimental')
-    // 中性空态：不声称全集，只说「observed」。
-    expect(text).toContain('No project contexts observed')
-    expect(text).not.toMatch(/all references|unreferenced/i)
-  })
-
-  it('renders Inventory view', async () => {
-    const router = routerFor(EMPTY_CONTEXT, '/environment/stores/inventory')
-    const { container } = await renderAt(<RouterProvider router={router} />)
-    const text = container.textContent ?? ''
-    expect(text).toContain('Inventory')
-    expect(text).toContain('Registry is empty')
   })
 })

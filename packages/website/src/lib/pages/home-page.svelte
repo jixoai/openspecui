@@ -1,3 +1,11 @@
+<!--
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+1. Present the current OpenSpecUI product modes and launch commands.
+2. Keep App-daemon and Direct Web examples explicit and parser-valid.
+3. Link the standalone PWA without presenting it as the CLI App target.
+
+Original request (2026-07-29): "支持 openspecui --web，并放弃 App 外壳部署位置配置。"
+-->
 <script lang="ts">
   import ArrowUpRight from 'lucide-svelte/icons/arrow-up-right'
   import BookOpenText from 'lucide-svelte/icons/book-open-text'
@@ -22,9 +30,9 @@
   let appModeEnabled = $state(true)
 
   const runnerCommandPrefix = $derived(getRunnerCommandPrefix(runner))
-  const hostedAppCommand = $derived(`${runnerCommandPrefix} openspecui@latest --app`)
+  const appDaemonCommand = $derived(`${runnerCommandPrefix} openspecui@latest --app`)
   const runCommand = $derived(
-    `${runnerCommandPrefix} openspecui@latest${appModeEnabled ? ' --app' : ''}`
+    `${runnerCommandPrefix} openspecui@latest ${appModeEnabled ? '--app' : '--web'}`
   )
   const currentRunSummary = $derived(
     appModeEnabled ? content.commands.appOnSummary : content.commands.appOffSummary
@@ -111,7 +119,7 @@
           <code
             class="bg-terminal text-terminal-foreground scrollbar-thin scrollbar-track-transparent block overflow-x-auto px-3 py-2 text-sm"
           >
-            {hostedAppCommand}
+            {appDaemonCommand}
           </code>
           <p class="text-muted-foreground/80 text-pretty text-[11px] leading-5 sm:text-[12px]">
             {content.commands.compatibility}

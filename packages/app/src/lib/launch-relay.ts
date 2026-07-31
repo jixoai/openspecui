@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
- * 1. Elect one browser/PWA launch owner and relay credential-free tab requests.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Elect one browser launch owner and relay credential-free tab requests.
  * 2. Converge same-origin windows on locator credentials without storing them in shell state/localStorage.
  * 3. Preserve acknowledgement and local fallback behavior across window lifecycles.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
- * Delivery correction (2026-07-24): forwarded PWA launches retain locator-scoped Access Gate credentials.
+ * Delivery correction (2026-07-24): forwarded launches retain locator-scoped Access Gate credentials.
+ * Owner correction (2026-07-31): PWA roles and priority takeover are retired.
  */
 import {
   bindLaunchCredential,
@@ -15,18 +16,13 @@ import {
 } from './launch-credential'
 import { generateHostedSessionId, type HostedShellLaunchRequest } from './shell-state'
 
-const LEADER_STORAGE_KEY = 'openspecui-app:pwa-leader'
-const LAUNCH_CHANNEL_NAME = 'openspecui-app:pwa-launch'
+const LEADER_STORAGE_KEY = 'openspecui-app:browser-launch-leader'
+const LAUNCH_CHANNEL_NAME = 'openspecui-app:browser-launch'
 const LEADER_TTL_MS = 6000
 const HEARTBEAT_INTERVAL_MS = 2000
 const ACK_TIMEOUT_MS = 400
 
-export type HostedLaunchRole = 'browser' | 'pwa'
-export type HostedLaunchDispatchResult =
-  | 'applied'
-  | 'forwarded'
-  | 'forwarded-to-pwa'
-  | 'fallback-applied'
+export type HostedLaunchDispatchResult = 'applied' | 'forwarded' | 'fallback-applied'
 
 type HostedLaunchTimerHandle = number | ReturnType<typeof globalThis.setTimeout>
 type HostedLaunchIntervalHandle = number | ReturnType<typeof globalThis.setInterval>
@@ -51,7 +47,6 @@ export interface HostedLaunchRelayMessageAck {
   type: 'launch-ack'
   id: string
   targetWindowId: string
-  leaderRole: HostedLaunchRole
   credentials: readonly LaunchCredentialBinding[]
 }
 
@@ -74,7 +69,6 @@ export interface HostedLaunchRelayRuntime {
   clearTimeout?: HostedClearTimeout
   focusWindow?: () => void
   windowId?: string
-  role?: HostedLaunchRole
   /** Runtime-only credential reader for the sending window. */
   readCredential?: (apiBaseUrl: string) => string | null
   /** Runtime-only credential binder for the receiving window. */
@@ -86,7 +80,6 @@ export interface HostedLaunchRelayRuntime {
 interface LeaderRecord {
   windowId: string
   updatedAt: number
-  role: HostedLaunchRole
 }
 
 interface PendingLaunch {
@@ -97,33 +90,6 @@ interface PendingLaunch {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
-}
-
-function isHostedLaunchRole(value: unknown): value is HostedLaunchRole {
-  return value === 'browser' || value === 'pwa'
-}
-
-function getHostedLaunchRolePriority(role: HostedLaunchRole): number {
-  return role === 'pwa' ? 2 : 1
-}
-
-function detectHostedLaunchRole(): HostedLaunchRole {
-  if (typeof window === 'undefined') {
-    return 'browser'
-  }
-
-  const hostedNavigator = window.navigator as Navigator & { standalone?: boolean }
-  const matchesDisplayMode =
-    typeof window.matchMedia === 'function' &&
-    (window.matchMedia('(display-mode: standalone)').matches ||
-      window.matchMedia('(display-mode: window-controls-overlay)').matches)
-  const inStandaloneMode = hostedNavigator.standalone === true || matchesDisplayMode
-
-  return inStandaloneMode ? 'pwa' : 'browser'
-}
-
-function resolveForwardedLaunchResult(role: HostedLaunchRole): HostedLaunchDispatchResult {
-  return role === 'pwa' ? 'forwarded-to-pwa' : 'forwarded'
 }
 
 function isHostedLaunchRequest(value: unknown): value is HostedShellLaunchRequest {
@@ -147,7 +113,6 @@ function isAckMessage(value: unknown): value is HostedLaunchRelayMessageAck {
     value.type === 'launch-ack' &&
     typeof value.id === 'string' &&
     typeof value.targetWindowId === 'string' &&
-    isHostedLaunchRole(value.leaderRole) &&
     Array.isArray(value.credentials) &&
     value.credentials.every(
       (credential) =>
@@ -168,7 +133,6 @@ function parseLeaderRecord(raw: string | null): LeaderRecord | null {
     return {
       windowId: parsed.windowId,
       updatedAt: parsed.updatedAt,
-      role: isHostedLaunchRole(parsed.role) ? parsed.role : 'browser',
     }
   } catch {
     return null
@@ -244,7 +208,6 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
     runtime.clearTimeout ?? ((timer) => globalThis.clearTimeout(timer))
   const focusWindow = runtime.focusWindow ?? focusCurrentWindow
   const windowId = runtime.windowId ?? generateHostedSessionId()
-  const role = runtime.role ?? detectHostedLaunchRole()
   const readCredential = runtime.readCredential ?? readLaunchCredential
   const bindCredential = runtime.bindCredential ?? bindLaunchCredential
   const readCredentialSnapshot = runtime.readCredentialSnapshot ?? readLaunchCredentialSnapshot
@@ -257,15 +220,12 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
     const current = readHostedLaunchLeader(runtime.storage)
     const currentNow = now()
     const shouldClaimLeadership =
-      isHostedLaunchLeaderExpired(currentNow, current) ||
-      current?.windowId === windowId ||
-      getHostedLaunchRolePriority(role) > getHostedLaunchRolePriority(current?.role ?? 'browser')
+      isHostedLaunchLeaderExpired(currentNow, current) || current?.windowId === windowId
 
     if (shouldClaimLeadership) {
       writeHostedLaunchLeader(runtime.storage, {
         windowId,
         updatedAt: currentNow,
-        role,
       })
     }
 
@@ -288,7 +248,6 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
       type: 'launch-ack',
       id: message.id,
       targetWindowId: message.sourceWindowId,
-      leaderRole: role,
       credentials: readCredentialSnapshot(),
     })
   }
@@ -309,7 +268,7 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
 
     clearTimeoutImpl(pendingLaunch.timer)
     pending.delete(message.id)
-    pendingLaunch.resolve(resolveForwardedLaunchResult(message.leaderRole))
+    pendingLaunch.resolve('forwarded')
   }
 
   const onChannelMessage: EventListener = (event) => {
@@ -327,9 +286,6 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
     get windowId() {
       return windowId
     },
-    get role() {
-      return role
-    },
     isLeader() {
       return refreshLeadership()
     },
@@ -346,10 +302,9 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
           clearIntervalImpl(heartbeatTimer)
           heartbeatTimer = null
         }
-        const leaderRole = readHostedLaunchLeader(runtime.storage)?.role ?? role
         for (const pendingLaunch of pending.values()) {
           clearTimeoutImpl(pendingLaunch.timer)
-          pendingLaunch.resolve(resolveForwardedLaunchResult(leaderRole))
+          pendingLaunch.resolve('forwarded')
         }
         pending.clear()
         channel?.removeEventListener('message', onChannelMessage)
@@ -381,8 +336,7 @@ export function createHostedLaunchRelay(runtime: HostedLaunchRelayRuntime) {
             return
           }
 
-          const leaderRole = readHostedLaunchLeader(runtime.storage)?.role ?? role
-          resolve(resolveForwardedLaunchResult(leaderRole))
+          resolve('forwarded')
         }, ACK_TIMEOUT_MS)
 
         pending.set(id, {

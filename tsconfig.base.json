@@ -25,6 +25,10 @@
       "@openspecui/core": ["packages/core/src/index.ts"],
       "@openspecui/core/dashboard-display": ["packages/core/src/dashboard-display.ts"],
       "@openspecui/core/hosted-app": ["packages/core/src/hosted-app.ts"],
+      "@openspecui/core/app-daemon-control": ["packages/core/src/app-daemon-control.ts"],
+      "@openspecui/core/workspace-directory-catalog": [
+        "packages/core/src/workspace-directory-catalog.ts"
+      ],
       "@openspecui/core/hosted-contract": ["packages/core/src/hosted-contract.ts"],
       "@openspecui/core/markdown-facts": ["packages/core/src/markdown-facts.ts"],
       "@openspecui/core/markdown-reading": ["packages/core/src/markdown-reading.ts"],
@@ -43,6 +47,9 @@
       "@openspecui/core/opsx-schema-detail": ["packages/core/src/opsx-schema-detail.ts"],
       "@openspecui/core/store-types": ["packages/core/src/store-types.ts"],
       "@openspecui/core/store-mutation-protocol": ["packages/core/src/store-mutation-protocol.ts"],
+      "@openspecui/core/store-content-projection": [
+        "packages/core/src/store-content-projection.ts"
+      ],
       "@openspecui/core/task-progress": ["packages/core/src/task-progress.ts"],
       "@openspecui/core/spec-catalog": ["packages/core/src/spec-catalog.ts"],
       "@openspecui/core/pty-protocol": ["packages/core/src/pty-protocol.ts"],

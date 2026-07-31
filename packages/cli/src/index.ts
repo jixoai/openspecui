@@ -1,14 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Start the embedded Server and its worktree children with one resolved Project Web/preview asset root.
  * 2. Resolve one Access Gate credential and deliver it to Server, private browser, and worktree children.
  * 3. Keep inherited child credentials silent while coordinating deterministic runtime teardown.
  * 4. Bootstrap only worker-thread payloads owned by the worktree Server protocol.
+ * 5. Forward diagnostic tracing configuration into the embedded Server owner.
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
  * Review correction (2026-07-26): explicit Web asset roots are presence-sensitive.
  * Delivery correction (2026-07-26): nested worktree Servers inherit the resolved parent asset root.
+ * Original request (2026-07-30): "通过 --otel --otel-endpoint 来开启。"
  */
 import {
   generateAccessGateCredential,
@@ -71,6 +73,10 @@ export interface CLIOptions {
   onBrowserLaunchCredential?: (credential: string) => void
   /** Optional handoff owner. Worker runtimes use this to delegate nested switches to their parent. */
   gitWorktreeHandoff?: GitWorktreeHandoffService
+  /** Enable backend OpenTelemetry tracing (diagnostic only). */
+  otel?: boolean
+  /** OTLP/HTTP Collector base URL. Absent ⇒ console exporter fallback. */
+  otelEndpoint?: string
 }
 
 export interface RunningServer {
@@ -305,6 +311,7 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
       previewAssetsDir: webAssetsDir,
       gitWorktreeHandoff,
       accessGate,
+      tracing: options.otel ? { enabled: true, endpoint: options.otelEndpoint } : undefined,
     },
     (app) => setupStaticFiles(app, webAssetsDir)
   )

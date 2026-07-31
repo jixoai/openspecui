@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Prove Summary admission precedes lower-priority Trends and Git subscriptions.
- * 2. Prove a later backend binding cannot relabel an already captured refresh or removal intent.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Prove notice-free Summary admission precedes lower-priority Trends and Git subscriptions without superseding synchronous replay.
+ * 2. Prove a later backend binding cannot relabel an already captured readonly refresh or removal intent.
  * 3. Prove a stale Dashboard region is display-only while its current replacement is pending.
  * 4. Prove a late Summary A pull cannot overwrite the matching root-rebind B pull.
  * 5. Prove cached or Server-retained Summary data becomes display-only before matching current convergence.
@@ -11,6 +11,8 @@
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
  * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
+ * Original request (2026-07-31): "所有可能其它页面都有类似的问题。"
+ * Owner correction (2026-07-31): Dashboard refresh is a readonly query despite internal stamp maintenance.
  */
 import type { DashboardSummaryProjection } from '@openspecui/core'
 import type {
@@ -156,13 +158,13 @@ vi.mock('./trpc', () => ({
       getSummary: { query: getSummaryQueryMock },
       subscribeTrends: { subscribe: subscribeTrendsMock },
       subscribeGit: { subscribe: subscribeGitMock },
-      refreshGitSnapshot: { mutate: refreshMock },
+      refreshGitSnapshot: { query: refreshMock },
       removeDetachedWorktree: { mutate: removeMock },
     },
   },
 }))
 
-describe('Dashboard Git mutation provenance', () => {
+describe('Dashboard Git command provenance', () => {
   beforeEach(() => {
     codeQueryMock.mockClear()
     refreshMock.mockReset()
@@ -187,8 +189,10 @@ describe('Dashboard Git mutation provenance', () => {
     const summaryB = createSummary(2)
     const identityA = 'dashboard-summary-v2:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
     const identityB = 'dashboard-summary-v2:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
+    const admissionPull = createDeferred<DashboardSummaryProjectionState>()
     const pullA = createDeferred<DashboardSummaryProjectionState>()
     const pullB = createDeferred<DashboardSummaryProjectionState>()
+    getSummaryQueryMock.mockImplementationOnce(() => admissionPull.promise)
     getSummaryQueryMock.mockImplementationOnce(() => pullA.promise)
     getSummaryQueryMock.mockImplementationOnce(() => pullB.promise)
     const { result } = renderHook(() => useDashboardOverviewSubscription())
@@ -196,16 +200,17 @@ describe('Dashboard Git mutation provenance', () => {
     expect(subscribeSummaryMock).toHaveBeenCalledOnce()
     expect(subscribeTrendsMock).not.toHaveBeenCalled()
     expect(subscribeGitMock).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledOnce())
 
     act(() => {
       summarySubscribers[0]?.onData(createSummaryWake(identityA, 1, 'initial'))
     })
-    await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledTimes(2))
 
     act(() => {
       summarySubscribers[0]?.onData(createSummaryWake(identityB, 1, 'root-rebind'))
     })
-    await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledTimes(3))
 
     await act(async () => {
       pullB.resolve(createSummaryState(summaryB, identityB, 1))
@@ -220,6 +225,7 @@ describe('Dashboard Git mutation provenance', () => {
 
     await act(async () => {
       pullA.resolve(createSummaryState(summaryA, identityA, 1))
+      admissionPull.resolve(createSummaryState(summaryA, identityA, 1))
     })
     await vi.waitFor(() => expect(result.current.regions.summary.data).toEqual(summaryB))
     expect(subscribeTrendsMock).toHaveBeenCalledOnce()
@@ -230,8 +236,10 @@ describe('Dashboard Git mutation provenance', () => {
     const summaryB = createSummary(2)
     const identityA = 'dashboard-summary-v2:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
     const identityB = 'dashboard-summary-v2:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
+    const admissionPull = createDeferred<DashboardSummaryProjectionState>()
     const pullA = createDeferred<DashboardSummaryProjectionState>()
     const pullB = createDeferred<DashboardSummaryProjectionState>()
+    getSummaryQueryMock.mockImplementationOnce(() => admissionPull.promise)
     getSummaryQueryMock.mockImplementationOnce(() => pullA.promise)
     getSummaryQueryMock.mockImplementationOnce(() => pullB.promise)
     const { result } = renderHook(() => useDashboardOverviewSubscription())
@@ -240,7 +248,7 @@ describe('Dashboard Git mutation provenance', () => {
       summarySubscribers[0]?.onData(createSummaryWake(identityA, 1, 'initial'))
       summarySubscribers[0]?.onData(createSummaryWake(identityB, 1, 'root-rebind'))
     })
-    await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledTimes(3))
 
     await act(async () => {
       pullB.resolve(createSummaryState(summaryB, identityB, 1))
@@ -249,6 +257,7 @@ describe('Dashboard Git mutation provenance', () => {
 
     await act(async () => {
       pullA.reject(new Error('late A failure'))
+      admissionPull.reject(new Error('late admission failure'))
     })
     await vi.waitFor(() =>
       expect(result.current.regions.summary).toEqual({
@@ -294,7 +303,9 @@ describe('Dashboard Git mutation provenance', () => {
     const summaryA = createSummary(1)
     const summaryB = createSummary(2)
     const identityB = 'dashboard-summary-v2:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
+    const admissionPull = createDeferred<DashboardSummaryProjectionState>()
     const pullB = createDeferred<DashboardSummaryProjectionState>()
+    getSummaryQueryMock.mockImplementationOnce(() => admissionPull.promise)
     getSummaryQueryMock.mockImplementationOnce(() => pullB.promise)
     primeSubscriptionCache('dashboard.subscribeSummary.v2', summaryA)
     const { result } = renderHook(() => useDashboardOverviewSubscription())
@@ -309,7 +320,7 @@ describe('Dashboard Git mutation provenance', () => {
     act(() => {
       summarySubscribers[0]?.onData(createSummaryWake(identityB, 1, 'root-rebind'))
     })
-    await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledTimes(2))
     expect(result.current.regions.summary).toEqual({
       data: summaryA,
       isLoading: false,
@@ -319,6 +330,7 @@ describe('Dashboard Git mutation provenance', () => {
 
     await act(async () => {
       pullB.resolve(createSummaryState(summaryB, identityB, 1))
+      admissionPull.resolve(createSummaryState(summaryA, identityB, 1))
     })
     await vi.waitFor(() =>
       expect(result.current.regions.summary).toEqual({
@@ -339,9 +351,6 @@ describe('Dashboard Git mutation provenance', () => {
       .mockResolvedValueOnce(createSummaryState(current, identity, 2))
     const { result } = renderHook(() => useDashboardOverviewSubscription())
 
-    act(() => {
-      summarySubscribers[0]?.onData(createSummaryWake(identity, 2, 'initial', 'revalidating', 1))
-    })
     await vi.waitFor(() =>
       expect(result.current.regions.summary).toEqual({
         data: retained,
@@ -354,7 +363,7 @@ describe('Dashboard Git mutation provenance', () => {
     expect(subscribeGitMock).toHaveBeenCalledOnce()
 
     act(() => {
-      summarySubscribers[0]?.onData(createSummaryWake(identity, 2, 'initial', 'ready', 2))
+      summarySubscribers[0]?.onData(createSummaryWake(identity, 2, 'dependency', 'ready', 2))
     })
     await vi.waitFor(() =>
       expect(result.current.regions.summary).toEqual({
@@ -364,5 +373,34 @@ describe('Dashboard Git mutation provenance', () => {
         error: null,
       })
     )
+  })
+
+  it('pulls the initial Summary without waiting for a lifecycle wake', async () => {
+    const summary = createSummary(1)
+    const identity = 'dashboard-summary-v2:initial-without-wake'
+    getSummaryQueryMock.mockResolvedValue(createSummaryState(summary, identity, 1))
+
+    const { result } = renderHook(() => useDashboardOverviewSubscription())
+
+    await vi.waitFor(() => expect(getSummaryQueryMock).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(result.current.regions.summary.data).toEqual(summary))
+    expect(subscribeSummaryMock).toHaveBeenCalledOnce()
+    expect(subscribeTrendsMock).toHaveBeenCalledOnce()
+    expect(subscribeGitMock).toHaveBeenCalledOnce()
+  })
+
+  it('uses a synchronously replayed Summary wake as admission instead of starting a second Pull', async () => {
+    const summary = createSummary(1)
+    const identity = 'dashboard-summary-v2:synchronous-replay'
+    getSummaryQueryMock.mockResolvedValue(createSummaryState(summary, identity, 1))
+    subscribeSummaryMock.mockImplementationOnce((_input, callbacks) => {
+      callbacks.onData(createSummaryWake(identity, 1, 'initial', 'ready', 1))
+      return { unsubscribe: vi.fn() }
+    })
+
+    const { result } = renderHook(() => useDashboardOverviewSubscription())
+
+    await vi.waitFor(() => expect(result.current.regions.summary.data).toEqual(summary))
+    expect(getSummaryQueryMock).toHaveBeenCalledOnce()
   })
 })

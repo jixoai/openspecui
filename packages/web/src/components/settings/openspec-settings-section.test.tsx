@@ -1,12 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Verify Settings projects shared CLI, Root, Environment, and launch-tool lifecycle truth.
  * 2. Verify Init mode, repair, pending, cancellation, terminal, and convergence behavior.
+ * 3. Verify Settings derives current and compatible CLI labels from the shared compatibility law.
  *
  * Original request (2026-07-20): "Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics."
  * Owner acceptance boundary (2026-07-20): final end-to-end browser walkthroughs remain owner-owned.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-28): Settings should summarize OpenSpec facts and defer evidence to Context and Config.
+ * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
+ * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  * Owner Context direction (2026-07-29): Settings links to Config-owned Resolved Context.
  */
 import type { CliRunnerLine, CliStreamTransport, OverallStatus } from '@/lib/use-cli-runner'
@@ -393,15 +396,15 @@ describe('OpenSpecSettingsSections', () => {
   it.each([
     {
       name: 'current 1.6',
-      cli: { available: true, version: '1.6.4' },
+      cli: { available: true, version: '1.6.9' },
       label: 'Current 1.6 line',
       message: 'matches the OpenSpecUI 6.x target line',
     },
     {
-      name: 'legacy 1.5',
-      cli: { available: true, version: '1.5.9' },
-      label: 'Legacy-compatible 1.5 line',
-      message: 'legacy-compatible with OpenSpecUI 6.x',
+      name: 'compatible 1.7',
+      cli: { available: true, version: '1.7.4' },
+      label: 'Compatible 1.7 line',
+      message: 'compatible with OpenSpecUI 6.x',
     },
     {
       name: 'unavailable',

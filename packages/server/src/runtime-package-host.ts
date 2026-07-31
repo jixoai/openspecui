@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Resolve the physical host manifest that owns on-demand runtime installation.
+ * 2. Read declared runtime ranges without treating optional peers as install-time dependencies.
+ * 3. Normalize legacy on-demand optional dependency records after package-manager installation.
+ *
+ * Original request (2026-07-31): "这个依赖好像会导致安装的时候仍然会被强制装上去，可能要改成 peerDependencies 会更好"
+ */
 import { createCleanCliEnv } from '@openspecui/core'
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -13,6 +21,7 @@ interface RuntimeHostPackageJson {
   name?: unknown
   dependencies?: Record<string, string>
   optionalDependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
 }
 
 export interface RuntimePackageDependencyTreeNode {
@@ -65,6 +74,7 @@ export function readRuntimeHostPackageDependencyRequest(input: {
   const range =
     parsed.optionalDependencies?.[input.packageName] ??
     parsed.dependencies?.[input.packageName] ??
+    parsed.peerDependencies?.[input.packageName] ??
     input.fallbackRange
   return `${input.packageName}@${range}`
 }

@@ -4,11 +4,15 @@
     "types": ["node", "vite/client"]
   },
   "include": [
+    "src/components/app-daemon-workspace-owner.test.ts",
     "src/components/app-launch-owner.test.ts",
+    "src/components/workspace-tab-browser-action.test.tsx",
     "src/components/store-remove-dialog.test.tsx",
     "src/components/store-mutation-lifecycle.test.tsx",
+    "src/lib/daemon-workspace-control.test.ts",
     "src/lib/store-action-correlation.test.ts",
     "src/lib/store-lifecycle-composer.test.ts",
+    "src/lib/titlebar-presentation.test.ts",
     "src/lib/use-store-data.test.tsx",
     "src/routes/connection-context.test.tsx",
     "../server/src/huggingface-transformers.d.ts"

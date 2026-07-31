@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Verify root development task selection, arguments, and startup policy.
+ * 2. Protect the separate browser-HMR and daemon-consumed App build boundaries.
+ *
+ * Original request (2026-07-30): "pnpm dev整理同时启动多个构建相关的任务，是不是缺了 app 项目的构建，如果是了，请你补充一下。"
+ */
 import { describe, expect, it } from 'vitest'
 
 import { createDevTasks } from './dev-task-definitions'
@@ -69,6 +76,11 @@ describe('createDevTasks', () => {
         VITE_API_URL: 'http://localhost:3200',
         OPENSPEC_SERVER_PORT: '3200',
       },
+    })
+    expect(tasks.find((task) => task.id === 'app-dist-dev')).toMatchObject({
+      autoStart: true,
+      args: ['--filter', '@openspecui/app', 'dev:dist'],
+      command: 'pnpm',
     })
   })
 })

@@ -1,6 +1,29 @@
+/**
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Prove Git path parsing preserves objective rename and OpenSpec change identities.
+ * 2. Prove cooperative cancellation terminates the owned Git subprocess command.
+ *
+ * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
+ * Original request (2026-07-31): "Code Git Snapshot，它非常慢，有时候甚至要十几秒"
+ */
 import { describe, expect, it } from 'vitest'
 
-import { extractGitPathVariants, parseRelatedChanges } from './git-shared.js'
+import { defaultRunGit, extractGitPathVariants, parseRelatedChanges } from './git-shared.js'
+
+describe('defaultRunGit', () => {
+  it('rejects promptly when the owning Projection Work aborts', async () => {
+    const controller = new AbortController()
+    const command = defaultRunGit(
+      process.cwd(),
+      ['-c', 'alias.openspecui-wait=!sleep 5', 'openspecui-wait'],
+      controller.signal
+    )
+
+    setTimeout(() => controller.abort(), 20)
+
+    await expect(command).rejects.toMatchObject({ name: 'AbortError' })
+  })
+})
 
 describe('extractGitPathVariants', () => {
   it('expands brace rename paths without leaking raw rename syntax', () => {

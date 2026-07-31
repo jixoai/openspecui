@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Reserve the App settings surface for hosted protocol and environment diagnostics.
  * 2. Keep the optional Access Gate distinct from users or permissions.
  *
@@ -26,7 +26,7 @@ export function SettingsRoute() {
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">Backend Access Gate</h2>
         {/* TODO(kernel): --auth/--password 是后端 CLI 侧能力；App 仅展示状态，不实现凭据管理。
-            凭据只在 session memory 中，绝不进 query params / persisted tabs / localStorage。 */}
+            凭据只在运行时内存中，绝不进 query params / persisted tabs / localStorage。 */}
         <p className="text-muted-foreground text-sm">
           No backend access gate configured. The optional shared Bearer credential is a backend
           responsibility (<code className="bg-muted rounded px-1">--auth</code> /{' '}

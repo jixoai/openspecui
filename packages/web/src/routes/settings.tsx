@@ -12,6 +12,7 @@
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
  * Owner correction (2026-07-29): Settings uses one shell scroll owner and container-driven field density.
+ * Owner correction (2026-07-29): remove project-level Hosted App URL configuration; the daemon owns its local App shell.
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -58,7 +59,6 @@ import { useCliRunner } from '@/lib/use-cli-runner'
 import { useServerStatus } from '@/lib/use-server-status'
 import { useConfigSubscription } from '@/lib/use-subscription'
 import type { OpenSpecUIConfig } from '@openspecui/core'
-import { OFFICIAL_APP_BASE_URL } from '@openspecui/core/hosted-app'
 import { NotificationSoundSchema } from '@openspecui/core/notifications'
 import {
   DEFAULT_BELL_SOUND_ID,
@@ -198,7 +198,6 @@ const SETTINGS_TOC_ITEMS: TocItem[] = [
   { id: 'settings-openspec-diagnostics', label: 'OpenSpec Diagnostics' },
   { id: 'settings-init-openspec', label: 'Initialize OpenSpec' },
   { id: 'settings-api-configuration', label: 'API Configuration' },
-  { id: 'settings-hosted-app', label: 'Hosted App' },
   { id: 'settings-file-watcher', label: 'File Watcher' },
 ]
 
@@ -316,7 +315,6 @@ export function Settings() {
       : DEFAULT_CODE_EDITOR_THEME
   )
   const [apiUrl, setApiUrl] = useState(getApiBaseUrl() || '')
-  const [appBaseUrl, setAppBaseUrl] = useState(() => config?.appBaseUrl ?? '')
   const [cliCommand, setCliCommand] = useState(() =>
     config?.cli?.command ? formatExecutePath(config.cli.command, config.cli.args ?? []) : ''
   )
@@ -383,9 +381,6 @@ export function Settings() {
     if (!nextTheme || !isCodeEditorTheme(nextTheme)) return
     setCodeEditorTheme(nextTheme)
   }, [config?.codeEditor?.theme])
-  useEffect(() => {
-    setAppBaseUrl(config?.appBaseUrl ?? '')
-  }, [config?.appBaseUrl])
 
   // 安装完成后重新嗅探
   const handleInstallSuccess = useCallback(() => {
@@ -433,10 +428,6 @@ export function Settings() {
   const saveCodeEditorThemeMutation = useMutation({
     mutationFn: (nextTheme: CodeEditorTheme) =>
       trpcClient.config.update.mutate({ codeEditor: { theme: nextTheme } }),
-  })
-  const saveAppBaseUrlMutation = useMutation({
-    mutationFn: (nextAppBaseUrl: string) =>
-      trpcClient.config.update.mutate({ appBaseUrl: nextAppBaseUrl.trim() }),
   })
   const saveOpsxConfigMutation = useMutation({
     mutationFn: (agentInvocationMode: OpsxAgentInvocationMode) =>
@@ -600,7 +591,6 @@ export function Settings() {
     config?.dashboard?.trendPointLimit ?? DEFAULT_DASHBOARD_TREND_POINT_LIMIT
   const savedGitDiffEagerLineBudget =
     config?.git?.diffEagerLineBudget ?? DEFAULT_GIT_DIFF_EAGER_LINE_BUDGET
-  const savedAppBaseUrl = config?.appBaseUrl ?? ''
   const savedTerminalFontFamily = config?.terminal?.fontFamily ?? DEFAULT_TERMINAL_FONT_FAMILY
   const savedTerminalConfig = {
     fontSize: config?.terminal?.fontSize ?? DEFAULT_TERMINAL_FONT_SIZE,
@@ -636,7 +626,6 @@ export function Settings() {
   const gitDiffEagerLineBudgetSaved = gitDiffEagerLineBudget === savedGitDiffEagerLineBudget
   const cliCommandSaved = cliCommand.trim() === savedCliCommand
   const apiUrlApplied = apiUrl === (getApiBaseUrl() || '')
-  const appBaseUrlSaved = appBaseUrl.trim() === savedAppBaseUrl
   const savedOpsxAgentInvocationMode = config?.opsx?.agentInvocationMode ?? 'compose'
   const notificationSound = NotificationSoundSchema.parse(
     config?.notifications?.sound ?? DEFAULT_NOTIFICATION_SOUND_ID
@@ -1314,48 +1303,6 @@ export function Settings() {
                         Current: <code className="bg-muted rounded px-1">{getApiBaseUrl()}</code>
                       </p>
                     )}
-                  </div>
-                </div>
-              </TocSection>
-
-              <TocSection
-                id="settings-hosted-app"
-                index={tocIndex('settings-hosted-app')}
-                className="space-y-4"
-              >
-                <h2 className="text-lg font-semibold">Hosted App</h2>
-                <div className="border-border space-y-4 rounded-lg border p-4">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium">Base URL</label>
-                    <p className="text-muted-foreground mb-3 text-sm">
-                      Used by <code className="bg-muted rounded px-1">openspecui --app</code> when
-                      no explicit base URL is passed. Leave empty to use the official app shell.
-                      Reusing an installed PWA only works when that PWA was installed from this same
-                      shell origin.
-                    </p>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={appBaseUrl}
-                        onChange={(e) => setAppBaseUrl(e.target.value)}
-                        placeholder={OFFICIAL_APP_BASE_URL}
-                        className="border-border bg-background text-foreground flex-1 rounded-md border px-3 py-2"
-                      />
-                      <AsyncAction
-                        pending={saveAppBaseUrlMutation.isPending}
-                        settled={appBaseUrlSaved}
-                        onClick={() => saveAppBaseUrlMutation.mutate(appBaseUrl)}
-                        disabled={saveAppBaseUrlMutation.isPending}
-                      >
-                        Save
-                      </AsyncAction>
-                    </div>
-                    <p className="text-muted-foreground mt-2 text-sm">
-                      Effective default:{' '}
-                      <code className="bg-muted rounded px-1">
-                        {savedAppBaseUrl || OFFICIAL_APP_BASE_URL}
-                      </code>
-                    </p>
                   </div>
                 </div>
               </TocSection>

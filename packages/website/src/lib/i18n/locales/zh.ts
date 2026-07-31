@@ -1,8 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Provide the canonical Chinese product-site copy.
+ * 2. 让启动指引与本地 App daemon 和显式 Direct Web 合同一致。
  *
  * Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
+ * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
+ * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  */
 import type { WebsiteContent } from '$lib/i18n/schema'
 
@@ -23,22 +26,22 @@ export const zh = {
   nav: {
     home: '首页',
     hooks: 'Hooks',
-    app: 'Hosted App',
+    app: '独立 PWA',
     github: 'GitHub',
   },
   hero: {
     title: '用一个贴近 CLI 本质的 UI 来操作 OpenSpec。',
     summary:
       'OpenSpecUI 为 OpenSpec 项目提供可视化的 dashboard、config 界面、change 工作流视图、terminal tabs，以及静态导出能力，同时不遮蔽底层工作流。',
-    primaryCta: '打开 Hosted App',
+    primaryCta: '打开独立 PWA',
     secondaryCta: '阅读 Hooks 文档',
     sidebarEyebrow: '默认路径',
-    sidebarTitle: 'PWA 优先，网页回退',
+    sidebarTitle: '一个本地 App daemon',
     sidebarBody:
-      '启动本地后端，再发起 App Shell 链接。若浏览器发现同一部署范围内已安装的 PWA，则可能直接复用它。',
+      '将项目投递到随当前版本打包的 App shell。默认使用原生 OpenTray；显式 Web 模式使用 Browser/PWA 宿主。',
     badges: {
       live: '实时模式',
-      hosted: '托管前端',
+      hosted: 'App daemon',
       static: '静态导出',
     },
   },
@@ -48,16 +51,16 @@ export const zh = {
     runnerLabel: '入口',
     appToggleLabel: 'App 模式',
     appToggleSummary:
-      '优先启动 App Shell，而不是本地 Web bundle。若浏览器发现同一部署范围内已安装的 PWA，则可能直接复用它。',
+      '选择用本地 App daemon 管理 Workspaces，或用 Direct Web 显式打开单个浏览器界面。',
     appToggleEnabled: '开启',
     appToggleDisabled: '关闭',
     runLabel: '运行 OpenSpec UI',
-    appOnSummary:
-      '启动本地后端，并发起 App Shell 链接。浏览器若能捕获同一部署范围内的已安装 PWA，就会优先进入它；否则回退到普通网页标签。',
-    appOffSummary: '启动本地后端，并由当前机器直接提供本地 Web UI。',
+    appOnSummary: '启动项目 backend，确保本地 App daemon 已运行，并将项目附加成一个 Workspace。',
+    appOffSummary:
+      '启动项目 backend 并显式打开 Direct Project Web；若 daemon 已运行，也会保留该 Workspace。',
     exportLabel: '静态导出',
     exportSummary: '生成可部署的静态快照，用于文档站点或离线审阅。',
-    compatibility: 'OpenSpecUI 6.x 面向 OpenSpec CLI 1.6.x，并将 1.5.x 作为遗留兼容线。',
+    compatibility: 'OpenSpecUI 6.1 面向 OpenSpec CLI 1.6.x，并将 1.7.x 作为兼容线。',
   },
   modes: {
     title: '选择合适的界面',
@@ -68,8 +71,8 @@ export const zh = {
         body: '适合编辑 specs、审阅 changes、使用 terminal，以及实时观察项目状态。',
       },
       {
-        title: 'Hosted app 模式',
-        body: '适合复用一套维护中的 Shell 部署，同时连接多个本地后端，并在同一部署范围内复用 PWA。',
+        title: 'App daemon 模式',
+        body: '适合在一个保留式 OpenTray 或 Browser/PWA App shell 中管理多个项目 Workspace。',
       },
       {
         title: '静态导出',
@@ -79,10 +82,9 @@ export const zh = {
   },
   links: {
     title: '继续深入',
-    summary: '先进入 app，再查看上游工作流与源码仓库。',
+    summary: '先从本地运行，再查看上游工作流、独立 PWA 与源码仓库。',
     appTitle: 'app.openspecui.com',
-    appBody:
-      '提供会打开后端自带 OpenSpecUI 页面的 App Shell，并支持浏览器管理的同部署范围 PWA 捕获。',
+    appBody: '可选的独立 Browser/PWA 部署；CLI App 模式始终使用自己打包的本地 shell。',
     openspecTitle: 'openspec.dev',
     openspecBody: 'OpenSpec 官方站点与工作流参考。',
     githubTitle: 'GitHub',

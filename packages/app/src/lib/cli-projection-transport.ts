@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-26 Asia/Shanghai):
- * 1. Subscribe to lifecycle-only Root and Store Projection Work notices.
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Subscribe to lifecycle-only Root, Store registry, and demand-driven Store-content Projection Work notices.
  * 2. Resolve only the connected locator's in-memory credential on every handshake.
  * 3. Decode notices at the browser trust boundary without carrying business projection data.
  *
  * Original request (2026-07-26): "Push 通知变更，然后让多端基于订阅拉取更新。"
+ * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
  */
 import {
   HostedCliProjectionNoticeSchema,
@@ -18,6 +19,7 @@ export type CliProjectionSelector =
   | { kind: 'root-context' }
   | { kind: 'store-list' }
   | { kind: 'store-doctor'; storeId?: string }
+  | { kind: 'store-content'; envUri: string; storeId: string; contentKind: 'specs' | 'changes' }
 
 export interface CliProjectionTransportCallbacks {
   onNotice(notice: HostedCliProjectionNotice): void
@@ -93,15 +95,27 @@ export function createTRPCCliProjectionTransportFactory(
         onStopped: callbacks.onStopped,
         onComplete: callbacks.onComplete,
       }
-      const subscription =
-        selector.kind === 'root-context'
-          ? client.rootContext.subscribeProjection.subscribe(undefined, observer)
-          : client.stores.subscribeProjection.subscribe(
-              selector.kind === 'store-list'
-                ? { kind: 'list' }
-                : { kind: 'doctor', id: selector.storeId },
-              observer
-            )
+      const subscription = (() => {
+        if (selector.kind === 'root-context') {
+          return client.rootContext.subscribeProjection.subscribe(undefined, observer)
+        }
+        if (selector.kind === 'store-content') {
+          return client.storesContent.subscribeProjection.subscribe(
+            {
+              envUri: selector.envUri,
+              storeId: selector.storeId,
+              kind: selector.contentKind,
+            },
+            observer
+          )
+        }
+        return client.stores.subscribeProjection.subscribe(
+          selector.kind === 'store-list'
+            ? { kind: 'list' }
+            : { kind: 'doctor', id: selector.storeId },
+          observer
+        )
+      })()
       let retired = false
       return {
         unsubscribe() {

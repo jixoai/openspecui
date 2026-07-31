@@ -33,6 +33,18 @@
       "default": "./dist/hosted-app.mjs",
       "types": "./dist/hosted-app.d.mts"
     },
+    "./app-daemon-control": {
+      "development": "./src/app-daemon-control.ts",
+      "import": "./dist/app-daemon-control.mjs",
+      "default": "./dist/app-daemon-control.mjs",
+      "types": "./dist/app-daemon-control.d.mts"
+    },
+    "./workspace-directory-catalog": {
+      "development": "./src/workspace-directory-catalog.ts",
+      "import": "./dist/workspace-directory-catalog.mjs",
+      "default": "./dist/workspace-directory-catalog.mjs",
+      "types": "./dist/workspace-directory-catalog.d.mts"
+    },
     "./hosted-contract": {
       "development": "./src/hosted-contract.ts",
       "import": "./dist/hosted-contract.mjs",
@@ -68,6 +80,12 @@
       "import": "./dist/store-types.mjs",
       "default": "./dist/store-types.mjs",
       "types": "./dist/store-types.d.mts"
+    },
+    "./store-content-projection": {
+      "development": "./src/store-content-projection.ts",
+      "import": "./dist/store-content-projection.mjs",
+      "default": "./dist/store-content-projection.mjs",
+      "types": "./dist/store-content-projection.d.mts"
     },
     "./markdown-facts": {
       "development": "./src/markdown-facts.ts",
@@ -191,15 +209,20 @@
     }
   },
   "scripts": {
-    "build": "tsdown src/index.ts src/dashboard-display.ts src/dashboard-summary-transport.ts src/cli-projection.ts src/planning-cli-projection.ts src/opsx-display-path.ts src/opsx-workflows.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/task-progress.ts src/spec-catalog.ts src/hosted-app.ts src/hosted-contract.ts src/store-mutation-protocol.ts src/openspec-compat.ts src/store-types.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/local-download-profiles.ts src/translation-language-pair.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts",
-    "dev": "tsdown src/index.ts src/dashboard-display.ts src/dashboard-summary-transport.ts src/cli-projection.ts src/planning-cli-projection.ts src/opsx-display-path.ts src/opsx-workflows.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/task-progress.ts src/spec-catalog.ts src/hosted-app.ts src/hosted-contract.ts src/store-mutation-protocol.ts src/openspec-compat.ts src/store-types.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/local-download-profiles.ts src/translation-language-pair.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts --watch",
+    "build": "tsdown src/index.ts src/dashboard-display.ts src/dashboard-summary-transport.ts src/cli-projection.ts src/planning-cli-projection.ts src/opsx-display-path.ts src/opsx-workflows.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/task-progress.ts src/spec-catalog.ts src/hosted-app.ts src/app-daemon-control.ts src/workspace-directory-catalog.ts src/hosted-contract.ts src/store-content-projection.ts src/store-mutation-protocol.ts src/openspec-compat.ts src/store-types.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/local-download-profiles.ts src/translation-language-pair.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts",
+    "dev": "tsdown src/index.ts src/dashboard-display.ts src/dashboard-summary-transport.ts src/cli-projection.ts src/planning-cli-projection.ts src/opsx-display-path.ts src/opsx-workflows.ts src/opsx-entity.ts src/opsx-schema-detail.ts src/task-progress.ts src/spec-catalog.ts src/hosted-app.ts src/app-daemon-control.ts src/workspace-directory-catalog.ts src/hosted-contract.ts src/store-content-projection.ts src/store-mutation-protocol.ts src/openspec-compat.ts src/store-types.ts src/markdown-facts.ts src/markdown-reading.ts src/document-translation.ts src/translator.ts src/local-download-profiles.ts src/translation-language-pair.ts src/openspec-annotations.ts src/openspec-projection.ts src/notifications.ts src/sounds.ts src/terminal-theme.ts src/terminal-invocation.ts src/terminal-audio.ts src/terminal-control.ts --format esm --dts --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck:store-mutation-tests": "tsc -p tsconfig.store-mutation-tests.json --noEmit",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.reactive-context-tests.json --noEmit && tsc -p tsconfig.store-mutation-tests.json --noEmit && tsc -p tsconfig.hosted-contract-tests.json --noEmit && tsc -p tsconfig.cli-projection-tests.json --noEmit",
-    "typecheck:hosted-contract-tests": "tsc -p tsconfig.hosted-contract-tests.json --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.reactive-context-tests.json --noEmit && tsc -p tsconfig.store-mutation-tests.json --noEmit && tsc -p tsconfig.hosted-contract-tests.json --noEmit && tsc -p tsconfig.cli-projection-tests.json --noEmit && tsc -p tsconfig.store-content-projection-tests.json --noEmit && tsc -p tsconfig.spawn-safe-tests.json --noEmit && tsc -p tsconfig.cli-executor-admission-tests.json --noEmit && tsc -p tsconfig.openspec-cli-spawn-mode-tests.json --noEmit",
+    "typecheck:hosted-contract-tests": "tsc -p tsconfig.hosted-contract-tests.json --noEmit",
+    "typecheck:store-content-projection-tests": "tsc -p tsconfig.store-content-projection-tests.json --noEmit",
+    "typecheck:spawn-safe-tests": "tsc -p tsconfig.spawn-safe-tests.json --noEmit",
+    "typecheck:cli-executor-admission-tests": "tsc -p tsconfig.cli-executor-admission-tests.json --noEmit",
+    "typecheck:openspec-cli-spawn-mode-tests": "tsc -p tsconfig.openspec-cli-spawn-mode-tests.json --noEmit"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "@parcel/watcher": "^2.5.1",
     "cross-spawn": "^7.0.6",
     "mdast-util-from-markdown": "^2.0.2",

@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove health metadata creates the canonical authenticated Project Web iframe.
- * 2. Prove explicit refresh, tab switching, and dialog interactions target the intended tab.
+ * 2. Prove refresh, tab switching, and Launcher transition/persistence target the intended Workspace.
  * 3. Preserve per-tab iframe sessions and runtime identity across ordinary shell updates.
  * 4. Keep a rendered iframe mounted while backend health is revalidated or temporarily offline, with
  *    distinct visual loading and terminal frame-error evidence.
@@ -10,15 +10,20 @@
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Owner-reported defect (2026-07-26): "Dashboard加载完成的一瞬间开始reload。"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
+ * Original request (2026-07-30): "Workspace需要记住曾经打开的目录，并且支持收藏。"
+ * Owner correction (2026-07-31): Open in browser occupies the global action slot; Home exposes neither it nor Refresh.
+ * Owner-reported defect (2026-07-31): offline Workspace recovery must not duplicate banner and waiting states.
+ * Owner correction (2026-07-31): PWA is retired; Home must ignore browser install prompts.
  */
 // @vitest-environment jsdom
 
 import { buildBackendHealthPayload } from '@openspecui/core/hosted-app'
-import { act, fireEvent, screen } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getHostedShellStorageKey } from '../lib/shell-state'
+import { getWorkspaceCandidateCatalogStorageKey } from '../lib/workspace-candidate-catalog'
 import { HostedShell, HostedShellTabContent } from './hosted-shell'
 
 const originalFetch = global.fetch
@@ -148,6 +153,9 @@ describe('HostedShell', () => {
     })
     document.body.innerHTML = ''
     localStorage.clear()
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: getWorkspaceCandidateCatalogStorageKey() })
+    )
     setSuccessfulFetch()
   })
 
@@ -181,6 +189,12 @@ describe('HostedShell', () => {
     )
     expect(iframe?.getAttribute('allow')).toBe('clipboard-read; clipboard-write')
     expect(container.querySelector('.rt-skeleton')).toBeTruthy()
+    const projectItem = container.querySelector('[data-tab-id]:not([data-tab-id="workspace-home"])')
+    expect(projectItem?.querySelector('[data-workspace-browser-action="true"]')).toBeNull()
+    expect(
+      container.querySelector('[data-tabs-actions="true"] [data-workspace-browser-action="true"]')
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reload current tab' })).toBeTruthy()
 
     await act(async () => {
       if (iframe) {
@@ -203,6 +217,8 @@ describe('HostedShell', () => {
         runtime={{
           reachability: 'online',
           projectName: 'opsx-project',
+          projectDir: '/tmp/opsx-project',
+          git: null,
           openspecuiVersion: '2.0.2',
           embeddedUiUrl: 'http://localhost:3100/dashboard',
           errorMessage: null,
@@ -235,6 +251,8 @@ describe('HostedShell', () => {
         runtime={{
           reachability: 'checking',
           projectName: null,
+          projectDir: null,
+          git: null,
           openspecuiVersion: null,
           embeddedUiUrl: null,
           errorMessage: null,
@@ -295,22 +313,25 @@ describe('HostedShell', () => {
     ).toBe(initialIframe)
   })
 
-  it('opens the add dialog when the empty shell header is double-clicked', async () => {
-    const { container } = await renderShell(
+  it('renders the fixed Home pinned tab when no project backends are open', async () => {
+    await renderShell(
       <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
     )
+    // Home is a pinned, non-closeable tab that replaces the old empty shell state.
+    expect(screen.getByText('Home')).toBeTruthy()
+    expect(screen.getByText('Start from path')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Reload current tab' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Open .* in browser/ })).toBeNull()
 
-    const strip = container.querySelector('.tabs-strip')
-    expect(strip).toBeTruthy()
+    const installPrompt = new Event('beforeinstallprompt') as Event & {
+      prompt(): Promise<void>
+      userChoice: Promise<{ outcome: 'accepted'; platform: string }>
+    }
+    installPrompt.prompt = vi.fn(async () => undefined)
+    installPrompt.userChoice = Promise.resolve({ outcome: 'accepted', platform: 'fixture' })
+    await act(async () => window.dispatchEvent(installPrompt))
 
-    await act(async () => {
-      if (strip) {
-        fireEvent.doubleClick(strip)
-      }
-    })
-
-    expect(document.querySelector('dialog[open]')).toBeTruthy()
-    expect(screen.getByLabelText('API URL')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Install OpenSpec UI App' })).toBeNull()
   })
 
   it('opens the add dialog when the tabs bar empty space is double-clicked', async () => {
@@ -333,6 +354,96 @@ describe('HostedShell', () => {
     })
 
     expect(document.querySelector('dialog[open]')).toBeTruthy()
+  })
+
+  it('does not persist or open a manual candidate before a successful backend probe', async () => {
+    const healthRequest = deferred<Response>()
+    global.fetch = vi.fn(() => healthRequest.promise) as typeof fetch
+    const { container } = await renderShell(
+      <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
+    )
+
+    fireEvent.click(screen.getByLabelText('Add backend API'))
+    fireEvent.click(screen.getByText('Connect another backend...'))
+    fireEvent.change(screen.getByPlaceholderText('http://localhost:3100'), {
+      target: { value: 'http://localhost:3999' },
+    })
+    fireEvent.click(screen.getByText('Connect'))
+
+    expect(screen.getByText('Connect').closest('button')?.disabled).toBe(true)
+    expect(localStorage.getItem(getWorkspaceCandidateCatalogStorageKey())).toBeNull()
+    expect(container.querySelector('iframe')).toBeNull()
+
+    act(() => {
+      healthRequest.resolve(new Response(null, { status: 503 }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('This backend is currently offline.')).toBeTruthy()
+      expect(screen.getByText('Connect').closest('button')?.disabled).toBe(false)
+    })
+    expect(localStorage.getItem(getWorkspaceCandidateCatalogStorageKey())).toBeNull()
+    expect(container.querySelector('iframe')).toBeNull()
+  })
+
+  it('persists and opens a manual candidate only after its backend probe succeeds', async () => {
+    const healthRequest = deferred<Response>()
+    let healthRequestCount = 0
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (!url.endsWith('/api/health')) throw new Error(`Unexpected fetch: ${url}`)
+      healthRequestCount += 1
+      if (healthRequestCount === 1) return healthRequest.promise
+      return new Response(
+        JSON.stringify(
+          buildBackendHealthPayload({
+            projectDir: '/tmp/manual-project',
+            projectName: 'manual-project',
+            watcherEnabled: true,
+            openspecuiVersion: '6.0.0',
+            embeddedUiUrl: 'http://localhost:3998/dashboard',
+          })
+        ),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    }) as typeof fetch
+    const { container } = await renderShell(
+      <HostedShell initialLaunchRequest={null} fallbackLaunchRequest={null} initialError={null} />
+    )
+
+    fireEvent.click(screen.getByLabelText('Add backend API'))
+    fireEvent.click(screen.getByText('Connect another backend...'))
+    fireEvent.change(screen.getByPlaceholderText('http://localhost:3100'), {
+      target: { value: 'http://localhost:3998' },
+    })
+    fireEvent.click(screen.getByText('Connect'))
+    expect(localStorage.getItem(getWorkspaceCandidateCatalogStorageKey())).toBeNull()
+
+    act(() => {
+      healthRequest.resolve(
+        new Response(
+          JSON.stringify(
+            buildBackendHealthPayload({
+              projectDir: '/tmp/manual-project',
+              projectName: 'manual-project',
+              watcherEnabled: true,
+              openspecuiVersion: '6.0.0',
+              embeddedUiUrl: 'http://localhost:3998/dashboard',
+            })
+          ),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+    })
+
+    await waitFor(() => {
+      expect(document.querySelector('dialog[open]')).toBeNull()
+      expect(localStorage.getItem(getWorkspaceCandidateCatalogStorageKey())).toContain(
+        'http://localhost:3998'
+      )
+      expect(container.querySelector('iframe')).toBeTruthy()
+    })
   })
 
   it('reloads only the current active iframe when the refresh action is clicked', async () => {
@@ -464,7 +575,7 @@ describe('HostedShell', () => {
     expect(betaPanel?.getAttribute('data-tab-panel-state')).toBe('inactive')
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /beta.*localhost:3200/i }))
+      fireEvent.click(screen.getByRole('button', { name: /beta.*\/tmp\/beta/i }))
     })
 
     expect(alphaFrame?.src).toContain('session=session-alpha')
@@ -474,7 +585,7 @@ describe('HostedShell', () => {
     expect(document.title).toBe('beta - OpenSpec UI App')
   })
 
-  it('keeps offline tabs visible and shows retry guidance', async () => {
+  it('keeps offline tabs visible with one coherent retry state', async () => {
     setSuccessfulFetch({ online: false })
 
     const { container } = await renderShell(
@@ -489,6 +600,8 @@ describe('HostedShell', () => {
     await flushEffects()
 
     expect(container.textContent ?? '').toContain('Backend unreachable')
+    expect(container.textContent?.match(/Backend unreachable/g)).toHaveLength(1)
+    expect(container.textContent ?? '').not.toContain('Waiting for this backend to come online')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
     expect(container.querySelectorAll('[data-hosted-reachability="offline"]')).toHaveLength(2)
   })

@@ -1,3 +1,12 @@
+<!--
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+1. 说明当前 OpenSpec 兼容线与项目工作流。
+2. 说明 serve、App daemon、Direct Web 与静态导出命令。
+3. 说明项目 Hooks，同时保持 OpenSpec CLI 的事实权威。
+
+原始需求（2026-07-29）："补充 openspecui --web == openspecui serve --web；README 文档需要补充这些命令的介绍。"
+-->
+
 # OpenSpec UI
 
 [English](./README.md) | [中文](./README-zh.md)
@@ -8,15 +17,15 @@ OpenSpecUI 是 OpenSpec 工作流的 Web 界面（动态模式 + 静态导出）
 
 | OpenSpecUI        | OpenSpec CLI 线                                |
 | ----------------- | ---------------------------------------------- |
-| `@latest` / `@^6` | 当前：`>=1.6.0 <1.7.0`；接受：`>=1.5.0 <1.7.0` |
+| `@latest` / `@^6` | 当前：`>=1.6.0 <1.7.0`；兼容：`>=1.7.0 <1.8.0` |
 | `@^5`             | 当前：`>=1.5.0 <1.6.0`；接受：`>=1.4.0 <1.6.0` |
 | `@^4`             | 当前：`>=1.4.0 <1.5.0`；接受：`>=1.3.0 <1.5.0` |
 | `@^3`             | `>=1.3.0 <1.4.0`                               |
 | `@^2`             | `>=1.2.0 <1.3.0`                               |
 | `@^1`             | `>=1.0.0 <1.2.0`                               |
 
-OpenSpecUI 的 major 版本跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 6.x 面向 OpenSpec CLI
-1.6.x，并且只把紧邻的 1.5.x 作为 legacy-compatible 线；它不向前兼容 OpenSpec CLI 1.7.x。
+OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 6.1 仍适配 OpenSpec CLI
+1.6.x，并将 1.7.x 作为兼容桥接；该桥接不承诺 1.7 特有能力，也不定义后续 OpenSpecUI 7.x 的边界。
 
 历史文档：
 
@@ -37,13 +46,13 @@ npm install -g openspecui
 openspecui
 ```
 
-默认地址：`http://localhost:3100`。
+选择 Direct Project Web 时，默认地址为 `http://localhost:3100`。
 
 ## OpenSpec CLI 兼容性
 
-- OpenSpecUI 6.x 面向 OpenSpec CLI `>=1.6.0 <1.7.0`；CLI 1.5.x 仍作为 legacy-compatible 线被接受。
-- 更旧的 CLI 线和 CLI `>=1.7.0` 不受 OpenSpecUI 6.x 支持。
-- 如果 CLI 不在 `>=1.5.0 <1.7.0` 范围内，界面会显示 `OpenSpec CLI Required` 并阻断核心操作，直到升级。
+- OpenSpecUI 6.1 面向 OpenSpec CLI `>=1.6.0 <1.7.0`；CLI `>=1.7.0 <1.8.0` 仍保持兼容。
+- 更旧的 CLI 线和 CLI `>=1.8.0` 不受 OpenSpecUI 6.1 支持。
+- 如果 CLI 不在 `>=1.6.0 <1.8.0` 范围内，界面会显示 `OpenSpec CLI Required` 并阻断核心操作，直到升级。
 - 可在 **Settings → OpenSpec Profile & Sync** 查看 profile/workflow 同步状态。
 - OpenSpec CLI 1.6 的默认 `core` profile 包含 `/opsx:sync` 与 `/opsx:update`，并支持 Oh My Pi 和 Trae command delivery。
 
@@ -55,13 +64,45 @@ npm install -g @fission-ai/openspec@latest
 
 ## 常见流程
 
-### 启动服务
+### 启动项目服务
 
 ```bash
 openspecui
 openspecui ./my-project
+openspecui serve ./my-project
 openspecui --port 3200
 ```
+
+裸命令是 `serve` 的缩写，每个 `serve` 进程只负责自己的项目 Server。若 App daemon 已经
+运行，项目会被加入它的 **Workspaces**；否则交互式终端会询问
+`Start OpenSpecUI App? [Y/n]`，非交互环境则打开 Direct Project Web。
+
+### App daemon 与显式呈现模式
+
+```bash
+# 通过本地 App daemon 呈现当前项目（默认使用原生 OpenTray）
+openspecui --app
+openspecui serve --app
+
+# 打开 Direct Project Web；若 daemon 已运行，同时附加 Workspace
+openspecui --web
+openspecui serve --web
+openspecui serve --no-open
+
+# 只管理用户级 App daemon，不管理项目 Server
+openspecui start
+openspecui start --web
+openspecui stop
+openspecui restart
+openspecui restart --web
+```
+
+daemon 的宿主模式在启动时固定：native 使用保留式 OpenTray 窗口，`--web` 使用
+普通 Browser Web 宿主。若重复 `start` 显式请求了另一种模式，请执行 CLI 提示的精确
+`restart` 命令。`serve --no-open` 不会询问、启动 daemon、注册 Workspace 或打开浏览器。
+带 URL 的 App 模式与项目级 App shell 地址设置已不再支持；daemon 只提供与当前 CLI
+同版本打包的 App shell。每个 Workspace 标签都可以请求 daemon 在系统浏览器中打开当前
+backend，页面本身不能提交任意 URL。
 
 ### 静态导出
 

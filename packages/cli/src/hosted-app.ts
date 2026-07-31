@@ -1,12 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
- * 1. Resolve the effective hosted App deployment locator.
- * 2. Build public and private browser launch URLs without putting credentials in query state.
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * 1. Build public and private browser launch URLs without putting credentials in query state.
  *
  * Original request (2026-07-15): "把 --app 模式提上日程。"
  * Delivery correction (2026-07-24): launch credentials travel only in the private browser fragment.
  */
-import { buildHostedLaunchUrl, resolveHostedAppBaseUrl } from '@openspecui/core'
+import { buildHostedLaunchUrl } from '@openspecui/core'
 
 export function buildHostedAppLaunchUrl(options: {
   baseUrl: string
@@ -32,11 +31,4 @@ export function buildDirectWebLaunchUrl(options: {
     url.hash = fragment.toString()
   }
   return url.toString()
-}
-
-export function resolveEffectiveHostedAppBaseUrl(options: {
-  override?: string | null
-  configured?: string | null
-}): string {
-  return resolveHostedAppBaseUrl(options)
 }

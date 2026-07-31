@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Build CLI-owned Spec membership from the active planning root and direct References.
  * 2. Read owned documents from planning-root services and referenced documents from CLI JSON.
  * 3. Preserve live referenced command provenance and evidence without synthesizing document fields.
  * 4. Reject mismatched Root/Store/spec provenance before publishing a Catalog or document.
+ * 5. Submit owned and referenced CLI enumeration lazily so one Catalog cannot monopolize CLI admission.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
+ * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
  */
 import {
   CliProjectionCommandError,
@@ -56,12 +58,11 @@ export async function readSpecCatalog(
 ): Promise<SpecCatalog> {
   const rootSelector =
     source.rootContext.storeId !== null ? { store: source.rootContext.storeId } : {}
-  const [ownedList, references] = await Promise.all([
-    source.contracts.listSpecs(rootSelector),
-    Promise.all(
-      source.rootContext.references.map((reference) => enumerateReference(source, reference))
-    ),
-  ])
+  const ownedList = await source.contracts.listSpecs(rootSelector)
+  const references: EnumeratedReference[] = []
+  for (const reference of source.rootContext.references) {
+    references.push(await enumerateReference(source, reference))
+  }
   const ownedError = ownedListContractError(source.rootContext, ownedList)
   if (!ownedList.success || !ownedList.data || ownedError) {
     throw new CliProjectionCommandError(

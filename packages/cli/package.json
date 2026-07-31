@@ -22,27 +22,40 @@
   },
   "files": [
     "dist",
-    "web"
+    "web",
+    "app"
   ],
   "scripts": {
-    "build": "pnpm run build:web && pnpm run build:copy-web && tsdown",
+    "build": "pnpm run build:web && pnpm run build:app && pnpm run build:copy-web && tsdown",
     "build:web": "pnpm --filter @openspecui/web build",
+    "build:app": "pnpm --filter @openspecui/app build",
     "build:copy-web": "rm -rf ./web && cp -r ../web/dist ./web",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.command-tests.json --noEmit",
     "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=development\" tsx src/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
+    "@opentray/ext-webview": "0.18.0",
     "@parcel/watcher": "^2.5.1",
-    "better-sqlite3": "^12.5.0"
+    "better-sqlite3": "^12.5.0",
+    "opentray": "0.18.0",
+    "zod": "^3.24.1"
   },
   "// runtime-note": "The published openspecui package installs heavyweight translation runtimes only when the user asks for them.",
   "// bundle-note": "tsdown keeps translator package runtime imports external, so the settings-panel install flow resolves ranges on demand instead of preinstalling them.",
-  "optionalDependencies": {
+  "peerDependencies": {
     "ctranslate2": "workspace:*",
     "node-llama-cpp": "~3.18.1"
+  },
+  "peerDependenciesMeta": {
+    "ctranslate2": {
+      "optional": true
+    },
+    "node-llama-cpp": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@hono/node-server": "^1.14.1",
@@ -54,11 +67,11 @@
     "@types/yargs": "^17.0.35",
     "hono": "^4.7.3",
     "open": "^10.1.0",
-    "tsx": "^4.19.2",
     "tsdown": "^0.16.6",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^4.1.0",
-    "yargs": "^18.0.0",
-    "yaml": "^2.8.0"
+    "yaml": "^2.8.0",
+    "yargs": "^18.0.0"
   }
 }

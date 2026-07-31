@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Parse and sanitize hosted launch URLs before App routing.
  * 2. Bind fragment credentials to the parsed normalized API locator before URL stripping.
- * 3. Register and eagerly refresh the production service worker.
+ * 3. Capture the native App presentation declaration before client routing can replace its URL.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Delivery correction (2026-07-24): launch credential ownership is locator-scoped and ordering-safe.
+ * Owner correction (2026-07-30): retain the native App presentation independently from route URLs.
+ * Owner correction (2026-07-31): PWA and service-worker bootstrapping are retired.
  */
 import { consumeLaunchCredential } from './launch-credential'
 import { normalizeHostedApiBaseUrl, type HostedShellLaunchRequest } from './shell-state'
@@ -16,21 +18,11 @@ export interface HostedLaunchParseResult {
   hasLaunchParams: boolean
 }
 
-export interface HostedServiceWorkerRegistration {
-  update(): Promise<unknown>
-}
-
-export interface HostedServiceWorkerRuntime {
-  register(
-    scriptUrl: string,
-    options: { scope: string; type?: 'module' }
-  ): Promise<HostedServiceWorkerRegistration>
-}
-
-export interface HostedBootstrapRuntime {
-  dev: boolean
-  location: Pick<Location, 'search' | 'href'>
-  serviceWorker?: HostedServiceWorkerRuntime
+/** Read the private one-shot host declaration carried by the native daemon presenter. */
+export function parseHostedAppPresentation(search: string): 'opentray-overlay' | undefined {
+  return new URLSearchParams(search).get('appMode') === 'opentray-overlay'
+    ? 'opentray-overlay'
+    : undefined
 }
 
 export function parseHostedLaunchParams(search: string): HostedLaunchParseResult {
@@ -98,26 +90,4 @@ export function consumeHostedLaunchUrl(
     ...launch,
     error: [launch.error, credentialError].filter((message) => message !== null).join(' ') || null,
   }
-}
-
-function createBrowserRuntime(): HostedBootstrapRuntime {
-  return {
-    dev: import.meta.env.DEV,
-    location: window.location,
-    serviceWorker: typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined,
-  }
-}
-
-export async function registerHostedServiceWorker(
-  runtime: HostedBootstrapRuntime = createBrowserRuntime()
-): Promise<void> {
-  if (runtime.dev || !runtime.serviceWorker) {
-    return
-  }
-
-  const registration = await runtime.serviceWorker.register('/service-worker.js', {
-    scope: '/',
-    type: 'module',
-  })
-  await registration.update()
 }

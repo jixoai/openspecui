@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove path-backed OPSX projections react to planning-root changes.
  * 2. Prove non-canonical Change ids are rejected before projection streams start.
  * 3. Prove demand-driven Status does not require Apply/artifact warmup and retains CLI evidence.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
+ * Full-gate correction (2026-07-31): prove warmup independence by immediate rejection if touched, not a loaded-suite timing race.
  */
 import { mkdir, realpath, writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -355,14 +356,9 @@ process.exit(1)
     const { kernel } = await prepareKernel('result.md')
     const pendingWarmup = vi
       .spyOn(kernel, 'waitForWarmup')
-      .mockImplementation(() => new Promise<void>(() => {}))
+      .mockRejectedValue(new Error('Status List must not wait for full warmup.'))
 
-    await Promise.race([
-      kernel.ensureStatusList(),
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Status List remained behind full warmup.')), 250)
-      }),
-    ])
+    await expect(kernel.ensureStatusList()).resolves.toBeUndefined()
 
     expect(kernel.getStatusList().map((status) => status.changeName)).toEqual(['demo-change'])
     expect(pendingWarmup).not.toHaveBeenCalled()

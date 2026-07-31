@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Load Dashboard Code Git snapshots independently from planning Summary and trends.
  * 2. Preserve backend-issued Code binding provenance and observable Git task lifecycle.
  * 3. Trigger explicit Git snapshot invalidation through a reactive stamp without broad Dashboard reloads.
+ * 4. Propagate Projection Work cancellation into the Git subprocess tree.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Derived requirement (2026-07-25): P4.3 settles a cached refresh stamp before Dashboard Git refresh returns.
+ * Original request (2026-07-31): "Code Git Snapshot，它非常慢，有时候甚至要十几秒"
  */
 import {
   reactiveReadFile,
@@ -123,7 +125,8 @@ export async function touchDashboardGitRefreshStamp(
 /** Load one Code Git snapshot and retain any failure as Git-region evidence only. */
 export async function loadDashboardGitProjection(
   ctx: DashboardGitLoaderContext,
-  reason = 'dashboard-git'
+  reason = 'dashboard-git',
+  signal?: AbortSignal
 ): Promise<DashboardGitSnapshot> {
   beginDashboardGitTask(reason)
   try {
@@ -135,6 +138,7 @@ export async function loadDashboardGitProjection(
     const snapshot = await buildDashboardGitSnapshot({
       projectDir: ctx.projectDir,
       bindingToken: ctx.codeBindingToken,
+      signal,
     })
     endDashboardGitTask(null)
     return snapshot

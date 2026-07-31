@@ -11,6 +11,8 @@
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
  * Owner correction (2026-07-29): Settings delegates scrolling to the shell and field density to its container.
+ * Owner correction (2026-07-29): Settings no longer renders project-owned Hosted App URL configuration.
+ * Owner correction (2026-07-31): Observed model metadata refresh uses readonly query transport.
  */
 import type {
   LocalModelAssetLog,
@@ -2440,7 +2442,7 @@ vi.mock('@/lib/trpc', () => ({
         mutate: localModelsMock.delete,
       },
       refreshArtifacts: {
-        mutate: localModelsMock.refreshArtifacts,
+        query: localModelsMock.refreshArtifacts,
       },
     },
     localCt2Models: {
@@ -2478,7 +2480,7 @@ vi.mock('@/lib/trpc', () => ({
         mutate: localCt2ModelsMock.delete,
       },
       refreshArtifacts: {
-        mutate: localCt2ModelsMock.refreshArtifacts,
+        query: localCt2ModelsMock.refreshArtifacts,
       },
     },
     localLlamaModels: {
@@ -2516,7 +2518,7 @@ vi.mock('@/lib/trpc', () => ({
         mutate: localLlamaModelsMock.delete,
       },
       refreshArtifacts: {
-        mutate: localLlamaModelsMock.refreshArtifacts,
+        query: localLlamaModelsMock.refreshArtifacts,
       },
     },
   },
@@ -2633,7 +2635,6 @@ describe('Settings', { timeout: 10_000 }, () => {
         theme: 'dark',
         codeEditor: { theme: 'monokai' },
         cli: { command: 'custom-openspec', args: ['--profile', 'strict'] },
-        appBaseUrl: 'https://app.example.test/workbench',
         terminal: {
           fontSize: 19,
           fontFamily: 'Config Mono',
@@ -2688,7 +2689,7 @@ describe('Settings', { timeout: 10_000 }, () => {
       'Monokai'
     )
     expect(readInputValue('Execute Path')).toBe('custom-openspec --profile strict')
-    expect(readInputValue('Base URL')).toBe('https://app.example.test/workbench')
+    expect(markup).not.toContain('Hosted App')
     expect(readInputValue('Font Size: 19px')).toBe('19')
     expect(readInputValue('Font Family')).toBe('Config Mono')
     expect(readInputValue('Scrollback Lines: 24,000')).toBe('24000')

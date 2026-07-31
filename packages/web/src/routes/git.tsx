@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Make Code versus distinct Planning repository scope explicit in URL and UI.
- * 2. Render scoped status, history, worktrees, pagination, and refresh lifecycles.
+ * 2. Render scoped status, history, worktrees, pagination, and readonly refresh lifecycles.
  * 3. Execute worktree removal and handoff only against the selected repository.
  * 4. Preserve Git list/detail View Transition continuity without cross-binding cache reuse.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Original request (2026-07-31): "dashboard.refreshGitSnapshot?batch=1 这个请求一直在阻塞其它任务，这个不是只读吗"
+ * Owner correction (2026-07-31): Preserve lifecycle refresh and classify its cache/stamp maintenance as readonly.
  */
 import {
   getGitEntrySharedDescriptor,
@@ -173,7 +175,7 @@ export function GitRoute() {
 
       void (async () => {
         try {
-          await trpcClient.git.refresh.mutate({
+          await trpcClient.git.refresh.query({
             scope,
             expectedBindingToken: bindingToken,
             reason,

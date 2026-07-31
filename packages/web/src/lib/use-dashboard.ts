@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Admit Dashboard Summary and objective Kanban facts first, then independently deliver trends and Code Git projections.
- * 2. Execute Dashboard Git mutations against the stable Launch-owned Code binding.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Admit Dashboard Summary through a notice-free initial Pull before independently delivering objective Kanban, trends, and Code Git projections.
+ * 2. Execute readonly Dashboard Git refreshes and domain mutations against the stable Launch-owned Code binding.
  * 3. Translate current and stale Projection Work snapshots into honest region display and updating state.
- * 4. Commit Dashboard Summary v2 pulls only when their wake-up identity and generation remain current.
+ * 4. Retire late initial or replacement Summary v2 Pulls and require current wake identity/generation for replacements.
  * 5. Render Server-retained Summary data as display-only in a fresh browser Document.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
@@ -12,6 +12,8 @@
  * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
  * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
+ * Original request (2026-07-31): "所有可能其它页面都有类似的问题。"
+ * Owner correction (2026-07-31): Observation refresh is readonly even when it maintains an internal stamp.
  */
 import type {
   DashboardGitSnapshot,
@@ -159,8 +161,10 @@ function useDashboardSummaryProjectionRegion(
       lifecycle: { hasCached: boolean }
     ) => {
       let active = true
+      let pullEpoch = 0
       let hasDisplayData = lifecycle.hasCached
       let activeWake: DashboardSummaryInvalidation | null = null
+      let wakeObservedDuringAdmission = false
       const isActiveWake = (wake: DashboardSummaryInvalidation) =>
         active &&
         activeWake !== null &&
@@ -168,10 +172,12 @@ function useDashboardSummaryProjectionRegion(
         activeWake.workGeneration === wake.workGeneration &&
         activeWake.snapshotGeneration === wake.snapshotGeneration &&
         activeWake.state === wake.state
-      const pull = async (wake: DashboardSummaryInvalidation) => {
+      const pull = async (wake?: DashboardSummaryInvalidation) => {
+        const epoch = ++pullEpoch
         try {
           const state = await trpcClient.dashboard.getSummary.query()
-          if (!isActiveWake(wake) || !isCurrentSummaryState(wake, state)) return
+          if (!active || epoch !== pullEpoch) return
+          if (wake && (!isActiveWake(wake) || !isCurrentSummaryState(wake, state))) return
           if (state.data) {
             hasDisplayData = true
             callbacks.onEvent({
@@ -181,12 +187,13 @@ function useDashboardSummaryProjectionRegion(
           }
           if (state.error) callbacks.onError(normalizeProjectionError(state.error))
         } catch (cause: unknown) {
-          if (!isActiveWake(wake)) return
+          if (!active || epoch !== pullEpoch || (wake && !isActiveWake(wake))) return
           callbacks.onError(normalizeProjectionError(cause))
         }
       }
       const subscription = subscribe({
         onData(wake) {
+          wakeObservedDuringAdmission = true
           const wasDisplaying = hasDisplayData
           activeWake = wake
           if (wasDisplaying && wake.state !== 'ready') {
@@ -196,9 +203,11 @@ function useDashboardSummaryProjectionRegion(
         },
         onError: callbacks.onError,
       })
+      if (!wakeObservedDuringAdmission) void pull()
       return {
         unsubscribe() {
           active = false
+          pullEpoch += 1
           subscription.unsubscribe()
         },
       }
@@ -344,7 +353,7 @@ export async function refreshDashboardGitSnapshot(
   expectedBindingToken: string
 ): Promise<void> {
   if (isStaticMode()) return
-  await trpcClient.dashboard.refreshGitSnapshot.mutate({
+  await trpcClient.dashboard.refreshGitSnapshot.query({
     scope: 'code',
     expectedBindingToken,
     reason,

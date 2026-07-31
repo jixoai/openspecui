@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Share same-identity in-flight projection work across Server subscribers.
  * 2. Retain bounded display snapshots while preserving freshness and provenance.
  * 3. Retire generations so late A work cannot publish into current B state.
- * 4. Expose explicit invalidation, cancellation, batches, and typed failures.
+ * 4. Expose explicit invalidation, cancellation, batches, typed failures, and resource-admission trace boundaries.
  * 5. Expose immediate cached lifecycle reads and data-free lifecycle notices.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
+ * Original request (2026-07-31): "检查它的工作到底做了什么，为什么需要那么多的时间"
  */
 import {
   ReactiveContext,
@@ -337,6 +338,16 @@ class ProjectionWork<T, TBatch> {
               resourceClass: this.request.resourceClass,
               priority: this.request.priority,
               signal: controller.signal,
+              onQueued: () => {
+                if (!this.isCurrentRun(generation, controller)) return
+                this.record('queue-enter', generation)
+                this.publishStage('queue-enter', generation)
+              },
+              onStarted: () => {
+                if (!this.isCurrentRun(generation, controller)) return
+                this.record('resource-admitted', generation)
+                this.publishStage('resource-admitted', generation)
+              },
               run: (scheduleSignal) =>
                 context.runOnce(() =>
                   this.request.load({

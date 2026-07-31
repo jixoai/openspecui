@@ -1,8 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Verify the website launch controls and current compatibility guidance.
+ * 2. Prove App and Direct Web choices emit explicit production CLI modes.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
+ * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
+ * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  */
 import { en } from '$lib/i18n/locales/en'
 import HomePage from '$lib/pages/home-page.svelte'
@@ -20,9 +23,7 @@ describe('HomePage', () => {
     expect(screen.getAllByText('npx openspecui@latest --app')).toHaveLength(2)
     expect(screen.getByText('npx openspecui@latest export -o ./dist')).toBeVisible()
     expect(
-      screen.getByText(
-        'OpenSpecUI 6.x targets OpenSpec CLI 1.6.x and accepts 1.5.x as legacy-compatible.'
-      )
+      screen.getByText('OpenSpecUI 6.1 targets OpenSpec CLI 1.6.x and accepts 1.7.x as compatible.')
     ).toBeVisible()
 
     await fireEvent.change(screen.getByLabelText('Runner'), { target: { value: 'pnpm' } })
@@ -31,7 +32,7 @@ describe('HomePage', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'App mode' }))
 
-    expect(screen.getByText('pnpx openspecui@latest')).toBeVisible()
+    expect(screen.getByText('pnpx openspecui@latest --web')).toBeVisible()
     expect(screen.getAllByText('pnpx openspecui@latest --app')).toHaveLength(1)
     expect(screen.getByText('pnpx openspecui@latest export -o ./dist')).toBeVisible()
   })

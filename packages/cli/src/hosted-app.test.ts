@@ -1,29 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
- * 1. Prove hosted App base resolution and credential-free public URLs.
- * 2. Characterize the private Direct/App URL builders independently of the start-command owner.
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * 1. Prove credential-free public hosted URLs for the manually addressable App shell.
+ * 2. Characterize private Direct/App URL builders independently of removed CLI shell selection.
  *
  * Original request (2026-07-15): "把 --app 模式提上日程。"
  * Delivery correction (2026-07-24): printed locators must not become another credential log.
  */
 import { describe, expect, it } from 'vitest'
-import {
-  buildDirectWebLaunchUrl,
-  buildHostedAppLaunchUrl,
-  resolveEffectiveHostedAppBaseUrl,
-} from './hosted-app'
+import { buildDirectWebLaunchUrl, buildHostedAppLaunchUrl } from './hosted-app'
 
 describe('hosted app CLI helpers', () => {
-  it('resolves hosted app base URL from override, config, then official default', () => {
-    expect(resolveEffectiveHostedAppBaseUrl({ override: 'app.example.com/ui' })).toBe(
-      'https://app.example.com/ui'
-    )
-    expect(
-      resolveEffectiveHostedAppBaseUrl({ configured: 'https://intranet.example.com/osui/' })
-    ).toBe('https://intranet.example.com/osui')
-    expect(resolveEffectiveHostedAppBaseUrl({})).toBe('https://app.openspecui.com')
-  })
-
   it('builds hosted launch URLs with api parameters only', () => {
     expect(
       buildHostedAppLaunchUrl({

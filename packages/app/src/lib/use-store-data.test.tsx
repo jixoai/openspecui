@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Prove Store display provenance retires immediately across backend locator replacement.
  * 2. Preserve same-locator settled Store data as display-only during revalidation.
  * 3. Prove stale, pending, and refresh-error Store lifecycle states cannot retain mutation authority.
  * 4. Prove a fresh owner performs its typed Pull before the first lifecycle notice.
+ * 5. Prove explicit refresh is single-flight and locks the complete request lifecycle.
  *
  * Original request (2026-07-26): "真正基于文件、甚至是文件内容结构的变更去拉取更新。"
  * Owner architecture clarification (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
@@ -20,6 +21,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   fetchBackendStoreInspectorProjection,
   fetchBackendStoreInventoryProjection,
+  refreshBackendStoreProjections,
 } from './backend-client'
 import type {
   CliProjectionSelector,
@@ -70,6 +72,7 @@ vi.mock('./backend-client', async (importOriginal) => {
     ...original,
     fetchBackendStoreInventoryProjection: vi.fn(),
     fetchBackendStoreInspectorProjection: vi.fn(),
+    refreshBackendStoreProjections: vi.fn(),
   }
 })
 
@@ -187,6 +190,37 @@ afterEach(() => {
 })
 
 describe('useStoreData locator provenance', () => {
+  it('single-flights explicit refresh and exposes its loading lock until replacement Pull settles', async () => {
+    vi.mocked(fetchBackendStoreInventoryProjection).mockResolvedValue(listState(API_A))
+    vi.mocked(fetchBackendStoreInspectorProjection).mockResolvedValue(doctorState(API_A))
+    const refreshRequest = createDeferred<void>()
+    vi.mocked(refreshBackendStoreProjections).mockReturnValue(refreshRequest.promise)
+    const view = renderHook(() => useStoreData({ apiBaseUrl: API_A }))
+
+    await publishReady(API_A)
+    await waitFor(() => expect(view.result.current.canMutate).toBe(true))
+
+    let firstRefresh: Promise<void> | undefined
+    let secondRefresh: Promise<void> | undefined
+    act(() => {
+      firstRefresh = view.result.current.refresh()
+      secondRefresh = view.result.current.refresh()
+    })
+
+    expect(firstRefresh).toBe(secondRefresh)
+    expect(refreshBackendStoreProjections).toHaveBeenCalledTimes(1)
+    expect(view.result.current.isInventoryUpdating).toBe(true)
+    expect(view.result.current.isInspectorUpdating).toBe(true)
+    expect(view.result.current.canMutate).toBe(false)
+
+    await act(async () => {
+      refreshRequest.resolve()
+      await firstRefresh
+    })
+    expect(view.result.current.isInventoryUpdating).toBe(false)
+    expect(view.result.current.isInspectorUpdating).toBe(false)
+  })
+
   it('pulls Store list and Doctor immediately before the first lifecycle notice', async () => {
     vi.mocked(fetchBackendStoreInventoryProjection).mockResolvedValue(listState(API_A))
     vi.mocked(fetchBackendStoreInspectorProjection).mockResolvedValue(doctorState(API_A))

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
  * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
  * 3. Host Server-local terminal/Root Context notifications, sound, preview-resource, and translation HTTP boundaries.
@@ -8,6 +8,9 @@
  * 5. Own the runtime observation environment and external Codex command lease while deferring expensive
  *    root-scoped projections until a foreground consumer requests them; keep Store-list registry/mutation
  *    evidence distinct from selector-exact Store-root observation.
+ * 6. Initialize backend OpenTelemetry tracing (--otel diagnostic only) and expose the resolved Tracer
+ *    through Context so procedure/planning-root instrumentation stays branch-free.
+ * 7. Admit dynamic loopback App origins while keeping remote browser origins explicitly allowlisted.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "Every Planning-root execution surface uses the same operation lifetime owner."
@@ -21,6 +24,8 @@
  * Owner-reported defect (2026-07-26): App-embedded Project Web must enter its canonical Dashboard
  * route directly instead of visibly normalizing the backend root after iframe launch.
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Built-runtime defect (2026-07-30): Direct Web shutdown must await HTTP closure and retire non-cooperative WebSocket and buffered CLI children after one signal.
+ * Original request (2026-07-31): Trace every Planning-root write lock with timing, source, and stack evidence.
  *
  * @module server
  */
@@ -75,6 +80,7 @@ import {
   createAccessGate,
   createAccessGateMiddleware,
   extractBearerCredential,
+  isLoopbackHostname,
   type AccessGate,
 } from './access-gate.js'
 import { createChangesProjectionWorkOwner } from './changes-projection-service.js'
@@ -125,6 +131,10 @@ import {
   resolveDefaultServerHostIdentity,
   type ServerHostIdentityProvider,
 } from './server-host-identity.js'
+import {
+  createStoreContentProjectionWorkOwner,
+  StoreContentProjectionService,
+} from './store-content-projection-service.js'
 import { StoreMutationService } from './store-mutation-service.js'
 import { StoreObservationFallbackService } from './store-observation-fallback.js'
 import { StoreObservationService } from './store-observation-service.js'
@@ -133,6 +143,7 @@ import {
   StoreProjectionService,
 } from './store-projection-service.js'
 import { ToolCommandObservationService } from './tool-command-observation-service.js'
+import { initTracing, shutdownTracing, type TracingConfig } from './tracing.js'
 import { createRuntimeSqliteTranslationCacheAdapter } from './translation-cache-adapter.js'
 import { getDefaultTranslationCacheDatabasePath } from './translation-cache-path.js'
 import { TranslationCacheService } from './translation-cache-service.js'
@@ -188,6 +199,11 @@ export interface ServerConfig {
     planningRootServices: PlanningRootServiceManager,
     notificationService: NotificationService
   ) => Observable<RootContextState, unknown>
+  /**
+   * Backend OpenTelemetry tracing config (--otel diagnostic only). When disabled or absent, all
+   * instrumentation uses a no-op tracer and the OTel SDK is never started.
+   */
+  tracing?: TracingConfig
   /** Optional path overrides for isolated runtimes and tests */
   runtimePaths?: {
     globalSettingsPath?: string
@@ -211,6 +227,8 @@ export interface ServerConfig {
  * Create an OpenSpecUI HTTP server with optional WebSocket support
  */
 export function createServer(config: ServerConfig) {
+  // Diagnostic-only OpenTelemetry tracer. No-op unless --otel is enabled.
+  const tracer = initTracing(config.tracing ?? { enabled: false })
   // Whole-backend Access Gate. Default loopback; the live listener revises this once bound.
   const accessGate: AccessGate = createAccessGate({
     credential: config.accessGate ?? null,
@@ -271,6 +289,14 @@ export function createServer(config: ServerConfig) {
     storeObservation,
     workOwner: storeProjectionWorkOwner,
   })
+  // Demand-driven readonly Store-content (Specs/active Changes) Projection Work (P6/6.10).
+  const storeContentProjectionService = new StoreContentProjectionService({
+    dataScopePath: dataScope.path,
+    cliExecutor,
+    invalidation: runtimeInvalidation,
+    storeObservation,
+    workOwner: createStoreContentProjectionWorkOwner(projectionWorkRuntime),
+  })
   const planningRootServices = new PlanningRootServiceManager({
     launchProjectDir: config.projectDir,
     previewAssetsDir: config.previewAssetsDir ?? join(__dirname, '..', '..', 'web', 'dist'),
@@ -284,6 +310,7 @@ export function createServer(config: ServerConfig) {
     dashboardProjectionWorkOwner,
     changesProjectionWorkOwner,
     planningCliProjectionWorkOwner,
+    tracer,
   })
   const rootContextProjectionService = new RootContextProjectionService({
     launchProjectDir: config.projectDir,
@@ -430,7 +457,18 @@ export function createServer(config: ServerConfig) {
   app.use(
     '*',
     cors({
-      origin: corsOrigins,
+      origin: (origin) => {
+        if (corsOrigins.includes(origin)) return origin
+        try {
+          const url = new URL(origin)
+          return (url.protocol === 'http:' || url.protocol === 'https:') &&
+            isLoopbackHostname(url.hostname)
+            ? origin
+            : undefined
+        } catch {
+          return undefined
+        }
+      },
       credentials: true,
     })
   )
@@ -540,6 +578,7 @@ export function createServer(config: ServerConfig) {
         runtimeInvalidation,
         storeObservation,
         storeProjectionService,
+        storeContentProjectionService,
         rootContextProjectionService,
         environmentGlobalProjectionService,
         storeMutationService,
@@ -559,6 +598,7 @@ export function createServer(config: ServerConfig) {
         watcher,
         projectDir: config.projectDir,
         envUri,
+        tracer,
       }),
     })
     return response
@@ -587,6 +627,7 @@ export function createServer(config: ServerConfig) {
       runtimeInvalidation,
       storeObservation,
       storeProjectionService,
+      storeContentProjectionService,
       rootContextProjectionService,
       environmentGlobalProjectionService,
       storeMutationService,
@@ -606,6 +647,7 @@ export function createServer(config: ServerConfig) {
       watcher,
       projectDir: config.projectDir,
       envUri,
+      tracer,
     }
   }
 
@@ -622,6 +664,7 @@ export function createServer(config: ServerConfig) {
     dataHomeObserver,
     storeObservation,
     storeProjectionService,
+    storeContentProjectionService,
     rootContextProjectionService,
     environmentGlobalProjectionService,
     storeObservationFallback,
@@ -642,6 +685,7 @@ export function createServer(config: ServerConfig) {
     projectionWorkRuntime,
     watcher,
     createContext,
+    tracer,
     port: config.port ?? 3100,
   }
 }
@@ -755,6 +799,15 @@ export async function createWebSocketServer(
     }
   }
 
+  const closeWebSocketServer = (socketServer: WebSocketServer): Promise<void> =>
+    new Promise((resolve, reject) => {
+      for (const client of socketServer.clients) client.terminate()
+      socketServer.close((error) => {
+        if (error) reject(error)
+        else resolve()
+      })
+    })
+
   return {
     wss,
     ptyWss,
@@ -766,17 +819,19 @@ export async function createWebSocketServer(
         await settleCleanupPhase(failures, [
           () => handler.broadcastReconnectNotification(),
           () => ptyManager.closeAll(),
-          () => ptyWss.close(),
-          () => wss.close(),
+          () => closeWebSocketServer(ptyWss),
+          () => closeWebSocketServer(wss),
           () => server.watcher?.stop(),
         ])
         await settleCleanupPhase(failures, [() => server.storeObservationFallback.dispose()])
         await settleCleanupPhase(failures, [() => server.storeMutationService.dispose()])
         await settleCleanupPhase(failures, [() => server.rootContextNotificationBridge.dispose()])
         await settleCleanupPhase(failures, [() => server.storeProjectionService.dispose()])
+        await settleCleanupPhase(failures, [() => server.storeContentProjectionService.dispose()])
         await settleCleanupPhase(failures, [
           () => server.environmentGlobalProjectionService.dispose(),
         ])
+        await settleCleanupPhase(failures, [() => server.cliExecutor.dispose()])
         await settleCleanupPhase(failures, [() => server.planningRootServices.dispose()])
         await settleCleanupPhase(failures, [() => server.projectionWorkRuntime.clear()])
         await settleCleanupPhase(failures, [() => server.storeObservation.dispose()])
@@ -856,6 +911,15 @@ export async function startServer(
     port,
   })
 
+  const closeHttpServer = (): Promise<void> =>
+    new Promise((resolve, reject) => {
+      httpServer.close((error) => {
+        if (error) reject(error)
+        else resolve()
+      })
+      if ('closeAllConnections' in httpServer) httpServer.closeAllConnections()
+    })
+
   // Create WebSocket server.
   const wsServer = await createWebSocketServer(server, httpServer, {
     projectDir: config.projectDir,
@@ -880,12 +944,14 @@ export async function startServer(
         const websocketResults = await Promise.allSettled([
           Promise.resolve().then(() => wsServer.close()),
         ])
-        const httpResults = await Promise.allSettled([
-          Promise.resolve().then(() => httpServer.close()),
-        ])
-        const failures = [...modelResults, ...websocketResults, ...httpResults].flatMap((result) =>
-          result.status === 'rejected' ? [result.reason] : []
-        )
+        const httpResults = await Promise.allSettled([closeHttpServer()])
+        const tracingResults = await Promise.allSettled([shutdownTracing()])
+        const failures = [
+          ...modelResults,
+          ...websocketResults,
+          ...httpResults,
+          ...tracingResults,
+        ].flatMap((result) => (result.status === 'rejected' ? [result.reason] : []))
         if (failures.length > 0) {
           throw new AggregateError(failures, 'Server shutdown failed.')
         }

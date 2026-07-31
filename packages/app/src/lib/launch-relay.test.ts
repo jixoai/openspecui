@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
- * 1. Prove PWA/browser launch leadership and relay settlement.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Prove browser launch leadership and relay settlement.
  * 2. Prove forwarded credentials bind only in runtime memory for the matching locator.
  * 3. Prove every live window converges on the complete locator credential set without persistence.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Delivery correction (2026-07-24): relay credentials transiently without persisted shell state.
+ * Owner correction (2026-07-31): PWA roles and priority takeover are retired.
  */
 import { describe, expect, it, vi } from 'vitest'
 import { createHostedLaunchRelay, readHostedLaunchLeader } from './launch-relay'
@@ -108,7 +109,6 @@ describe('hosted launch relay', () => {
       storage,
       createChannel: () => null,
       windowId: 'window-a',
-      role: 'browser',
       ...createNoHeartbeatRuntime(),
     })
 
@@ -118,65 +118,31 @@ describe('hosted launch relay', () => {
     expect(readHostedLaunchLeader(storage)).toEqual({
       windowId: 'window-a',
       updatedAt: expect.any(Number),
-      role: 'browser',
     })
 
     stop()
   })
 
-  it('lets a pwa window take leadership from a browser window', () => {
-    const storage = createMemoryStorage()
-    const pair = createChannelPair()
-
-    const browserRelay = createHostedLaunchRelay({
-      storage,
-      createChannel: () => pair.primary,
-      windowId: 'browser-window',
-      role: 'browser',
-      ...createNoHeartbeatRuntime(),
-    })
-    const pwaRelay = createHostedLaunchRelay({
-      storage,
-      createChannel: () => pair.secondary,
-      windowId: 'pwa-window',
-      role: 'pwa',
-      ...createNoHeartbeatRuntime(),
-    })
-
-    const stopBrowser = browserRelay.start(() => {})
-    const stopPwa = pwaRelay.start(() => {})
-
-    expect(readHostedLaunchLeader(storage)?.windowId).toBe('pwa-window')
-    expect(readHostedLaunchLeader(storage)?.role).toBe('pwa')
-    expect(browserRelay.isLeader()).toBe(false)
-    expect(pwaRelay.isLeader()).toBe(true)
-
-    stopPwa()
-    stopBrowser()
-  })
-
-  it('forwards launches to the pwa leader and reports the forwarded-to-pwa result', async () => {
+  it('forwards launches to the current browser leader', async () => {
     vi.useFakeTimers()
     const storage = createMemoryStorage()
     const pair = createChannelPair()
     const launches: string[] = []
 
-    const pwaRelay = createHostedLaunchRelay({
+    const leaderRelay = createHostedLaunchRelay({
       storage,
       createChannel: () => pair.primary,
-      windowId: 'pwa-window',
-      role: 'pwa',
+      windowId: 'leader-window',
       ...createNoHeartbeatRuntime(),
     })
     const browserRelay = createHostedLaunchRelay({
       storage,
       createChannel: () => pair.secondary,
       windowId: 'browser-window',
-      role: 'browser',
       ...createNoHeartbeatRuntime(),
     })
 
-    const stopPwa = pwaRelay.start((request) => {
+    const stopLeader = leaderRelay.start((request) => {
       launches.push(request.apiBaseUrl)
     })
     const stopBrowser = browserRelay.start(() => {})
@@ -184,27 +150,26 @@ describe('hosted launch relay', () => {
     const resultPromise = browserRelay.dispatch({ apiBaseUrl: 'http://localhost:3100' })
     await vi.advanceTimersByTimeAsync(450)
 
-    expect(await resultPromise).toBe('forwarded-to-pwa')
+    expect(await resultPromise).toBe('forwarded')
     expect(launches).toEqual(['http://localhost:3100'])
 
     stopBrowser()
-    stopPwa()
+    stopLeader()
     vi.useRealTimers()
   })
 
-  it('binds a forwarded credential to the same locator in the PWA runtime only', async () => {
+  it('binds a forwarded credential to the same locator in the leader runtime only', async () => {
     vi.useFakeTimers()
     const storage = createMemoryStorage()
     const pair = createChannelPair()
-    const pwaCredentials = new Map<string, string>()
+    const leaderCredentials = new Map<string, string>()
 
-    const pwaRelay = createHostedLaunchRelay({
+    const leaderRelay = createHostedLaunchRelay({
       storage,
       createChannel: () => pair.primary,
-      windowId: 'pwa-window',
-      role: 'pwa',
+      windowId: 'leader-window',
       bindCredential(apiBaseUrl, credential) {
-        pwaCredentials.set(apiBaseUrl, credential)
+        leaderCredentials.set(apiBaseUrl, credential)
         return true
       },
       ...createNoHeartbeatRuntime(),
@@ -213,24 +178,23 @@ describe('hosted launch relay', () => {
       storage,
       createChannel: () => pair.secondary,
       windowId: 'browser-window',
-      role: 'browser',
       readCredential(apiBaseUrl) {
         return apiBaseUrl === 'http://localhost:3100' ? 'credential-a' : null
       },
       ...createNoHeartbeatRuntime(),
     })
 
-    const stopPwa = pwaRelay.start(() => {})
+    const stopLeader = leaderRelay.start(() => {})
     const stopBrowser = browserRelay.start(() => {})
     const resultPromise = browserRelay.dispatch({ apiBaseUrl: 'http://localhost:3100' })
     await vi.advanceTimersByTimeAsync(450)
 
-    expect(await resultPromise).toBe('forwarded-to-pwa')
-    expect(pwaCredentials).toEqual(new Map([['http://localhost:3100', 'credential-a']]))
-    expect(storage.getItem('openspecui-app:pwa-leader')).not.toContain('credential-a')
+    expect(await resultPromise).toBe('forwarded')
+    expect(leaderCredentials).toEqual(new Map([['http://localhost:3100', 'credential-a']]))
+    expect(storage.getItem('openspecui-app:browser-launch-leader')).not.toContain('credential-a')
 
     stopBrowser()
-    stopPwa()
+    stopLeader()
     vi.useRealTimers()
   })
 
@@ -249,7 +213,6 @@ describe('hosted launch relay', () => {
         storage,
         createChannel: () => hub.create(windowId),
         windowId,
-        role: 'browser',
         readCredential: (apiBaseUrl) => credentials[windowId].get(apiBaseUrl) ?? null,
         readCredentialSnapshot: () =>
           Array.from(credentials[windowId], ([apiBaseUrl, credential]) => ({
@@ -287,9 +250,9 @@ describe('hosted launch relay', () => {
     expect(credentials.b).toEqual(expected)
     expect(credentials.c).toEqual(expected)
     expect(Array.from({ length: storage.length }, (_, index) => storage.key(index))).toEqual([
-      'openspecui-app:pwa-leader',
+      'openspecui-app:browser-launch-leader',
     ])
-    expect(storage.getItem('openspecui-app:pwa-leader')).not.toContain('credential-')
+    expect(storage.getItem('openspecui-app:browser-launch-leader')).not.toContain('credential-')
 
     stopC()
     stopB()
@@ -308,7 +271,6 @@ describe('hosted launch relay', () => {
       storage,
       createChannel: () => pair.primary,
       windowId: 'window-a',
-      role: 'browser',
       now: () => currentTime,
       ...createNoHeartbeatRuntime(),
     })
@@ -317,8 +279,8 @@ describe('hosted launch relay', () => {
     })
 
     storage.setItem(
-      'openspecui-app:pwa-leader',
-      JSON.stringify({ windowId: 'missing-window', updatedAt: currentTime, role: 'browser' })
+      'openspecui-app:browser-launch-leader',
+      JSON.stringify({ windowId: 'missing-window', updatedAt: currentTime })
     )
 
     const resultPromise = relay.dispatch({ apiBaseUrl: 'http://localhost:3200' })

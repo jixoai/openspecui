@@ -1,24 +1,26 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Orchestrate persistent credential-free project tabs and the embedded frame's visual lifecycle.
- * 2. Coordinate PWA install, display, and update ownership.
- * 3. Publish shell state once and consume exact-tab reachability from the shared observation owner.
- * 4. Keep refresh/retry feedback attached to the affected tab runtime.
- * 5. Preserve cross-window shell-state convergence.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Orchestrate fixed Home/project tabs, browser actions, and iframe lifecycle.
+ * 2. Publish shell state once and consume exact-tab reachability from the shared observation owner.
+ * 3. Bind Home directory launch and refresh/retry feedback to their exact runtime lifecycle.
+ * 4. Preserve cross-window shell-state convergence.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
+ * Original request (2026-07-29): "Workspaces 的 tab 可以提供一个 open in browser 的 icon-button。"
+ * Owner correction (2026-07-31): Home is content-sized; Refresh and Open in browser are project-only global actions.
+ * Owner-reported defect (2026-07-31): an offline Workspace must render one coherent recovery state.
+ * Owner correction (2026-07-31): PWA is fully retired; the shell owns no install or service-worker update flow.
  * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
- * Compromise: tab, frame, and PWA display lifecycles remain co-located because they settle in one mounted
- * shell; launch, health, and Root observation are physically extracted into App-lifetime owners.
  */
-import { Dialog } from '@openspecui/web-src/components/dialog'
+
+import { selectWorkspaceDirectoryCatalogView } from '@openspecui/core/workspace-directory-catalog'
 import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
 import { RealtimeSkeleton } from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { type Tab } from '@openspecui/web-src/components/tabs'
 import { TerminalTabs } from '@openspecui/web-src/components/terminal/terminal-tabs'
-import { AlertCircle, Download, Link2, LoaderCircle, Plus, RefreshCw, Unlink2 } from 'lucide-react'
+import { AlertCircle, Home, Link2, LoaderCircle, Plus, RefreshCw, Unlink2 } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -26,29 +28,19 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type FormEvent,
+  type ReactNode,
 } from 'react'
 import {
   ConnectionObservationBoundary,
   useConnectionObservationOwner,
   useConnectionObservations,
 } from '../lib/connection-observation'
-import {
-  computeHostedAppDisplayMode,
-  EMPTY_TITLEBAR_INSETS,
-  isBeforeInstallPromptEvent,
-  readHostedAppTitlebarInsets,
-  type BeforeInstallPromptEventLike,
-  type HostedAppDisplayMode,
-  type HostedAppTitlebarInsets,
-  type HostedAppWindowControlsOverlayLike,
-} from '../lib/pwa-runtime'
 import type { HostedTabReachability } from '../lib/reachability'
+import { probeHostedBackend } from '../lib/reachability'
 import {
   activateHostedTab,
   applyHostedLaunchRequest,
   buildHostedEmbeddedUiUrl,
-  getHostedTabLabel,
   normalizeHostedApiBaseUrl,
   removeHostedTab,
   reorderHostedTabs,
@@ -56,12 +48,38 @@ import {
   type HostedShellTab,
 } from '../lib/shell-state'
 import { useConnections, useConnectionsActions } from '../lib/use-connections'
+import {
+  useWorkspaceCandidateActions,
+  useWorkspaceCandidates,
+} from '../lib/use-workspace-candidates'
+import { composeLauncherCandidates } from '../lib/workspace-candidate-catalog'
+import type { LauncherPendingCommand } from '../lib/workspace-launcher-selector'
+import { selectWorkspacePathLabel } from '../lib/workspace-path-label'
+import { useAppDaemonWorkspace } from './app-daemon-workspace-owner'
 import { useAppLaunchError } from './app-launch-owner'
 import { HostedShellThemeBootstrap } from './hosted-shell-theme'
+import { WorkspaceHome } from './workspace-home'
+import { WorkspaceLauncherDialog } from './workspace-launcher-dialog'
+import { WorkspaceTabBrowserAction } from './workspace-tab-browser-action'
 
 const REFRESH_FEEDBACK_MS = 1200
-const UPDATE_CHECK_INTERVAL_MS = 60000
-const UPDATE_READY_MESSAGE = 'A newer OpenSpec UI App shell is ready.'
+const HOME_TAB_ID = 'workspace-home'
+
+function launcherProbeFailure(result: Awaited<ReturnType<typeof probeHostedBackend>>): string {
+  if (result.errorMessage) return result.errorMessage
+  switch (result.reachability) {
+    case 'offline':
+      return 'This backend is currently offline.'
+    case 'authentication-required':
+      return 'This backend requires a valid launch credential.'
+    case 'unsupported':
+      return 'This backend is not compatible with this App.'
+    case 'checking':
+      return 'This backend is still being checked.'
+    case 'online':
+      return 'The Workspace could not be opened.'
+  }
+}
 
 type HostedTabFrameStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
@@ -69,11 +87,15 @@ interface HostedShellProps {
   initialLaunchRequest: HostedShellLaunchRequest | null
   fallbackLaunchRequest?: HostedShellLaunchRequest | null
   initialError: string | null
+  onOpenTaskManager?: () => void
 }
 
 interface HostedTabRuntimeState {
   reachability: HostedTabReachability
   projectName: string | null
+  /** Canonical project directory from backend health; used for path-first tab labels. */
+  projectDir: string | null
+  git: { githubRemote?: string | null; branch?: string | null } | null
   openspecuiVersion: string | null
   embeddedUiUrl: string | null
   errorMessage: string | null
@@ -82,33 +104,6 @@ interface HostedTabRuntimeState {
 interface HostedTabFrameState {
   src: string | null
   status: HostedTabFrameStatus
-}
-
-interface HostedShellPwaState {
-  canInstall: boolean
-  isInstalling: boolean
-  isInstalled: boolean
-  displayMode: HostedAppDisplayMode
-  titlebarInsets: HostedAppTitlebarInsets
-}
-
-type HostedAppUpdateStatus = 'idle' | 'ready'
-
-interface HostedAppUpdateState {
-  status: HostedAppUpdateStatus
-  errorMessage: string | null
-}
-
-interface HostedShellRootStyle extends CSSProperties {
-  '--hosted-pwa-titlebar-left': string
-  '--hosted-pwa-titlebar-right': string
-  '--hosted-pwa-titlebar-top': string
-  '--hosted-pwa-titlebar-height': string
-}
-
-interface HostedNavigator extends Navigator {
-  standalone?: boolean
-  windowControlsOverlay?: HostedAppWindowControlsOverlayLike
 }
 
 interface HostedShellTabContentProps {
@@ -124,6 +119,8 @@ interface HostedShellTabContentProps {
 const DEFAULT_RUNTIME_STATE: HostedTabRuntimeState = {
   reachability: 'checking',
   projectName: null,
+  projectDir: null,
+  git: null,
   openspecuiVersion: null,
   embeddedUiUrl: null,
   errorMessage: null,
@@ -134,38 +131,8 @@ const DEFAULT_FRAME_STATE: HostedTabFrameState = {
   status: 'idle',
 }
 
-const DEFAULT_PWA_STATE: HostedShellPwaState = {
-  canInstall: false,
-  isInstalling: false,
-  isInstalled: false,
-  displayMode: 'browser',
-  titlebarInsets: EMPTY_TITLEBAR_INSETS,
-}
-
-const DEFAULT_UPDATE_STATE: HostedAppUpdateState = {
-  status: 'idle',
-  errorMessage: null,
-}
-
 function cx(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(' ')
-}
-
-function shouldExposeHostedAppUpdate(options: {
-  hasTabs: boolean
-  registration: Pick<ServiceWorkerRegistration, 'waiting'>
-}): HostedAppUpdateState {
-  if (options.registration.waiting && options.hasTabs) {
-    return { status: 'ready', errorMessage: null }
-  }
-  return { status: 'idle', errorMessage: null }
-}
-
-function shouldAutoApplyHostedAppUpdate(options: {
-  hasTabs: boolean
-  registration: Pick<ServiceWorkerRegistration, 'waiting'>
-}): boolean {
-  return !options.hasTabs && Boolean(options.registration.waiting)
 }
 
 function buildHostedTabIframeSrc(
@@ -175,38 +142,12 @@ function buildHostedTabIframeSrc(
   return runtime.embeddedUiUrl ? buildHostedEmbeddedUiUrl(tab, runtime.embeddedUiUrl) : null
 }
 
-function createBrowserPwaSnapshot(deferredPrompt: BeforeInstallPromptEventLike | null) {
-  const hostedNavigator = navigator as HostedNavigator
-  const runtime = {
-    matchMedia: (query: string) => window.matchMedia(query),
-    innerWidth: window.innerWidth,
-    navigatorStandalone: hostedNavigator.standalone,
-    windowControlsOverlay: hostedNavigator.windowControlsOverlay,
-  }
-  const displayMode = computeHostedAppDisplayMode(runtime)
-  return {
-    canInstall: deferredPrompt !== null && displayMode === 'browser',
-    isInstalling: false,
-    isInstalled: displayMode !== 'browser',
-    displayMode,
-    titlebarInsets: readHostedAppTitlebarInsets(runtime),
-  } satisfies HostedShellPwaState
-}
-
-function HostedShellUpdateIcon() {
-  return <RefreshCw className="h-3.5 w-3.5" />
-}
-
 function HostedShellActions(props: {
   isRefreshing: boolean
   isRefreshFeedbackActive: boolean
   onRefresh: () => void
   onAdd: () => void
-  canInstall: boolean
-  isInstalling: boolean
-  onInstall: () => void
-  onApplyUpdate: () => void
-  updateStatus: HostedAppUpdateStatus
+  browserAction?: ReactNode
   showRefresh?: boolean
 }) {
   const buttonClassName =
@@ -226,29 +167,7 @@ function HostedShellActions(props: {
           <RefreshCw className={cx('h-3.5 w-3.5', refreshActive && 'animate-spin')} />
         </button>
       )}
-      {props.updateStatus === 'ready' ? (
-        <button
-          type="button"
-          onClick={props.onApplyUpdate}
-          className={buttonClassName}
-          aria-label="Apply app update"
-          title="Apply app update"
-        >
-          <HostedShellUpdateIcon />
-        </button>
-      ) : (
-        props.canInstall && (
-          <button
-            type="button"
-            onClick={props.onInstall}
-            className={buttonClassName}
-            aria-label="Install OpenSpec UI App"
-            title="Install OpenSpec UI App"
-          >
-            <Download className={cx('h-4 w-4', props.isInstalling && 'animate-pulse')} />
-          </button>
-        )
-      )}
+      {props.browserAction}
       <button
         type="button"
         onClick={props.onAdd}
@@ -271,7 +190,11 @@ export function HostedShellTabContent({
   onFrameLoad,
   onFrameError,
 }: HostedShellTabContentProps) {
-  const title = runtime.projectName ?? getHostedTabLabel(tab)
+  const pathLabel =
+    runtime.projectDir !== null
+      ? selectWorkspacePathLabel({ projectPath: runtime.projectDir, git: null })
+      : null
+  const title = pathLabel?.title ?? runtime.projectName ?? tab.apiBaseUrl
   const iframeTitle = `Hosted OpenSpec UI ${title}`
   const iframeSrc = buildHostedTabIframeSrc(tab, runtime)
   const showInlineError =
@@ -284,10 +207,11 @@ export function HostedShellTabContent({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-hosted-reachability={runtime.reachability}>
-      {runtime.reachability === 'offline' && (
+      {runtime.reachability === 'offline' && iframeSrc !== null && (
         <div className="border-border bg-muted/40 text-muted-foreground flex items-center justify-between gap-3 border-b px-3 py-2 text-xs">
           <span>
-            Backend unreachable. The session stays mounted so you can retry without losing context.
+            Backend unreachable. The Workspace stays mounted so you can retry without losing
+            context.
           </span>
           <button
             type="button"
@@ -366,9 +290,22 @@ export function HostedShellTabContent({
           ) : (
             <div className="max-w-sm space-y-2 text-sm">
               {runtime.reachability === 'offline' && !iframeSrc && (
-                <p className="text-muted-foreground text-xs">
-                  Waiting for this backend to come online.
-                </p>
+                <div className="flex flex-col items-center gap-3">
+                  <AlertCircle className="text-muted-foreground h-5 w-5" aria-hidden="true" />
+                  <div className="space-y-1">
+                    <p className="font-medium">Backend unreachable</p>
+                    <p className="text-muted-foreground text-xs">
+                      This Workspace remains open and will reconnect when the backend returns.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRetry(tab.id)}
+                    className="hover:bg-muted border-border rounded-none border px-3 py-1.5 text-xs font-medium transition"
+                  >
+                    Retry
+                  </button>
+                </div>
               )}
               {runtime.reachability === 'authentication-required' && runtime.errorMessage && (
                 <p className="text-muted-foreground text-xs">{runtime.errorMessage}</p>
@@ -395,7 +332,14 @@ function createHostedShellTab(props: {
   onFrameLoad: (tabId: string) => void
   onFrameError: (tabId: string) => void
 }): Tab {
-  const title = props.runtime.projectName ?? getHostedTabLabel(props.tab)
+  // Path-first label: verified GitHub org/repo or directory basename when projectDir is known;
+  // fall back to projectName. host/port stays diagnostic-only (not the primary tab label).
+  const pathLabel =
+    props.runtime.projectDir !== null
+      ? selectWorkspacePathLabel({ projectPath: props.runtime.projectDir, git: props.runtime.git })
+      : null
+  const title = pathLabel?.title ?? props.runtime.projectName ?? props.tab.apiBaseUrl
+  const subtitle = pathLabel?.subtitle ?? pathLabel?.detail ?? props.tab.apiBaseUrl
 
   return {
     id: props.tab.id,
@@ -404,28 +348,28 @@ function createHostedShellTab(props: {
     label: (
       <div
         className={cx(
-          'flex min-w-0 flex-col py-0.5 text-left transition',
+          'flex min-w-0 items-center gap-1 py-0.5 text-left transition',
           props.runtime.reachability === 'offline' && 'opacity-60 grayscale'
         )}
         data-hosted-reachability={props.runtime.reachability}
       >
-        <span className="flex min-w-0 items-center gap-1.5">
-          {props.runtime.reachability === 'checking' && (
-            <LoaderCircle className="h-3 w-3 animate-spin" />
-          )}
-          {props.runtime.reachability === 'online' && (
-            <Link2 className="h-3 w-3 text-emerald-500" />
-          )}
-          {props.runtime.reachability === 'offline' && (
-            <Unlink2 className="h-3 w-3 text-amber-500" />
-          )}
-          {props.runtime.reachability === 'authentication-required' && (
-            <AlertCircle className="h-3 w-3 text-amber-500" />
-          )}
-          <span className="font-nav min-w-0 truncate text-xs">{title}</span>
-        </span>
-        <span className="text-muted-foreground max-w-72 truncate text-[10px]">
-          {props.tab.apiBaseUrl}
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex min-w-0 items-center gap-1.5">
+            {props.runtime.reachability === 'checking' && (
+              <LoaderCircle className="h-3 w-3 animate-spin" />
+            )}
+            {props.runtime.reachability === 'online' && (
+              <Link2 className="h-3 w-3 text-emerald-500" />
+            )}
+            {props.runtime.reachability === 'offline' && (
+              <Unlink2 className="h-3 w-3 text-amber-500" />
+            )}
+            {props.runtime.reachability === 'authentication-required' && (
+              <AlertCircle className="h-3 w-3 text-amber-500" />
+            )}
+            <span className="font-nav min-w-0 truncate text-xs">{title}</span>
+          </span>
+          <span className="text-muted-foreground max-w-72 truncate text-[10px]">{subtitle}</span>
         </span>
       </div>
     ),
@@ -437,12 +381,16 @@ function HostedShellRuntime({
   initialLaunchRequest,
   fallbackLaunchRequest = null,
   initialError,
+  onOpenTaskManager,
 }: HostedShellProps) {
   const appLaunchError = useAppLaunchError()
+  const daemonWorkspace = useAppDaemonWorkspace()
   const [errorMessage, setErrorMessage] = useState(initialError)
   const connectionOwner = useConnectionObservationOwner()
   const connectionSnapshot = useConnectionObservations()
   const connectionActions = useConnectionsActions()
+  const candidateCatalog = useWorkspaceCandidates()
+  const candidateActions = useWorkspaceCandidateActions()
   const shellState = useConnections()
   const setShellState = useCallback(
     (resolveNext: (current: typeof shellState) => typeof shellState) => {
@@ -454,25 +402,105 @@ function HostedShellRuntime({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isRefreshFeedbackActive, setIsRefreshFeedbackActive] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [apiDraft, setApiDraft] = useState('')
+  const [openingWorkspaceId, setOpeningWorkspaceId] = useState<string | null>(null)
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
-  const [pwaState, setPwaState] = useState<HostedShellPwaState>(DEFAULT_PWA_STATE)
-  const [updateState, setUpdateState] = useState<HostedAppUpdateState>(DEFAULT_UPDATE_STATE)
-  const installPromptRef = useRef<BeforeInstallPromptEventLike | null>(null)
+  const [launcherPending, setLauncherPending] = useState<readonly LauncherPendingCommand[]>([])
+  const launcherPendingRef = useRef(new Map<string, LauncherPendingCommand>())
+  // Favorites / Recent are replaced from daemon snapshots, never browser persistence.
+  const directoryCatalog = daemonWorkspace.directoryCatalog
+  const [homePathError, setHomePathError] = useState<string | null>(null)
+  const [homePathPending, setHomePathPending] = useState(false)
+  const [selectedWorkspaceTabId, setSelectedWorkspaceTabId] = useState(HOME_TAB_ID)
+  const [candidateReachability, setCandidateReachability] = useState<
+    Readonly<Record<string, HostedTabReachability>>
+  >({})
   const isolatedLaunchHandledRef = useRef(false)
   const refreshFeedbackTimerRef = useRef<number | null>(null)
   const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
-  const serviceWorkerRegistrationRef = useRef<ServiceWorkerRegistration | null>(null)
-  const shouldReloadForUpdateRef = useRef(false)
 
   useEffect(() => {
     if (appLaunchError !== undefined) setErrorMessage(appLaunchError)
   }, [appLaunchError])
 
+  useEffect(() => {
+    setSelectedWorkspaceTabId(shellState.activeTabId ?? HOME_TAB_ID)
+  }, [shellState.activeTabId])
+
+  useEffect(() => {
+    let active = true
+    const closedCandidates = composeLauncherCandidates(
+      candidateCatalog,
+      daemonWorkspace.workspaces.map((workspace) => ({
+        apiBaseUrl: workspace.backendUrl,
+        source: 'daemon-live' as const,
+        label: workspace.projectDir,
+      }))
+    ).filter((candidate) => !shellState.tabs.some((tab) => tab.apiBaseUrl === candidate.apiBaseUrl))
+    for (const candidate of closedCandidates) {
+      setCandidateReachability((current) => ({
+        ...current,
+        [candidate.apiBaseUrl]: 'checking',
+      }))
+      void probeHostedBackend(candidate.apiBaseUrl).then((result) => {
+        if (!active) return
+        setCandidateReachability((current) => ({
+          ...current,
+          [candidate.apiBaseUrl]: result.reachability,
+        }))
+      })
+    }
+    return () => {
+      active = false
+    }
+  }, [candidateCatalog, daemonWorkspace.workspaces, shellState.tabs])
+
   const openAddDialog = useCallback(() => {
     setAddDialogError(null)
     setIsAddDialogOpen(true)
   }, [])
+
+  const runLauncherTransition = useCallback(
+    (apiBaseUrl: string, kind: LauncherPendingCommand['kind']) => {
+      const normalized = normalizeHostedApiBaseUrl(apiBaseUrl)
+      if (!normalized) {
+        setAddDialogError('Enter a valid backend API URL.')
+        return
+      }
+      if (launcherPendingRef.current.has(normalized)) return
+
+      const command = { apiBaseUrl: normalized, kind } satisfies LauncherPendingCommand
+      launcherPendingRef.current.set(normalized, command)
+      setLauncherPending([...launcherPendingRef.current.values()])
+      setAddDialogError(null)
+
+      void probeHostedBackend(normalized)
+        .then((result) => {
+          setCandidateReachability((current) => ({
+            ...current,
+            [normalized]: result.reachability,
+          }))
+          if (result.reachability !== 'online') {
+            setAddDialogError(launcherProbeFailure(result))
+            return
+          }
+          if (kind === 'connect') {
+            candidateActions.addManualCandidate(normalized, result.health?.projectName)
+          }
+          setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl: normalized }))
+          setIsAddDialogOpen(false)
+        })
+        .catch((error: unknown) => {
+          setAddDialogError(
+            error instanceof Error ? error.message : 'The Workspace could not be opened.'
+          )
+        })
+        .finally(() => {
+          launcherPendingRef.current.delete(normalized)
+          setLauncherPending([...launcherPendingRef.current.values()])
+        })
+    },
+    [candidateActions, setShellState]
+  )
 
   const updateTabFrameState = useCallback(
     (tabId: string, resolveNext: (previous: HostedTabFrameState) => HostedTabFrameState) => {
@@ -553,11 +581,6 @@ function HostedShellRuntime({
     [updateTabFrameState]
   )
 
-  const submitApi = useCallback((apiBaseUrl: string) => {
-    setShellState((current) => applyHostedLaunchRequest(current, { apiBaseUrl }))
-    setErrorMessage(null)
-  }, [])
-
   const startRefreshFeedback = useCallback(() => {
     setIsRefreshFeedbackActive(true)
     if (refreshFeedbackTimerRef.current !== null) {
@@ -589,6 +612,11 @@ function HostedShellRuntime({
     return Object.fromEntries(
       shellState.tabs.map((tab) => {
         const observation = byTabId.get(tab.id)
+        const daemonBinding = daemonWorkspace.workspaces.find(
+          (workspace) =>
+            normalizeHostedApiBaseUrl(workspace.backendUrl) ===
+            normalizeHostedApiBaseUrl(tab.apiBaseUrl)
+        )
         const health = observation?.health ?? null
         const reachability = observation?.reachability ?? 'checking'
         return [
@@ -596,6 +624,13 @@ function HostedShellRuntime({
           {
             reachability,
             projectName: health?.projectName ?? null,
+            projectDir: daemonBinding?.projectDir ?? health?.projectDir ?? null,
+            git: daemonBinding?.git
+              ? {
+                  githubRemote: daemonBinding.git.remoteUrl,
+                  branch: daemonBinding.git.branch,
+                }
+              : null,
             openspecuiVersion: health?.openspecuiVersion ?? null,
             embeddedUiUrl:
               reachability !== 'unsupported' && reachability !== 'authentication-required'
@@ -606,7 +641,53 @@ function HostedShellRuntime({
         ]
       })
     )
-  }, [connectionSnapshot.observations, shellState.tabs])
+  }, [connectionSnapshot.observations, daemonWorkspace.workspaces, shellState.tabs])
+
+  const launcherCandidates = useMemo(
+    () =>
+      composeLauncherCandidates(
+        candidateCatalog,
+        daemonWorkspace.workspaces.map((workspace) => ({
+          apiBaseUrl: workspace.backendUrl,
+          source: 'daemon-live' as const,
+          label: workspace.projectDir,
+        }))
+      ).map((candidate) => {
+        const binding = daemonWorkspace.workspaces.find(
+          (workspace) => workspace.backendUrl === candidate.apiBaseUrl
+        )
+        const tab = shellState.tabs.find(
+          (workspace) => workspace.apiBaseUrl === candidate.apiBaseUrl
+        )
+        const runtime = tab ? tabRuntime[tab.id] : undefined
+        return {
+          apiBaseUrl: candidate.apiBaseUrl,
+          source: candidate.source,
+          reachability:
+            runtime?.reachability ??
+            candidateReachability[candidate.apiBaseUrl] ??
+            (binding ? 'online' : 'checking'),
+          label: binding
+            ? selectWorkspacePathLabel({
+                projectPath: binding.projectDir,
+                git: binding.git
+                  ? { githubRemote: binding.git.remoteUrl, branch: binding.git.branch }
+                  : null,
+              })
+            : selectWorkspacePathLabel({
+                projectPath: candidate.label ?? candidate.apiBaseUrl,
+                git: null,
+              }),
+        }
+      }),
+    [
+      candidateCatalog,
+      candidateReachability,
+      daemonWorkspace.workspaces,
+      shellState.tabs,
+      tabRuntime,
+    ]
+  )
 
   useEffect(() => {
     return () => {
@@ -649,79 +730,6 @@ function HostedShellRuntime({
     })
   }, [shellState.tabs, tabRuntime])
 
-  const syncPwaState = useCallback(() => {
-    setPwaState((current) => ({
-      ...createBrowserPwaSnapshot(installPromptRef.current),
-      isInstalling: current.isInstalling,
-    }))
-  }, [])
-
-  useEffect(() => {
-    syncPwaState()
-
-    const hostedNavigator = navigator as HostedNavigator
-    const onDisplayChange = () => {
-      syncPwaState()
-    }
-    const onBeforeInstallPrompt = (event: Event) => {
-      if (!isBeforeInstallPromptEvent(event)) {
-        return
-      }
-      event.preventDefault()
-      installPromptRef.current = event
-      setPwaState((current) => ({
-        ...createBrowserPwaSnapshot(event),
-        isInstalling: current.isInstalling,
-      }))
-    }
-    const onAppInstalled = () => {
-      installPromptRef.current = null
-      setPwaState(() => ({
-        ...createBrowserPwaSnapshot(null),
-        isInstalling: false,
-        isInstalled: true,
-      }))
-    }
-
-    const standaloneMedia = window.matchMedia('(display-mode: standalone)')
-    const overlayMedia = window.matchMedia('(display-mode: window-controls-overlay)')
-    standaloneMedia.addEventListener('change', onDisplayChange)
-    overlayMedia.addEventListener('change', onDisplayChange)
-    window.addEventListener('resize', onDisplayChange)
-    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
-    window.addEventListener('appinstalled', onAppInstalled)
-    hostedNavigator.windowControlsOverlay?.addEventListener('geometrychange', onDisplayChange)
-
-    return () => {
-      standaloneMedia.removeEventListener('change', onDisplayChange)
-      overlayMedia.removeEventListener('change', onDisplayChange)
-      window.removeEventListener('resize', onDisplayChange)
-      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
-      window.removeEventListener('appinstalled', onAppInstalled)
-      hostedNavigator.windowControlsOverlay?.removeEventListener('geometrychange', onDisplayChange)
-    }
-  }, [syncPwaState])
-
-  const handleInstall = useCallback(async () => {
-    const promptEvent = installPromptRef.current
-    if (!promptEvent) {
-      return
-    }
-
-    setPwaState((current) => ({ ...current, isInstalling: true }))
-    installPromptRef.current = null
-
-    try {
-      await promptEvent.prompt()
-      await promptEvent.userChoice
-    } finally {
-      setPwaState(() => ({
-        ...createBrowserPwaSnapshot(installPromptRef.current),
-        isInstalling: false,
-      }))
-    }
-  }, [])
-
   const probeTabs = useCallback(
     async (options?: { tabIds?: readonly string[]; visualFeedback?: boolean }) => {
       const targets = shellState.tabs.filter(
@@ -747,156 +755,23 @@ function HostedShellRuntime({
     [connectionOwner, shellState.tabs, startRefreshFeedback]
   )
 
-  const activateWaitingHostedAppUpdate = useCallback((registration: ServiceWorkerRegistration) => {
-    if (!registration.waiting || shouldReloadForUpdateRef.current) {
-      return false
-    }
-
-    shouldReloadForUpdateRef.current = true
-    registration.waiting.postMessage({ type: 'SKIP_WAITING' })
-    return true
-  }, [])
-
-  const syncUpdateStateFromRegistration = useCallback(
-    (registration: ServiceWorkerRegistration, options?: { hasTabsOverride?: boolean }) => {
-      serviceWorkerRegistrationRef.current = registration
-      const hasTabs = options?.hasTabsOverride ?? shellState.tabs.length > 0
-      if (shouldAutoApplyHostedAppUpdate({ hasTabs, registration })) {
-        if (activateWaitingHostedAppUpdate(registration)) {
-          setUpdateState({ status: 'idle', errorMessage: null })
-        }
-        return
-      }
-      setUpdateState(shouldExposeHostedAppUpdate({ hasTabs, registration }))
-    },
-    [activateWaitingHostedAppUpdate, shellState.tabs.length]
-  )
-
-  const checkForHostedAppUpdate = useCallback(async () => {
-    if (
-      typeof navigator === 'undefined' ||
-      typeof navigator.serviceWorker === 'undefined' ||
-      typeof navigator.serviceWorker.getRegistration !== 'function'
-    ) {
-      return
-    }
-
-    const registration =
-      serviceWorkerRegistrationRef.current ?? (await navigator.serviceWorker.getRegistration())
-    if (!registration) {
-      return
-    }
-
-    serviceWorkerRegistrationRef.current = registration
-    await registration.update().catch(() => {})
-    syncUpdateStateFromRegistration(registration)
-  }, [syncUpdateStateFromRegistration])
-
-  useEffect(() => {
-    if (
-      typeof navigator === 'undefined' ||
-      typeof navigator.serviceWorker === 'undefined' ||
-      typeof navigator.serviceWorker.getRegistration !== 'function' ||
-      typeof navigator.serviceWorker.addEventListener !== 'function'
-    ) {
-      return
-    }
-
-    let disposed = false
-    let cleanupRegistrationListener = () => {}
-
-    const bindRegistration = (registration: ServiceWorkerRegistration) => {
-      const onUpdateFound = () => {
-        const installing = registration.installing
-        if (!installing) {
-          return
-        }
-
-        const onStateChange = () => {
-          if (installing.state !== 'installed') {
-            return
-          }
-
-          if (!navigator.serviceWorker.controller) {
-            syncUpdateStateFromRegistration(registration, { hasTabsOverride: false })
-            return
-          }
-
-          if (shellState.tabs.length === 0) {
-            activateWaitingHostedAppUpdate(registration)
-            return
-          }
-
-          syncUpdateStateFromRegistration(registration, { hasTabsOverride: true })
-        }
-
-        installing.addEventListener('statechange', onStateChange)
-      }
-
-      registration.addEventListener('updatefound', onUpdateFound)
-      syncUpdateStateFromRegistration(registration)
-
-      return () => {
-        registration.removeEventListener('updatefound', onUpdateFound)
-      }
-    }
-
-    const initialize = async () => {
-      const registration = await navigator.serviceWorker.getRegistration()
-      if (disposed || !registration) {
-        return
-      }
-
-      cleanupRegistrationListener()
-      cleanupRegistrationListener = bindRegistration(registration)
-    }
-
-    const onControllerChange = () => {
-      if (shouldReloadForUpdateRef.current) {
-        shouldReloadForUpdateRef.current = false
-        window.location.reload()
-      }
-    }
-
-    const onFocus = () => {
-      void checkForHostedAppUpdate()
-    }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void checkForHostedAppUpdate()
-      }
-    }
-
-    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    void initialize()
-
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void checkForHostedAppUpdate()
-      }
-    }, UPDATE_CHECK_INTERVAL_MS)
-
-    return () => {
-      disposed = true
-      cleanupRegistrationListener()
-      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      window.clearInterval(interval)
-    }
-  }, [
-    activateWaitingHostedAppUpdate,
-    checkForHostedAppUpdate,
-    shellState.tabs.length,
-    syncUpdateStateFromRegistration,
-  ])
-
   const activeHostedTab =
     shellState.tabs.find((tab) => tab.id === shellState.activeTabId) ?? shellState.tabs[0] ?? null
   const activeRuntime = activeHostedTab
     ? (tabRuntime[activeHostedTab.id] ?? DEFAULT_RUNTIME_STATE)
+    : null
+  const activePathLabel =
+    activeRuntime?.projectDir !== null && activeRuntime?.projectDir !== undefined
+      ? selectWorkspacePathLabel({
+          projectPath: activeRuntime.projectDir,
+          git: activeRuntime.git,
+        })
+      : null
+  const activeWorkspaceTitle = activeHostedTab
+    ? (activePathLabel?.title ?? activeRuntime?.projectName ?? activeHostedTab.apiBaseUrl)
+    : null
+  const activeWorkspaceId = activeHostedTab
+    ? daemonWorkspace.resolveWorkspaceId(activeHostedTab.apiBaseUrl)
     : null
 
   const handleRefreshCurrentTab = useCallback(() => {
@@ -910,214 +785,253 @@ function HostedShellRuntime({
       tabIds: [activeHostedTab.id],
       visualFeedback: true,
     })
-    void checkForHostedAppUpdate()
-  }, [activeHostedTab, checkForHostedAppUpdate, probeTabs, reloadHostedTab])
+  }, [activeHostedTab, probeTabs, reloadHostedTab])
 
-  const handleApplyHostedUpdate = useCallback(() => {
-    const registration = serviceWorkerRegistrationRef.current
-    if (!registration?.waiting) {
-      window.location.reload()
-      return
-    }
-
-    shouldReloadForUpdateRef.current = true
-    registration.waiting.postMessage({ type: 'SKIP_WAITING' })
-  }, [])
+  const handleOpenWorkspaceInBrowser = useCallback(
+    (workspaceId: string) => {
+      if (openingWorkspaceId !== null) return
+      setOpeningWorkspaceId(workspaceId)
+      void daemonWorkspace
+        .openWorkspaceInBrowser(workspaceId)
+        .catch(() => {})
+        .finally(() => {
+          setOpeningWorkspaceId((current) => (current === workspaceId ? null : current))
+        })
+    },
+    [daemonWorkspace, openingWorkspaceId]
+  )
 
   useEffect(() => {
     if (!activeHostedTab) {
       document.title = 'OpenSpec UI App'
       return
     }
-    const title = activeRuntime?.projectName ?? getHostedTabLabel(activeHostedTab)
-    document.title = `${title} - OpenSpec UI App`
-  }, [activeHostedTab, activeRuntime])
+    document.title = `${activeWorkspaceTitle} - OpenSpec UI App`
+  }, [activeHostedTab, activeWorkspaceTitle])
 
-  const tabs = useMemo(
-    () =>
-      shellState.tabs.map((tab) =>
-        createHostedShellTab({
-          tab,
-          runtime: tabRuntime[tab.id] ?? DEFAULT_RUNTIME_STATE,
-          frameState: tabFrames[tab.id] ?? DEFAULT_FRAME_STATE,
-          onRetry: (tabId) => {
-            void probeTabs({ tabIds: [tabId], visualFeedback: true })
-          },
-          onSetIframeRef: setIframeRef,
-          onFrameLoad: markFrameLoaded,
-          onFrameError: markFrameErrored,
-        })
+  const tabs = useMemo(() => {
+    const projectTabs = shellState.tabs.map((tab) =>
+      createHostedShellTab({
+        tab,
+        runtime: tabRuntime[tab.id] ?? DEFAULT_RUNTIME_STATE,
+        frameState: tabFrames[tab.id] ?? DEFAULT_FRAME_STATE,
+        onRetry: (tabId) => {
+          void probeTabs({ tabIds: [tabId], visualFeedback: true })
+        },
+        onSetIframeRef: setIframeRef,
+        onFrameLoad: markFrameLoaded,
+        onFrameError: markFrameErrored,
+      })
+    )
+    // Fixed, non-closeable Home tab as the first Workspace tab (4.0a).
+    const homeTab: Tab = {
+      id: HOME_TAB_ID,
+      closable: false,
+      label: (
+        <div className="flex min-w-0 items-center gap-1 py-0.5 text-left">
+          <Home className="h-3 w-3 shrink-0" />
+          <span className="font-nav min-w-0 truncate text-xs">Home</span>
+        </div>
       ),
-    [
-      markFrameErrored,
-      markFrameLoaded,
-      probeTabs,
-      setIframeRef,
-      shellState.tabs,
-      tabFrames,
-      tabRuntime,
-    ]
-  )
-
-  const handleAddSubmit = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault()
-      const normalizedApiBaseUrl = normalizeHostedApiBaseUrl(apiDraft)
-      if (!normalizedApiBaseUrl) {
-        setAddDialogError('Enter a valid API URL, for example http://localhost:3100')
-        return
-      }
-
-      submitApi(normalizedApiBaseUrl)
-      setApiDraft('')
-      setAddDialogError(null)
-      setIsAddDialogOpen(false)
-    },
-    [apiDraft, submitApi]
-  )
-
-  const rootStyle: HostedShellRootStyle = {
-    '--hosted-pwa-titlebar-left': `${pwaState.titlebarInsets.left}px`,
-    '--hosted-pwa-titlebar-right': `${pwaState.titlebarInsets.right}px`,
-    '--hosted-pwa-titlebar-top': `${pwaState.titlebarInsets.top}px`,
-    '--hosted-pwa-titlebar-height': `${pwaState.titlebarInsets.height}px`,
-  }
+      content: (
+        <WorkspaceHome
+          catalog={selectWorkspaceDirectoryCatalogView(directoryCatalog)}
+          launchSupported={daemonWorkspace.availability === 'supported'}
+          pending={homePathPending}
+          error={homePathError}
+          onOpenTaskManager={onOpenTaskManager}
+          onSubmitPath={(projectDir) => {
+            setHomePathPending(true)
+            setHomePathError(null)
+            void daemonWorkspace
+              .startManagedProject(projectDir)
+              .then((workspace) => {
+                const tab = connectionActions
+                  .getState()
+                  .tabs.find((candidate) => candidate.apiBaseUrl === workspace.backendUrl)
+                setSelectedWorkspaceTabId(tab?.id ?? HOME_TAB_ID)
+              })
+              .catch((error: unknown) => {
+                setHomePathError(
+                  error instanceof Error ? error.message : 'Managed project failed to start.'
+                )
+              })
+              .finally(() => setHomePathPending(false))
+          }}
+          onToggleFavorite={(canonicalPath, favorite) => {
+            setHomePathError(null)
+            void daemonWorkspace
+              .setDirectoryFavorite(canonicalPath, favorite)
+              .catch((error: unknown) => {
+                setHomePathError(
+                  error instanceof Error ? error.message : 'Failed to persist Workspace favorite.'
+                )
+              })
+          }}
+          onOpenDirectory={(canonicalPath) => {
+            setHomePathPending(true)
+            setHomePathError(null)
+            void daemonWorkspace
+              .startManagedProject(canonicalPath)
+              .then((workspace) => {
+                const tab = connectionActions
+                  .getState()
+                  .tabs.find((candidate) => candidate.apiBaseUrl === workspace.backendUrl)
+                setSelectedWorkspaceTabId(tab?.id ?? HOME_TAB_ID)
+              })
+              .catch((error: unknown) => {
+                setHomePathError(
+                  error instanceof Error ? error.message : 'Managed project failed to start.'
+                )
+              })
+              .finally(() => setHomePathPending(false))
+          }}
+        />
+      ),
+    }
+    return [homeTab, ...projectTabs]
+  }, [
+    markFrameErrored,
+    markFrameLoaded,
+    connectionActions,
+    daemonWorkspace,
+    directoryCatalog,
+    homePathError,
+    homePathPending,
+    onOpenTaskManager,
+    probeTabs,
+    setIframeRef,
+    shellState.tabs,
+    tabFrames,
+    tabRuntime,
+  ])
 
   return (
-    <div
-      className="hosted-shell-root bg-background text-foreground flex h-full min-h-0 min-w-0 flex-col"
-      data-titlebar-overlay={pwaState.displayMode === 'window-controls-overlay'}
-      style={rootStyle}
-    >
+    <div className="hosted-shell-root bg-background text-foreground flex h-full min-h-0 min-w-0 flex-col">
       <HostedShellThemeBootstrap />
 
-      {updateState.status === 'ready' && (
-        <div className="border-border bg-muted/30 text-muted-foreground border-b px-3 py-2 text-xs">
-          {updateState.errorMessage ?? UPDATE_READY_MESSAGE}
+      {(daemonWorkspace.error ?? errorMessage) && (
+        <div
+          role="status"
+          className="border-border bg-muted/30 flex items-center gap-2 border-b px-3 py-2 text-xs"
+        >
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden="true" />
+          <span>{daemonWorkspace.error ?? errorMessage}</span>
         </div>
       )}
 
       {tabs.length === 0 ? (
-        <div className="flex h-full min-h-0 min-w-0 flex-col">
-          <div className="tabs-header border-border bg-terminal text-terminal-foreground flex min-w-0 items-stretch border-b">
+        <div className="flex h-full min-w-0 flex-col">
+          <div className="tabs-header border-border bg-muted/40 text-foreground flex min-w-0 items-stretch border-b">
             <div
-              className="tabs-strip bg-terminal min-w-0 flex-1 px-4 py-3"
+              className="tabs-strip bg-muted/40 min-w-0 flex-1 px-4 py-3"
               onDoubleClick={openAddDialog}
             >
               <p className="font-nav text-xs uppercase tracking-[0.16em]">OpenSpec UI App</p>
             </div>
-            <div className="tabs-actions border-border bg-terminal text-terminal-foreground flex shrink-0 items-center border-l">
+            <div className="tabs-actions border-border bg-muted/40 text-foreground flex shrink-0 items-center border-l">
               <HostedShellActions
                 isRefreshing={false}
                 isRefreshFeedbackActive={false}
                 onRefresh={() => {}}
                 onAdd={openAddDialog}
-                canInstall={pwaState.canInstall}
-                isInstalling={pwaState.isInstalling}
-                onInstall={() => {
-                  void handleInstall()
-                }}
-                onApplyUpdate={handleApplyHostedUpdate}
-                updateStatus={updateState.status}
                 showRefresh={false}
               />
             </div>
           </div>
-          {errorMessage && (
-            <div className="border-border bg-muted/30 border-b px-3 py-2 text-xs">
-              {errorMessage}
-            </div>
-          )}
           <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6 text-center">
             <div className="space-y-3">
-              <p className="font-nav text-xs uppercase tracking-[0.16em]">No Hosted Sessions</p>
+              <p className="font-nav text-xs uppercase tracking-[0.16em]">No Workspaces</p>
               <p className="text-muted-foreground max-w-sm text-sm">
-                Open a backend connection to start a hosted OpenSpec UI tab.
+                Open a backend connection to start an OpenSpec UI Workspace.
               </p>
             </div>
           </div>
         </div>
       ) : (
-        <TerminalTabs
-          tabs={tabs}
-          selectedTab={shellState.activeTabId ?? tabs[0]?.id}
-          onTabChange={(tabId) => {
-            setShellState((current) => activateHostedTab(current, tabId))
-          }}
-          onTabClose={(tabId) => {
-            setShellState((current) => removeHostedTab(current, tabId))
-          }}
-          onTabOrderChange={(orderedTabIds) => {
-            setShellState((current) => reorderHostedTabs(current, orderedTabIds))
-          }}
-          onTabBarDoubleClick={openAddDialog}
-          actions={
-            <HostedShellActions
-              isRefreshing={isRefreshing}
-              isRefreshFeedbackActive={isRefreshFeedbackActive}
-              onRefresh={handleRefreshCurrentTab}
-              onAdd={openAddDialog}
-              canInstall={pwaState.canInstall}
-              isInstalling={pwaState.isInstalling}
-              onInstall={() => {
-                void handleInstall()
-              }}
-              onApplyUpdate={handleApplyHostedUpdate}
-              updateStatus={updateState.status}
-            />
+        <div
+          className="h-full min-h-0"
+          style={
+            {
+              '--terminal': 'var(--background)',
+              '--terminal-foreground': 'var(--foreground)',
+            } as CSSProperties
           }
-          className="hosted-shell-tabs h-full min-h-0"
-        />
+        >
+          <TerminalTabs
+            tabs={tabs}
+            selectedTab={selectedWorkspaceTabId}
+            onTabChange={(tabId) => {
+              setSelectedWorkspaceTabId(tabId)
+              if (tabId === HOME_TAB_ID) return
+              setShellState((current) => activateHostedTab(current, tabId))
+            }}
+            onTabClose={(tabId) => {
+              if (tabId === HOME_TAB_ID) return
+              setShellState((current) => {
+                // Resolve the locator before removing the tab so an unchanged daemon snapshot does not
+                // reopen this Workspace (3.2/3.7). No-op for non-daemon-backed locators.
+                const closing = current.tabs.find((tab) => tab.id === tabId)
+                if (closing) daemonWorkspace.dismissDaemonWorkspace(closing.apiBaseUrl)
+                const next = removeHostedTab(current, tabId)
+                setSelectedWorkspaceTabId(next.activeTabId ?? HOME_TAB_ID)
+                return next
+              })
+            }}
+            onTabOrderChange={(orderedTabIds) => {
+              // Home tab stays first; filter it out before reordering project tabs.
+              const projectIds = orderedTabIds.filter((id) => id !== HOME_TAB_ID)
+              setShellState((current) => reorderHostedTabs(current, projectIds))
+            }}
+            onTabBarDoubleClick={openAddDialog}
+            actions={
+              <HostedShellActions
+                isRefreshing={isRefreshing}
+                isRefreshFeedbackActive={isRefreshFeedbackActive}
+                onRefresh={handleRefreshCurrentTab}
+                onAdd={openAddDialog}
+                showRefresh={selectedWorkspaceTabId !== HOME_TAB_ID}
+                browserAction={
+                  selectedWorkspaceTabId !== HOME_TAB_ID && activeWorkspaceTitle ? (
+                    <WorkspaceTabBrowserAction
+                      label={activeWorkspaceTitle}
+                      workspaceId={activeWorkspaceId}
+                      pending={
+                        activeWorkspaceId !== null && openingWorkspaceId === activeWorkspaceId
+                      }
+                      onOpen={handleOpenWorkspaceInBrowser}
+                    />
+                  ) : undefined
+                }
+              />
+            }
+            className="hosted-shell-tabs h-full min-h-0"
+          />
+        </div>
       )}
 
-      <Dialog
+      <WorkspaceLauncherDialog
         open={isAddDialogOpen}
-        onClose={() => setIsAddDialogOpen(false)}
-        title={
-          <span className="font-nav text-sm uppercase tracking-[0.14em]">Add Backend API</span>
-        }
-        footer={
-          <>
-            <button
-              type="button"
-              onClick={() => setIsAddDialogOpen(false)}
-              className="border-border bg-background text-foreground hover:bg-muted border px-3 py-1.5 text-sm transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="hosted-shell-add-api"
-              className="bg-primary text-primary-foreground px-3 py-1.5 text-sm transition hover:opacity-90"
-            >
-              Add
-            </button>
-          </>
-        }
-      >
-        <form id="hosted-shell-add-api" onSubmit={handleAddSubmit} className="space-y-3">
-          <div className="space-y-2">
-            <label htmlFor="hosted-shell-api" className="text-sm font-medium">
-              API URL
-            </label>
-            <input
-              id="hosted-shell-api"
-              type="text"
-              autoFocus
-              value={apiDraft}
-              onChange={(event) => {
-                setApiDraft(event.target.value)
-                if (addDialogError) {
-                  setAddDialogError(null)
-                }
-              }}
-              placeholder="http://localhost:3100"
-              className="border-border bg-background w-full border px-3 py-2 font-mono text-sm"
-            />
-          </div>
-          {addDialogError && <p className="text-xs text-red-500">{addDialogError}</p>}
-        </form>
-      </Dialog>
+        onClose={() => {
+          if (launcherPending.length === 0) setIsAddDialogOpen(false)
+        }}
+        candidates={launcherCandidates}
+        openWorkspaces={shellState.tabs.map((tab) => ({ apiBaseUrl: tab.apiBaseUrl }))}
+        pending={launcherPending}
+        onFocus={(apiBaseUrl) => {
+          const tab = shellState.tabs.find((t) => t.apiBaseUrl === apiBaseUrl)
+          if (tab) setShellState((current) => activateHostedTab(current, tab.id))
+          setIsAddDialogOpen(false)
+        }}
+        onOpen={(apiBaseUrl) => {
+          runLauncherTransition(apiBaseUrl, 'open')
+        }}
+        onForget={(apiBaseUrl) => candidateActions.forgetManualCandidate(apiBaseUrl)}
+        onConnect={(apiBaseUrl) => {
+          runLauncherTransition(apiBaseUrl, 'connect')
+        }}
+        error={addDialogError}
+      />
     </div>
   )
 }

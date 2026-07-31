@@ -1,14 +1,17 @@
 /**
- * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Publish browser-safe hosted schemas including Root Context display and physical launch identity.
  * 2. Decode one successful tRPC result envelope into typed data or retained contract-error evidence.
  * 3. Preserve upstream Store and OpenSpec diagnostic facts without inferring health or ownership.
  * 4. Keep this protocol entry free of Node runtime dependencies for hosted browser consumers.
  * 5. Publish Store CLI projection lifecycle Pull schemas and data-free Push notices.
+ * 6. Publish the additive Store-content compatibility fact and typed Store-content projection schemas.
  *
  * Original request (2026-07-24): "可以归档旧change了，然后我们继续新的change 的开发推进"
  * P4.1 contract boundary: malformed successful hosted payloads must not become asserted public facts.
  * Original request (2026-07-26): "这是一套通用的数据拉取推送技术。"
+ * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西，就跟 Config 和 Context 的关系一样。"
+ *   Store-content capability is an additive compatibility fact; absence is unsupported, never empty.
  */
 import { z } from 'zod'
 import {
@@ -18,8 +21,25 @@ import {
   CliRootSourceSchema,
 } from './cli-contracts/common.js'
 import { CliProjectionNoticeSchema, createCliProjectionStateSchema } from './cli-projection.js'
+import {
+  HostedStoreContentChangesEnvelopeSchema,
+  HostedStoreContentSpecsEnvelopeSchema,
+  STORE_CONTENT_INSPECT_CAPABILITY,
+  StoreContentKindSchema,
+} from './store-content-projection.js'
 import { StoreMutationStartResponseSchema } from './store-mutation-protocol.js'
 import { StoreDoctorStoreSchema, StoreListEntrySchema } from './store-types.js'
+
+export {
+  HostedStoreContentChangesEnvelopeSchema,
+  HostedStoreContentSpecsEnvelopeSchema,
+  STORE_CONTENT_INSPECT_CAPABILITY,
+  StoreContentChangeEntrySchema,
+  StoreContentChangeListSchema,
+  StoreContentKindSchema,
+  StoreContentSpecEntrySchema,
+  StoreContentSpecListSchema,
+} from './store-content-projection.js'
 
 export {
   asEnvUri,
@@ -47,6 +67,25 @@ export const HOSTED_STORE_CAPABILITIES = [
   'contexts.inspect',
 ] as const
 
+/**
+ * Additive hosted Store-content compatibility fact. A backend advertising it implements the
+ * demand-driven typed Spec/active-Change list projection. This authorizes nothing: capability
+ * absence is presented as `unsupported`, never as an empty Store or an authorization denial.
+ */
+export const HOSTED_STORE_CONTENT_CAPABILITY = STORE_CONTENT_INSPECT_CAPABILITY
+
+/**
+ * Additive hosted capability vocabulary a backend MAY advertise in `hostedCapabilities`. The
+ * baseline `HOSTED_STORE_CAPABILITIES` (Store list/Doctor/mutation + Contexts) is advertised by
+ * every Store-capable backend, while the additive `stores.content.inspect` is advertised only by
+ * backends that implement the demand-driven readonly Store-content projection. Capability
+ * visibility remains a compatibility fact; it authorizes nothing.
+ */
+export const HOSTED_STORE_ADVERTISED_CAPABILITIES = [
+  ...HOSTED_STORE_CAPABILITIES,
+  HOSTED_STORE_CONTENT_CAPABILITY,
+] as const
+
 /** Display-safe summary emitted with a hosted backend health response. */
 export const HostedBackendRootSummarySchema = z
   .object({
@@ -72,7 +111,7 @@ export const HostedBackendHealthResponseSchema = z
     cliVersion: z.string().nullable().optional(),
     envUri: z.string().optional(),
     rootSummary: HostedBackendRootSummarySchema.nullable().optional(),
-    hostedCapabilities: z.array(z.enum(HOSTED_STORE_CAPABILITIES)).optional(),
+    hostedCapabilities: z.array(z.enum(HOSTED_STORE_ADVERTISED_CAPABILITIES)).optional(),
     accessGateEnabled: z.boolean().optional(),
   })
   .passthrough()
@@ -115,6 +154,20 @@ export const HostedStoreListProjectionStateSchema = createCliProjectionStateSche
 /** Browser-safe Pull state for Store Doctor CLI Projection Work. */
 export const HostedStoreDoctorProjectionStateSchema = createCliProjectionStateSchema(
   HostedStoreDoctorEnvelopeSchema
+)
+
+/** Demand-driven readonly Store content kind carried by every Store-content request/response. */
+export const HostedStoreContentKindSchema = StoreContentKindSchema
+export type HostedStoreContentKind = z.infer<typeof HostedStoreContentKindSchema>
+
+/** Browser-safe Pull state for Store Specs-content CLI Projection Work (one composite identity). */
+export const HostedStoreContentSpecsProjectionStateSchema = createCliProjectionStateSchema(
+  HostedStoreContentSpecsEnvelopeSchema
+)
+
+/** Browser-safe Pull state for Store active-Changes-content CLI Projection Work (one composite identity). */
+export const HostedStoreContentChangesProjectionStateSchema = createCliProjectionStateSchema(
+  HostedStoreContentChangesEnvelopeSchema
 )
 
 /** Browser-safe lifecycle-only Push shared by hosted CLI projections. */
@@ -314,6 +367,16 @@ export type HostedStoreDoctorEnvelope = z.infer<typeof HostedStoreDoctorEnvelope
 export type HostedStoreListProjectionState = z.infer<typeof HostedStoreListProjectionStateSchema>
 export type HostedStoreDoctorProjectionState = z.infer<
   typeof HostedStoreDoctorProjectionStateSchema
+>
+export type HostedStoreContentSpecsEnvelope = z.infer<typeof HostedStoreContentSpecsEnvelopeSchema>
+export type HostedStoreContentChangesEnvelope = z.infer<
+  typeof HostedStoreContentChangesEnvelopeSchema
+>
+export type HostedStoreContentSpecsProjectionState = z.infer<
+  typeof HostedStoreContentSpecsProjectionStateSchema
+>
+export type HostedStoreContentChangesProjectionState = z.infer<
+  typeof HostedStoreContentChangesProjectionStateSchema
 >
 export type HostedCliProjectionNotice = z.infer<typeof HostedCliProjectionNoticeSchema>
 export type HostedRootContext = z.infer<typeof HostedRootContextSchema>

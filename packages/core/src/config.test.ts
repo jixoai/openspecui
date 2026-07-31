@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Verify persisted UI configuration defaults, presence, and writes.
  * 2. Verify CLI runner selection, caching, invalidation, and parsing.
  * 3. Verify reactive configuration convergence and watcher cleanup.
@@ -8,6 +8,7 @@
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  * Independent review correction (2026-07-20): Global CLI installation must retire cached and
  * in-flight runner authority.
+ * Owner correction (2026-07-29): project config no longer owns a hosted App base URL.
  *
  * Compromise: this historical suite follows the monolithic ConfigManager surface; splitting its existing
  * domains is outside the bounded 6.13 correction.
@@ -115,7 +116,6 @@ describe('ConfigManager', () => {
       const customConfig = {
         cli: { command: 'bunx', args: ['openspec'] },
         theme: 'dark' as const,
-        appBaseUrl: 'https://app.example.com/openspecui',
         opsx: {
           agentInvocationMode: 'command' as const,
         },
@@ -149,7 +149,6 @@ describe('ConfigManager', () => {
       expect(config.cli.command).toBe('bunx')
       expect(config.cli.args).toEqual(['openspec'])
       expect(config.theme).toBe('dark')
-      expect(config.appBaseUrl).toBe('https://app.example.com/openspecui')
       expect(config.opsx.agentInvocationMode).toBe('command')
       expect(config.terminal.fontSize).toBe(14)
       expect(config.terminal.useTheme).toBe('system')
@@ -299,7 +298,6 @@ describe('ConfigManager', () => {
       expect(config.cli.command).toBe('custom')
       expect(config.theme).toBe('system') // default
       expect(config.codeEditor.theme).toBe('github')
-      expect(config.appBaseUrl).toBe('')
       expect(config.opsx.agentInvocationMode).toBe('compose')
       expect(config.terminal.scrollback).toBe(1000)
       expect(config.terminal.useTheme).toBe('app')
@@ -574,7 +572,6 @@ describe('ConfigManager', () => {
       await configManager.writeConfig({
         theme: 'system',
         codeEditor: { theme: 'github' },
-        appBaseUrl: '',
         opsx: { agentInvocationMode: 'compose' },
         terminal: {
           fontSize: 13,
@@ -977,7 +974,6 @@ describe('OpenSpecUIConfigSchema', () => {
       cli: { command: 'npx @fission-ai/openspec' },
       theme: 'dark',
       codeEditor: { theme: 'github' },
-      appBaseUrl: 'https://app.example.com/ui',
       opsx: {
         agentInvocationMode: 'command',
       },
@@ -1010,7 +1006,6 @@ describe('OpenSpecUIConfigSchema', () => {
       expect(result.data.cli.command).toBeUndefined()
       expect(result.data.theme).toBe('system')
       expect(result.data.codeEditor.theme).toBe('github')
-      expect(result.data.appBaseUrl).toBe('')
       expect(result.data.opsx.agentInvocationMode).toBe('compose')
       expect(result.data.terminal.fontSize).toBe(13)
       expect(result.data.terminal.useTheme).toBe('app')
@@ -1110,7 +1105,6 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.cli.command).toBeUndefined()
     expect(DEFAULT_CONFIG.theme).toBe('system')
     expect(DEFAULT_CONFIG.codeEditor.theme).toBe('github')
-    expect(DEFAULT_CONFIG.appBaseUrl).toBe('')
     expect(DEFAULT_CONFIG.opsx.agentInvocationMode).toBe('compose')
     expect(DEFAULT_CONFIG.terminal.scrollback).toBe(1000)
     expect(DEFAULT_CONFIG.terminal.useTheme).toBe('app')

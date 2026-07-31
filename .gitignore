@@ -1,4 +1,9 @@
 node_modules/
+packages/app/public/native-icons/app-icon.icns
+packages/app/public/native-icons/app-icon.ico
+packages/app/public/native-icons/app-icon.json
+packages/app/public/native-icons/app-icon.png
+packages/app/public/native-icons/linux/
 .svelte-kit/
 dist/
 dist-ssg/

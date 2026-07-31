@@ -1,17 +1,19 @@
 /**
- * Orthogonal intents (updated 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Cross a real guarded Server and the App mutation-ledger WebSocket transport.
  * 2. Prove locator credentials admit only their matching transport.
  * 3. Prove real lifecycle data commits through the framework-neutral owner.
+ * 4. Keep reconnect handshakes on the retired locator after its HTTP listener has released the port.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
+ * Full-gate correction (2026-07-31): wait for the closed listener's port before asserting same-locator reconnect behavior.
  */
 import type { AccessGateCredential } from '@openspecui/core'
-import { startServer, type RunningServer } from '@openspecui/server'
+import { isPortAvailable, startServer, type RunningServer } from '@openspecui/server'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mutateBackendStore } from './backend-client'
 import { bindLaunchCredential, clearLaunchCredential } from './launch-credential'
 import {
@@ -250,6 +252,9 @@ describe('App mutation observation tRPC transport', () => {
     // must reject B while A's independent ledger remains current and untouched.
     bindCredential(serverB.url, credentialA.credential)
     await serverB.close()
+    await vi.waitFor(async () => {
+      expect(await isPortAvailable(serverB.port)).toBe(true)
+    })
     const restartedB = await startServer({
       projectDir: projectDirB,
       port: serverB.port,

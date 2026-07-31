@@ -1,4 +1,31 @@
+/**
+ * Orthogonal intents (created 2026-07-31 Asia/Shanghai):
+ * 1. Resolve an actual bindable port for explicit ranges and OS-assigned ephemeral requests.
+ *
+ * Owner-reported defect (2026-07-31): Managed directory launch published `http://localhost:0`
+ * even though the backend was listening on an OS-assigned port.
+ */
 import { createServer as createNetServer } from 'node:net'
+
+function findEphemeralPort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createNetServer()
+    server.once('error', reject)
+    server.once('listening', () => {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        server.close()
+        reject(new Error('OS-assigned TCP port did not expose a numeric address.'))
+        return
+      }
+      server.close((error) => {
+        if (error) reject(error)
+        else resolve(address.port)
+      })
+    })
+    server.listen(0)
+  })
+}
 
 /**
  * Check if a port is available by trying to listen on it.
@@ -27,6 +54,8 @@ export function isPortAvailable(port: number): Promise<boolean> {
  * @throws Error if no available port is found in the range
  */
 export async function findAvailablePort(startPort: number, maxAttempts = 10): Promise<number> {
+  if (startPort === 0) return findEphemeralPort()
+
   for (let i = 0; i < maxAttempts; i++) {
     const port = startPort + i
     if (await isPortAvailable(port)) {

@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Own every root-scoped operation, CLI projection, and project-Schema mutation for the selected Planning root.
- * 2. Serialize replacement and issue fresh record/generation provenance without reconstructing root selection.
+ * 2. Single-flight Root resolution outside traced locks, then serialize short generation-checked record commits.
  * 3. Acquire and retire observation/invalidation leases with each active root.
  * 4. Keep reactive subscriptions and current-generation snapshots bound to Root Context dependencies and selection.
  * 5. Revoke leased service capabilities, cancel retiring streams outside blocked transitions, and
@@ -14,6 +14,10 @@
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Owner architecture clarification (2026-07-26): "将这些变更信息收集起来作为触发器，更新底层幂等计算的缓存结果。"
+ * Built-runtime correction (2026-07-30): retiring a Planning root must retire its buffered CLI children.
+ * Original request (2026-07-31): "把所有write-lock打印上时间日志和来源堆栈，使用otel来进行trace。"
+ * Owner diagnosis (2026-07-31): readonly cache misses must merge before lock admission, and slow async work must remain outside write locks.
+ * Full-gate correction (2026-07-31): imperative snapshots cannot become reactive replay authority before dependency-tracked validation.
  */
 import {
   CliExecutor,
@@ -29,6 +33,7 @@ import {
   type RuntimeRootInvalidationOwner,
   type WatcherRootRelease,
 } from '@openspecui/core'
+import { trace, type Tracer } from '@opentelemetry/api'
 import { randomUUID } from 'node:crypto'
 import {
   ChangesProjectionService,
@@ -61,6 +66,7 @@ import {
   createServerProjectionWorkRuntime,
   type ProjectionWorkRuntime,
 } from './projection-work/runtime.js'
+import { AsyncReadWriteLock, createLockTracer } from './read-write-lock.js'
 import { resolveServerRootContext, trackRootContextDependencies } from './root-context-service.js'
 import { SchemaMutationService, type SchemaMutationAction } from './schema-mutation-service.js'
 import { SearchService } from './search-service.js'
@@ -87,6 +93,7 @@ export interface PlanningRootServices {
 
 interface PlanningRootServiceRecord extends PlanningRootServices {
   identity: string
+  rootCliExecutor: CliExecutor
   schemaMutationService: SchemaMutationService
   hookRuntime: HookRuntime
   observationRelease: Promise<WatcherRootRelease | null>
@@ -103,7 +110,16 @@ interface CurrentRootContextSnapshot {
   invalidationKey: string
   state: Extract<RootContextResolvedState, { state: 'ready' }>
   services: PlanningRootServiceRecord
+  reactiveReplayEligible: boolean
 }
+
+type PlanningRootTransitionResult =
+  | {
+      status: 'current'
+      state: RootContextResolvedState
+      services: PlanningRootServiceRecord | null
+    }
+  | { status: 'stale' }
 
 interface PlanningRootOperationLease {
   services: PlanningRootServices
@@ -125,7 +141,7 @@ export interface PlanningRootServiceResolver {
   /** Resolve one uncached Root Context attempt for the external Projection Work owner. */
   resolveRootContextProjection?(): Promise<RootContextResolvedState>
   /** Run one complete operation while its selected Planning-root record remains alive. */
-  runOperation<T>(operation: PlanningRootOperation<T>): Promise<T>
+  runOperation<T>(operation: PlanningRootOperation<T>, allowStaleCache?: boolean): Promise<T>
   /** Run one complete reactive operation while tracking current root dependencies. */
   runReactiveOperation<T>(operation: PlanningRootOperation<T>): Promise<T>
   /** Retain one operation lease until its settlement-aware stream handle confirms termination. */
@@ -170,6 +186,8 @@ export interface PlanningRootServiceManagerOptions {
   changesProjectionWorkOwner?: ChangesProjectionWorkOwner
   /** Server-owned selector-exact Planning CLI registry shared across replaceable root records. */
   planningCliProjectionWorkOwner?: PlanningCliProjectionWorkOwner
+  /** Server tracer used to connect lock waits to their parent tRPC/projection trace. */
+  tracer?: Tracer
 }
 
 /** Serialized deep owner for one replaceable Planning-root service record. */
@@ -177,7 +195,9 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   private activeRecord: PlanningRootServiceRecord | null = null
   private currentRootContextSnapshot: CurrentRootContextSnapshot | null = null
   private readonly retiringRecords = new Set<PlanningRootServiceRecord>()
-  private transitionTail: Promise<void> = Promise.resolve()
+  private readonly rootTransitionFlights = new Map<string, Promise<PlanningRootTransitionResult>>()
+  private rootTransitionCommitTail: Promise<void> = Promise.resolve()
+  private readonly transitionLock: AsyncReadWriteLock
   private disposePromise: Promise<void> | null = null
   private disposed = false
   private readonly dashboardProjectionWorkOwner: DashboardProjectionWorkOwner
@@ -186,6 +206,10 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   private readonly ownedProjectionWorkRuntime: ProjectionWorkRuntime | null
 
   constructor(private readonly options: PlanningRootServiceManagerOptions) {
+    this.transitionLock = new AsyncReadWriteLock({
+      name: 'planning-root-transition',
+      tracer: createLockTracer(options.tracer ?? trace.getTracer('openspecui-server')),
+    })
     if (
       options.dashboardProjectionWorkOwner &&
       options.changesProjectionWorkOwner &&
@@ -276,13 +300,14 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         loadSummary: () => loadDashboardSummary({ adapter }),
         loadTrends: () =>
           loadDashboardTrends({ adapter, configManager: this.options.configManager }),
-        loadGit: () =>
+        loadGit: (signal) =>
           loadDashboardGitProjection(
             {
               projectDir: this.options.launchProjectDir,
               codeBindingToken: this.options.codeBinding.bindingToken,
             },
-            'projection-work'
+            'projection-work',
+            signal
           ),
       },
     })
@@ -328,6 +353,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
 
     return {
       identity: this.rootIdentity(rootContext),
+      rootCliExecutor,
       gitBindingToken,
       schemaMutationService,
       rootContext,
@@ -352,13 +378,24 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     }
   }
 
-  private runTransition<T>(task: () => Promise<T>): Promise<T> {
-    const result = this.transitionTail.then(task, task)
-    this.transitionTail = result.then(
-      () => undefined,
-      () => undefined
+  /** Run one short state commit under the exclusive transition lock. */
+  private runWriteTransition<T>(source: string, task: () => Promise<T> | T): Promise<T> {
+    return this.transitionLock.withWriteLock(
+      { source, stack: new Error(`Write lock source: ${source}`).stack ?? source },
+      task
     )
-    return result
+  }
+
+  /**
+   * Run `task` under a shared (read) lock. Used for cache-hit fast paths where only
+   * `activeRecord` and `currentRootContextSnapshot` are read. Multiple read transitions
+   * run concurrently; a pending writer blocks new readers.
+   */
+  private runReadTransition<T>(source: string, task: () => Promise<T> | T): Promise<T> {
+    return this.transitionLock.withReadLock(
+      { source, stack: new Error(`Read lock source: ${source}`).stack ?? source },
+      task
+    )
   }
 
   private async disposeRecord(record: PlanningRootServiceRecord): Promise<void> {
@@ -372,6 +409,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         Promise.resolve().then(() => record.dashboardProjectionService.dispose()),
         Promise.resolve().then(() => record.changesProjectionService.dispose()),
         Promise.resolve().then(() => record.planningCliProjectionService.dispose()),
+        Promise.resolve().then(() => record.rootCliExecutor.dispose()),
         record.hookRuntime.dispose(),
         record.searchService.dispose(),
         record.observationRelease.then((releaseObservationRoot) => releaseObservationRoot?.()),
@@ -526,131 +564,270 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     }
   }
 
-  private async activate(
-    state: RootContextResolvedState
-  ): Promise<PlanningRootServiceRecord | null> {
-    if (state.state === 'error') {
-      const previous = this.activeRecord
-      this.activeRecord = null
-      if (previous) {
-        await this.retireRecord(previous)
+  private traceRootContextCacheHit(): void {
+    const tracer = this.options.tracer ?? trace.getTracer('openspecui-server')
+    tracer.startActiveSpan('planningRoot.resolveRootContext', (span) => {
+      span.setAttribute('rootContext.cacheHit', true)
+      span.end()
+    })
+  }
+
+  private resolvedStateForRecord(
+    state: Extract<RootContextResolvedState, { state: 'ready' }>,
+    record: PlanningRootServiceRecord
+  ): Extract<RootContextResolvedState, { state: 'ready' }> {
+    return { ...state, data: record.rootContext }
+  }
+
+  private enqueueRootTransitionCommit<T>(task: () => Promise<T>): Promise<T> {
+    const result = this.rootTransitionCommitTail.then(task, task)
+    this.rootTransitionCommitTail = result.then(
+      () => undefined,
+      () => undefined
+    )
+    return result
+  }
+
+  private getRootTransition(invalidationKey: string): {
+    transition: Promise<PlanningRootTransitionResult>
+    joined: boolean
+  } {
+    const existing = this.rootTransitionFlights.get(invalidationKey)
+    if (existing) return { transition: existing, joined: true }
+
+    const transition = this.resolveAndCommitRootTransition(invalidationKey)
+    this.rootTransitionFlights.set(invalidationKey, transition)
+    const clear = () => {
+      if (this.rootTransitionFlights.get(invalidationKey) === transition) {
+        this.rootTransitionFlights.delete(invalidationKey)
       }
-      return null
+    }
+    void transition.then(clear, clear)
+    return { transition, joined: false }
+  }
+
+  private awaitRootTransition(invalidationKey: string): Promise<PlanningRootTransitionResult> {
+    const tracer = this.options.tracer ?? trace.getTracer('openspecui-server')
+    return tracer.startActiveSpan('planningRoot.transition.wait', async (span) => {
+      const { transition, joined } = this.getRootTransition(invalidationKey)
+      span.setAttribute('rootContext.invalidationKey', invalidationKey)
+      span.setAttribute('rootContext.singleFlight.joined', joined)
+      try {
+        const result = await transition
+        span.setAttribute('rootContext.transition.status', result.status)
+        return result
+      } finally {
+        span.end()
+      }
+    })
+  }
+
+  private async resolveAndCommitRootTransition(
+    invalidationKey: string
+  ): Promise<PlanningRootTransitionResult> {
+    if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+    const tracer = this.options.tracer ?? trace.getTracer('openspecui-server')
+    const state = await tracer.startActiveSpan('planningRoot.resolveRootContext', async (span) => {
+      span.setAttribute('rootContext.cacheHit', false)
+      span.setAttribute('rootContext.invalidationKey', invalidationKey)
+      try {
+        return await resolveServerRootContext({
+          projectDir: this.options.launchProjectDir,
+          cliExecutor: this.options.cliExecutor,
+        })
+      } finally {
+        span.end()
+      }
+    })
+    try {
+      return await this.enqueueRootTransitionCommit(() =>
+        this.commitRootTransition(invalidationKey, state)
+      )
+    } catch (error) {
+      return {
+        status: 'current',
+        state: this.lifecycleErrorState(state, error),
+        services: null,
+      }
+    }
+  }
+
+  private async commitRootTransition(
+    invalidationKey: string,
+    state: RootContextResolvedState
+  ): Promise<PlanningRootTransitionResult> {
+    if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+    if (this.currentRootContextInvalidationKey() !== invalidationKey) return { status: 'stale' }
+
+    if (state.state === 'error') {
+      const detached = await this.runWriteTransition('root-transition.commit', () => {
+        if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+        if (this.currentRootContextInvalidationKey() !== invalidationKey) {
+          return { status: 'stale' as const, record: null }
+        }
+        const record = this.activeRecord
+        this.activeRecord = null
+        this.currentRootContextSnapshot = null
+        if (record) this.retiringRecords.add(record)
+        return { status: 'current' as const, record }
+      })
+      if (detached.status === 'stale') return detached
+      if (detached.record) await this.retireRecord(detached.record)
+      if (this.currentRootContextInvalidationKey() !== invalidationKey) return { status: 'stale' }
+      return { status: 'current', state, services: null }
     }
 
     if (!state.data.planningRoot) {
-      throw new Error('Root Context reached ready state without a planning root.')
+      return {
+        status: 'current',
+        state: this.lifecycleErrorState(
+          state,
+          'Root Context reached ready state without a planning root.'
+        ),
+        services: null,
+      }
     }
 
+    const identity = this.rootIdentity(state.data)
     const active = this.activeRecord
-    if (active?.identity === this.rootIdentity(state.data)) {
-      const currentRootContext = { ...state.data, generation: active.gitBindingToken }
-      active.rootContext = currentRootContext
-      active.rootContextValue.set(currentRootContext)
-      return active
-    }
-
-    this.activeRecord = null
-    if (active) {
-      await this.retireRecord(active)
-    }
-    if (this.disposed) throw new Error('Planning-root service manager is disposed.')
-    const created = this.createRecord({
-      ...state.data,
-      generation: state.data.generation ?? randomUUID(),
-    })
-    this.activeRecord = created
-    return created
-  }
-
-  private async resolveActiveTransition(
-    reactive: boolean,
-    useRuntimeInvalidationCache = true
-  ): Promise<{
-    state: RootContextResolvedState
-    services: PlanningRootServiceRecord | null
-  }> {
-    if (this.disposed) throw new Error('Planning-root service manager is disposed.')
-    const invalidationKey = useRuntimeInvalidationCache
-      ? this.currentRootContextInvalidationKey()
-      : null
-    const cached = this.currentRootContextSnapshot
-
-    // Only reactive display work can replay a validated Root snapshot. Imperative queries, mutations, and
-    // PTY operations must re-confirm upstream CLI root selection because that selection can change outside
-    // the reactive filesystem invalidation graph.
-    if (
-      reactive &&
-      invalidationKey !== null &&
-      cached?.invalidationKey === invalidationKey &&
-      cached.services === this.activeRecord
-    ) {
-      if (reactive) {
-        await trackRootContextDependencies(
-          {
-            projectDir: this.options.launchProjectDir,
-          },
-          cached.state
-        )
-      }
-      return { state: cached.state, services: cached.services }
-    }
-
-    // A new Root/Store/context generation must never reuse or authorize the prior Root snapshot.
-    this.currentRootContextSnapshot = null
-    const state = await resolveServerRootContext({
-      projectDir: this.options.launchProjectDir,
-      cliExecutor: this.options.cliExecutor,
-    })
-    if (reactive) {
-      await trackRootContextDependencies(
-        {
-          projectDir: this.options.launchProjectDir,
-        },
-        state
-      )
-    }
-    try {
-      const services = await this.activate(state)
-      if (state.state === 'ready' && services) {
-        const resolvedState: Extract<RootContextResolvedState, { state: 'ready' }> = {
-          ...state,
-          data: services.rootContext,
+    if (active?.identity === identity) {
+      return this.runWriteTransition('root-transition.commit', () => {
+        if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+        if (this.currentRootContextInvalidationKey() !== invalidationKey) {
+          return { status: 'stale' as const }
         }
-        // If a dependency changed while CLI resolution or record retirement was in flight, the reactive caller
-        // will recompute B. Do not write an A result under B's identity.
-        if (
-          reactive &&
-          invalidationKey !== null &&
-          this.currentRootContextInvalidationKey() === invalidationKey
-        ) {
-          this.currentRootContextSnapshot = {
-            invalidationKey,
-            state: resolvedState,
-            services,
-          }
-        }
-        return {
+        if (this.activeRecord !== active) return { status: 'stale' as const }
+        const currentRootContext = { ...state.data, generation: active.gitBindingToken }
+        active.rootContext = currentRootContext
+        active.rootContextValue.set(currentRootContext)
+        const resolvedState = this.resolvedStateForRecord(state, active)
+        this.currentRootContextSnapshot = {
+          invalidationKey,
           state: resolvedState,
-          services,
+          services: active,
+          reactiveReplayEligible: false,
         }
-      }
-      return { state, services }
+        return { status: 'current' as const, state: resolvedState, services: active }
+      })
+    }
+
+    if (active) {
+      const detached = await this.runWriteTransition('root-transition.detach', () => {
+        if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+        if (this.currentRootContextInvalidationKey() !== invalidationKey) return false
+        if (this.activeRecord !== active) return false
+        this.activeRecord = null
+        this.currentRootContextSnapshot = null
+        this.retiringRecords.add(active)
+        return true
+      })
+      if (!detached) return { status: 'stale' }
+      await this.retireRecord(active)
+      if (this.currentRootContextInvalidationKey() !== invalidationKey) return { status: 'stale' }
+    }
+
+    if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+    let created: PlanningRootServiceRecord
+    try {
+      created = this.createRecord({
+        ...state.data,
+        generation: state.data.generation ?? randomUUID(),
+      })
     } catch (error) {
-      return { state: this.lifecycleErrorState(state, error), services: null }
+      return { status: 'current', state: this.lifecycleErrorState(state, error), services: null }
+    }
+
+    let committed: boolean
+    try {
+      committed = await this.runWriteTransition('root-transition.commit', () => {
+        if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+        if (this.currentRootContextInvalidationKey() !== invalidationKey) return false
+        if (this.activeRecord !== null) return false
+        this.activeRecord = created
+        const resolvedState = this.resolvedStateForRecord(state, created)
+        this.currentRootContextSnapshot = {
+          invalidationKey,
+          state: resolvedState,
+          services: created,
+          reactiveReplayEligible: false,
+        }
+        return true
+      })
+    } catch (error) {
+      await this.retireRecord(created)
+      throw error
+    }
+    if (!committed) {
+      await this.retireRecord(created)
+      return { status: 'stale' }
+    }
+    return {
+      status: 'current',
+      state: this.resolvedStateForRecord(state, created),
+      services: created,
     }
   }
 
-  private resolveTransition(
+  private readCurrentSnapshot(invalidationKey: string): Promise<CurrentRootContextSnapshot | null> {
+    return this.runReadTransition('root-transition.cache-check', () => {
+      if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+      const cached = this.currentRootContextSnapshot
+      if (cached?.invalidationKey !== invalidationKey || cached.services !== this.activeRecord) {
+        return null
+      }
+      return cached
+    })
+  }
+
+  private async trackReactiveRootContext(state: RootContextResolvedState): Promise<void> {
+    await trackRootContextDependencies({ projectDir: this.options.launchProjectDir }, state)
+  }
+
+  private promoteReactiveSnapshot(
+    invalidationKey: string,
+    services: PlanningRootServiceRecord | null
+  ): void {
+    const snapshot = this.currentRootContextSnapshot
+    if (
+      !services ||
+      snapshot?.invalidationKey !== invalidationKey ||
+      snapshot.services !== services ||
+      this.activeRecord !== services
+    ) {
+      return
+    }
+    snapshot.reactiveReplayEligible = true
+  }
+
+  private async resolveTransition(
     reactive: boolean,
-    useRuntimeInvalidationCache = true
+    useRuntimeInvalidationCache = true,
+    allowStaleCache = false
   ): Promise<{
     state: RootContextResolvedState
     services: PlanningRootServiceRecord | null
   }> {
-    return this.runTransition(() =>
-      this.resolveActiveTransition(reactive, useRuntimeInvalidationCache)
-    )
+    const cacheEligible = reactive || allowStaleCache
+    while (true) {
+      if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+      const invalidationKey = this.currentRootContextInvalidationKey()
+      if (useRuntimeInvalidationCache && cacheEligible) {
+        const cached = await this.readCurrentSnapshot(invalidationKey)
+        if (cached && (!reactive || cached.reactiveReplayEligible)) {
+          this.traceRootContextCacheHit()
+          if (reactive) await this.trackReactiveRootContext(cached.state)
+          return { state: cached.state, services: cached.services }
+        }
+      }
+
+      const transition = await this.awaitRootTransition(invalidationKey)
+      if (transition.status === 'stale') continue
+      if (reactive) {
+        await this.trackReactiveRootContext(transition.state)
+        this.promoteReactiveSnapshot(invalidationKey, transition.services)
+      }
+      return transition
+    }
   }
 
   private requireActiveServices(result: {
@@ -667,16 +844,71 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
     return result.services
   }
 
-  private acquireOperation(reactive: boolean): Promise<{
+  private async acquireOperation(
+    reactive: boolean,
+    allowStaleCache = false
+  ): Promise<{
     lease: PlanningRootOperationLease
     record: PlanningRootServiceRecord
   }> {
-    return this.runTransition(async () => {
-      if (this.disposed) throw new Error('Planning-root service manager is disposed.')
-      const record = this.requireActiveServices(await this.resolveActiveTransition(reactive))
-      if (this.disposed) throw new Error('Planning-root service manager is disposed.')
-      return { lease: this.createOperationLease(record), record }
-    })
+    const cacheEligible = reactive || allowStaleCache
+    let acceptNewerSnapshot = false
+    while (true) {
+      const invalidationKey = this.currentRootContextInvalidationKey()
+      const cached =
+        cacheEligible || acceptNewerSnapshot
+          ? await this.runReadTransition('acquire-operation.cache-check', () => {
+              if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+              const snapshot = this.currentRootContextSnapshot
+              if (
+                snapshot?.invalidationKey !== invalidationKey ||
+                snapshot.services !== this.activeRecord ||
+                (reactive && !snapshot.reactiveReplayEligible)
+              ) {
+                return null
+              }
+              return {
+                state: snapshot.state,
+                lease: this.createOperationLease(snapshot.services),
+                record: snapshot.services,
+              }
+            })
+          : null
+      if (cached) {
+        try {
+          this.traceRootContextCacheHit()
+          if (reactive) await this.trackReactiveRootContext(cached.state)
+          return { lease: cached.lease, record: cached.record }
+        } catch (error) {
+          await cached.lease.release()
+          throw error
+        }
+      }
+
+      const transition = await this.awaitRootTransition(invalidationKey)
+      if (transition.status === 'stale') {
+        acceptNewerSnapshot = true
+        continue
+      }
+      const admitted = await this.runReadTransition('acquire-operation.commit', () => {
+        if (this.disposed) throw new Error('Planning-root service manager is disposed.')
+        if (this.currentRootContextInvalidationKey() !== invalidationKey) return null
+        const record = this.requireActiveServices(transition)
+        if (this.activeRecord !== record) return null
+        return { lease: this.createOperationLease(record), record }
+      })
+      if (!admitted) continue
+      try {
+        if (reactive) {
+          await this.trackReactiveRootContext(transition.state)
+          this.promoteReactiveSnapshot(invalidationKey, admitted.record)
+        }
+        return admitted
+      } catch (error) {
+        await admitted.lease.release()
+        throw error
+      }
+    }
   }
 
   /** Resolve Root Context only after the active Planning-root lifecycle has converged. */
@@ -695,8 +927,8 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   }
 
   /** Run one complete operation without exposing a durable service handle. */
-  async runOperation<T>(operation: PlanningRootOperation<T>): Promise<T> {
-    const { lease } = await this.acquireOperation(false)
+  async runOperation<T>(operation: PlanningRootOperation<T>, allowStaleCache = false): Promise<T> {
+    const { lease } = await this.acquireOperation(false, allowStaleCache)
     try {
       return await operation(lease.services)
     } finally {
@@ -715,39 +947,35 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   }
 
   /** Retain a revocable operation capability until the child process actually settles. */
-  startOperationStream(operation: PlanningRootStreamOperation): Promise<CliStreamHandle> {
-    return this.runTransition(async () => {
+  async startOperationStream(operation: PlanningRootStreamOperation): Promise<CliStreamHandle> {
+    const { lease, record } = await this.acquireOperation(false)
+    try {
       if (this.disposed) throw new Error('Planning-root service manager is disposed.')
-      const record = this.requireActiveServices(await this.resolveActiveTransition(false))
-      if (this.disposed) throw new Error('Planning-root service manager is disposed.')
-      const lease = this.createOperationLease(record)
-      try {
-        const stream = operation(lease.services)
-        let managedStream: CliStreamHandle
-        const settled = stream.settled.then(async (settlement) => {
-          await lease.release()
-          record.activeStreams.delete(managedStream)
-          return settlement
-        })
-        let cancelRequested = false
-        managedStream = {
-          settled,
-          cancel: () => {
-            if (!cancelRequested) {
-              cancelRequested = true
-              void stream.cancel().catch(() => {})
-            }
-            return settled
-          },
-        }
-        record.activeStreams.add(managedStream)
-        void settled.catch(() => {})
-        return managedStream
-      } catch (error) {
+      const stream = operation(lease.services)
+      let managedStream: CliStreamHandle
+      const settled = stream.settled.then(async (settlement) => {
         await lease.release()
-        throw error
+        record.activeStreams.delete(managedStream)
+        return settlement
+      })
+      let cancelRequested = false
+      managedStream = {
+        settled,
+        cancel: () => {
+          if (!cancelRequested) {
+            cancelRequested = true
+            void stream.cancel().catch(() => {})
+          }
+          return settled
+        },
       }
-    })
+      record.activeStreams.add(managedStream)
+      void settled.catch(() => {})
+      return managedStream
+    } catch (error) {
+      await lease.release()
+      throw error
+    }
   }
 
   /** Run one Schema action inside the same operation-lifetime contract as every Router caller. */
@@ -778,11 +1006,12 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       this.activeRecord = null
       this.retiringRecords.add(active)
     }
-    // A replacement may be waiting on A's lease in transitionTail. Cancel before queuing teardown.
+    // Cancel admitted children first; pending Root resolution and record retirement never hold the lock.
     const cancellation = this.cancelRetiringStreams()
     void cancellation.catch(() => {})
-    const teardown = this.runTransition(async () => {
-      await cancellation
+    const teardown = cancellation.then(async () => {
+      await Promise.allSettled(this.rootTransitionFlights.values())
+      await this.rootTransitionCommitTail
       for (const record of this.retiringRecords) await this.retireRecord(record)
       this.ownedProjectionWorkRuntime?.clear()
     })

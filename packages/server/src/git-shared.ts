@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Execute Git commands and retain structured stdout/stderr/exit evidence.
  * 2. Distinguish a valid non-repository path from an identity-command failure.
  * 3. Canonicalize repository paths for binding identity and stale-intent checks.
+ * 4. Propagate cooperative cancellation into Git subprocess ownership.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves objective Planning Git failures.
+ * Original request (2026-07-31): "Code Git Snapshot，它非常慢，有时候甚至要十几秒"
  */
 import { execFile } from 'node:child_process'
 import { realpath, stat } from 'node:fs/promises'
@@ -27,7 +29,11 @@ export interface GitCommandResult {
   failureKind?: 'not-repository' | 'command-failed'
 }
 
-export type GitRunner = (cwd: string, args: string[]) => Promise<GitCommandResult>
+export type GitRunner = (
+  cwd: string,
+  args: string[],
+  signal?: AbortSignal
+) => Promise<GitCommandResult>
 export type PathTimestampReader = (absolutePath: string) => Promise<number | null>
 
 export interface ParsedWorktree {
@@ -42,15 +48,21 @@ export const EMPTY_DIFF: DashboardGitDiffStats = {
   deletions: 0,
 }
 
-export async function defaultRunGit(cwd: string, args: string[]): Promise<GitCommandResult> {
+export async function defaultRunGit(
+  cwd: string,
+  args: string[],
+  signal?: AbortSignal
+): Promise<GitCommandResult> {
   try {
     const { stdout } = await execFileAsync('git', args, {
       cwd,
       encoding: 'utf8',
       maxBuffer: 8 * 1024 * 1024,
+      signal,
     })
     return { ok: true, stdout }
   } catch (error: unknown) {
+    if (signal?.aborted) throw error
     const stderrField = readErrorField(error, 'stderr')
     const stderr = typeof stderrField === 'string' ? stderrField : undefined
     const errorCode = readErrorField(error, 'code')

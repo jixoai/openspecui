@@ -1,14 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Prove server startup and its canonical embedded entry remain available while runtime observers warm up.
- * 2. Prove shutdown is idempotent and continues across independent owner failures.
- * 3. Prove backend shutdown settles attached Planning-root CLI streams without client cooperation.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Prove server startup publishes its actual bound port and keeps the canonical embedded entry available while runtime observers warm up.
+ * 2. Prove shutdown awaits HTTP settlement, remains idempotent, and continues across independent owner failures.
+ * 3. Prove backend shutdown settles attached Planning-root streams and buffered projection CLI children without client cooperation.
  * 4. Prove preview assets remain bound to the current Planning-root lifecycle.
  * 5. Prove Root Context health records stay Server-local and retire with the running Server lifecycle.
  *
  * Original request (2026-07-17): "Backend disposal actively cancels every owned stream and awaits settlement."
  * Original checkpoint (2026-07-16): "6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging."
  * Owner-reported defect (2026-07-26): "a内容还没加载出来，页面就自动刷新了。"
+ * Built-runtime defect (2026-07-30): Direct Web shutdown must await HTTP closure and retire non-cooperative WebSocket and buffered CLI children after one signal.
+ * Owner-reported defect (2026-07-31): A managed directory launch published `http://localhost:0`, leaving its Workspace permanently offline.
+ * Owner-reported defect (2026-07-31): A healthy external dev backend appeared offline because the dynamic local App origin was rejected by CORS.
  */
 import {
   ConfigManager,
@@ -152,6 +155,47 @@ async function createProjectDir(): Promise<string> {
 }
 
 describe('server startup runtime contract', () => {
+  it('publishes the actual OS-assigned port when the preferred port is zero', async () => {
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
+    coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
+    coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
+    coreMockState.disposeDataHomeObservation.mockResolvedValue(undefined)
+    const projectDir = await createProjectDir()
+
+    const started = await startServer({ projectDir, port: 0, enableWatcher: false })
+    runningServers.push(started)
+
+    expect(started.preferredPort).toBe(0)
+    expect(started.port).toBeGreaterThan(0)
+    expect(new URL(started.url).port).toBe(String(started.port))
+    expect((await fetch(`${started.url}/api/health`)).ok).toBe(true)
+  })
+
+  it('admits dynamic loopback App origins without admitting arbitrary remote origins', async () => {
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
+    coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
+    coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
+    coreMockState.disposeDataHomeObservation.mockResolvedValue(undefined)
+    const projectDir = await createProjectDir()
+    const started = await startServer({
+      projectDir,
+      port: await findAvailablePort(34_900, 100),
+      enableWatcher: false,
+    })
+    runningServers.push(started)
+
+    const loopbackOrigin = 'http://127.0.0.1:61594'
+    const loopback = await fetch(`${started.url}/api/health`, {
+      headers: { Origin: loopbackOrigin },
+    })
+    expect(loopback.headers.get('access-control-allow-origin')).toBe(loopbackOrigin)
+
+    const remote = await fetch(`${started.url}/api/health`, {
+      headers: { Origin: 'https://untrusted.example' },
+    })
+    expect(remote.headers.get('access-control-allow-origin')).toBeNull()
+  })
+
   it('returns before background warmup tasks are allowed to start', async () => {
     coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
     coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
@@ -378,6 +422,77 @@ describe('server startup runtime contract', () => {
 
       expect(closedWithoutClientCooperation).toBe(true)
       expect(closeFinishedAt).toBeGreaterThanOrEqual(closedAt)
+    }
+  )
+
+  it('terminates non-cooperative WebSocket clients before shutdown completes', async () => {
+    coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
+    coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
+    coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
+    coreMockState.disposeDataHomeObservation.mockResolvedValue(undefined)
+    const projectDir = await createProjectDir()
+    const port = await findAvailablePort(34_600, 100)
+    const server = await startServer({ projectDir, port, enableWatcher: false })
+    runningServers.push(server)
+    const socket = new WebSocket(`ws://localhost:${server.port}/trpc`)
+    await new Promise<void>((resolve, reject) => {
+      socket.once('open', resolve)
+      socket.once('error', reject)
+    })
+    const socketClosed = new Promise<void>((resolve) => socket.once('close', () => resolve()))
+
+    await server.close()
+    runningServers.pop()
+
+    const closedWithoutClientCooperation = await Promise.race([
+      socketClosed.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 500)),
+    ])
+    if (!closedWithoutClientCooperation) socket.terminate()
+
+    expect(closedWithoutClientCooperation).toBe(true)
+    expect(socket.readyState).toBe(WebSocket.CLOSED)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'terminates a non-cooperative buffered Store projection child before shutdown completes',
+    async () => {
+      coreMockState.acquireObservationRoot.mockResolvedValue(async () => {})
+      coreMockState.disposeObservationEnvironment.mockResolvedValue(undefined)
+      coreMockState.startDataHomeObservation.mockResolvedValue(undefined)
+      coreMockState.disposeDataHomeObservation.mockResolvedValue(undefined)
+      const projectDir = await createProjectDir()
+      const readyPath = join(projectDir, 'store-list-ready')
+      const runnerPath = join(projectDir, 'buffered-store-runner.cjs')
+      await writeFile(
+        runnerPath,
+        [
+          "const { writeFileSync } = require('node:fs')",
+          "if (process.argv.includes('--version')) process.stdout.write('1.6.0\\n')",
+          'else {',
+          `  writeFileSync(${JSON.stringify(readyPath)}, process.argv.slice(2).join(' '))`,
+          "  process.on('SIGTERM', () => {})",
+          '  setInterval(() => {}, 1_000)',
+          '}',
+        ].join('\n'),
+        'utf8'
+      )
+      const configManager = new ConfigManager(projectDir)
+      await configManager.writeConfig({
+        cli: { command: `${process.execPath} ${runnerPath}` },
+      })
+      const port = await findAvailablePort(34_500, 100)
+      const server = await startServer({ projectDir, port, enableWatcher: false })
+      runningServers.push(server)
+
+      await vi.waitFor(async () => {
+        expect(await readFile(readyPath, 'utf8')).toContain('store list --json')
+      })
+      const closeStartedAt = Date.now()
+      await server.close()
+      runningServers.pop()
+
+      expect(Date.now() - closeStartedAt).toBeLessThan(3_000)
     }
   )
 

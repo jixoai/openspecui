@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Render objective Dashboard metric values and historical trend texture.
+ * 2. Preserve one stable card geometry while Pending content settles in place.
+ * 3. Explain unavailable objective history without inventing trend semantics.
+ *
+ * Original request (2026-07-31): "Historical Trends 这里的卡片高度是稳定的"
+ */
+import { RealtimeSkeleton } from '@/components/realtime'
 import type {
   DashboardCardAvailability,
   DashboardTrendKind,
@@ -227,6 +236,7 @@ export function DashboardMetricCard({
   trendKind,
   points,
   triColorPoints = [],
+  pending = false,
   className,
 }: {
   label: string
@@ -236,6 +246,7 @@ export function DashboardMetricCard({
   trendKind: DashboardTrendKind
   points: DashboardTrendPoint[]
   triColorPoints?: DashboardTriColorTrendPoint[]
+  pending?: boolean
   className?: string
 }) {
   const compactTriColorPoints = compressTriColorTrend(triColorPoints, TREND_BAR_TARGET)
@@ -263,37 +274,58 @@ export function DashboardMetricCard({
           : 'border-border bg-card'
       } ${className ?? ''}`}
       data-testid="dashboard-metric-card"
+      aria-busy={pending}
     >
-      {!isInvalid &&
+      {!pending &&
+        !isInvalid &&
         (hasTriColorTrend ? (
           <MiniTriColorTrendBars bars={normalizedTriColorBars} />
         ) : (
           <MiniTrendBars bars={normalizedBars} directions={directions} trendKind={trendKind} />
         ))}
 
-      <div className="relative z-10">
-        <div className="text-muted-foreground mb-1 flex items-center gap-2 text-sm">
-          <Icon className="h-3.5 w-3.5" />
-          {label}
+      {pending ? (
+        <div className="relative z-10 flex h-full flex-col" aria-hidden="true">
+          <div className="mb-2 flex items-center gap-2">
+            <RealtimeSkeleton className="size-3.5 shrink-0 rounded-full" />
+            <RealtimeSkeleton className="h-4 w-2/3 max-w-56" />
+          </div>
+          <RealtimeSkeleton className="h-8 w-24" />
+          <div className="mt-auto flex h-1/2 items-end gap-1 pt-4">
+            {Array.from({ length: 12 }, (_, index) => (
+              <RealtimeSkeleton
+                key={index}
+                className="min-h-3 flex-1 rounded-sm"
+                style={{ height: `${28 + ((index * 17) % 64)}%` }}
+              />
+            ))}
+          </div>
         </div>
-        <div className="text-2xl font-bold">{value}</div>
-        {isInvalid && (
-          <div
-            className="text-muted-foreground mt-2 text-xs"
-            data-testid="dashboard-card-invalid-note"
-          >
-            {invalidMessage}
+      ) : (
+        <div className="relative z-10">
+          <div className="text-muted-foreground mb-1 flex items-center gap-2 text-sm">
+            <Icon className="h-3.5 w-3.5" />
+            {label}
           </div>
-        )}
-        {!isInvalid && !hasTrend && (
-          <div
-            className="text-muted-foreground mt-2 text-xs"
-            data-testid="dashboard-card-trend-note"
-          >
-            No trend yet
-          </div>
-        )}
-      </div>
+          <div className="text-2xl font-bold">{value}</div>
+          {isInvalid && (
+            <div
+              className="text-muted-foreground mt-2 text-xs"
+              data-testid="dashboard-card-invalid-note"
+            >
+              {invalidMessage}
+            </div>
+          )}
+          {!isInvalid && !hasTrend && (
+            <div
+              className="text-muted-foreground mt-2 text-xs"
+              data-testid="dashboard-card-trend-note"
+            >
+              No trend yet
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

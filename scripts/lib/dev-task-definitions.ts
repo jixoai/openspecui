@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Define the root development task graph and automatic startup policy.
+ * 2. Keep browser HMR servers distinct from built assets consumed by CLI runtimes.
+ *
+ * Original request (2026-07-30): "pnpm dev整理同时启动多个构建相关的任务，是不是缺了 app 项目的构建，如果是了，请你补充一下。"
+ */
 import { join } from 'node:path'
 
 export type DevTask = {
@@ -78,6 +85,14 @@ export function createDevTasks(config: DevTaskConfig): DevTask[] {
         OPENSPECUI_APP_DEV_VERSION: webPackageVersion,
         VITE_OPENSPECUI_APP_DEFAULT_API_URL: apiUrl,
       },
+      autoStart: true,
+    },
+    {
+      id: 'app-dist-dev',
+      name: 'App Dist Watch',
+      description: 'Watch-build @openspecui/app dist output for the CLI App daemon.',
+      command: 'pnpm',
+      args: ['--filter', '@openspecui/app', 'dev:dist'],
       autoStart: true,
     },
     {

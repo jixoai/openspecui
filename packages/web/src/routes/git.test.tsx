@@ -1,14 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove Code/Planning Git route requests, controls, and navigation.
  * 2. Prove mounted repository rebinding retires stale Planning status and history.
- * 3. Prove every Git mutation retains the binding token captured by its render.
+ * 3. Prove readonly Git refresh and domain mutations retain the binding token captured by their render.
  * 4. Prove cached Git scope data is non-authoritative during reconnect until B emits.
  * 5. Drive real transport connection/error callbacks through query and action owners.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-07-31): "dashboard.refreshGitSnapshot?batch=1 这个请求一直在阻塞其它任务，这个不是只读吗"
+ * Owner correction (2026-07-31): Lifecycle refresh remains enabled through readonly query transport.
  */
 import type { GitRepositoryScopes, GitWorktreeSummary, RootContextState } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -99,7 +101,7 @@ vi.mock('@/lib/trpc', () => ({
         mutate: switchWorktreeMock,
       },
       refresh: {
-        mutate: refreshGitMock,
+        query: refreshGitMock,
       },
       removeDetachedWorktree: {
         mutate: removeDetachedWorktreeMock,
@@ -624,6 +626,22 @@ describe('GitRoute', () => {
       expectedBindingToken: 'code-binding',
       cursor: undefined,
       limit: 50,
+    })
+  })
+
+  it('issues lifecycle Git refresh through the readonly query contract', async () => {
+    renderWithQueryClient(<GitRoute />)
+    await screen.findByText('main against origin/main')
+    refreshGitMock.mockClear()
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+    })
+
+    expect(refreshGitMock).toHaveBeenCalledWith({
+      scope: 'code',
+      expectedBindingToken: 'code-binding',
+      reason: 'window-focus',
     })
   })
 

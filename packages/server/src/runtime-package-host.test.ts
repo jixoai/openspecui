@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Prove runtime-host manifest discovery and package-manager tree parsing.
+ * 2. Prove on-demand runtime ranges use installed optional dependencies or optional peers.
+ * 3. Prove legacy duplicated runtime dependency records are normalized safely.
+ *
+ * Original request (2026-07-31): "这个依赖好像会导致安装的时候仍然会被强制装上去，可能要改成 peerDependencies 会更好"
+ */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -68,6 +76,30 @@ describe('readRuntimeHostPackageDependencyRequest', () => {
           name: 'openspecui',
           dependencies: { '@huggingface/transformers': '^4.0.0' },
           optionalDependencies: { '@huggingface/transformers': '~4.2.0' },
+        },
+        null,
+        2
+      )
+    )
+
+    expect(
+      readRuntimeHostPackageDependencyRequest({
+        runtimeHost: createRuntimeHostContext(dir),
+        packageName: '@huggingface/transformers',
+        fallbackRange: '^0.0.0',
+      })
+    ).toBe('@huggingface/transformers@~4.2.0')
+  })
+
+  it('reads the runtime dependency range from an optional peer when not installed', async () => {
+    const dir = await createTempTree()
+    await writeFile(
+      join(dir, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'openspecui',
+          peerDependencies: { '@huggingface/transformers': '~4.2.0' },
+          peerDependenciesMeta: { '@huggingface/transformers': { optional: true } },
         },
         null,
         2

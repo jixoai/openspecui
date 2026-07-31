@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Consume the typed Store-list CLI projection for presentation suggestions.
  * 2. Preserve retained data and explicit lifecycle errors during registry revalidation.
  * 3. Keep Store suggestions read-only and separate from Project Binding mutation authority.
  *
  * Original request (2026-07-29): "Project Binding 的 Store 表单使用 Combobox，并允许注册表建议。"
+ * Owner correction (2026-07-31): Projection refresh is a readonly observation command.
  */
 import {
   HostedCliProjectionNoticeSchema,
@@ -26,7 +27,7 @@ export function useStoreListProjection(
   const source = useMemo<CliProjectionLifecycleSource<HostedStoreListEnvelope>>(
     () => ({
       read: () => trpcClient.stores.readListProjection.query(),
-      refresh: () => trpcClient.stores.refreshProjection.mutate({ kind: 'list' }),
+      refresh: () => trpcClient.stores.refreshProjection.query({ kind: 'list' }),
       parseState: (raw) => HostedStoreListProjectionStateSchema.parse(raw),
       subscribe(callbacks) {
         return trpcClient.stores.subscribeProjection.subscribe(

@@ -53,6 +53,20 @@ describe('hosted contract decoder', () => {
     expect('computeEnvUri' in hostedContract).toBe(false)
   })
 
+  it('treats the additive Store-content capability as distinct from baseline Store vocabulary', () => {
+    expect(hostedContract.HOSTED_STORE_CONTENT_CAPABILITY).toBe('stores.content.inspect')
+    expect(hostedContract.HOSTED_STORE_CAPABILITIES).not.toContain(
+      hostedContract.HOSTED_STORE_CONTENT_CAPABILITY
+    )
+    expect(hostedContract.HOSTED_STORE_ADVERTISED_CAPABILITIES).toContain(
+      hostedContract.HOSTED_STORE_CONTENT_CAPABILITY
+    )
+    // Capability visibility authorizes nothing.
+    expect(hostedContract.hasCapability(['stores.content.inspect'], 'stores.content.inspect')).toBe(
+      true
+    )
+  })
+
   it('preserves canonical Launch physical identity in browser-safe Root Context', () => {
     const decoded = HostedRootContextSchema.parse({
       launchProject: { path: '/tmp/project-link', physicalPath: '/private/tmp/project' },

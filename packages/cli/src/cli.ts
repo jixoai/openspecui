@@ -1,318 +1,108 @@
 #!/usr/bin/env node
 
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Parse and dispatch start/export CLI commands through yargs.
- * 2. Coordinate local/hosted App and consumed worktree runtime bootstrap with protected shutdown.
- * 3. Delegate one credential-safe Direct/App intent to the selected start-command presenter.
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * 1. Parse one production yargs command plan and dispatch serve, daemon, export, or meta execution.
+ * 2. Keep each foreground serve process as the sole owner of its project Server and shutdown.
+ * 3. Bootstrap the detached App daemon and consume only its explicit managed-directory restoration handoff.
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
  * Delivery correction (2026-07-26): process children consume the parent's resolved Web asset root.
- * Original request (2026-07-28): "从底层上封装，后续可能对接 OpenTray 原生窗口。"
+ * Owner correction (2026-07-29): bare openspecui is serve; start/stop/restart own only the App daemon.
+ * Owner correction (2026-07-30): native appMode cold launch must re-enter the public `start` lifecycle.
+ * Owner lifecycle decision (2026-07-30): daemon restart restores the managed running directory set.
  */
-
-import { ConfigManager } from '@openspecui/core'
-import { readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import yargs from 'yargs'
+import { promptForAppAdmission } from './app-admission-prompt.js'
 import { getCliArgs } from './argv.js'
 import { createBrowserStartCommandPresenter } from './browser-start-command-presenter.js'
-import type { ExportFormat } from './export.js'
-import { exportStaticSite } from './export.js'
-import { resolveEffectiveHostedAppBaseUrl } from './hosted-app.js'
-import { startServer } from './index.js'
+import { parseCliCommand } from './cli-command.js'
+import { executeCliCommand } from './cli-execution.js'
+import { createDaemonController } from './daemon-controller.js'
 import {
-  resolveLocalHostedAppWorkspace,
-  shouldUseLocalHostedAppDevMode,
-  startLocalHostedAppDev,
-  type LocalHostedAppDevSession,
-} from './local-hosted-app-dev.js'
-import { coordinateStartCommandPresentation } from './start-command-presentation.js'
+  consumeDaemonBootstrap,
+  consumeDaemonRestoreProjects,
+  runDaemonProcess,
+} from './daemon-process.js'
+import { exportStaticSite } from './export.js'
+import { startServer } from './index.js'
+import { readCliPackageVersion } from './package-version.js'
 import { buildStartupBanner } from './startup-banner.js'
 import {
   consumeWorktreeProcessAccessGateCredential,
   consumeWorktreeProcessWebAssetsDir,
 } from './worktree-server-worker.js'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const DEFAULT_HOSTED_CORS_ORIGINS = ['http://localhost:5173', 'http://localhost:3000']
-
-function getVersion(): string {
-  try {
-    const pkgPath = join(__dirname, '..', 'package.json')
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-    return pkg.version || '0.0.0'
-  } catch {
-    return '0.0.0'
-  }
-}
-
-function buildHostedCorsOrigins(baseUrl: string): string[] {
-  const origins = new Set(DEFAULT_HOSTED_CORS_ORIGINS)
-  origins.add(new URL(baseUrl).origin)
-  return [...origins]
-}
+const entryPath = fileURLToPath(import.meta.url)
+const runtimeDir = dirname(entryPath)
 
 async function main(): Promise<void> {
   const inheritedAccessGateCredential = consumeWorktreeProcessAccessGateCredential(process.env)
   const inheritedWebAssetsDir = consumeWorktreeProcessWebAssetsDir(process.env)
+  const daemonHostMode = consumeDaemonBootstrap(process.env)
+  if (daemonHostMode) {
+    await runDaemonProcess({
+      entryPath,
+      hostMode: daemonHostMode,
+      runtimeDir,
+      restoreProjectDirs: consumeDaemonRestoreProjects(process.env),
+      startProjectServer: startServer,
+    })
+    return
+  }
+
+  const version = readCliPackageVersion(runtimeDir)
   const originalCwd = process.env.INIT_CWD || process.cwd()
-  const args = getCliArgs(process.argv)
+  const plan = await parseCliCommand(getCliArgs(process.argv), { version })
+  if (plan.kind === 'serve') {
+    const projectDir = resolve(originalCwd, plan.projectDir || plan.dir || '.')
+    console.log(buildStartupBanner({ projectDir, version }))
+    console.log('')
+  }
 
-  await yargs(args)
-    .scriptName('openspecui')
-    .command(
-      ['$0 [project-dir]', 'start [project-dir]'],
-      'Start the OpenSpec UI server',
-      (yargs) => {
-        return yargs
-          .positional('project-dir', {
-            describe: 'Project directory containing openspec/',
-            type: 'string',
-          })
-          .option('port', {
-            alias: 'p',
-            describe: 'Port to run the server on',
-            type: 'number',
-            default: 3100,
-          })
-          .option('dir', {
-            alias: 'd',
-            describe: 'Project directory containing openspec/',
-            type: 'string',
-          })
-          .option('open', {
-            describe: 'Automatically open the browser',
-            type: 'boolean',
-            default: true,
-          })
-          .option('app', {
-            describe:
-              'Launch the hosted app at the official or custom base URL. Uses the installed PWA when the browser captures that same-scope URL, otherwise falls back to a browser page. Supports --app and --app=<baseUrl>.',
-            type: 'string',
-          })
-          .option('auth', {
-            describe:
-              'Generate a high-entropy Bearer credential and protect the whole backend Access Gate. ' +
-              'Mutually exclusive with --password.',
-            type: 'boolean',
-          })
-          .option('password', {
-            describe:
-              'Normalize an operator secret into the same Bearer Access Gate (e.g. --password=secret). ' +
-              'Can leak through shell history/process inspection. Mutually exclusive with --auth.',
-            type: 'string',
-            coerce: (value) => (value === '' ? true : value),
-          })
-      },
-      async (argv) => {
-        const rawDir = (argv['project-dir'] as string | undefined) || argv.dir || '.'
-        const projectDir = resolve(originalCwd, rawDir)
-        const useHostedApp = argv.app !== undefined
-        const localVersion = getVersion()
+  const daemon = createDaemonController({
+    version,
+    entryPath: fileURLToPath(import.meta.url),
+  })
+  const result = await executeCliCommand(plan, {
+    originalCwd,
+    inheritedAccessGateCredential,
+    inheritedWebAssetsDir,
+    interactive: process.stdin.isTTY === true && process.stdout.isTTY === true,
+    startServer,
+    exportStaticSite,
+    daemon,
+    browserPresenter: createBrowserStartCommandPresenter(async (target) => {
+      const open = await import('open')
+      await open.default(target)
+    }),
+    promptForApp: () => promptForAppAdmission({ input: process.stdin, output: process.stdout }),
+    write: (message) => console.log(message),
+  })
 
-        console.log(buildStartupBanner({ projectDir, version: localVersion }))
-        console.log('')
-
-        let server: Awaited<ReturnType<typeof startServer>> | null = null
-        let localHostedApp: LocalHostedAppDevSession | null = null
-        try {
-          let hostedBaseUrl: string | null = null
-
-          if (useHostedApp) {
-            const workspace = resolveLocalHostedAppWorkspace(__dirname)
-            const localHostedAppMode = { appValue: argv.app, workspace }
-
-            if (shouldUseLocalHostedAppDevMode(localHostedAppMode)) {
-              localHostedApp = await startLocalHostedAppDev({
-                workspace: localHostedAppMode.workspace,
-              })
-              hostedBaseUrl = localHostedApp.baseUrl
-            } else {
-              const configManager = new ConfigManager(projectDir)
-              const config = await configManager.readConfig()
-              hostedBaseUrl = resolveEffectiveHostedAppBaseUrl({
-                override: argv.app,
-                configured: config.appBaseUrl,
-              })
-            }
-          }
-
-          server = await coordinateStartCommandPresentation(
-            {
-              serverOptions: {
-                projectDir,
-                port: argv.port,
-                corsOrigins: hostedBaseUrl ? buildHostedCorsOrigins(hostedBaseUrl) : undefined,
-                auth: argv.auth === true ? true : undefined,
-                password:
-                  argv.password === true
-                    ? true
-                    : typeof argv.password === 'string'
-                      ? argv.password
-                      : undefined,
-                accessGateCredential: inheritedAccessGateCredential ?? undefined,
-                webAssetsDir: inheritedWebAssetsDir ?? undefined,
-              },
-              hostedBaseUrl,
-              shouldOpen: argv.open,
-              onServerReady: ({ server: runningServer, publicHostedUrl }) => {
-                server = runningServer
-                if (runningServer.port !== runningServer.preferredPort) {
-                  console.log(
-                    `⚠️  Port ${runningServer.preferredPort} is in use, using ${runningServer.port} instead`
-                  )
-                }
-                console.log(`✅ Server running at ${runningServer.url}`)
-
-                if (hostedBaseUrl && publicHostedUrl) {
-                  console.log(`🌐 Hosted app base: ${hostedBaseUrl}`)
-                  console.log(`🔗 Hosted URL: ${publicHostedUrl}`)
-                  console.log(
-                    '📦 Launch mode: prefer an installed hosted-app PWA on the same deployment scope; otherwise open the browser page.'
-                  )
-                }
-                console.log('')
-              },
-            },
-            {
-              startServer,
-              presenter: createBrowserStartCommandPresenter(async (target) => {
-                const open = await import('open')
-                await open.default(target)
-              }),
-            }
-          )
-
-          if (argv.open) {
-            console.log(
-              useHostedApp
-                ? '🌐 Hosted app launch requested (browser page or installed PWA, depending on browser capture).'
-                : '🌐 Browser opened'
-            )
-          }
-
-          console.log('')
-          console.log('Press Ctrl+C to stop the server')
-
-          process.on('SIGINT', async () => {
-            console.log('\n\n👋 Shutting down...')
-            await localHostedApp?.close()
-            await server?.close()
-            process.exit(0)
-          })
-
-          process.on('SIGTERM', async () => {
-            await localHostedApp?.close()
-            await server?.close()
-            process.exit(0)
-          })
-        } catch (error) {
-          await localHostedApp?.close()
-          await server?.close()
-          console.error('❌ Failed to start server:', error)
-          process.exit(1)
-        }
-      }
+  if (result.kind !== 'serve') return
+  if (result.server.port !== result.server.preferredPort) {
+    console.log(
+      `Port ${result.server.preferredPort} is in use, using ${result.server.port} instead.`
     )
-    .command(
-      'export',
-      'Export OpenSpec project as static website or JSON data',
-      (yargs) => {
-        return yargs
-          .option('output', {
-            alias: 'o',
-            describe: 'Output directory for export',
-            type: 'string',
-            demandOption: true,
-          })
-          .option('format', {
-            alias: 'f',
-            describe: 'Export format',
-            type: 'string',
-            choices: ['html', 'json'] as const,
-            default: 'html',
-          })
-          .option('dir', {
-            alias: 'd',
-            describe: 'Project directory containing openspec/',
-            type: 'string',
-          })
-          .option('base-path', {
-            alias: 'b',
-            describe: 'Base path for deployment (e.g., /docs/ or ./)',
-            type: 'string',
-          })
-          .option('clean', {
-            alias: 'c',
-            describe: 'Clean output directory before export',
-            type: 'boolean',
-          })
-          .option('open', {
-            describe: 'Start preview server and open in browser after export',
-            type: 'boolean',
-          })
-          .option('preview-port', {
-            describe: 'Port for the preview server (used with --open)',
-            type: 'number',
-          })
-          .option('port', {
-            alias: 'p',
-            describe: 'Alias of --open --preview-port <port>',
-            type: 'number',
-          })
-          .option('preview-host', {
-            describe: 'Host for the preview server (used with --open)',
-            type: 'string',
-          })
-          .option('references', {
-            describe:
-              'Direct Reference export policy. Required when effective References exist: ' +
-              "'include' materializes direct Reference Specs (complete-or-fail), 'omit' excludes them",
-            type: 'string',
-            choices: ['include', 'omit'] as const,
-          })
-      },
-      async (argv) => {
-        const projectDir = resolve(originalCwd, argv.dir || '.')
-        const outputDir = resolve(originalCwd, argv.output)
-        const previewPort = argv.port ?? argv['preview-port']
-        const shouldOpen = argv.open || argv.port !== undefined
+  }
+  console.log('')
+  console.log('Press Ctrl+C to stop the server')
 
-        try {
-          await exportStaticSite({
-            projectDir,
-            outputDir,
-            format: argv.format as ExportFormat,
-            basePath: argv['base-path'],
-            clean: argv.clean,
-            open: shouldOpen,
-            previewPort,
-            previewHost: argv['preview-host'],
-            references: argv.references as 'include' | 'omit' | undefined,
-          })
-
-          if (!shouldOpen) {
-            process.exit(0)
-          }
-        } catch (error) {
-          console.error('❌ Export failed:', error)
-          process.exit(1)
-        }
-      }
-    )
-    .help()
-    .alias('help', 'h')
-    .version(getVersion())
-    .alias('version', 'v')
-    .strict()
-    .parseAsync()
+  let closing = false
+  const shutdown = async () => {
+    if (closing) return
+    closing = true
+    await result.lease?.close()
+    await result.server.close()
+  }
+  process.once('SIGINT', () => void shutdown())
+  process.once('SIGTERM', () => void shutdown())
 }
 
-// Run CLI
-main().catch((error) => {
-  console.error('Fatal error:', error)
-  process.exit(1)
+main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : 'Fatal OpenSpecUI error.')
+  process.exitCode = 1
 })

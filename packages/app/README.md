@@ -1,99 +1,97 @@
+<!--
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+1. Document the bundled daemon-owned App shell and CLI command contract.
+2. Document Workspaces, runtime-only authority, and local development.
+3. Document Browser Web deployment without installable-app or service-worker semantics.
+
+Original request (2026-07-29): "App 使用 Workspaces；不再考虑 App 外壳部署位置；README 补充 daemon、serve、--app 和 --web。"
+-->
+
 # @openspecui/app
 
-PWA shell workspace for `app.openspecui.com`.
+The persistent Workspaces shell bundled with the `openspecui` CLI and served by its user-level App daemon.
+
+## Primary Runtime
+
+The normal product path is local and version-locked:
+
+```text
+foreground `openspecui serve`
+  -> project backend + reconnecting Workspace lease
+  -> user-level App daemon
+  -> bundled @openspecui/app assets
+  -> native OpenTray window or Browser host
+```
+
+The daemon owns the App endpoint, tray, retained window, and transient Workspace ledger. Each foreground `serve` process remains the sole owner of its project backend.
+
+Use the CLI from a project root:
+
+```bash
+# Bare command is an alias for serve; it discovers a running daemon or asks [Y/n] in a TTY.
+openspecui
+openspecui serve
+
+# Require the local App daemon and attach this project.
+openspecui --app
+openspecui serve --app
+
+# Open Direct Project Web. A running daemon also receives the Workspace.
+openspecui --web
+openspecui serve --web
+
+# Manage only the App daemon.
+openspecui start
+openspecui start --web
+openspecui stop
+openspecui restart
+openspecui restart --web
+```
+
+Native mode uses a retained OpenTray window. Daemon `--web` mode uses the Browser presenter and never loads the native WebView extension. The selected host mode is immutable until `restart`.
+
+The CLI does not select a remote App URL. The local daemon always serves the shell packed with the same CLI release.
 
 ## What It Builds
 
-The `app` workspace emits a persistent multi-tab shell, not a version-hosting site.
+The workspace emits:
 
-Build output includes:
+- `index.html`
+- hashed App assets
 
-- root shell: `index.html`
-- root service worker: `service-worker.js`
-- PWA manifest: `manifest.webmanifest`
-
-The shell restores tabs, accepts one launch request from the URL, probes each backend, and then mounts the backend-owned OpenSpecUI page inside an iframe tab.
-
-## Hosted Launch Contract
-
-The shell accepts an initial backend via query parameters:
-
-- `api=<backend-origin>`
-
-Example:
-
-```text
-https://app.openspecui.com/?api=http%3A%2F%2Flocalhost%3A3100
-```
-
-Each backend must expose `/api/health` with:
-
-- `hostedShellProtocolVersion: 1`
-- `embeddedUiUrl: string`
-
-The shell uses `embeddedUiUrl` directly and appends:
-
-- `api=<backend-origin>`
-- `session=<session-id>`
-
-Example embedded URL:
-
-```text
-http://localhost:3100/dashboard?api=http%3A%2F%2Flocalhost%3A3100&session=<session-id>
-```
-
-Tabs remain in the root shell and can be reopened on later visits.
-
-When this deployment is installed as a PWA, browsers that support navigation capture may route the launch URL into that installed app window instead of a regular browser tab. That reuse only applies when the installed PWA comes from the same deployment scope as the URL being opened.
+The shell restores Workspaces, probes backend health, and mounts backend-owned OpenSpecUI pages in persistent iframe tabs. In daemon delivery it receives Workspace snapshots through same-origin typed control endpoints. Runtime credentials stay in memory and are not persisted with tabs.
 
 ## Local Development
 
 ```bash
 pnpm --filter @openspecui/app dev
-pnpm openspecui --app
-pnpm --filter @openspecui/app cf:dev
-```
-
-Use `pnpm openspecui --app` from the repo root when you want the local backend plus the local app shell together.
-
-## Build
-
-```bash
 pnpm --filter @openspecui/app build
+pnpm openspecui --app
 ```
 
-## Deploy with Wrangler
+Repository tooling may resolve the local App build while developing the workspace. This is an internal development path, not a user-facing shell-location option.
 
-One-time setup:
+## Browser Web Deployment
 
-```bash
-pnpm --filter @openspecui/app cf:project:create
+The same static output can be deployed manually as a browser shell. It is a normal web document, not an installable
+app: the build emits no web manifest, service worker, install prompt, or background update owner.
+
+A standalone deployment may accept an initial backend through:
+
+```text
+https://app.openspecui.com/?api=http%3A%2F%2Flocalhost%3A3100
 ```
 
-Production deploy:
-
-```bash
-pnpm --filter @openspecui/app cf:deploy
-```
-
-Required auth:
-
-- `wrangler login`, or
-- `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`
-
-Source of truth:
-
-- deploy config: `packages/app/wrangler.jsonc`
-- cache headers: `packages/app/public/_headers`
-- worker passthrough: `packages/app/public/_worker.js`
-
-Custom domains remain a Cloudflare-side concern. Attach `app.openspecui.com` to the Pages project after the first successful deploy.
-
-## Deploy
+The backend must expose `/api/health` with a compatible `hostedShellProtocolVersion`, `embeddedUiUrl`, and runtime capabilities. The App loads the backend-owned page and appends tab-local `api` and `session` parameters.
 
 ### Cloudflare Pages
 
-This workspace is ready for direct upload with Wrangler. The output directory is `packages/app/dist`.
+```bash
+pnpm --filter @openspecui/app cf:project:create
+pnpm --filter @openspecui/app cf:deploy
+```
+
+The output directory is `packages/app/dist`. Deployment authentication uses `wrangler login` or `CLOUDFLARE_API_TOKEN` with `CLOUDFLARE_ACCOUNT_ID`.
 
 ### Docker
 
@@ -108,18 +106,7 @@ CMD ["caddy", "file-server", "--root", "/srv", "--listen", ":80"]
 ```nginx
 server {
   listen 80;
-  server_name app.openspecui.com;
   root /srv/openspecui-app;
-
-  location = /service-worker.js {
-    add_header Cache-Control "public, max-age=0, must-revalidate";
-    try_files $uri =404;
-  }
-
-  location = /manifest.webmanifest {
-    add_header Cache-Control "public, max-age=0, must-revalidate";
-    try_files $uri =404;
-  }
 
   location / {
     try_files $uri $uri/ /index.html;
@@ -130,10 +117,10 @@ server {
 ### Caddy
 
 ```caddy
-app.openspecui.com {
+app.example.com {
   root * /srv/openspecui-app
 
-  @mutable path / /index.html /manifest.webmanifest /service-worker.js
+  @mutable path / /index.html
   header @mutable Cache-Control "public, max-age=0, must-revalidate"
 
   try_files {path} /index.html
@@ -141,21 +128,4 @@ app.openspecui.com {
 }
 ```
 
-## Cache Expectations
-
-Mutable entrypoints should revalidate:
-
-- `/`
-- `/index.html`
-- `/manifest.webmanifest`
-- `/service-worker.js`
-
-Immutable hashed assets can be long-lived:
-
-- `/assets/*`
-
-The service worker cache namespace is derived from the app workspace contents. Rebuilding the same source tree keeps the same cache revision; changing the shell source or public assets produces a new revision and lets the new worker evict the old shell cache on activation.
-
-If a newer shell arrives while at least one backend tab is open, the shell exposes the update action and waits for the user to apply it. If no backend tabs are open, the waiting worker is promoted immediately so the shell can upgrade without interrupting an active session.
-
-The included `public/_headers` file is tuned for Cloudflare Pages with that split.
+Mutable shell entrypoints should revalidate. Hashed `/assets/*` files may use long-lived immutable caching. The included `public/_headers` file applies this split for Cloudflare Pages.

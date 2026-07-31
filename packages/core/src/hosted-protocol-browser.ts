@@ -1,11 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
  * 1. Brand backend-issued opaque environment identities without calculating them.
  * 2. Define hosted capability facts and Store mutation lifecycle vocabulary for browser consumers.
  * 3. Keep browser-safe protocol facts physically separate from Node crypto and Access Gate operations.
  *
  * Original request (2026-07-24): "可以归档旧change了，然后我们继续新的change 的开发推进"
  * P4.1 correction: browser consumers must not runtime-import the Node-bearing Core root entry.
+ * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
+ *   `stores.content.inspect` is an additive compatibility fact advertising the readonly Store-content
+ *   projection; absence renders content unsupported, never empty or denied.
  */
 import type { CliDiagnostic } from './cli-contracts/common.js'
 
@@ -17,8 +20,18 @@ export function asEnvUri(value: string): EnvUri {
   return value as EnvUri
 }
 
-/** Product-level Store/Context compatibility vocabulary. It is not an authorization model. */
-export type StoreCapability = 'stores.inspect' | 'stores.mutate' | 'contexts.inspect'
+/**
+ * Product-level Store/Context compatibility vocabulary. It is not an authorization model.
+ *
+ * The additive `stores.content.inspect` fact advertises the demand-driven readonly Store-content
+ * projection (Specs and active Changes). It authorizes nothing and is not part of the baseline
+ * capability set every backend advertises.
+ */
+export type StoreCapability =
+  | 'stores.inspect'
+  | 'stores.mutate'
+  | 'contexts.inspect'
+  | 'stores.content.inspect'
 
 /** Read-only backend-advertised Store/Context compatibility facts. */
 export type StoreCapabilitySet = readonly StoreCapability[]

@@ -10,6 +10,7 @@
  */
 import {
   HOSTED_SHELL_PROTOCOL_VERSION,
+  HOSTED_STORE_ADVERTISED_CAPABILITIES,
   HOSTED_STORE_CAPABILITIES,
   HostedBackendHealthResponseSchema,
   OPENSPECUI_RUNTIME_CAPABILITIES,
@@ -19,7 +20,9 @@ import {
 
 export {
   HOSTED_SHELL_PROTOCOL_VERSION,
+  HOSTED_STORE_ADVERTISED_CAPABILITIES,
   HOSTED_STORE_CAPABILITIES,
+  HOSTED_STORE_CONTENT_CAPABILITY,
   HostedBackendHealthResponseSchema,
   OPENSPECUI_RUNTIME_CAPABILITIES,
   type HostedBackendHealthResponse,
@@ -43,6 +46,12 @@ export interface BackendHealthPayloadInput {
   envUri?: string
   rootSummary?: HostedBackendRootSummary | null
   accessGateEnabled?: boolean
+  /**
+   * Whether this backend implements the demand-driven readonly Store-content projection
+   * (Specs and active Changes). When true the additive `stores.content.inspect` compatibility
+   * fact is advertised; absence renders Store Detail content unsupported, never empty. P6 server.
+   */
+  storeContentProjectionEnabled?: boolean
 }
 
 function withHttpsProtocol(value: string): string {
@@ -162,6 +171,10 @@ export function buildEmbeddedUiLaunchUrl(options: {
 export function buildBackendHealthPayload(
   input: BackendHealthPayloadInput
 ): HostedBackendHealthResponse {
+  const hostedCapabilities: HostedBackendHealthResponse['hostedCapabilities'] =
+    input.storeContentProjectionEnabled
+      ? [...HOSTED_STORE_ADVERTISED_CAPABILITIES]
+      : [...HOSTED_STORE_CAPABILITIES]
   return {
     status: 'ok',
     projectDir: input.projectDir,
@@ -176,7 +189,9 @@ export function buildBackendHealthPayload(
     cliVersion: input.cliVersion,
     envUri: input.envUri,
     rootSummary: input.rootSummary,
-    hostedCapabilities: [...HOSTED_STORE_CAPABILITIES],
+    // Baseline Store capabilities are always advertised; the additive content capability appears
+    // only when this backend implements the demand-driven readonly Store-content projection.
+    hostedCapabilities,
     accessGateEnabled: input.accessGateEnabled,
   }
 }
