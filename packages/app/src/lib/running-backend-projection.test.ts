@@ -1,10 +1,13 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
- * 1. Prove running-backend navigation lists every lease without deriving identity from port (4.0c).
- * 2. Prove Task Manager exposes ownership-valid Stop/Close/favorite only (4.0d).
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Prove registered backends retain path-first identity without deriving identity from port (4.0c).
+ * 2. Prove Task Manager exposes only callable lifecycle commands plus independent favorite actions (4.0d).
+ * 3. Prove an external close-only lease never fabricates Close, Remove, Delete, or Stop authority.
  *
  * Original request (2026-07-30): "所有正在运行中的backend都会显示在这里。"
  * Original request (2026-07-30): "任务管理器...可以杀掉Workspace，或者收藏、取消收藏"
+ * Owner correction (2026-07-31): Running requires Health API plus an established WebSocket; external close-only
+ *   rows expose no fake lifecycle action.
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -18,7 +21,7 @@ function entry(overrides: Partial<RunningBackendEntry> & { id: string }): Runnin
   return {
     projectPath: '/projects/a',
     ownership: 'daemon-managed',
-    health: 'ready',
+    health: 'running',
     managedGeneration: 1,
     shutdown: 'managed',
     label: selectWorkspacePathLabel({
@@ -52,11 +55,11 @@ describe('running backend navigation (4.0c)', () => {
 })
 
 describe('running backend Task Manager commands (4.0d)', () => {
-  it('a ready daemon-managed backend exposes exact-generation Stop + favorite', () => {
+  it('a running daemon-managed backend exposes exact-generation Stop + favorite', () => {
     const commands = resolveRunningBackendCommands(
       entry({
         ownership: 'daemon-managed',
-        health: 'ready',
+        health: 'running',
         managedGeneration: 7,
         projectPath: '/p',
       })
@@ -65,31 +68,33 @@ describe('running backend Task Manager commands (4.0d)', () => {
     expect(commands.some((c) => c.kind === 'favorite')).toBe(true)
   })
 
-  it('an external backend exposes external Stop when ready', () => {
+  it('an external backend exposes no lifecycle action without a callable App shutdown channel', () => {
     const commands = resolveRunningBackendCommands(
       entry({
         ownership: 'external',
-        health: 'ready',
+        health: 'running',
         managedGeneration: undefined,
         shutdown: 'external-owner',
         projectPath: '/p',
       })
     )
-    expect(commands).toContainEqual({ kind: 'stop-external' })
+    expect(commands.map((command) => command.kind)).toEqual(['favorite'])
   })
 
-  it('a backend without current managed generation offers Close only', () => {
+  it('an external close-only lease exposes no lifecycle action', () => {
     const commands = resolveRunningBackendCommands(
       entry({
-        ownership: 'daemon-managed',
+        ownership: 'external',
         health: 'unknown',
         managedGeneration: undefined,
         shutdown: 'close-only',
         projectPath: '/p',
       })
     )
-    expect(commands[0]).toEqual({ kind: 'close-only' })
-    expect(commands.some((c) => c.kind.startsWith('stop'))).toBe(false)
+    expect(commands.map((command) => command.kind)).toEqual(['favorite'])
+    expect(
+      commands.some((command) => ['close-only', 'remove', 'delete'].includes(command.kind))
+    ).toBe(false)
   })
 
   it('favorite requires a canonical directory identity; absent path offers no favorite', () => {

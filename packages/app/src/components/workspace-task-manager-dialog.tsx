@@ -1,65 +1,73 @@
 /**
  * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Render every current daemon lease as path-first Task Manager evidence.
- * 2. Expose exact managed Stop, presentation Close, and canonical-path favorite actions.
- * 3. Bind destructive commands to pending/error states without presenting port as identity.
+ * 1. Render every daemon registration with independent Health API + WebSocket runtime evidence.
+ * 2. Expose exact managed Stop and canonical-path favorite actions without fake external lifecycle controls.
+ * 3. Bind destructive commands and Dialog dismissal to one pending/error lifecycle without presenting port as identity.
  * 4. Preserve physical continuity while daemon backend rows enter, leave, or reorder.
  *
  * Original request (2026-07-30): "任务管理器，打开后，可以看到所有正在运行中backend的详情，并可以杀掉Workspace，或者收藏、取消收藏"
+ * Owner correction (2026-07-31): "TaskManagerPage 改成 TaskManagerDialog"
+ * Owner correction (2026-07-31): external close-only rows must not expose Close/Remove/Delete; Running requires
+ *   Health API plus an established WebSocket.
  */
-import { Link } from '@tanstack/react-router'
-import { ArrowLeft, Loader2, Square, Star, X } from 'lucide-react'
+import { Dialog } from '@openspecui/web-src/components/dialog'
+import { Loader2, Square, Star } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useAppDaemonWorkspace } from '../components/app-daemon-workspace-owner'
+import { useRunningBackendObservations } from '../lib/running-backend-observation-provider'
 import {
   projectDaemonRunningBackends,
   resolveRunningBackendCommands,
+  type RunningBackendEntry,
 } from '../lib/running-backend-projection'
-import {
-  useWorkspaceDirectoryCatalog,
-  useWorkspaceDirectoryCatalogActions,
-} from '../lib/use-workspace-directory-catalog'
 import { useListFlowAnimation } from '../lib/use-list-flow-animation'
+import { useAppDaemonWorkspace } from './app-daemon-workspace-owner'
 
-/** Home-owned running backend manager. */
-export function WorkspaceTaskManagerRoute() {
+export interface WorkspaceTaskManagerDialogProps {
+  readonly open: boolean
+  readonly onClose: () => void
+}
+
+/** App-owned running backend manager. */
+export function WorkspaceTaskManagerDialog({ open, onClose }: WorkspaceTaskManagerDialogProps) {
   const daemon = useAppDaemonWorkspace()
+  const runtime = useRunningBackendObservations()
   const entries = useMemo(
-    () => projectDaemonRunningBackends(daemon.workspaces),
-    [daemon.workspaces]
+    () => projectDaemonRunningBackends(daemon.workspaces, runtime.observations),
+    [daemon.workspaces, runtime.observations, runtime.revision]
   )
+  const runningCount = entries.filter((entry) => entry.health === 'running').length
   const entryIds = useMemo(() => entries.map((entry) => entry.id), [entries])
   const listItemRef = useListFlowAnimation(entryIds)
-  const catalog = useWorkspaceDirectoryCatalog()
-  const catalogActions = useWorkspaceDirectoryCatalogActions()
+  const catalog = daemon.directoryCatalog
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const toggleFavorite = (projectPath: string, favorite: boolean) => {
-    catalogActions.setFavorite(projectPath, favorite)
+  const requestClose = () => {
+    if (pendingId === null) onClose()
   }
 
   return (
-    <div className="@container min-w-0 space-y-5 p-4 md:p-6">
-      <header className="flex items-center gap-3">
-        <Link
-          to="/workspaces"
-          className="hover:bg-muted inline-flex h-8 w-8 items-center justify-center rounded-md"
-          aria-label="Back to Workspaces"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
+    <Dialog
+      open={open}
+      onClose={requestClose}
+      onDismissRequest={pendingId === null ? requestClose : null}
+      title={
         <div>
-          <h1 className="font-nav text-xl font-bold">Task Manager</h1>
-          <p className="text-muted-foreground text-xs">{entries.length} running backends</p>
+          <h2 className="font-nav text-lg font-bold">Task Manager</h2>
+          <p className="text-muted-foreground text-xs">
+            {runningCount} running · {entries.length} registered
+          </p>
         </div>
-      </header>
-
+      }
+      className="w-full max-w-3xl"
+      bodyClassName="@container min-w-0 overscroll-contain"
+      maxHeight="min(86vh, 48rem)"
+    >
       {error ? (
         <p
           role="alert"
-          className="border-destructive/40 bg-destructive/5 text-destructive rounded-md border p-3 text-sm"
+          className="border-destructive/40 bg-destructive/5 text-destructive mb-4 rounded-md border p-3 text-sm"
         >
           {error}
         </p>
@@ -78,7 +86,6 @@ export function WorkspaceTaskManagerRoute() {
             const projectPath = entry.projectPath
             const commands = resolveRunningBackendCommands(entry)
             const managedStop = commands.find((command) => command.kind === 'stop-managed')
-            const externalStop = commands.some((command) => command.kind === 'stop-external')
             return (
               <li
                 ref={listItemRef(entry.id)}
@@ -87,8 +94,12 @@ export function WorkspaceTaskManagerRoute() {
               >
                 <button
                   type="button"
-                  className="min-w-0 text-left"
-                  onClick={() => daemon.focusWorkspace(entry.id)}
+                  disabled={pendingId !== null}
+                  className="min-w-0 text-left disabled:opacity-50"
+                  onClick={() => {
+                    daemon.focusWorkspace(entry.id)
+                    onClose()
+                  }}
                 >
                   <span className="block truncate text-sm font-semibold">{entry.label.title}</span>
                   {entry.label.subtitle ? (
@@ -102,21 +113,31 @@ export function WorkspaceTaskManagerRoute() {
                   <span className="text-muted-foreground mt-1 block text-xs">
                     {entry.ownership === 'daemon-managed'
                       ? 'Managed by App daemon'
-                      : 'External owner'}
+                      : 'External foreground owner'}
                     {' · '}
-                    {entry.health}
+                    {formatBackendState(entry.health)}
                     {entry.startedAt
                       ? ` · started ${new Date(entry.startedAt).toLocaleString()}`
                       : ''}
                   </span>
                 </button>
-                <div className="flex items-center gap-1 self-center">
+                <div className="flex flex-wrap items-center gap-1 self-center">
                   {projectPath ? (
                     <button
                       type="button"
-                      onClick={() => toggleFavorite(projectPath, !favorite)}
+                      disabled={pendingId !== null}
+                      onClick={() => {
+                        setPendingId(entry.id)
+                        setError(null)
+                        void daemon
+                          .setDirectoryFavorite(projectPath, !favorite)
+                          .catch((caught: unknown) =>
+                            setError(caught instanceof Error ? caught.message : 'Favorite failed.')
+                          )
+                          .finally(() => setPendingId(null))
+                      }}
                       aria-label={favorite ? 'Remove from favorites' : 'Add to favorites'}
-                      className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 w-8 items-center justify-center rounded-md"
+                      className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-50"
                     >
                       <Star
                         className={`h-4 w-4 ${favorite ? 'fill-current text-amber-500' : ''}`}
@@ -153,7 +174,7 @@ export function WorkspaceTaskManagerRoute() {
                           type="button"
                           disabled={pending}
                           onClick={() => setConfirmingId(null)}
-                          className="hover:bg-muted h-8 rounded-md px-2 text-xs"
+                          className="hover:bg-muted h-8 rounded-md px-2 text-xs disabled:opacity-50"
                         >
                           Cancel
                         </button>
@@ -161,46 +182,31 @@ export function WorkspaceTaskManagerRoute() {
                     ) : (
                       <button
                         type="button"
+                        disabled={pendingId !== null}
                         onClick={() => setConfirmingId(entry.id)}
-                        className="text-destructive hover:bg-destructive/10 inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs"
+                        className="text-destructive hover:bg-destructive/10 inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs disabled:opacity-50"
                       >
                         <Square className="h-3.5 w-3.5" />
                         Stop
                       </button>
                     )
-                  ) : externalStop ? (
-                    <>
-                      <span
-                        title="The foreground serve owner has not exposed a callable shutdown channel to the App."
-                        className="text-muted-foreground px-2 text-xs"
-                      >
-                        Stop via owner unavailable
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => daemon.closeWorkspace(entry.id)}
-                        className="text-muted-foreground hover:bg-muted inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Close Workspace
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => daemon.closeWorkspace(entry.id)}
-                      className="text-muted-foreground hover:bg-muted inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                      Close Workspace
-                    </button>
-                  )}
+                  ) : null}
                 </div>
               </li>
             )
           })}
         </ul>
       )}
-    </div>
+    </Dialog>
   )
+}
+
+function formatBackendState(state: RunningBackendEntry['health']): string {
+  if (state === 'running') return 'Running'
+  if (state === 'checking') return 'Checking Health + realtime'
+  if (state === 'realtime-unavailable') return 'Realtime unavailable'
+  if (state === 'authentication-required') return 'Authentication required'
+  if (state === 'unsupported') return 'Unsupported backend'
+  if (state === 'offline') return 'Offline'
+  return 'Not yet observed'
 }

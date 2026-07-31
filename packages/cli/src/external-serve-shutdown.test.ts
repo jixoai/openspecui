@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove an external serve Stop is offered only when the lease advertises owner-handled shutdown (3.0e).
- * 2. Prove a lease without the capability resolves to presentation Close only — never an inferred Stop.
+ * 2. Prove a lease without the capability resolves to unavailable, never Close or an inferred Stop.
  *
  * Original request (2026-07-30): "关键是，支持直接从目录直接启动 openspecui 服务。"
+ * Owner correction (2026-07-31): missing shutdown authority is not a Close Workspace command.
  * Spec: cli-commands › "Stop an external foreground project".
  */
 import { describe, expect, it, vi } from 'vitest'
@@ -35,12 +36,12 @@ describe('external serve shutdown capability (3.0e)', () => {
     expect(request).toHaveBeenCalledTimes(1)
   })
 
-  it('resolves to presentation Close only when the lease omits shutdown capability', () => {
-    expect(resolveExternalServeTaskCommand(null)).toEqual({ kind: 'close-only' })
-    expect(resolveExternalServeTaskCommand(undefined)).toEqual({ kind: 'close-only' })
+  it('resolves to unavailable when the lease omits shutdown capability', () => {
+    expect(resolveExternalServeTaskCommand(null)).toEqual({ kind: 'unavailable' })
+    expect(resolveExternalServeTaskCommand(undefined)).toEqual({ kind: 'unavailable' })
   })
 
-  it('resolves to Close only when the capability is present but unavailable', () => {
+  it('resolves to unavailable when the capability is present but unavailable', () => {
     const unavailable: ExternalServeShutdownResult = {
       ok: false,
       code: 'unavailable',
@@ -50,7 +51,7 @@ describe('external serve shutdown capability (3.0e)', () => {
       isAvailable: () => false,
       request: vi.fn(async () => unavailable),
     }
-    expect(resolveExternalServeTaskCommand(capability)).toEqual({ kind: 'close-only' })
+    expect(resolveExternalServeTaskCommand(capability)).toEqual({ kind: 'unavailable' })
   })
 
   it('the unsupported capability never claims it can stop and reports unsupported', async () => {

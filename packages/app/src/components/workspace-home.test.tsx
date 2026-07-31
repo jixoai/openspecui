@@ -1,12 +1,15 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove the fixed Workspace Home renders Favorites/path form/Recent/Task Manager entry (4.0a).
  * 2. Prove path submission binds a loading lock and surfaces errors (4.0b).
  * 3. Prove an unsupported App delivery presents directory launch as unsupported.
+ * 4. Prove Task Manager remains the primary secondary action on Home.
  *
  * Original request (2026-07-30): "Workspace需要记住曾经打开的目录，并且支持收藏。"
+ * Owner correction (2026-07-31): "Task manager按钮应该有 bg-primary 的样式"
  */
 // @vitest-environment jsdom
+import type { WorkspaceDirectoryCatalogView } from '@openspecui/core/workspace-directory-catalog'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -19,7 +22,6 @@ import { act, fireEvent, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceDirectoryCatalogView } from '../lib/workspace-directory-catalog'
 import { WorkspaceHome } from './workspace-home'
 
 const originalMatchMedia = window.matchMedia
@@ -40,8 +42,7 @@ async function renderAt(element: ReactElement): Promise<{ container: HTMLDivElem
 }
 
 /**
- * Minimal router that mounts the Home under an index route so the Task Manager `<Link>` resolves without
- * loading the full HostedShell route element. Home is a pure presentation component.
+ * Minimal router that mounts Home under its App route without loading the full HostedShell owner.
  */
 function homeRouter(home: ReactElement) {
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
@@ -50,13 +51,8 @@ function homeRouter(home: ReactElement) {
     path: '/workspaces',
     component: () => home,
   })
-  const tasksRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/workspaces/tasks',
-    component: () => null,
-  })
   const router = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, tasksRoute]),
+    routeTree: rootRoute.addChildren([indexRoute]),
     history: createMemoryHistory({ initialEntries: ['/workspaces'] }),
   })
   return router
@@ -100,6 +96,9 @@ describe('Workspace Home (4.0a/4.0b)', () => {
     expect(screen.getByText('Favorites')).toBeTruthy()
     expect(screen.getByText('Recent')).toBeTruthy()
     expect(screen.getByText('Task Manager')).toBeTruthy()
+    const taskManagerClassName = screen.getByRole('button', { name: 'Task Manager' }).className
+    expect(taskManagerClassName).toContain('bg-primary')
+    expect(taskManagerClassName).toContain('text-primary-foreground')
     expect(screen.getByPlaceholderText(/your-project/)).toBeTruthy()
 
     // Favorites row uses the path-first label (basename fallback).

@@ -15,6 +15,7 @@
  * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
  */
 
+import { selectWorkspaceDirectoryCatalogView } from '@openspecui/core/workspace-directory-catalog'
 import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
 import { RealtimeSkeleton } from '@openspecui/web-src/components/realtime/realtime-skeleton'
 import { type Tab } from '@openspecui/web-src/components/tabs'
@@ -51,12 +52,7 @@ import {
   useWorkspaceCandidateActions,
   useWorkspaceCandidates,
 } from '../lib/use-workspace-candidates'
-import {
-  useWorkspaceDirectoryCatalog,
-  useWorkspaceDirectoryCatalogActions,
-} from '../lib/use-workspace-directory-catalog'
 import { composeLauncherCandidates } from '../lib/workspace-candidate-catalog'
-import { selectWorkspaceDirectoryCatalogView } from '../lib/workspace-directory-catalog'
 import type { LauncherPendingCommand } from '../lib/workspace-launcher-selector'
 import { selectWorkspacePathLabel } from '../lib/workspace-path-label'
 import { useAppDaemonWorkspace } from './app-daemon-workspace-owner'
@@ -211,7 +207,7 @@ export function HostedShellTabContent({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-hosted-reachability={runtime.reachability}>
-      {runtime.reachability === 'offline' && (
+      {runtime.reachability === 'offline' && iframeSrc !== null && (
         <div className="border-border bg-muted/40 text-muted-foreground flex items-center justify-between gap-3 border-b px-3 py-2 text-xs">
           <span>
             Backend unreachable. The Workspace stays mounted so you can retry without losing
@@ -294,9 +290,22 @@ export function HostedShellTabContent({
           ) : (
             <div className="max-w-sm space-y-2 text-sm">
               {runtime.reachability === 'offline' && !iframeSrc && (
-                <p className="text-muted-foreground text-xs">
-                  Waiting for this backend to come online.
-                </p>
+                <div className="flex flex-col items-center gap-3">
+                  <AlertCircle className="text-muted-foreground h-5 w-5" aria-hidden="true" />
+                  <div className="space-y-1">
+                    <p className="font-medium">Backend unreachable</p>
+                    <p className="text-muted-foreground text-xs">
+                      This Workspace remains open and will reconnect when the backend returns.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRetry(tab.id)}
+                    className="hover:bg-muted border-border rounded-none border px-3 py-1.5 text-xs font-medium transition"
+                  >
+                    Retry
+                  </button>
+                </div>
               )}
               {runtime.reachability === 'authentication-required' && runtime.errorMessage && (
                 <p className="text-muted-foreground text-xs">{runtime.errorMessage}</p>
@@ -397,9 +406,8 @@ function HostedShellRuntime({
   const [addDialogError, setAddDialogError] = useState<string | null>(null)
   const [launcherPending, setLauncherPending] = useState<readonly LauncherPendingCommand[]>([])
   const launcherPendingRef = useRef(new Map<string, LauncherPendingCommand>())
-  // Workspace directory catalog (Favorites / Recent) — credential-free, persisted.
-  const directoryCatalog = useWorkspaceDirectoryCatalog()
-  const directoryCatalogActions = useWorkspaceDirectoryCatalogActions()
+  // Favorites / Recent are replaced from daemon snapshots, never browser persistence.
+  const directoryCatalog = daemonWorkspace.directoryCatalog
   const [homePathError, setHomePathError] = useState<string | null>(null)
   const [homePathPending, setHomePathPending] = useState(false)
   const [selectedWorkspaceTabId, setSelectedWorkspaceTabId] = useState(HOME_TAB_ID)
@@ -798,17 +806,8 @@ function HostedShellRuntime({
       document.title = 'OpenSpec UI App'
       return
     }
-    const activePathLabel =
-      activeRuntime?.projectDir !== null && activeRuntime?.projectDir !== undefined
-        ? selectWorkspacePathLabel({
-            projectPath: activeRuntime.projectDir,
-            git: activeRuntime.git,
-          })
-        : null
-    const activeTitle =
-      activePathLabel?.title ?? activeRuntime?.projectName ?? activeHostedTab.apiBaseUrl
-    document.title = `${activeTitle} - OpenSpec UI App`
-  }, [activeHostedTab, activeRuntime])
+    document.title = `${activeWorkspaceTitle} - OpenSpec UI App`
+  }, [activeHostedTab, activeWorkspaceTitle])
 
   const tabs = useMemo(() => {
     const projectTabs = shellState.tabs.map((tab) =>
@@ -847,7 +846,6 @@ function HostedShellRuntime({
             void daemonWorkspace
               .startManagedProject(projectDir)
               .then((workspace) => {
-                directoryCatalogActions.recordSuccessfulOpen(workspace.projectDir)
                 const tab = connectionActions
                   .getState()
                   .tabs.find((candidate) => candidate.apiBaseUrl === workspace.backendUrl)
@@ -861,7 +859,14 @@ function HostedShellRuntime({
               .finally(() => setHomePathPending(false))
           }}
           onToggleFavorite={(canonicalPath, favorite) => {
-            directoryCatalogActions.setFavorite(canonicalPath, favorite)
+            setHomePathError(null)
+            void daemonWorkspace
+              .setDirectoryFavorite(canonicalPath, favorite)
+              .catch((error: unknown) => {
+                setHomePathError(
+                  error instanceof Error ? error.message : 'Failed to persist Workspace favorite.'
+                )
+              })
           }}
           onOpenDirectory={(canonicalPath) => {
             setHomePathPending(true)
@@ -869,7 +874,6 @@ function HostedShellRuntime({
             void daemonWorkspace
               .startManagedProject(canonicalPath)
               .then((workspace) => {
-                directoryCatalogActions.recordSuccessfulOpen(workspace.projectDir)
                 const tab = connectionActions
                   .getState()
                   .tabs.find((candidate) => candidate.apiBaseUrl === workspace.backendUrl)
@@ -892,11 +896,8 @@ function HostedShellRuntime({
     connectionActions,
     daemonWorkspace,
     directoryCatalog,
-    directoryCatalogActions,
     homePathError,
     homePathPending,
-    handleOpenWorkspaceInBrowser,
-    openingWorkspaceId,
     onOpenTaskManager,
     probeTabs,
     setIframeRef,
@@ -910,8 +911,12 @@ function HostedShellRuntime({
       <HostedShellThemeBootstrap />
 
       {(daemonWorkspace.error ?? errorMessage) && (
-        <div className="border-border bg-muted/30 border-b px-3 py-2 text-xs">
-          {daemonWorkspace.error ?? errorMessage}
+        <div
+          role="status"
+          className="border-border bg-muted/30 flex items-center gap-2 border-b px-3 py-2 text-xs"
+        >
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden="true" />
+          <span>{daemonWorkspace.error ?? errorMessage}</span>
         </div>
       )}
 

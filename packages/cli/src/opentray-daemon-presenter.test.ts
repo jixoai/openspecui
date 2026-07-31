@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove branded native appMode/DevTools bootstrap and one-shot placement through the production presenter.
  * 2. Prove retained activation, hide-versus-destroy semantics, and exact final teardown order.
  * 3. Prove Web import isolation, platform selection, and native fallback truth.
@@ -15,6 +15,7 @@
  * Owner correction (2026-07-30): "logo要全面应用：titlebar中、appIcon中、trayIcon中。"
  * Owner correction (2026-07-30): Native appMode persists public cold launch and delegates warm reopen.
  * Owner diagnostic decision (2026-07-30): use OpenTray's local source selector so its window bridge is injected.
+ * Owner-reported defect (2026-07-31): Tray Quit must not leave the daemon App HTTP server alive.
  */
 import type { OpenTrayAppLaunchOptions } from 'opentray'
 import { describe, expect, it, vi } from 'vitest'
@@ -35,6 +36,7 @@ const APP_LAUNCH: OpenTrayAppLaunchOptions = {
 
 function createFixture(
   options: {
+    isVisiblePending?: boolean
     nativeFailure?: boolean
     placementFailure?: boolean
     showFailure?: boolean
@@ -83,7 +85,14 @@ function createFixture(
     focus: vi.fn(async () => {
       events.push('focus')
     }),
-    isVisible: vi.fn(async () => visible),
+    isVisible: vi.fn(async () =>
+      options.isVisiblePending
+        ? await new Promise<boolean>(() => {
+            // Exact regression fixture: an OpenTray visibility RPC can remain pending while Quit
+            // must continue tearing down independently owned daemon resources.
+          })
+        : visible
+    ),
     listenVisible: vi.fn((handler: (nextVisible: boolean) => void) => {
       visibleHandler = handler
       return () => events.push('off:window')
@@ -109,6 +118,7 @@ function createFixture(
   const appServer: LocalAppServer = {
     url: 'http://127.0.0.1:43121',
     setWorkspaces: vi.fn(),
+    setWorkspaceDirectoryCatalog: vi.fn(),
     close: vi.fn(async () => {
       events.push('close:app-server')
     }),
@@ -288,10 +298,37 @@ describe('OpenTray daemon presenter', () => {
       'off:window',
       'off:menu',
       'off:tray',
+      'close:app-server',
       'destroy:window',
       'destroy:tray',
-      'close:app-server',
     ])
+  })
+
+  it('finishes Tray Quit while a native visibility operation remains pending', async () => {
+    const fixture = createFixture({ isVisiblePending: true })
+    let closeHost: () => void = () => {}
+    const onStopRequested = vi.fn(() => closeHost())
+    const { host } = await createOpenTrayDaemonPresenter({
+      appAssetsDir: '/package/app',
+      appLaunch: APP_LAUNCH,
+      appServer: fixture.appServer,
+      requestedHostMode: 'native',
+      version: '6.1.0',
+      openExternalUrl: fixture.openExternalUrl,
+      onStopRequested,
+      platform: 'darwin',
+      driver: fixture.driver,
+    })
+    closeHost = () => void host.close()
+
+    fixture.menuHandler(1)
+    await vi.waitFor(() => expect(fixture.window.isVisible).toHaveBeenCalledOnce())
+    fixture.menuHandler(2)
+
+    await vi.waitFor(() => expect(fixture.appServer.close).toHaveBeenCalledOnce())
+    expect(onStopRequested).toHaveBeenCalledOnce()
+    expect(fixture.window.destroy).toHaveBeenCalledOnce()
+    expect(fixture.tray.destroy).toHaveBeenCalledOnce()
   })
 
   it('keeps Web mode isolated from native creation and opens the local App', async () => {

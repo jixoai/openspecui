@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove the loopback App server owns immutable assets, SPA fallback, and bounded paths.
  * 2. Prove Workspace control follows invalidation Push then typed replacement Pull.
  * 3. Prove browser actions carry only encoded opaque Workspace ids to daemon authority.
  * 4. Prove managed directory start/Stop is runtime-parsed and delegated only when locally supported.
+ * 5. Prove the daemon-owned directory catalog is pulled and favorite writes are exact-origin invalidations.
  *
  * Original request (2026-07-29): "daemon 使用随 CLI 发布的本地 App 外壳。"
  */
@@ -14,11 +15,17 @@ import {
   type AppDaemonStartManagedProjectResponse,
   type AppDaemonStopManagedProjectResponse,
 } from '@openspecui/core/app-daemon-control'
+import {
+  AppDaemonSetWorkspaceDirectoryFavoriteResponseSchema,
+  AppDaemonWorkspaceDirectorySnapshotSchema,
+  setDirectoryFavorite,
+  type WorkspaceDirectoryCatalog,
+} from '@openspecui/core/workspace-directory-catalog'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { request } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DaemonWorkspaceSnapshotSchema } from './daemon-protocol.js'
 import { startLocalAppServer, type LocalAppServer } from './local-app-server.js'
 
@@ -35,6 +42,12 @@ async function startFixture(
     openWorkspaceInBrowser?: (workspaceId: string) => Promise<'not-found' | 'opened'>
     startManagedProject?: (projectDir: string) => Promise<AppDaemonStartManagedProjectResponse>
     stopManagedProject?: (generation: number) => Promise<AppDaemonStopManagedProjectResponse>
+    initialWorkspaceDirectoryCatalog?: WorkspaceDirectoryCatalog
+    recordSuccessfulDirectoryOpen?: (canonicalPath: string) => Promise<WorkspaceDirectoryCatalog>
+    setWorkspaceDirectoryFavorite?: (
+      canonicalPath: string,
+      favorite: boolean
+    ) => Promise<WorkspaceDirectoryCatalog>
   } = {}
 ): Promise<LocalAppServer> {
   const assetsDir = await mkdtemp(join(tmpdir(), 'openspecui-local-app-'))
@@ -47,6 +60,9 @@ async function startFixture(
     openWorkspaceInBrowser: options.openWorkspaceInBrowser ?? (async () => 'not-found'),
     startManagedProject: options.startManagedProject,
     stopManagedProject: options.stopManagedProject,
+    initialWorkspaceDirectoryCatalog: options.initialWorkspaceDirectoryCatalog,
+    recordSuccessfulDirectoryOpen: options.recordSuccessfulDirectoryOpen,
+    setWorkspaceDirectoryFavorite: options.setWorkspaceDirectoryFavorite,
   })
   servers.push(server)
   return server
@@ -260,6 +276,49 @@ describe('local App server', () => {
     )
   })
 
+  it('records Recent only after a managed start settles successfully', async () => {
+    const workspace = {
+      id: 'managed-a',
+      backendUrl: 'http://127.0.0.1:3100',
+      credential: null,
+      projectDir: '/real/project-a',
+      ownership: 'daemon-managed' as const,
+      registeredAt: 1,
+      managedGeneration: 7,
+      shutdown: 'managed' as const,
+      git: null,
+    }
+    const recordOpen = vi.fn(async (canonicalPath: string) => ({
+      version: 1 as const,
+      entries: [{ canonicalPath, favorite: false, lastOpenedAt: 10 }],
+    }))
+    const successful = await startFixture({
+      startManagedProject: async () => ({ ok: true, workspace, alreadyRunning: false }),
+      recordSuccessfulDirectoryOpen: recordOpen,
+    })
+    await fetch(`${successful.url}/api/daemon/managed-projects/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: successful.url },
+      body: JSON.stringify({ projectDir: '/typed/by-user' }),
+    })
+    expect(recordOpen).toHaveBeenCalledWith('/real/project-a')
+
+    const failedRecord = vi.fn(async () => ({ version: 1 as const, entries: [] }))
+    const failed = await startFixture({
+      startManagedProject: async () => ({
+        ok: false,
+        error: { code: 'INVALID_DIRECTORY', message: 'not a directory' },
+      }),
+      recordSuccessfulDirectoryOpen: failedRecord,
+    })
+    await fetch(`${failed.url}/api/daemon/managed-projects/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: failed.url },
+      body: JSON.stringify({ projectDir: '/missing' }),
+    })
+    expect(failedRecord).not.toHaveBeenCalled()
+  })
+
   it('rejects cross-origin control before invoking a managed owner', async () => {
     const startManagedProject = vi.fn(async () => ({
       ok: false as const,
@@ -275,5 +334,56 @@ describe('local App server', () => {
 
     expect(response.status).toBe(403)
     expect(startManagedProject).not.toHaveBeenCalled()
+  })
+
+  it('persists favorite state, invalidates, and publishes the replacement catalog snapshot', async () => {
+    let catalog: WorkspaceDirectoryCatalog = {
+      version: 1,
+      entries: [{ canonicalPath: '/projects/a', favorite: false, lastOpenedAt: 7 }],
+    }
+    const setFavorite = vi.fn(async (canonicalPath: string, favorite: boolean) => {
+      catalog = setDirectoryFavorite(catalog, canonicalPath, favorite)
+      return catalog
+    })
+    const server = await startFixture({
+      initialWorkspaceDirectoryCatalog: catalog,
+      setWorkspaceDirectoryFavorite: setFavorite,
+    })
+    const eventResponse = await fetch(`${server.url}/api/daemon/events`)
+    const events = createEventReader(eventResponse.body!)
+    expect(await events.next()).toContain('"revision":0')
+
+    const mutation = await fetch(`${server.url}/api/daemon/workspace-directories/favorite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: server.url },
+      body: JSON.stringify({ canonicalPath: '/projects/a', favorite: true }),
+    })
+    expect(
+      AppDaemonSetWorkspaceDirectoryFavoriteResponseSchema.parse(await mutation.json())
+    ).toEqual({ ok: true })
+    expect(setFavorite).toHaveBeenCalledWith('/projects/a', true)
+    expect(await events.next()).toContain('"revision":1')
+
+    const snapshot = await fetch(`${server.url}/api/daemon/workspace-directories`)
+    expect(AppDaemonWorkspaceDirectorySnapshotSchema.parse(await snapshot.json())).toEqual({
+      revision: 1,
+      catalog: {
+        version: 1,
+        entries: [{ canonicalPath: '/projects/a', favorite: true, lastOpenedAt: 7 }],
+      },
+    })
+    await events.cancel()
+  })
+
+  it('rejects a cross-origin favorite write before invoking persistence', async () => {
+    const setFavorite = vi.fn(async () => ({ version: 1 as const, entries: [] }))
+    const server = await startFixture({ setWorkspaceDirectoryFavorite: setFavorite })
+    const response = await fetch(`${server.url}/api/daemon/workspace-directories/favorite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://attacker.example' },
+      body: JSON.stringify({ canonicalPath: '/projects/a', favorite: true }),
+    })
+    expect(response.status).toBe(403)
+    expect(setFavorite).not.toHaveBeenCalled()
   })
 })

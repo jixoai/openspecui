@@ -1,25 +1,31 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
- * 1. Project every current backend lease into Workspaces secondary navigation + Task Manager (4.0c/4.0d).
- * 2. Distinguish daemon-managed vs external ownership and ownership-valid Stop/Close capabilities.
- * 3. Pure composition: join backend leases with path-first labels without deriving identity from port.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Project every daemon registration plus independent Health/WebSocket evidence into Task Manager.
+ * 2. Distinguish daemon-managed vs external ownership and expose only callable lifecycle commands.
+ * 3. Pure composition: join backend registrations with path-first labels without deriving identity from port.
  *
  * Original request (2026-07-30): "所有正在运行中的backend都会显示在这里。"
  * Original request (2026-07-30): "任务管理器...可以杀掉Workspace，或者收藏、取消收藏"
+ * Owner correction (2026-07-31): Running requires Health API plus an established WebSocket; external close-only
+ *   registrations expose no fake Close/Remove/Delete action.
  * Spec: hosted-app-distribution › "Browse running backends" and "Manage running backends".
  *
  * Port/host remain transport evidence; the path-first label selector owns the display identity.
  */
 
 import type { AppDaemonWorkspaceBinding } from '@openspecui/core/app-daemon-control'
+import type {
+  RunningBackendObservation,
+  RunningBackendObservationState,
+} from './running-backend-observation'
 import type { WorkspacePathLabel } from './workspace-path-label'
 import { selectWorkspacePathLabel } from './workspace-path-label'
 
 /** Ownership of one running backend. */
 export type RunningBackendOwnership = 'daemon-managed' | 'external'
 
-/** Health of one running backend, observed-only. */
-export type RunningBackendHealth = 'ready' | 'starting' | 'failed' | 'unknown'
+/** Runtime state of one registered backend, proven independently from its daemon lease. */
+export type RunningBackendHealth = RunningBackendObservationState | 'unknown'
 
 /** One running backend lease projected into Workspaces navigation and Task Manager. */
 export interface RunningBackendEntry {
@@ -44,35 +50,22 @@ export interface RunningBackendEntry {
 /** Capability-exact Task Manager commands for one running backend. */
 export type RunningBackendTaskCommand =
   | { kind: 'stop-managed'; generation: number }
-  | { kind: 'stop-external' }
-  | { kind: 'close-only' }
   | { kind: 'favorite' }
   | { kind: 'unfavorite' }
 
 /**
  * Resolve the Task Manager commands available for one running backend based on its ownership and health.
  *
- * A daemon-managed backend exposes Stop through the child owner (exact generation). An external backend exposes
- * Stop only when its lease advertises owner-handled shutdown; otherwise presentation Close only. Favorite/
- * unfavorite operate on canonical directory identity independently of runtime state. A failed/starting backend
- * exposes Stop only when it has a current managed generation.
+ * A daemon-managed backend exposes Stop through the child owner whenever its exact generation exists, including
+ * when network observation fails. External registrations expose no lifecycle command until the App has a callable
+ * owner-shutdown channel; Close is presentation-only and Remove/Delete would hide a still-objective lease.
  */
 export function resolveRunningBackendCommands(
   entry: RunningBackendEntry
 ): readonly RunningBackendTaskCommand[] {
   const commands: RunningBackendTaskCommand[] = []
-  const canStop =
-    entry.health === 'ready' ||
-    (entry.health === 'failed' &&
-      entry.ownership === 'daemon-managed' &&
-      entry.managedGeneration !== undefined) ||
-    entry.health === 'starting'
-  if (entry.ownership === 'daemon-managed' && entry.managedGeneration !== undefined && canStop) {
+  if (entry.ownership === 'daemon-managed' && entry.managedGeneration !== undefined) {
     commands.push({ kind: 'stop-managed', generation: entry.managedGeneration })
-  } else if (entry.ownership === 'external' && entry.shutdown === 'external-owner' && canStop) {
-    commands.push({ kind: 'stop-external' })
-  } else {
-    commands.push({ kind: 'close-only' })
   }
   if (entry.projectPath !== null) {
     commands.push({ kind: 'favorite' })
@@ -82,26 +75,38 @@ export function resolveRunningBackendCommands(
 
 /** Project the complete daemon ledger into path-first navigation/Task Manager entries. */
 export function projectDaemonRunningBackends(
-  workspaces: readonly AppDaemonWorkspaceBinding[]
+  workspaces: readonly AppDaemonWorkspaceBinding[],
+  observations: readonly RunningBackendObservation[] = []
 ): readonly RunningBackendEntry[] {
+  const observedByWorkspaceId = new Map(
+    observations.map((observation) => [observation.workspaceId, observation] as const)
+  )
   return composeRunningBackendNavigation(
-    workspaces.map((workspace) => ({
-      id: workspace.id,
-      projectPath: workspace.projectDir,
-      ownership: workspace.ownership,
-      health: 'ready',
-      startedAt: workspace.registeredAt,
-      ...(workspace.managedGeneration === null
-        ? {}
-        : { managedGeneration: workspace.managedGeneration }),
-      shutdown: workspace.shutdown,
-      label: selectWorkspacePathLabel({
+    workspaces.map((workspace) => {
+      const observation = observedByWorkspaceId.get(workspace.id)
+      const currentObservation =
+        observation?.backendUrl === workspace.backendUrl &&
+        observation.registeredAt === workspace.registeredAt
+          ? observation
+          : null
+      return {
+        id: workspace.id,
         projectPath: workspace.projectDir,
-        git: workspace.git
-          ? { githubRemote: workspace.git.remoteUrl, branch: workspace.git.branch }
-          : null,
-      }),
-    }))
+        ownership: workspace.ownership,
+        health: currentObservation?.state ?? 'unknown',
+        startedAt: workspace.registeredAt,
+        ...(workspace.managedGeneration === null
+          ? {}
+          : { managedGeneration: workspace.managedGeneration }),
+        shutdown: workspace.shutdown,
+        label: selectWorkspacePathLabel({
+          projectPath: workspace.projectDir,
+          git: workspace.git
+            ? { githubRemote: workspace.git.remoteUrl, branch: workspace.git.branch }
+            : null,
+        }),
+      }
+    })
   )
 }
 

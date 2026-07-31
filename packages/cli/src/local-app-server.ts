@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Serve the same-release App shell from a loopback-only HTTP endpoint.
  * 2. Enforce bounded static paths, MIME types, cache policy, and SPA fallback.
  * 3. Publish transient Workspace authority through snapshot Pull, invalidation Push, and open-by-id.
  * 4. Expose same-origin managed directory start/Stop without accepting executable or port input.
+ * 5. Publish the daemon-owned Favorites/Recent catalog and same-origin favorite mutations.
  *
  * Original request (2026-07-29): "daemon 使用随 CLI 发布的本地 App 外壳。"
  */
@@ -16,6 +17,15 @@ import {
   type AppDaemonStartManagedProjectResponse,
   type AppDaemonStopManagedProjectResponse,
 } from '@openspecui/core/app-daemon-control'
+import {
+  AppDaemonSetWorkspaceDirectoryFavoriteRequestSchema,
+  AppDaemonSetWorkspaceDirectoryFavoriteResponseSchema,
+  AppDaemonWorkspaceDirectorySnapshotSchema,
+  createEmptyWorkspaceDirectoryCatalog,
+  WorkspaceDirectoryCatalogSchema,
+  type AppDaemonSetWorkspaceDirectoryFavoriteResponse,
+  type WorkspaceDirectoryCatalog,
+} from '@openspecui/core/workspace-directory-catalog'
 import { createReadStream } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -38,6 +48,7 @@ const MAX_CONTROL_BODY_BYTES = 64 * 1024
 export interface LocalAppServer {
   url: string
   setWorkspaces(workspaces: readonly DaemonWorkspaceBinding[]): void
+  setWorkspaceDirectoryCatalog(catalog: WorkspaceDirectoryCatalog): void
   close(): Promise<void>
 }
 
@@ -88,6 +99,12 @@ export async function startLocalAppServer(options: {
   openWorkspaceInBrowser(workspaceId: string): Promise<'not-found' | 'opened'>
   startManagedProject?(projectDir: string): Promise<AppDaemonStartManagedProjectResponse>
   stopManagedProject?(generation: number): Promise<AppDaemonStopManagedProjectResponse>
+  initialWorkspaceDirectoryCatalog?: WorkspaceDirectoryCatalog
+  recordSuccessfulDirectoryOpen?(canonicalPath: string): Promise<WorkspaceDirectoryCatalog>
+  setWorkspaceDirectoryFavorite?(
+    canonicalPath: string,
+    favorite: boolean
+  ): Promise<WorkspaceDirectoryCatalog>
   host?: string
   port?: number
 }): Promise<LocalAppServer> {
@@ -97,7 +114,15 @@ export async function startLocalAppServer(options: {
   const eventStreams = new Set<ServerResponse>()
   let revision = 0
   let workspaces: readonly DaemonWorkspaceBinding[] = []
+  let workspaceDirectoryCatalog = WorkspaceDirectoryCatalogSchema.parse(
+    options.initialWorkspaceDirectoryCatalog ?? createEmptyWorkspaceDirectoryCatalog()
+  )
   let serverOrigin: string | null = null
+  const publishInvalidation = () => {
+    revision += 1
+    const notice = `event: invalidate\ndata: ${JSON.stringify({ revision })}\n\n`
+    for (const stream of eventStreams) stream.write(notice)
+  }
   const server = createServer((request, response) => {
     void (async () => {
       const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1')
@@ -108,9 +133,65 @@ export async function startLocalAppServer(options: {
         request.method === 'POST' &&
         (requestUrl.pathname === '/api/daemon/managed-projects/start' ||
           requestUrl.pathname === '/api/daemon/managed-projects/stop' ||
+          requestUrl.pathname === '/api/daemon/workspace-directories/favorite' ||
           openWorkspaceMatch !== null)
       if (isControlPost && !isExactOriginControl(request, serverOrigin)) {
         writeJson(response, 403, { error: 'Daemon control requires the exact local App origin.' })
+        return
+      }
+      if (
+        request.method === 'POST' &&
+        requestUrl.pathname === '/api/daemon/workspace-directories/favorite'
+      ) {
+        let payload: AppDaemonSetWorkspaceDirectoryFavoriteResponse
+        try {
+          const input = AppDaemonSetWorkspaceDirectoryFavoriteRequestSchema.parse(
+            await readJsonBody(request)
+          )
+          if (!options.setWorkspaceDirectoryFavorite) {
+            payload = {
+              ok: false,
+              error: {
+                code: 'PERSISTENCE_FAILED',
+                message: 'Workspace directory persistence is unavailable.',
+              },
+            }
+          } else {
+            try {
+              workspaceDirectoryCatalog = WorkspaceDirectoryCatalogSchema.parse(
+                await options.setWorkspaceDirectoryFavorite(input.canonicalPath, input.favorite)
+              )
+              publishInvalidation()
+              payload = { ok: true }
+            } catch (error) {
+              payload = {
+                ok: false,
+                error: {
+                  code: 'PERSISTENCE_FAILED',
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : 'Failed to persist Workspace favorite state.',
+                },
+              }
+            }
+          }
+        } catch (error) {
+          payload = {
+            ok: false,
+            error: {
+              code: 'INVALID_REQUEST',
+              message:
+                error instanceof Error ? error.message : 'Invalid Workspace favorite request.',
+            },
+          }
+        }
+        const parsed = AppDaemonSetWorkspaceDirectoryFavoriteResponseSchema.parse(payload)
+        writeJson(
+          response,
+          parsed.ok ? 200 : parsed.error.code === 'INVALID_REQUEST' ? 400 : 500,
+          parsed
+        )
         return
       }
       if (
@@ -139,6 +220,17 @@ export async function startLocalAppServer(options: {
           }
         }
         const parsed = AppDaemonStartManagedProjectResponseSchema.parse(payload)
+        if (parsed.ok && options.recordSuccessfulDirectoryOpen) {
+          try {
+            workspaceDirectoryCatalog = WorkspaceDirectoryCatalogSchema.parse(
+              await options.recordSuccessfulDirectoryOpen(parsed.workspace.projectDir)
+            )
+            publishInvalidation()
+          } catch {
+            // The backend is already running and admitted. Catalog persistence failure cannot
+            // truthfully turn that settled runtime success into a failed start response.
+          }
+        }
         writeJson(
           response,
           parsed.ok ? 200 : parsed.error.code === 'UNSUPPORTED' ? 404 : 400,
@@ -219,6 +311,19 @@ export async function startLocalAppServer(options: {
         response.end(request.method === 'HEAD' ? undefined : JSON.stringify(snapshot))
         return
       }
+      if (requestUrl.pathname === '/api/daemon/workspace-directories') {
+        const snapshot = AppDaemonWorkspaceDirectorySnapshotSchema.parse({
+          revision,
+          catalog: workspaceDirectoryCatalog,
+        })
+        response.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+        })
+        response.end(request.method === 'HEAD' ? undefined : JSON.stringify(snapshot))
+        return
+      }
       if (requestUrl.pathname === '/api/daemon/events') {
         response.writeHead(200, {
           'Content-Type': 'text/event-stream; charset=utf-8',
@@ -275,9 +380,11 @@ export async function startLocalAppServer(options: {
     url: serverOrigin,
     setWorkspaces(nextWorkspaces) {
       workspaces = nextWorkspaces.map((workspace) => ({ ...workspace }))
-      revision += 1
-      const notice = `event: invalidate\ndata: ${JSON.stringify({ revision })}\n\n`
-      for (const stream of eventStreams) stream.write(notice)
+      publishInvalidation()
+    },
+    setWorkspaceDirectoryCatalog(nextCatalog) {
+      workspaceDirectoryCatalog = WorkspaceDirectoryCatalogSchema.parse(nextCatalog)
+      publishInvalidation()
     },
     close: () => {
       for (const stream of eventStreams) stream.end()

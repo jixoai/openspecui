@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Select and operate the branded Web or retained Native App presentation lifecycle.
  * 2. Keep native/browser authority credential-safe and preserve truthful browser-capable fallback.
  * 3. Center only the first retained native window without overriding later user placement.
@@ -12,6 +12,7 @@
  * Owner correction (2026-07-30): "logo要全面应用：titlebar中、appIcon中、trayIcon中。"
  * Owner correction (2026-07-30): appMode must follow the complete skill-creator-v2/OpenTray lifecycle contract.
  * Owner diagnostic decision (2026-07-30): use OpenTray's local source selector so its window bridge is injected.
+ * Owner-reported defect (2026-07-31): Tray Quit must release the daemon even when a native RPC is pending.
  */
 import type { WebviewNativeApiPolicy, WebviewWindowOptions } from '@opentray/ext-webview'
 import type {
@@ -43,6 +44,7 @@ const OPEN_ITEM_ID = 1
 const QUIT_ITEM_ID = 2
 const WINDOW_WIDTH = 1280
 const WINDOW_HEIGHT = 840
+const TEARDOWN_STEP_TIMEOUT_MS = 2_000
 
 export interface DaemonPresenterDiagnostic {
   code:
@@ -144,11 +146,29 @@ function presenterSupportsNative(platform: NodeJS.Platform): boolean {
   return platform === 'darwin' || platform === 'win32'
 }
 
+async function runBoundedTeardownStep(step: () => Promise<void> | void): Promise<void> {
+  let timeout: NodeJS.Timeout | null = null
+  try {
+    await Promise.race([
+      Promise.resolve().then(step),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error('OpenTray presenter teardown step timed out.')),
+          TEARDOWN_STEP_TIMEOUT_MS
+        )
+        timeout.unref()
+      }),
+    ])
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
+}
+
 async function runTeardown(steps: ReadonlyArray<() => Promise<void> | void>): Promise<void> {
   let firstFailure: unknown
   for (const step of steps) {
     try {
-      await step()
+      await runBoundedTeardownStep(step)
     } catch (error) {
       firstFailure ??= error
     }
@@ -247,8 +267,8 @@ async function createWebPresenter(options: {
     close() {
       closePromise ??= runTeardown([
         ...unlisten.map((stop) => () => stop()),
-        () => tray?.destroy(),
         () => options.appServer.close(),
+        () => tray?.destroy(),
       ])
       return closePromise
     },
@@ -314,10 +334,12 @@ async function createNativePresenter(options: {
   const unlisten: Array<() => void> = []
   let operation = Promise.resolve()
   let closePromise: Promise<void> | null = null
+  let closing = false
   let visible = true
 
   const updateMenu = () => resources.tray.setMenu(trayMenu(visible))
   const enqueue = (action: () => Promise<void>): Promise<void> => {
+    if (closing) return Promise.resolve()
     const next = operation.then(action, action)
     operation = next.catch(() => {})
     return next
@@ -378,12 +400,14 @@ async function createNativePresenter(options: {
     ...createProjectionMethods(options),
     activate,
     close() {
+      closing = true
       closePromise ??= runTeardown([
         ...unlisten.map((stop) => () => stop()),
-        () => operation,
+        // A visibility/focus RPC may never settle after the native broker disconnects. Its rejection
+        // is already observed by `enqueue`; it cannot own or delay daemon teardown.
+        () => options.appServer.close(),
         () => resources.window.destroy(),
         () => resources.tray.destroy(),
-        () => options.appServer.close(),
       ])
       return closePromise
     },

@@ -1,17 +1,20 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
- * 1. Prove Workspaces secondary nav projects every running backend with path-first labels (8.1a).
- * 2. Prove selecting one focuses/opens the exact Workspace; no port identity.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Prove Workspaces secondary navigation directly lists favorite directories without a section accordion.
+ * 2. Prove selecting one starts/focuses the canonical directory rather than a backend locator.
+ * 3. Prove running state is a right-side signal and never a selected-row highlight.
+ * 4. Prove the empty state contributes no redundant secondary navigation chrome.
  *
  * Original request (2026-07-30): "所有正在运行中的backend都会显示在这里。"
+ * Owner correction (2026-07-31): "runnings 这个列表的子元素，直接改成 Favorites，没有 Favorites 手风琴折叠，直接二级罗列"
+ * Owner correction (2026-07-31): Workspace secondary rows never highlight; a right-side signal reports Running.
  */
 // @vitest-environment jsdom
+import type { WorkspaceDirectoryEntry } from '@openspecui/core/workspace-directory-catalog'
 import { act, fireEvent, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RunningBackendEntry } from '../lib/running-backend-projection'
-import { selectWorkspacePathLabel } from '../lib/workspace-path-label'
 import { WorkspacesSecondaryNav } from './workspaces-secondary-nav'
 
 async function renderAt(element: ReactElement): Promise<{ container: HTMLDivElement; root: Root }> {
@@ -28,22 +31,11 @@ async function renderAt(element: ReactElement): Promise<{ container: HTMLDivElem
   return { container, root }
 }
 
-function entry(overrides: Partial<RunningBackendEntry> & { id: string }): RunningBackendEntry {
-  return {
-    projectPath: '/projects/a',
-    ownership: 'daemon-managed',
-    health: 'ready',
-    managedGeneration: 1,
-    shutdown: 'managed',
-    label: selectWorkspacePathLabel({
-      projectPath: '/projects/a',
-      git: { githubRemote: 'https://github.com/org/a.git', branch: 'main' },
-    }),
-    ...overrides,
-  }
+function favorite(canonicalPath: string): WorkspaceDirectoryEntry {
+  return { canonicalPath, favorite: true, lastOpenedAt: 1 }
 }
 
-describe('WorkspacesSecondaryNav (8.1a)', () => {
+describe('WorkspacesSecondaryNav favorites', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
   })
@@ -51,76 +43,49 @@ describe('WorkspacesSecondaryNav (8.1a)', () => {
     document.body.innerHTML = ''
   })
 
-  it('projects every running backend with path-first labels (no port)', async () => {
+  it('directly lists favorite directories without Running/Favorites accordion chrome', async () => {
     await renderAt(
       <WorkspacesSecondaryNav
-        entries={[
-          entry({
-            id: 'ws-a',
-            label: selectWorkspacePathLabel({
-              projectPath: '/projects/a',
-              git: { githubRemote: 'https://github.com/org/a.git', branch: 'main' },
-            }),
-          }),
-          entry({
-            id: 'ws-b',
-            label: selectWorkspacePathLabel({ projectPath: '/projects/second-backend' }),
-          }),
-        ]}
+        favorites={[favorite('/projects/a'), favorite('/projects/second-project')]}
         onSelect={() => {}}
       />
     )
-    // Path-first GitHub slug + basename fallback render; no port.
-    expect(screen.getByText('org/a')).toBeTruthy()
-    expect(screen.getByText('second-backend')).toBeTruthy()
-    expect(screen.getByText('Running (2)')).toBeTruthy()
+    expect(screen.getByText('a')).toBeTruthy()
+    expect(screen.getByText('second-project')).toBeTruthy()
+    expect(screen.queryByText(/Running/)).toBeNull()
+    expect(screen.queryByText(/Favorites/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /expand|collapse/i })).toBeNull()
   })
 
-  it('selects the exact Workspace on click', async () => {
+  it('selects the canonical favorite path', async () => {
     const onSelect = vi.fn()
-    await renderAt(<WorkspacesSecondaryNav entries={[entry({ id: 'ws-a' })]} onSelect={onSelect} />)
-    fireEvent.click(screen.getByText('org/a'))
-    expect(onSelect).toHaveBeenCalledWith('ws-a')
+    await renderAt(
+      <WorkspacesSecondaryNav favorites={[favorite('/projects/a')]} onSelect={onSelect} />
+    )
+    fireEvent.click(screen.getByText('a'))
+    expect(onSelect).toHaveBeenCalledWith('/projects/a')
   })
 
-  it('marks the active Workspace', async () => {
+  it('uses only right-side signals for running state without highlighting a row', async () => {
     await renderAt(
       <WorkspacesSecondaryNav
-        entries={[
-          entry({ id: 'ws-a' }),
-          entry({
-            id: 'ws-b',
-            label: selectWorkspacePathLabel({ projectPath: '/projects/second-backend' }),
-          }),
-        ]}
-        activeId="ws-b"
+        favorites={[favorite('/projects/a'), favorite('/projects/second-project')]}
+        runningPaths={['/projects/second-project']}
         onSelect={() => {}}
       />
     )
-    const activeButton = screen.getByText('second-backend').closest('button')
-    expect(activeButton?.className).toContain('bg-primary')
+    const stoppedButton = screen.getByText('a').closest('button')
+    const runningButton = screen.getByText('second-project').closest('button')
+    expect(stoppedButton?.className).not.toContain('bg-primary')
+    expect(runningButton?.className).not.toContain('bg-primary')
+    expect(stoppedButton?.querySelector('[aria-label="Workspace stopped"]')).toBeTruthy()
+    expect(runningButton?.querySelector('[aria-label="Workspace running"]')).toBeTruthy()
   })
 
-  it('renders an external backend marker', async () => {
-    await renderAt(
-      <WorkspacesSecondaryNav
-        entries={[entry({ id: 'ws-ext', ownership: 'external' })]}
-        onSelect={() => {}}
-      />
+  it('renders no secondary navigation when there are no favorites', async () => {
+    const { container } = await renderAt(
+      <WorkspacesSecondaryNav favorites={[]} onSelect={() => {}} />
     )
-    expect(screen.getByLabelText('external backend')).toBeTruthy()
-  })
-
-  it('collapses and expands', async () => {
-    await renderAt(<WorkspacesSecondaryNav entries={[entry({ id: 'ws-a' })]} onSelect={() => {}} />)
-    expect(screen.getByText('org/a')).toBeTruthy()
-    fireEvent.click(screen.getByText('Running (1)'))
-    expect(screen.queryByText('org/a')).toBeNull()
-  })
-
-  it('renders nothing listing when no backends are running', async () => {
-    await renderAt(<WorkspacesSecondaryNav entries={[]} onSelect={() => {}} />)
-    expect(screen.getByText('Running (0)')).toBeTruthy()
-    expect(screen.queryByText('org/a')).toBeNull()
+    expect(container.textContent).toBe('')
   })
 })

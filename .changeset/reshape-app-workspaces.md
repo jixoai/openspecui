@@ -9,9 +9,11 @@ Reshape the App information architecture around Workspaces and Stores.
 
 - Workspaces becomes a path-first project launcher: fixed Home (Favorites +
   path-input + Recent + Task Manager), daemon-managed directory launch with
-  canonical-path dedupe / exact Stop / restart restoration, running-backend
-  secondary navigation, and path-first labels (GitHub org/repo or folder
-  basename + branch subtitle).
+  canonical-path dedupe / exact Stop / restart restoration, direct favorite
+  secondary navigation, Health + WebSocket verified Running evidence, and
+  path-first labels (GitHub org/repo or folder basename + branch subtitle).
+  Favorites and Recent are persisted by the user-level daemon and converge
+  across App windows through invalidation Push followed by snapshot Pull.
 - Stores becomes the only other primary domain: Environment-scoped Store
   index with composite-identity Detail, demand-driven readonly Store-content
   (Specs/active Changes) Projection Work, and explicit Environment selection

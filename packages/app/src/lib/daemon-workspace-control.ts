@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Pull the daemon's complete runtime Workspace ledger from the same-origin App shell.
  * 2. Convert typed SSE invalidations into serialized replacement Pulls.
  * 3. Treat absent daemon endpoints as unsupported while surfacing real local control failures.
- * 4. Dispatch opaque browser actions and typed managed directory start/Stop commands.
+ * 4. Dispatch opaque browser, managed directory, and daemon-persisted favorite commands.
+ * 5. Pull the daemon-owned Favorites/Recent snapshot without browser persistence.
  *
  * Original request (2026-07-29): "如果已经有 app daemon，那么默认投递到 app 中。"
+ * Owner-reported defect (2026-07-31): an older daemon HTML fallback must not surface as raw JSON syntax.
  */
 import {
   AppDaemonInvalidationSchema,
@@ -17,8 +19,16 @@ import {
   type AppDaemonStopManagedProjectResponse,
   type AppDaemonWorkspaceSnapshot,
 } from '@openspecui/core/app-daemon-control'
+import {
+  AppDaemonSetWorkspaceDirectoryFavoriteResponseSchema,
+  AppDaemonWorkspaceDirectorySnapshotSchema,
+  type AppDaemonWorkspaceDirectorySnapshot,
+} from '@openspecui/core/workspace-directory-catalog'
 
 export type DaemonWorkspaceControlAvailability = 'supported' | 'unsupported'
+
+export const DAEMON_CONTROL_UPGRADE_REQUIRED_MESSAGE =
+  'The OpenSpecUI App daemon is outdated. Restart the App daemon to continue.'
 
 export interface DaemonWorkspaceEventSource {
   addEventListener(type: 'invalidate', listener: EventListener): void
@@ -30,6 +40,7 @@ export interface DaemonWorkspaceControl {
   openWorkspaceInBrowser(workspaceId: string): Promise<void>
   startManagedProject(projectDir: string): Promise<AppDaemonStartManagedProjectResponse>
   stopManagedProject(generation: number): Promise<AppDaemonStopManagedProjectResponse>
+  setDirectoryFavorite(canonicalPath: string, favorite: boolean): Promise<void>
   start(): Promise<DaemonWorkspaceControlAvailability>
   stop(): void
 }
@@ -61,6 +72,7 @@ function defaultEventSource(url: string): DaemonWorkspaceEventSource | null {
 export function createDaemonWorkspaceControl(options: {
   baseUrl: string
   onSnapshot(snapshot: AppDaemonWorkspaceSnapshot): void
+  onDirectorySnapshot?(snapshot: AppDaemonWorkspaceDirectorySnapshot): void
   onError(error: Error): void
   fetch?: DaemonControlFetch
   createEventSource?: (url: string) => DaemonWorkspaceEventSource | null
@@ -71,13 +83,23 @@ export function createDaemonWorkspaceControl(options: {
   const eventsUrl = new URL('/api/daemon/events', options.baseUrl).toString()
   const managedStartUrl = new URL('/api/daemon/managed-projects/start', options.baseUrl).toString()
   const managedStopUrl = new URL('/api/daemon/managed-projects/stop', options.baseUrl).toString()
+  const directorySnapshotUrl = new URL(
+    '/api/daemon/workspace-directories',
+    options.baseUrl
+  ).toString()
+  const directoryFavoriteUrl = new URL(
+    '/api/daemon/workspace-directories/favorite',
+    options.baseUrl
+  ).toString()
   let stopped = false
   let currentRevision = -1
+  let currentDirectoryRevision = -1
   let pullRunning = false
   let pullQueued = false
   let eventSource: DaemonWorkspaceEventSource | null = null
+  let pendingWorkspaceSnapshot: AppDaemonWorkspaceSnapshot | null = null
 
-  const pullOnce = async (): Promise<DaemonWorkspaceControlAvailability> => {
+  const pullWorkspaceOnce = async (): Promise<DaemonWorkspaceControlAvailability> => {
     let response: Response
     try {
       response = await fetchSnapshot(snapshotUrl, {
@@ -101,12 +123,61 @@ export function createDaemonWorkspaceControl(options: {
       const snapshot = AppDaemonWorkspaceSnapshotSchema.parse(payload)
       if (!stopped && snapshot.revision > currentRevision) {
         currentRevision = snapshot.revision
-        options.onSnapshot(snapshot)
+        pendingWorkspaceSnapshot = snapshot
       }
-    } catch (error) {
-      options.onError(toError(error, 'Daemon Workspace snapshot was invalid.'))
+    } catch {
+      options.onError(
+        new Error('The OpenSpecUI App daemon returned an invalid Workspace snapshot.')
+      )
     }
     return 'supported'
+  }
+
+  const pullDirectoryOnce = async (): Promise<DaemonWorkspaceControlAvailability> => {
+    if (!options.onDirectorySnapshot) return 'supported'
+    let response: Response
+    try {
+      response = await fetchSnapshot(directorySnapshotUrl, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      })
+    } catch (error) {
+      options.onError(toError(error, DAEMON_CONTROL_UPGRADE_REQUIRED_MESSAGE))
+      return 'unsupported'
+    }
+    if (!response.ok) {
+      options.onError(new Error(DAEMON_CONTROL_UPGRADE_REQUIRED_MESSAGE))
+      return 'unsupported'
+    }
+    if (response.headers.get('content-type')?.includes('text/html')) {
+      options.onError(new Error(DAEMON_CONTROL_UPGRADE_REQUIRED_MESSAGE))
+      return 'unsupported'
+    }
+    try {
+      const payload: unknown = JSON.parse(await response.text())
+      const snapshot = AppDaemonWorkspaceDirectorySnapshotSchema.parse(payload)
+      if (!stopped && snapshot.revision > currentDirectoryRevision) {
+        currentDirectoryRevision = snapshot.revision
+        options.onDirectorySnapshot(snapshot)
+      }
+    } catch (error) {
+      options.onError(toError(error, DAEMON_CONTROL_UPGRADE_REQUIRED_MESSAGE))
+      return 'unsupported'
+    }
+    return 'supported'
+  }
+
+  const pullOnce = async (): Promise<DaemonWorkspaceControlAvailability> => {
+    const availability = await pullWorkspaceOnce()
+    if (availability === 'supported') {
+      const directoryAvailability = await pullDirectoryOnce()
+      if (directoryAvailability === 'supported' && pendingWorkspaceSnapshot !== null) {
+        options.onSnapshot(pendingWorkspaceSnapshot)
+      }
+      pendingWorkspaceSnapshot = null
+      return directoryAvailability
+    }
+    return availability
   }
 
   const queuePull = () => {
@@ -183,6 +254,29 @@ export function createDaemonWorkspaceControl(options: {
       const parsed = AppDaemonStopManagedProjectResponseSchema.safeParse(payload)
       if (!parsed.success) throw new Error('Daemon managed Stop returned an invalid response.')
       return parsed.data
+    },
+    async setDirectoryFavorite(canonicalPath, favorite) {
+      let response: Response
+      try {
+        response = await fetchSnapshot(directoryFavoriteUrl, {
+          method: 'POST',
+          cache: 'no-store',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ canonicalPath, favorite }),
+        })
+      } catch {
+        throw new Error('OpenSpecUI App daemon is unavailable.')
+      }
+      let payload: unknown
+      try {
+        payload = JSON.parse(await response.text())
+      } catch {
+        throw new Error('Daemon favorite command returned an invalid response.')
+      }
+      const parsed = AppDaemonSetWorkspaceDirectoryFavoriteResponseSchema.safeParse(payload)
+      if (!parsed.success) throw new Error('Daemon favorite command returned an invalid response.')
+      if (!parsed.data.ok) throw new Error(parsed.data.error.message)
     },
     async openWorkspaceInBrowser(workspaceId) {
       const actionUrl = new URL(

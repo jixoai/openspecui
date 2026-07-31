@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Apply daemon Workspace snapshots while keeping current credentials in runtime memory.
  * 2. Bind persisted backend locators to current opaque daemon Workspace ids.
  * 3. Expose same-origin open-in-browser actions and objective failures to the App surface.
  * 4. Drive admission decisions so an unchanged snapshot never reopens a user-closed Workspace (3.2/3.7).
+ * 5. Project the daemon-owned Favorites/Recent catalog and dispatch persisted favorite commands.
  *
  * Original request (2026-07-29): "Workspaces 的 tab 可以提供一个 open in browser 的 icon-button。"
  * Original request (2026-07-30): "Workspace需要记住曾经打开的目录。"
@@ -14,6 +15,10 @@ import type {
   AppDaemonWorkspaceBinding,
   AppDaemonWorkspaceSnapshot,
 } from '@openspecui/core/app-daemon-control'
+import {
+  createEmptyWorkspaceDirectoryCatalog,
+  type WorkspaceDirectoryCatalog,
+} from '@openspecui/core/workspace-directory-catalog'
 import {
   createContext,
   useCallback,
@@ -51,12 +56,16 @@ export interface AppDaemonWorkspaceContextValue {
   availability: 'checking' | 'supported' | 'unsupported'
   /** Complete current daemon Workspace ledger. */
   workspaces: readonly AppDaemonWorkspaceBinding[]
+  /** Complete daemon-owned Favorites/Recent catalog; never sourced from browser storage. */
+  directoryCatalog: WorkspaceDirectoryCatalog
   /** Ask the daemon to open one opaque current Workspace in the system browser. */
   openWorkspaceInBrowser(workspaceId: string): Promise<void>
   /** Start or join one daemon-managed backend by canonical local directory. */
   startManagedProject(projectDir: string): Promise<AppDaemonWorkspaceBinding>
   /** Stop and settle one exact daemon-managed generation. */
   stopManagedProject(generation: number): Promise<void>
+  /** Persist one canonical directory's favorite state in the App daemon. */
+  setDirectoryFavorite(canonicalPath: string, favorite: boolean): Promise<void>
   /** Focus or open the exact Workspace represented by one current daemon id. */
   focusWorkspace(workspaceId: string): void
   /** Close Workspace presentation without claiming external process ownership. */
@@ -76,6 +85,7 @@ const UNSUPPORTED_APP_DAEMON_WORKSPACE_CONTEXT: AppDaemonWorkspaceContextValue =
   error: null,
   availability: 'unsupported',
   workspaces: [],
+  directoryCatalog: createEmptyWorkspaceDirectoryCatalog(),
   openWorkspaceInBrowser: async () => {
     throw new Error('OpenSpecUI App daemon is unavailable.')
   },
@@ -85,6 +95,9 @@ const UNSUPPORTED_APP_DAEMON_WORKSPACE_CONTEXT: AppDaemonWorkspaceContextValue =
   },
   stopManagedProject: async () => {
     throw new Error('Managed Stop is unavailable in this App delivery.')
+  },
+  setDirectoryFavorite: async () => {
+    throw new Error('Workspace favorite persistence is unavailable in this App delivery.')
   },
   focusWorkspace: () => {},
   closeWorkspace: () => {},
@@ -143,6 +156,9 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
   const admissionRef = useRef<DaemonWorkspaceAdmissionState>(createEmptyAdmissionState())
   const [workspaceIds, setWorkspaceIds] = useState<ReadonlyMap<string, string>>(() => new Map())
   const [workspaces, setWorkspaces] = useState<readonly AppDaemonWorkspaceBinding[]>([])
+  const [directoryCatalog, setDirectoryCatalog] = useState<WorkspaceDirectoryCatalog>(() =>
+    createEmptyWorkspaceDirectoryCatalog()
+  )
   const [availability, setAvailability] = useState<'checking' | 'supported' | 'unsupported'>(
     'checking'
   )
@@ -167,6 +183,10 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
         )
         setWorkspaceIds(applied)
         setWorkspaces(snapshot.workspaces)
+        setError(null)
+      },
+      onDirectorySnapshot: (snapshot) => {
+        setDirectoryCatalog(snapshot.catalog)
         setError(null)
       },
       onError: (nextError) => setError(nextError.message),
@@ -260,6 +280,27 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
     [availability, connectionActions, workspaces]
   )
 
+  const setDirectoryFavorite = useCallback(
+    async (canonicalPath: string, favorite: boolean): Promise<void> => {
+      const control = controlRef.current
+      if (!control || availability !== 'supported') {
+        throw new Error('Workspace favorite persistence is unavailable in this App delivery.')
+      }
+      try {
+        await control.setDirectoryFavorite(canonicalPath, favorite)
+        setError(null)
+      } catch (nextError) {
+        const message =
+          nextError instanceof Error
+            ? nextError.message
+            : 'Failed to persist Workspace favorite state.'
+        setError(message)
+        throw new Error(message)
+      }
+    },
+    [availability]
+  )
+
   const closeWorkspace = useCallback(
     (workspaceId: string) => {
       const workspace = workspaces.find((candidate) => candidate.id === workspaceId)
@@ -290,9 +331,11 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
       error,
       availability,
       workspaces,
+      directoryCatalog,
       openWorkspaceInBrowser,
       startManagedProject,
       stopManagedProject,
+      setDirectoryFavorite,
       focusWorkspace,
       closeWorkspace,
       dismissDaemonWorkspace,
@@ -305,9 +348,11 @@ export function AppDaemonWorkspaceOwner({ children }: { children: ReactNode }) {
       error,
       availability,
       workspaces,
+      directoryCatalog,
       openWorkspaceInBrowser,
       startManagedProject,
       stopManagedProject,
+      setDirectoryFavorite,
       focusWorkspace,
       closeWorkspace,
       dismissDaemonWorkspace,

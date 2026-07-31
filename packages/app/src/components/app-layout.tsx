@@ -4,30 +4,41 @@
  * 2. Install shared connection, daemon Workspace, Store-mutation, and launch owners above every route.
  * 3. Keep project Workspaces separate from environment-scoped administration.
  * 4. Preserve the stateful HostedShell and its iframe Documents across route changes.
- * 5. Keep the Stores runtime owner mounted across Stores subroutes and dormant elsewhere.
+ * 5. Keep Stores runtime and ledger-level backend observation mounted across their complete App scopes.
+ * Compromise: Task Manager Dialog and favorite-nav launch ownership remain here because both span the persistent
+ * HostedShell and daemon Workspace owner without becoming another primary or routed domain.
  *
  * Original request (2026-07-15): "在没有后端的基础上，先把前端的初步工作先完成。"
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  * Owner correction (2026-07-30): the self-drawn window titlebar belongs above every App route.
  * Owner correction (2026-07-30): Settings belongs in the overlay titlebar, with navigation fallback for non-overlay hosts.
+ * Owner correction (2026-07-31): "TaskManagerPage 改成 TaskManagerDialog"
+ * Owner correction (2026-07-31): Workspaces secondary navigation directly lists Favorites; Running evidence moves
+ *   to Task Manager and requires Health API plus WebSocket observation.
+ * Owner correction (2026-07-31): replace the sidebar glyph with the App logo and retire PWA chrome.
+ * Owner correction (2026-07-31): OpenTray hides duplicate sidebar branding; favorite rows use status lights only.
  * Owner correction (2026-07-31): either App brand toggles a compact icon-only primary-navigation rail.
  * Owner correction (2026-07-31): sidebar topology changes use native View Transitions, never transform/width timers.
  */
+import { selectWorkspaceDirectoryCatalogView } from '@openspecui/core/workspace-directory-catalog'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { Boxes, Settings, Store, type LucideIcon } from 'lucide-react'
 import { useEffect, useState, type CSSProperties } from 'react'
 import { ConnectionObservationProvider } from '../lib/connection-observation'
 import { MutationObservationProvider } from '../lib/mutation-observation-provider'
-import { projectDaemonRunningBackends } from '../lib/running-backend-projection'
+import {
+  RunningBackendObservationProvider,
+  useRunningBackendObservations,
+} from '../lib/running-backend-observation-provider'
 import { runSidebarViewTransition } from '../lib/sidebar-view-transition'
 import { StoresRuntimeProvider } from '../lib/stores-runtime'
-import { useConnections } from '../lib/use-connections'
 import { useRouterContext } from '../lib/use-router-context'
 import { useTitlebarPresentation } from '../lib/use-titlebar-presentation'
 import { AppDaemonWorkspaceOwner, useAppDaemonWorkspace } from './app-daemon-workspace-owner'
 import { AppLaunchOwner } from './app-launch-owner'
 import { AppTitlebar } from './app-titlebar'
 import { HostedShell } from './hosted-shell'
+import { WorkspaceTaskManagerDialog } from './workspace-task-manager-dialog'
 import { WorkspacesSecondaryNav } from './workspaces-secondary-nav'
 
 interface AppNavItem {
@@ -58,11 +69,13 @@ export function AppLayout() {
   return (
     <AppLaunchOwner>
       <AppDaemonWorkspaceOwner>
-        <MutationObservationProvider>
-          <ConnectionObservationProvider>
-            <AppLayoutSurface />
-          </ConnectionObservationProvider>
-        </MutationObservationProvider>
+        <RunningBackendObservationProvider>
+          <MutationObservationProvider>
+            <ConnectionObservationProvider>
+              <AppLayoutSurface />
+            </ConnectionObservationProvider>
+          </MutationObservationProvider>
+        </RunningBackendObservationProvider>
       </AppDaemonWorkspaceOwner>
     </AppLaunchOwner>
   )
@@ -77,15 +90,22 @@ function AppLayoutSurface() {
   const hasOverlayTitlebar = titlebar.presentation.kind === 'opentray'
   const [workspacesMounted, setWorkspacesMounted] = useState(workspacesVisible)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [taskManagerOpen, setTaskManagerOpen] = useState(false)
+  const [favoritePendingPath, setFavoritePendingPath] = useState<string | null>(null)
+  const [favoriteLaunchError, setFavoriteLaunchError] = useState<string | null>(null)
   const daemonWorkspace = useAppDaemonWorkspace()
-  const connections = useConnections()
-  const runningBackends = projectDaemonRunningBackends(daemonWorkspace.workspaces)
-  const activeBackendId =
-    daemonWorkspace.workspaces.find(
-      (workspace) =>
-        connections.tabs.find((tab) => tab.id === connections.activeTabId)?.apiBaseUrl ===
-        workspace.backendUrl
-    )?.id ?? null
+  const runningBackendObservations = useRunningBackendObservations()
+  const favoriteDirectories = selectWorkspaceDirectoryCatalogView(
+    daemonWorkspace.directoryCatalog
+  ).favorites
+  const runningWorkspaceIds = new Set(
+    runningBackendObservations.observations.flatMap((observation) =>
+      observation.state === 'running' ? [observation.workspaceId] : []
+    )
+  )
+  const runningProjectPaths = daemonWorkspace.workspaces.flatMap((workspace) =>
+    runningWorkspaceIds.has(workspace.id) ? [workspace.projectDir] : []
+  )
   useEffect(() => {
     if (workspacesVisible) setWorkspacesMounted(true)
   }, [workspacesVisible])
@@ -103,6 +123,30 @@ function AppLayoutSurface() {
       direction: sidebarCollapsed ? 'expand' : 'collapse',
       update: () => setSidebarCollapsed((collapsed) => !collapsed),
     })
+  }
+  const openFavorite = (canonicalPath: string) => {
+    const current = daemonWorkspace.workspaces.find(
+      (workspace) => workspace.projectDir === canonicalPath
+    )
+    if (current) {
+      daemonWorkspace.focusWorkspace(current.id)
+      void navigate({ to: '/workspaces' })
+      return
+    }
+    if (favoritePendingPath !== null) return
+    setFavoritePendingPath(canonicalPath)
+    setFavoriteLaunchError(null)
+    void daemonWorkspace
+      .startManagedProject(canonicalPath)
+      .then(() => {
+        void navigate({ to: '/workspaces' })
+      })
+      .catch((error: unknown) => {
+        setFavoriteLaunchError(
+          error instanceof Error ? error.message : 'Failed to start favorite Workspace.'
+        )
+      })
+      .finally(() => setFavoritePendingPath(null))
   }
 
   return (
@@ -154,13 +198,16 @@ function AppLayoutSurface() {
             {sidebarCollapsed ? null : (
               <div className="ml-4 max-h-72 min-w-0 overflow-y-auto overflow-x-hidden pl-1">
                 <WorkspacesSecondaryNav
-                  entries={runningBackends}
-                  activeId={activeBackendId}
-                  onSelect={(entryId) => {
-                    daemonWorkspace.focusWorkspace(entryId)
-                    void navigate({ to: '/workspaces' })
-                  }}
+                  favorites={favoriteDirectories}
+                  runningPaths={runningProjectPaths}
+                  pendingPath={favoritePendingPath}
+                  onSelect={openFavorite}
                 />
+                {favoriteLaunchError ? (
+                  <p role="alert" className="text-destructive px-2 py-1 text-xs">
+                    {favoriteLaunchError}
+                  </p>
+                ) : null}
               </div>
             )}
             <AppNavLink
@@ -210,13 +257,16 @@ function AppLayoutSurface() {
               data-testid="mobile-workspaces-secondary-nav"
             >
               <WorkspacesSecondaryNav
-                entries={runningBackends}
-                activeId={activeBackendId}
-                onSelect={(entryId) => {
-                  daemonWorkspace.focusWorkspace(entryId)
-                  void navigate({ to: '/workspaces' })
-                }}
+                favorites={favoriteDirectories}
+                runningPaths={runningProjectPaths}
+                pendingPath={favoritePendingPath}
+                onSelect={openFavorite}
               />
+              {favoriteLaunchError ? (
+                <p role="alert" className="text-destructive px-2 py-1 text-xs">
+                  {favoriteLaunchError}
+                </p>
+              ) : null}
             </div>
           ) : null}
           <main
@@ -234,7 +284,7 @@ function AppLayoutSurface() {
                   initialLaunchRequest={null}
                   fallbackLaunchRequest={null}
                   initialError={null}
-                  onOpenTaskManager={() => void navigate({ to: '/workspaces/tasks' })}
+                  onOpenTaskManager={() => setTaskManagerOpen(true)}
                 />
               </div>
             ) : null}
@@ -244,6 +294,10 @@ function AppLayoutSurface() {
           </main>
         </div>
       </div>
+      <WorkspaceTaskManagerDialog
+        open={taskManagerOpen}
+        onClose={() => setTaskManagerOpen(false)}
+      />
     </div>
   )
 }

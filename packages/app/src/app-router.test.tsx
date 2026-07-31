@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove the App router renders the two-domain (Workspaces + Stores) surface (8.1).
- * 2. Prove the root redirects to Workspaces and Settings remains a secondary utility route (8.1/8.2).
+ * 2. Prove the root redirects to Workspaces, Task Manager remains an overlay, and Settings remains a secondary utility route (8.1/8.2).
  * 3. Prove retired routes (Connections/Environment/Store Manager) are gone (8.3).
  * 4. Prove route round-trips preserve the AppLayout-owned iframe Document identity (8.5/8.9).
  * 5. Prove overlay window chrome remains globally visible outside Workspaces.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Original request (2026-07-30): "左侧只留下 Workspaces + Stores 就行了。"
+ * Owner correction (2026-07-31): "TaskManagerPage 改成 TaskManagerDialog"
  */
 // @vitest-environment jsdom
 
@@ -155,6 +156,26 @@ describe('app-router', () => {
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
+    })
+    expect(router.state.location.pathname).toBe('/workspaces')
+  })
+
+  it('opens Task Manager as an App-owned Dialog without changing routes', async () => {
+    const router = routerFor(EMPTY_CONTEXT, '/workspaces')
+    const { container } = await renderAt(<RouterProvider router={router} />)
+    const taskManagerButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Task Manager'
+    )
+    expect(taskManagerButton).toBeTruthy()
+
+    await act(async () => taskManagerButton?.click())
+
+    await waitFor(() => {
+      expect(
+        Array.from(container.querySelectorAll('dialog[open]')).some((dialog) =>
+          dialog.textContent?.includes('Task Manager')
+        )
+      ).toBe(true)
     })
     expect(router.state.location.pathname).toBe('/workspaces')
   })

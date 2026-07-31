@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Register App-native Workspaces and Stores as the only primary domain routes (8.1/8.3).
  * 2. Redirect the root to Workspaces; keep Settings as a secondary utility route (8.2).
- * 3. Preserve typed launch and host-presentation context across the App route tree.
+ * 3. Preserve typed launch and host-presentation context across the App route tree; Task Manager is App-owned overlay state.
  *
  * Original request (2026-07-15): "在没有后端的基础上，先把前端的初步工作先完成。"
  * Original request (2026-07-30): "左侧只留下 Workspaces + Stores 就行了。"
@@ -10,7 +10,7 @@
  *
  * Retired routes (removed without compatibility glue): /connections, /environment, /environment/stores/*
  * (Inspector/Inventory/Context Matrix). Workspaces and Stores are the only primary destinations; Settings is a
- * secondary utility route. /workspaces/tasks is the Home-owned Task Manager secondary page (8.1b).
+ * secondary utility route. Task Manager is a Home-opened Dialog rather than a route.
  */
 import {
   createRootRouteWithContext,
@@ -24,7 +24,6 @@ import { SettingsRoute } from './routes/settings'
 import { StoreDetailRoute } from './routes/store-detail'
 import { StoresEnvironmentsRoute } from './routes/stores-environments'
 import { StoresIndexRoute } from './routes/stores-index'
-import { WorkspaceTaskManagerRoute } from './routes/workspace-task-manager'
 import { WorkspacesRoute } from './routes/workspaces'
 
 /**
@@ -52,18 +51,11 @@ const indexRoute = createRoute({
   },
 })
 
-// --- Workspaces：固定 Home + 项目工作面 + Task Manager ---
+// --- Workspaces：固定 Home + 项目工作面 ---
 const workspacesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/workspaces',
   component: WorkspacesRoute,
-})
-
-// Home-owned Task Manager secondary page. The Workspaces shell remains mounted above routed content (8.1b).
-const workspacesTasksRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/workspaces/tasks',
-  component: WorkspaceTaskManagerRoute,
 })
 
 // --- Stores：selected-Environment index + Environment evidence + composite-identity Detail ---
@@ -94,7 +86,6 @@ const settingsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   workspacesRoute,
-  workspacesTasksRoute,
   storesRoute,
   storesEnvironmentsRoute,
   storeDetailRoute,

@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove daemon control performs initial Pull and notice-driven replacement Pull.
  * 2. Prove unsupported hosted shells stay quiet while objective local failures remain visible.
  * 3. Prove open-in-browser posts only an encoded opaque Workspace id and parses typed failures.
+ * 4. Prove one invalidation pulls the daemon-owned directory catalog and favorite commands stay server-owned.
  *
  * Original request (2026-07-29): "如果已经有 app daemon，那么默认投递到 app 中。"
+ * Owner-reported defect (2026-07-31): HTML fallback from an old daemon must become a restart signal.
  */
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -134,6 +136,62 @@ describe('daemon Workspace control', () => {
     expect(source.listeners).toHaveLength(0)
   })
 
+  it('pulls daemon-owned Favorites/Recent after invalidation and posts favorite commands', async () => {
+    let revision = 1
+    let favorite = false
+    const source = new TestEventSource()
+    const directorySnapshots: unknown[] = []
+    const fetchControl = vi.fn(async (input: string, init: RequestInit) => {
+      if (input.endsWith('/api/daemon/workspaces')) return snapshotResponse(revision, [])
+      if (input.endsWith('/api/daemon/workspace-directories/favorite')) {
+        const body: unknown = JSON.parse(String(init.body))
+        favorite =
+          typeof body === 'object' && body !== null && 'favorite' in body
+            ? body.favorite === true
+            : false
+        return new Response(JSON.stringify({ ok: true }))
+      }
+      if (input.endsWith('/api/daemon/workspace-directories')) {
+        return new Response(
+          JSON.stringify({
+            revision,
+            catalog: {
+              version: 1,
+              entries: [{ canonicalPath: '/projects/a', favorite, lastOpenedAt: 7 }],
+            },
+          })
+        )
+      }
+      throw new Error(`Unexpected daemon request: ${input}`)
+    })
+    const control = createDaemonWorkspaceControl({
+      baseUrl: 'http://127.0.0.1:14000',
+      fetch: fetchControl,
+      createEventSource: () => source,
+      onSnapshot: () => {},
+      onDirectorySnapshot: (snapshot) => directorySnapshots.push(snapshot),
+      onError: (error) => {
+        throw error
+      },
+    })
+
+    await control.start()
+    expect(directorySnapshots).toMatchObject([
+      { revision: 1, catalog: { entries: [{ canonicalPath: '/projects/a', favorite: false }] } },
+    ])
+
+    await control.setDirectoryFavorite('/projects/a', true)
+    revision = 2
+    source.emit(revision)
+    await vi.waitFor(() => expect(directorySnapshots).toHaveLength(2))
+    expect(directorySnapshots[1]).toMatchObject({
+      revision: 2,
+      catalog: { entries: [{ canonicalPath: '/projects/a', favorite: true }] },
+    })
+    expect(fetchControl.mock.calls.some(([url]) => url.endsWith('/favorite'))).toBe(true)
+    control.stop()
+  })
+
   it.each([
     new Response('missing', { status: 404 }),
     new Response('<main>Hosted App</main>', {
@@ -153,6 +211,32 @@ describe('daemon Workspace control', () => {
     await expect(control.start()).resolves.toBe('unsupported')
     expect(createEventSource).not.toHaveBeenCalled()
     expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('turns an old daemon directory HTML fallback into an explicit restart signal', async () => {
+    const onError = vi.fn()
+    const fetchControl = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(snapshotResponse(1, []))
+      .mockResolvedValueOnce(
+        new Response('<!doctype html><html><body>Hosted App</body></html>', {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        })
+      )
+    const control = createDaemonWorkspaceControl({
+      baseUrl: 'http://127.0.0.1:14000',
+      fetch: fetchControl,
+      onSnapshot: vi.fn(),
+      onDirectorySnapshot: vi.fn(),
+      onError,
+    })
+
+    await expect(control.start()).resolves.toBe('unsupported')
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'The OpenSpecUI App daemon is outdated. Restart the App daemon to continue.',
+      })
+    )
   })
 
   it('surfaces an objective local control failure and remains available for later invalidations', async () => {

@@ -1,19 +1,20 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Fixed, non-closeable, non-reorderable Workspace Home surface (4.0a).
  * 2. Favorites above, path-input launch form in the middle, Recent below, Task Manager entry.
  * 3. Pure presentation composed by the future Workspace shell; callbacks stay owned by the caller.
  *
  * Original request (2026-07-30): "Workspace需要记住曾经打开的目录，并且支持收藏。关键是，支持直接从目录直接启动 openspecui 服务。"
+ * Owner correction (2026-07-31): "Task manager按钮应该有 bg-primary 的样式"
  * Spec: hosted-app-distribution › "Open the fixed Workspace Home" and "Start a project from a local directory".
  *
  * Home is the repeat-use entry. It owns no daemon authority or subscription: the caller binds path submission
  * to the current local-daemon authority and supplies the catalog view. The form locks while pending and surfaces
  * concrete errors without fabricating a running Workspace.
  */
+import type { WorkspaceDirectoryCatalogView } from '@openspecui/core/workspace-directory-catalog'
 import { Clock, Folder, ListTodo, Loader2, Star } from 'lucide-react'
 import { useState } from 'react'
-import type { WorkspaceDirectoryCatalogView } from '../lib/workspace-directory-catalog'
 import { selectWorkspacePathLabel, type WorkspacePathLabel } from '../lib/workspace-path-label'
 
 /** Presentation row for one directory (favorite or recent). */
@@ -123,7 +124,7 @@ export function WorkspaceHome({
         <button
           type="button"
           onClick={onOpenTaskManager}
-          className="hover:bg-muted inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium"
         >
           <ListTodo className="h-4 w-4" />
           Task Manager

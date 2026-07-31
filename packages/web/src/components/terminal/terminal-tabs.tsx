@@ -1,9 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Project shared Tabs through terminal-palette chrome and stable tab dimensions.
- * 2. Keep tab-local actions inside each fixed-width tab without creating page overflow.
+ * 2. Keep tab-local actions inside each fixed-width tab without creating page overflow or splitting its surface color.
+ * 3. Keep selected-tab foreground controls above the animated selection surface without vertical strip scrolling.
  *
  * Owner direction (2026-07-29): Workspace tabs expose an Open in browser icon button.
+ * Owner correction (2026-07-31): "Workspaces-tabs-bar 的背景色和前景色有问题"
+ * Owner correction (2026-07-31): The Workspace background fills its complete tab item.
+ * Owner correction (2026-07-31): Close has hover-only chrome and the tabs container cannot scroll vertically.
  */
 import { Tabs, type TabsProps } from '../tabs'
 
@@ -51,22 +55,25 @@ export function TerminalTabs({
         headerForeground: 'z-auto flex-1',
         headerFrame: 'items-end',
         strip: `min-w-0 flex-1 items-end border-b ${TERMINAL_CHROME_BORDER} px-4 rounded-none`,
-        list: 'flex-1 items-end overflow-y-hidden pt-2 [&::scroll-button(*)]:mt-3',
-        item: 'w-[clamp(8.5rem,18vw,13rem)]',
+        list: 'flex-1 items-end overflow-y-clip pt-2 [&::scroll-button(*)]:mt-3',
+        item: `z-20 w-[clamp(8.5rem,18vw,13rem)] rounded-t-[8px] transition-[background-color,transform,filter] duration-180 ${IOS_TAB_EASE}`,
+        activeItem: 'bg-transparent [filter:brightness(1)] [transform:translateY(0)]',
+        inactiveItem: 'bg-terminal [filter:brightness(0.9)] hover:[filter:brightness(0.96)]',
         buttonBase: `z-20 rounded-tl-[8px] border border-b-0 border-transparent px-0 py-0 transition-[color,background-color,border-color] duration-180 ${IOS_TAB_EASE}`,
         buttonInner: `grid h-full min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-t-[8px] px-3 py-1.5 transition-[color,background-color,transform,filter] duration-180 ${IOS_TAB_EASE} will-change-transform`,
         activeButton: 'bg-transparent text-terminal-foreground',
         activeButtonInner: 'bg-transparent text-terminal-foreground [transform:translateY(0)]',
         inactiveButton:
           'bg-transparent text-terminal-foreground/72 hover:border-[color-mix(in_oklab,var(--background)_10%,transparent)] hover:text-terminal-foreground',
-        inactiveButtonInner:
-          'bg-terminal [filter:brightness(0.9)] [transform:translateY(0.25em)] hover:text-terminal-foreground hover:[filter:brightness(0.96)] hover:[transform:translateY(0.125em)]',
-        tabActions: `${TERMINAL_CHROME_BORDER} border-b bg-terminal px-0.5`,
+        inactiveButtonInner: 'hover:text-terminal-foreground',
+        tabActions: 'px-0.5',
         actions: `${TERMINAL_CHROME_BORDER} bg-terminal text-terminal-foreground border-b rounded-none px-1`,
         selectionIndicatorViewport:
           'inset-x-0 top-0 bottom-[-1px] overflow-visible overflow-x-hidden',
-        closeButtonActive: 'text-terminal-foreground/70 hover:text-terminal-foreground',
-        closeButtonInactive: 'text-terminal-foreground/50 hover:text-terminal-foreground',
+        closeButtonActive:
+          'h-6 w-[23px] self-center [--tabs-close-radius:6px_0_0_6px] bg-transparent text-terminal-foreground/70 hover:bg-terminal-foreground/20 hover:text-terminal-foreground',
+        closeButtonInactive:
+          'h-6 w-[23px] self-center [--tabs-close-radius:6px_0_0_6px] bg-transparent text-terminal-foreground/50 hover:bg-terminal-foreground/20 hover:text-terminal-foreground',
         selectionIndicator: `${TERMINAL_CHROME_BORDER} border-x border-t border-b-0 bg-terminal rounded-t-[8px] shadow-[0_1px_0_var(--terminal)] duration-180 ${IOS_TAB_EASE}`,
       }}
     />

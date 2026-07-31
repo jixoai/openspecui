@@ -1,25 +1,27 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
- * 1. Prove Workspace Home, running navigation, and Launcher remain contained at a mobile-width boundary.
- * 2. Prove the real Task Manager route renders path-first evidence and dispatches exact managed Stop.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Prove Workspace Home, favorite navigation, and Launcher remain contained at a mobile-width boundary.
+ * 2. Prove Task Manager dispatches exact daemon-owned favorite and managed Stop commands.
  * 3. Keep this Chromium fixture below the owner-only final App walkthrough boundary.
  *
  * Original request (2026-07-30): "任务管理器...可以杀掉Workspace，或者收藏、取消收藏"
+ * Owner correction (2026-07-31): "TaskManagerPage 改成 TaskManagerDialog"
+ * Owner correction (2026-07-31): Favorites replace Running navigation; external close-only rows expose no fake
+ *   lifecycle action.
  */
-import { RouterProvider, createRootRoute, createRoute, createRouter } from '@tanstack/react-router'
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { page } from 'vitest/browser'
 import '../index.css'
-import { selectWorkspacePathLabel } from '../lib/workspace-path-label'
-import { WorkspaceTaskManagerRoute } from '../routes/workspace-task-manager'
 import { WorkspaceHome } from './workspace-home'
 import { WorkspaceLauncherDialog } from './workspace-launcher-dialog'
+import { WorkspaceTaskManagerDialog } from './workspace-task-manager-dialog'
 import { WorkspacesSecondaryNav } from './workspaces-secondary-nav'
 
 const daemon = vi.hoisted(() => ({
   stopManagedProject: vi.fn(async () => {}),
+  setDirectoryFavorite: vi.fn(async () => {}),
   focusWorkspace: vi.fn(),
   closeWorkspace: vi.fn(),
 }))
@@ -44,10 +46,27 @@ vi.mock('./app-daemon-workspace-owner', () => ({
           githubSlug: 'acme/team',
         },
       },
+      {
+        id: 'workspace-external',
+        backendUrl: 'http://127.0.0.1:3100',
+        credential: null,
+        projectDir: '/projects/openspecui',
+        ownership: 'external',
+        registeredAt: 2,
+        managedGeneration: null,
+        shutdown: 'close-only',
+        git: {
+          remoteUrl: 'https://github.com/jixoai-labs/openspecui.git',
+          branch: 'main',
+          githubSlug: 'jixoai-labs/openspecui',
+        },
+      },
     ],
+    directoryCatalog: { version: 1, entries: [] },
     openWorkspaceInBrowser: vi.fn(async () => {}),
     startManagedProject: vi.fn(),
     stopManagedProject: daemon.stopManagedProject,
+    setDirectoryFavorite: daemon.setDirectoryFavorite,
     focusWorkspace: daemon.focusWorkspace,
     closeWorkspace: daemon.closeWorkspace,
     resolveWorkspaceId: () => null,
@@ -55,20 +74,42 @@ vi.mock('./app-daemon-workspace-owner', () => ({
   }),
 }))
 
+vi.mock('../lib/running-backend-observation-provider', () => ({
+  useRunningBackendObservations: () => ({
+    revision: 1,
+    observations: [
+      {
+        workspaceId: 'workspace-team',
+        backendUrl: 'http://127.0.0.1:43127',
+        registeredAt: 1,
+        state: 'running',
+        healthReachability: 'online',
+        websocket: 'connected',
+        error: null,
+        observedAt: 1,
+      },
+      {
+        workspaceId: 'workspace-external',
+        backendUrl: 'http://127.0.0.1:3100',
+        registeredAt: 2,
+        state: 'running',
+        healthReachability: 'online',
+        websocket: 'connected',
+        error: null,
+        observedAt: 1,
+      },
+    ],
+  }),
+}))
+
 function renderTaskManager() {
-  const rootRoute = createRootRoute({ component: WorkspaceTaskManagerRoute })
-  const indexRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/',
-    component: () => null,
-  })
-  const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute]) })
-  return render(<RouterProvider router={router} />)
+  return render(<WorkspaceTaskManagerDialog open onClose={() => {}} />)
 }
 
 beforeEach(async () => {
   localStorage.clear()
   daemon.stopManagedProject.mockClear()
+  daemon.setDirectoryFavorite.mockClear()
   daemon.focusWorkspace.mockClear()
   daemon.closeWorkspace.mockClear()
   await page.viewport(1280, 720)
@@ -77,7 +118,7 @@ beforeEach(async () => {
 afterEach(() => cleanup())
 
 describe('Workspace management browser boundary', () => {
-  it('contains Home, running navigation, and Launcher at 320px', async () => {
+  it('contains Home, favorite navigation, and Launcher at 320px', async () => {
     await page.viewport(320, 720)
     const view = render(
       <main className="w-full min-w-0 overflow-hidden">
@@ -92,20 +133,7 @@ describe('Workspace management browser boundary', () => {
           onOpenDirectory={() => {}}
         />
         <WorkspacesSecondaryNav
-          entries={[
-            {
-              id: 'workspace-team',
-              projectPath: '/projects/team',
-              ownership: 'daemon-managed',
-              health: 'ready',
-              managedGeneration: 7,
-              shutdown: 'managed',
-              label: selectWorkspacePathLabel({
-                projectPath: '/projects/team',
-                git: { githubRemote: 'https://github.com/acme/team.git', branch: 'main' },
-              }),
-            },
-          ]}
+          favorites={[{ canonicalPath: '/projects/team', favorite: true, lastOpenedAt: 2 }]}
           onSelect={() => {}}
         />
         <WorkspaceLauncherDialog
@@ -134,23 +162,36 @@ describe('Workspace management browser boundary', () => {
     )
 
     expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeVisible()
-    expect(screen.getByText('Running (1)')).toBeVisible()
+    expect(screen.getAllByText('team').length).toBeGreaterThan(0)
     expect(screen.getByText('Open Workspace')).toBeInTheDocument()
     expect(view.container.scrollWidth).toBeLessThanOrEqual(view.container.clientWidth)
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(window.innerWidth)
   })
 
-  it('renders the real Task Manager route and dispatches the exact managed generation', async () => {
+  it('renders the real Task Manager dialog and dispatches the exact managed generation', async () => {
     await page.viewport(320, 720)
     const view = renderTaskManager()
 
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: /Task Manager/ })).toBeVisible()
+    })
     expect(await screen.findByText('acme/team')).toBeVisible()
-    expect(screen.getByText('main')).toBeVisible()
+    expect(screen.getByText('jixoai-labs/openspecui')).toBeVisible()
+    expect(screen.getAllByText('main')).toHaveLength(2)
     expect(screen.queryByText('43127')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Add to favorites' }))
-    expect(screen.getByRole('button', { name: 'Remove from favorites' })).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Stop' }))
+    expect(screen.queryByRole('button', { name: 'Close Workspace' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Remove|Delete/ })).not.toBeInTheDocument()
+    const managedRow = screen.getByText('acme/team').closest('li')
+    expect(managedRow).not.toBeNull()
+    fireEvent.click(within(managedRow!).getByRole('button', { name: 'Add to favorites' }))
+    await waitFor(() => {
+      expect(daemon.setDirectoryFavorite).toHaveBeenCalledWith('/projects/team', true)
+    })
+    expect(within(managedRow!).getByRole('button', { name: 'Add to favorites' })).toBeVisible()
+    const stopButton = within(managedRow!).getByRole('button', { name: 'Stop' })
+    await waitFor(() => expect(stopButton).toBeEnabled())
+    fireEvent.click(stopButton)
+    fireEvent.click(within(managedRow!).getByRole('button', { name: 'Confirm Stop' }))
 
     expect(daemon.stopManagedProject).toHaveBeenCalledWith(7)
     expect(view.container.scrollWidth).toBeLessThanOrEqual(view.container.clientWidth)

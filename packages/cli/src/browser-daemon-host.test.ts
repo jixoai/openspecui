@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove the daemon Browser host resolves private Workspace targets only at the opener boundary.
  * 2. Prove opener failures cannot reflect credentials or private launch fragments into daemon errors.
  *
@@ -13,6 +13,7 @@ function createAppServer(): LocalAppServer {
   return {
     url: 'http://127.0.0.1:14000',
     setWorkspaces: vi.fn(),
+    setWorkspaceDirectoryCatalog: vi.fn(),
     close: vi.fn(async () => {}),
   }
 }

@@ -1,20 +1,20 @@
 /**
  * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Bootstrap the detached App daemon from explicit environment-owned startup evidence and freeze its OpenSpec execution mode.
+ * 1. Bootstrap the detached App daemon from explicit environment-owned startup evidence.
  * 2. Compose local App HTTP, presentation host, and IPC lifecycle in teardown order.
  * 3. Own local-directory project children through the managed daemon control boundary.
  * 4. Project source or packaged CLI execution into the public native cold-launch lifecycle.
- * 5. Enable native DevTools only for the source CLI development runtime.
+ * 5. Own the user-level Favorites/Recent catalog behind the local App control boundary.
  *
  * Original request (2026-07-29): "多次执行 openspecui --app 只是在激活同一个 daemon。"
  * Owner correction (2026-07-30): "pnpm openspecui这种开发模式下，应该要启动 opentray 的 devtools。"
  * Owner correction (2026-07-30): appMode must include the durable `openspecui start` cold-launch vector.
- * Owner acceptance (2026-07-31): Worker is the default buffered OpenSpec execution mode.
+ * Owner-reported defect (2026-07-31): Tray Quit must be retained across daemon bootstrap and fully settle.
  */
 import { resolveOpenSpecSpawnMode } from '@openspecui/core'
 import type { AppDaemonWorkspaceBinding } from '@openspecui/core/app-daemon-control'
 import { execFile } from 'node:child_process'
-import { basename, dirname } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { resolveAppAssetsDir } from './app-assets.js'
@@ -37,6 +37,7 @@ import {
   type OpenTrayDaemonPresenterResolution,
 } from './opentray-daemon-presenter.js'
 import { readCliPackageVersion } from './package-version.js'
+import { createWorkspaceDirectoryCatalogStore } from './workspace-directory-catalog-store.js'
 
 export const DAEMON_RUN_ENV = 'OPENSPECUI_INTERNAL_DAEMON_RUN'
 export const DAEMON_HOST_MODE_ENV = 'OPENSPECUI_INTERNAL_DAEMON_HOST_MODE'
@@ -121,9 +122,27 @@ export async function runDaemonProcess(options: {
   })
   const paths = resolveDaemonPaths()
   const assetsDir = await resolveAppAssetsDir(runtimeDir)
+  const workspaceDirectoryCatalogStore = createWorkspaceDirectoryCatalogStore({
+    filePath: join(paths.homeDir, 'workspace-directory-catalog.json'),
+  })
+  const initialWorkspaceDirectoryCatalog = await workspaceDirectoryCatalogStore.getSnapshot()
   let server: RunningDaemonServer | null = null
+  let stopRequested = false
+  const requestStop = () => {
+    stopRequested = true
+    const runningServer = server
+    if (!runningServer) return
+    void runningServer.close().catch(() => {
+      process.stderr.write('Tray Quit could not release every App daemon resource cleanly.\n')
+    })
+  }
   const appServer = await startLocalAppServer({
     assetsDir,
+    initialWorkspaceDirectoryCatalog,
+    recordSuccessfulDirectoryOpen: (canonicalPath) =>
+      workspaceDirectoryCatalogStore.recordSuccessfulOpen(canonicalPath),
+    setWorkspaceDirectoryFavorite: (canonicalPath, favorite) =>
+      workspaceDirectoryCatalogStore.setFavorite(canonicalPath, favorite),
     openWorkspaceInBrowser: async (workspaceId) =>
       server?.openWorkspaceInBrowser(workspaceId) ?? 'not-found',
     startManagedProject: async (projectDir) => {
@@ -194,7 +213,7 @@ export async function runDaemonProcess(options: {
       requestedHostMode: options.hostMode,
       version,
       openExternalUrl,
-      onStopRequested: () => void server?.close(),
+      onStopRequested: requestStop,
       reportDiagnostic,
       enableDevtools: isDevelopmentCliRuntime(runtimeDir),
     })
@@ -248,6 +267,10 @@ export async function runDaemonProcess(options: {
       host: presentation.host,
       managedProject,
     })
+    if (stopRequested) {
+      await server.close()
+      return
+    }
     const restoreResults = await managedOwner.restoreManagedDirectorySet(
       (options.restoreProjectDirs ?? []).map((canonicalProjectDir) => ({ canonicalProjectDir }))
     )

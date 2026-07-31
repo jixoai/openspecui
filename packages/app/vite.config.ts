@@ -72,6 +72,10 @@ export default defineConfig({
         __dirname,
         '../core/src/app-daemon-control.ts'
       ),
+      '@openspecui/core/workspace-directory-catalog': resolve(
+        __dirname,
+        '../core/src/workspace-directory-catalog.ts'
+      ),
       '@openspecui/core/store-types': resolve(__dirname, '../core/src/store-types.ts'),
       '@openspecui/core/store-mutation-protocol': resolve(
         __dirname,

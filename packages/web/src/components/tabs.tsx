@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Render persistent, reorderable tab triggers and state-preserving content panels.
  * 2. Keep tab-local actions as accessible siblings instead of nested interactive controls.
  * 3. Own selection-indicator geometry and the tab strip's bounded horizontal scroll.
  *
  * Owner direction (2026-07-29): Workspace tabs expose an Open in browser icon button.
+ * Owner correction (2026-07-31): Inactive Workspace color fills the complete tab item, including sibling controls.
  */
 import { X } from 'lucide-react'
 import {
@@ -52,6 +53,8 @@ export interface TabsClassNames {
   strip?: string
   list?: string
   item?: string
+  activeItem?: string
+  inactiveItem?: string
   buttonBase?: string
   buttonInner?: string
   activeButton?: string
@@ -524,6 +527,8 @@ function TabsImpl(
     'group relative z-10 flex h-full shrink-0 items-stretch',
     classNames?.item
   )
+  const activeItemClassName = cn(classNames?.activeItem)
+  const inactiveItemClassName = cn(classNames?.inactiveItem)
 
   const buttonBaseClassName = cn(
     'relative m-0 flex h-full min-w-0 flex-1 px-2 py-2 text-center text-sm font-medium transition-colors',
@@ -599,7 +604,10 @@ function TabsImpl(
         key={tab.id}
         data-tab-item="true"
         data-tab-id={tab.id}
-        className={itemClassName}
+        className={cn(
+          itemClassName,
+          activeTab === tab.id ? activeItemClassName : inactiveItemClassName
+        )}
         style={dragIndicatorStyle}
       >
         <button
@@ -655,7 +663,7 @@ function TabsImpl(
                   }
                 }}
                 draggable={false}
-                className={`rounded p-1 transition ${
+                className={`rounded-[var(--tabs-close-radius,0.25rem)] p-1 transition ${
                   tab.closeButtonVisibility === 'always'
                     ? 'opacity-100'
                     : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100'
