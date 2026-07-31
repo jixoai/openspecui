@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove public Router owner boundaries and Planning-root stream settlement.
  * 2. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
@@ -15,6 +15,7 @@
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  * Owner correction (2026-07-31): Observation refresh is a query even when it maintains internal cache or stamp state.
+ * Original request (2026-07-31): "手动刷新报错：Code Git snapshot failed: Invalid Dashboard projection Work event."
  */
 import {
   CliExecutor,
@@ -1920,6 +1921,32 @@ apply:
       expect(summary.data.summary.specifications).toBe(2)
       expect(trends.trendKinds.requirements).toBe('monotonic')
       expect(git.defaultBranch).toBe('origin/main')
+    })
+
+    it('accepts scheduler queue and resource-admission stages on Dashboard subscriptions', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      planning.dashboardProjectionService.subscribeGit = (listener) => {
+        listener({ type: 'stage', phase: 'queue-enter', workGeneration: 1 })
+        listener({ type: 'stage', phase: 'resource-admitted', workGeneration: 1 })
+        return { unsubscribe() {} }
+      }
+      const caller = appRouter.createCaller(context)
+      const observable = await caller.dashboard.subscribeGit()
+      const events: unknown[] = []
+      const errors: Error[] = []
+      const subscription = observable.subscribe({
+        next: (event) => events.push(event),
+        error: (error) => errors.push(error instanceof Error ? error : new Error(String(error))),
+      })
+
+      await vi.waitFor(() => expect(events).toHaveLength(2))
+      expect(errors).toEqual([])
+      expect(events).toEqual([
+        { type: 'stage', phase: 'queue-enter', workGeneration: 1 },
+        { type: 'stage', phase: 'resource-admitted', workGeneration: 1 },
+      ])
+      subscription.unsubscribe()
     })
 
     it('replays the legacy Dashboard subscription without forcing a refresh', async () => {

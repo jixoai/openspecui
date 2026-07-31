@@ -185,7 +185,11 @@ import {
 } from './planning-config-service.js'
 import type { PlanningRootServiceResolver, PlanningRootServices } from './planning-root-service.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
-import type { ProjectionWorkEvent, ProjectionWorkSubscription } from './projection-work/index.js'
+import {
+  projectionWorkPhases,
+  type ProjectionWorkEvent,
+  type ProjectionWorkSubscription,
+} from './projection-work/index.js'
 import { reactiveKV } from './reactive-kv.js'
 import {
   createReactiveProjectionSubscription,
@@ -544,6 +548,7 @@ const projectionWorkIdentitySchema = z.object({
   inputFingerprint: z.string(),
   protocolVersion: z.number().int(),
 })
+const projectionWorkPhaseSchema = z.enum(projectionWorkPhases)
 
 function dashboardProjectionEventSchema<TData>(
   dataSchema: z.ZodType<TData>
@@ -561,19 +566,7 @@ function dashboardProjectionEventSchema<TData>(
     }),
     z.object({
       type: z.literal('stage'),
-      phase: z.enum([
-        'request',
-        'transport-start',
-        'root-ready',
-        'cache-hit',
-        'join',
-        'start',
-        'leaf-settled',
-        'first-stable-payload',
-        'complete',
-        'error',
-        'cancel',
-      ]),
+      phase: projectionWorkPhaseSchema,
       workGeneration: z.number().int(),
     }),
     z.object({
@@ -699,19 +692,7 @@ function changeProjectionEventSchema(): z.ZodType<
     }),
     z.object({
       type: z.literal('stage'),
-      phase: z.enum([
-        'request',
-        'transport-start',
-        'root-ready',
-        'cache-hit',
-        'join',
-        'start',
-        'leaf-settled',
-        'first-stable-payload',
-        'complete',
-        'error',
-        'cancel',
-      ]),
+      phase: projectionWorkPhaseSchema,
       workGeneration: z.number().int(),
     }),
     z.object({
