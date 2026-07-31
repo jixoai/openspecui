@@ -3,10 +3,18 @@
  * 1. Compose App and shared Project Web style layers.
  * 2. Render compact overlay chrome with window-control-safe horizontal content.
  * 3. Preserve hosted Workspace tab affordances and content-sized Home identity across application themes.
+ * 4. Keep the OpenTray brand toggle interactive without leaking drag authority.
+ * 5. Stage left/right App shell snapshots at equal height and stable edge alignment, then exchange them through masks.
  *
  * Owner correction (2026-07-30): follow skill-creator-v2's fixed 32px titlebar and horizontal safe area.
  * Owner correction (2026-07-31): Home uses only the width required by its icon and label.
  * Owner correction (2026-07-31): PWA overlay chrome is retired.
+ * Owner correction (2026-07-31): clicking the App brand expands or collapses the desktop sidebar.
+ * Owner correction (2026-07-31): "使用VT的话，首先要把transform动画关闭。"
+ * Owner correction (2026-07-31): old/new sidebar snapshots stay left-aligned and equal-height; shell snapshots stay
+ *   right-aligned and equal-height; both exchanges use directional mask-image fades.
+ * Owner correction (2026-07-31): add a right-anchored scale-x handoff to shell snapshots while masks retain visibility ownership.
+ * Owner correction (2026-07-31): old/new masks use coupled overlap trajectories so no fully blank frame can separate them.
  */
 @import '../../web/src/index.css';
 @import '../../web/src/styles/realtime.css';
@@ -16,6 +24,13 @@
 :root {
   --app-titlebar-left: 8px;
   --app-titlebar-right: 8px;
+  --app-sidebar-collapsed-width: 3.5rem;
+  --app-sidebar-expanded-width: 14rem;
+  --app-sidebar-vt-content-top: 0px;
+}
+
+:root:has([data-titlebar-presentation='opentray']) {
+  --app-sidebar-vt-content-top: 2rem;
 }
 
 .app-titlebar {
@@ -49,6 +64,30 @@
   letter-spacing: 0;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--foreground) 76%, transparent);
+  border: 0;
+  border-radius: 0.25rem;
+  background-color: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.app-titlebar-brand:hover {
+  background-color: color-mix(in srgb, var(--muted) 84%, transparent);
+  color: var(--foreground);
+}
+
+.app-titlebar-brand:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.app-titlebar-brand:active {
+  background-color: color-mix(in srgb, var(--muted) 96%, transparent);
 }
 
 .app-titlebar-content {
@@ -64,7 +103,6 @@
 .app-titlebar-mark {
   display: block;
   width: 1rem;
-  height: 1rem;
   flex: 0 0 auto;
 }
 
@@ -85,6 +123,10 @@ html.dark .app-titlebar-logo-light {
 
 html.dark .app-titlebar-logo-dark {
   display: block;
+}
+
+.app-titlebar-text {
+  height: 1.25em;
 }
 
 .app-titlebar-settings {
@@ -139,6 +181,233 @@ html.dark .app-titlebar-logo-dark {
 html.dark .hosted-shell-root .hosted-shell-tabs [data-tab-trigger='true'].tab-selected {
   background-color: var(--primary);
   color: var(--primary-foreground);
+}
+
+html[data-sidebar-vt] [data-app-sidebar] {
+  contain: paint;
+  view-transition-name: app-sidebar;
+}
+
+html[data-sidebar-vt] [data-app-shell-content] {
+  contain: paint;
+  view-transition-name: app-shell-content;
+}
+
+::view-transition-group(app-sidebar),
+::view-transition-group(app-shell-content) {
+  animation: none;
+  overflow: clip;
+  top: var(--app-sidebar-vt-content-top);
+  height: calc(100dvh - var(--app-sidebar-vt-content-top));
+  transform: none;
+}
+
+::view-transition-group(app-sidebar) {
+  right: auto;
+  left: 0;
+  width: var(--app-sidebar-expanded-width);
+}
+
+::view-transition-group(app-shell-content) {
+  right: 0;
+  left: auto;
+  width: calc(100dvw - var(--app-sidebar-collapsed-width));
+}
+
+::view-transition-image-pair(app-sidebar),
+::view-transition-image-pair(app-shell-content) {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+  overflow: clip;
+}
+
+::view-transition-old(app-sidebar),
+::view-transition-new(app-sidebar),
+::view-transition-old(app-shell-content),
+::view-transition-new(app-shell-content) {
+  width: 100%;
+  height: 100%;
+  mix-blend-mode: normal;
+  object-fit: none;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 300% 100%;
+  mask-size: 300% 100%;
+}
+
+::view-transition-old(app-sidebar),
+::view-transition-new(app-sidebar) {
+  object-position: left top;
+}
+
+::view-transition-old(app-shell-content),
+::view-transition-new(app-shell-content) {
+  object-position: right top;
+  transform-origin: right center;
+}
+
+@keyframes app-vt-mask-out-right-first {
+  from {
+    -webkit-mask-position: 0% 0%;
+    mask-position: 0% 0%;
+  }
+  to {
+    -webkit-mask-position: 100% 0%;
+    mask-position: 100% 0%;
+  }
+}
+
+@keyframes app-vt-mask-in-left-first {
+  from {
+    -webkit-mask-position: 70% 0%;
+    mask-position: 70% 0%;
+  }
+  to {
+    -webkit-mask-position: 0% 0%;
+    mask-position: 0% 0%;
+  }
+}
+
+@keyframes app-vt-mask-out-left-first {
+  from {
+    -webkit-mask-position: 100% 0%;
+    mask-position: 100% 0%;
+  }
+  to {
+    -webkit-mask-position: 0% 0%;
+    mask-position: 0% 0%;
+  }
+}
+
+@keyframes app-vt-mask-in-right-first {
+  from {
+    -webkit-mask-position: 30% 0%;
+    mask-position: 30% 0%;
+  }
+  to {
+    -webkit-mask-position: 100% 0%;
+    mask-position: 100% 0%;
+  }
+}
+
+@keyframes app-shell-grow-old-scale-x {
+  0%,
+  12% {
+    scale: 1 1;
+  }
+  64%,
+  100% {
+    scale: 1.04 1;
+  }
+}
+
+@keyframes app-shell-grow-new-scale-x {
+  0%,
+  34% {
+    scale: 0.96 1;
+  }
+  100% {
+    scale: 1 1;
+  }
+}
+
+@keyframes app-shell-shrink-old-scale-x {
+  0%,
+  12% {
+    scale: 1 1;
+  }
+  64%,
+  100% {
+    scale: 0.96 1;
+  }
+}
+
+@keyframes app-shell-shrink-new-scale-x {
+  0%,
+  34% {
+    scale: 1.04 1;
+  }
+  100% {
+    scale: 1 1;
+  }
+}
+
+html[data-sidebar-vt='collapse']::view-transition-old(app-sidebar),
+html[data-sidebar-vt='collapse']::view-transition-new(app-sidebar),
+html[data-sidebar-vt='expand']::view-transition-new(app-sidebar),
+html[data-sidebar-vt='collapse']::view-transition-old(app-shell-content) {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    black 0%,
+    black 33.333%,
+    transparent 50%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to right, black 0%, black 33.333%, transparent 50%, transparent 100%);
+}
+
+html[data-sidebar-vt='collapse']::view-transition-old(app-sidebar) {
+  animation: app-vt-mask-out-right-first 320ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+html[data-sidebar-vt='collapse']::view-transition-new(app-sidebar) {
+  animation: app-vt-mask-in-left-first 320ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+html[data-sidebar-vt='collapse']::view-transition-old(app-shell-content) {
+  animation:
+    app-vt-mask-out-right-first 320ms cubic-bezier(0.4, 0, 0.2, 1) both,
+    app-shell-grow-old-scale-x 320ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+html[data-sidebar-vt='collapse']::view-transition-new(app-shell-content) {
+  animation:
+    app-vt-mask-in-right-first 320ms cubic-bezier(0.4, 0, 0.2, 1) both,
+    app-shell-grow-new-scale-x 320ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+html[data-sidebar-vt='expand']::view-transition-old(app-sidebar),
+html[data-sidebar-vt='collapse']::view-transition-new(app-shell-content),
+html[data-sidebar-vt='expand']::view-transition-old(app-shell-content),
+html[data-sidebar-vt='expand']::view-transition-new(app-shell-content) {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    transparent 50%,
+    black 66.667%,
+    black 100%
+  );
+  mask-image: linear-gradient(to right, transparent 0%, transparent 50%, black 66.667%, black 100%);
+}
+
+html[data-sidebar-vt='expand']::view-transition-old(app-sidebar) {
+  animation: app-vt-mask-out-left-first 320ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+html[data-sidebar-vt='expand']::view-transition-new(app-sidebar) {
+  animation: app-vt-mask-in-left-first 320ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+html[data-sidebar-vt='expand']::view-transition-old(app-shell-content) {
+  animation:
+    app-vt-mask-out-left-first 320ms cubic-bezier(0.4, 0, 0.2, 1) both,
+    app-shell-shrink-old-scale-x 320ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+html[data-sidebar-vt='expand']::view-transition-new(app-shell-content) {
+  animation:
+    app-vt-mask-in-right-first 320ms cubic-bezier(0.4, 0, 0.2, 1) both,
+    app-shell-shrink-new-scale-x 320ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-sidebar-vt]::view-transition-old(app-sidebar),
+  html[data-sidebar-vt]::view-transition-new(app-sidebar),
+  html[data-sidebar-vt]::view-transition-old(app-shell-content),
+  html[data-sidebar-vt]::view-transition-new(app-shell-content) {
+    animation: none;
+  }
 }
 
 iframe {

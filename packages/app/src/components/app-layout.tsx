@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Own the global App titlebar, navigation, and mobile-safe routed viewport budget.
+ * 1. Own the global App titlebar, shared desktop sidebar expansion, navigation, and mobile-safe routed viewport budget.
  * 2. Install shared connection, daemon Workspace, Store-mutation, and launch owners above every route.
  * 3. Keep project Workspaces separate from environment-scoped administration.
  * 4. Preserve the stateful HostedShell and its iframe Documents across route changes.
@@ -10,6 +10,8 @@
  * Original request (2026-07-27): "统一修复所有类似的问题，特别是app 那边新增的页面。"
  * Owner correction (2026-07-30): the self-drawn window titlebar belongs above every App route.
  * Owner correction (2026-07-30): Settings belongs in the overlay titlebar, with navigation fallback for non-overlay hosts.
+ * Owner correction (2026-07-31): either App brand toggles a compact icon-only primary-navigation rail.
+ * Owner correction (2026-07-31): sidebar topology changes use native View Transitions, never transform/width timers.
  */
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { Boxes, Settings, Store, type LucideIcon } from 'lucide-react'
@@ -17,6 +19,7 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { ConnectionObservationProvider } from '../lib/connection-observation'
 import { MutationObservationProvider } from '../lib/mutation-observation-provider'
 import { projectDaemonRunningBackends } from '../lib/running-backend-projection'
+import { runSidebarViewTransition } from '../lib/sidebar-view-transition'
 import { StoresRuntimeProvider } from '../lib/stores-runtime'
 import { useConnections } from '../lib/use-connections'
 import { useRouterContext } from '../lib/use-router-context'
@@ -73,6 +76,7 @@ function AppLayoutSurface() {
   const workspacesVisible = pathname === '/workspaces'
   const hasOverlayTitlebar = titlebar.presentation.kind === 'opentray'
   const [workspacesMounted, setWorkspacesMounted] = useState(workspacesVisible)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const daemonWorkspace = useAppDaemonWorkspace()
   const connections = useConnections()
   const runningBackends = projectDaemonRunningBackends(daemonWorkspace.workspaces)
@@ -94,6 +98,12 @@ function AppLayoutSurface() {
     '--app-titlebar-left': `${titlebar.presentation.insets.left}px`,
     '--app-titlebar-right': `${titlebar.presentation.insets.right}px`,
   }
+  const toggleSidebar = () => {
+    runSidebarViewTransition({
+      direction: sidebarCollapsed ? 'expand' : 'collapse',
+      update: () => setSidebarCollapsed((collapsed) => !collapsed),
+    })
+  }
 
   return (
     <div
@@ -107,41 +117,72 @@ function AppLayoutSurface() {
         presentation={titlebar.presentation}
         onPointerDown={titlebar.onPointerDown}
         settingsActive={pathname === '/settings'}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        <aside className="border-border bg-muted/30 hidden w-56 shrink-0 flex-col gap-1 border-r p-3 md:flex">
-          <div
-            className="text-muted-foreground mb-4 flex items-center gap-2 px-2 text-xs font-semibold uppercase tracking-wide"
-            data-app-sidebar-brand
-          >
-            <img aria-hidden="true" className="h-4 w-4 shrink-0" src="/icon.svg" alt="" />
-            OpenSpecUI App
-          </div>
-          <nav className="flex min-h-0 flex-col gap-1">
-            <AppNavLink item={APP_NAV_ITEMS[0]!} active={isActive('/workspaces')} />
-            <div className="ml-4 max-h-72 overflow-y-auto pl-1">
-              <WorkspacesSecondaryNav
-                entries={runningBackends}
-                activeId={activeBackendId}
-                onSelect={(entryId) => {
-                  daemonWorkspace.focusWorkspace(entryId)
-                  void navigate({ to: '/workspaces' })
-                }}
-              />
-            </div>
-            <AppNavLink item={APP_NAV_ITEMS[1]!} active={isActive('/stores')} />
+        <aside
+          className={`border-border bg-muted/30 hidden shrink-0 flex-col gap-1 overflow-hidden border-r md:flex ${
+            sidebarCollapsed ? 'w-14 p-2' : 'w-56 p-3'
+          }`}
+          data-app-sidebar
+          data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
+        >
+          {hasOverlayTitlebar ? null : (
+            <button
+              aria-expanded={!sidebarCollapsed}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className={`text-muted-foreground hover:bg-muted hover:text-foreground mb-4 flex h-8 items-center rounded-md text-xs font-semibold uppercase tracking-wide transition-colors ${
+                sidebarCollapsed ? 'justify-center px-0' : 'gap-2 px-2'
+              }`}
+              data-app-sidebar-brand
+              onClick={toggleSidebar}
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              type="button"
+            >
+              <img aria-hidden="true" className="h-4 w-4 shrink-0" src="/icon.svg" alt="" />
+              <span className={sidebarCollapsed ? 'sr-only' : undefined}>OpenSpecUI App</span>
+            </button>
+          )}
+          <nav className="flex min-h-0 min-w-0 flex-col gap-1 overflow-hidden">
+            <AppNavLink
+              item={APP_NAV_ITEMS[0]!}
+              active={isActive('/workspaces')}
+              collapsed={sidebarCollapsed}
+            />
+            {sidebarCollapsed ? null : (
+              <div className="ml-4 max-h-72 min-w-0 overflow-y-auto overflow-x-hidden pl-1">
+                <WorkspacesSecondaryNav
+                  entries={runningBackends}
+                  activeId={activeBackendId}
+                  onSelect={(entryId) => {
+                    daemonWorkspace.focusWorkspace(entryId)
+                    void navigate({ to: '/workspaces' })
+                  }}
+                />
+              </div>
+            )}
+            <AppNavLink
+              item={APP_NAV_ITEMS[1]!}
+              active={isActive('/stores')}
+              collapsed={sidebarCollapsed}
+            />
           </nav>
           <div className="flex-1" />
           {hasOverlayTitlebar ? null : (
             <nav className="flex flex-col gap-1">
-              <AppNavLink item={SETTINGS_ITEM} active={isActive(SETTINGS_ITEM.to)} />
+              <AppNavLink
+                item={SETTINGS_ITEM}
+                active={isActive(SETTINGS_ITEM.to)}
+                collapsed={sidebarCollapsed}
+              />
             </nav>
           )}
         </aside>
 
         {/* 移动端顶栏 */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-app-shell-content>
           <header className="border-border bg-background/80 sticky top-0 z-10 flex items-center gap-1 border-b px-2 py-2 backdrop-blur md:hidden">
             {(hasOverlayTitlebar ? APP_NAV_ITEMS : APP_NAV_ITEMS.concat(SETTINGS_ITEM)).map(
               (item) => {
@@ -207,19 +248,31 @@ function AppLayoutSurface() {
   )
 }
 
-function AppNavLink({ item, active }: { item: AppNavItem; active: boolean }) {
+function AppNavLink({
+  item,
+  active,
+  collapsed,
+}: {
+  item: AppNavItem
+  active: boolean
+  collapsed: boolean
+}) {
   const Icon = item.icon
   return (
     <Link
       to={item.to}
-      className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
+      aria-label={collapsed ? item.label : undefined}
+      title={collapsed ? item.label : undefined}
+      className={`flex h-9 items-center rounded-md text-sm transition-colors ${
+        collapsed ? 'justify-center px-0' : 'gap-2 px-3'
+      } ${
         active
           ? 'bg-primary text-primary-foreground font-medium'
           : 'text-muted-foreground hover:bg-muted hover:text-foreground'
       }`}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      {item.label}
+      <span className={collapsed ? 'sr-only' : undefined}>{item.label}</span>
     </Link>
   )
 }
