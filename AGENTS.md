@@ -4,7 +4,7 @@ Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
 2. Enforce protected-branch, PR, CI, and release delivery policy.
 3. Protect static/SSG behavior and shared live/static projections.
 4. Preserve the OpenSpec adaptation baseline, source-distinct projections, and independent-review corrections.
-5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, CLI trace phase precision, buffered CLI process/Worker execution, live-projection loading, admission Pull, readonly refresh semantics, real-time visual lifecycle, OPSX-first information hierarchy, Config-owned Resolved Context, Terminal palette accessibility, container-responsive objective Kanban projection, live Board scroll ownership, OpenTray App-daemon hosting, App-build asset projection, Workspaces/Stores two-domain App information architecture, PWA retirement, App brand projection, foreground Server shutdown, and delivery-correction boundaries for the 1.6/6.1 line.
+5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, CLI trace phase precision, buffered CLI process/Worker execution, live-projection loading, admission Pull, readonly refresh semantics, real-time visual lifecycle, OPSX-first information hierarchy, Config-owned Resolved Context, Terminal palette accessibility, container-responsive objective Kanban projection, live Board scroll ownership, OpenTray App-daemon hosting, App-build asset projection, Workspaces/Stores two-domain App information architecture, PWA retirement, App brand projection, foreground Server shutdown, on-demand native translation runtime dependency ownership, and delivery-correction boundaries for the 1.6/6.1 line.
 
 Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配，目前我们的进度有点落后。你先了解项目，然后更新 references/openspec，然后使用 $wayfinder 和我讨论具体的适配计划。我们最终使用openspec来管理 wayfinder 产出的文档。"
 Original request (2026-07-28): "这个PR自身是否符合OPSX的开放式设计，是否会冲突？都需要进行深入的调查。"
@@ -88,6 +88,8 @@ Original request (2026-07-31): "系统性地进行修复，因为List页面也�
 Owner-reported defect (2026-07-31): "终端大量报错，比如: Cannot execute the operation on ended Span"
 Original request (2026-07-31): "dashboard.refreshGitSnapshot?batch=1 这个请求一直在阻塞其它任务，这个不是只读吗"
 Owner correction (2026-07-31): "这个只是辅助‘只读’的动作，它的本质仍然是Readonly，所以把它改成只读才是解决问题的根本"
+Original request (2026-07-31): "开始发布6.1.0；目前这个版本先给它支持1.7.*，因为基本兼容。"
+Original request (2026-07-31): "这个依赖好像会导致安装的时候仍然会被强制装上去，可能要改成 peerDependencies 会更好"
 Original request (2026-07-31): "这些命令的执行，时间绝对不是七八秒那么久...请看一下代码，看能不能让trace更精确"
 Original request (2026-07-31): "直接寻址到本地 openspec背后的js，直接用 worker_thread 来运行它。"
 Original request (2026-07-31): "在主线程，通过 OPENSPEC_SPAWN_MODE=process|worker 来进行区分两种模式。"
@@ -180,6 +182,20 @@ MUST READ: CLAUDE.md
 - Stable promotion law (2026-07-29): when `.changeset/pre.json` still records an active prerelease channel, a stable release MUST explicitly exit that channel through `pnpm changeversion --exit-pre`; plain `pnpm changeversion` is valid only when no prerelease state exists. The version PR, merged `main` head, npm `latest`, remote package tags, and non-prerelease GitHub Release remain independent completion facts.
 
 ## OpenSpec 1.6 Adaptation Baseline
+
+### OpenSpec CLI 1.7 compatibility bridge law (2026-07-31)
+
+OpenSpecUI 6.1 classifies CLI `>=1.7.0 <1.8.0` as current and `>=1.6.0 <1.7.0` as
+legacy-compatible. CLI versions below 1.6 or at/above 1.8 remain blocked by default. This release decision broadens
+the compatibility gate because 1.7 is basically compatible; it does not claim 1.7-specific feature completeness,
+advance the pinned 1.6 upstream source evidence, or define the later OpenSpecUI 7.x adaptation boundary.
+
+### On-demand native translation runtime dependency law (2026-07-31)
+
+`ctranslate2` and `node-llama-cpp` are optional peers of the runtime hosts and their local translator adapters, not
+install-time dependencies. The published CLI, Server, and adapter manifests SHALL mark each peer optional through
+`peerDependenciesMeta`; development manifests may retain the runtime for typechecking and focused tests. Runtime
+admission resolves the declared optional-peer range and installs it only after the user selects that local engine.
 
 ### OPSX-first information hierarchy law (2026-07-28)
 
@@ -298,7 +314,7 @@ proof exist.
   the experimental App iframe is excluded.
 
 - `references/openspec` is the official upstream submodule and currently targets exact tag `v1.6.0` (`e1b51d1`).
-- The shipped line is OpenSpecUI 5.x nominally targeting OpenSpec CLI 1.5.x. Version compatibility alone is not proof of feature completeness: the 1.4 `sync` core-profile change and the 1.5 resolved-root/Stores contract must be audited as part of the 1.6 plan. The established version law is one OpenSpecUI major per OpenSpec CLI minor; the 1.6 adaptation therefore plans the next major line unless an explicit decision changes that law.
+- OpenSpecUI 6.1 targets OpenSpec CLI 1.7.x and keeps 1.6.x as its single legacy-compatible line. This explicit bridge supersedes the earlier one-product-major-per-CLI-minor convention for the 6.1 release only; it does not pre-decide the future 7.x product contract. Version compatibility alone is not proof of 1.7 feature completeness, and `references/openspec` remains pinned to the 1.6 evidence baseline until a separate adaptation change advances it.
 - OpenSpec CLI remains the workflow source of truth. Prefer CLI JSON and exit status over parallel parsers or inferred workflow state.
 - OpenSpec 1.6 Doctor References carry Store identity, root, and diagnostics, but no embedded Spec index. Build Referenced Spec Catalog entries by enumerating each direct Doctor-declared Reference through typed `list --specs --store --json`; never treat an absent `references[*].specs` field as an empty Store.
 - Typed CLI contract law (2026-07-16 independent review): `.passthrough()` tolerates additive unknown fields but does not make known OpenSpec 1.6 fields strongly typed. Command consumers must use the typed result envelope and preserve parsed data, raw payload/stdout, stderr, diagnostics, contract drift, success, and exit status as separate facts; never reparse `stdout` after a typed executor call. Preserve explicitly supplied Store selectors by presence rather than truthiness, keep the beta Store UI projection optional-field tolerant, and require executable pinned-CLI fixtures before claiming feature-complete adaptation.
@@ -441,7 +457,7 @@ proof exist.
 - Decision (2026-07-15): When effective References exist, static export requires `--references=include|omit`. Missing policy stops the export. `include` requires complete successful materialization and must not publish partial output; `omit` retains an explicit omission state rather than pretending no References exist.
 - Static Reference snapshots retain compound Spec identity, Store id for included content, source/read-only state, and observation time. Remove absolute paths (including `meta.projectDir`), registry/data-home paths, remote URLs, backend/environment identity, and raw path-bearing diagnostics. An omitted export exposes only the omission state and aggregate count, not unpublished Store identities.
 - Decision (2026-07-15): The OpenSpec 1.6 Wayfinder map is complete. Formal implementation truth now lives in `openspec/changes/target-openspec-cli-16-line/loop/{intake,research-plan,implementation,checkpoints}.md` under the declared `opsx-collab-pr-loop` schema. Keep `wayfinder/` as decision provenance; do not maintain it as a parallel execution plan.
-- The repository-local OpenSpec artifact CLI currently reports 1.5.0 while the product target and `references/openspec` authority are 1.6.0. Use the local CLI to follow the declared artifact schema, but verify product behavior against the pinned 1.6 source, executable contracts, JSON, and exit status.
+- The repository-local OpenSpec artifact CLI currently reports 1.5.0, the OpenSpecUI 6.1 compatibility target is 1.7.x, and `references/openspec` remains pinned to the 1.6.0 evidence baseline. Use the local CLI to follow the declared artifact schema, verify established product behavior against the pinned 1.6 source and executable contracts, and treat 1.7 support as a compatibility bridge rather than proof of unreviewed 1.7-specific features.
 - Implementation baseline (2026-07-15): Section 2 CLI 1.6 contract baseline is complete at 11/11 on `feat/openspec-cli-16-contract-baseline`. Typed CLI evidence, 1.4-1.6 workflow/tool regressions, 6.x compatibility guidance, strict validate/archive behavior, Update/Sync Web actions, multiline Requirement rendering, and scenario-loss diagnostics pass all required local gates in an isolated clean worktree. The slice is not merged; do not claim Section 3+ production contracts from parallel skeleton files.
 - A typed CLI command result preserves parsed command data, the raw JSON document, stdout, stderr, structured diagnostics, process success, and exit status as separate facts. Contract validation may report missing required semantics but must not discard raw evidence; additive fields remain accepted.
 - First-party executable evidence against `references/openspec@e1b51d1` covers nearest/declared/explicit roots, self/missing/direct References, empty healthy Stores, multiline Requirements, proposal-less nested validation failure, and scenario-loss archive failure. Keep the source/tag regression tests alongside adapter fixtures so the version gate cannot substitute for feature completeness. Fixtures must not synthesize optional fields absent from the official command payload; an invented superset is not evidence that a real CLI projection works.
