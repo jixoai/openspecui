@@ -24,6 +24,7 @@
  * Owner correction (2026-07-29): App shell location is daemon-owned and is not writable project config.
  * Owner correction (2026-07-31): Observation refresh remains readonly when internal cache or stamp maintenance is required.
  * Full-gate correction (2026-07-31): Dashboard Git invalidation must re-confirm Planning authority instead of replaying a stale Root snapshot.
+ * Original request (2026-07-31): "检查它的工作到底做了什么，为什么需要那么多的时间"
  */
 import type {
   ChangeFile,
@@ -367,16 +368,20 @@ function createPlanningRootProjectionWorkSubscription<T, TBatch = never>(
           () => {
             retireRegionalSubscription()
             const epoch = regionalEpoch
-            return ctx.planningRootServices.runReactiveOperation((services) => {
-              regionalSubscription = subscribe(services, (event) => {
-                if (!active || epoch !== regionalEpoch) return
-                try {
-                  emit.next(parseEvent(event))
-                } catch (error: unknown) {
-                  emit.error(error instanceof Error ? error : new Error(String(error)))
-                }
-              })
-            })
+            return runPlanningRoot(
+              ctx,
+              (services) => {
+                regionalSubscription = subscribe(services, (event) => {
+                  if (!active || epoch !== regionalEpoch) return
+                  try {
+                    emit.next(parseEvent(event))
+                  } catch (error: unknown) {
+                    emit.error(error instanceof Error ? error : new Error(String(error)))
+                  }
+                })
+              },
+              { reactive: true }
+            )
           },
           controller.signal,
           { onRecomputeStarted: retireRegionalSubscription }

@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Bound Projection Work by CLI, filesystem, Git, and CPU resource class.
  * 2. Give foreground requests priority without creating an unbounded queue.
  * 3. Cancel cooperative background work when it would starve foreground work.
+ * 4. Expose queue-entry and resource-admission boundaries without owning projection traces.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-31): "检查它的工作到底做了什么，为什么需要那么多的时间"
  */
 import type { ProjectionWorkPriority, ProjectionWorkResourceClass } from './types.js'
 
@@ -18,6 +20,8 @@ export interface ProjectionWorkScheduleRequest<T> {
   resourceClass: ProjectionWorkResourceClass
   priority: ProjectionWorkPriority
   signal: AbortSignal
+  onQueued?(): void
+  onStarted?(): void
   run(signal: AbortSignal): Promise<T>
 }
 
@@ -101,6 +105,7 @@ export class ProjectionWorkScheduler {
           work.started = true
           const queue = this.queues[work.resourceClass]
           queue.running.add(work)
+          request.onStarted?.()
           void request.run(controller.signal).then(
             (value) => {
               settle(() => resolve(value))
@@ -127,6 +132,7 @@ export class ProjectionWorkScheduler {
       } else {
         queue.background.push(work)
       }
+      request.onQueued?.()
       this.drain(request.resourceClass)
     })
   }

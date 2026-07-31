@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove same-identity subscribers share one owner loader and one ReactiveContext.
  * 2. Prove pending dependency changes and retired generations cannot publish stale results.
  * 3. Prove retained data, replacement failure/recovery, and late subscribers remain observable.
  * 4. Prove trace/cache bounds, selector retirement, and queued scheduler work preserve exact ownership.
+ * 5. Prove queue-entry and resource-admission phases expose actual scheduler wait boundaries.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "dependency 在 pending load 中变化时旧 A 不得作为 current snapshot 发布。"
+ * Original request (2026-07-31): "检查它的工作到底做了什么，为什么需要那么多的时间"
  */
 import { ReactiveState } from '@openspecui/core'
 import { describe, expect, it, vi } from 'vitest'
@@ -345,7 +347,7 @@ describe('ProjectionWorkRegistry', () => {
   })
 
   it('keeps queued Work dependencies bound to the Work that owns the delayed loader', async () => {
-    const { registry } = createRegistry()
+    const { registry, trace } = createRegistry()
     const stateA = new ReactiveState('A-1')
     const stateB = new ReactiveState('B-1')
     const aStarted = createDeferred<void>()
@@ -391,9 +393,12 @@ describe('ProjectionWorkRegistry', () => {
 
     try {
       expect(callsB).toBe(0)
+      expect(trace.read().filter((entry) => entry.phase === 'queue-enter')).toHaveLength(2)
+      expect(trace.read().filter((entry) => entry.phase === 'resource-admitted')).toHaveLength(1)
       releaseA.resolve()
       await Promise.all([aReady.promise, bReady.promise])
       expect({ callsA, callsB }).toEqual({ callsA: 1, callsB: 1 })
+      expect(trace.read().filter((entry) => entry.phase === 'resource-admitted')).toHaveLength(2)
 
       stateB.set('B-2')
       await vi.waitFor(() => expect({ callsA, callsB }).toEqual({ callsA: 1, callsB: 2 }), {

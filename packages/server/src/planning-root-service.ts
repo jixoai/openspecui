@@ -300,13 +300,14 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         loadSummary: () => loadDashboardSummary({ adapter }),
         loadTrends: () =>
           loadDashboardTrends({ adapter, configManager: this.options.configManager }),
-        loadGit: () =>
+        loadGit: (signal) =>
           loadDashboardGitProjection(
             {
               projectDir: this.options.launchProjectDir,
               codeBindingToken: this.options.codeBinding.bindingToken,
             },
-            'projection-work'
+            'projection-work',
+            signal
           ),
       },
     })

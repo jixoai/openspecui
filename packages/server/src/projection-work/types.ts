@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Define the provenance-bearing identity for Server-owned Projection Work.
  * 2. Define typed snapshot, phase, batch, completion, and failure events.
  * 3. Keep display freshness explicitly separate from mutation authority.
+ * 4. Distinguish resource queue time from admitted leaf execution time.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-07-31): "检查它的工作到底做了什么，为什么需要那么多的时间"
  */
 
 /** Resource classes remain distinct so I/O and CPU work cannot borrow unbounded concurrency. */
@@ -23,6 +25,8 @@ export const projectionWorkPhases = [
   'cache-hit',
   'join',
   'start',
+  'queue-enter',
+  'resource-admitted',
   'leaf-settled',
   'first-stable-payload',
   'complete',

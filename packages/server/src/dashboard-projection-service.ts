@@ -3,7 +3,7 @@
  * 1. Own Dashboard Summary, trends, and Code Git regional Projection Work requests.
  * 2. Bind every regional snapshot to Planning-root and Code Git provenance before reuse.
  * 3. Retain reusable display snapshots without allowing a retired root service to keep subscribers alive.
- * 4. Keep readonly Git refresh invalidation separate from broad Dashboard aggregate reloads.
+ * 4. Keep readonly Git refresh invalidation separate from broad Dashboard reloads while carrying scheduler cancellation into Git work.
  * 5. Issue data-free Dashboard Summary v2 invalidations and correlated opaque retained/current typed pulls.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
@@ -46,7 +46,7 @@ export interface DashboardProjectionRoot {
 export interface DashboardProjectionLoaders {
   loadSummary(): Promise<DashboardSummaryProjection>
   loadTrends(): Promise<DashboardTrendsProjection>
-  loadGit(): Promise<DashboardGitSnapshot>
+  loadGit(signal: AbortSignal): Promise<DashboardGitSnapshot>
 }
 
 /** Construction boundary for one root-scoped Dashboard projection service. */
@@ -280,7 +280,7 @@ export class DashboardProjectionService implements DashboardProjectionServiceCon
       estimateSnapshotBytes,
       load: async (context) => {
         context.reportStage('root-ready')
-        const data = await this.options.loaders.loadGit()
+        const data = await this.options.loaders.loadGit(context.signal)
         context.reportStage('leaf-settled')
         return data
       },
