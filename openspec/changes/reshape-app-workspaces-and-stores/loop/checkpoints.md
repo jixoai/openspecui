@@ -12,6 +12,12 @@ Original request (2026-07-30): "弱化端口这个概念，重点强调 path的�
 Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果没有就使用path的foldername；subtitle写git分支名"
 Original request (2026-07-30): "我让另外一个 Agent 做了个开头，但我觉得它们做偏了，请你直接接手任务，review，并真正完成相关工作，我来做最终的 review"
 Owner correction (2026-07-21): "每项先明确一个生产 owner、一个精准红例、一个绿例。focused review 未通过，不跑全量门禁。"
+Owner correction (2026-07-31): Favorites directly replace Running secondary navigation; Running requires Health API
+plus WebSocket evidence; external registrations without callable shutdown expose no lifecycle action.
+Owner correction (2026-07-31): Favorites/Recent persistence belongs to the App daemon backend, never browser storage.
+Owner-reported defect (2026-07-31): Tray Quit must not leave App HTTP alive or expose stale-daemon HTML as JSON.
+Owner correction (2026-07-31): PWA install, Service Worker, manifest, PWA launch ownership, and PWA overlay chrome are
+retired; the sidebar brand uses the App-owned `/icon.svg` logo.
 -->
 
 ## 1. Research and Planning
@@ -41,8 +47,8 @@ Production owners: `openspec/specs/cli-commands/spec.md`, `openspec/specs/hosted
       Settings is secondary, and Connections/Environment are indirect facts.
 - [ ] 2.2 Specify the candidate-backed Workspace Launcher, secondary manual URL flow, Focus/Open/unavailable outcomes,
       duplicate suppression, daemon first-admission auto-open, and close/reopen behavior.
-- [ ] 2.2a Specify fixed Home, canonical directory launch, favorites/history, running navigation, Task Manager,
-      path-first labels, and managed versus external lifecycle authority.
+- [ ] 2.2a Specify fixed Home, canonical directory launch, favorites/history, direct favorite navigation, Task Manager,
+      Health+WebSocket Running evidence, path-first labels, and managed versus external lifecycle authority.
 - [ ] 2.2b Modify project ownership law so external commands remain foreground-owned while authenticated local App
       launch creates daemon-managed children; define stop/restart restoration without process inference.
 - [ ] 2.3 Replace user-selected backend-tab Store targeting with explicit Environment selection plus internally exact
@@ -57,7 +63,7 @@ Production owners: `openspec/specs/cli-commands/spec.md`, `openspec/specs/hosted
       selection as product navigation.
 - [x] 2.8 Run strict OpenSpec validation and focused spec review before public-contract or product code proceeds.
       Rechecked 2026-07-31: strict validation passes; independent spec review found and the implementation fixes
-      pending Launcher authority, mobile running navigation, and direct Store conflict evidence.
+      pending Launcher authority, mobile secondary navigation, and direct Store conflict evidence.
 
 Red evidence:
 
@@ -79,13 +85,14 @@ Production owners: focused CLI daemon child/control modules and pure App state m
       intent and current persistence has no canonical favorite/recent catalog.
 - [x] 3.0a Define a runtime-parsed versioned directory catalog containing only canonical path, favorite, and recency;
       reject credentials, URLs, ports, process ids, and generation authority.
-      Delivered 2026-07-30: `packages/app/src/lib/workspace-directory-catalog.ts` owns the versioned
-      credential-free catalog (canonical path + favorite + recency). `parseWorkspaceDirectoryCatalog`
-      rejects wrong-version/malformed storage as empty (no repair), dedupes by canonical path, and drops
-      malformed entries. `recordSuccessfulDirectoryOpen`/`setDirectoryFavorite`/`removeDirectoryEntry` keep
-      favorite ordering independent of recency/runtime. `selectWorkspaceDirectoryCatalogView` projects
-      Favorites-then-recent. Checked `workspace-directory-catalog.test.ts` proves no
-      credential/URL/port/generation/pid leakage, favorite independence, and malformed rejection.
+      Corrected 2026-07-31: `packages/core/src/workspace-directory-catalog.ts` defines the browser-safe catalog and
+      daemon snapshot/favorite wire schemas. `packages/cli/src/workspace-directory-catalog-store.ts` is the sole
+      serialized persistence owner at `$OPENSPECUI_HOME/workspace-directory-catalog.json`, using atomic replacement
+      and empty fallback for missing/corrupt data. The local App exposes snapshot Pull plus exact-origin favorite
+      POST; SSE remains invalidation-only. Managed start records recency only after readiness/admission success.
+      App `localStorage` persistence and storage-event convergence were deleted. Checked Core/CLI/App evidence proves
+      restart persistence, concurrent mutation retention, failed-start exclusion, exact-origin rejection, Push ->
+      Pull replacement, two-window backend convergence, and absence of the old browser key.
 - [ ] 3.0 Add checked red evidence that the current daemon cannot start one project from an authenticated directory
       intent and current persistence has no canonical favorite/recent catalog.
       (Characterized 2026-07-30: the current daemon protocol exposes only `register-workspace` and has no
@@ -113,10 +120,11 @@ Production owners: focused CLI daemon child/control modules and pure App state m
       `restoreManagedDirectorySet()` restore the captured set exactly once (alreadyRunning joins without respawning).
       `daemon-server.ts` close() calls `settleAllForDaemonStop()`. Proven across owner + daemon-server tests.
 - [x] 3.0e Extend external serve leases with optional owner-handled shutdown; never infer or signal an external
-      process. Without capability, expose presentation Close only.
+      process. Without capability, expose no backend lifecycle action.
       Delivered 2026-07-30: `external-serve-shutdown.ts` defines `ExternalServeShutdownCapability` and
       `resolveExternalServeTaskCommand` — Stop is offered only when the exact current lease advertises owner-handled
-      shutdown; absence resolves to presentation Close only and never infers/signals a process.
+      shutdown; absence resolves to unavailable and never infers/signals a process or maps presentation Close onto
+      backend lifecycle.
       `external-serve-shutdown.test.ts` proves delegation, the unsupported boundary, and the unavailable boundary.
 - [x] 3.0f Add mutation-resistance evidence for physical-path duplicate gating, managed-child cleanup, restart
       restoration, and external-owner isolation.
@@ -201,17 +209,17 @@ Green evidence:
       exact-origin App HTTP -> daemon server -> managed owner -> production `startServer`/`close`, with focused CLI
       and App evidence for admission, Close, Stop, teardown, restoration, and catalog convergence.
 
-## 4. Workspace Home, Running Navigation, Task Manager, and Launcher
+## 4. Workspace Home, Favorite Navigation, Task Manager, and Launcher
 
 Production owner: a new `packages/app/src/components/workspace-launcher/` feature folder composed by
 `packages/app/src/components/hosted-shell.tsx`.
 
 - [~] 4.0 Add a fixed-point component red case proving Workspaces has no fixed Home, favorites/recent/path launch,
-  running-backend navigation, or Task Manager.
+  favorite secondary navigation, or Task Manager.
   Characterized 2026-07-30: the current `routes/workspaces.tsx` is a null route marker with no Home/favorites/
-  path-launch/running-nav/Task Manager surface; the new `components/workspace-home.tsx` is the green replacement.
+  path-launch/favorite-nav/Task Manager surface; the new `components/workspace-home.tsx` is the green replacement.
 - [x] 4.0a Build fixed non-closeable/non-reorderable Home as the first tab with Favorites above, a path-input form in
-      the middle, Recent below, and a `/workspaces/tasks` entry.
+      the middle, Recent below, and a Task Manager Dialog entry.
       Delivered 2026-07-30: `components/workspace-home.tsx` renders the fixed Home with Favorites, a path-input form,
       Recent (recency-desc), and a Task Manager entry. `workspace-home.test.tsx` proves the topology.
 - [x] 4.0b Bind path submission to current local-daemon authority with form loading lock, direct errors, focus on
@@ -219,15 +227,15 @@ Production owner: a new `packages/app/src/components/workspace-launcher/` featur
       Delivered 2026-07-30: the path form locks while `pending`, surfaces `error` directly, and renders an unsupported
       state when `launchSupported` is false (standalone/remote App). Tests cover the loading lock, trimmed submission,
       direct error, and unsupported boundary.
-- [x] 4.0c Render all current backend leases as Workspaces secondary navigation; selecting one focuses or opens the
-      exact Workspace without deriving identity from port.
-      Delivered 2026-07-30: `lib/running-backend-projection.ts` `composeRunningBackendNavigation` lists every lease by
-      stable id (no port identity) and dedupes; identity is path-first via the label selector.
-- [x] 4.0d Build Task Manager detail for path, display identity, owner, health, start time, lifecycle state, and
-      ownership-valid Stop/Close/favorite commands.
-      Delivered 2026-07-30: `RunningBackendEntry` carries path, ownership (daemon-managed|external), health, startedAt,
-      managedGeneration, and label; `resolveRunningBackendCommands` exposes ownership-valid stop-managed/stop-external/
-      close-only/favorite only. Tests prove the capability matrix and close-only boundary.
+- [x] 4.0c Render favorite canonical directories directly as Workspaces secondary navigation without a section
+      accordion; selecting one focuses or starts the exact directory without deriving identity from port.
+      Corrected 2026-07-31: `components/workspaces-secondary-nav.tsx` consumes the reactive directory catalog,
+      renders no `Running`/`Favorites` disclosure chrome, and binds stable pending/active path geometry.
+- [x] 4.0d Build Task Manager detail for path, display identity, owner, observed runtime state, start time, lifecycle,
+      exact managed Stop, and path-owned favorite commands.
+      Corrected 2026-07-31: `running-backend-observation.ts` observes every daemon registration independently from
+      open tabs and requires compatible Health API plus an established WebSocket before `Running`. WebSocket loss
+      retires Running. External registrations without callable shutdown expose no Close/Remove/Delete/Stop action.
 - [x] 4.0e Build one pure path-first label selector: verified GitHub `org/repo`, else canonical folder basename;
       current branch is subtitle, complete path is retrievable, and locator/port is diagnostic-only.
       Delivered 2026-07-30: `lib/workspace-path-label.ts` `selectWorkspacePathLabel` parses verified HTTPS/SSH GitHub
@@ -280,18 +288,19 @@ Green evidence:
       Delivered 2026-07-30: `workspace-launcher-dialog.test.tsx` (8 tests) covers candidate list (not URL), Focus/Open,
       unavailable, secondary connect + invalid rejection, forget menu, search filter, empty state; selector test (7)
       covers dedupe/lock/unavailable reasons.
-- [x] 4.11a Checked component tests cover fixed Home, favorite/recent ordering, path form lifecycle, running nav,
-      Task Manager capability matrix, GitHub/folder fallback, branch refresh, long paths, and hidden primary port.
+- [x] 4.11a Checked component tests cover fixed Home, favorite/recent ordering, path form lifecycle, favorite nav,
+      Health+WebSocket Running evidence, Task Manager authority, GitHub/folder fallback, branch refresh, long paths,
+      and hidden primary port.
       Verified 2026-07-30: `workspace-home.test.tsx`, `use-workspace-directory-catalog.test.tsx`,
-      `running-backend-projection.test.ts`, `workspaces-secondary-nav.test.tsx`, and Task Manager route coverage prove
-      the named states through the production shared catalog/daemon owners. The App suite passes 67 files / 377 tests.
+      `running-backend-observation.test.ts`, `running-backend-projection.test.ts`, and
+      `workspaces-secondary-nav.test.tsx` prove the corrected boundaries. Focused correction tests pass 11/11.
 - [x] 4.12 Basic component browser fixture proves narrow Dialog containment and stable control dimensions; record it
       as preparation evidence only.
-      Verified 2026-07-30: `workspace-management.browser.test.tsx` renders Home, running navigation, and Launcher at
+      Corrected 2026-07-31: `workspace-management.browser.test.tsx` renders Home, favorite navigation, and Launcher at
       320px in Chromium without page overflow. This is preparation evidence, not final App acceptance.
 - [x] 4.13 Focused review passes before navigation retirement.
-      Rechecked 2026-07-31: probe-before-persist, stable isolated daemon fallback, and mobile secondary navigation
-      have focused regression coverage. List flow continuity is shared by Stores and Task Manager.
+      Rechecked 2026-07-31: probe-before-persist, stable isolated daemon fallback, direct Favorites, and independent
+      runtime observation have focused regression coverage. List flow continuity is shared by Stores and Task Manager.
 
 ## 5. Environment Selection and Store Authority
 
@@ -547,17 +556,13 @@ Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/componen
       domain navigation.
       Delivered 2026-07-30: `app-router.tsx` redirects `/` to `/workspaces`; `app-layout.tsx` primary nav is exactly
       Workspaces + Stores. Test proves root redirect + two-domain nav.
-- [x] 8.1a Make Workspaces the only expandable primary item and project every current backend into its secondary
-      navigation without turning Settings, Connections, Environment, or Task Manager into primary domains.
-      Delivered 2026-07-30: `components/workspaces-secondary-nav.tsx` renders every running backend as an expandable
-      path-first item under Workspaces (no port identity), with health dots, external markers, active highlighting, and
-      focus/open selection. Test (6) proves projection, selection, active mark, external marker, collapse, and empty state.
-      Reopened 2026-07-30: the secondary projection is mounted only in the desktop `md:flex` sidebar; mobile primary
-      navigation has no expandable running-backend projection.
-- [x] 8.1b Register `/workspaces/tasks` as the Home-owned secondary page while preserving fixed Home and mounted
-      project iframe identity.
-      Delivered 2026-07-30: `/workspaces/tasks` route registered; the static segment takes precedence over dynamic
-      Stores detail matching. WorkspaceHome links to it.
+- [x] 8.1a Project Favorites directly beneath Workspaces on desktop/mobile without turning Settings, Connections,
+      Environment, or Task Manager into primary domains.
+      Corrected 2026-07-31: `components/workspaces-secondary-nav.tsx` renders direct canonical-path favorite rows with
+      active/pending state, no accordion, no `Running(n)` count, and no empty navigation chrome.
+- [x] 8.1b Open Task Manager as an App-owned Dialog while preserving fixed Home and mounted project iframe identity.
+      Corrected 2026-07-31: the retired `/workspaces/tasks` page is removed; Workspace Home opens one Dialog owned by
+      `AppLayout`, leaving route and iframe identity unchanged.
 - [x] 8.2 Keep Settings at the utility edge without presenting it as a third domain destination.
       Delivered 2026-07-30: Settings is the utility-edge nav item (and overlay titlebar button), not a primary domain.
 - [x] 8.3 Remove `/connections`, `/environment`, and old nested Store routes without redirects or compatibility
@@ -577,11 +582,17 @@ Production owners: `packages/app/src/app-router.tsx`, `packages/app/src/componen
       Workspaces navigation.
       Delivered 2026-07-30: `app-router.test.tsx` proves the same iframe DOM node is preserved across a
       Workspaces -> Stores -> Workspaces round-trip (8.9).
-- [~] 8.6 Preserve OpenTray/browser/PWA/native-frame titlebar geometry, drag boundaries, overlay controls, Workspace
+- [~] 8.6 Preserve OpenTray/browser/native-frame titlebar geometry, drag boundaries, overlay controls, Workspace
   Open in browser, and shell block-size ownership.
   Audited 2026-07-30: the AppLayout titlebar (AppTitlebar) geometry/drag/overlay is unchanged by this change; the
   shell block-size ownership (h-dvh + overflow-hidden on Workspaces route) is verified by app-router.test iframe
   continuity. Titlebar visual variants are owner-walkthrough evidence (8.10/11.6).
+  Corrected 2026-07-31: Tray Quit no longer awaits a pending native visibility operation; App HTTP retires before
+  bounded WebView/tray teardown. Old-daemon HTML fallback becomes one restart-required state, and an offline tab no
+  longer renders both the banner and `Waiting for this backend` copy.
+  Corrected 2026-07-31: PWA install prompts, service-worker registration/update UI, manifest generation, PWA launch
+  leader/Launch Handler semantics, and PWA overlay geometry were deleted. Browser relay remains Browser-only, and
+  the sidebar brand renders `/icon.svg`.
 - [x] 8.7 Audit mobile header labels/icons and stable dimensions for only the retained destinations.
       Audited 2026-07-30: `app-layout-header-audit.test.tsx` proves the desktop sidebar + mobile header render only
       Workspaces + Stores (+ Settings utility), with no retired links, and mobile icons use stable h-3.5 w-3.5 geometry.
@@ -604,7 +615,7 @@ Green evidence:
       Verified 2026-07-30: App Chromium lane passes 4 files / 9 tests across titlebar, Workspace tabs, Workspace
       management, Task Manager, Launcher, and Store surfaces. This is preparation evidence only.
 - [x] 8.11 Focused App-shell review passes before repository-wide gates.
-      Rechecked 2026-07-31: desktop and mobile both render running-backend secondary navigation; manual Connect is
+      Rechecked 2026-07-31: desktop and mobile both render direct favorite secondary navigation; manual Connect is
       locked through its probe and persists only the successful credential-free candidate.
 
 ## 9. Documentation, Headers, and Release Metadata
@@ -661,7 +672,7 @@ Green evidence:
 - [ ] 10.4 Run focused Core/Server/App unit tests for every production owner.
       2026-07-30: Core Store-content 10/10, Server Store-content 7/7, App 67 files / 377 tests, and CLI 29 files /
       151 tests pass. These cover the Change owners independently from unrelated repository teardown failures.
-- [x] 10.5 Run App component browser fixtures for Home, running navigation, Task Manager, launcher, container
+- [x] 10.5 Run App component browser fixtures for Home, favorite navigation, Task Manager, launcher, container
       responsiveness, navigation, and titlebar preparation evidence.
       2026-07-30: `pnpm --filter @openspecui/app test:browser:ci` passes 4 files / 9 tests in Chromium.
 - [~] 10.6 Run `pnpm format:check`.
@@ -698,7 +709,7 @@ Green evidence:
 - [ ] 11.3 Wait for required PR checks on the exact head and resolve independent review findings through spec-first
       corrections.
 - [x] 11.4 Prepare numbered production-boundary walkthrough cases for Home/favorite/history, path start/dedupe,
-      managed Close/Stop/daemon restart, external-owner isolation, running navigation/Task Manager, path-first labels,
+      managed Close/Stop/daemon restart, external-owner isolation, favorite navigation/Task Manager, path-first labels,
       daemon auto-open/close/reopen, manual connect, multiple Environments/same Store id, Store Detail retained/
       regional states, destructive authority retirement, responsive containers, and iframe continuity.
 - [x] 11.5 Include exact setup, trigger, PASS/FAIL observation, restore commands, and tested head; exclude credentials,

@@ -1,7 +1,7 @@
 <!--
-Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
 1. Specify the two-domain App navigation and candidate-backed Workspace Launcher.
-2. Specify path-first Workspace Home, managed services, running navigation, Task Manager, and project labels.
+2. Specify path-first Workspace Home, managed services, favorite navigation, observed Running, Task Manager, and project labels.
 3. Specify the product-shaped Store index/detail surface and readonly content boundary.
 4. Preserve mounted Workspace continuity and direct lifecycle/error presentation through the redesign.
 
@@ -12,6 +12,12 @@ Original request (2026-07-30): "Workspace需要记住曾经打开的目录，并
 Original request (2026-07-30): "所有正在运行中的backend都会显示在这里。"
 Original request (2026-07-30): "任务管理器，打开后，可以看到所有正在运行中backend的详情，并可以杀掉Workspace，或者收藏、取消收藏"
 Original request (2026-07-30): "弱化端口这个概念，重点强调 path的概念。"
+Owner correction (2026-07-31): Favorites replace Running secondary navigation; Running requires Health API plus
+WebSocket evidence; external close-only rows expose no Close/Remove/Delete lifecycle action.
+Owner correction (2026-07-31): Favorites/Recent persistence belongs to the App daemon backend, never browser storage.
+Owner-reported defect (2026-07-31): Tray Quit must fully release the daemon; stale daemon HTML is not JSON evidence.
+Owner correction (2026-07-31): "Workspace Home 页面不要有PWA安装，我们现在已经完全废弃pwa这个方向了。请清理干净pwa相关的代码"
+Owner correction (2026-07-31): "左侧导航栏顶部这里的 OpenSpecUI App，这里的icon改成我们的 logo。"
 -->
 
 # Delta for hosted-app-distribution
@@ -95,10 +101,10 @@ contracts. Manual backend URL entry SHALL remain a secondary escape flow.
 
 ### Requirement: Path-First Workspace Home And Runtime Management
 
-The Workspaces destination SHALL provide one fixed Home tab, path-first running-backend navigation, and a Task
-Manager. The local App daemon SHALL manage services started from Home without adopting externally owned foreground
-services. Canonical physical directory identity SHALL control duplicate suppression, history, favorites, and
-managed-service restoration; backend host or port SHALL NOT be a product identity.
+The Workspaces destination SHALL provide one fixed Home tab, direct favorite-directory secondary navigation, and a
+Task Manager Dialog. The local App daemon SHALL manage services started from Home without adopting externally owned
+foreground services. Canonical physical directory identity SHALL control duplicate suppression, history, favorites,
+and managed-service restoration; backend host or port SHALL NOT be a product identity.
 
 #### Scenario: Open the fixed Workspace Home
 
@@ -128,13 +134,13 @@ managed-service restoration; backend host or port SHALL NOT be a product identit
 - **THEN** the App SHALL focus or restore the existing Workspace
 - **AND** SHALL NOT start another backend, allocate another port, or duplicate history identity
 
-#### Scenario: Browse running backends from Workspaces navigation
+#### Scenario: Browse favorites from Workspaces navigation
 
-- **GIVEN** one or more managed or external backends have current daemon leases
-- **WHEN** Workspaces navigation expands
-- **THEN** its secondary navigation SHALL list every running backend
-- **AND** selecting one SHALL focus or open its exact Workspace
-- **AND** the list SHALL remain source- and lifecycle-aware without presenting a port as the primary label
+- **GIVEN** one or more canonical directories are favorites
+- **WHEN** Workspaces navigation renders
+- **THEN** its secondary navigation SHALL list those favorites directly without a `Running` or `Favorites` accordion
+- **AND** selecting one SHALL focus its current Workspace or start it through managed directory authority
+- **AND** the list SHALL use canonical path identity without presenting a port or backend locator
 
 #### Scenario: Present a path-first Workspace label
 
@@ -148,20 +154,24 @@ managed-service restoration; backend host or port SHALL NOT be a product identit
 
 #### Scenario: Manage running backends
 
-- **WHEN** the user opens `/workspaces/tasks`
-- **THEN** Task Manager SHALL list every current backend with project path, display identity, ownership, health,
-  start time, lifecycle state, and available commands
+- **WHEN** the user opens the Task Manager Dialog
+- **THEN** it SHALL list every current daemon registration with project path, display identity, ownership, observed
+  runtime state, start time, lifecycle state, and available commands
+- **AND** a backend SHALL be called Running only after a compatible Health API result and an established WebSocket
+  subscription for that exact current registration
+- **AND** HTTP success without WebSocket SHALL remain non-running and WebSocket loss SHALL retire Running status
 - **AND** favorite and unfavorite SHALL operate on canonical directory identity independently of runtime state
 - **AND** a managed backend SHALL expose Stop through the daemon child owner
-- **AND** an external backend SHALL expose Stop only when its exact current serve lease advertises owner-handled
-  shutdown; otherwise it SHALL expose Close Workspace without claiming process termination
+- **AND** an external close-only backend SHALL expose no Close, Remove, Delete, or Stop lifecycle action
+- **AND** manual backend Forget or Remove SHALL remain a Workspace Launcher candidate action
 - **AND** destructive commands SHALL lock, confirm where data loss is plausible, and retire stale authority
 
 #### Scenario: Close, stop, or restart a managed Workspace
 
 - **GIVEN** a daemon-managed backend has an open Workspace
 - **WHEN** the user closes only the project tab
-- **THEN** the backend SHALL remain running and listed in Workspaces navigation and Task Manager
+- **THEN** the backend SHALL remain registered and listed in Task Manager
+- **AND** Workspaces secondary navigation SHALL continue to depend only on favorite directory state
 - **WHEN** the user explicitly stops the managed backend
 - **THEN** the daemon SHALL terminate that owned service and retire its current candidate, Workspace, frame, and
   runtime credential authority while preserving directory history and favorite state
@@ -171,10 +181,14 @@ managed-service restoration; backend host or port SHALL NOT be a product identit
 - **THEN** it SHALL restore the managed directory set that was running immediately before restart
 - **AND** each restored physical directory SHALL converge to at most one backend and Workspace
 
-#### Scenario: Persist favorites and recent directories
+#### Scenario: Persist favorites and recent directories in the daemon
 
-- **WHEN** a project directory is successfully admitted or its favorite state changes
-- **THEN** the App SHALL persist only canonical credential-free directory identity, favorite state, and recency
+- **WHEN** a managed project directory is successfully ready and admitted or its favorite state changes
+- **THEN** the App daemon SHALL atomically persist only canonical credential-free directory identity, favorite state,
+  and recency in its user-level catalog
+- **AND** a failed managed start SHALL NOT advance recency
+- **AND** every App window SHALL consume revisioned replacement snapshots after daemon invalidation
+- **AND** browser storage, document state, and storage events SHALL NOT own or converge this catalog
 - **AND** favorite ordering SHALL remain independent from running and open state
 - **AND** credentials, backend URLs, host, port, private fragments, process ids, and generation authority SHALL NOT
   enter persisted Home state
@@ -229,6 +243,53 @@ Detail SHALL provide governance plus readonly OpenSpec content context without d
 
 ## MODIFIED Requirements
 
+### Requirement: App Workspace And Distribution
+
+The App SHALL build one persistent Browser/OpenTray Workspaces shell. The build SHALL emit `index.html` and hashed
+App assets only; installable-app metadata and service-worker files are retired. A normal Browser Web deployment SHALL
+remain a regular web document without an install prompt, manifest, background cache owner, or PWA update flow.
+
+#### Scenario: Build the non-installable App shell
+
+- **WHEN** the App workspace is built
+- **THEN** it SHALL emit a root `index.html` and hashed App assets
+- **AND** it SHALL NOT emit `manifest.webmanifest`, `service-worker.js`, or PWA icon assets
+- **AND** the shell SHALL continue to own Workspace restoration, backend probing, and initial-Workspace admission
+
+#### Scenario: Browser Web host has no install surface
+
+- **WHEN** a Browser Web document receives a browser install-prompt event
+- **THEN** the App SHALL ignore that event
+- **AND** Workspace Home SHALL render no install command or install state
+
+### Requirement: PWA Shell Updates
+
+The App SHALL NOT register, cache, update, or expose a service worker. Shell refresh is owned by the normal Browser
+document or the OpenTray native host, not by a PWA lifecycle.
+
+#### Scenario: No background shell update owner
+
+- **WHEN** the App mounts in Browser Web or OpenTray
+- **THEN** it SHALL not register a service worker or subscribe to service-worker lifecycle events
+- **AND** it SHALL render no apply-update action or waiting-service-worker banner
+
+### Requirement: OpenTray And Browser Presentation
+
+The daemon SHALL present the same bundled App shell through an exclusive native OpenTray or Browser host without
+changing project Server ownership. PWA roles, launch handlers, and PWA overlay titlebar geometry are retired.
+
+#### Scenario: Browser host uses browser-only launch ownership
+
+- **WHEN** the App runs in an ordinary Browser Web document
+- **THEN** cross-window launch relay SHALL use Browser ownership only
+- **AND** it SHALL not detect standalone/display-mode installation or consume a Web App Launch Handler queue
+
+#### Scenario: Exactly one native titlebar owner is active
+
+- **WHEN** the App runs in Browser Web, OpenTray overlay, or native frame mode
+- **THEN** exactly one Browser/OpenTray/native-frame presentation owner SHALL write titlebar inset geometry
+- **AND** PWA overlay geometry SHALL not participate in that state machine
+
 ### Requirement: Daemon-Owned Workspace Projection
 
 The user-level App daemon SHALL own the local App endpoint, Workspace presentation ledger, and only those project
@@ -272,3 +333,19 @@ backends SHALL share one typed running-Workspace projection without sharing term
 - **WHEN** the App daemon stops
 - **THEN** it SHALL terminate and settle every daemon-managed backend child before releasing its endpoint
 - **AND** SHALL NOT terminate externally owned foreground `serve` processes
+
+#### Scenario: Quit from the system tray
+
+- **WHEN** the user invokes Quit from the App tray
+- **THEN** it SHALL execute the same daemon Stop ownership transition
+- **AND** a pending or failed presentation RPC SHALL NOT prevent App HTTP, managed children, WebView, tray, or IPC
+  authority from being released
+- **AND** every third-party presentation teardown step SHALL be bounded so later resource owners still settle
+
+#### Scenario: App shell meets an older daemon control surface
+
+- **WHEN** a required same-origin daemon API returns HTML or a payload outside the current control contract
+- **THEN** the App SHALL present one explicit daemon-restart requirement
+- **AND** it SHALL NOT expose the raw parser failure or advertise unsupported managed controls
+- **AND** one offline Workspace SHALL render one coherent recovery state rather than simultaneous offline and waiting
+  claims

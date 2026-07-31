@@ -12,13 +12,19 @@ Original request (2026-07-30): "所有正在运行中的backend都会显示在�
 Original request (2026-07-30): "任务管理器...可以杀掉Workspace，或者收藏、取消收藏"
 Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果没有就使用path的foldername；subtitle写git分支名"
 Original request (2026-07-30): "我让另外一个 Agent 做了个开头，但我觉得它们做偏了，请你直接接手任务，review，并真正完成相关工作，我来做最终的 review"
+Owner correction (2026-07-31): Favorites replace Running secondary navigation; Running requires Health API plus
+WebSocket evidence; external close-only registrations expose no Close/Remove/Delete lifecycle action.
+Owner correction (2026-07-31): Favorites/Recent persistence belongs to the App daemon backend, never browser storage.
+Owner-reported defect (2026-07-31): Tray Quit left App HTTP alive after IPC retirement; stale daemon HTML reached JSON parsing.
+Owner correction (2026-07-31): PWA installation, service-worker/update, manifest, PWA launch-role, and PWA overlay
+chrome are retired; the sidebar brand uses `/icon.svg`.
 -->
 
 ## Implementation State
 
 The production implementation reached the Workspaces and Stores route families on top of `fdc3ac1`. Independent
 review of `bb9e82e` found four production gaps: Launcher Open/Connect had no real pending transition, manual
-candidates persisted before reachability succeeded, mobile omitted running-backend secondary navigation, and Store
+candidates persisted before reachability succeeded, mobile omitted secondary navigation, and Store
 Detail collapsed exact Environment conflict into generic authority loss. The current correction closes all four,
 also makes isolated daemon fallback identity stable (preventing a candidate-probe render loop), rejects URL userinfo
 from credential-free persistence, and gives dynamic Stores/Task rows physical layout continuity.
@@ -31,18 +37,20 @@ Workspace lifecycle correction approved by manager
 P1 typed contracts       landed (Store-content capability + browser-safe projection schemas + checked fixtures)
 P2 managed backend       landed (canonical directory catalog, daemon child owner, exact Stop/restart restoration)
 P3 candidate/open        landed (admission/dismissal reducer, credential isolation, iframe continuity)
-P4 Workspace surfaces   corrected (probe-before-persist + mobile running navigation)
+P4 Workspace surfaces   corrected (probe-before-persist + mobile Favorites + observed Running)
 P5 Environment runtime  landed (persisted envUri selection, per-source collection, stable authority, conflict gate)
 P6 Store content         landed (demand-driven Server Projection Work, typed Push -> Pull App transport)
 P7 Store product         corrected (Detail preserves exact authority/conflict reason)
-P8 navigation            corrected (mobile exposes running Workspace secondary navigation)
+P8 navigation            corrected (mobile exposes direct favorite secondary navigation)
 Review corrections       stable source survives redundant checking; cross-Store responses are rejected;
                          conflicts retain readonly source; Doctor failures do not block cleanup;
                          unregister and remove remain distinct composite-ledger actions
 Current focused evidence App correction suite passes on the current worktree
+PWA retirement evidence      focused App tests prove install-prompt silence, Browser-only relay, and sidebar logo;
+                             clean App/CLI projections contain no manifest, service worker, or PWA install assets
 Repository gates          full repository evidence remains prior-head; scoped correction evidence is current
 External dirty blockers   format-check: user lockfile/script; test-ci: pre-existing Core/Server teardown timeouts
-Implementation commit    bb9e82e (review fixed point; correction commit pending)
+Implementation commit    bb9e82e (review fixed point; backend catalog correction remains uncommitted)
 Pending delivery          owner walkthrough result, PR, archive/sync
 Owner walkthrough      reserved for final handoff
 ```
@@ -60,7 +68,7 @@ P2 managed-project backend verification on 2026-07-30:
   rejection wire codes, unsupported-delivery rejection, and daemon-teardown child settlement.
 - External foreground `serve` leases remain physically separate and currently publish `close-only`. The reserved
   `external-owner` compatibility fact has no callable App shutdown channel in this Change; Task Manager presents
-  that limitation directly instead of fabricating Stop success.
+  ownership plus independent runtime evidence without fabricating Close, Remove, Delete, or Stop authority.
 - `openspecui typecheck` (incl. `tsconfig.command-tests.json` checked lane) passes; the
   `managed-project-production.ts` module wires the fixed `startServer` plan, `fs.realpath`
   canonicalization, and the owner→daemon control adapter.
@@ -109,6 +117,47 @@ Correction verification on 2026-07-31 (implementation commit `cce6c4c6eade117296
   the known user-owned lockfile/script formatting delta and pre-existing Core/Server teardown timeouts still block
   PR delivery until independently resolved.
 
+Owner-directed Favorites/Running correction verification on 2026-07-31 (uncommitted review worktree):
+
+- Precise red evidence failed because the old sidebar rendered `Running(n)`, external close-only resolved to a Close
+  command, and no daemon-ledger runtime observer existed.
+- Corrected App unit evidence passes 6 files / 30 tests, including the Health+WebSocket Running owner, Favorites
+  navigation, App shell/router, and path launch; the narrow three-owner suite passes 11/11.
+- CLI external shutdown evidence passes 5/5; missing capability now resolves to `unavailable`, not presentation Close.
+- App Chromium preparation evidence passes 4 files / 9 tests; App and CLI checked type lanes pass; strict Change
+  validation and `git diff --check` pass.
+- A full App Vitest run with two workers timed out once in the unrelated
+  `mutation-observation-transport.test.ts` locator-credential case; isolated rerun passes 2/2. This run does not
+  replace the earlier 68-file package evidence and is not claimed as a new full-suite pass.
+
+Owner-directed backend catalog correction verification on 2026-07-31 (uncommitted worktree):
+
+- Removed the App `localStorage` directory-catalog owner and its storage-event convergence path. Favorites/Recent
+  now persist atomically at `$OPENSPECUI_HOME/workspace-directory-catalog.json` under one serialized daemon owner.
+- The local App publishes `GET /api/daemon/workspace-directories`; exact-origin
+  `POST /api/daemon/workspace-directories/favorite` persists before invalidation. Managed start advances recency
+  only after the canonical Workspace backend is ready and admitted; failed starts do not enter Recent.
+- The existing daemon SSE remains data-free invalidation. Each App window Pulls the Workspace ledger and directory
+  catalog replacement snapshots independently; two mounted App owners converge without Web Storage.
+- Focused evidence passes: Core catalog 4/4, CLI store/local control 12/12, App transport/owner/component 32/32,
+  App/CLI/Core checked type lanes, and the combined five-owner correction set 24/24.
+
+Owner-directed PWA retirement and App-brand correction verification on 2026-07-31 (uncommitted worktree):
+
+- Workspace Home no longer subscribes to `beforeinstallprompt`/`appinstalled` and renders no install action.
+  `hosted-shell.test.tsx` deliberately dispatches the retired browser event and proves the UI remains silent.
+- App bootstrap, HTML, headers, Vite development/build plugins, launch relay, and titlebar presentation contain no
+  service-worker registration, web manifest, Launch Handler, standalone-priority, or PWA-overlay runtime owner.
+- `pnpm --filter @openspecui/app exec vitest run` passes the eight focused owners: 8 files / 37 tests. App and CLI
+  checked type lanes, `pnpm lint:ci`, strict Change validation, and `git diff --check` pass.
+- `pnpm --filter @openspecui/app build` passes and atomically projects the build into `packages/cli/app`. File and
+  exact-token scans of both outputs find no `manifest.webmanifest`, `service-worker.js`, PWA install icon,
+  `beforeinstallprompt`, `launchQueue`, retired relay role, or `pwa-overlay`. Existing CSS pseudo-element and chunk
+  size warnings remain non-blocking and are unrelated to this correction.
+- Desktop sidebar and OpenTray titlebar consume the App-owned `/icon.svg`; the focused header/titlebar tests prove
+  the exact image projection. Root English/Chinese and App README host language now describes Browser Web and
+  OpenTray only. Historical changelogs, versioned READMEs, and predecessor Change evidence remain unchanged.
+
 This Change builds on completed owners from `integrate-app-mode-with-opentray` but does not close, rewrite, or claim
 its remaining delivery/owner-acceptance checkpoints. Existing unrelated modifications in
 `packages/server/src/server.ts` and `packages/server/src/server-startup.test.ts` predate this Change and are not
@@ -123,7 +172,7 @@ P2  managed local service owner / canonical directory catalog
  ↓
 P3  candidate catalog / open Workspace state separation
  ↓
-P4  Workspace Home / running navigation / Task Manager / Launcher
+P4  Workspace Home / favorite navigation / Task Manager / Launcher
  ↓
 P5  Environment selection / exact authority owner
  ↓
@@ -167,14 +216,14 @@ open tab identity, and iframe lifecycle are orthogonal intents.
 
 Required ownership:
 
-| Owner                  | Facts                                                                               | Persistence                              |
-| ---------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------- |
-| manual candidate store | normalized backend locator and optional display metadata                            | credential-free local persistence        |
-| daemon candidate owner | opaque Workspace id, backend locator, runtime credential binding, snapshot revision | runtime only                             |
-| open Workspace store   | stable tab/session id, locator, order, active id, daemon binding when present       | credential-free presentation persistence |
-| frame runtime          | iframe source/load/error and DOM reference                                          | mounted memory only                      |
-| directory catalog      | canonical path, favorite, successful recency                                        | credential-free shared local persistence |
-| managed service owner  | physical path, child, readiness, generation, restore intent                         | runtime plus bounded restart intent      |
+| Owner                  | Facts                                                                               | Persistence                               |
+| ---------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------- |
+| manual candidate store | normalized backend locator and optional display metadata                            | credential-free local persistence         |
+| daemon candidate owner | opaque Workspace id, backend locator, runtime credential binding, snapshot revision | runtime only                              |
+| open Workspace store   | stable tab/session id, locator, order, active id, daemon binding when present       | credential-free presentation persistence  |
+| frame runtime          | iframe source/load/error and DOM reference                                          | mounted memory only                       |
+| directory catalog      | canonical path, favorite, successful recency                                        | daemon user-level atomic JSON persistence |
+| managed service owner  | physical path, child, readiness, generation, restore intent                         | runtime plus bounded restart intent       |
 
 The exact persisted shape may be replaced without migration glue. Every new/changed module and test retains a
 timestamped intent/original-request header.
@@ -217,6 +266,11 @@ captures the managed directory set, settles children, replaces the daemon, and r
 once. Externally owned foreground services are never adopted; Stop is available only through a lease-advertised
 owner shutdown protocol.
 
+Tray Quit enters the same Stop transition. Presenter teardown first retires listeners and App HTTP, never awaits a
+previous visibility/focus operation, and bounds WebView/tray destruction so one disconnected OpenTray RPC cannot
+leave a half-closed daemon. If a stale App window receives HTML from a required daemon API, the control owner emits
+one restart-required state instead of reflecting JSON syntax, and an offline tab renders one recovery surface.
+
 One pure presentation selector derives title and subtitle:
 
 ```text
@@ -233,8 +287,22 @@ identity.
 ### 4. Workspace Home and Launcher interaction
 
 The first Workspaces tab is fixed Home and cannot close or reorder. Home owns Favorites, a path-input start form,
-Recent, and the `/workspaces/tasks` entry. Workspaces navigation lists every current backend as secondary items;
-Task Manager exposes current detail and only ownership-valid Stop/Close/favorite actions.
+Recent, and the Task Manager Dialog entry. Workspaces navigation directly lists favorite canonical directories with
+no `Running`/`Favorites` accordion. Task Manager lists daemon registrations separately and exposes exact managed
+Stop plus path-owned favorite actions.
+
+One App-lifetime running-backend observation owner follows every daemon registration independently from open tabs:
+
+```text
+daemon registration
+  + compatible /api/health
+  + established root-context WebSocket subscription
+  = Running
+```
+
+HTTP success without WebSocket remains Checking; WebSocket loss retires Running to Realtime unavailable. External
+close-only rows expose no lifecycle command because presentation Close does not stop the owner and Remove/Delete
+would hide an objectively registered backend. Manual connection Forget remains Launcher-owned.
 
 Home and Task Manager consume one reactive directory-catalog owner shared across same-origin App windows. They do
 not take independent local-storage snapshots. Favoriting a running canonical directory that has no prior history
@@ -379,8 +447,8 @@ Exact filenames may refine during Apply, but ownership must remain physically se
 | responsive evidence             | App component browser fixtures at rendered container widths                          |
 | product law                     | `cli-commands`, hosted App/Environment specs, AGENTS.md, `i18n.zh.md`, README        |
 
-If `hosted-shell.tsx` would exceed five orthogonal intents after launcher integration, the worker must extract PWA
-update/display behavior or tab/frame presentation rather than add another compromise to that file.
+If `hosted-shell.tsx` would exceed five orthogonal intents after launcher integration, the worker must extract
+tab/frame presentation rather than add another compromise to that file. Retired PWA behavior must not return.
 
 ## Divergence Notes
 

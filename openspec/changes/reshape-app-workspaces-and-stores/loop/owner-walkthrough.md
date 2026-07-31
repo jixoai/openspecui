@@ -6,6 +6,8 @@ Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
 4. Preserve the owner-only final browser acceptance boundary.
 
 Original request (2026-07-30): "我让另外一个 Agent 做了个开头，但我觉得它们做偏了，请你直接接手任务，review，并真正完成相关工作，我来做最终的 review"
+Owner correction (2026-07-31): Favorites directly replace Running secondary navigation; Task Manager Running needs
+Health API plus WebSocket evidence; external rows without callable shutdown expose no lifecycle action.
 -->
 
 # Owner Walkthrough: Workspaces and Stores
@@ -61,7 +63,7 @@ Setup: case 1 is running and `/tmp/openspecui-owner-alias/openspecui` is the sym
 
 Trigger: submit `/tmp/openspecui-owner-alias/openspecui` from Home.
 
-PASS: the existing Workspace is focused; running navigation and Task Manager still contain one backend for the
+PASS: the existing Workspace is focused; Favorites and Task Manager still contain one canonical identity for the
 physical repository; Recent contains one canonical identity. FAIL: another backend, port, Workspace, or history row
 is created.
 
@@ -74,7 +76,7 @@ Setup: the managed Workspace from case 1 is open.
 Trigger:
 
 1. Close only its project tab.
-2. Confirm it remains in running navigation and Task Manager, then reopen it from running navigation.
+2. Confirm it remains in Task Manager, then favorite/reopen it from direct Workspaces secondary navigation.
 3. In Task Manager choose Stop and confirm.
 4. Start the same path again from Home, then run `pnpm openspecui restart --web` in the setup terminal.
 
@@ -84,16 +86,18 @@ alive, restart duplicates or loses it, or history/favorite is removed.
 
 Restore: keep the restored backend for case 4.
 
-## 4. Running Navigation, Task Manager, and Labels
+## 4. Favorite Navigation, Task Manager, and Runtime Evidence
 
 Setup: start `/Users/kzf/Dev/GitHub/jixoai-labs/openspecui/references/openspec` from Home as a second managed project.
 
-Trigger: expand Workspaces navigation, switch between both entries, then open Task Manager.
+Trigger: favorite both directories, switch between the direct Workspaces secondary items, then open Task Manager.
 
-PASS: every running backend appears once; titles prefer verified GitHub `org/repo` and otherwise use the folder name;
-available branch is the subtitle; full path is retrievable; host/port is not a title or selector; each managed row has
-exact Stop and favorite controls. FAIL: a backend is absent, a port is primary, selection opens the wrong Workspace,
-or Task Manager claims an unsupported external process kill.
+PASS: favorite navigation has no Running/Favorites accordion and lists each canonical path once. Task Manager lists
+every daemon registration, calls it Running only after Health + realtime settle, and demotes it when realtime is
+lost; titles prefer verified GitHub `org/repo` and otherwise use the folder name; full path is retrievable; host/port
+is not a selector; managed rows have exact Stop. An external row without callable shutdown has no Close/Remove/
+Delete/Stop. FAIL: lease presence alone shows Running, a port is primary, selection opens the wrong Workspace, or an
+external row exposes a fake lifecycle action.
 
 Restore: Stop the `references/openspec` managed backend in Task Manager.
 
@@ -183,7 +187,7 @@ Restore: keep the restarted Environment B backend for case 9.
 
 Setup: use browser responsive mode at 320px, 640px, and 1024px widths.
 
-Trigger: inspect Home, Launcher, running navigation, Task Manager, Stores index, Store Detail, and the overlay titlebar
+Trigger: inspect Home, Launcher, favorite navigation, Task Manager, Stores index, Store Detail, and the overlay titlebar
 at each width.
 
 PASS: no page-level horizontal overflow or incoherent overlap; controls retain stable dimensions; Store rows move from

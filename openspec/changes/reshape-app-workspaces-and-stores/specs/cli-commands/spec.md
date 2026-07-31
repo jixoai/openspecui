@@ -1,10 +1,11 @@
 <!--
-Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
 1. Preserve foreground serve ownership while authorizing daemon-managed directory launch.
 2. Define managed stop/restart restoration without adopting external project processes.
 
 Original request (2026-07-30): "关键是，支持直接从目录直接启动 openspecui 服务。"
 Owner lifecycle decision (2026-07-30): closing a Workspace does not stop its backend; daemon stop affects only managed services; daemon restart restores the managed running set.
+Owner correction (2026-07-31): an external close-only registration exposes no Task Manager Close/Remove/Delete action.
 -->
 
 # Delta for cli-commands
@@ -49,8 +50,9 @@ port, locator, or process discovery.
 - **THEN** the daemon SHALL request shutdown through the lease
 - **AND** the foreground owner SHALL perform and settle its normal Server teardown
 - **AND** the daemon SHALL NOT signal, adopt, or kill an inferred process
-- **WHEN** the lease omits shutdown capability
-- **THEN** Task Manager SHALL offer only presentation Close and SHALL NOT claim the backend was stopped
+- **WHEN** the App has no exact callable owner-shutdown channel
+- **THEN** Task Manager SHALL expose no external lifecycle action
+- **AND** SHALL NOT map Workspace presentation Close or connection-candidate Remove/Delete onto backend lifecycle
 
 #### Scenario: Daemon lifecycle commands remain project-argument-free
 

@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
 1. Preserve the manager's first-hand App information-architecture request without rewriting it as implementation detail.
 2. Bound the path-first Workspace home, managed-backend lifecycle, and Workspaces/Connections consolidation.
 3. Bound the Environment-scoped Stores product model and Store index/detail outcome.
@@ -15,6 +15,12 @@ Original request (2026-07-30): "所有正在运行中的backend都会显示在�
 Original request (2026-07-30): "任务管理器，打开后，可以看到所有正在运行中backend的详情，并可以杀掉Workspace，或者收藏、取消收藏"
 Original request (2026-07-30): "弱化端口这个概念，重点强调 path的概念。"
 Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果没有就使用path的foldername；subtitle写git分支名"
+Owner correction (2026-07-31): Workspaces secondary navigation directly lists Favorites without an accordion;
+Running requires compatible Health API evidence plus an established WebSocket; external close-only registrations
+expose no Close/Remove/Delete lifecycle action.
+Owner correction (2026-07-31): Favorites/Recent persistence belongs to the App daemon backend, never browser storage.
+Owner correction (2026-07-31): "Workspace Home 页面不要有PWA安装，我们现在已经完全废弃pwa这个方向了。请清理干净pwa相关的代码"
+Owner correction (2026-07-31): "左侧导航栏顶部这里的 OpenSpecUI App，这里的icon改成我们的 logo。"
 -->
 
 ## User Input
@@ -47,7 +53,7 @@ Workspaces
 │  ├─ Start from path
 │  ├─ Recent directories
 │  └─ Task Manager
-├─ running backend navigation
+├─ favorite directories (direct secondary navigation)
 └─ open project tabs
 ```
 
@@ -61,18 +67,20 @@ Workspaces
    Closing its project tab preserves the running service; explicit Stop terminates it; daemon stop terminates only
    daemon-managed services; daemon restart restores the managed running set. External foreground `serve` owners
    remain separate and may stop only through their own current lease capability.
-4. Make Workspaces primary navigation expand into a secondary list of every currently running backend. Selecting
-   one focuses or opens its exact Workspace without using port as product identity.
+4. List favorite canonical directories directly beneath Workspaces without a `Running`/`Favorites` accordion.
+   Selecting one focuses its current Workspace or starts the directory through managed daemon authority.
 5. Make the Workspaces `+` control open a connection-backed Workspace Launcher. Known daemon/live/persisted
    connection candidates are the direct plane; manual backend URL entry is a secondary escape hatch.
 6. Define one deterministic launcher outcome for every candidate: focus an already-open Workspace, open one
    Workspace for a reachable candidate, or expose its concrete offline/authentication/compatibility state without
    creating a duplicate tab.
-7. Persist credential-free canonical directory history and favorites. A successful directory launch or objective
-   project admission updates recency; favorite state is independent from whether a backend or tab is open.
-8. Add `/workspaces/tasks` as the Task Manager detail surface for running backend identity, ownership, lifecycle,
-   path, Git facts, health, and exact Stop/Close/favorite capabilities.
-9. Present every running backend and project tab path-first: use an objective GitHub `org/repo` slug as title when
+7. Persist credential-free canonical directory history and favorites in the App daemon's user-level catalog.
+   A successful managed directory launch updates recency only after backend admission settles; favorite state is
+   independent from whether a backend or tab is open. Browser windows Pull this catalog and never own its storage.
+8. Add an App-owned Task Manager Dialog for every current daemon registration. It independently establishes a
+   compatible Health API result and WebSocket subscription before calling a backend Running, while retaining
+   non-running registrations with their objective failure state.
+9. Present every Task Manager backend and project tab path-first: use an objective GitHub `org/repo` slug as title when
    available, otherwise the canonical directory basename; use the current Git branch as subtitle. Full local path
    remains retrievable, while host/port stays secondary diagnostic evidence.
 10. Make Stores the user-facing entry while preserving Environment as the registry and operation scope. A Store
@@ -105,6 +113,8 @@ Doctor evidence -> direct failure or collapsed healthy evidence
 - Do not clone, discover, or resolve a GitHub `org/repo` display slug into a local directory; directory launch
   accepts a local path and Git facts only improve presentation after objective inspection.
 - Do not use host, port, backend URL, symlink spelling, or unverified Git metadata as Workspace project identity.
+- Do not treat daemon lease presence as Running evidence or hide a still-registered external backend through a
+  presentation-only Close, Remove, or Delete action.
 - Do not implement Store Git clone, pull, push, synchronization, or machine-wide filesystem discovery.
 - Do not merge same-id Stores across Environment identities or infer Environment identity from URL, path, port,
   process lifetime, or the first online connection.
@@ -116,6 +126,7 @@ Doctor evidence -> direct failure or collapsed healthy evidence
 - Do not treat capability advertisement as permission, Doctor silence as machine-wide completeness, or retained
   display data as current mutation authority.
 - Do not claim agent-run browser fixtures as final end-to-end acceptance.
+- Do not preserve PWA install, manifest, service-worker cache/update, launch-role, or overlay-titlebar behavior.
 
 ## Acceptance Boundary
 
@@ -125,14 +136,16 @@ Doctor evidence -> direct failure or collapsed healthy evidence
    directories, and a Task Manager entry. It cannot be closed, reordered, or replaced by a project iframe.
 3. Submitting a valid local directory starts or focuses exactly one canonical managed service and Workspace with a
    loading lock and concrete failure. The same physical directory cannot produce duplicate managed backends.
-4. Workspaces secondary navigation lists every running backend and focuses its exact Workspace. Tab and navigation
-   labels use GitHub `org/repo` or directory basename plus Git branch; port is not a primary label or selector.
-5. Task Manager shows all current backends, distinguishes daemon-managed and external owners, exposes objective
-   Stop/Close/favorite capabilities, and never claims it can terminate a backend without current lifecycle authority.
+4. Workspaces secondary navigation directly lists Favorites with no section accordion. Selecting a canonical path
+   focuses its current Workspace or starts one managed backend; port is not a label or selector.
+5. Task Manager shows all daemon registrations, distinguishes daemon-managed and external foreground owners, and
+   calls one Running only after compatible Health API and established WebSocket evidence. Managed rows expose exact
+   Stop; external close-only rows expose no Close/Remove/Delete/Stop action; favorite remains path-owned.
 6. Closing a managed Workspace tab leaves its backend running; explicit Stop retires its authority and frames;
    daemon stop affects only managed services; daemon restart restores the previously running managed directory set.
-7. Favorites and recent directories persist canonical credential-free paths independently from runtime state.
-   Failed submissions, credentials, backend URLs, ports, and private launch fragments do not enter history.
+7. Favorites and recent directories persist canonical credential-free paths independently from runtime state in the
+   daemon-owned user catalog. Failed submissions, credentials, backend URLs, ports, and private launch fragments do
+   not enter history; App windows converge through daemon invalidation Push followed by snapshot Pull.
 8. The Workspace Launcher lists objective connection candidates and their live state, focuses existing
    Workspaces, opens new reachable Workspaces without duplication, and contains manual URL entry in a secondary
    flow. Credentials remain runtime-only.
@@ -152,9 +165,12 @@ Doctor evidence -> direct failure or collapsed healthy evidence
 14. Initial, retained-refresh, regional failure, empty, and mutation lifecycle states preserve the established
     Push notification -> Pull current snapshot law and never fabricate optimistic Store inventory or content.
 15. Focused checked tests cover Home/catalog persistence, canonical-path duplicate suppression, managed service
-    lifecycle, running-backend navigation, Task Manager authority, path-first labels, launcher state/duplication,
+    lifecycle, favorite navigation, Health+WebSocket Running evidence, Task Manager authority, path-first labels,
+    launcher state/duplication,
     composite Store identity,
     Environment authority selection and conflict, responsive index/detail topology, content projection, retained
     realtime behavior, and destructive-action authority retirement.
 16. CI-equivalent local gates pass on the implementation branch. The owner receives numbered production-boundary
     walkthrough cases and remains the sole owner of final end-to-end browser acceptance.
+17. Workspace Home ignores browser install prompts; clean App output contains no manifest, service worker, or PWA
+    icon assets; Browser launch relay has no PWA role; and the sidebar brand renders the App-owned logo.

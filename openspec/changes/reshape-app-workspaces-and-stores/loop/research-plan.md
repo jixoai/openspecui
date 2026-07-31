@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
 1. Record official OpenSpec Store facts and current App ownership constraints that bound the redesign.
 2. Tell the Workspaces/Stores product story before deriving routes, protocols, state owners, and implementation slices.
 3. Define path-first Workspace launch/runtime management and Environment-scoped Store interaction.
@@ -13,6 +13,10 @@ Original request (2026-07-30): "所有正在运行中的backend都会显示在�
 Original request (2026-07-30): "任务管理器，打开后，可以看到所有正在运行中backend的详情，并可以杀掉Workspace，或者收藏、取消收藏"
 Original request (2026-07-30): "弱化端口这个概念，重点强调 path的概念。"
 Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果没有就使用path的foldername；subtitle写git分支名"
+Owner correction (2026-07-31): Favorites replace Running secondary navigation; daemon registration is not Running
+without compatible Health API and established WebSocket evidence; external close-only rows expose no fake action.
+Owner correction (2026-07-31): Favorites/Recent persistence belongs to the App daemon backend, never browser storage.
+Owner correction (2026-07-31): PWA is fully retired and the sidebar `OpenSpecUI App` brand uses the product logo.
 -->
 
 ## Research Findings
@@ -175,15 +179,33 @@ may advertise owner-handled Stop          stops it explicitly or during daemon t
 re-registers after daemon replacement     restores it only during daemon restart
 ```
 
-The daemon never discovers, adopts, or signals a process by path, port, URL, or PID inference. Task Manager can
-request an external Stop only through an exact current lease capability; otherwise it can close only the Workspace
-presentation. This preserves objective process ownership while satisfying one control surface for all running
-backends.
+The daemon never discovers, adopts, or signals a process by path, port, URL, or PID inference. A foreground `serve`
+lease records external ownership but does not prove runtime reachability. Task Manager independently verifies the
+Health API and establishes a WebSocket subscription before presenting Running. Until an exact callable owner-
+shutdown channel exists, an external row exposes no lifecycle action: presentation Close is unrelated to backend
+lifecycle, while Remove/Delete would hide a backend that objectively remains registered.
 
 Workspace identity and presentation also need a path-first hierarchy. Server health already carries project path,
 while Git repository facts can objectively derive a GitHub `org/repo` slug and current branch. The slug is display
 metadata, not a clone target or filesystem identity. Canonical physical directory remains the durable local identity;
 host and port remain internal locator/diagnostic facts.
+
+### 9. PWA is a cross-layer product capability, not a Home button
+
+The retired install button was backed by four independent owners: `beforeinstallprompt` state in `HostedShell`,
+service-worker registration/update UI, manifest/cache build outputs, and PWA-specific launch/titlebar roles. Hiding
+only the button would leave browser cache authority, obsolete build artifacts, and a second presentation state
+machine active. The correction therefore removes all four while preserving two current hosts:
+
+```text
+Browser Web host         retained: normal document + browser-only cross-window launch relay
+OpenTray native host     retained: native overlay geometry + drag + branded titlebar
+PWA installation         retired: manifest + prompt + service worker + cache/update
+PWA presentation role    retired: standalone priority + Launch Handler + pwa-overlay
+```
+
+The existing `/icon.svg` is already the canonical App/native brand source, so the sidebar reuses it rather than
+introducing another glyph or asset owner.
 
 ## Decision & Plan (For Approval)
 
@@ -201,7 +223,7 @@ Open App
       │   ├─ path input -> start/focus one managed backend
       │   ├─ Recent directories
       │   └─ Task Manager -> all running backend detail/actions
-      ├─ secondary navigation -> every running backend
+      ├─ secondary navigation -> favorite canonical directories
       ├─ project tabs -> org/repo | folder name + branch subtitle
       └─ press + -> connection candidate launcher
           ├─ Open now
@@ -212,9 +234,9 @@ Open App
 
 Home is the repeat-use entry, while `+` remains the heterogeneous connection escape hatch. Favorites and Recent are
 canonical directory records, not backend locators or open tabs. A successful path launch updates recency; favorite
-state survives Stop and tab closure. Closing a project tab does not stop a managed service. Task Manager owns
-explicit lifecycle control and distinguishes daemon-managed Stop, lease-mediated external Stop, and presentation-
-only Close.
+state survives Stop and tab closure. Closing a project tab does not stop a managed service. Task Manager owns exact
+managed Stop and independent Health+WebSocket observation; external close-only registrations expose evidence and
+favorite state but no fake lifecycle command.
 
 The launcher direct plane remains a searchable candidate list, not a URL form. Each candidate row contains
 path-first project identity, Environment when known, objective connection state, and one deterministic command.
@@ -317,7 +339,9 @@ Content is deliberately bounded:
 
 2. **Managed local service owner and directory catalog**
    - Add authenticated daemon control for canonical directory start/stop and exact managed ownership.
-   - Persist canonical credential-free favorites, successful recency, and restart-only running-set intent.
+   - Persist canonical credential-free favorites and successful recency in the daemon user's
+     `$OPENSPECUI_HOME/workspace-directory-catalog.json`; App windows receive replacement snapshots through
+     invalidation Push -> Pull and never use browser storage for this catalog.
    - Keep daemon stop and restart distinct: stop clears managed services; restart snapshots and restores its managed
      running set. External foreground serve processes remain untouched.
    - Extend exact serve leases with optional owner-handled shutdown rather than signaling inferred processes.
@@ -329,9 +353,11 @@ Content is deliberately bounded:
    - Make closing, reopening, duplicate suppression, daemon disappearance/reappearance, and cross-window
      convergence explicit transitions.
 
-4. **Workspace Home, running navigation, Task Manager, and Launcher**
+4. **Workspace Home, favorite navigation, Task Manager, and Launcher**
    - Make Home a fixed first tab with Favorites, path form, Recent, and Task Manager entry.
-   - Project every current lease into Workspaces secondary navigation and Task Manager.
+   - Project Favorites directly into Workspaces secondary navigation without a section accordion.
+   - Project every current lease into Task Manager, but call it Running only after compatible Health API and an
+     established WebSocket subscription.
    - Derive tab/nav title from verified GitHub `org/repo` or folder basename and subtitle from branch; keep full path
      available and port diagnostic-only.
    - Extract the current Add-API form from `HostedShell` into a feature-complete launcher Dialog.
@@ -361,6 +387,7 @@ Content is deliberately bounded:
 8. **Navigation and retirement**
    - Reduce persistent App navigation to Workspaces and Stores; keep Settings secondary.
    - Retire Connections/Environment/Inspector/Inventory/Context Matrix routes and tests in the same slice.
+   - Retire PWA install/update/build/launch/titlebar owners and keep Browser/OpenTray hosts explicit.
    - Preserve App-lifetime launch, daemon, connection observation, mutation observation, and iframe owners above
      routed content.
 
@@ -376,7 +403,7 @@ Content is deliberately bounded:
 - Workspace Launcher with connection candidate, focus/open, unavailable, and secondary manual-connect flows.
 - Fixed Workspace Home with Favorites, path launch, Recent, and Task Manager.
 - Canonical directory catalog and daemon-managed local project service lifecycle.
-- Running-backend secondary navigation and path-first GitHub/folder plus branch labels.
+- Direct favorite secondary navigation plus path-first Task Manager/tab GitHub/folder and branch labels.
 - Exact owner-handled external Stop capability without daemon process adoption.
 - Separate candidate and open-Workspace state/projection ownership.
 - Environment-selected Store index and composite Environment/Store detail identity.
@@ -418,10 +445,10 @@ Content is deliberately bounded:
 | Responsive Store evidence becomes a desktop table                     | Verify container widths directly; use stacked/aligned list topology with no horizontal scroll.                                            |
 | Canonical-path aliases start duplicate managed Servers                | Resolve physical identity before spawn; key in-flight/running/restoration state by that identity and mutation-test the gate.              |
 | Daemon restart or crash leaks managed children                        | One child owner records exact state, settles teardown, and distinguishes restart restoration from ordinary stop/crash recovery.           |
-| Task Manager kills an external process without authority              | Require exact current lease-advertised shutdown; otherwise expose presentation Close only.                                                |
+| Task Manager fabricates external lifecycle authority                  | Keep external ownership as evidence; expose no Close/Remove/Delete/Stop until an exact callable shutdown channel exists.                  |
 | Favorites/history leak credentials or transient runtime facts         | Persist only canonical path, favorite, and recency through a runtime-validated versioned schema.                                          |
 | Git remote/branch changes destabilize Workspace identity              | Use Git facts only for display; canonical physical directory and opaque Workspace generation remain authoritative.                        |
-| Running navigation and tabs become redundant port lists               | Share one path-first label selector; hide host/port in secondary diagnostics and keep different click outcomes explicit.                  |
+| Favorite navigation and tabs become redundant port lists              | Use canonical path for favorites and path-first tab labels; keep host/port diagnostic-only.                                               |
 
 ## Verification Strategy
 
@@ -493,7 +520,7 @@ The final handoff supplies numbered cases covering:
 
 1. fixed Home topology, favorite/recent persistence, and canonical-path duplicate suppression;
 2. managed directory start, tab close without Stop, explicit Stop, daemon stop isolation, and restart restoration;
-3. running-backend navigation, Task Manager ownership/action states, and path-first tab labels;
+3. favorite navigation, Health+WebSocket Running evidence, Task Manager ownership/action states, and path-first labels;
 4. initial external daemon Workspace auto-open and close/reopen through the launcher;
 5. manual connection secondary flow without credential persistence;
 6. multiple Environments and same Store id isolation;
