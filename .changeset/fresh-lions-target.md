@@ -4,4 +4,4 @@
 openspecui: patch
 ---
 
-Target OpenSpec CLI 1.7.x in OpenSpecUI 6.1, retain 1.6.x as the legacy-compatible line, and block versions below 1.6 or at/above 1.8 by default.
+Keep OpenSpec CLI 1.6.x as the OpenSpecUI 6.1 target line, accept 1.7.x as compatible without upgrade warnings, and block versions below 1.6 or at/above 1.8 by default.

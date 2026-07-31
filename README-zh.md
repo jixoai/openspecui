@@ -17,15 +17,15 @@ OpenSpecUI 是 OpenSpec 工作流的 Web 界面（动态模式 + 静态导出）
 
 | OpenSpecUI        | OpenSpec CLI 线                                |
 | ----------------- | ---------------------------------------------- |
-| `@latest` / `@^6` | 当前：`>=1.7.0 <1.8.0`；接受：`>=1.6.0 <1.8.0` |
+| `@latest` / `@^6` | 当前：`>=1.6.0 <1.7.0`；兼容：`>=1.7.0 <1.8.0` |
 | `@^5`             | 当前：`>=1.5.0 <1.6.0`；接受：`>=1.4.0 <1.6.0` |
 | `@^4`             | 当前：`>=1.4.0 <1.5.0`；接受：`>=1.3.0 <1.5.0` |
 | `@^3`             | `>=1.3.0 <1.4.0`                               |
 | `@^2`             | `>=1.2.0 <1.3.0`                               |
 | `@^1`             | `>=1.0.0 <1.2.0`                               |
 
-OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 6.1 明确桥接到 OpenSpec CLI
-1.7.x，同时保留紧邻的 1.6.x 作为旧兼容线；这个兼容桥接不定义后续 OpenSpecUI 7.x 的边界。
+OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 6.1 仍适配 OpenSpec CLI
+1.6.x，并将 1.7.x 作为兼容桥接；该桥接不承诺 1.7 特有能力，也不定义后续 OpenSpecUI 7.x 的边界。
 
 历史文档：
 
@@ -50,7 +50,7 @@ openspecui
 
 ## OpenSpec CLI 兼容性
 
-- OpenSpecUI 6.1 面向 OpenSpec CLI `>=1.7.0 <1.8.0`；CLI 1.6.x 仍作为旧兼容线被接受。
+- OpenSpecUI 6.1 面向 OpenSpec CLI `>=1.6.0 <1.7.0`；CLI `>=1.7.0 <1.8.0` 仍保持兼容。
 - 更旧的 CLI 线和 CLI `>=1.8.0` 不受 OpenSpecUI 6.1 支持。
 - 如果 CLI 不在 `>=1.6.0 <1.8.0` 范围内，界面会显示 `OpenSpec CLI Required` 并阻断核心操作，直到升级。
 - 可在 **Settings → OpenSpec Profile & Sync** 查看 profile/workflow 同步状态。

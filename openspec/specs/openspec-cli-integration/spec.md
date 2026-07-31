@@ -6,6 +6,7 @@ Compromise: these six tightly coupled CLI-integration concerns remain in one cap
 
 Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
 Original request (2026-07-31): "开始发布6.1.0；目前这个版本先给它支持1.7.*，因为基本兼容。"
+Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
 Original request (2026-07-15): "sync、update 的完整交付链。"
 -->
 
@@ -19,7 +20,7 @@ Define how OpenSpecUI integrates with the OpenSpec CLI to execute OPSX workflows
 
 ### Requirement: CLI Discovery and Version Enforcement
 
-OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enforce the shipped release line's CLI compatibility policy. OpenSpecUI 6.1 targets CLI 1.7.x, accepts the immediately previous 1.6.x line as legacy-compatible, and blocks older and future lines. This explicit bridge does not claim 1.7-specific feature completeness or define the later OpenSpecUI 7.x contract.
+OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enforce the shipped release line's CLI compatibility policy. OpenSpecUI 6.x is adapted to CLI 1.6.x, accepts CLI 1.7.x as compatible without claiming 1.7-specific feature completeness, and blocks older and future lines. This compatibility bridge does not define the later OpenSpecUI 7.x contract.
 
 #### Scenario: Enforce OpenSpecUI 6.1 compatibility range
 
@@ -28,18 +29,18 @@ OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enfor
 - **THEN** the UI SHALL block usage
 - **AND** present upgrade instructions
 
-#### Scenario: Treat 1.7 runtime as current in 6.1
-
-- **GIVEN** OpenSpecUI 6.1 evaluates OpenSpec CLI `>=1.7.0 <1.8.0`
-- **WHEN** OpenSpecUI initializes
-- **THEN** the UI SHALL allow core interactions without a compatibility warning
-
-#### Scenario: Accept legacy-compatible 1.6 runtime in 6.1
+#### Scenario: Treat 1.6 runtime as current in 6.1
 
 - **GIVEN** OpenSpecUI 6.1 evaluates OpenSpec CLI `>=1.6.0 <1.7.0`
 - **WHEN** OpenSpecUI initializes
+- **THEN** the UI SHALL allow core interactions without a compatibility warning
+
+#### Scenario: Accept compatible 1.7 runtime in 6.1
+
+- **GIVEN** OpenSpecUI 6.1 evaluates OpenSpec CLI `>=1.7.0 <1.8.0`
+- **WHEN** OpenSpecUI initializes
 - **THEN** the UI SHALL allow core interactions
-- **AND** SHALL show that the CLI is legacy-compatible and recommend OpenSpec CLI `>=1.7.0 <1.8.0`
+- **AND** SHALL NOT display an upgrade warning
 
 #### Scenario: Drop support for 1.5 and older runtimes in 6.1
 
@@ -54,7 +55,7 @@ OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enfor
 - **THEN** OpenSpecUI 3.x SHALL correspond to OpenSpec CLI 1.3.x
 - **AND** OpenSpecUI 4.x SHALL correspond to OpenSpec CLI 1.4.x
 - **AND** OpenSpecUI 5.x SHALL correspond to OpenSpec CLI 1.5.x
-- **AND** OpenSpecUI 6.1 SHALL target OpenSpec CLI 1.7.x while accepting only 1.6.x as legacy-compatible
+- **AND** OpenSpecUI 6.1 SHALL target OpenSpec CLI 1.6.x while accepting 1.7.x as compatible
 - **AND** the compatibility bridge SHALL NOT define an OpenSpecUI 7.x CLI target
 
 ### Requirement: Safe CLI Execution

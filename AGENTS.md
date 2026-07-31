@@ -89,6 +89,7 @@ Owner-reported defect (2026-07-31): "终端大量报错，比如: Cannot execute
 Original request (2026-07-31): "dashboard.refreshGitSnapshot?batch=1 这个请求一直在阻塞其它任务，这个不是只读吗"
 Owner correction (2026-07-31): "这个只是辅助‘只读’的动作，它的本质仍然是Readonly，所以把它改成只读才是解决问题的根本"
 Original request (2026-07-31): "开始发布6.1.0；目前这个版本先给它支持1.7.*，因为基本兼容。"
+Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
 Original request (2026-07-31): "这个依赖好像会导致安装的时候仍然会被强制装上去，可能要改成 peerDependencies 会更好"
 Original request (2026-07-31): "这些命令的执行，时间绝对不是七八秒那么久...请看一下代码，看能不能让trace更精确"
 Original request (2026-07-31): "直接寻址到本地 openspec背后的js，直接用 worker_thread 来运行它。"
