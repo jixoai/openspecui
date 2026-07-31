@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Provide the canonical Chinese product-site copy.
  * 2. 让启动指引与本地 App daemon 和显式 Direct Web 合同一致。
  *
  * Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
+ * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  */
 import type { WebsiteContent } from '$lib/i18n/schema'
 
@@ -58,7 +59,7 @@ export const zh = {
       '启动项目 backend 并显式打开 Direct Project Web；若 daemon 已运行，也会保留该 Workspace。',
     exportLabel: '静态导出',
     exportSummary: '生成可部署的静态快照，用于文档站点或离线审阅。',
-    compatibility: 'OpenSpecUI 6.x 面向 OpenSpec CLI 1.6.x，并将 1.5.x 作为遗留兼容线。',
+    compatibility: 'OpenSpecUI 6.1 面向 OpenSpec CLI 1.7.x，并将 1.6.x 作为旧兼容线。',
   },
   modes: {
     title: '选择合适的界面',

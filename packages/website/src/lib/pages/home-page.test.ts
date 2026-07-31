@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Verify the website launch controls and current compatibility guidance.
  * 2. Prove App and Direct Web choices emit explicit production CLI modes.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
+ * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  */
 import { en } from '$lib/i18n/locales/en'
 import HomePage from '$lib/pages/home-page.svelte'
@@ -22,7 +23,7 @@ describe('HomePage', () => {
     expect(screen.getByText('npx openspecui@latest export -o ./dist')).toBeVisible()
     expect(
       screen.getByText(
-        'OpenSpecUI 6.x targets OpenSpec CLI 1.6.x and accepts 1.5.x as legacy-compatible.'
+        'OpenSpecUI 6.1 targets OpenSpec CLI 1.7.x and accepts 1.6.x as legacy-compatible.'
       )
     ).toBeVisible()
 

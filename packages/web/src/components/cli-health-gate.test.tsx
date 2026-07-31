@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Lock the Web compatibility gate to the OpenSpecUI 6.x / CLI 1.6 line.
- * 2. Prove the 1.5 legacy notice and unsupported-version escape hatch behavior.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Lock the Web compatibility gate to the OpenSpecUI 6.1 / CLI 1.7 line.
+ * 2. Prove the 1.6 legacy notice and unsupported-version escape hatch behavior.
  * 3. Prove shared Root Context is the gate's only CLI availability truth and refresh is readonly.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
+ * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  * Owner correction (2026-07-31): Root observation refresh uses query transport.
  */
 import type { RootContext, RootContextState } from '@openspecui/core'
@@ -122,7 +123,7 @@ function renderGate() {
 
 describe('CliHealthGate', () => {
   beforeEach(() => {
-    setAvailability({ available: true, version: '1.6.0' })
+    setAvailability({ available: true, version: '1.7.0' })
     config = undefined
     rootRefreshCalls = 0
   })
@@ -131,7 +132,7 @@ describe('CliHealthGate', () => {
     cleanup()
   })
 
-  it('does not render for current OpenSpec CLI 1.6.x', async () => {
+  it('does not render for current OpenSpec CLI 1.7.x', async () => {
     renderGate()
 
     await waitFor(() => {
@@ -140,27 +141,27 @@ describe('CliHealthGate', () => {
     })
   })
 
-  it('renders a non-blocking legacy-compatible notice for OpenSpec CLI 1.5.x', async () => {
-    setAvailability({ available: true, version: '1.5.1' })
+  it('renders a non-blocking legacy-compatible notice for OpenSpec CLI 1.6.x', async () => {
+    setAvailability({ available: true, version: '1.6.1' })
 
     renderGate()
 
-    expect(await screen.findByText('OpenSpec CLI 1.5.1 is legacy-compatible')).toBeInTheDocument()
-    expect(screen.getByText(/Upgrade to >=1.6.0 <1.7.0/)).toBeInTheDocument()
+    expect(await screen.findByText('OpenSpec CLI 1.6.1 is legacy-compatible')).toBeInTheDocument()
+    expect(screen.getByText(/Upgrade to >=1.7.0 <1.8.0/)).toBeInTheDocument()
     expect(screen.queryByText(/OpenSpec CLI .* Required/)).not.toBeInTheDocument()
   })
 
   it('blocks unsupported OpenSpec CLI versions', async () => {
-    setAvailability({ available: true, version: '1.4.1' })
+    setAvailability({ available: true, version: '1.5.1' })
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.5.0 <1.7.0 Required/)).toBeInTheDocument()
-    expect(screen.getByText(/Detected OpenSpec CLI 1.4.1/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.6.0 <1.8.0 Required/)).toBeInTheDocument()
+    expect(screen.getByText(/Detected OpenSpec CLI 1.5.1/)).toBeInTheDocument()
   })
 
   it('offers a skip-version-check escape hatch when the CLI is available', async () => {
-    setAvailability({ available: true, version: '1.7.0' })
+    setAvailability({ available: true, version: '1.8.0' })
 
     renderGate()
 
@@ -168,7 +169,7 @@ describe('CliHealthGate', () => {
   })
 
   it('clears the blocking dialog after skipping the version check', async () => {
-    setAvailability({ available: true, version: '1.7.0' })
+    setAvailability({ available: true, version: '1.8.0' })
 
     renderGate()
 
@@ -176,7 +177,7 @@ describe('CliHealthGate', () => {
     fireEvent.click(skip)
 
     await waitFor(() => {
-      expect(screen.queryByText(/OpenSpec CLI >=1.5.0 <1.7.0 Required/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/OpenSpec CLI >=1.6.0 <1.8.0 Required/)).not.toBeInTheDocument()
     })
   })
 
@@ -185,7 +186,7 @@ describe('CliHealthGate', () => {
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.5.0 <1.7.0 Required/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.6.0 <1.8.0 Required/)).toBeInTheDocument()
     expect(screen.queryByText(/Skip version check/)).not.toBeInTheDocument()
   })
 

@@ -17,16 +17,16 @@ OpenSpecUI is a web interface for OpenSpec workflows (live mode + static export)
 
 | OpenSpecUI        | OpenSpec CLI line                                     |
 | ----------------- | ----------------------------------------------------- |
-| `@latest` / `@^6` | current: `>=1.6.0 <1.7.0`; accepted: `>=1.5.0 <1.7.0` |
+| `@latest` / `@^6` | current: `>=1.7.0 <1.8.0`; accepted: `>=1.6.0 <1.8.0` |
 | `@^5`             | current: `>=1.5.0 <1.6.0`; accepted: `>=1.4.0 <1.6.0` |
 | `@^4`             | current: `>=1.4.0 <1.5.0`; accepted: `>=1.3.0 <1.5.0` |
 | `@^3`             | `>=1.3.0 <1.4.0`                                      |
 | `@^2`             | `>=1.2.0 <1.3.0`                                      |
 | `@^1`             | `>=1.0.0 <1.2.0`                                      |
 
-OpenSpecUI major versions track OpenSpec CLI minor lines. OpenSpecUI 6.x targets OpenSpec CLI
-1.6.x and accepts only the immediately previous 1.5.x line as legacy-compatible. It does not
-forward-support OpenSpec CLI 1.7.x.
+OpenSpecUI major versions ordinarily track OpenSpec CLI minor lines. OpenSpecUI 6.1 explicitly
+bridges to OpenSpec CLI 1.7.x while retaining 1.6.x as its immediately previous
+legacy-compatible line. This compatibility bridge does not define the later OpenSpecUI 7.x line.
 
 Legacy docs:
 
@@ -51,9 +51,9 @@ Direct Project Web defaults to `http://localhost:3100` when that presentation is
 
 ## OpenSpec CLI Compatibility
 
-- OpenSpecUI 6.x targets OpenSpec CLI `>=1.6.0 <1.7.0`; CLI 1.5.x remains legacy-compatible.
-- Older CLI lines and CLI `>=1.7.0` are unsupported by OpenSpecUI 6.x.
-- If your CLI is outside `>=1.5.0 <1.7.0`, the UI shows `OpenSpec CLI Required` and blocks core interactions until upgraded.
+- OpenSpecUI 6.1 targets OpenSpec CLI `>=1.7.0 <1.8.0`; CLI 1.6.x remains legacy-compatible.
+- Older CLI lines and CLI `>=1.8.0` are unsupported by OpenSpecUI 6.1.
+- If your CLI is outside `>=1.6.0 <1.8.0`, the UI shows `OpenSpec CLI Required` and blocks core interactions until upgraded.
 - OpenSpec profile/workflow sync can be inspected from **Settings → OpenSpec Profile & Sync**.
 - OpenSpec CLI 1.6's default `core` profile includes `/opsx:sync` and `/opsx:update`, with Oh My Pi and Trae command delivery.
 

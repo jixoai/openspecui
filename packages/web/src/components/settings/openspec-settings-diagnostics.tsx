@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Summarize read-only Root compatibility, selection, and failed-attempt state with links to Context.
  * 2. Summarize Environment Global profile, delivery, drift, and data scope with a link to Config.
  * 3. Preserve settled diagnostic facts during revalidation and use stable skeleton geometry on admission.
@@ -7,6 +7,7 @@
  * Original request (2026-07-20): "Settings diagnostics are read-only."
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-28): Settings should stay concise and defer verbose OpenSpec evidence to its owning routes.
+ * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  * Owner Context direction (2026-07-29): link Root details to Config-owned Resolved Context.
  */
 import { InformationBadge } from '@/components/information-disclosure'
@@ -15,7 +16,11 @@ import { TocSection } from '@/components/toc'
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
 import { VTLink } from '@/lib/view-transitions/navigation'
 import type { EnvironmentGlobalConfig, RootContext, RootContextState } from '@openspecui/core'
-import { classifyOpenSpecCliVersion } from '@openspecui/core/openspec-compat'
+import {
+  classifyOpenSpecCliVersion,
+  OPENSPEC_CLI_LEGACY_SERIES,
+  OPENSPEC_CLI_TARGET_SERIES,
+} from '@openspecui/core/openspec-compat'
 import { AlertCircle, ExternalLink } from 'lucide-react'
 import { SettingsStatusLabel } from './settings-status-label'
 
@@ -43,9 +48,9 @@ function CompatibilityStatus({ context }: { context: RootContext | null }) {
   const visibleStatus = availability.available ? compatibility.status : 'unavailable'
   const visibleLabel =
     visibleStatus === 'current'
-      ? 'Current 1.6 line'
+      ? `Current ${OPENSPEC_CLI_TARGET_SERIES} line`
       : visibleStatus === 'legacy-compatible'
-        ? 'Legacy-compatible 1.5 line'
+        ? `Legacy-compatible ${OPENSPEC_CLI_LEGACY_SERIES} line`
         : visibleStatus === 'unavailable'
           ? 'CLI unavailable'
           : visibleStatus === 'unknown'

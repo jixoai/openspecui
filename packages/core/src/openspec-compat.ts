@@ -1,21 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
- * 1. Encode the OpenSpecUI-major to OpenSpec-CLI-minor compatibility law.
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * 1. Encode the shipped OpenSpecUI release line's OpenSpec CLI compatibility law.
  * 2. Classify current, immediately previous, unsupported, and unknown CLI versions.
  *
  * Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
+ * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  */
 export const OPENSPECUI_TARGET_MAJOR = 6
-export const OPENSPEC_CLI_TARGET_SERIES = '1.6'
-export const OPENSPEC_CLI_LEGACY_SERIES = '1.5'
-export const OPENSPEC_CLI_MIN_VERSION = '1.5.0'
-export const OPENSPEC_CLI_TARGET_MIN_VERSION = '1.6.0'
-export const OPENSPEC_CLI_RECOMMENDED_MIN_VERSION = '1.6.0'
-export const OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION = '1.7.0'
-export const OPENSPEC_CLI_ACCEPTED_RANGE = '>=1.5.0 <1.7.0'
-export const OPENSPEC_CLI_RECOMMENDED_RANGE = '>=1.6.0 <1.7.0'
-export const OPENSPEC_CLI_LEGACY_RANGE = '>=1.5.0 <1.6.0'
-export const OPENSPEC_CLI_REFERENCE_TAG_PATTERN = 'v1.6.*'
+export const OPENSPEC_CLI_TARGET_SERIES = '1.7'
+export const OPENSPEC_CLI_LEGACY_SERIES = '1.6'
+export const OPENSPEC_CLI_MIN_VERSION = '1.6.0'
+export const OPENSPEC_CLI_TARGET_MIN_VERSION = '1.7.0'
+export const OPENSPEC_CLI_RECOMMENDED_MIN_VERSION = '1.7.0'
+export const OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION = '1.8.0'
+export const OPENSPEC_CLI_ACCEPTED_RANGE = '>=1.6.0 <1.8.0'
+export const OPENSPEC_CLI_RECOMMENDED_RANGE = '>=1.7.0 <1.8.0'
+export const OPENSPEC_CLI_LEGACY_RANGE = '>=1.6.0 <1.7.0'
+export const OPENSPEC_CLI_REFERENCE_TAG_PATTERN = 'v1.7.*'
 
 export interface OpenSpecCliVersion {
   major: number
@@ -70,10 +71,10 @@ function isSeries(version: OpenSpecCliVersion, series: string): boolean {
 
 /**
  * A version is "current/recommended" when it falls inside the recommended
- * range (e.g. `>=1.6.0 <1.7.0`). OpenSpecUI follows a 1:1 major-to-minor
- * version law: one OpenSpecUI major line targets exactly one OpenSpec CLI
- * minor line (2.x→1.2, 3.x→1.3, 4.x→1.4, 5.x→1.5, 6.x→1.6). The previous minor line
- * is accepted as legacy-compatible; older lines are unsupported.
+ * range (e.g. `>=1.7.0 <1.8.0`). OpenSpecUI ordinarily advances its target CLI
+ * line with a product major. The 6.1 release deliberately bridges to the
+ * basically compatible OpenSpec CLI 1.7 line while retaining 1.6 as the one
+ * legacy-compatible line; older and future minor lines remain unsupported.
  */
 function isCurrentRecommended(version: OpenSpecCliVersion): boolean {
   const min = parseOpenSpecCliVersion(OPENSPEC_CLI_RECOMMENDED_MIN_VERSION)

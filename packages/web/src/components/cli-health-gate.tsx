@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Gate Web compatibility from the shared Root Context CLI evidence only.
  * 2. Preserve session-only bypass and execute-path repair controls.
  * 3. Revalidate the shared Root Context Work through readonly refresh after explicit repair.
@@ -7,6 +7,7 @@
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
  * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
+ * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  * Owner correction (2026-07-31): Root observation refresh is readonly despite internal cache invalidation.
  */
 import { isStaticMode } from '@/lib/static-mode'
