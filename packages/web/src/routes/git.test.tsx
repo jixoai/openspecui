@@ -1,14 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove Code/Planning Git route requests, controls, and navigation.
  * 2. Prove mounted repository rebinding retires stale Planning status and history.
- * 3. Prove every Git mutation retains the binding token captured by its render.
+ * 3. Prove only explicit Git mutations execute and retain the binding token captured by their render.
  * 4. Prove cached Git scope data is non-authoritative during reconnect until B emits.
  * 5. Drive real transport connection/error callbacks through query and action owners.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-07-31): "dashboard.refreshGitSnapshot?batch=1 这个请求一直在阻塞其它任务，这个不是只读吗"
  */
 import type { GitRepositoryScopes, GitWorktreeSummary, RootContextState } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -625,6 +626,19 @@ describe('GitRoute', () => {
       cursor: undefined,
       limit: 50,
     })
+  })
+
+  it('does not issue implicit Git refresh mutations from read-only lifecycle events', async () => {
+    renderWithQueryClient(<GitRoute />)
+    await screen.findByText('main against origin/main')
+    refreshGitMock.mockClear()
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+
+    expect(refreshGitMock).not.toHaveBeenCalled()
   })
 
   it('loads Code status and history from the first Code-only scope emission', async () => {

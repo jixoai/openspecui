@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Render independent Dashboard Summary, objective Kanban, trends, and Code Git projections.
  * 2. Keep Dashboard-owned Code Git actions separate from Planning-root readiness.
  * 3. Carry the Code Git binding token through dashboard detail handoff navigation.
@@ -11,6 +11,7 @@
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
+ * Original request (2026-07-31): "dashboard.refreshGitSnapshot?batch=1 这个请求一直在阻塞其它任务，这个不是只读吗"
  */
 import { Badge } from '@/components/badge'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'
@@ -219,11 +220,9 @@ export function Dashboard() {
     [dashboardGitBindingToken]
   )
 
-  const focusRefreshAtRef = useRef(0)
   const [removingWorktreePath, setRemovingWorktreePath] = useState<string | null>(null)
   const gitAutoRefreshTimerRef = useRef<number | null>(null)
   const gitTaskStatusRef = useRef(gitTaskStatus)
-  const gitRefreshRequestRef = useRef(gitRefreshRequest)
   const gitRefreshReason = gitRefreshRequest?.reason ?? null
 
   const clearGitAutoRefreshTimer = useCallback(() => {
@@ -343,45 +342,18 @@ export function Dashboard() {
   )
 
   useEffect(() => {
-    gitRefreshRequestRef.current = gitRefreshRequest
-  }, [gitRefreshRequest])
-
-  useEffect(() => {
     if (staticMode) return
 
-    const triggerOnce = (reason: string) => {
-      if (gitRefreshRequestRef.current !== null) return
-      const now = Date.now()
-      if (now - focusRefreshAtRef.current < 700) return
-      focusRefreshAtRef.current = now
-      clearGitAutoRefreshTimer()
-      setGitAutoRefreshCycleStartedAt(null)
-      setGitAutoRefreshNow(Date.now())
-      runDashboardGitRefresh(reason)
-    }
-
-    const onFocus = () => {
-      triggerOnce('window-focus')
-    }
-
     const onVisibilityChange = () => {
-      const visible = document.visibilityState === 'visible'
-      setIsDocumentVisible(visible)
-      if (visible) {
-        triggerOnce('document-visible')
-      }
+      setIsDocumentVisible(document.visibilityState === 'visible')
     }
 
-    window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisibilityChange)
 
-    triggerOnce('dashboard-mount')
-
     return () => {
-      window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [clearGitAutoRefreshTimer, runDashboardGitRefresh, staticMode])
+  }, [staticMode])
 
   useEffect(() => {
     gitTaskStatusRef.current = gitTaskStatus

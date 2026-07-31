@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove Dashboard planning metrics render before lower-priority workflow projections are admitted.
- * 2. Prove rendered A-to-B refresh/removal intents conflict visibly, settle, and resume on B.
+ * 2. Prove only explicit refresh/removal intents execute, conflict visibly across A-to-B, settle, and resume on B.
  * 3. Prove live Code Git navigation carries the backend-issued binding token.
  * 4. Prove Dashboard snapshots cannot be relabeled across Code binding replacements.
  * 5. Prove retained Overview content remains visible beside terminal error evidence.
@@ -10,6 +10,7 @@
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Dashboard Git provenance.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Original request (2026-07-31): "dashboard.refreshGitSnapshot?batch=1 这个请求一直在阻塞其它任务，这个不是只读吗"
  */
 import type { DashboardGitRefreshControlProps } from '@/components/dashboard/git-refresh-control'
 import type { DashboardGitWorktree, GitRepositoryScopes } from '@openspecui/core'
@@ -590,6 +591,34 @@ describe('Dashboard', () => {
     ).toBeTruthy()
   })
 
+  it('does not issue implicit Git refresh mutations from read-only Dashboard lifecycle events', async () => {
+    staticModeMock.mockReturnValue(false)
+
+    render(<Dashboard />)
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+
+    expect(refreshDashboardGitSnapshotMock).not.toHaveBeenCalled()
+  })
+
+  it('issues an automatic Git refresh only after the user-selected interval elapses', async () => {
+    staticModeMock.mockReturnValue(false)
+    localStorage.setItem('openspecui:dashboard:git-auto-refresh', '30s')
+    vi.useFakeTimers()
+
+    render(<Dashboard />)
+    expect(refreshDashboardGitSnapshotMock).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000)
+    })
+
+    expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledOnce()
+    expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith('auto-refresh:30s', 'code-binding')
+  })
+
   it('supports auto refresh presets and clears manual refresh after task completion', async () => {
     staticModeMock.mockReturnValue(false)
     const now = 1_000
@@ -606,23 +635,8 @@ describe('Dashboard', () => {
     refreshDashboardGitSnapshotMock.mockResolvedValue(undefined)
 
     const view = render(<Dashboard />)
-    await waitFor(() =>
-      expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith(
-        'dashboard-mount',
-        'code-binding'
-      )
-    )
-
-    gitTaskStatus = {
-      ...gitTaskStatus,
-      lastStartedAt: now,
-      lastFinishedAt: now + 10,
-      lastReason: 'dashboard-mount',
-    }
-    view.rerender(<Dashboard />)
     await waitFor(() => expect(isDisabled('Refresh')).toBe(false))
-
-    refreshDashboardGitSnapshotMock.mockClear()
+    expect(refreshDashboardGitSnapshotMock).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('combobox', { name: 'Git auto refresh' }))
     const option = screen.getByRole('option', { name: '30s' })
@@ -658,7 +672,7 @@ describe('Dashboard', () => {
     dateNowSpy.mockRestore()
   })
 
-  it('does not immediately retrigger dashboard-mount refresh after the first request settles', async () => {
+  it('does not issue an implicit Git refresh after task status settles and rerenders', async () => {
     staticModeMock.mockReturnValue(false)
 
     let gitTaskStatus = {
@@ -673,25 +687,18 @@ describe('Dashboard', () => {
     refreshDashboardGitSnapshotMock.mockResolvedValue(undefined)
 
     const view = render(<Dashboard />)
-
-    await waitFor(() => {
-      expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledTimes(1)
-      expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith(
-        'dashboard-mount',
-        'code-binding'
-      )
-    })
+    expect(refreshDashboardGitSnapshotMock).not.toHaveBeenCalled()
 
     gitTaskStatus = {
       ...gitTaskStatus,
       lastStartedAt: 1_000,
       lastFinishedAt: 2_000,
-      lastReason: 'dashboard-mount',
+      lastReason: 'watcher-change',
     }
     view.rerender(<Dashboard />)
 
     await waitFor(() => expect(isDisabled('Refresh')).toBe(false))
-    expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledTimes(1)
+    expect(refreshDashboardGitSnapshotMock).not.toHaveBeenCalled()
   })
 
   it('opens current git snapshot entries with their own Code binding provenance', async () => {
@@ -868,14 +875,8 @@ describe('Dashboard', () => {
     dashboardOverviewMock.mockReturnValue({ data: snapshotA, isLoading: false, error: null })
 
     const view = render(<Dashboard />)
-    await waitFor(() =>
-      expect(refreshDashboardGitSnapshotMock).toHaveBeenCalledWith(
-        'dashboard-mount',
-        'code-binding-a'
-      )
-    )
     await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled())
-    refreshDashboardGitSnapshotMock.mockClear()
+    expect(refreshDashboardGitSnapshotMock).not.toHaveBeenCalled()
     dashboardGitRefreshControlRenderMock.mockClear()
     worktreeRowRenderMock.mockClear()
     view.rerender(<Dashboard />)

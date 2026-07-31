@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Make Code versus distinct Planning repository scope explicit in URL and UI.
- * 2. Render scoped status, history, worktrees, pagination, and refresh lifecycles.
+ * 2. Render scoped status, history, worktrees, pagination, and explicit refresh lifecycles.
  * 3. Execute worktree removal and handoff only against the selected repository.
  * 4. Preserve Git list/detail View Transition continuity without cross-binding cache reuse.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Original request (2026-07-31): "dashboard.refreshGitSnapshot?batch=1 这个请求一直在阻塞其它任务，这个不是只读吗"
  */
 import {
   getGitEntrySharedDescriptor,
@@ -148,10 +149,7 @@ export function GitRoute() {
     gitEntriesContainerRef
   )
 
-  const focusRefreshAtRef = useRef(0)
   const gitAutoRefreshTimerRef = useRef<number | null>(null)
-  const gitRefreshRequestRef = useRef(gitRefreshRequest)
-  const refreshBusyRef = useRef(false)
   const refreshBusy =
     scopeNonAuthoritative ||
     gitRefreshRequest !== null ||
@@ -310,45 +308,18 @@ export function GitRoute() {
   )
 
   useEffect(() => {
-    gitRefreshRequestRef.current = gitRefreshRequest
-  }, [gitRefreshRequest])
-
-  useEffect(() => {
-    refreshBusyRef.current = refreshBusy
-  }, [refreshBusy])
-
-  useEffect(() => {
     if (staticMode) return
 
-    const triggerOnce = (reason: string) => {
-      if (gitRefreshRequestRef.current !== null) return
-      if (refreshBusyRef.current) return
-      const now = Date.now()
-      if (now - focusRefreshAtRef.current < 700) return
-      focusRefreshAtRef.current = now
-      clearGitAutoRefreshTimer()
-      setGitAutoRefreshCycleStartedAt(null)
-      setGitAutoRefreshNow(Date.now())
-      runGitRefresh(reason)
-    }
-
-    const onFocus = () => triggerOnce('window-focus')
     const onVisibilityChange = () => {
-      const visible = document.visibilityState === 'visible'
-      setIsDocumentVisible(visible)
-      if (visible) {
-        triggerOnce('document-visible')
-      }
+      setIsDocumentVisible(document.visibilityState === 'visible')
     }
 
-    window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisibilityChange)
 
     return () => {
-      window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [clearGitAutoRefreshTimer, runGitRefresh, staticMode])
+  }, [staticMode])
 
   useEffect(() => {
     if (staticMode) return
