@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove Dashboard keeps real regional geometry mounted while Summary admits lower-priority projections.
- * 2. Prove readonly lifecycle refresh conflicts visibly across A-to-B, settles, and resumes on B.
+ * 2. Prove absolute-deadline auto-refresh pauses while hidden and resumes without mount/focus invalidation.
  * 3. Prove live Code Git curation and navigation preserve backend-issued binding provenance.
  * 4. Prove Dashboard snapshots cannot be relabeled across Code binding replacements.
  * 5. Prove retained Overview content remains visible beside terminal error evidence.
@@ -11,12 +11,13 @@
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-31): "dashboard.refreshGitSnapshot?batch=1 这个请求一直在阻塞其它任务，这个不是只读吗"
- * Owner correction (2026-07-31): Preserve Dashboard lifecycle refresh through readonly query transport.
+ * Superseding owner correction (2026-07-31): Mount/focus do not invalidate; visibility resumes the remaining deadline or refreshes once when overdue.
  * Owner-reported regression (2026-07-31): "Git Snapshot 界面上的代码？我现在手动刷新不了。"
  * Original request (2026-07-31): "优化 Dashboard，目前是 Kanban / Code Git Snapshot / Active Changes / Specifications。改成 Kanban 独占一行，然后移除 Specifications，接着就是 Active Changes / Code Git Snapshot 两个一行"
  * Original request (2026-07-31): "这个看板底部加一个border"
  * Original request (2026-07-31): "基于真实的布局去做骨架屏，或者说是直接让卡片自身去支持 Pending 样式"
  * Original request (2026-07-31): "commitList这里默认显示5个就好"
+ * Original request (2026-07-31): "检查目前的这个 Code Git Snapshot，它非常慢，有时候甚至要十几秒"
  */
 import type { DashboardGitRefreshControlProps } from '@/components/dashboard/git-refresh-control'
 import type { DashboardGitEntry, DashboardGitWorktree, GitRepositoryScopes } from '@openspecui/core'
