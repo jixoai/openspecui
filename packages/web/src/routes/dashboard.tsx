@@ -12,6 +12,10 @@
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  * Original request (2026-07-31): "dashboard.refreshGitSnapshot?batch=1 这个请求一直在阻塞其它任务，这个不是只读吗"
+ * Owner correction (2026-07-31): Preserve lifecycle refresh and classify its cache/stamp maintenance as readonly.
+ * Owner-reported regression (2026-07-31): "Git Snapshot 界面上的代码？我现在手动刷新不了。"
+ * Original request (2026-07-31): "优化 Dashboard，目前是 Kanban / Code Git Snapshot / Active Changes / Specifications。改成 Kanban 独占一行，然后移除 Specifications，接着就是 Active Changes / Code Git Snapshot 两个一行"
+ * Original request (2026-07-31): "这个看板底部加一个border"
  */
 import { Badge } from '@/components/badge'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'
@@ -69,7 +73,6 @@ import type {
   DashboardMetricKey,
   DashboardTrendKind,
 } from '@openspecui/core'
-import { specIdentityKey } from '@openspecui/core/spec-catalog'
 import {
   AlertCircle,
   Archive,
@@ -546,219 +549,155 @@ export function Dashboard() {
     </div>
   )
 
-  const renderExecutionSnapshot = () => (
-    <div className={`grid min-w-0 gap-3 ${showGitRegion ? 'xl:grid-cols-2' : 'xl:grid-cols-1'}`}>
-      <section className="@container min-w-0 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-medium">Kanban</h2>
-          <VTLink
-            to="/board"
-            aria-label="Open Kanban"
-            title="Open Kanban"
-            className="text-muted-foreground hover:text-foreground inline-flex h-8 w-8 items-center justify-center rounded-md"
-          >
-            <SquareKanban className="h-4 w-4" />
-          </VTLink>
-        </div>
-        <ReadonlyKanban
-          variant="compact"
-          activeItems={activeChanges}
-          archivedItems={summaryProjection?.recentArchives ?? []}
-          activeCounts={
-            summaryProjection?.trackedTaskPhaseCounts ?? {
-              'no-tasks': 0,
-              'in-progress': 0,
-              complete: 0,
-            }
+  const renderKanbanSection = () => (
+    <section
+      data-testid="dashboard-kanban-row"
+      className="border-border @container min-w-0 space-y-2 border-b"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-medium">Kanban</h2>
+        <VTLink
+          to="/board"
+          aria-label="Open Kanban"
+          title="Open Kanban"
+          className="text-muted-foreground hover:text-foreground inline-flex h-8 w-8 items-center justify-center rounded-md"
+        >
+          <SquareKanban className="h-4 w-4" />
+        </VTLink>
+      </div>
+      <ReadonlyKanban
+        variant="compact"
+        activeItems={activeChanges}
+        archivedItems={summaryProjection?.recentArchives ?? []}
+        activeCounts={
+          summaryProjection?.trackedTaskPhaseCounts ?? {
+            'no-tasks': 0,
+            'in-progress': 0,
+            complete: 0,
           }
-          archivedCount={summary.completedChanges}
-        />
-      </section>
+        }
+        archivedCount={summary.completedChanges}
+      />
+    </section>
+  )
 
-      {showGitRegion ? (
-        <section className="min-w-0 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h2 className="font-medium">Code Git Snapshot</h2>
-              <p className="text-muted-foreground truncate text-xs">
-                {showGitSnapshot
-                  ? `Default branch: ${git.defaultBranch}`
-                  : 'Waiting for the current Code Git projection.'}
-              </p>
-            </div>
-            {!staticMode ? (
-              <DashboardGitRefreshControl
-                options={GIT_AUTO_REFRESH_OPTIONS}
-                value={gitAutoRefreshPreset}
-                onValueChange={setGitAutoRefreshPreset}
-                progress={gitAutoRefreshProgress}
-                showProgress={showGitRefreshProgress}
-                disabled={disableRefreshButton}
-                animated={animateRefreshButton}
-                onRefresh={handleManualGitRefresh}
-              />
-            ) : null}
+  const renderGitSnapshotSection = () =>
+    showGitRegion ? (
+      <section className="min-w-0 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="font-medium">Code Git Snapshot</h2>
+            <p className="text-muted-foreground truncate text-xs">
+              {showGitSnapshot
+                ? `Default branch: ${git.defaultBranch}`
+                : 'Waiting for the current Code Git projection.'}
+            </p>
           </div>
-          {gitIsLoading && !dashboardGit ? <GitWorktreeSkeleton count={3} /> : null}
-          {gitError ? (
-            <div
-              role="alert"
-              className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
-            >
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>Code Git snapshot failed: {gitError.message}</span>
-            </div>
+          {!staticMode ? (
+            <DashboardGitRefreshControl
+              options={GIT_AUTO_REFRESH_OPTIONS}
+              value={gitAutoRefreshPreset}
+              onValueChange={setGitAutoRefreshPreset}
+              progress={gitAutoRefreshProgress}
+              showProgress={showGitRefreshProgress}
+              disabled={disableRefreshButton}
+              animated={animateRefreshButton}
+              onRefresh={handleManualGitRefresh}
+            />
           ) : null}
-          {!showGitSnapshot && dashboardGit && !gitIsLoading && !gitError ? (
-            <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
-              Waiting for the current Code Git binding.
-            </div>
-          ) : null}
-          {showGitSnapshot ? (
-            <RealtimeRevalidateCue active={gitIsUpdating && Boolean(dashboardGit)}>
-              <div className="border-border/80 bg-card min-w-0 rounded-lg border p-3">
-                <div className="mb-2 flex items-center gap-1.5">
-                  <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" />
-                  <span className="text-muted-foreground truncate text-xs">
-                    Default branch: {git.defaultBranch}
-                  </span>
-                </div>
+        </div>
+        {gitIsLoading && !dashboardGit ? <GitWorktreeSkeleton count={3} /> : null}
+        {gitError ? (
+          <div
+            role="alert"
+            className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
+          >
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>Code Git snapshot failed: {gitError.message}</span>
+          </div>
+        ) : null}
+        {!showGitSnapshot && dashboardGit && !gitIsLoading && !gitError ? (
+          <div className="text-muted-foreground rounded-md border border-dashed px-3 py-4 text-sm">
+            Waiting for the current Code Git binding.
+          </div>
+        ) : null}
+        {showGitSnapshot ? (
+          <RealtimeRevalidateCue active={gitIsUpdating && Boolean(dashboardGit)}>
+            <div className="border-border/80 bg-card min-w-0 rounded-lg border p-3">
+              <div className="mb-2 flex items-center gap-1.5">
+                <GitBranch className="text-muted-foreground h-4 w-4 shrink-0" />
+                <span className="text-muted-foreground truncate text-xs">
+                  Default branch: {git.defaultBranch}
+                </span>
+              </div>
 
-                {currentWorktree ? (
-                  <div className="space-y-0">
-                    <WorktreeRow
-                      worktree={currentWorktree}
-                      emphasize
-                      removing={removingWorktreePath === currentWorktree.path}
-                      onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
-                    />
-                    <div
-                      className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}
-                    >
-                      {sortDashboardGitEntries(currentWorktree.entries).map((entry) => (
-                        <GitEntryRow
-                          key={
-                            entry.type === 'commit'
-                              ? entry.hash
-                              : `${entry.type}:${entry.updatedAt ?? 'none'}`
-                          }
-                          entry={entry}
-                          onSelect={
-                            staticMode
-                              ? undefined
-                              : (selectedEntry, sourceElement) => {
-                                  if (git.bindingToken === null) return
-                                  void vtNavController.push(
-                                    'bottom',
-                                    buildGitEntryHrefFromEntry(selectedEntry),
-                                    withSharedElementHandoffState(
-                                      undefined,
-                                      getGitEntrySharedHandoff(selectedEntry, git.bindingToken)
-                                    ),
-                                    {
-                                      source: sourceElement,
-                                      sharedElements: getGitEntrySharedDescriptor(selectedEntry),
-                                    }
-                                  )
-                                }
-                          }
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground rounded-md border border-dashed px-2.5 py-2 text-xs">
-                    No worktree snapshot available.
-                  </div>
-                )}
-
-                {otherWorktrees.length > 0 && (
-                  <div className="border-border/70 mt-3 space-y-1 border-t pt-2">
-                    <div className="text-muted-foreground text-xs uppercase tracking-wide">
-                      Other Worktrees
-                    </div>
-                    {otherWorktrees.map((worktree) => (
-                      <WorktreeRow
-                        key={worktree.path}
-                        worktree={worktree}
-                        emphasize={false}
-                        removing={removingWorktreePath === worktree.path}
-                        onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
+              {currentWorktree ? (
+                <div className="space-y-0">
+                  <WorktreeRow
+                    worktree={currentWorktree}
+                    emphasize
+                    removing={removingWorktreePath === currentWorktree.path}
+                    onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
+                  />
+                  <div className={`-mt-px space-y-1 border-l pl-3 pt-2 ${GIT_WORKTREE_LINE_CLASS}`}>
+                    {sortDashboardGitEntries(currentWorktree.entries).map((entry) => (
+                      <GitEntryRow
+                        key={
+                          entry.type === 'commit'
+                            ? entry.hash
+                            : `${entry.type}:${entry.updatedAt ?? 'none'}`
+                        }
+                        entry={entry}
+                        onSelect={
+                          staticMode
+                            ? undefined
+                            : (selectedEntry, sourceElement) => {
+                                if (git.bindingToken === null) return
+                                void vtNavController.push(
+                                  'bottom',
+                                  buildGitEntryHrefFromEntry(selectedEntry),
+                                  withSharedElementHandoffState(
+                                    undefined,
+                                    getGitEntrySharedHandoff(selectedEntry, git.bindingToken)
+                                  ),
+                                  {
+                                    source: sourceElement,
+                                    sharedElements: getGitEntrySharedDescriptor(selectedEntry),
+                                  }
+                                )
+                              }
+                        }
                       />
                     ))}
                   </div>
-                )}
-              </div>
-            </RealtimeRevalidateCue>
-          ) : null}
-        </section>
-      ) : null}
-    </div>
-  )
-
-  const renderSpecificationsSection = () => (
-    <section className="border-border min-w-0 rounded-t-lg border">
-      <div className="border-border flex min-w-0 flex-wrap items-center justify-between gap-1.5 border-b px-4 py-3">
-        <h2 className="shrink-0 font-medium">Specifications</h2>
-        <span className="text-muted-foreground text-xs sm:text-sm">
-          {summary.specifications} specs · {summary.requirements} requirements
-        </span>
-      </div>
-      <div className="bg-card divide-border min-w-0 divide-y">
-        {summaryProjection?.specifications.map((spec) => {
-          const identity = { kind: 'owned' as const, specId: spec.id }
-          const sharedDescriptor = {
-            family: 'specs',
-            entityId: specIdentityKey(identity),
-          } as const
-
-          return (
-            <VTLink
-              key={spec.id}
-              to="/specs/owned/$specId"
-              params={{ specId: spec.id }}
-              state={(prev) => ({
-                ...prev,
-                __vtHandoff: {
-                  family: 'specs',
-                  entityId: specIdentityKey(identity),
-                  title: spec.name,
-                  subtitle: spec.id,
-                },
-              })}
-              vt={{ sharedElements: sharedDescriptor }}
-              {...getSharedElementBinding(sharedDescriptor, 'container')}
-              className="hover:bg-muted/50 block min-w-0 px-4 py-3"
-            >
-              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
-                <div className="min-w-0 flex-1">
-                  <div
-                    {...getSharedElementBinding(sharedDescriptor, 'title')}
-                    className="truncate font-medium"
-                  >
-                    {spec.name}
-                  </div>
-                  <div className="text-muted-foreground truncate text-xs">
-                    {spec.updatedAt > 0 && <>{formatRelativeTime(spec.updatedAt)} · </>}
-                    {spec.id}
-                  </div>
                 </div>
-                <div className="shrink-0 text-right text-sm">
-                  <div className="font-medium">{spec.requirements}</div>
-                  <div className="text-muted-foreground text-xs">requirements</div>
+              ) : (
+                <div className="text-muted-foreground rounded-md border border-dashed px-2.5 py-2 text-xs">
+                  No worktree snapshot available.
                 </div>
-              </div>
-            </VTLink>
-          )
-        })}
-        {summaryProjection?.specifications.length === 0 && (
-          <div className="text-muted-foreground px-4 py-6 text-center text-sm">
-            No specifications found.
-          </div>
-        )}
-      </div>
-    </section>
-  )
+              )}
+
+              {otherWorktrees.length > 0 && (
+                <div className="border-border/70 mt-3 space-y-1 border-t pt-2">
+                  <div className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Other Worktrees
+                  </div>
+                  {otherWorktrees.map((worktree) => (
+                    <WorktreeRow
+                      key={worktree.path}
+                      worktree={worktree}
+                      emphasize={false}
+                      removing={removingWorktreePath === worktree.path}
+                      onRemoveDetachedWorktree={handleRemoveDetachedWorktree}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </RealtimeRevalidateCue>
+        ) : null}
+      </section>
+    ) : null
 
   const renderActiveChangesSection = () => (
     <section className="border-border flex min-w-0 flex-col rounded-t-lg border">
@@ -882,7 +821,7 @@ export function Dashboard() {
   )
 
   return (
-    <div className="min-w-0 space-y-6 p-4">
+    <div className="@container min-w-0 space-y-6 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-nav flex items-center gap-2 text-2xl font-bold">
           <LayoutDashboard className="h-6 w-6 shrink-0" />
@@ -928,11 +867,14 @@ export function Dashboard() {
         {renderHistoryCards()}
       </section>
 
-      {renderExecutionSnapshot()}
+      {renderKanbanSection()}
 
-      <div className="grid gap-3 xl:grid-cols-2">
+      <div
+        data-testid="dashboard-secondary-grid"
+        className="@[64rem]:grid-cols-2 grid min-w-0 gap-3"
+      >
         {renderActiveChangesSection()}
-        {renderSpecificationsSection()}
+        {renderGitSnapshotSection()}
       </div>
     </div>
   )

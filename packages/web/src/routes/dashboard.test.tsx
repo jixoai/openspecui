@@ -11,6 +11,10 @@
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-07-31): "dashboard.refreshGitSnapshot?batch=1 这个请求一直在阻塞其它任务，这个不是只读吗"
+ * Owner correction (2026-07-31): Preserve Dashboard lifecycle refresh through readonly query transport.
+ * Owner-reported regression (2026-07-31): "Git Snapshot 界面上的代码？我现在手动刷新不了。"
+ * Original request (2026-07-31): "优化 Dashboard，目前是 Kanban / Code Git Snapshot / Active Changes / Specifications。改成 Kanban 独占一行，然后移除 Specifications，接着就是 Active Changes / Code Git Snapshot 两个一行"
+ * Original request (2026-07-31): "这个看板底部加一个border"
  */
 import type { DashboardGitRefreshControlProps } from '@/components/dashboard/git-refresh-control'
 import type { DashboardGitWorktree, GitRepositoryScopes } from '@openspecui/core'
@@ -345,15 +349,26 @@ describe('Dashboard', () => {
     cleanup()
   })
 
-  it('renders Active Changes before Specifications', () => {
+  it('renders Kanban as a full row before the shared Active Changes and Code Git row', () => {
+    staticModeMock.mockReturnValue(false)
     render(<Dashboard />)
 
+    const kanbanRow = screen.getByTestId('dashboard-kanban-row')
+    const secondaryGrid = screen.getByTestId('dashboard-secondary-grid')
+    const kanbanHeading = screen.getByRole('heading', { name: 'Kanban' })
     const activeChangesHeading = screen.getByRole('heading', { name: 'Active Changes' })
-    const specificationsHeading = screen.getByRole('heading', { name: 'Specifications' })
+    const gitHeading = screen.getByRole('heading', { name: 'Code Git Snapshot' })
 
-    expect(activeChangesHeading.compareDocumentPosition(specificationsHeading)).toBe(
+    expect(kanbanRow).toContainElement(kanbanHeading)
+    expect(kanbanRow).toHaveClass('border-b')
+    expect(secondaryGrid).toContainElement(activeChangesHeading)
+    expect(secondaryGrid).toContainElement(gitHeading)
+    expect(secondaryGrid).toHaveClass('@[64rem]:grid-cols-2')
+    expect(kanbanRow.compareDocumentPosition(secondaryGrid)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(activeChangesHeading.compareDocumentPosition(gitHeading)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
+    expect(screen.queryByRole('heading', { name: 'Specifications' })).not.toBeInTheDocument()
   })
 
   it('keeps the Summary visible while independent Trends and Git regions are still loading', () => {
@@ -454,26 +469,6 @@ describe('Dashboard', () => {
 
     expect(screen.getByTestId('dashboard-context-summary').textContent).toBe('false')
     expect(dashboardContextSummaryMock).toHaveBeenCalledWith({ staticMode: false })
-  })
-
-  it('renders specification metadata with relative time before spec id', () => {
-    const now = 61_000
-    const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(now)
-
-    dashboardOverviewMock.mockReturnValue({
-      data: {
-        ...createOverviewData(),
-        specifications: [{ id: 'spec-1', name: 'Spec 1', requirements: 9, updatedAt: 1_000 }],
-      },
-      isLoading: false,
-      error: null,
-    })
-
-    render(<Dashboard />)
-
-    expect(screen.getByText('1m ago · spec-1')).toBeInTheDocument()
-
-    dateNowSpy.mockRestore()
   })
 
   it('copies on click and toggles path mode via button or double click', async () => {
