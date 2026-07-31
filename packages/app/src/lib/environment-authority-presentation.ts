@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Preserve each Environment authority outcome as concise direct-plane product evidence.
  *
  * Original request (2026-07-30): "Stores 完全可以融入 Environment Center。"
  * Review correction (2026-07-30): Store Detail must not collapse source conflict into generic authority loss.
+ * Owner-reported confusion (2026-07-31): internal "Environment authority" language is not user-facing vocabulary.
  */
 import type { EnvironmentAuthorityResolution } from './environment-authority'
 
@@ -24,9 +25,15 @@ export function selectEnvironmentAuthorityIssue(
         message: 'Open a compatible Workspace to observe its runtime Environment.',
       }
     case 'requires-selection':
-      return { severity: 'warning', message: 'Select an Environment before inspecting Stores.' }
+      return {
+        severity: 'warning',
+        message: 'Choose an Environment to view and manage its Stores.',
+      }
     case 'pending':
-      return { severity: 'warning', message: 'The selected Environment is refreshing.' }
+      return {
+        severity: 'warning',
+        message: 'Store data is updating for the selected Environment.',
+      }
     case 'offline':
       return {
         severity: 'error',
@@ -47,7 +54,7 @@ export function selectEnvironmentAuthorityIssue(
     case 'no-current-authority':
       return {
         severity: 'warning',
-        message: 'The selected Environment has no current access source.',
+        message: 'No connected Workspace is currently ready to change Stores in this Environment.',
       }
     case 'authority':
       return null

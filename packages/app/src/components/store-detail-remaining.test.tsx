@@ -1,9 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove New Store flow gates on authority + lifecycle (7.6).
  * 2. Prove Environment evidence subpage renders observed-only facts + conflict (7.7).
+ * 3. Prove Setup projects the official id/path/Git/remote parameter surface.
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
+ * Owner-reported confusion (2026-07-31): Setup requires Store name, path, and Advanced Options.
  */
 // @vitest-environment jsdom
 import { act, fireEvent, screen } from '@testing-library/react'
@@ -57,9 +59,9 @@ describe('NewStoreDialog (7.6)', () => {
         onSubmit={onSubmit}
       />
     )
-    expect(screen.getByText(/No current Environment authority/)).toBeTruthy()
-    // The Register button is disabled without authority.
-    const submitButton = screen.getByText('Register').closest('button')
+    expect(screen.getByText(/Store creation is temporarily unavailable/)).toBeTruthy()
+    // The Setup button is disabled without a connected Workspace ready to mutate Stores.
+    const submitButton = screen.getByText('Setup').closest('button')
     expect(submitButton?.hasAttribute('disabled')).toBe(true)
   })
 
@@ -75,7 +77,7 @@ describe('NewStoreDialog (7.6)', () => {
       />
     )
     // Pending locks the submit.
-    const submitButton = screen.getByText('Register').closest('button')
+    const submitButton = screen.getByText('Setup').closest('button')
     expect(submitButton?.hasAttribute('disabled')).toBe(true)
   })
 
@@ -84,15 +86,41 @@ describe('NewStoreDialog (7.6)', () => {
     await renderAt(
       <NewStoreDialog open onClose={() => {}} hasAuthority lifecycle="idle" onSubmit={onSubmit} />
     )
+    fireEvent.click(screen.getByText('Register existing root'))
     const pathInput = screen.getByPlaceholderText('/path/to/store-root') as HTMLInputElement
     fireEvent.change(pathInput, { target: { value: '/stores/team' } })
-    const idInput = screen.getByPlaceholderText('my-store') as HTMLInputElement
+    const idInput = screen.getByPlaceholderText('accept-ref') as HTMLInputElement
     fireEvent.change(idInput, { target: { value: 'team' } })
     fireEvent.click(screen.getByText('Register'))
     expect(onSubmit).toHaveBeenCalledWith({
       kind: 'register',
       path: '/stores/team',
       storeId: 'team',
+    })
+  })
+
+  it('submits the complete Setup parameter surface', async () => {
+    const onSubmit = vi.fn()
+    await renderAt(
+      <NewStoreDialog open onClose={() => {}} hasAuthority lifecycle="idle" onSubmit={onSubmit} />
+    )
+    fireEvent.change(screen.getByLabelText('Directory path'), {
+      target: { value: '/lab/store-ref' },
+    })
+    fireEvent.change(screen.getByLabelText('Store name'), { target: { value: 'accept-ref' } })
+    fireEvent.click(screen.getByText('Advanced Options'))
+    fireEvent.change(screen.getByLabelText('Git initialization'), { target: { value: 'skip' } })
+    fireEvent.change(screen.getByLabelText('Canonical remote URL (optional)'), {
+      target: { value: 'https://github.com/acme/store-ref.git' },
+    })
+    fireEvent.click(screen.getByText('Setup'))
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      kind: 'setup',
+      path: '/lab/store-ref',
+      storeId: 'accept-ref',
+      initGit: false,
+      remote: 'https://github.com/acme/store-ref.git',
     })
   })
 })

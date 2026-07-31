@@ -7,12 +7,14 @@
  * 5. Animate Store row insertion and layout movement without changing product identity or selection.
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
+ * Owner-reported defect (2026-07-31): retained Store rows must use the shared revalidation visual language.
  * Spec: hosted-app-distribution › "Scan Stores in an Environment" and the container-responsive law.
  *
  * The Stores index does NOT preserve the old Inventory table or three-tab Store Manager shell. Rows use dividers
  * and stable list geometry rather than nested cards. Mobile renders one readable column; wider containers add
  * aligned facts without introducing horizontal overflow.
  */
+import { RealtimeRevalidateCue } from '@openspecui/web-src/components/realtime/realtime-cue'
 import { LoaderCircle, Network, Plus, RefreshCw, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { buildStoreDetailPath } from '../lib/store-route-identity'
@@ -45,6 +47,8 @@ export interface StoresIndexProps {
   readonly onSelectEnvironment?: (envUri: string) => void
   readonly onOpenEnvironments?: () => void
   readonly onNewStore?: () => void
+  readonly canCreateStore?: boolean
+  readonly createStoreUnavailableReason?: string | null
   readonly onRefresh?: () => void
   readonly authorityMessage?: string | null
   readonly isLoading?: boolean
@@ -86,6 +90,8 @@ export function StoresIndex({
   onSelectEnvironment,
   onOpenEnvironments,
   onNewStore,
+  canCreateStore = true,
+  createStoreUnavailableReason = null,
   onRefresh,
   authorityMessage = null,
   isLoading = false,
@@ -160,7 +166,8 @@ export function StoresIndex({
             <button
               type="button"
               onClick={onNewStore}
-              disabled={!envUri}
+              disabled={!envUri || !canCreateStore}
+              title={createStoreUnavailableReason ?? 'Create or register a Store'}
               className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
@@ -206,68 +213,75 @@ export function StoresIndex({
         </select>
       </div>
 
-      {isLoading && rows.length === 0 ? (
-        <div
-          aria-label="Loading Stores"
-          className="border-border divide-border divide-y rounded-md border"
-        >
-          {[0, 1, 2].map((index) => (
-            <div key={index} className="flex items-center gap-3 px-4 py-4">
-              <LoaderCircle className="text-muted-foreground h-4 w-4 animate-spin" />
-              <span className="bg-muted h-4 w-40 animate-pulse rounded" />
-            </div>
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          {!envUri
-            ? 'Select an Environment to inspect its Stores.'
-            : rows.length === 0
-              ? 'No stores observed in this environment.'
-              : 'No stores match the filter.'}
-        </p>
-      ) : (
-        <ul
-          role="list"
-          className="border-border divide-border min-w-0 divide-y overflow-hidden rounded-lg border"
-        >
-          {filtered.map((row) => {
-            const detailPath = buildStoreDetailPath({ envUri, storeId: row.storeId })
-            return (
-              <li ref={listItemRef(row.storeId)} key={row.storeId} className="min-w-0">
-                <button
-                  type="button"
-                  onClick={() => onOpenDetail?.(detailPath)}
-                  className="hover:bg-muted/40 @lg:flex-row @lg:items-center @lg:justify-between @lg:gap-4 flex w-full min-w-0 flex-col gap-1 px-4 py-3 text-left"
-                  aria-label={`Open store ${row.storeId}`}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <HealthDot variant={healthVariant(row.health)} />
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{row.storeId}</div>
-                      {row.root ? (
-                        <div className="text-muted-foreground truncate text-xs">{row.root}</div>
+      <RealtimeRevalidateCue
+        active={isUpdating}
+        persistent
+        statusLabel="Stores updating"
+        className="min-h-12 rounded-lg"
+      >
+        {isLoading && rows.length === 0 ? (
+          <div
+            aria-label="Loading Stores"
+            className="border-border divide-border divide-y rounded-md border"
+          >
+            {[0, 1, 2].map((index) => (
+              <div key={index} className="flex items-center gap-3 px-4 py-4">
+                <LoaderCircle className="text-muted-foreground h-4 w-4 animate-spin" />
+                <span className="bg-muted h-4 w-40 animate-pulse rounded" />
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <p className="text-muted-foreground px-1 py-3 text-sm">
+            {!envUri
+              ? 'Select an Environment to inspect its Stores.'
+              : rows.length === 0
+                ? 'No stores observed in this environment.'
+                : 'No stores match the filter.'}
+          </p>
+        ) : (
+          <ul
+            role="list"
+            className="border-border divide-border min-w-0 divide-y overflow-hidden rounded-lg border"
+          >
+            {filtered.map((row) => {
+              const detailPath = buildStoreDetailPath({ envUri, storeId: row.storeId })
+              return (
+                <li ref={listItemRef(row.storeId)} key={row.storeId} className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => onOpenDetail?.(detailPath)}
+                    className="hover:bg-muted/40 @lg:flex-row @lg:items-center @lg:justify-between @lg:gap-4 flex w-full min-w-0 flex-col gap-1 px-4 py-3 text-left"
+                    aria-label={`Open store ${row.storeId}`}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <HealthDot variant={healthVariant(row.health)} />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{row.storeId}</div>
+                        {row.root ? (
+                          <div className="text-muted-foreground truncate text-xs">{row.root}</div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground @lg:justify-end flex shrink-0 flex-wrap items-center gap-2 text-xs">
+                      {row.usage ? (
+                        <span className="bg-muted rounded px-1.5 py-0.5">
+                          Root for {row.usage.rootFor} · Referenced by {row.usage.referencedBy}
+                        </span>
+                      ) : null}
+                      {row.mutationState !== 'idle' ? (
+                        <span className="bg-muted rounded px-1.5 py-0.5">
+                          {mutationLabel(row.mutationState)}
+                        </span>
                       ) : null}
                     </div>
-                  </div>
-                  <div className="text-muted-foreground @lg:justify-end flex shrink-0 flex-wrap items-center gap-2 text-xs">
-                    {row.usage ? (
-                      <span className="bg-muted rounded px-1.5 py-0.5">
-                        Root for {row.usage.rootFor} · Referenced by {row.usage.referencedBy}
-                      </span>
-                    ) : null}
-                    {row.mutationState !== 'idle' ? (
-                      <span className="bg-muted rounded px-1.5 py-0.5">
-                        {mutationLabel(row.mutationState)}
-                      </span>
-                    ) : null}
-                  </div>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </RealtimeRevalidateCue>
       <p className="text-muted-foreground/70 text-xs">
         Observed stores only. Empty results do not imply machine-wide completeness.
       </p>

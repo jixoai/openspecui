@@ -1,9 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Prove the Stores index renders searchable/filterable rows with composite-identity Detail links (7.3).
  * 2. Prove observed-only completeness language and no horizontal-overflow container class (7.17).
+ * 3. Prove retained and empty Store projections use the shared realtime revalidation cue.
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
+ * Owner-reported defect (2026-07-31): Store removal must visibly retain and refresh the list.
  */
 // @vitest-environment jsdom
 import { act, fireEvent, screen } from '@testing-library/react'
@@ -98,6 +100,22 @@ describe('StoresIndex (7.3/7.17)', () => {
 
   it('renders an empty observed state without claiming machine-wide completeness', async () => {
     await renderAt(<StoresIndex rows={[]} envUri="env://1" />)
+    expect(screen.getByText(/No stores observed in this environment/)).toBeTruthy()
+  })
+
+  it('retains Store rows under the shared revalidation cue while updating', async () => {
+    const { container } = await renderAt(<StoresIndex rows={ROWS} envUri="env://1" isUpdating />)
+    const cue = container.querySelector('.rt-revalidate-cue')
+    expect(cue).not.toBeNull()
+    expect(cue?.getAttribute('aria-busy')).toBe('true')
+    expect(screen.getByText('Stores updating')).toBeTruthy()
+    expect(screen.getByText('team')).toBeTruthy()
+    expect(screen.getByText('design')).toBeTruthy()
+  })
+
+  it('keeps the shared revalidation cue visible for an updating empty projection', async () => {
+    const { container } = await renderAt(<StoresIndex rows={[]} envUri="env://1" isUpdating />)
+    expect(container.querySelector('.rt-revalidate-cue')).not.toBeNull()
     expect(screen.getByText(/No stores observed in this environment/)).toBeTruthy()
   })
 })

@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
  * 1. Bind the Stores index to selected-Environment Store projections and navigation.
  * 2. Pin New Store drafts to exact current authority and follow backend mutation settlement.
  * 3. Keep loading, retained refresh, and authority failures in the direct plane.
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
+ * Owner-reported confusion (2026-07-31): opaque envUri and internal authority language must not lead the UI.
  * Spec: hosted-app-distribution > "Scan Stores in an Environment".
  */
 import { useNavigate } from '@tanstack/react-router'
@@ -13,6 +14,7 @@ import { NewStoreDialog, type NewStoreLifecycleState } from '../components/new-s
 import { StoresIndex } from '../components/stores-index'
 import type { EnvironmentActionAuthority } from '../lib/environment-authority'
 import { selectEnvironmentAuthorityIssue } from '../lib/environment-authority-presentation'
+import { selectEnvironmentLabel } from '../lib/environment-presentation'
 import { buildStoresEnvironmentsPath } from '../lib/store-route-identity'
 import { useStoresRuntime } from '../lib/stores-runtime'
 
@@ -54,31 +56,38 @@ export function StoresIndexRoute() {
 
   const observedEnvironmentOptions = runtime.environments.map((environment) => ({
     envUri: environment.envUri,
-    label:
-      environment.projects.length === 1 && environment.projects[0]?.label
-        ? `${environment.projects[0].label} Environment`
-        : environment.envUri,
+    label: selectEnvironmentLabel(environment),
   }))
   const environmentOptions =
     runtime.selectedEnvUri &&
     !observedEnvironmentOptions.some(({ envUri }) => envUri === runtime.selectedEnvUri)
       ? [
-          { envUri: runtime.selectedEnvUri, label: `${runtime.selectedEnvUri} (unavailable)` },
+          {
+            envUri: runtime.selectedEnvUri,
+            label: 'Previously selected Environment (unavailable)',
+          },
           ...observedEnvironmentOptions,
         ]
       : observedEnvironmentOptions
   const errors = [runtime.storeData.inventoryError, runtime.storeData.inspectorError]
     .flatMap((error) => (error ? [error.message] : []))
     .join(' ')
+  const authorityIssue = selectEnvironmentAuthorityIssue(runtime.authority.kind)
+  const selectedEnvironmentLabel = environmentOptions.find(
+    (environment) => environment.envUri === runtime.selectedEnvUri
+  )?.label
+  const canCreateStore = runtime.pinMutationAuthority() !== null
 
   return (
     <>
       <StoresIndex
         rows={runtime.rows}
         envUri={runtime.selectedEnvUri ?? ''}
-        environmentLabel={runtime.selectedEnvUri ?? undefined}
+        environmentLabel={selectedEnvironmentLabel}
         environments={environmentOptions}
-        authorityMessage={selectEnvironmentAuthorityIssue(runtime.authority.kind)?.message ?? null}
+        authorityMessage={authorityIssue?.message ?? null}
+        canCreateStore={canCreateStore}
+        createStoreUnavailableReason={authorityIssue?.message ?? null}
         isLoading={runtime.storeData.isInventoryLoading}
         isUpdating={runtime.storeData.isInventoryUpdating || runtime.storeData.isInspectorUpdating}
         error={errors || null}
@@ -87,7 +96,9 @@ export function StoresIndexRoute() {
         onOpenEnvironments={() => void navigate({ to: buildStoresEnvironmentsPath() })}
         onRefresh={() => void runtime.storeData.refresh()}
         onNewStore={() => {
-          setNewStoreAuthority(runtime.pinMutationAuthority())
+          const authority = runtime.pinMutationAuthority()
+          if (!authority) return
+          setNewStoreAuthority(authority)
           setRequestId(null)
           setRequestError(null)
           setNewStoreOpen(true)
@@ -101,6 +112,7 @@ export function StoresIndexRoute() {
           setNewStoreAuthority(null)
         }}
         hasAuthority={runtime.isMutationAuthorityCurrent(newStoreAuthority)}
+        unavailableReason={authorityIssue?.message ?? null}
         lifecycle={lifecycle}
         error={mutationError}
         onSubmit={(input) => {
@@ -113,7 +125,13 @@ export function StoresIndexRoute() {
               requestId: nextRequestId,
               kind: input.kind,
               path: input.path,
-              ...(input.kind === 'setup' ? { storeId: input.storeId } : { id: input.storeId }),
+              ...(input.kind === 'setup'
+                ? {
+                    storeId: input.storeId,
+                    initGit: input.initGit,
+                    remote: input.remote,
+                  }
+                : { id: input.storeId, confirmIdentity: input.confirmIdentity }),
             })
             .then((admission) => {
               if (!admission) {
