@@ -1,5 +1,17 @@
 # @openspecui/server
 
+## 6.2.0
+
+### Patch Changes
+
+- Updated dependencies [cbf7153]
+  - @openspecui/core@6.2.0
+  - @openspecui/local-ct2-translator@6.2.0
+  - @openspecui/local-llama-translator@6.2.0
+  - @openspecui/local-translator@6.2.0
+  - @openspecui/openai-completion-translator@6.2.0
+  - @openspecui/search@6.2.0
+
 ## 6.1.0
 
 ### Minor Changes

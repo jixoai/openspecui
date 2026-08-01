@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 6.2.0
+
+### Patch Changes
+
+- cbf7153: Hide inactive Tabs panels with `display:none` instead of `opacity:0` so Safari/WebKit stops routing mouse-wheel events to the topmost-painted iframe. In App mode only the newest Workspace tab scrolled; now every tab scrolls and React keeps each iframe's connection and state alive across the show/hide toggle.
+
 ## 6.1.0
 
 ### Minor Changes
