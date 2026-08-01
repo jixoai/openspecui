@@ -392,4 +392,43 @@ describe('GlobalSettingsManager', () => {
       '{\n  "translationEngines": {\n    "local": {\n      "model": "onnx-community/opus-mt-en-zh"\n    }\n  }\n}'
     )
   })
+
+  it('persists and clears the serve presentation preference alongside sibling fields', async () => {
+    await settingsManager.writeSettings({ servePresentation: 'app' })
+    clearCache()
+
+    let settings = await settingsManager.readSettings()
+    expect(settings.servePresentation).toBe('app')
+    await expect(readFile(settingsPath, 'utf-8')).resolves.toBe(
+      '{\n  "servePresentation": "app"\n}'
+    )
+
+    await settingsManager.writeSettings({ servePresentation: 'web' })
+    clearCache()
+
+    settings = await settingsManager.readSettings()
+    expect(settings.servePresentation).toBe('web')
+
+    // Clearing back to default (undefined) prunes the field entirely.
+    await settingsManager.writeSettings({ servePresentation: null })
+    clearCache()
+
+    await expect(settingsManager.readSettings()).resolves.toEqual(DEFAULT_GLOBAL_SETTINGS)
+    await expect(readFile(settingsPath, 'utf-8')).resolves.toBe('{}')
+  })
+
+  it('repairs an invalid persisted serve presentation value to the default', async () => {
+    await mkdir(join(tempDir, '.openspecui'), { recursive: true })
+    await writeFile(
+      settingsPath,
+      JSON.stringify({ servePresentation: 'unknown-mode', translationCache: { entryLimit: 2000 } }),
+      'utf-8'
+    )
+    clearCache()
+
+    await expect(settingsManager.readSettings()).resolves.toEqual({
+      ...DEFAULT_GLOBAL_SETTINGS,
+      translationCache: { entryLimit: 2000 },
+    })
+  })
 })

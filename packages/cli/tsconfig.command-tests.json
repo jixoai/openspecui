@@ -8,7 +8,7 @@
     "types": ["node", "vitest/globals"]
   },
   "include": [
-    "src/app-admission-prompt.test.ts",
+    "src/serve-mode-prompt.test.ts",
     "src/browser-daemon-host.test.ts",
     "src/cli-command.test.ts",
     "src/cli-documentation.test.ts",

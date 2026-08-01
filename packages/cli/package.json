@@ -58,6 +58,7 @@
     }
   },
   "devDependencies": {
+    "@clack/prompts": "^1.7.0",
     "@hono/node-server": "^1.14.1",
     "@openspecui/core": "workspace:*",
     "@openspecui/server": "workspace:*",

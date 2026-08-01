@@ -333,11 +333,14 @@ export {
   GlobalSettingsManager,
   OpenSpecUIGlobalSettingsSchema,
   OpenSpecUIGlobalSettingsUpdateSchema,
+  SERVE_PRESENTATION_MODES,
+  ServePresentationModeSchema,
   getDefaultGlobalSettingsPath,
   toPersistedGlobalSettings,
   type OpenSpecUIGlobalSettings,
   type OpenSpecUIGlobalSettingsUpdate,
   type PersistedOpenSpecUIGlobalSettings,
+  type ServePresentationMode,
 } from './global-settings.js'
 
 export {
