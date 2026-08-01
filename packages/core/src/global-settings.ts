@@ -43,6 +43,11 @@ export type DocumentTranslationGlobalSettings = z.infer<
   typeof DocumentTranslationGlobalSettingsSchema
 >
 
+export const SERVE_PRESENTATION_MODES = ['app', 'web'] as const
+export type ServePresentationMode = (typeof SERVE_PRESENTATION_MODES)[number]
+
+export const ServePresentationModeSchema = z.enum(SERVE_PRESENTATION_MODES)
+
 export const OpenSpecUIGlobalSettingsSchema = z.object({
   translation: DocumentTranslationGlobalSettingsSchema.default(
     DocumentTranslationGlobalSettingsSchema.parse({})
@@ -53,6 +58,7 @@ export const OpenSpecUIGlobalSettingsSchema = z.object({
   translationEngines: TranslationEngineGlobalSettingsSchema.default(
     TranslationEngineGlobalSettingsSchema.parse({})
   ),
+  servePresentation: ServePresentationModeSchema.optional(),
 })
 
 export type OpenSpecUIGlobalSettings = z.infer<typeof OpenSpecUIGlobalSettingsSchema>
@@ -61,12 +67,14 @@ export type OpenSpecUIGlobalSettingsUpdate = {
   translation?: Partial<DocumentTranslationGlobalSettings>
   translationCache?: Partial<TranslationCacheSettings>
   translationEngines?: TranslationEngineGlobalSettingsUpdate
+  servePresentation?: ServePresentationMode | null
 }
 
 export const OpenSpecUIGlobalSettingsUpdateSchema = z.object({
   translation: DocumentTranslationGlobalSettingsUpdateSchema.optional(),
   translationCache: TranslationCacheSettingsUpdateSchema.optional(),
   translationEngines: TranslationEngineGlobalSettingsUpdateSchema.optional(),
+  servePresentation: ServePresentationModeSchema.nullable().optional(),
 })
 
 export type PersistedOpenSpecUIGlobalSettings = {
@@ -79,6 +87,7 @@ export type PersistedOpenSpecUIGlobalSettings = {
     localCt2?: Partial<TranslationLocalCt2Settings>
     localLlama?: Partial<TranslationLocalLlamaSettings>
   }
+  servePresentation?: ServePresentationMode
 }
 
 export const DEFAULT_GLOBAL_SETTINGS: OpenSpecUIGlobalSettings =
@@ -122,6 +131,12 @@ const PERSISTED_GLOBAL_SETTINGS_SANITIZE_RULES = [
   { kind: 'object', path: ['translationEngines', 'local'], fallback: {} },
   { kind: 'object', path: ['translationEngines', 'localCt2'], fallback: {} },
   { kind: 'object', path: ['translationEngines', 'localLlama'], fallback: {} },
+  {
+    kind: 'field',
+    path: ['servePresentation'],
+    schema: ServePresentationModeSchema,
+    fallback: undefined,
+  },
 ] as const satisfies readonly PersistedSanitizeRule[]
 
 export function getDefaultGlobalSettingsPath(): string {
@@ -297,6 +312,10 @@ export function toPersistedGlobalSettings(
     persisted.translationEngines = translationEngines
   }
 
+  if (settings.servePresentation !== undefined) {
+    persisted.servePresentation = settings.servePresentation
+  }
+
   return persisted
 }
 
@@ -383,6 +402,12 @@ export class GlobalSettingsManager {
             update.translationEngines?.localLlama
           ),
         },
+        servePresentation:
+          update.servePresentation === undefined
+            ? current.servePresentation
+            : update.servePresentation === null
+              ? undefined
+              : update.servePresentation,
       })
       const persisted = toPersistedGlobalSettings(merged)
 

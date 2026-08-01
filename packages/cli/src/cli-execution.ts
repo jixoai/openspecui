@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Execute checked CLI plans while preserving foreground project Server ownership.
- * 2. Apply the approved App admission matrix through daemon and Browser presentation ports.
+ * 2. Apply the serve presentation matrix (preference, Radio prompt, daemon, Browser) through ports.
  * 3. Keep export execution independent from daemon lifecycle.
  *
  * Original request (2026-07-29): "openspecui 启动当前项目其实是 openspecui serve 的缩写；start/stop/restart 针对 daemon。"
+ * Original request (2026-08-01): "全局偏好 + 交互式 Radio；非 tty 无偏好默认 web + 警告。"
  */
 import type { OpenSpecSpawnMode } from '@openspecui/core'
 import { resolve } from 'node:path'
@@ -17,9 +18,13 @@ import type {
 } from './cli-command.js'
 import type { ExportOptions } from './export.js'
 import type { CLIOptions, RunningServer } from './index.js'
+import type { ServeModePromptInput } from './serve-mode-prompt.js'
+import type { ServePreferencesPort } from './serve-preferences.js'
 import {
+  IMPLICIT_DEFAULT_WARNING,
   planServePresentation,
-  resolveAppPrompt,
+  resolveModePrompt,
+  type ServeMode,
   type ServePresentationPlan,
 } from './serve-presentation-plan.js'
 
@@ -61,7 +66,8 @@ export interface CliExecutionDependencies {
   exportStaticSite(options: ExportOptions): Promise<void>
   daemon: CliDaemonPort
   browserPresenter: StartCommandPresenter
-  promptForApp(): Promise<boolean>
+  servePreferences: ServePreferencesPort
+  promptForServeMode(input: ServeModePromptInput): Promise<ServeMode | null>
   write(message: string): void
 }
 
@@ -121,7 +127,8 @@ async function presentReadyServer(
   dependencies: CliExecutionDependencies
 ): Promise<CliWorkspaceLease | null> {
   if (presentation.kind === 'none') return null
-  if (presentation.kind === 'prompt-for-app') throw new Error('App admission was not resolved.')
+  if (presentation.kind === 'prompt-for-mode')
+    throw new Error('Serve mode prompt was not resolved.')
   if (presentation.kind === 'direct-web') {
     await dependencies.browserPresenter.present({
       surface: 'project-web',
@@ -157,15 +164,23 @@ async function executeServePlan(
   let presentation: ServePresentationPlan = { kind: 'none' }
   if (plan.open) {
     daemonStatus = await dependencies.daemon.status()
+    const preference = await dependencies.servePreferences.read()
     presentation = planServePresentation({
       open: plan.open,
       app: plan.app,
       web: plan.web,
       daemonRunning: daemonStatus !== null,
       interactive: dependencies.interactive,
+      preference,
     })
-    if (presentation.kind === 'prompt-for-app') {
-      presentation = resolveAppPrompt(await dependencies.promptForApp())
+    if (presentation.kind === 'prompt-for-mode') {
+      const mode = await dependencies.promptForServeMode({ initialValue: preference })
+      if (mode === null) throw new Error('Serve mode selection cancelled.')
+      await dependencies.servePreferences.write(mode)
+      presentation = resolveModePrompt(mode)
+    }
+    if (presentation.kind === 'direct-web' && presentation.warnImplicitDefault) {
+      dependencies.write(IMPLICIT_DEFAULT_WARNING)
     }
     if (presentation.kind === 'app' && presentation.startDaemon) {
       daemonStatus = await dependencies.daemon.start(undefined)
