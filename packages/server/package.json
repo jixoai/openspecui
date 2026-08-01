@@ -48,7 +48,7 @@
   "// runtime-note": "Translation runtimes are installed on demand from the settings panel instead of being pulled in during startup.",
   "// bundle-note": "The translator engine packages keep heavyweight runtime imports external in tsdown output, so this host package resolves install ranges on demand when the user chooses a local engine.",
   "peerDependencies": {
-    "ctranslate2": "workspace:*",
+    "ctranslate2": "^1.0.0",
     "node-llama-cpp": "~3.18.1"
   },
   "peerDependenciesMeta": {

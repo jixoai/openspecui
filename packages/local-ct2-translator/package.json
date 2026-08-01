@@ -32,13 +32,13 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "ctranslate2": "workspace:*",
+    "ctranslate2": "^1.0.0",
     "tsdown": "^0.16.6",
     "typescript": "^5.7.2",
     "vitest": "^4.1.0"
   },
   "peerDependencies": {
-    "ctranslate2": "workspace:*",
+    "ctranslate2": "^1.0.0",
     "typescript": "^5.0.0"
   },
   "peerDependenciesMeta": {

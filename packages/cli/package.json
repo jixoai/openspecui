@@ -46,7 +46,7 @@
   "// runtime-note": "The published openspecui package installs heavyweight translation runtimes only when the user asks for them.",
   "// bundle-note": "tsdown keeps translator package runtime imports external, so the settings-panel install flow resolves ranges on demand instead of preinstalling them.",
   "peerDependencies": {
-    "ctranslate2": "workspace:*",
+    "ctranslate2": "^1.0.0",
     "node-llama-cpp": "~3.18.1"
   },
   "peerDependenciesMeta": {
