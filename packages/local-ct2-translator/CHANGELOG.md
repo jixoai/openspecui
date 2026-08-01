@@ -1,5 +1,11 @@
 # @openspecui/local-ct2-translator
 
+## 6.2.1
+
+### Patch Changes
+
+- @openspecui/core@6.2.1
+
 ## 6.2.0
 
 ### Patch Changes
