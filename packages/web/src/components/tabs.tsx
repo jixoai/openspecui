@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Render persistent, reorderable tab triggers and state-preserving content panels.
  * 2. Keep tab-local actions as accessible siblings instead of nested interactive controls.
  * 3. Own selection-indicator geometry and the tab strip's bounded horizontal scroll.
  *
  * Owner direction (2026-07-29): Workspace tabs expose an Open in browser icon button.
  * Owner correction (2026-07-31): Inactive Workspace color fills the complete tab item, including sibling controls.
+ * Owner-reported defect (2026-08-01): Safari/WebKit routes mouse-wheel to the topmost-painted iframe regardless of pointer-events:none / opacity-0 / visibility:hidden, so only the newest Workspace tab scrolled. `display:none` is the only property that hard-removes an iframe from WebKit's wheel hit testing; React keeps the iframe node (and its connection/state) alive across the show/hide toggle, verified to preserve content on tab switch.
  */
 import { X } from 'lucide-react'
 import {
@@ -768,7 +769,7 @@ function TabsImpl(
               className={
                 activeTab === tab.id
                   ? 'relative flex min-h-0 flex-1 flex-col'
-                  : 'pointer-events-none absolute inset-0 flex min-h-0 flex-col overflow-hidden opacity-0'
+                  : 'pointer-events-none absolute inset-0 hidden min-h-0 flex-col overflow-hidden'
               }
             >
               {tab.content}
