@@ -1305,7 +1305,7 @@ function getManagedLocalRuntimeSpec(engineId: ManagedLocalTranslationEngineId): 
   return {
     packageNames: ['ctranslate2'],
     allowBuildPackages: ['ctranslate2'],
-    fallbackRange: '^0.1.0',
+    fallbackRange: '^1.0.0',
     detectMissing(tree) {
       return hasRuntimePackageDependencyPath(tree, ['ctranslate2']) ? [] : ['ctranslate2']
     },

@@ -191,12 +191,18 @@ legacy-compatible. CLI versions below 1.6 or at/above 1.8 remain blocked by defa
 the compatibility gate because 1.7 is basically compatible; it does not claim 1.7-specific feature completeness,
 advance the pinned 1.6 upstream source evidence, or define the later OpenSpecUI 7.x adaptation boundary.
 
-### On-demand native translation runtime dependency law (2026-07-31)
+### On-demand native translation runtime dependency law (updated 2026-08-01)
 
 `ctranslate2` and `node-llama-cpp` are optional peers of the runtime hosts and their local translator adapters, not
 install-time dependencies. The published CLI, Server, and adapter manifests SHALL mark each peer optional through
 `peerDependenciesMeta`; development manifests may retain the runtime for typechecking and focused tests. Runtime
 admission resolves the declared optional-peer range and installs it only after the user selects that local engine.
+
+`ctranslate2` graduated from this monorepo on 2026-08-01 to its own repo (Gaubee/ctranslate2). The workspace package
+`packages/ct2-engine` was removed; the native multi-platform Rust/NAPI build left the release pipeline, and the
+consumers (`@openspecui/local-ct2-translator`, `@openspecui/server`, `openspecui`) now resolve `ctranslate2` from the
+npm registry at `^1.0.0`. The npm name stays `ctranslate2`, so adapter `import('ctranslate2')` and all runtime
+admission strings are unchanged.
 
 ### OPSX-first information hierarchy law (2026-07-28)
 

@@ -13,7 +13,6 @@ import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 
-import { verifyNapiPublishArtifacts } from './lib/publish-packages/napi-artifacts'
 import { createPackageReleaseWork } from './lib/publish-packages/release-work'
 import { preparePublishDirectory, resolveRepositoryUrl } from './lib/publish-packages/repository'
 import {
@@ -87,7 +86,6 @@ function publishPackage(
   repositoryUrl: string | null
 ): void {
   const publishTarget = pkg.publishDirectory ? resolve(pkg.dir, pkg.publishDirectory) : pkg.dir
-  verifyNapiPublishArtifacts(publishTarget)
   const prepared = preparePublishDirectory(publishTarget, repositoryUrl)
   const { distTag } = resolveReleaseChannel(pkg.version)
   const args = ['publish', '--provenance', '--tag', distTag, '--access', pkg.access]
