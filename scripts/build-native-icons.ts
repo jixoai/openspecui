@@ -34,9 +34,9 @@ const CACHE_PATH = join(rootDir, 'node_modules', '.cache', 'openspecui', 'native
 const DARWIN_LIGHT_SOURCE = join(SOURCE_DIR, 'app-icon.default.icns')
 const DARWIN_DARK_SOURCE = join(SOURCE_DIR, 'app-icon.dark.icns')
 
-/** Win/Linux 源：iOS Default/Dark PNG（squircle 已 baked-in）。 */
-const LIGHT_PNG_SOURCE = join(SOURCE_DIR, 'openspecui-icon-composer-iOS-Default-1024@1x.png')
-const DARK_PNG_SOURCE = join(SOURCE_DIR, 'openspecui-icon-composer-iOS-Dark-1024@1x.png')
+/** Win/Linux 源：Default/Dark PNG（squircle 已 baked-in）。 */
+const LIGHT_PNG_SOURCE = join(SOURCE_DIR, 'app-icon.default.png')
+const DARK_PNG_SOURCE = join(SOURCE_DIR, 'app-icon.dark.png')
 
 /** ICO 嵌入尺寸（Windows 标准，大尺寸用 PNG 编码）。 */
 const ICO_SIZES = [256, 128, 64, 48, 32, 16] as const
