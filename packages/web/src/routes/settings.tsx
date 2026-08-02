@@ -27,6 +27,7 @@ import { OpenSpecSettingsSections } from '@/components/settings/openspec-setting
 import { SoundSettingControl } from '@/components/sound-setting-control'
 import { Switch } from '@/components/switch'
 import { TerminalInvocationSettings } from '@/components/terminal/terminal-invocation-settings'
+import { clearHostedThemeOverride } from '@/components/theme-bootstrap'
 import { generateTimelineScope, Toc, TocSection, type TocItem } from '@/components/toc'
 import { getApiBaseUrl } from '@/lib/api-config'
 import {
@@ -690,6 +691,9 @@ export function Settings() {
               <ButtonGroup<Theme>
                 value={theme}
                 onChange={(nextTheme) => {
+                  clearHostedThemeOverride()
+                  applyTheme(nextTheme)
+                  persistTheme(nextTheme)
                   setTheme(nextTheme)
                   saveThemeMutation.mutate(nextTheme)
                 }}

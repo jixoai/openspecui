@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (created 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Prove the root Guide orchestrator navigates and waits for route-owned semantic anchors.
  * 2. Prove replacement projection signals, not presentation callbacks, advance paused stages.
- * 3. Prove missing targets, cancellation, restart, focus restoration, and reduced motion remain explicit.
+ * 3. Prove missing targets, completion anchoring, cancellation, restart, focus restoration, and reduced motion remain explicit.
+ * 4. Prove one presentation generation cannot leak or stack after effect replacement.
  *
  * Original request (2026-08-02): implement the adaptive Config Guide with unit and component evidence.
  */
@@ -11,14 +12,15 @@ import {
   CONFIG_GUIDE_STAGES,
   type ConfigGuideStageId,
   type ConfigGuideStageSignal,
+  type ConfigGuideStageStatus,
 } from '@/lib/config-guide'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useEffect, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfigGuideProvider, useConfigGuide, useConfigGuideAnchor } from './config-guide'
-import type { ConfigGuidePresentation } from './config-guide-driver'
+import type { ConfigGuidePresentation } from './config-guide-presentation'
 
-const { initializationValue, navigateMock, presentMock } = vi.hoisted(() => {
+const { initializationValue, navigateMock, presentationRenderMock } = vi.hoisted(() => {
   const initializationOpen = vi.fn()
   return {
     initializationValue: {
@@ -26,7 +28,7 @@ const { initializationValue, navigateMock, presentMock } = vi.hoisted(() => {
       open: initializationOpen,
     },
     navigateMock: vi.fn(),
-    presentMock: vi.fn(),
+    presentationRenderMock: vi.fn(),
   }
 })
 
@@ -40,8 +42,11 @@ vi.mock('@/lib/view-transitions/navigation', () => ({
   useVTHrefNavigate: () => navigateMock,
 }))
 
-vi.mock('./config-guide-driver', () => ({
-  presentConfigGuide: presentMock,
+vi.mock('./config-guide-presentation', () => ({
+  ConfigGuidePresentationLayer: ({ presentation }: { presentation: ConfigGuidePresentation }) => {
+    presentationRenderMock(presentation)
+    return <div data-testid="guide-presentation" />
+  },
 }))
 
 function stageSignal(stage: ConfigGuideStageId, status: ConfigGuideStageSignal['status']) {
@@ -67,13 +72,19 @@ function StageAnchor({
   )
 }
 
-function GuideHarness({ mountTargets = true }: { mountTargets?: boolean }) {
+function GuideHarness({
+  initialStatus = 'required',
+  mountTargets = true,
+}: {
+  initialStatus?: ConfigGuideStageStatus
+  mountTargets?: boolean
+}) {
   const guide = useConfigGuide()
   const [route, setRoute] = useState('/config')
   const [signals, setSignals] = useState<Record<ConfigGuideStageId, ConfigGuideStageSignal>>(
     () =>
       Object.fromEntries(
-        CONFIG_GUIDE_STAGES.map((stage) => [stage, stageSignal(stage, 'required')])
+        CONFIG_GUIDE_STAGES.map((stage) => [stage, stageSignal(stage, initialStatus)])
       ) as Record<ConfigGuideStageId, ConfigGuideStageSignal>
   )
 
@@ -122,7 +133,7 @@ function GuideHarness({ mountTargets = true }: { mountTargets?: boolean }) {
 }
 
 function latestPresentation(): ConfigGuidePresentation {
-  const calls = presentMock.mock.calls as [ConfigGuidePresentation][]
+  const calls = presentationRenderMock.mock.calls as [ConfigGuidePresentation][]
   const latest = calls.at(-1)?.[0]
   if (!latest) throw new Error('Expected a Config Guide presentation.')
   return latest
@@ -133,7 +144,6 @@ describe('ConfigGuideProvider', () => {
     navigateMock.mockImplementation(async ({ href }: { href: string }) => {
       navigateRoute?.(href)
     })
-    presentMock.mockResolvedValue(vi.fn())
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({ matches: false }))
@@ -175,10 +185,35 @@ describe('ConfigGuideProvider', () => {
           name: `Replace ${CONFIG_GUIDE_STAGE_META[stage].label} projection`,
         })
       )
+      await waitFor(() => expect(latestPresentation().signal?.status).toBe('ready'))
+      act(() => latestPresentation().onNext())
     }
 
     await waitFor(() => expect(latestPresentation().kind).toBe('complete'))
     expect(latestPresentation().canGoBack).toBe(false)
+    expect(latestPresentation().element).toBe(screen.getByTestId('guide-anchor-resolved-context'))
+  })
+
+  it('does not flicker through ready stages or complete without user interaction', async () => {
+    render(
+      <ConfigGuideProvider enabled>
+        <GuideHarness initialStatus="ready" />
+      </ConfigGuideProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Guide' }))
+
+    await waitFor(() => expect(latestPresentation().label).toBe('Project Binding'))
+    expect(latestPresentation().kind).toBe('stage')
+    expect(screen.getByTestId('guide-route')).toHaveTextContent('/config/project')
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(latestPresentation().label).toBe('Project Binding')
+    expect(latestPresentation().kind).toBe('stage')
   })
 
   it('restores focus on cancel and restarts from the first unresolved projection', async () => {
@@ -203,6 +238,44 @@ describe('ConfigGuideProvider', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Restart Guide' }))
     await waitFor(() => expect(latestPresentation().label).toBe('Project Binding'))
+  })
+
+  it('keeps exactly one presentation for an unchanged active stage', async () => {
+    render(
+      <ConfigGuideProvider enabled>
+        <GuideHarness />
+      </ConfigGuideProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Guide' }))
+    await waitFor(() => expect(presentationRenderMock).toHaveBeenCalled())
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(screen.getAllByTestId('guide-presentation')).toHaveLength(1)
+  })
+
+  it('does not publish a target failure after its waiting generation is cancelled', async () => {
+    vi.useFakeTimers()
+    render(
+      <ConfigGuideProvider enabled>
+        <GuideHarness mountTargets={false} />
+      </ConfigGuideProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Guide' }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel Guide' }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_100)
+    })
+
+    expect(presentationRenderMock).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('guide-presentation')).toBeNull()
   })
 
   it('turns an unmounted semantic target into a retryable typed failure', async () => {
