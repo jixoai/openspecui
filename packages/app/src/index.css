@@ -43,7 +43,7 @@
   flex-shrink: 0;
   align-items: center;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
-  background-color: color-mix(in srgb, var(--background) 92%, var(--muted));
+  background-color: var(--background);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
   color: var(--foreground);
   padding-inline-start: var(--app-titlebar-left);
@@ -54,21 +54,37 @@
 }
 
 /*
- * Translucent frosted titlebar — only under the OpenTray overlay, where a native
- * gaussian-blur window material sits behind the page (see opentray-daemon-presenter
- * style.background { kind: 'semantic', token: 'blur' }). Mirrors pnpm-pub's
- * bg-background/60 + backdrop-blur-xl layering; in browser/native-frame there is no
- * native blur source so the opaque default above stays correct.
+ * Native gaussian-blur compositing — only under the OpenTray overlay, where a native
+ * window material sits behind the page (opentray-daemon-presenter style.background
+ * { kind: 'semantic', token: 'blur' }). Only the left sidebar is translucent so the
+ * native blur reads through it; the titlebar and main view stay opaque (bg-background),
+ * and the app-layout root + body are transparent so they never occlude the sidebar.
+ * In browser/native-frame mode the root keeps bg-background (set on the element) so the
+ * page has its normal opaque surface.
  */
-:root:has([data-titlebar-presentation='opentray']) .app-titlebar {
+[data-app-shell] {
+  background-color: var(--background);
+}
+
+:root:has([data-titlebar-presentation='opentray']) body {
+  background-color: transparent;
+}
+
+/* Under the overlay the root goes transparent so the sidebar blur is not occluded. */
+:root:has([data-titlebar-presentation='opentray']) [data-app-shell] {
+  background-color: transparent;
+}
+
+/* Main view surface stays opaque so only the sidebar reads the native blur. */
+:root:has([data-titlebar-presentation='opentray']) [data-app-shell-content] {
+  background-color: var(--background);
+}
+
+/* Left sidebar: the single translucent surface that lets the native blur through. */
+:root:has([data-titlebar-presentation='opentray']) [data-app-sidebar] {
   background-color: color-mix(in srgb, var(--background) 60%, transparent);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-}
-
-/* Let the native semantic-blur window material show through the page body. */
-:root:has([data-titlebar-presentation='opentray']) body {
-  background-color: transparent;
 }
 
 .app-titlebar-brand {
