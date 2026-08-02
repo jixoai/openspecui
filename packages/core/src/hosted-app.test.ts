@@ -62,6 +62,19 @@ describe('hosted-app helpers', () => {
     ).toBe('http://localhost:3100/dashboard?api=http%3A%2F%2Flocalhost%3A3200&session=session-a')
   })
 
+  it('inherits the App theme via the theme query param when provided', () => {
+    expect(
+      buildEmbeddedUiLaunchUrl({
+        embeddedUiUrl: 'http://localhost:3100/dashboard',
+        apiBaseUrl: 'http://localhost:3200',
+        sessionId: 'session-a',
+        theme: 'dark',
+      })
+    ).toBe(
+      'http://localhost:3100/dashboard?api=http%3A%2F%2Flocalhost%3A3200&session=session-a&theme=dark'
+    )
+  })
+
   it('validates backend health payloads', () => {
     expect(
       isHostedBackendHealthResponse({

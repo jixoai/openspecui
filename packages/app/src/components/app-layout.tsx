@@ -302,6 +302,7 @@ function AppLayoutSurface() {
                   fallbackLaunchRequest={null}
                   initialError={null}
                   onOpenTaskManager={() => setTaskManagerOpen(true)}
+                  appTheme={appTheme.theme}
                 />
               </div>
             ) : null}

@@ -41,6 +41,20 @@ export function getHostedApiBootstrapState(
   }
 }
 
+/**
+ * App-forced theme override passed via the `theme` URL param when the App shell
+ * opens this child window. Returns null when not hosted or no override is present.
+ */
+export function getHostedThemeOverride(
+  locationLike: Pick<Location, 'search'>
+): 'light' | 'dark' | 'system' | null {
+  const value = getSearchParam(locationLike.search, 'theme')
+  if (value === 'light' || value === 'dark' || value === 'system') {
+    return value
+  }
+  return null
+}
+
 export function getHostedScopedStorageKey(
   baseKey: string,
   locationLike: Pick<Location, 'search'>

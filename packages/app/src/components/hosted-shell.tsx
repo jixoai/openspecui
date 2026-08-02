@@ -15,6 +15,7 @@
  * Delivery correction (2026-07-24): bind launch credentials before forwarding credential-free tabs.
  */
 
+import { type HostedShellTheme } from '@openspecui/core/hosted-app'
 import { selectWorkspaceDirectoryCatalogView } from '@openspecui/core/workspace-directory-catalog'
 import { AccessibleStatus } from '@openspecui/web-src/components/realtime/realtime-primitives'
 import { RealtimeSkeleton } from '@openspecui/web-src/components/realtime/realtime-skeleton'
@@ -47,6 +48,7 @@ import {
   type HostedShellLaunchRequest,
   type HostedShellTab,
 } from '../lib/shell-state'
+import { broadcastThemeToIframes } from '../lib/theme-iframe-sync'
 import { useConnections, useConnectionsActions } from '../lib/use-connections'
 import {
   useWorkspaceCandidateActions,
@@ -88,6 +90,11 @@ interface HostedShellProps {
   fallbackLaunchRequest?: HostedShellLaunchRequest | null
   initialError: string | null
   onOpenTaskManager?: () => void
+  /**
+   * App theme master preference. Force-synced to every live Workspace iframe via
+   * postMessage when it changes. Child windows never echo back.
+   */
+  appTheme?: HostedShellTheme
 }
 
 interface HostedTabRuntimeState {
@@ -382,6 +389,7 @@ function HostedShellRuntime({
   fallbackLaunchRequest = null,
   initialError,
   onOpenTaskManager,
+  appTheme,
 }: HostedShellProps) {
   const appLaunchError = useAppLaunchError()
   const daemonWorkspace = useAppDaemonWorkspace()
@@ -417,6 +425,12 @@ function HostedShellRuntime({
   const isolatedLaunchHandledRef = useRef(false)
   const refreshFeedbackTimerRef = useRef<number | null>(null)
   const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
+
+  // Force-sync the App theme to every live Workspace iframe (one-directional master push).
+  useEffect(() => {
+    if (!appTheme) return
+    broadcastThemeToIframes(iframeRefs.current, appTheme)
+  }, [appTheme])
 
   useEffect(() => {
     if (appLaunchError !== undefined) setErrorMessage(appLaunchError)
