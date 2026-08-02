@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prove Owned SpecList rows cross real VTLink, detail preparation, and the Router.
  * 2. Prove Referenced rows preserve Store-qualified route, query, cache, and handoff identity.
  * 3. Await the real Router resolution lifecycle while stabilizing only transport and native-transition runtime edges.
+ * 4. Prove recursive Spec ids remain one complete TanStack Router parameter.
  *
  * Original request (2026-07-23): "List mutations and route changes preserve physical continuity through existing motion/View Transition patterns."
  * Derived requirement (2026-07-26): full-suite scheduling must not race the asynchronous onResolved evidence.
@@ -312,5 +313,50 @@ describe('SpecList detail navigation', () => {
     })
 
     unsubscribe()
+  })
+
+  it.each([
+    {
+      name: 'owned',
+      entry: createOwned('platform/auth', 'Nested Owned Auth'),
+      path: '/specs/owned/platform%2Fauth',
+      expectedIdentity: { kind: 'owned' as const, specId: 'platform/auth' },
+    },
+    {
+      name: 'referenced',
+      entry: createReferenced('platform-a', 'platform/auth', 'Nested Referenced Auth'),
+      path: '/specs/referenced/platform-a/platform%2Fauth',
+      expectedIdentity: {
+        kind: 'referenced' as const,
+        storeId: 'platform-a',
+        specId: 'platform/auth',
+      },
+    },
+  ])('preserves recursive identity through the real $name Router route', async (fixture) => {
+    catalogState = {
+      data: createCatalog(
+        [fixture.entry],
+        fixture.entry.source === 'referenced' ? ['platform-a'] : []
+      ),
+      isLoading: false,
+      error: null,
+    }
+    const document =
+      fixture.entry.source === 'owned'
+        ? { ...ownedDocument, identity: fixture.expectedIdentity }
+        : { ...referencedDocument, identity: fixture.expectedIdentity }
+    specDocumentQueryMock.mockResolvedValue(document)
+    const router = createNavigationFixture()
+    await router.load()
+
+    render(<RouterProvider router={router} />)
+    if (fixture.entry.source === 'referenced') {
+      fireEvent.click(await screen.findByRole('tab', { name: 'Referenced 1' }))
+    }
+    fireEvent.click(await screen.findByRole('link', { name: new RegExp(fixture.entry.name, 'i') }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(fixture.path))
+    expect(screen.getByTestId('spec-detail-probe')).toBeTruthy()
+    expect(specDocumentQueryMock).toHaveBeenCalledExactlyOnceWith(fixture.expectedIdentity)
   })
 })

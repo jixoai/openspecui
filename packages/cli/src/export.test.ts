@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Verify static export produces the expected OpenSpec project snapshot.
  * 2. Verify export combines local planning artifacts with CLI-backed schema projection.
  * 3. Cover Reference-aware export materialization and publication behavior.
+ * 4. Preserve recursive Spec identity and source content through owned export.
  *
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  */
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
@@ -421,6 +423,39 @@ The system SHALL do second thing.
       expect(snapshot.specs[0].requirements).toHaveLength(2)
       expect(snapshot.specs[0].requirements[0].text).toContain('First requirement')
       expect(snapshot.specs[0].requirements[1].text).toContain('Second requirement')
+    })
+
+    it('exports a recursive owned Spec without flattening identity or source content', async () => {
+      const specDir = join(testProjectDir, 'openspec', 'specs', 'platform', 'auth')
+      await mkdir(specDir, { recursive: true })
+      const source = `# Platform Auth Specification
+
+## Purpose
+Nested authentication.
+
+## Requirements
+
+### Requirement: Preserve identity
+The platform SHALL preserve recursive Spec identity.
+
+#### Scenario: Export nested Spec
+- **WHEN** the project is exported
+- **THEN** every Spec identity segment is retained
+`
+      await writeFile(join(specDir, 'spec.md'), source, 'utf-8')
+
+      const snapshot = await generateSnapshot(testProjectDir)
+      const spec = snapshot.specs.find((entry) => entry.identity.specId === 'platform/auth')
+
+      expect(spec).toMatchObject({
+        identity: { kind: 'owned', specId: 'platform/auth' },
+        source: 'owned',
+        readOnly: false,
+        id: 'platform/auth',
+        content: expect.stringContaining('Preserve identity'),
+        sourceContent: source,
+      })
+      expect(spec?.requirements).toHaveLength(1)
     })
 
     it('should throw error for non-initialized project', async () => {

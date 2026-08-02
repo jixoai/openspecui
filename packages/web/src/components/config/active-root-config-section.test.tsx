@@ -1,14 +1,20 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Verify Active Root presence, empty content, owner provenance, and static projection states.
- * 2. Verify loading/error topology without conflating transport failure and file absence.
- * 3. Verify save pending/failure locks, dirty-draft retention, and the real mutation boundary.
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Prove Structured and Raw editors retain independent drafts and exact revision locators.
+ * 2. Prove loading, replacement, transport, Root, and pending states retain display while locking mutation.
+ * 3. Prove conflict, invalid-result, and transport recovery preserve user-authored drafts.
+ * 4. Prove shared-Store impact and official diagnostics remain directly visible.
+ * 5. Prove static Active Root projection remains source-distinct and read-only.
  *
- * Original request (2026-07-17): "An existing empty Active Root file remains editable."
  * Original request (2026-07-18): "Stale or transport-error Active Root data must remain read-only."
- * Original request (2026-07-27): "普通 pending 不应改变命令标签。"
- * Original request (2026-07-28): successful Config provenance should remain accessible through compact badges.
+ * Original request (2026-08-01): preserve mode-local Structured and Raw YAML editing with explicit conflict recovery.
  */
+import type { ActiveRootConfigView } from '@/lib/use-planning-config'
+import type {
+  ActiveRootConfig,
+  ActiveRootMutationResult,
+  ActiveRootRevision,
+} from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -21,7 +27,8 @@ const { activeRootSubscriptionMock, rootActionMock, writeActiveRootMock } = vi.h
   writeActiveRootMock: vi.fn(),
 }))
 
-vi.mock('@/lib/use-planning-config', () => ({
+vi.mock('@/lib/use-planning-config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-planning-config')>()),
   useActiveRootConfigViewSubscription: activeRootSubscriptionMock,
 }))
 
@@ -46,19 +53,93 @@ vi.mock('@/components/code-editor', () => ({
     value,
     onChange,
     readOnly,
+    onSaveShortcut,
   }: {
     value: string
     onChange?: (value: string) => void
     readOnly?: boolean
+    onSaveShortcut?: () => void
   }) => (
     <textarea
-      aria-label="Active Root config editor"
+      aria-label="Raw YAML editor"
       value={value}
       readOnly={readOnly}
       onChange={(event) => onChange?.(event.target.value)}
+      onKeyDown={(event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === 's') onSaveShortcut?.()
+      }}
     />
   ),
 }))
+
+const REVISION_A = `sha256:${'a'.repeat(64)}` as ActiveRootRevision
+const REVISION_B = `sha256:${'b'.repeat(64)}` as ActiveRootRevision
+const REVISION_C = `sha256:${'c'.repeat(64)}` as ActiveRootRevision
+
+function activeRootConfig(
+  overrides: Omit<Partial<ActiveRootConfig>, 'file' | 'owner'> & {
+    file?: Partial<ActiveRootConfig['file']>
+    owner?: Partial<ActiveRootConfig['owner']>
+  } = {}
+): ActiveRootConfig {
+  return {
+    kind: 'active-root',
+    owner: {
+      kind: 'planning-root',
+      path: '/stores/shared',
+      source: 'store',
+      storeId: 'shared',
+      externalToLaunchProject: true,
+      ...overrides.owner,
+    },
+    file: {
+      path: '/stores/shared/openspec/config.yaml',
+      format: 'yaml',
+      exists: true,
+      content: 'schema: spec-driven\ncontext: original\n',
+      ...overrides.file,
+    },
+    revision: overrides.revision ?? REVISION_A,
+    official: overrides.official ?? {
+      schema: 'spec-driven',
+      context: 'original',
+      rules: { proposal: ['Keep intent explicit.'] },
+      operations: {
+        apply: { guidance: ['Run focused tests.'] },
+        archive: { guidance: ['Record evidence.'] },
+      },
+    },
+    diagnostics: overrides.diagnostics ?? [],
+  }
+}
+
+function configView(config = activeRootConfig()): ActiveRootConfigView {
+  return {
+    content: config.file.content,
+    exists: config.file.exists,
+    filePath: config.file.path,
+    owner: config.owner,
+    revision: config.revision,
+    official: config.official,
+    diagnostics: config.diagnostics,
+  }
+}
+
+function subscriptionState(
+  data = configView(),
+  overrides: { isLoading?: boolean; isUpdating?: boolean; error?: Error | null } = {}
+) {
+  return {
+    data,
+    isLoading: overrides.isLoading ?? false,
+    isUpdating: overrides.isUpdating ?? false,
+    error: overrides.error ?? null,
+  }
+}
+
+function applied(config = activeRootConfig()): ActiveRootMutationResult {
+  return { state: 'applied', config }
+}
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void
@@ -70,26 +151,19 @@ function createDeferred<T>() {
   return { promise, reject, resolve }
 }
 
-function configView(overrides: { content?: string | null; exists?: boolean } = {}) {
-  return {
-    content: 'content' in overrides ? (overrides.content ?? null) : 'schema: spec-driven\n',
-    exists: overrides.exists ?? true,
-    filePath: '/stores/shared/openspec/config.yaml',
-    owner: {
-      kind: 'planning-root' as const,
-      path: '/stores/shared',
-      source: 'declared' as const,
-      storeId: 'shared',
-      externalToLaunchProject: true,
-    },
-  }
-}
-
 function renderSection(node: ReactNode) {
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   })
   return render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>)
+}
+
+function edit() {
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+}
+
+function switchMode(name: 'Structured' | 'Raw YAML') {
+  fireEvent.click(screen.getByRole('tab', { name }))
 }
 
 describe('ActiveRootConfigSection', () => {
@@ -103,192 +177,257 @@ describe('ActiveRootConfigSection', () => {
       message: null,
       evidence: [],
     })
-    activeRootSubscriptionMock.mockReset().mockReturnValue({
-      data: configView(),
-      isLoading: false,
-      error: null,
-    })
-    writeActiveRootMock.mockReset().mockResolvedValue(undefined)
+    activeRootSubscriptionMock.mockReset().mockReturnValue(subscriptionState())
+    writeActiveRootMock.mockReset().mockResolvedValue(applied())
   })
 
   afterEach(() => cleanup())
 
-  it('renders absence only when exists is false and opens a creation draft', () => {
-    activeRootSubscriptionMock.mockReturnValue({
-      data: configView({ content: null, exists: false }),
-      isLoading: false,
-      error: null,
-    })
+  it('retains independent Structured and Raw drafts while switching modes', () => {
     renderSection(<ActiveRootConfigSection isStatic={false} />)
+    edit()
 
-    expect(screen.getByText('No config file exists in the active Planning root.')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Create Active Root config' }))
-    expect(
-      (screen.getByLabelText('Active Root config editor') as HTMLTextAreaElement).value
-    ).toContain('schema: spec-driven')
-  })
-
-  it.each([
-    { label: 'empty', content: '' },
-    { label: 'non-empty', content: 'schema: custom\n' },
-  ])('keeps an existing $label file editable', ({ content }) => {
-    activeRootSubscriptionMock.mockReturnValue({
-      data: configView({ content, exists: true }),
-      isLoading: false,
-      error: null,
+    fireEvent.change(screen.getByLabelText('Schema'), { target: { value: 'team-schema' } })
+    switchMode('Raw YAML')
+    fireEvent.change(screen.getByLabelText('Raw YAML editor'), {
+      target: { value: 'schema: raw-team\ncustom: retained\n' },
     })
-    renderSection(<ActiveRootConfigSection isStatic={false} />)
-
-    expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy()
-    expect(screen.queryByText('No config file exists in the active Planning root.')).toBeNull()
-    expect(screen.getByLabelText('Active Root config editor')).toHaveValue(content)
+    switchMode('Structured')
+    expect(screen.getByLabelText('Schema')).toHaveValue('team-schema')
+    switchMode('Raw YAML')
+    expect(screen.getByLabelText('Raw YAML editor')).toHaveValue(
+      'schema: raw-team\ncustom: retained\n'
+    )
   })
 
-  it('shows external Store owner and file provenance through accessible badges', async () => {
-    renderSection(<ActiveRootConfigSection isStatic={false} />)
-
-    expect(screen.getByText('Planning root: /stores/shared')).toBeTruthy()
-    expect(screen.getByRole('note', { name: 'Active Root source declared' })).toBeTruthy()
-    expect(screen.getByRole('note', { name: 'Active Root Store shared' })).toBeTruthy()
-    expect(
-      screen.getByRole('note', { name: 'Active Root is external to the launch project' })
-    ).toBeTruthy()
-    const fileBadge = screen.getByRole('note', { name: 'Active Root config file path' })
-    fireEvent.focus(fileBadge)
-    expect(await screen.findByText('/stores/shared/openspec/config.yaml')).toBeVisible()
-    expect(
-      screen.getByText(
-        'Edits write the Store-backed planning root and are observed by other projects resolving Store shared.'
-      )
-    ).toBeTruthy()
-  })
-
-  it('distinguishes initial loading from absence', () => {
-    activeRootSubscriptionMock.mockReturnValue({ data: undefined, isLoading: true, error: null })
-    const { container } = renderSection(<ActiveRootConfigSection isStatic={false} />)
-
-    // Initial-loading is now a visual skeleton rather than routine loading copy.
-    expect(container.querySelector('.rt-skeleton')).not.toBeNull()
-    expect(screen.queryByText('No config file exists in the active Planning root.')).toBeNull()
-  })
-
-  it('renders a no-data subscription error instead of absence', () => {
-    activeRootSubscriptionMock.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      error: new Error('doctor failed'),
+  it('submits Structured changes against the exact owner, file, and loaded revision', async () => {
+    const next = activeRootConfig({
+      revision: REVISION_B,
+      file: { content: 'schema: team-schema\ncontext: updated\n' },
+      official: {
+        schema: 'team-schema',
+        context: 'updated',
+        rules: { proposal: ['Keep intent explicit.'] },
+        operations: {
+          apply: { guidance: ['Run focused tests.'] },
+          archive: { guidance: ['Record evidence.'] },
+        },
+      },
     })
+    writeActiveRootMock.mockResolvedValueOnce(applied(next))
     renderSection(<ActiveRootConfigSection isStatic={false} />)
+    edit()
+    fireEvent.change(screen.getByLabelText('Schema'), { target: { value: 'team-schema' } })
+    fireEvent.change(screen.getByLabelText('Project context'), { target: { value: 'updated' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Structured' }))
 
-    expect(screen.getByRole('alert')).toHaveTextContent('doctor failed')
-    expect(screen.queryByText('No config file exists in the active Planning root.')).toBeNull()
+    await waitFor(() => expect(writeActiveRootMock).toHaveBeenCalledOnce())
+    expect(writeActiveRootMock).toHaveBeenCalledWith({
+      mode: 'structured',
+      ownerPath: '/stores/shared',
+      filePath: '/stores/shared/openspec/config.yaml',
+      revision: REVISION_A,
+      update: {
+        schema: 'team-schema',
+        context: 'updated',
+        rules: { proposal: ['Keep intent explicit.'] },
+        operations: {
+          apply: { guidance: ['Run focused tests.'] },
+          archive: { guidance: ['Record evidence.'] },
+        },
+      },
+    })
   })
 
-  it('keeps stale data visible but locks the editor beside a refresh error', () => {
-    rootActionMock.mockReturnValue({
-      status: 'checking',
-      disabled: true,
-      context: null,
-      observedAt: 1,
-      title: 'Refreshing planning root',
-      message: 'Root-dependent actions remain locked while OpenSpec refreshes root selection.',
-      evidence: [],
-    })
-    activeRootSubscriptionMock.mockReturnValue({
-      data: configView({ content: '', exists: true }),
-      isLoading: false,
-      error: new Error('refresh failed'),
-    })
+  it('submits Raw YAML against the same exact loaded locator', async () => {
     renderSection(<ActiveRootConfigSection isStatic={false} />)
+    edit()
+    switchMode('Raw YAML')
+    fireEvent.change(screen.getByLabelText('Raw YAML editor'), {
+      target: { value: 'schema: spec-driven\nteam: custom\n' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Raw YAML' }))
 
-    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
-    expect(screen.getByLabelText('Active Root config editor')).toHaveAttribute('readonly')
-    expect(screen.getByRole('alert')).toHaveTextContent('refresh failed')
+    await waitFor(() => expect(writeActiveRootMock).toHaveBeenCalledOnce())
+    expect(writeActiveRootMock).toHaveBeenCalledWith({
+      mode: 'raw',
+      ownerPath: '/stores/shared',
+      filePath: '/stores/shared/openspec/config.yaml',
+      revision: REVISION_A,
+      content: 'schema: spec-driven\nteam: custom\n',
+    })
   })
 
-  it('locks stale Active Root data when its own transport fails', () => {
-    activeRootSubscriptionMock.mockReturnValue({
-      data: configView({ content: 'schema: stale\n', exists: true }),
-      isLoading: false,
-      error: new Error('active config transport failed'),
-    })
-    renderSection(<ActiveRootConfigSection isStatic={false} />)
-
-    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
-    expect(screen.getByLabelText('Active Root config editor')).toHaveAttribute('readonly')
-    expect(screen.getByRole('alert')).toHaveTextContent('active config transport failed')
-  })
-
-  it('keeps Cancel available when readiness is lost after editing starts', () => {
+  it('retains a dirty draft while replacement refresh locks every mutation control', () => {
     const view = renderSection(<ActiveRootConfigSection isStatic={false} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
-    fireEvent.change(screen.getByLabelText('Active Root config editor'), {
-      target: { value: 'schema: local draft\n' },
-    })
-
-    rootActionMock.mockReturnValue({
-      status: 'blocked',
-      disabled: true,
-      context: null,
-      observedAt: 2,
-      title: 'Planning root unavailable',
-      message: 'planning root failed',
-      evidence: [],
-    })
-    activeRootSubscriptionMock.mockReturnValue({
-      data: configView(),
-      isLoading: false,
-      error: new Error('root refresh failed'),
-    })
+    edit()
+    fireEvent.change(screen.getByLabelText('Schema'), { target: { value: 'retained-draft' } })
+    activeRootSubscriptionMock.mockReturnValue(
+      subscriptionState(configView(), { isUpdating: true })
+    )
     view.rerender(
       <QueryClientProvider client={new QueryClient()}>
         <ActiveRootConfigSection isStatic={false} />
       </QueryClientProvider>
     )
 
-    expect(screen.getByLabelText('Active Root config editor')).toHaveAttribute('readonly')
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(screen.getByLabelText('Schema')).toHaveValue('retained-draft')
+    expect(screen.getByLabelText('Schema')).toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: 'Save Structured' })).toBeDisabled()
     expect(writeActiveRootMock).not.toHaveBeenCalled()
   })
 
-  it('rejects a queued Save at the real mutation boundary after readiness is lost', async () => {
-    const readyRootAction = {
-      status: 'ready' as const,
-      disabled: false,
-      context: null,
-      observedAt: 1,
-      title: null,
-      message: null as string | null,
-      evidence: [],
-    }
-    rootActionMock.mockReturnValue(readyRootAction)
-    const queryClient = new QueryClient({
-      defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+  it('locks a dirty draft after Root replacement and reloads only on explicit recovery', () => {
+    const latest = activeRootConfig({
+      revision: REVISION_B,
+      owner: { path: '/stores/replacement', storeId: 'replacement' },
+      file: {
+        path: '/stores/replacement/openspec/config.yaml',
+        content: 'schema: replacement\n',
+      },
+      official: { schema: 'replacement', context: null, rules: null, operations: null },
     })
-    const view = render(
-      <QueryClientProvider client={queryClient}>
+    const view = renderSection(<ActiveRootConfigSection isStatic={false} />)
+    edit()
+    fireEvent.change(screen.getByLabelText('Schema'), { target: { value: 'local-draft' } })
+    activeRootSubscriptionMock.mockReturnValue(subscriptionState(configView(latest)))
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
         <ActiveRootConfigSection isStatic={false} />
       </QueryClientProvider>
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
-    fireEvent.change(screen.getByLabelText('Active Root config editor'), {
-      target: { value: 'schema: queued draft\n' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    // Replace the hook result before TanStack runs mutationFn. This is a real
-    // component mutation boundary, not a direct invocation of the handler.
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Active Root changed after this draft was loaded.'
+    )
+    expect(screen.getByLabelText('Schema')).toHaveValue('local-draft')
+    expect(screen.getByLabelText('Schema')).toHaveAttribute('readonly')
+    fireEvent.click(screen.getByRole('button', { name: 'Reload latest' }))
+    expect(screen.getByLabelText('Schema')).toHaveValue('replacement')
+    expect(screen.getByLabelText('Schema')).not.toHaveAttribute('readonly')
+  })
+
+  it('retains Raw draft on conflict, exposes latest YAML, and retries against the latest revision', async () => {
+    const latest = activeRootConfig({
+      revision: REVISION_B,
+      file: { content: 'schema: external\nexternal: true\n' },
+      official: { schema: 'external', context: null, rules: null, operations: null },
+    })
+    const committed = activeRootConfig({
+      revision: REVISION_C,
+      file: { content: 'schema: local\nteam: retained\n' },
+      official: { schema: 'local', context: null, rules: null, operations: null },
+    })
+    writeActiveRootMock
+      .mockResolvedValueOnce({ state: 'conflict', reason: 'revision-changed', latest })
+      .mockResolvedValueOnce(applied(committed))
+    renderSection(<ActiveRootConfigSection isStatic={false} />)
+    edit()
+    switchMode('Raw YAML')
+    fireEvent.change(screen.getByLabelText('Raw YAML editor'), {
+      target: { value: 'schema: local\nteam: retained\n' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Raw YAML' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('The physical Active Root changed before this save could commit.')
+      ).toBeTruthy()
+    )
+    expect(screen.getByLabelText('Raw YAML editor')).toHaveValue('schema: local\nteam: retained\n')
+    fireEvent.click(screen.getByText('Review latest physical YAML'))
+    expect(screen.getByText(/external: true/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry against latest' }))
+
+    await waitFor(() => expect(writeActiveRootMock).toHaveBeenCalledTimes(2))
+    expect(writeActiveRootMock).toHaveBeenLastCalledWith({
+      mode: 'raw',
+      ownerPath: '/stores/shared',
+      filePath: '/stores/shared/openspec/config.yaml',
+      revision: REVISION_B,
+      content: 'schema: local\nteam: retained\n',
+    })
+  })
+
+  it('retains Raw YAML after typed invalid result and permits a corrected retry', async () => {
+    const invalidResult: ActiveRootMutationResult = {
+      state: 'invalid',
+      reason: 'raw-syntax',
+      diagnostics: [
+        {
+          code: 'config-unparseable',
+          severity: 'error',
+          path: '$',
+          message: 'YAML syntax is invalid.',
+        },
+      ],
+      latest: activeRootConfig(),
+    }
+    writeActiveRootMock.mockResolvedValueOnce(invalidResult).mockResolvedValueOnce(applied())
+    renderSection(<ActiveRootConfigSection isStatic={false} />)
+    edit()
+    switchMode('Raw YAML')
+    fireEvent.change(screen.getByLabelText('Raw YAML editor'), { target: { value: 'schema: [' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Raw YAML' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('YAML syntax is invalid.')
+    )
+    expect(screen.getByLabelText('Raw YAML editor')).toHaveValue('schema: [')
+    fireEvent.change(screen.getByLabelText('Raw YAML editor'), {
+      target: { value: 'schema: spec-driven\n' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Raw YAML' }))
+    await waitFor(() => expect(writeActiveRootMock).toHaveBeenCalledTimes(2))
+  })
+
+  it('retains a dirty draft after transport failure and retries without re-entering edit mode', async () => {
+    writeActiveRootMock
+      .mockRejectedValueOnce(new Error('write denied'))
+      .mockResolvedValueOnce(applied())
+    renderSection(<ActiveRootConfigSection isStatic={false} />)
+    edit()
+    fireEvent.change(screen.getByLabelText('Schema'), { target: { value: 'retry-schema' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Structured' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('write denied'))
+    expect(screen.getByLabelText('Schema')).toHaveValue('retry-schema')
+    fireEvent.click(screen.getByRole('button', { name: 'Save Structured' }))
+    await waitFor(() => expect(writeActiveRootMock).toHaveBeenCalledTimes(2))
+  })
+
+  it('keeps pending save controls locked and prevents duplicate submission', async () => {
+    const pending = createDeferred<ActiveRootMutationResult>()
+    writeActiveRootMock.mockReturnValueOnce(pending.promise)
+    renderSection(<ActiveRootConfigSection isStatic={false} />)
+    edit()
+    fireEvent.change(screen.getByLabelText('Schema'), { target: { value: 'pending-schema' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Structured' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save Structured' })).toBeDisabled()
+    )
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(screen.getByLabelText('Schema')).toHaveAttribute('readonly')
+    fireEvent.click(screen.getByRole('button', { name: 'Save Structured' }))
+    expect(writeActiveRootMock).toHaveBeenCalledOnce()
+    pending.resolve(applied())
+  })
+
+  it('rejects a queued save at the mutation boundary after Root readiness is lost', async () => {
+    const readyState = rootActionMock()
+    const view = renderSection(<ActiveRootConfigSection isStatic={false} />)
+    edit()
+    fireEvent.change(screen.getByLabelText('Schema'), { target: { value: 'queued-schema' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Structured' }))
     rootActionMock.mockReturnValue({
-      ...readyRootAction,
+      ...readyState,
       status: 'blocked',
       disabled: true,
       message: 'Planning root became unavailable.',
     })
     view.rerender(
-      <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={new QueryClient()}>
         <ActiveRootConfigSection isStatic={false} />
       </QueryClientProvider>
     )
@@ -299,56 +438,66 @@ describe('ActiveRootConfigSection', () => {
     expect(writeActiveRootMock).not.toHaveBeenCalled()
   })
 
-  it('locks the editor, save, and cancel controls while one save is pending', async () => {
-    const pending = createDeferred<void>()
-    writeActiveRootMock.mockReturnValueOnce(pending.promise)
+  it('keeps shared Store impact and official diagnostics in the direct plane', () => {
+    activeRootSubscriptionMock.mockReturnValue(
+      subscriptionState(
+        configView(
+          activeRootConfig({
+            diagnostics: [
+              {
+                code: 'schema-invalid',
+                severity: 'warning',
+                path: 'schema',
+                message: 'Schema is not a string.',
+              },
+            ],
+          })
+        )
+      )
+    )
     renderSection(<ActiveRootConfigSection isStatic={false} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
-    fireEvent.change(screen.getByLabelText('Active Root config editor'), {
-      target: { value: 'schema: changed\n' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
-    })
-    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('aria-busy', 'true')
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
-    expect(screen.getByLabelText('Active Root config editor')).toHaveAttribute('readonly')
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(writeActiveRootMock).toHaveBeenCalledTimes(1)
-
-    pending.resolve()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy())
+    expect(screen.getByRole('note', { name: 'Shared Store write impact' })).toHaveTextContent(
+      'Saves affect every project currently resolving this Store.'
+    )
+    expect(screen.getByText(/Schema is not a string/)).toBeTruthy()
+    expect(screen.getByLabelText('Active Root config revision')).toHaveTextContent(
+      'Revision aaaaaaaa'
+    )
   })
 
-  it('retains the dirty draft and error after save failure', async () => {
-    writeActiveRootMock.mockRejectedValueOnce(new Error('write denied'))
+  it('renders a missing config creation draft while preserving exact non-existent revision evidence', () => {
+    activeRootSubscriptionMock.mockReturnValue(
+      subscriptionState(
+        configView(
+          activeRootConfig({
+            file: { exists: false, content: null },
+            official: { schema: null, context: null, rules: null, operations: null },
+          })
+        )
+      )
+    )
     renderSection(<ActiveRootConfigSection isStatic={false} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
-    fireEvent.change(screen.getByLabelText('Active Root config editor'), {
-      target: { value: 'schema: retained\n' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('write denied'))
-    expect(screen.getByLabelText('Active Root config editor')).toHaveValue('schema: retained\n')
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Create Active Root config' }))
+    expect(screen.getByLabelText('Schema')).toHaveValue('spec-driven')
+    expect(screen.getByRole('button', { name: 'Save Structured' })).toBeEnabled()
   })
 
-  it('renders the static Active Root snapshot read-only without mutation controls', () => {
-    activeRootSubscriptionMock.mockReturnValue({
-      data: { ...configView({ content: '', exists: true }), filePath: null, owner: null },
-      isLoading: false,
-      error: null,
-    })
+  it('renders a static snapshot read-only without mutation controls or invented provenance', () => {
+    activeRootSubscriptionMock.mockReturnValue(
+      subscriptionState({
+        ...configView(),
+        owner: null,
+        filePath: null,
+        revision: null,
+      })
+    )
     renderSection(<ActiveRootConfigSection isStatic />)
 
     expect(screen.getByText('Static Active Root snapshot')).toBeTruthy()
-    expect(screen.getByLabelText('Active Root config editor')).toHaveAttribute('readonly')
+    expect(screen.getByLabelText('Schema')).toHaveAttribute('readonly')
     expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+    expect(screen.queryByLabelText('Active Root config revision')).toBeNull()
     expect(writeActiveRootMock).not.toHaveBeenCalled()
   })
 })

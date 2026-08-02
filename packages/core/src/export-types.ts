@@ -1,5 +1,10 @@
 /**
- * Types for static export / SSG
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Define the publication-safe snapshot contract shared by CLI export and static Web projection.
+ * 2. Preserve exact CLI-selected Root provenance, including OpenSpec 1.7 machine default Store fallback.
+ * 3. Keep Reference publication policy explicit without leaking private runtime evidence.
+ *
+ * Original request (2026-08-01): adapt OpenSpecUI 7 to the OpenSpec 1.7 Root and Store protocol.
  */
 import type { OpenSpecUIConfig } from './config.js'
 import type { OpsxEntityDetail } from './opsx-entity.js'
@@ -8,7 +13,7 @@ import type { SpecIdentity } from './spec-catalog.js'
 import type { DocumentChecklistSummary, TrackedTaskProgress } from './task-progress.js'
 
 /** Source from which the CLI resolved the exported writable planning root. */
-export type ExportRootSource = 'nearest' | 'declared' | 'store' | 'implicit'
+export type ExportRootSource = 'nearest' | 'declared' | 'store' | 'global_default' | 'implicit'
 
 /** Root provenance captured by CLI selection instead of an assumed launch projectDir. */
 export interface ExportRootProvenance {

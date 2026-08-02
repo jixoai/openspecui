@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Verify Apply instruction context-file normalization.
  * 2. Require command-specific CLI evidence on demand-driven instruction leaves.
  * 3. Preserve typed OpenSpec 1.6 Reference indexes on both instruction surfaces.
+ * 4. Preserve OpenSpec 1.7 operation inputs and skipped dependency identity.
  *
  * Original request (2026-07-15): "Preserve CLI-provided paths, action context, References, and diagnostics end to end."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
@@ -112,6 +113,18 @@ describe('ApplyInstructionsSchema', () => {
       })
     ).toThrow(/instructions apply/)
   })
+
+  it('preserves project context and Apply operation guidance', () => {
+    const parsed = ApplyInstructionsSchema.parse({
+      ...baseApplyInstructions,
+      contextFiles: {},
+      context: 'Authentication changes require a threat model.',
+      operationGuidance: ['Run security-focused tests before completion.'],
+    })
+
+    expect(parsed.context).toBe('Authentication changes require a threat model.')
+    expect(parsed.operationGuidance).toEqual(['Run security-focused tests before completion.'])
+  })
 })
 
 describe('ArtifactInstructionsSchema', () => {
@@ -149,5 +162,43 @@ describe('ArtifactInstructionsSchema', () => {
       root: { source: 'nearest' },
     })
     expect(parsed.references).toEqual(referenceIndex)
+  })
+
+  it('preserves skipped dependency satisfaction without a physical path', () => {
+    const parsed = ArtifactInstructionsSchema.parse({
+      changeName: 'add-example',
+      artifactId: 'tasks',
+      schemaName: 'spec-driven',
+      changeDir: '/repo/openspec/changes/add-example',
+      outputPath: 'tasks.md',
+      description: 'Track implementation.',
+      instruction: 'Write tasks.',
+      context: null,
+      rules: [],
+      template: '# Tasks',
+      dependencies: [
+        {
+          id: 'specs',
+          done: true,
+          skipped: true,
+          path: 'specs/**/*.md',
+          description: 'Delta specifications.',
+        },
+      ],
+      unlocks: [],
+      evidence: {
+        command: 'instructions',
+        success: true,
+        stdout: '{}',
+        stderr: '',
+        exitCode: 0,
+        payload: {},
+        diagnostics: [],
+        selector: {},
+        root: { path: '/repo', source: 'nearest' },
+      },
+    })
+
+    expect(parsed.dependencies[0]).toMatchObject({ id: 'specs', done: true, skipped: true })
   })
 })

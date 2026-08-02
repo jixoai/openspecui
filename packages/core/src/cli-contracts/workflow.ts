@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Model camelCase workflow JSON independently from Store-family JSON.
  * 2. Preserve strict validate and archive outcomes, including failure payloads.
  * 3. Preserve multiline requirement bodies from `show --json`.
- * 4. Preserve complete OpenSpec 1.6 Status/Instructions action contracts as CLI facts.
+ * 4. Preserve complete OpenSpec 1.7 Status and operation-Instruction contracts as CLI facts.
  * 5. Export the successful Spec-document schema for browser-safe projection validation.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
@@ -160,7 +160,8 @@ const CliStatusArtifactSchema = z
   .object({
     id: z.string(),
     outputPath: z.string(),
-    status: z.enum(['done', 'ready', 'blocked']),
+    status: z.enum(['done', 'skipped', 'ready', 'blocked']),
+    requires: z.array(z.string()),
     missingDeps: z.array(z.string()).optional(),
   })
   .passthrough()
@@ -194,6 +195,7 @@ const CliInstructionDependencySchema = z
     done: z.boolean(),
     path: z.string(),
     description: z.string(),
+    skipped: z.boolean().optional(),
   })
   .passthrough()
 
@@ -247,6 +249,8 @@ export const CliApplyInstructionsSuccessSchema = z
     missingArtifacts: z.array(z.string()).optional(),
     instruction: z.string(),
     references: z.array(CliReferenceIndexEntrySchema).optional(),
+    context: z.string().optional(),
+    operationGuidance: z.array(z.string()).optional(),
     root: CliRootSchema,
   })
   .passthrough()
@@ -254,6 +258,22 @@ export const CliApplyInstructionsSuccessSchema = z
 /** Typed success or diagnostic failure result of the CLI Apply Instructions command. */
 export const CliApplyInstructionsSchema = z.union([
   CliApplyInstructionsSuccessSchema,
+  CliDiagnosticFailureSchema,
+])
+
+/** Complete successful Archive Instructions payload for the selected Root. */
+export const CliArchiveInstructionsSuccessSchema = z
+  .object({
+    changeName: z.string(),
+    context: z.string().optional(),
+    operationGuidance: z.array(z.string()).optional(),
+    root: CliRootSchema,
+  })
+  .passthrough()
+
+/** Typed success or diagnostic failure result of the CLI Archive Instructions command. */
+export const CliArchiveInstructionsSchema = z.union([
+  CliArchiveInstructionsSuccessSchema,
   CliDiagnosticFailureSchema,
 ])
 
@@ -343,5 +363,7 @@ export type CliArtifactInstructions = z.infer<typeof CliArtifactInstructionsSche
 export type CliArtifactInstructionsSuccess = z.infer<typeof CliArtifactInstructionsSuccessSchema>
 export type CliApplyInstructions = z.infer<typeof CliApplyInstructionsSchema>
 export type CliApplyInstructionsSuccess = z.infer<typeof CliApplyInstructionsSuccessSchema>
+export type CliArchiveInstructions = z.infer<typeof CliArchiveInstructionsSchema>
+export type CliArchiveInstructionsSuccess = z.infer<typeof CliArchiveInstructionsSuccessSchema>
 export type CliValidate = z.infer<typeof CliValidateSchema>
 export type CliArchive = z.infer<typeof CliArchiveSchema>

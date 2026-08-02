@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prove parsing of real OpenSpec CLI version output.
- * 2. Prove OpenSpecUI 6.1 targets CLI 1.6 while accepting CLI 1.7 as compatible.
- * 3. Prove older, future, and unknown CLI versions remain blocked.
+ * 2. Prove OpenSpecUI 7 supports only the adapted OpenSpec CLI 1.7 line.
+ * 3. Prove older, future, and unknown CLI versions remain blocked by default.
  *
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
+ * Original request (2026-08-01): "v7不兼容1.6.x，明确要求必须使用 v1.7.x。"
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -16,16 +17,28 @@ import {
 
 describe('openspec CLI compatibility law', () => {
   it('parses versions from raw CLI output', () => {
-    expect(parseOpenSpecCliVersion('1.7.0')).toEqual({ major: 1, minor: 7, patch: 0 })
+    expect(parseOpenSpecCliVersion('1.7.0')).toEqual({
+      major: 1,
+      minor: 7,
+      patch: 0,
+      prerelease: null,
+    })
     expect(parseOpenSpecCliVersion('openspec 1.6.0')).toEqual({
       major: 1,
       minor: 6,
       patch: 0,
+      prerelease: null,
+    })
+    expect(parseOpenSpecCliVersion('openspec 1.7.0-rc.1')).toEqual({
+      major: 1,
+      minor: 7,
+      patch: 0,
+      prerelease: 'rc.1',
     })
   })
 
-  it('classifies the 1.6 target line as the current OpenSpecUI 6.1 target line', () => {
-    expect(classifyOpenSpecCliVersion('1.6.0')).toMatchObject({
+  it('classifies the 1.7 line as the current OpenSpecUI 7 target line', () => {
+    expect(classifyOpenSpecCliVersion('1.7.0')).toMatchObject({
       status: 'current',
       supported: true,
       recommended: true,
@@ -33,16 +46,19 @@ describe('openspec CLI compatibility law', () => {
     })
   })
 
-  it('classifies the 1.7 line as compatible but not adapted', () => {
-    expect(classifyOpenSpecCliVersion('1.7.0')).toMatchObject({
-      status: 'compatible',
-      supported: true,
+  it('blocks versions outside the OpenSpecUI 7 adapted line', () => {
+    expect(classifyOpenSpecCliVersion('1.7.0-rc.1')).toMatchObject({
+      status: 'unsupported',
+      supported: false,
       recommended: false,
-      blocksCoreInteractions: false,
+      blocksCoreInteractions: true,
     })
-  })
-
-  it('blocks versions outside the 6.x accepted range', () => {
+    expect(classifyOpenSpecCliVersion('1.6.1')).toMatchObject({
+      status: 'unsupported',
+      supported: false,
+      recommended: false,
+      blocksCoreInteractions: true,
+    })
     expect(classifyOpenSpecCliVersion('1.5.1')).toMatchObject({
       status: 'unsupported',
       supported: false,

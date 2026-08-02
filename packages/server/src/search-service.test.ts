@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Verify Planning-root Search lifecycle, processed reads, and reactive rebuilds.
  * 2. Verify source-scoped documents and normalized project queries reach the provider.
- * 3. Verify duplicate Spec ids preserve Owned and Store-qualified Reference identity.
+ * 3. Verify duplicate and recursive Spec ids preserve Owned and Store-qualified Reference identity.
  * 4. Prove each buffered/reactive caller owns current physical document dependencies.
  * 5. Prove a failed provider operation cannot poison later queue work or disposal.
  *
@@ -10,6 +10,7 @@
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  * Derived requirement (2026-07-19): Warmup and overlapping subscribers cannot steal Search freshness or dependencies.
  * Derived requirement (2026-07-19): Provider queue rejection recovery needs exact mutation-resistant evidence.
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  */
 import {
   clearCache,
@@ -50,11 +51,14 @@ function createDeferred<T>(): Deferred<T> {
   }
 }
 
-async function createPhysicalAdapter(): Promise<{ adapter: OpenSpecAdapter; root: string }> {
+async function createPhysicalAdapter(
+  specId = 'auth',
+  marker = 'initial marker'
+): Promise<{ adapter: OpenSpecAdapter; root: string }> {
   const root = await mkdtemp(join(tmpdir(), 'openspecui-search-service-'))
   tempDirs.push(root)
   const adapter = new OpenSpecAdapter(root)
-  await adapter.writeSpec('auth', createSpecMarkdown('initial marker'))
+  await adapter.writeSpec(specId, createSpecMarkdown(marker))
   return { adapter, root }
 }
 
@@ -680,13 +684,34 @@ describe('SearchService', () => {
         id: 'spec:referenced:platform-a:auth',
         scope: 'referenced-specs',
         href: '/specs/referenced/platform-a/auth',
-        path: 'referenced:platform-a:specs/auth',
+        path: 'referenced:platform-a:specs/auth/spec.md',
       },
       {
         id: 'spec:referenced:platform-b:auth',
         scope: 'referenced-specs',
         href: '/specs/referenced/platform-b/auth',
-        path: 'referenced:platform-b:specs/auth',
+        path: 'referenced:platform-b:specs/auth/spec.md',
+      },
+    ])
+  })
+
+  it('indexes a physical recursive owned Spec with complete identity and path', async () => {
+    const { adapter } = await createPhysicalAdapter('platform/auth', 'nested marker')
+    const provider = new FakeProvider()
+    const service = new SearchService(adapter, undefined, provider)
+
+    await service.init()
+
+    expect(
+      provider.initCalls[0]
+        ?.filter((document) => document.kind === 'spec')
+        .map(({ id, href, path, content }) => ({ id, href, path, content }))
+    ).toEqual([
+      {
+        id: 'spec:owned:platform%2Fauth',
+        href: '/specs/owned/platform%2Fauth',
+        path: 'owned:openspec/specs/platform/auth/spec.md',
+        content: expect.stringContaining('nested marker'),
       },
     ])
   })

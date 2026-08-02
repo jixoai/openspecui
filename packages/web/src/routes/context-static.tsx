@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Render Config-owned static Resolved Context from publication-safe snapshot provenance.
  * 2. Distinguish none, omitted, included, and legacy-unrecorded Reference policy.
  * 3. State unavailable runtime evidence explicitly without starting live transports.
+ * 4. Participate in the publication-safe Config-local route and scroll contract.
  *
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
  * Original request (2026-07-28): static source facts stay attributable while verbose policy detail is disclosed on demand.
  * Owner Context direction (2026-07-29): move static Context to `/config/context` with a direct Config return.
  */
+import { ConfigWorkbenchPage } from '@/components/config/config-workbench'
 import { ResolvedContextHeader } from '@/components/config/resolved-context-header'
 import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import {
@@ -23,9 +25,7 @@ export function StaticContextView() {
   const context = selectStaticContextSnapshot(providedSnapshot ?? getInitialData())
 
   return (
-    <div className="space-y-6 p-4">
-      <ResolvedContextHeader status="static" />
-
+    <ConfigWorkbenchPage current="context" header={<ResolvedContextHeader status="static" />}>
       {context ? (
         <div className="space-y-4">
           <section className="border-border min-w-0 border-y py-3">
@@ -93,7 +93,7 @@ export function StaticContextView() {
           </p>
         </section>
       )}
-    </div>
+    </ConfigWorkbenchPage>
   )
 }
 

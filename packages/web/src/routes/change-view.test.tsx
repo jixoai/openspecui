@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Verify change detail fallbacks and schema-driven artifact rendering.
- * 2. Verify retained status errors alongside detail and Root Context failure locks the workflow toolbar.
+ * 2. Verify retained status errors and non-current Status authority lock the workflow toolbar.
+ * 3. Verify OpenSpec 1.7 Apply context and operation guidance remain separate visible inputs.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
@@ -47,13 +48,23 @@ const retainedChangeStatus = {
   schemaName: 'opsx-collab-pr-loop',
   isComplete: false,
   applyRequires: [],
-  artifacts: [{ id: 'implementation', outputPath: 'implementation.md', status: 'ready' }],
+  artifacts: [
+    { id: 'implementation', outputPath: 'implementation.md', status: 'ready', requires: [] },
+  ],
   provenance: { kind: 'static' },
 } satisfies ChangeStatus
 
 vi.mock('@/lib/use-opsx', () => ({
   useOpsxApplyInstructionsSubscription: applyInstructionsMock,
-  useOpsxStatusSubscription: statusMock,
+  useOpsxStatusSubscription: (...args: unknown[]) => {
+    const state = statusMock(...args)
+    return {
+      authority: state.error ? { state: 'failed', error: state.error } : { state: 'current' },
+      refresh: vi.fn(),
+      refreshPending: false,
+      ...state,
+    }
+  },
 }))
 
 vi.mock('@/lib/use-subscription', () => ({
@@ -204,8 +215,8 @@ describe('ChangeView', () => {
 
     expect(screen.getByText('Extract Terminal View Webcomponent')).toBeTruthy()
     expect(screen.getByText('artifact:implementation')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Update' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Verify' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Update' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Verify' })).toBeDisabled()
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Error loading change: status transport failed'
     )
@@ -277,8 +288,13 @@ describe('ChangeView', () => {
         isComplete: false,
         applyRequires: [],
         artifacts: [
-          { id: 'intake', outputPath: 'intake.md', status: 'done' },
-          { id: 'implementation', outputPath: 'implementation.md', status: 'ready' },
+          { id: 'intake', outputPath: 'intake.md', status: 'done', requires: [] },
+          {
+            id: 'implementation',
+            outputPath: 'implementation.md',
+            status: 'ready',
+            requires: ['intake'],
+          },
         ],
         provenance: { kind: 'static' },
       },
@@ -311,7 +327,9 @@ describe('ChangeView', () => {
         schemaName: 'opsx-collab-pr-loop',
         isComplete: false,
         applyRequires: [],
-        artifacts: [{ id: 'implementation', outputPath: 'implementation.md', status: 'ready' }],
+        artifacts: [
+          { id: 'implementation', outputPath: 'implementation.md', status: 'ready', requires: [] },
+        ],
         provenance: { kind: 'static' },
       },
       isLoading: false,
@@ -319,6 +337,11 @@ describe('ChangeView', () => {
     })
     applyInstructionsMock.mockReturnValue({
       data: {
+        context: 'Preserve the project-specific deployment boundary.',
+        operationGuidance: [
+          'Implement tasks in order.',
+          'Run focused verification before marking work complete.',
+        ],
         applyInstructionProgress: {
           source: 'openspec-instructions-apply',
           total: 0,
@@ -339,6 +362,12 @@ describe('ChangeView', () => {
 
     expect(screen.getByRole('note', { name: 'Apply instructions progress 0 of 0' })).toBeTruthy()
     expect(screen.getByRole('note', { name: 'Tracked artifact glob progress 1 of 3' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Apply inputs' })).toBeTruthy()
+    expect(screen.getByText('Project context')).toBeTruthy()
+    expect(screen.getByText('Preserve the project-specific deployment boundary.')).toBeTruthy()
+    expect(screen.getByText('Operation guidance')).toBeTruthy()
+    expect(screen.getByText('Implement tasks in order.')).toBeTruthy()
+    expect(screen.getByText('Run focused verification before marking work complete.')).toBeTruthy()
   })
 
   it('falls back to the shared content document tab when no artifact tab is available', () => {
@@ -378,7 +407,9 @@ describe('ChangeView', () => {
         schemaName: 'opsx-collab-pr-loop',
         isComplete: true,
         applyRequires: [],
-        artifacts: [{ id: 'implementation', outputPath: 'implementation.md', status: 'done' }],
+        artifacts: [
+          { id: 'implementation', outputPath: 'implementation.md', status: 'done', requires: [] },
+        ],
         provenance: { kind: 'static' },
       },
       isLoading: false,

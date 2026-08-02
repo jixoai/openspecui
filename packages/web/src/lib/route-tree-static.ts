@@ -1,10 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Register publication-safe project routes without live terminal surfaces.
  * 2. Preserve compound Spec, Config-owned Context, and objective readonly Kanban navigation.
+ * 3. Publish only read-only Active Root, Schema catalog/detail, and Context Config routes.
  *
  * Original request (2026-07-28): static Board uses the shared ReadonlyKanban.
  * Owner Context direction (2026-07-29): make `/config/context` the only static Context route.
+ * Owner Config-workbench decision (2026-08-01): keep `/config/agents` outside static routes.
+ * Owner Config-workbench decision (2026-08-01): keep Project and Environment runtime authority outside static routes.
  */
 import { createRoute, type AnyRootRoute } from '@tanstack/react-router'
 import { ArchiveList } from '../routes/archive-list'
@@ -13,6 +16,9 @@ import { Board } from '../routes/board'
 import { ChangeList } from '../routes/change-list'
 import { ChangeView } from '../routes/change-view'
 import { Config } from '../routes/config'
+import { ConfigRoot } from '../routes/config-root'
+import { ConfigSchemaCatalog } from '../routes/config-schema-catalog'
+import { ConfigSchemaDetail } from '../routes/config-schema-detail'
 import { ContextView } from '../routes/context'
 import { Dashboard } from '../routes/dashboard'
 import { SearchRoute } from '../routes/search'
@@ -30,6 +36,17 @@ export function createStaticRouteTree(rootRoute: AnyRootRoute) {
     }),
     createRoute({ getParentRoute: () => rootRoute, path: '/dashboard', component: Dashboard }),
     createRoute({ getParentRoute: () => rootRoute, path: '/config', component: Config }),
+    createRoute({ getParentRoute: () => rootRoute, path: '/config/root', component: ConfigRoot }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/config/schemas',
+      component: ConfigSchemaCatalog,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/config/schemas/$schemaId',
+      component: ConfigSchemaDetail,
+    }),
     createRoute({ getParentRoute: () => rootRoute, path: '/specs', component: SpecList }),
     createRoute({
       getParentRoute: () => rootRoute,

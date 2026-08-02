@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Render single-file and glob artifact output from the current OPSX projection.
  * 2. Preserve schema-provided artifact fallbacks and document translation configuration.
- * 3. Distinguish initial output admission from the committed not-yet-generated empty conclusion.
+ * 3. Distinguish initial output admission, missing output, and intentionally skipped non-output.
  *
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  */
@@ -233,6 +233,17 @@ export function ArtifactOutputViewer({ changeId, artifact }: Props) {
   const { data: config } = useConfigSubscription()
   const { data: globalSettings } = useGlobalSettingsSubscription()
   const translationConfig = resolveDocumentTranslationConfig(config?.translation, globalSettings)
+
+  if (artifact.status === 'skipped') {
+    return (
+      <ArtifactOutputDocumentShell artifact={artifact}>
+        <div className="text-muted-foreground rounded-md border border-dashed p-6 text-sm">
+          This artifact is intentionally skipped by the Change. No output file exists and no
+          generation action is available.
+        </div>
+      </ArtifactOutputDocumentShell>
+    )
+  }
 
   if (artifact.files) {
     return (

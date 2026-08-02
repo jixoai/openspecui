@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Resolve OPSX compose/command/direct invocation modes.
  * 2. Bind every invocation to the CLI-selected Root Context and Store selector.
- * 3. Preserve command-specific Status/Instructions evidence through hooks and clients.
+ * 3. Preserve command-specific Status, Apply, Artifact, and Archive Instructions evidence through hooks and clients.
  * 4. Generate Agent/CLI payloads without reconstructing planning paths.
  * 5. Return Manager-owned root generation and target evidence for stale-dispatch guards.
  *
@@ -226,9 +226,9 @@ function buildArchivePrompt(
     '',
     ...targetContextLines(target),
     '',
-    'CLI-owned workflow-status evidence:',
+    'CLI-owned archive-instructions evidence:',
     '```json',
-    normalized.length > 0 ? normalized : '(no status output)',
+    normalized.length > 0 ? normalized : '(no archive-instructions output)',
     '```',
     '',
     'Please confirm archive readiness, highlight risks, and provide the exact next steps.',
@@ -242,7 +242,7 @@ export interface WorkflowInvocationServiceOptions {
   hookRuntime: HookRuntime
   contracts: Pick<
     OpenSpecCliContractExecutor,
-    'workflowStatus' | 'artifactInstructions' | 'applyInstructions'
+    'workflowStatus' | 'artifactInstructions' | 'applyInstructions' | 'archiveInstructions'
   >
 }
 
@@ -416,11 +416,16 @@ export class WorkflowInvocationService {
       case 'update':
       case 'verify':
       case 'sync':
-      case 'archive':
         return {
           kind: 'workflow-status',
           options,
           result: await this.options.contracts.workflowStatus(input.changeId, options),
+        }
+      case 'archive':
+        return {
+          kind: 'archive-instructions',
+          options,
+          result: await this.options.contracts.archiveInstructions(input.changeId, options),
         }
       case 'explore':
       case 'propose':

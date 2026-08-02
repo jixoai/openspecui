@@ -1,15 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Own lexical and existing-ancestor physical confinement for root-scoped mutations.
- * 2. Execute UTF-8 write, directory-create, remove, and guarded external mutations.
+ * 2. Execute direct or atomic UTF-8 write, directory-create, remove, and guarded external mutations.
  * 3. Settle overlapping reactive projections before returning any terminal outcome.
  * 4. Keep TOCTOU and hard-link alias limitations explicit at the mutation seam.
  *
  * Original request (2026-07-16): "建立唯一的 physical/reactive entity-write owner。"
  * Original request (2026-07-16): "Schema/Template mutations must reject symlink escape and settle reactive projections before success."
+ * Derived requirement (2026-08-02): "Raw Active Root YAML uses same-directory atomic replacement before reactive settlement."
  */
-import { lstat, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { lstat, mkdir, open, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { settleReactiveFileWrite, settleReactivePathMutation } from './reactive-fs/index.js'
 
 /** One non-root path selected relative to an existing physical ownership root. */
@@ -25,6 +27,17 @@ export interface PhysicalReactiveFileWrite extends PhysicalReactivePathTarget {
   /** UTF-8 content written to disk and then published to reactive readers. */
   content: string
 }
+
+/** Input for one byte-compared atomic UTF-8 replacement. */
+export interface PhysicalReactiveFileCompareWrite extends PhysicalReactiveFileWrite {
+  /** Exact current UTF-8 source observed by the caller; null means the file was absent. */
+  expectedContent: string | null
+}
+
+/** Physical compare-and-write result returned after reactive settlement. */
+export type PhysicalReactiveFileCompareWriteResult =
+  | { state: 'written' }
+  | { state: 'conflict'; content: string | null }
 
 interface ResolvedMutationTarget {
   lexicalRoot: string
@@ -167,6 +180,111 @@ export async function writePhysicalReactiveFile(input: PhysicalReactiveFileWrite
       await writeFile(target.targetPath, input.content, 'utf8')
     },
     (targetPath) => settleReactiveFileWrite(targetPath, input.content)
+  )
+}
+
+/**
+ * Atomically replace one UTF-8 file inside an existing physical root, then settle reactive readers.
+ *
+ * The temporary file is created exclusively in the target directory, flushed, and renamed over the
+ * destination. Existing permission bits are retained where available. Crash-durable directory fsync is
+ * intentionally outside this cross-platform contract; successful callers observe one complete replacement.
+ */
+export async function writeAtomicPhysicalReactiveFile(
+  input: PhysicalReactiveFileWrite
+): Promise<void> {
+  await runResolvedPhysicalReactivePathMutation(
+    input,
+    async (target) => {
+      const targetDirectory = dirname(target.targetPath)
+      await mkdir(targetDirectory, { recursive: true })
+      await assertMutationTarget(target)
+      const targetInfo = await readLstat(target.targetPath)
+      const temporaryPath = join(
+        targetDirectory,
+        `.${basename(target.targetPath)}.${randomUUID()}.tmp`
+      )
+      let temporaryFile: Awaited<ReturnType<typeof open>> | null = null
+      try {
+        temporaryFile = await open(
+          temporaryPath,
+          'wx',
+          targetInfo ? targetInfo.mode & 0o777 : 0o666
+        )
+        await temporaryFile.writeFile(input.content, 'utf8')
+        await temporaryFile.sync()
+        await temporaryFile.close()
+        temporaryFile = null
+        await assertMutationTarget(target)
+        await rename(temporaryPath, target.targetPath)
+      } finally {
+        await temporaryFile?.close().catch(() => undefined)
+        await rm(temporaryPath, { force: true }).catch(() => undefined)
+      }
+    },
+    (targetPath) => settleReactiveFileWrite(targetPath, input.content)
+  )
+}
+
+async function readPhysicalUtf8(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, 'utf8')
+  } catch (error) {
+    if (isMissingPath(error)) return null
+    throw error
+  }
+}
+
+/**
+ * Compare current physical bytes immediately before atomic replacement and settle either outcome.
+ *
+ * This closes stale in-process writers through their serialized caller and detects observed external
+ * replacement after the temporary file is ready. Platforms expose no path-level atomic compare-and-swap,
+ * so an external process can still race in the final compare-to-rename interval.
+ */
+export async function compareAndWriteAtomicPhysicalReactiveFile(
+  input: PhysicalReactiveFileCompareWrite
+): Promise<PhysicalReactiveFileCompareWriteResult> {
+  let committed = false
+  return runResolvedPhysicalReactivePathMutation(
+    input,
+    async (target) => {
+      const targetDirectory = dirname(target.targetPath)
+      await mkdir(targetDirectory, { recursive: true })
+      await assertMutationTarget(target)
+      const targetInfo = await readLstat(target.targetPath)
+      const temporaryPath = join(
+        targetDirectory,
+        `.${basename(target.targetPath)}.${randomUUID()}.tmp`
+      )
+      let temporaryFile: Awaited<ReturnType<typeof open>> | null = null
+      try {
+        temporaryFile = await open(
+          temporaryPath,
+          'wx',
+          targetInfo ? targetInfo.mode & 0o777 : 0o666
+        )
+        await temporaryFile.writeFile(input.content, 'utf8')
+        await temporaryFile.sync()
+        await temporaryFile.close()
+        temporaryFile = null
+        await assertMutationTarget(target)
+        const currentContent = await readPhysicalUtf8(target.targetPath)
+        if (currentContent !== input.expectedContent) {
+          return { state: 'conflict' as const, content: currentContent }
+        }
+        await rename(temporaryPath, target.targetPath)
+        committed = true
+        return { state: 'written' as const }
+      } finally {
+        await temporaryFile?.close().catch(() => undefined)
+        await rm(temporaryPath, { force: true }).catch(() => undefined)
+      }
+    },
+    (targetPath) =>
+      committed
+        ? settleReactiveFileWrite(targetPath, input.content)
+        : settleReactivePathMutation(targetPath)
   )
 }
 

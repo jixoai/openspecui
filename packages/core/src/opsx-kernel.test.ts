@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Prove path-backed OPSX projections react to planning-root changes.
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Prove path-backed OPSX projections react to both Active Root YAML filename variants.
  * 2. Prove non-canonical Change ids are rejected before projection streams start.
  * 3. Prove demand-driven Status does not require Apply/artifact warmup and retains CLI evidence.
- * 4. Prove direct Projection Work readers preserve successful and failed real CLI process evidence.
+ * 4. Prove direct Projection Work readers preserve process evidence and skipped non-physical identity.
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
@@ -16,7 +16,9 @@ import { cleanupTempDir, createTempDir, waitFor, waitForDebounce } from './__tes
 import { CliExecutor } from './cli-executor.js'
 import { ConfigManager } from './config.js'
 import { OpsxKernel } from './opsx-kernel.js'
+import { writeAtomicPhysicalReactiveFile } from './physical-reactive-file-writer.js'
 import { acquireWatcherRoot, clearCache } from './reactive-fs/index.js'
+import { ReactiveContext } from './reactive-fs/reactive-context.js'
 import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
@@ -46,7 +48,8 @@ describe('OpsxKernel artifact status reactivity', () => {
 
   async function prepareKernel(
     outputPath: string,
-    rootSelector: { store?: string } = {}
+    rootSelector: { store?: string } = {},
+    activeRootConfigName: 'config.yaml' | 'config.yml' = 'config.yaml'
   ): Promise<{
     changeDir: string
     kernel: OpsxKernel
@@ -56,7 +59,7 @@ describe('OpsxKernel artifact status reactivity', () => {
     const schemaDir = join(tempDir, 'openspec', 'schemas', 'test')
     await mkdir(changeDir, { recursive: true })
     await mkdir(schemaDir, { recursive: true })
-    await writeFile(join(tempDir, 'openspec', 'config.yaml'), 'name: test\n', 'utf-8')
+    await writeFile(join(tempDir, 'openspec', activeRootConfigName), 'name: test\n', 'utf-8')
     await writeFile(join(changeDir, '.openspec.yaml'), 'schema: test\n', 'utf-8')
     await writeFile(
       join(schemaDir, 'schema.yaml'),
@@ -187,6 +190,21 @@ if (args[0] === 'instructions' && args[1] === 'apply' && args.includes('--json')
   process.exit(0)
 }
 
+if (args[0] === 'instructions' && args[1] === 'archive' && args.includes('--json')) {
+  const changeId = args[args.indexOf('--change') + 1]
+  console.log(JSON.stringify({
+    changeName: changeId,
+    context: 'Fixture archive context.',
+    operationGuidance: ['Review fixture deltas.'],
+    root: {
+      path: process.cwd(),
+      source: args.includes('--store') ? 'store' : 'nearest',
+      store_id: args.includes('--store') ? args[args.indexOf('--store') + 1] : undefined,
+    },
+  }))
+  process.exit(0)
+}
+
 if (args[0] === 'status' && args.includes('--json')) {
   const changeIndex = args.indexOf('--change')
   const changeId = changeIndex >= 0 ? args[changeIndex + 1] : 'unknown-change'
@@ -201,6 +219,7 @@ if (args[0] === 'status' && args.includes('--json')) {
   const done = isGlobPattern(outputPath)
     ? collectFiles(changeDir).some((path) => matchesGlob(path, outputPath))
     : existsSync(join(changeDir, outputPath))
+  const skipped = changeId === 'skip-specs'
 
   console.log(
     JSON.stringify({
@@ -220,7 +239,7 @@ if (args[0] === 'status' && args.includes('--json')) {
           existingOutputPaths: done ? [join(changeDir, outputPath)] : [],
         },
       },
-      isComplete: done,
+      isComplete: done || skipped,
       applyRequires: [],
       nextSteps: [],
       actionContext: {
@@ -236,8 +255,9 @@ if (args[0] === 'status' && args.includes('--json')) {
         {
           id: 'artifact',
           outputPath,
-          status: done ? 'done' : 'blocked',
-          missingDeps: done ? [] : [outputPath],
+          status: skipped ? 'skipped' : done ? 'done' : 'blocked',
+          requires: [],
+          missingDeps: done || skipped ? [] : [outputPath],
         },
       ],
       root: {
@@ -318,6 +338,15 @@ process.exit(1)
         root: { source: 'store', store_id: 'shared' },
       },
     })
+    await kernel.ensureArchiveInstructions('demo-change')
+    expect(kernel.getArchiveInstructions('demo-change')).toMatchObject({
+      context: 'Fixture archive context.',
+      operationGuidance: ['Review fixture deltas.'],
+      evidence: {
+        command: 'instructions archive',
+        selector: { store: 'shared' },
+      },
+    })
     expect(kernel.getInstructions('demo-change', 'artifact')).toMatchObject({
       artifactId: 'artifact',
       evidence: {
@@ -327,6 +356,22 @@ process.exit(1)
         root: { source: 'store', store_id: 'shared' },
       },
     })
+  })
+
+  it('preserves skipped dependencies without publishing a physical artifact path', async () => {
+    const { kernel } = await prepareKernel('specs/**/*.md')
+
+    await kernel.ensureStatus('skip-specs')
+
+    expect(kernel.getStatus('skip-specs').artifacts).toEqual([
+      {
+        id: 'artifact',
+        outputPath: 'specs/**/*.md',
+        status: 'skipped',
+        requires: [],
+        missingDeps: [],
+      },
+    ])
   })
 
   it('rejects non-canonical Change ids before starting path-backed projections', async () => {
@@ -409,6 +454,35 @@ process.exit(1)
         ],
       },
     })
+  })
+
+  it('recomputes Config Bundle from direct config.yml settlement without a Root bridge', async () => {
+    const { kernel } = await prepareKernel('result.md', {}, 'config.yml')
+    await closeAllWatchers()
+    const context = new ReactiveContext()
+    const stream = context.stream(() => kernel.readConfigBundleProjection())
+
+    try {
+      await expect(stream.next()).resolves.toMatchObject({
+        done: false,
+        value: { value: { schemas: [{ name: 'schema-a' }] } },
+      })
+
+      const replacement = stream.next()
+      await writeFile(join(tempDir, 'schema-name.txt'), 'schema-b\n', 'utf-8')
+      await writeAtomicPhysicalReactiveFile({
+        rootPath: tempDir,
+        relativePath: 'openspec/config.yml',
+        content: 'name: changed\n',
+      })
+
+      await expect(replacement).resolves.toMatchObject({
+        done: false,
+        value: { value: { schemas: [{ name: 'schema-b' }] } },
+      })
+    } finally {
+      await stream.return(undefined)
+    }
   })
 
   it(

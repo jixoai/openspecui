@@ -30,7 +30,8 @@
     "build:web": "pnpm --filter @openspecui/web build",
     "build:app": "pnpm --filter @openspecui/app build",
     "build:copy-web": "rm -rf ./web && cp -r ../web/dist ./web",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.command-tests.json --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.command-tests.json --noEmit && tsc -p tsconfig.nested-spec-tests.json --noEmit",
+    "typecheck:nested-spec-tests": "tsc -p tsconfig.nested-spec-tests.json --noEmit",
     "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=development\" tsx src/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest"

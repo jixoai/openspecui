@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Prove selector-exact isolation, including Reference-content invalidation, and same-identity single-flight.
  * 2. Prove retained A becomes display-only during B and survives a refresh failure.
  * 3. Prove an initial failure publishes no fabricated Planning CLI snapshot.
- * 4. Prove explicit refresh retires a late prior generation before it can publish.
- * 5. Prove lifecycle Push carries no Planning CLI business data or error details.
+ * 4. Prove explicit and config-dependent retirement suppress late prior generations.
+ * 5. Prove lifecycle Push carries no business data while every Instructions selector remains isolated.
  *
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-26): "public Pull retains full CliProjection failure evidence."
@@ -13,6 +13,7 @@ import {
   CliProjectionCommandError,
   OpenSpecCliContractExecutor,
   RuntimeInvalidationIndex,
+  type ArchiveInstructions,
   type ChangeStatus,
   type CliCommandResult,
   type CliProjectionCommandEvidence,
@@ -58,6 +59,25 @@ function createStatus(changeName: string): ChangeStatus {
     applyRequires: [],
     artifacts: [],
     provenance: { kind: 'static' },
+  }
+}
+
+function createArchiveInstructions(context: string): ArchiveInstructions {
+  return {
+    changeName: 'alpha',
+    context,
+    operationGuidance: [`Guidance for ${context}`],
+    evidence: {
+      command: 'instructions archive',
+      success: true,
+      stdout: JSON.stringify({ changeName: 'alpha', context }),
+      stderr: '',
+      exitCode: 0,
+      payload: { changeName: 'alpha', context },
+      diagnostics: [],
+      selector: { store: 'team' },
+      root: { path: '/planning', source: 'store', store_id: 'team' },
+    },
   }
 }
 
@@ -107,7 +127,7 @@ function createFixture(
   }),
   overrides: Partial<
     Pick<PlanningCliProjectionServiceOptions, 'contracts' | 'rootContext' | 'storeObservation'>
-  > = {}
+  > & { kernel?: Partial<PlanningCliProjectionServiceOptions['kernel']> } = {}
 ) {
   const runtime = createServerProjectionWorkRuntime()
   const invalidation = new RuntimeInvalidationIndex()
@@ -121,6 +141,9 @@ function createFixture(
     readApplyInstructionsProjection: async () => {
       throw new Error('Unexpected apply-instructions projection.')
     },
+    readArchiveInstructionsProjection: async () => {
+      throw new Error('Unexpected archive-instructions projection.')
+    },
     readConfigBundleProjection: async () => {
       throw new Error('Unexpected config-bundle projection.')
     },
@@ -130,6 +153,7 @@ function createFixture(
     readTemplateContentsProjection: async () => {
       throw new Error('Unexpected template-contents projection.')
     },
+    ...overrides.kernel,
   }
   const documentService: PlanningCliProjectionServiceOptions['documentService'] = {
     readSpec: async () => {
@@ -276,6 +300,49 @@ describe('PlanningCliProjectionService', () => {
     }
   })
 
+  it('retires every config-dependent current-root Work generation before replacement data can publish', async () => {
+    const initial = createDeferred<ChangeStatus>()
+    const replacement = createDeferred<ChangeStatus>()
+    let reads = 0
+    const fixture = createFixture(async () => {
+      reads += 1
+      return reads === 1 ? initial.promise : replacement.promise
+    })
+    const subscription = fixture.service.subscribe(alphaSelector, () => {})
+
+    try {
+      await vi.waitFor(() => expect(reads).toBe(1))
+      fixture.service.invalidateConfigDependentWork()
+      expect(fixture.service.read(alphaSelector)).toMatchObject({
+        state: 'loading',
+        invalidationCause: 'dependency',
+        workGeneration: 2,
+      })
+
+      initial.resolve(createStatus('retired-config-a'))
+      await vi.waitFor(() => expect(reads).toBe(2))
+      expect(fixture.service.read(alphaSelector)).toMatchObject({
+        state: 'loading',
+        invalidationCause: 'dependency',
+        workGeneration: 2,
+      })
+
+      replacement.resolve(createStatus('current-config-b'))
+      await vi.waitFor(() => {
+        expect(fixture.service.read(alphaSelector)).toMatchObject({
+          state: 'ready',
+          invalidationCause: 'dependency',
+          data: { value: { changeName: 'current-config-b' } },
+          workGeneration: 2,
+          snapshotGeneration: 2,
+        })
+      })
+    } finally {
+      subscription.unsubscribe()
+      fixture.runtime.clear()
+    }
+  })
+
   it('invalidates only Reference-dependent Planning CLI selectors for a relevant Spec edit', () => {
     const listeners: StoreObservationListener[] = []
     const rootContext: RootContext = {
@@ -318,14 +385,19 @@ describe('PlanningCliProjectionService', () => {
     })
 
     expect(
-      ['spec-catalog', 'spec-document', 'opsx-instructions', 'opsx-apply-instructions'].map(
-        (selector) => [selector, matcher(identity(selector))]
-      )
+      [
+        'spec-catalog',
+        'spec-document',
+        'opsx-instructions',
+        'opsx-apply-instructions',
+        'opsx-archive-instructions',
+      ].map((selector) => [selector, matcher(identity(selector))])
     ).toEqual([
       ['spec-catalog', true],
       ['spec-document', true],
       ['opsx-instructions', true],
       ['opsx-apply-instructions', true],
+      ['opsx-archive-instructions', true],
     ])
     expect(
       [
@@ -448,6 +520,79 @@ describe('PlanningCliProjectionService', () => {
         })
       })
       expect(notices.every((notice) => !containsBusinessData(notice))).toBe(true)
+    } finally {
+      subscription.unsubscribe()
+      fixture.runtime.clear()
+    }
+  })
+
+  it('retains Archive inputs through refresh failure and publishes only recovered current authority', async () => {
+    const replacement = createDeferred<ArchiveInstructions>()
+    const recovery = createDeferred<ArchiveInstructions>()
+    let reads = 0
+    const fixture = createFixture(async () => createStatus('unused'), undefined, {
+      kernel: {
+        readArchiveInstructionsProjection: async () => {
+          reads += 1
+          if (reads === 1) return createArchiveInstructions('Root A context')
+          if (reads === 2) return replacement.promise
+          return recovery.promise
+        },
+      },
+    })
+    const selector = {
+      kind: 'opsx-archive-instructions' as const,
+      change: 'alpha',
+    }
+    const subscription = fixture.service.subscribe(selector, () => {})
+
+    try {
+      await vi.waitFor(() => {
+        expect(fixture.service.read(selector)).toMatchObject({
+          state: 'ready',
+          freshness: 'current',
+          data: {
+            rootGeneration: 'planning-generation-a',
+            value: { context: 'Root A context' },
+          },
+          workGeneration: 1,
+        })
+      })
+
+      expect(fixture.service.refresh(selector)).toMatchObject({
+        state: 'revalidating',
+        freshness: 'stale-display-only',
+        data: { value: { context: 'Root A context' } },
+        workGeneration: 2,
+      })
+      replacement.reject(new Error('Root B archive inputs failed'))
+
+      await vi.waitFor(() => {
+        expect(fixture.service.read(selector)).toMatchObject({
+          state: 'refresh-error',
+          freshness: 'stale-display-only',
+          data: { value: { context: 'Root A context' } },
+          error: { message: 'Root B archive inputs failed' },
+          workGeneration: 2,
+        })
+      })
+
+      expect(fixture.service.refresh(selector)).toMatchObject({
+        state: 'revalidating',
+        freshness: 'stale-display-only',
+        workGeneration: 3,
+      })
+      recovery.resolve(createArchiveInstructions('Root C context'))
+
+      await vi.waitFor(() => {
+        expect(fixture.service.read(selector)).toMatchObject({
+          state: 'ready',
+          freshness: 'current',
+          data: { value: { context: 'Root C context' } },
+          workGeneration: 3,
+          snapshotGeneration: 3,
+        })
+      })
     } finally {
       subscription.unsubscribe()
       fixture.runtime.clear()

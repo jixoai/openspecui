@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Combine CLI artifact status with formal tracked-task phase.
  * 2. Keep no-tasks distinct from execution and completion.
- * 3. Never infer archive readiness from workflow completion.
+ * 3. Keep skipped dependency satisfaction distinct from completion and archive readiness.
  *
  * Original request (2026-07-15): "0/0 means no-tasks, never complete."
  */
@@ -12,7 +12,7 @@ export interface ChangeWorkflowPhaseInput {
   hasStatus: boolean
   isComplete: boolean
   trackedTaskPhase: TrackedTaskPhase
-  trackedArtifactStatus: 'done' | 'ready' | 'blocked' | null
+  trackedArtifactStatus: 'done' | 'skipped' | 'ready' | 'blocked' | null
 }
 
 export interface ChangeWorkflowPhase {
@@ -56,10 +56,11 @@ export function classifyChangeWorkflowPhase(params: ChangeWorkflowPhaseInput): C
 }
 
 export function inferTrackedArtifactStatus(
-  artifactStatuses: Array<'done' | 'ready' | 'blocked'>
-): 'done' | 'ready' | 'blocked' | null {
+  artifactStatuses: Array<'done' | 'skipped' | 'ready' | 'blocked'>
+): 'done' | 'skipped' | 'ready' | 'blocked' | null {
   if (artifactStatuses.includes('blocked')) return 'blocked'
   if (artifactStatuses.includes('ready')) return 'ready'
   if (artifactStatuses.includes('done')) return 'done'
+  if (artifactStatuses.includes('skipped')) return 'skipped'
   return null
 }

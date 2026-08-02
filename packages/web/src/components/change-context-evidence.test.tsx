@@ -1,14 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prove Change path, action context, and raw evidence remain CLI-authored on demand.
  * 2. Prove Reference summaries stay neutral while Reference errors remain direct.
  * 3. Prove static mode does not fabricate backend provenance.
- * 4. Keep checked live Status fixtures complete with their CLI evidence envelope.
+ * 4. Keep checked OpenSpec 1.7 Status fixtures complete with dependency and CLI evidence.
  *
  * Original request (2026-07-15): "保持客观中立很重要。"
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
  * Owner correction (2026-07-29): Change evidence uses readable, artifact, Reference, CLI-result, and raw-payload layers without page overflow.
+ * Original request (2026-08-01): OpenSpecUI 7 requires exact artifact dependency evidence.
  */
 import type { ChangeStatus } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -21,7 +22,7 @@ function cliStatus(): ChangeStatus {
     schemaName: 'spec-driven',
     isComplete: false,
     applyRequires: ['tasks'],
-    artifacts: [{ id: 'tasks', outputPath: 'tasks.md', status: 'ready' }],
+    artifacts: [{ id: 'tasks', outputPath: 'tasks.md', status: 'ready', requires: [] }],
     provenance: {
       kind: 'cli',
       planningHome: {

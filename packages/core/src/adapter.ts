@@ -1,16 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Read and mutate one CLI-selected planning root through reactive filesystem APIs.
- * 2. Project Specs, Changes, Archives, and schema-neutral entity files.
+ * 2. Project recursive Specs, Changes, Archives, and schema-neutral entity files.
  * 3. Keep tracked workflow tasks distinct from document checklist analytics.
  * 4. Preserve filesystem provenance and mutation boundaries for server consumers.
- * 5. Expose one bounded Change row projection for progressive list delivery without warming workflow details.
+ * 5. Expose Launch Project local-initialization evidence independently from Planning-root readiness.
  *
  * Original request (2026-07-15): "Split formal tracked progress, document checklist statistics, and Apply instruction progress into non-interchangeable facts."
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
+ * Review correction (2026-08-02): a same-named ordinary file is not initialized project structure.
  */
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
-import { requireCanonicalOpenSpecEntityId, requireOpenSpecEntityRelativePath } from './entity-id.js'
+import {
+  requireCanonicalOpenSpecEntityId,
+  requireCanonicalOpenSpecSpecId,
+  requireOpenSpecEntityRelativePath,
+} from './entity-id.js'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
 import {
   buildOpsxEntityDetail,
@@ -59,6 +65,13 @@ export interface ArchiveMeta {
   documentChecklistSummary: DocumentChecklistSummary
   createdAt: number
   updatedAt: number
+}
+
+/** Launch-project-local initialization fact; it never describes an external Store or selected Planning Root. */
+export interface LaunchProjectInitialization {
+  initialized: boolean
+  launchProjectPath: string
+  openspecPath: string
 }
 
 /**
@@ -116,8 +129,30 @@ export class OpenSpecAdapter {
   // List operations
   // =====================
 
+  /** List every Spec directory containing `spec.md` as a slash-separated relative identity. */
   async listSpecs(): Promise<string[]> {
-    return reactiveReadDir(this.specsDir, { directoriesOnly: true })
+    const visit = async (directory: string, prefix: string): Promise<string[]> => {
+      const names = await reactiveReadDir(directory, {
+        directoriesOnly: true,
+        throwOnError: true,
+      })
+      const entries = await Promise.all(
+        names.map(async (name) => {
+          const specDirectory = join(directory, name)
+          const specId = prefix ? `${prefix}/${name}` : name
+          const [content, descendants] = await Promise.all([
+            reactiveReadFile(join(specDirectory, 'spec.md')),
+            visit(specDirectory, specId),
+          ])
+          return content === null ? descendants : [specId, ...descendants]
+        })
+      )
+      return entries.flat()
+    }
+
+    return (await visit(this.specsDir, '')).sort((left, right) =>
+      left < right ? -1 : left > right ? 1 : 0
+    )
   }
 
   /**
@@ -249,7 +284,7 @@ export class OpenSpecAdapter {
   }
 
   async readSpecRaw(specId: string): Promise<string | null> {
-    const canonicalSpecId = requireCanonicalOpenSpecEntityId(specId, 'specId')
+    const canonicalSpecId = requireCanonicalOpenSpecSpecId(specId)
     const specPath = join(this.specsDir, canonicalSpecId, 'spec.md')
     return reactiveReadFile(specPath)
   }
@@ -476,7 +511,7 @@ export class OpenSpecAdapter {
   // =====================
 
   async writeSpec(specId: string, content: string): Promise<void> {
-    const canonicalSpecId = requireCanonicalOpenSpecEntityId(specId, 'specId')
+    const canonicalSpecId = requireCanonicalOpenSpecSpecId(specId)
     await writePhysicalReactiveFile({
       rootPath: this.projectDir,
       relativePath: join('openspec', 'specs', canonicalSpecId, 'spec.md'),
@@ -519,6 +554,17 @@ export class OpenSpecAdapter {
   // =====================
   // Init operations
   // =====================
+
+  /** Read the reactive local `openspec/` existence fact for the Launch Project. */
+  async readLaunchProjectInitialization(): Promise<LaunchProjectInitialization> {
+    const launchEntries = new Set(await reactiveReadDir(this.projectDir, { includeHidden: true }))
+    const openspecStat = launchEntries.has('openspec') ? await reactiveStat(this.openspecDir) : null
+    return {
+      initialized: openspecStat?.isDirectory ?? false,
+      launchProjectPath: this.projectDir,
+      openspecPath: this.openspecDir,
+    }
+  }
 
   async init(): Promise<void> {
     await mkdir(this.specsDir, { recursive: true })

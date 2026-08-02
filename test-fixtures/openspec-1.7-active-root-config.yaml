@@ -1,0 +1,41 @@
+# Orthogonal intent (2026-08-02): exercise official OpenSpec 1.7 fields beside comments, bindings, and team extensions.
+# Original request (2026-08-01): preserve raw YAML because teams may define keys beyond the official standard.
+
+# Binding remains owned by Project Binding in structured mode.
+store: shared-platform
+schema: spec-driven # Keep the selected workflow comment.
+
+x-team-policy:
+  reviewers: [architecture, security]
+  require-ticket: true
+
+context: |-
+  Payments platform maintained by Team Atlas.
+  Prefer reversible migrations.
+
+references:
+  - platform
+  - id: shared-security
+    remote: https://example.invalid/security.git
+
+rules:
+  proposal:
+    # This rule comment must survive a structured save.
+    - State the rollback boundary.
+  tasks:
+    - Keep each task independently verifiable.
+
+operations:
+  apply:
+    guidance:
+      - Run focused checks before broad gates.
+    x-review-owner: atlas
+  archive:
+    guidance:
+      - Preserve release evidence.
+  deploy:
+    guidance:
+      - Team-only operation outside the official model.
+
+x-audit:
+  retention-days: 90

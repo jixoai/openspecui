@@ -1,11 +1,10 @@
 /**
- * Orthogonal intents (created 2026-07-26 Asia/Shanghai):
- * 1. Own Environment Global CLI truth at the Server runtime-environment boundary.
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * 1. Own Environment Global CLI truth, including configured `defaultStore`, at runtime scope.
  * 2. Track the CLI-resolved config path as a dynamic reactive dependency.
  * 3. Expose immediate Pull, lifecycle-only Push, explicit refresh, and settled compatibility reads.
- * 4. Keep runtime-environment Work independent from Planning-root replacement.
- * 5. Own and retire the observed physical config-path lease for the active CLI result.
- * 6. Keep editable file bytes in a separate file-native Projection Work owner.
+ * 4. Keep editable file bytes physically separate from CLI projection Work.
+ * 5. Retire path leases and refresh Environment plus Root only after physical config replacement settles.
  *
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
@@ -57,6 +56,7 @@ export interface EnvironmentGlobalProjectionServiceOptions {
   cliExecutor: CliExecutor
   observationEnvironment: ObservationRootOwner
   workOwner: EnvironmentGlobalProjectionWorkOwner
+  onConfigFileSettled?: () => void
 }
 
 function estimateSnapshotBytes(data: EnvironmentGlobalProjectionData): number {
@@ -69,8 +69,15 @@ export class EnvironmentGlobalProjectionService {
   private configPathGeneration = 0
   private disposed = false
   private fileBridgeSubscription: ProjectionWorkSubscription | null = null
+  private configFileSettlementSubscription: ProjectionWorkSubscription | null = null
+  private configFileSettlementGeneration = 0
 
   constructor(private readonly options: EnvironmentGlobalProjectionServiceOptions) {}
+
+  /** Keep machine-config observation alive even when no Config page is mounted. */
+  start(): void {
+    this.ensureFileBridge()
+  }
 
   /** Retire the dynamic config-path lease before the Server observation environment closes. */
   async dispose(): Promise<void> {
@@ -80,6 +87,8 @@ export class EnvironmentGlobalProjectionService {
     this.configPathObservation = null
     this.fileBridgeSubscription?.unsubscribe()
     this.fileBridgeSubscription = null
+    this.configFileSettlementSubscription?.unsubscribe()
+    this.configFileSettlementSubscription = null
     await observation?.release()
   }
 
@@ -88,16 +97,18 @@ export class EnvironmentGlobalProjectionService {
   }
 
   refresh(): CliProjectionState<EnvironmentGlobalProjectionData> {
-    this.options.workOwner.registry.invalidate(this.identity())
     this.ensureFileBridge()
+    this.options.workOwner.registry.invalidate(this.identity())
     return this.read()
   }
 
   subscribe(listener: (notice: CliProjectionNotice) => void): ProjectionWorkSubscription {
+    this.ensureFileBridge()
     return this.options.workOwner.registry.subscribeLifecycle(this.request(), listener)
   }
 
   getCurrent(): Promise<EnvironmentGlobalProjectionData> {
+    this.ensureFileBridge()
     return new Promise((resolve, reject) => {
       let settled = false
       let subscription: ProjectionWorkSubscription | null = null
@@ -184,7 +195,7 @@ export class EnvironmentGlobalProjectionService {
       },
       owner: { generation: null, gitBindingToken: null },
       selector: 'config+profile+drift',
-      inputFingerprint: 'openspec-cli-1.6:config-path+list-json+list',
+      inputFingerprint: 'openspec-cli-1.7:config-path+list-json+list+default-store',
       protocolVersion: 1,
     }
   }
@@ -218,7 +229,7 @@ export class EnvironmentGlobalProjectionService {
       },
       owner: { generation: null, gitBindingToken: null },
       selector: 'config-file',
-      inputFingerprint: 'openspec-cli-1.6:config-path+file-bytes',
+      inputFingerprint: 'openspec-cli-1.7:config-path+file-bytes',
       protocolVersion: 1,
     }
   }
@@ -266,6 +277,21 @@ export class EnvironmentGlobalProjectionService {
         const currentPath = fileState?.data?.file.path
         if (!cliState?.data || !fileState?.data || nextPath === currentPath) return
         this.options.workOwner.fileRegistry.invalidate(this.fileIdentity(), 'dependency')
+      }
+    )
+    this.configFileSettlementSubscription = this.options.workOwner.fileRegistry.subscribeLifecycle(
+      this.fileRequest(),
+      (notice) => {
+        if (
+          notice.invalidationCause !== 'dependency' ||
+          notice.state !== 'ready' ||
+          notice.workGeneration <= this.configFileSettlementGeneration
+        ) {
+          return
+        }
+        this.configFileSettlementGeneration = notice.workGeneration
+        this.options.workOwner.registry.invalidate(this.identity(), 'dependency')
+        this.options.onConfigFileSettled?.()
       }
     )
   }

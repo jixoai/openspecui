@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Define distinct Project Binding, Active Root, and reactive Environment Global config projections.
  * 2. Inspect launch-project Store/Reference declarations without replacing CLI Root Context truth.
  * 3. Update only binding fields while preserving unrelated YAML fields and comments.
  * 4. Describe a typed launch-write result separately from asynchronous Root Context convergence.
- * 5. Separate CLI-owned Environment Global facts from the file-native editable document owner.
+ * 5. Separate configured Environment defaults from CLI-effective Root Context truth and file bytes.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
@@ -12,7 +12,7 @@
  */
 import { isMap, parseDocument } from 'yaml'
 import { z } from 'zod'
-import type { CliCommandResult, CliJsonValue, CliRootSource } from './cli-contracts/index.js'
+import type { CliCommandResult, CliJsonValue } from './cli-contracts/index.js'
 import type { CliResult } from './cli-executor.js'
 import type { OpenSpecDataScope } from './open-spec-data-scope.js'
 import type { RootContextError, RootContextResolvedState } from './root-context.js'
@@ -34,6 +34,14 @@ export const EnvironmentGlobalConfigValueSchema = z.record(
   z.string(),
   PlanningConfigJsonValueSchema
 )
+
+/** Runtime schema for setting or explicitly clearing the machine default Store id. */
+export const EnvironmentDefaultStoreUpdateSchema = z.object({
+  value: z.string().min(1).nullable(),
+})
+
+/** Validated mutation for the machine default Store id. */
+export type EnvironmentDefaultStoreUpdate = z.infer<typeof EnvironmentDefaultStoreUpdateSchema>
 
 /** Runtime schema for one project-declared Store Reference entry. */
 export const PlanningConfigReferenceSchema = z
@@ -148,19 +156,6 @@ export type ProjectBindingUpdateResult =
       transition: Extract<ProjectBindingTransition, { state: 'preview-error' }>
     }
 
-/** Active Planning-root configuration and CLI-owned root provenance. */
-export interface ActiveRootConfig {
-  kind: 'active-root'
-  owner: {
-    kind: 'planning-root'
-    path: string
-    source: CliRootSource
-    storeId: string | null
-    externalToLaunchProject: boolean
-  }
-  file: PlanningConfigFile
-}
-
 /** CLI-owned profile and project-drift facts observed with environment-global config. */
 export interface EnvironmentGlobalProfileState {
   available: boolean
@@ -172,6 +167,12 @@ export interface EnvironmentGlobalProfileState {
   error?: string
 }
 
+/** Authored machine default Store state without registry or effective-root inference. */
+export type EnvironmentDefaultStoreState =
+  | { state: 'absent'; id: null }
+  | { state: 'configured'; id: string }
+  | { state: 'invalid'; id: null; value: CliJsonValue }
+
 /** CLI-owned Environment Global path, parsed config, profile, drift, and command evidence. */
 export interface EnvironmentGlobalCliProjection {
   kind: 'environment-global'
@@ -181,6 +182,7 @@ export interface EnvironmentGlobalCliProjection {
   }
   configPath: string | null
   config: Record<string, CliJsonValue> | null
+  defaultStore: EnvironmentDefaultStoreState
   profileState: EnvironmentGlobalProfileState
   evidence: {
     path: CliResult
@@ -207,6 +209,20 @@ export interface EnvironmentGlobalConfig extends Omit<EnvironmentGlobalCliProjec
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Inspect only the authored machine fallback; Root Context remains the effective authority. */
+export function inspectEnvironmentDefaultStore(
+  config: Record<string, CliJsonValue> | null
+): EnvironmentDefaultStoreState {
+  if (!config || !Object.prototype.hasOwnProperty.call(config, 'defaultStore')) {
+    return { state: 'absent', id: null }
+  }
+  const value = config.defaultStore
+  if (typeof value === 'string' && value.length > 0) {
+    return { state: 'configured', id: value }
+  }
+  return { state: 'invalid', id: null, value: value ?? null }
 }
 
 function inspectReference(value: unknown): PlanningConfigReference | null {

@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Lock command argv for root-aware workflow and Reference reads.
  * 2. Lock official Store mutation argv without registry synthesis.
- * 3. Lock strict validate/archive JSON argv and explicit bypass behavior.
+ * 3. Lock strict Archive mutation and Archive Instructions JSON argv.
  * 4. Lock schema and template JSON reads to checked command contracts.
  *
  * Original request (2026-07-15): "坚持 CLI-first。"
@@ -63,11 +63,13 @@ describe('CliExecutor OpenSpec 1.6 contracts', () => {
     await executor.contracts.workflowStatus('add-auth', { store: 'shared', schema: 'custom' })
     await executor.contracts.artifactInstructions('add-auth', 'proposal', { store: 'shared' })
     await executor.contracts.applyInstructions('add-auth', { store: 'shared' })
+    await executor.contracts.archiveInstructions('add-auth', { store: 'shared' })
 
     expect(execute.mock.calls.map(([args]) => args)).toEqual([
       ['status', '--change', 'add-auth', '--json', '--schema', 'custom', '--store', 'shared'],
       ['instructions', 'proposal', '--change', 'add-auth', '--json', '--store', 'shared'],
       ['instructions', 'apply', '--change', 'add-auth', '--json', '--store', 'shared'],
+      ['instructions', 'archive', '--change', 'add-auth', '--json', '--store', 'shared'],
     ])
   })
 

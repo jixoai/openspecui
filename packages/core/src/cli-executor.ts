@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Execute buffered CLI work through process/Worker backends with runner recovery,
  *    observer-explicit OTel phase evidence, bounded probes, and owner-scoped disposal.
  * 2. Own streaming CLI processes through cancellation request, escalation, and confirmed settlement.
- * 3. Retain established init/schema/template and human validate/archive helpers.
+ * 3. Retain lifecycle helpers and add the fixed-path, tools-none project bootstrap stream.
  * 4. Expose the physically separated OpenSpec 1.6 typed command facade.
  * 5. Clear the Core-owned direct-child slot independently from stream settlement, and keep
  *    response-Span delivery physically separate from late child-process settlement evidence.
@@ -18,6 +18,8 @@
  * Original request (2026-07-31): "这些命令的执行，时间绝对不是七八秒那么久...请看一下代码，看能不能让trace更精确"
  * Original request (2026-07-31): "终端大量报错，比如: Cannot execute the operation on ended Span"
  * Original request (2026-07-31): "在主线程，通过 OPENSPEC_SPAWN_MODE=process|worker 来进行区分两种模式。"
+ * Original request (2026-08-02): initialize the Launch Project with `openspec init <path> --tools=none`.
+ * Review correction (2026-08-02): streamed command evidence must preserve argv boundaries.
  */
 import { context, trace, type Attributes, type Span } from '@opentelemetry/api'
 import { type ChildProcess } from 'child_process'
@@ -83,6 +85,10 @@ export class CliStreamTerminationError extends Error {
 
 const STREAM_TERMINATION_GRACE_MS = 1_000
 const STREAM_FORCE_CLOSE_TIMEOUT_MS = 1_000
+
+function formatCommandEvidence(argv: readonly string[]): string {
+  return JSON.stringify(argv)
+}
 
 interface CliResultInternal extends CliResult {
   errorCode?: string
@@ -837,7 +843,7 @@ export class CliExecutor {
 
       if (cancelRequested || settled) return
 
-      activeCommand = fullCommand.join(' ')
+      activeCommand = formatCommandEvidence(fullCommand)
       onEvent({ type: 'command', data: activeCommand })
       const [cmd, ...cmdArgs] = fullCommand
 
@@ -951,6 +957,14 @@ export class CliExecutor {
       args.push('--force')
     }
     return this.executeStream(args, onEvent)
+  }
+
+  /** Stream the fixed project bootstrap command without installing Agent integrations. */
+  initProjectStream(
+    projectPath: string,
+    onEvent: (event: CliStreamEvent) => void
+  ): CliStreamHandle {
+    return this.executeStream(['init', projectPath, '--tools=none'], onEvent)
   }
 
   /**

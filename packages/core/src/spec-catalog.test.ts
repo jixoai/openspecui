@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prove compound Spec keys, routes, and lookup remain collision-safe across sources.
  * 2. Prove live and static owned Catalog provenance remain source-distinct.
+ * 3. Prove recursive Spec identities remain complete and traversal-safe at schema boundaries.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  */
@@ -10,6 +11,8 @@ import {
   buildSpecCatalog,
   createStaticSpecCatalogOwnedProjection,
   getSpecCatalogEntry,
+  OwnedSpecIdentitySchema,
+  ReferencedSpecIdentitySchema,
   specIdentityFromRoute,
   specIdentityKey,
   specRoutePath,
@@ -42,6 +45,7 @@ describe('Spec Catalog', () => {
     ],
     referenceSources: ['platform-a', 'platform-b'].map((storeId) => ({
       storeId,
+      provenance: 'live' as const,
       state: 'ready' as const,
       diagnostics: [],
       evidence: {
@@ -113,4 +117,40 @@ describe('Spec Catalog', () => {
     )
     expect(specRoutePath({ kind: 'owned', specId: 'a/b c' })).toBe('/specs/owned/a%2Fb%20c')
   })
+
+  it('parses recursive owned and Store-qualified Spec identities without flattening', () => {
+    expect(OwnedSpecIdentitySchema.parse({ kind: 'owned', specId: 'platform/auth' })).toEqual({
+      kind: 'owned',
+      specId: 'platform/auth',
+    })
+    expect(
+      ReferencedSpecIdentitySchema.parse({
+        kind: 'referenced',
+        storeId: 'platform-store',
+        specId: 'platform/auth',
+      })
+    ).toEqual({
+      kind: 'referenced',
+      storeId: 'platform-store',
+      specId: 'platform/auth',
+    })
+    expect(specIdentityFromRoute({ specId: 'platform/auth' })).toEqual({
+      kind: 'owned',
+      specId: 'platform/auth',
+    })
+  })
+
+  it.each(['../secret', 'platform//auth', '/platform/auth', '%2e%2e%2fsecret'])(
+    'rejects unsafe Spec identity %j at the catalog schema boundary',
+    (specId) => {
+      expect(() => OwnedSpecIdentitySchema.parse({ kind: 'owned', specId })).toThrow()
+      expect(() =>
+        ReferencedSpecIdentitySchema.parse({
+          kind: 'referenced',
+          storeId: 'platform-store',
+          specId,
+        })
+      ).toThrow()
+    }
+  )
 })

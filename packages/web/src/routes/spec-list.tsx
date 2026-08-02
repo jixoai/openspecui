@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Default the project Spec Catalog to writable Owned Specs.
  * 2. Group direct read-only Referenced Specs by Store identity and preserve source-distinct Catalog policy.
- * 3. Preserve compound routes, collision-safe View Transition identity, and local row continuity.
+ * 3. Preserve complete recursive routes, collision-safe View Transition identity, and local row continuity.
  * 4. Keep empty states source-specific without completeness claims.
  * 5. Surface transport failure without hiding retained Catalog truth or claiming source emptiness.
  *
  * Original request (2026-07-15): "Specs defaults to Owned and provides a Store-grouped Referenced view with immutable entries."
  * Original request (2026-07-28): compact Catalog source and read-only metadata without hiding enumeration failures.
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  */
 import { InformationBadge } from '@/components/information-disclosure'
 import { SpecListSkeleton } from '@/components/realtime'

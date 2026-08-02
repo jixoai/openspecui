@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Drive Environment Global lifecycle-only Push through typed Pull endpoints.
  * 2. Prove revalidating data remains displayable while write authority is revoked.
- * 3. Prove readonly refresh-error keeps stale data visible, settles refresh, and cannot authorize writes.
+ * 3. Preserve typed `defaultStore` state while stale data remains display-only.
  *
  * Original request (2026-07-18): "Refresh locking must span the asynchronous subscription rebind."
  * Original request (2026-07-26): "Environment Global stale/refresh-error 不得授权写入（在 hook 可观测边界证明）。"
  * Owner correction (2026-07-31): Projection refresh uses readonly query transport.
+ * Original request (2026-08-01): machine `defaultStore` stays typed through CLI/file projection composition.
  */
 import type {
   EnvironmentGlobalFileProjectionData,
@@ -75,6 +76,7 @@ function environmentGlobalData(): EnvironmentGlobalProjectionData {
     },
     configPath: '/runtime/openspec/config.json',
     config,
+    defaultStore: { state: 'absent', id: null },
     profileState: {
       available: true,
       profile: 'core',

@@ -1,26 +1,29 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Read launch-project binding and active-root config from physically distinct roots.
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Read launch-project binding and reusable YAML source from its physical owner.
  * 2. Project environment-global config, profile, and drift through one CLI-owned reactive read.
- * 3. Mutate only the explicitly selected ownership facet and refresh reactive caches.
+ * 3. Mutate Project Binding or Environment Global only and refresh reactive caches.
  * 4. Return launch-file write evidence without waiting for Planning-root service convergence.
- * 5. Keep editable Environment Global file bytes in a file-native owner separate from CLI Work.
+ * 5. Keep configured Environment defaults separate from effective Root Context and file bytes.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
  * Derived requirement (2026-07-19): "Project Binding mutation uses write-then-converge settlement."
+ * Derived requirement (2026-08-02): "Active Root revision-aware mutation moves to its own physical service."
  */
 import {
   EnvironmentGlobalConfigValueSchema,
+  inspectEnvironmentDefaultStore,
   inspectProjectBinding,
   parseCliCommandResult,
   reactiveReadFile,
   updateProjectBindingContent,
   updateReactiveFileCache,
   writePhysicalReactiveFile,
-  type ActiveRootConfig,
+  type ActiveRootConfigFile,
   type CliExecutor,
   type CliJsonValue,
+  type EnvironmentDefaultStoreUpdate,
   type EnvironmentGlobalCliProjection,
   type EnvironmentGlobalFileProjection,
   type EnvironmentGlobalProfileState,
@@ -81,9 +84,10 @@ function projectEnvironmentProfileState(
   }
 }
 
-async function readProjectConfigFile(
+/** Read the preferred config.yaml/config.yml source under one physical project or Store root. */
+export async function readPlanningYamlConfigFile(
   options: ReadProjectConfigFileOptions
-): Promise<ActiveRootConfig['file']> {
+): Promise<ActiveRootConfigFile> {
   const yamlPath = join(options.rootPath, 'openspec', 'config.yaml')
   const yaml = await reactiveReadFile(yamlPath)
   if (yaml !== null) {
@@ -108,33 +112,13 @@ export async function readProjectBindingConfig(input: {
   launchProjectDir: string
   rootPreview: RootContextResolvedState
 }): Promise<ProjectBindingConfig> {
-  const file = await readProjectConfigFile({ rootPath: input.launchProjectDir })
+  const file = await readPlanningYamlConfigFile({ rootPath: input.launchProjectDir })
   return {
     kind: 'project-binding',
     owner: { kind: 'launch-project', path: input.launchProjectDir },
     file,
     binding: inspectProjectBinding(file.content),
     rootPreview: input.rootPreview,
-  }
-}
-
-/** Read configuration owned by the currently selected writable Planning root. */
-export async function readActiveRootConfig(input: {
-  launchProjectDir: string
-  rootContext: RootContext
-}): Promise<ActiveRootConfig> {
-  const planningRoot = input.rootContext.planningRoot
-  if (!planningRoot) throw new Error('Planning root is unavailable.')
-  return {
-    kind: 'active-root',
-    owner: {
-      kind: 'planning-root',
-      path: planningRoot.path,
-      source: planningRoot.source,
-      storeId: input.rootContext.storeId,
-      externalToLaunchProject: planningRoot.path !== input.launchProjectDir,
-    },
-    file: await readProjectConfigFile({ rootPath: planningRoot.path }),
   }
 }
 
@@ -158,6 +142,7 @@ export async function readEnvironmentGlobalConfig(input: {
     owner: { kind: 'runtime-environment', dataScope: input.dataScope },
     configPath,
     config: configEvidence.data,
+    defaultStore: inspectEnvironmentDefaultStore(configEvidence.data),
     profileState: projectEnvironmentProfileState(
       configEvidence.data,
       configEvidence.contractError ??
@@ -199,14 +184,14 @@ export async function writeProjectBindingConfig(input: {
   launchProjectDir: string
   update: ProjectBindingUpdate
 }): Promise<ProjectBindingLaunchWrite> {
-  const file = await readProjectConfigFile({ rootPath: input.launchProjectDir })
+  const file = await readPlanningYamlConfigFile({ rootPath: input.launchProjectDir })
   if (!file.path) throw new Error('Launch-project config path is unavailable.')
   await writePhysicalReactiveFile({
     rootPath: input.launchProjectDir,
     relativePath: join('openspec', file.format === 'yml' ? 'config.yml' : 'config.yaml'),
     content: updateProjectBindingContent(file.content, input.update),
   })
-  const writtenFile = await readProjectConfigFile({ rootPath: input.launchProjectDir })
+  const writtenFile = await readPlanningYamlConfigFile({ rootPath: input.launchProjectDir })
   return {
     state: 'write-complete',
     owner: { kind: 'launch-project', path: input.launchProjectDir },
@@ -214,17 +199,6 @@ export async function writeProjectBindingConfig(input: {
     binding: inspectProjectBinding(writtenFile.content),
     completedAt: Date.now(),
   }
-}
-
-/** Replace the active Planning-root configuration through its reactive file owner. */
-export async function writeActiveRootConfig(input: {
-  launchProjectDir: string
-  rootContext: RootContext
-  content: string
-}): Promise<void> {
-  const active = await readActiveRootConfig(input)
-  if (!active.file.path) throw new Error('Active-root config path is unavailable.')
-  await writeConfigFile(active.file.path, input.content)
 }
 
 /** Replace the CLI-selected environment-global configuration document. */
@@ -239,6 +213,21 @@ export async function writeEnvironmentGlobalConfig(input: {
   const configPath = pathEvidence.stdout.trim()
   if (!configPath) throw new Error('OpenSpec global config path is empty.')
   await writeConfigFile(configPath, `${JSON.stringify(input.config, null, 2)}\n`)
+}
+
+/** Set or explicitly clear only the official machine `defaultStore` field through the CLI. */
+export async function writeEnvironmentDefaultStore(input: {
+  cliExecutor: Pick<CliExecutor, 'execute'>
+  update: EnvironmentDefaultStoreUpdate
+}) {
+  const args = input.update.value
+    ? ['config', 'set', 'defaultStore', input.update.value, '--string']
+    : ['config', 'unset', 'defaultStore']
+  const result = await input.cliExecutor.execute(args)
+  if (!result.success) {
+    throw new Error(result.stderr || `OpenSpec ${args.slice(0, 3).join(' ')} failed.`)
+  }
+  return result
 }
 
 /** Read effective OpenSpec data scope from a successful or failed Root Context attempt. */

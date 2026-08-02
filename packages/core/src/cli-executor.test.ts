@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Verify buffered and streaming CLI execution, bounded runner probes, disposal, and error behavior.
  * 2. Preserve the launch process environment without loading project-owned environment files.
- * 3. Verify OpenSpec lifecycle command construction and cancellation.
+ * 3. Verify OpenSpec lifecycle command construction, fixed project bootstrap, and cancellation.
  * 4. Prove cancellation ownership and forced-timeout settlement remain immutable through late close.
  * 5. Prove late close clears the Core-owned direct-child slot exactly once.
  *
@@ -12,6 +12,8 @@
  * Original request (2026-07-17): "Make late-child-close bookkeeping proof resistant to the exact missing-cleanup mutation."
  * Built-runtime correction (2026-07-30): foreground Server shutdown must retire buffered projection children and settled probe timers.
  * Owner diagnosis (2026-07-31): explicit process-mode lifecycle evidence must tolerate the observed Node startup tail.
+ * Original request (2026-08-02): lock `openspec init <launch-project> --tools=none` before the Alert can execute it.
+ * Review correction (2026-08-02): command evidence must preserve argv boundaries for paths containing spaces.
  */
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import { ChildProcess } from 'node:child_process'
@@ -215,6 +217,18 @@ describe('CliExecutor', () => {
   })
 
   describe('init()', () => {
+    it('streams the fixed Launch Project bootstrap command with no Agent tools', () => {
+      const executeStream = vi.spyOn(cliExecutor, 'executeStream').mockReturnValue({
+        settled: Promise.resolve({ reason: 'exited', exitCode: 0 }),
+        cancel: () => Promise.resolve({ reason: 'cancelled', exitCode: null }),
+      })
+      const onEvent = vi.fn()
+
+      cliExecutor.initProjectStream('/repo/demo', onEvent)
+
+      expect(executeStream).toHaveBeenCalledWith(['init', '/repo/demo', '--tools=none'], onEvent)
+    })
+
     it('should call execute with init args and no tools (auto-detect)', async () => {
       const executeSpy = vi.spyOn(cliExecutor, 'execute').mockResolvedValue({
         success: true,
@@ -384,6 +398,22 @@ describe('CliExecutor', () => {
   })
 
   describe('stream settlement ownership', () => {
+    it('serializes command evidence without shell interpretation or argv loss', async () => {
+      await configManager.writeConfig({ cli: { command: process.execPath } })
+      clearCache()
+      const events: CliStreamEvent[] = []
+      const handle = cliExecutor.executeStream(
+        ['-e', 'process.exit(0)', '/repo/$HOME/a&b;*.md'],
+        (event) => events.push(event)
+      )
+
+      await handle.settled
+      expect(events[0]).toEqual({
+        type: 'command',
+        data: JSON.stringify([process.execPath, '-e', 'process.exit(0)', '/repo/$HOME/a&b;*.md']),
+      })
+    })
+
     it('makes cancellation available before delayed CLI runner resolution completes', async () => {
       const runnerResolution = Promise.withResolvers<string[]>()
       vi.spyOn(configManager, 'getCliCommand').mockReturnValue(runnerResolution.promise)
@@ -533,7 +563,10 @@ describe('CliExecutor', () => {
 
       await done
 
-      expect(events[0]).toMatchObject({ type: 'command', data: 'echo hello world' })
+      expect(events[0]).toMatchObject({
+        type: 'command',
+        data: JSON.stringify(['echo', 'hello', 'world']),
+      })
       expect(
         events.some((event) => event.type === 'stdout' && event.data?.includes('hello world'))
       ).toBe(true)
@@ -561,7 +594,7 @@ describe('CliExecutor', () => {
 
       expect(events[0]).toMatchObject({
         type: 'command',
-        data: "node -e process.stdout.write('raw-ok')",
+        data: JSON.stringify(['node', '-e', "process.stdout.write('raw-ok')"]),
       })
       expect(
         events.some((event) => event.type === 'stdout' && event.data?.includes('raw-ok'))

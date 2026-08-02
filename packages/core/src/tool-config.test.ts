@@ -1,4 +1,12 @@
-import { mkdir } from 'node:fs/promises'
+/**
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * 1. Prove project Agent detection follows the complete OpenSpec 1.7 registry and path-kind semantics.
+ * 2. Preserve special file-or-directory detection paths without treating default Tool roots as files.
+ *
+ * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
+ */
+
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
@@ -24,8 +32,8 @@ describe('getDetectedProjectTools', () => {
     await expect(getDetectedProjectTools(tempDir)).resolves.toEqual([])
   })
 
-  it('does not expose the removed AGENTS.md pseudo-tool', () => {
-    expect(getAllToolIds()).not.toContain('agents')
+  it('exposes the unavailable AGENTS.md pseudo-tool in the complete registry', () => {
+    expect(getAllToolIds()).toContain('agents')
   })
 
   it('includes OpenSpec CLI 1.4 tool ids', () => {
@@ -47,6 +55,14 @@ describe('getDetectedProjectTools', () => {
     expect(detected.map((tool) => tool.value)).toEqual(['claude', 'cursor'])
   })
 
+  it('does not detect a default Tool root when the path is a file', async () => {
+    await writeFile(join(tempDir, '.claude'), 'not a directory', 'utf8')
+
+    const detected = await getDetectedProjectTools(tempDir)
+
+    expect(detected.map((tool) => tool.value)).not.toContain('claude')
+  })
+
   it('does not detect GitHub Copilot from a bare .github directory', async () => {
     await mkdir(join(tempDir, '.github'), { recursive: true })
 
@@ -61,5 +77,13 @@ describe('getDetectedProjectTools', () => {
     const detected = await getDetectedProjectTools(tempDir)
 
     expect(detected.map((tool) => tool.value)).toContain('github-copilot')
+  })
+
+  it('detects Hermes from its official file marker', async () => {
+    await writeFile(join(tempDir, 'HERMES.md'), '# Hermes', 'utf8')
+
+    const detected = await getDetectedProjectTools(tempDir)
+
+    expect(detected.map((tool) => tool.value)).toContain('hermes')
   })
 })

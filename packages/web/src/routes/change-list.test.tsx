@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prove Changes render a primary row before admitting the lower-priority aggregate Status projection.
  * 2. Prove no-tasks and incomplete tasks cannot become workflow-complete.
- * 3. Prove completed tracked tasks and CLI Status converge on workflow completion.
+ * 3. Prove typed OpenSpec 1.7 Status and completed tracked tasks converge on workflow completion.
  * 4. Prove the page-level New command remains available with active Changes.
  * 5. Distinguish main Change-subscription terminal errors and stale refresh from Loading and empty truth.
  *
@@ -10,6 +10,7 @@
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Original request (2026-08-01): OpenSpecUI 7 uses exact artifact dependency fixtures.
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -442,7 +443,7 @@ describe('ChangeList', () => {
           schemaName: 'custom',
           isComplete: true,
           applyRequires: [],
-          artifacts: [{ id: 'plan', status: 'done' }],
+          artifacts: [{ id: 'plan', status: 'done', requires: [] }],
         },
       ],
     })
@@ -475,7 +476,7 @@ describe('ChangeList', () => {
           schemaName: 'spec-driven',
           isComplete: true,
           applyRequires: ['tasks'],
-          artifacts: [{ id: 'tasks', status: 'done' }],
+          artifacts: [{ id: 'tasks', status: 'done', requires: [] }],
         },
       ],
     })

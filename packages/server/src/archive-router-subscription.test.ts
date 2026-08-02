@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prove the public Archive Router emits typed recompute lifecycle events.
  * 2. Prove replacement data follows its start event while the task is blocked.
  * 3. Prove replacement failure preserves the original error after its start event.
  * 4. Keep the fixed point inside the Planning-root owner and checked transport lane.
+ * 5. Reject stale Archive Instructions generation before Validate or Archive starts.
  *
  * Original request (2026-07-22): "整个过程中，几乎都在 Loading。"
  * Derived requirement (2026-07-22): Archive retains A while its reactive replacement computes B.
+ * Review correction (2026-08-01): Archive inputs and mutation share one checked Root generation.
  */
 import {
   CliContextSchema,
@@ -18,6 +20,8 @@ import {
   ReactiveState,
   type ArchiveMeta,
   type CliCommandResult,
+  type CliStreamHandle,
+  type CliStreamSettlement,
 } from '@openspecui/core'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -85,6 +89,14 @@ function archive(id: string, updatedAt: number): ArchiveMeta {
   }
 }
 
+function settledStreamHandle(exitCode: number | null): CliStreamHandle {
+  const settlement: CliStreamSettlement = { reason: 'exited', exitCode }
+  return {
+    settled: Promise.resolve(settlement),
+    cancel: () => Promise.resolve(settlement),
+  }
+}
+
 async function createArchiveRouterFixture() {
   const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-archive-router-'))
   const launchRoot = join(tempDir, 'launch')
@@ -143,7 +155,6 @@ async function createArchiveRouterFixture() {
       await server.planningRootServices.dispose()
       await server.storeObservation.dispose()
       await server.dataHomeObserver.dispose()
-      await server.toolCommandObservation.dispose()
       server.projectInvalidation.dispose()
       await server.observationEnvironment.dispose()
       server.projectRecoveryService.dispose()
@@ -154,6 +165,41 @@ async function createArchiveRouterFixture() {
 }
 
 describe('public Archive projection subscription', () => {
+  it('rejects stale Archive Instructions generation before strict validation starts', async () => {
+    const fixture = await createArchiveRouterFixture()
+    const validateStream = vi
+      .spyOn(fixture.server.cliExecutor, 'validateStream')
+      .mockImplementation((_options, onEvent) => {
+        onEvent({ type: 'exit', exitCode: 0 })
+        return settledStreamHandle(0)
+      })
+    const archiveStream = vi
+      .spyOn(fixture.server.cliExecutor, 'archiveStream')
+      .mockImplementation((_changeId, _options, onEvent) => {
+        onEvent({ type: 'exit', exitCode: 0 })
+        return settledStreamHandle(0)
+      })
+
+    try {
+      const observable = await appRouter
+        .createCaller(fixture.server.createContext())
+        .cli.archiveStrictStream({
+          changeId: 'add-search',
+          expectedRootGeneration: 'stale-planning-generation',
+        })
+
+      await expect(
+        new Promise<void>((resolve, reject) => {
+          observable.subscribe({ complete: resolve, error: reject })
+        })
+      ).rejects.toMatchObject({ code: 'CONFLICT' })
+      expect(validateStream).not.toHaveBeenCalled()
+      expect(archiveStream).not.toHaveBeenCalled()
+    } finally {
+      await fixture.dispose()
+    }
+  })
+
   it('emits A, replacement start, then B through the Planning-root Router endpoint', async () => {
     const fixture = await createArchiveRouterFixture()
     const source = new ReactiveState<'A' | 'B'>('A')

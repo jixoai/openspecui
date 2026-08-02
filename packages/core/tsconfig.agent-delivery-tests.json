@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/agent-command-content.test.ts",
+    "src/agent-delivery-registry.test.ts",
+    "src/agent-delivery-policy.test.ts",
+    "src/tool-config.test.ts",
+    "src/tool-init-state.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

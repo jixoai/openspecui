@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Define selector-exact Planning-root CLI Projection Work contracts.
  * 2. Define the runtime-environment Environment Global projection contract.
  * 3. Publish browser-safe lifecycle Pull schemas without importing Node-owned Core modules.
- * 4. Keep projection data discriminated so one typed registry never mixes selector payloads.
+ * 4. Keep projection data discriminated across Status and Artifact/Apply/Archive Instructions.
  *
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
@@ -16,6 +16,7 @@ import {
 } from './cli-projection.js'
 import {
   ApplyInstructionsProjectionSchema,
+  ArchiveInstructionsSchema,
   ArtifactInstructionsSchema,
   ChangeStatusSchema,
   OpsxConfigBundleSchema,
@@ -49,6 +50,11 @@ export const PlanningCliProjectionSelectorSchema = z.discriminatedUnion('kind', 
     change: z.string().min(1),
     schema: z.string().optional(),
   }),
+  z.object({
+    kind: z.literal('opsx-archive-instructions'),
+    change: z.string().min(1),
+    schema: z.string().optional(),
+  }),
   z.object({ kind: z.literal('opsx-config-bundle') }),
   z.object({ kind: z.literal('opsx-templates'), schema: z.string().optional() }),
   z.object({ kind: z.literal('opsx-template-contents'), schema: z.string().optional() }),
@@ -75,6 +81,11 @@ export const PlanningCliProjectionDataSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('opsx-apply-instructions'),
     value: ApplyInstructionsProjectionSchema,
+  }),
+  z.object({
+    kind: z.literal('opsx-archive-instructions'),
+    rootGeneration: z.string().min(1),
+    value: ArchiveInstructionsSchema,
   }),
   z.object({
     kind: z.literal('opsx-config-bundle'),
@@ -145,6 +156,11 @@ export const EnvironmentGlobalProjectionDataSchema = z.object({
   }),
   configPath: z.string().nullable(),
   config: z.record(z.string(), CliJsonValueSchema).nullable(),
+  defaultStore: z.discriminatedUnion('state', [
+    z.object({ state: z.literal('absent'), id: z.null() }),
+    z.object({ state: z.literal('configured'), id: z.string() }),
+    z.object({ state: z.literal('invalid'), id: z.null(), value: CliJsonValueSchema }),
+  ]),
   profileState: z.object({
     available: z.boolean(),
     profile: z.enum(['core', 'custom']).nullable(),

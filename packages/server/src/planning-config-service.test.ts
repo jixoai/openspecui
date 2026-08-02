@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Prove three configuration owners retain distinct roots and evidence.
  * 2. Prove binding and active-root writes never cross ownership boundaries.
  * 3. Prove environment profile/drift and raw evidence refresh in one projection.
@@ -12,11 +12,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mutateActiveRootConfig, readActiveRootConfig } from './active-root-config-service.js'
 import {
-  readActiveRootConfig,
   readEnvironmentGlobalConfig,
   readProjectBindingConfig,
-  writeActiveRootConfig,
   writeProjectBindingConfig,
 } from './planning-config-service.js'
 
@@ -121,10 +120,20 @@ describe('planning config ownership', () => {
       launchProjectDir: launchProject,
       update: { store: 'shared', references: [{ id: 'platform' }] },
     })
-    await writeActiveRootConfig({
+    const active = await readActiveRootConfig({
       launchProjectDir: launchProject,
       rootContext: context,
-      content: 'schema: active\n',
+    })
+    await mutateActiveRootConfig({
+      launchProjectDir: launchProject,
+      rootContext: context,
+      mutation: {
+        mode: 'raw',
+        ownerPath: active.owner.path,
+        filePath: active.file.path,
+        revision: active.revision,
+        content: 'schema: active\n',
+      },
     })
 
     await expect(readFile(join(launchProject, 'openspec', 'config.yaml'), 'utf8')).resolves.toMatch(

@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-15 Asia/Shanghai):
- * 1. Lock OpenSpec 1.6 root, Store, Reference, validate, and archive payloads.
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * 1. Lock OpenSpec root, Store, Reference, workflow, validate, and archive payloads.
  * 2. Prove additive-field tolerance and required-field strictness.
  * 3. Prove process evidence and raw JSON survive success and failure parsing.
  * 4. Prove multiline requirement bodies remain intact.
  *
  * Original request (2026-07-15): "1.4、1.5、1.6 第一方合同回归测试。"
+ * Original request (2026-08-01): OpenSpecUI 7 requires the strict OpenSpec 1.7 workflow contract.
  */
 import { describe, expect, it } from 'vitest'
 import type { CliResult } from '../cli-executor.js'
@@ -34,6 +35,7 @@ describe('OpenSpec CLI command contract parsing', () => {
     { source: 'nearest', path: '/repo', store_id: undefined },
     { source: 'declared', path: '/stores/shared', store_id: 'shared' },
     { source: 'store', path: '/stores/shared', store_id: 'shared' },
+    { source: 'global_default', path: '/stores/shared', store_id: 'shared' },
   ] as const)('preserves $source root provenance', (root) => {
     const parsed = parseCliCommandResult(
       result({
@@ -256,7 +258,7 @@ describe('OpenSpec CLI command contract parsing', () => {
           requiresAffectedAreaSelection: false,
           constraints: ['Repo-local edits only.'],
         },
-        artifacts: [{ id: 'tasks', outputPath: 'tasks.md', status: 'ready' }],
+        artifacts: [{ id: 'tasks', outputPath: 'tasks.md', status: 'ready', requires: ['specs'] }],
         root: { path: '/store', source: 'store', store_id: 'shared' },
       }),
       CliWorkflowStatusSchema

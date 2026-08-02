@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Define reactive Change Status and Instructions projections.
  * 2. Preserve live CLI path/action/Reference provenance versus explicit static absence.
  * 3. Attribute Apply instruction progress without replacing tracked-task truth.
- * 4. Define schema, template, and dependency projections for OPSX surfaces.
+ * 4. Define schema, template, skipped-dependency, and operation-input projections for OPSX surfaces.
  * 5. Publish runtime schemas for final Projection Work payloads, including transformed Apply progress.
  *
  * Original request (2026-07-15): "Preserve CLI-provided paths, action context, References, and diagnostics end to end."
@@ -48,7 +48,7 @@ const OpsxCliJsonValueSchema: z.ZodType<CliJsonValue> = z.lazy(() =>
 /** Raw process and parser evidence retained beside one live CLI projection. */
 export const OpsxCliEvidenceSchema = z
   .object({
-    command: z.enum(['status', 'instructions', 'instructions apply']),
+    command: z.enum(['status', 'instructions', 'instructions apply', 'instructions archive']),
     success: z.boolean(),
     stdout: z.string(),
     stderr: z.string(),
@@ -78,10 +78,15 @@ const OpsxApplyInstructionsEvidenceSchema = OpsxCliEvidenceSchema.extend({
   command: z.literal('instructions apply'),
 })
 
+const OpsxArchiveInstructionsEvidenceSchema = OpsxCliEvidenceSchema.extend({
+  command: z.literal('instructions archive'),
+})
+
 export const ArtifactStatusSchema = z.object({
   id: z.string(),
   outputPath: z.string(),
-  status: z.enum(['done', 'ready', 'blocked']),
+  status: z.enum(['done', 'skipped', 'ready', 'blocked']),
+  requires: z.array(z.string()),
   missingDeps: z.array(z.string()).optional(),
   relativePath: z.string().optional(),
 })
@@ -116,6 +121,7 @@ export const DependencyInfoSchema = z.object({
   done: z.boolean(),
   path: z.string(),
   description: z.string(),
+  skipped: z.boolean().optional(),
 })
 
 export type DependencyInfo = z.infer<typeof DependencyInfoSchema>
@@ -149,6 +155,8 @@ const ApplyInstructionsInputSchema = z.object({
   missingArtifacts: z.array(z.string()).optional(),
   instruction: z.string(),
   references: z.array(CliReferenceIndexEntrySchema).optional(),
+  context: z.string().optional(),
+  operationGuidance: z.array(z.string()).optional(),
   evidence: OpsxApplyInstructionsEvidenceSchema,
 })
 
@@ -188,6 +196,8 @@ export const ApplyInstructionsProjectionSchema = z.object({
   missingArtifacts: z.array(z.string()).optional(),
   instruction: z.string(),
   references: z.array(CliReferenceIndexEntrySchema).optional(),
+  context: z.string().optional(),
+  operationGuidance: z.array(z.string()).optional(),
   evidence: OpsxApplyInstructionsEvidenceSchema,
   applyInstructionProgress: ApplyInstructionProgressSchema,
 })
@@ -203,6 +213,15 @@ export const ApplyInstructionsSchema = ApplyInstructionsInputSchema.transform(
 ).pipe(ApplyInstructionsProjectionSchema)
 
 export type ApplyInstructions = z.infer<typeof ApplyInstructionsSchema>
+
+export const ArchiveInstructionsSchema = z.object({
+  changeName: z.string(),
+  context: z.string().optional(),
+  operationGuidance: z.array(z.string()).optional(),
+  evidence: OpsxArchiveInstructionsEvidenceSchema,
+})
+
+export type ArchiveInstructions = z.infer<typeof ArchiveInstructionsSchema>
 
 const NullableString = z.string().nullable().optional()
 

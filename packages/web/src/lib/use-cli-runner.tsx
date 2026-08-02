@@ -1,13 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
- * 1. Run ordered CLI streams with stable process and loading state.
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Run ordered CLI streams with stable process/loading state across dedicated Root and Agent transports.
  * 2. Preserve stdout, stderr, exit, cancellation, and multiline diagnostics verbatim.
  * 3. Route root-dependent operations through dedicated Server-owned transports.
  * 4. Derive execution and displayed command evidence from one exhaustive typed transport.
- * 5. Carry opaque prepared-root generation into direct Verify admission.
+ * 5. Carry opaque prepared-root generation into Validate and Archive admission.
  *
  * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
  * Original request (2026-07-17): "Remove the Web generic fallback when no production caller requires it."
+ * Review correction (2026-08-01): Archive Instructions and mutation must share one Root generation.
+ * Owner Agent direction (2026-08-01): Agent Init, Update, and Repair execute only through the Agent owner.
+ * Review correction (2026-08-02): remove the generic Planning-root Update transport.
  */
 import '@/styles/terminal-effects.css'
 import type { CliStreamEvent } from '@openspecui/core'
@@ -57,23 +60,10 @@ interface ArchiveStrictStreamTransport {
   type: 'archive-strict'
   input: {
     changeId: string
+    expectedRootGeneration: string
     skipSpecs?: boolean
     noValidate?: boolean
   }
-}
-
-interface InitStreamTransport {
-  type: 'init'
-  input?: {
-    tools?: string[] | 'all' | 'none'
-    profile?: 'core' | 'custom'
-    force?: boolean
-  }
-}
-
-interface PlanningRootUpdateStreamTransport {
-  type: 'planning-root-update'
-  input?: { force?: boolean }
 }
 
 interface ValidateStreamTransport {
@@ -93,13 +83,30 @@ interface InstallGlobalCliStreamTransport {
   type: 'install-global-cli'
 }
 
+interface AgentInitStreamTransport {
+  type: 'agent-init'
+  input: {
+    tools: string[] | 'all'
+    force?: boolean
+  }
+}
+
+interface AgentUpdateStreamTransport {
+  type: 'agent-update'
+}
+
+interface AgentRepairStreamTransport {
+  type: 'agent-repair'
+}
+
 /** Sole semantic descriptor for one browser-requested CLI stream. */
 export type CliStreamTransport =
   | ArchiveStrictStreamTransport
-  | InitStreamTransport
-  | PlanningRootUpdateStreamTransport
   | ValidateStreamTransport
   | InstallGlobalCliStreamTransport
+  | AgentInitStreamTransport
+  | AgentUpdateStreamTransport
+  | AgentRepairStreamTransport
 
 interface UseCliRunnerOptions {
   onCreateProcess?: (process: CommandProcess) => void
@@ -148,30 +155,6 @@ function planCliStream(stream: CliStreamTransport): CliStreamPlan {
           trpcClient.cli.archiveStrictStream.subscribe(input, handlers),
       }
     })
-    .with({ type: 'init' }, ({ input }) => {
-      const args = ['init']
-      if (input?.tools !== undefined) {
-        args.push('--tools', Array.isArray(input.tools) ? input.tools.join(',') : input.tools)
-      }
-      if (input?.profile) args.push('--profile', input.profile)
-      if (input?.force) args.push('--force')
-      return {
-        command: 'openspec',
-        args,
-        subscribe: (handlers: CliStreamHandlers) =>
-          trpcClient.cli.initStream.subscribe(input, handlers),
-      }
-    })
-    .with({ type: 'planning-root-update' }, ({ input }) => {
-      const args = ['update']
-      if (input?.force) args.push('--force')
-      return {
-        command: 'openspec',
-        args,
-        subscribe: (handlers: CliStreamHandlers) =>
-          trpcClient.cli.updateStream.subscribe(input, handlers),
-      }
-    })
     .with({ type: 'validate' }, (stream) => {
       const { input } = stream
       const args = ['validate']
@@ -190,6 +173,32 @@ function planCliStream(stream: CliStreamTransport): CliStreamPlan {
       args: ['install', '-g', '@fission-ai/openspec'],
       subscribe: (handlers: CliStreamHandlers) =>
         trpcClient.cli.installGlobalCliStream.subscribe(undefined, handlers),
+    }))
+    .with({ type: 'agent-init' }, ({ input }) => {
+      const args = [
+        'init',
+        '--tools',
+        Array.isArray(input.tools) ? input.tools.join(',') : input.tools,
+      ]
+      if (input.force) args.push('--force')
+      return {
+        command: 'openspec',
+        args,
+        subscribe: (handlers: CliStreamHandlers) =>
+          trpcClient.agentIntegrations.initStream.subscribe(input, handlers),
+      }
+    })
+    .with({ type: 'agent-update' }, () => ({
+      command: 'openspec',
+      args: ['update'],
+      subscribe: (handlers: CliStreamHandlers) =>
+        trpcClient.agentIntegrations.updateStream.subscribe(undefined, handlers),
+    }))
+    .with({ type: 'agent-repair' }, () => ({
+      command: 'openspec',
+      args: ['update', '--force'],
+      subscribe: (handlers: CliStreamHandlers) =>
+        trpcClient.agentIntegrations.repairStream.subscribe(undefined, handlers),
     }))
     .exhaustive()
 }

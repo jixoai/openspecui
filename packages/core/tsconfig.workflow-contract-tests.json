@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/cli-contracts/workflow.test.ts",
+    "src/opsx-types.test.ts",
+    "src/official-cli-17-workflow-fixtures.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

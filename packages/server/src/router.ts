@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Register lease-scoped planning-root document, OPSX, regional Dashboard, readonly refresh, and archive procedures.
- * 2. Register CLI, Root Context, reactive launch-tool initialization, configuration, Store, and terminal-result projections.
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Register lease-scoped planning-root document, OPSX Status/Instructions, Dashboard, readonly refresh, and archive procedures.
+ * 2. Register CLI, Root Context, Agent delivery, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
  * 5. Compose the public tRPC application router and shared procedure schemas.
@@ -25,6 +25,13 @@
  * Owner correction (2026-07-31): Observation refresh remains readonly when internal cache or stamp maintenance is required.
  * Full-gate correction (2026-07-31): Dashboard Git invalidation must re-confirm Planning authority instead of replaying a stale Root snapshot.
  * Original request (2026-07-31): "检查它的工作到底做了什么，为什么需要那么多的时间"
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
+ * Original request (2026-08-01): machine `defaultStore` settlement refreshes Environment and Root independently.
+ * Original request (2026-08-01): move Agent policy, inventory, and execution ownership to `/config/agents`.
+ * Original request (2026-08-01): preserve revision-aware Raw YAML beside official Active Root structured fields.
+ * Review correction (2026-08-02): remove generic Agent Init/Update mutations that bypass the Agent owner.
+ * Original request (2026-08-02): initialize a missing Launch Project through one explicit `--tools=none` Alert.
+ * Review correction (2026-08-02): Init cancellation and success wait for objective process and projection settlement.
  */
 import type {
   ChangeFile,
@@ -51,16 +58,19 @@ import type {
   OpenSpecWatcher,
 } from '@openspecui/core'
 import {
+  ActiveRootMutationSchema,
+  AgentDeliveryPolicyUpdateSchema,
+  applyAgentDeliveryPolicy,
   BatchTranslateInputSchema,
   CliProjectionNoticeSchema,
   CodeEditorThemeSchema,
-  createToolInitStateProjection,
   DashboardConfigSchema,
   DashboardGitSnapshotSchema,
   DashboardSummaryInvalidationSchema,
   DashboardSummaryProjectionStateSchema,
   DashboardTrendsProjectionSchema,
   DocumentTranslationConfigUpdateSchema,
+  EnvironmentDefaultStoreUpdateSchema,
   EnvironmentGlobalConfigValueSchema,
   EnvironmentGlobalFileProjectionStateSchema,
   EnvironmentGlobalProjectionStateSchema,
@@ -84,6 +94,7 @@ import {
   ProjectBindingUpdateSchema,
   ReactiveContext,
   requireCanonicalOpenSpecEntityId,
+  requireCanonicalOpenSpecSpecId,
   requireOpenSpecEntityRelativePath,
   resolveTerminalShellDefaults,
   RUNTIME_INVALIDATION_FACETS,
@@ -99,8 +110,8 @@ import {
   TranslationCacheWriteInputSchema,
   TranslationEngineIdSchema,
   TranslationEngineLifecycleStatusSchema,
-  type AIToolOption,
   type ApplyInstructions,
+  type ArchiveInstructions,
   type ArtifactInstructions,
   type ChangeStatus,
   type CliProjectionNotice,
@@ -146,6 +157,8 @@ import { initTRPC, TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { mutateActiveRootConfig, readActiveRootConfig } from './active-root-config-service.js'
+import type { AgentDeliveryProjectionService } from './agent-delivery-projection-service.js'
 import { CliMutationInvalidator } from './cli-mutation-invalidator.js'
 import { createCliStreamObservable } from './cli-stream-observable.js'
 import type { Ct2ModelAssetService } from './ct2-model-asset-service.js'
@@ -177,13 +190,13 @@ import type { LocalModelAssetService } from './local-model-asset-service.js'
 import type { NotificationService } from './notification-service.js'
 import { getOpenSpecMutationFacets } from './open-spec-mutation-facets.js'
 import {
-  readActiveRootConfig,
   readProjectBindingConfig,
-  writeActiveRootConfig,
+  writeEnvironmentDefaultStore,
   writeEnvironmentGlobalConfig,
   writeProjectBindingConfig,
 } from './planning-config-service.js'
 import type { PlanningRootServiceResolver, PlanningRootServices } from './planning-root-service.js'
+import { ProjectInitializationOperationOwner } from './project-initialization-operation.js'
 import type { ProjectRecoveryService } from './project-recovery-service.js'
 import {
   projectionWorkPhases,
@@ -204,7 +217,6 @@ import { StoreMutationService, type StartStoreMutationInput } from './store-muta
 import type { StoreObservationReconciler } from './store-observation-service.js'
 import type { StoreProjectionService } from './store-projection-service.js'
 import { startStrictArchiveStream } from './strict-archive-stream.js'
-import type { ToolCommandObservationService } from './tool-command-observation-service.js'
 import { setTrackedTaskCompletion } from './tracked-task-mutation.js'
 import type { TranslationCacheService } from './translation-cache-service.js'
 import type { TranslationEngineService } from './translation-engine-service.js'
@@ -229,10 +241,10 @@ export interface Context {
   rootContextProjectionService: RootContextProjectionService
   /** CLI-backed runtime-environment config/profile Work and lifecycle owner. */
   environmentGlobalProjectionService: EnvironmentGlobalProjectionService
+  /** Environment-authoritative Agent registry, policy, and physical projection owner. */
+  agentDeliveryProjectionService: AgentDeliveryProjectionService
   /** Server-local Store mutation admission and lifecycle ledger. */
   storeMutationService: StoreMutationService
-  /** Runtime owner for environment-global tool command watcher leases. */
-  toolCommandObservation: ToolCommandObservationService
   configManager: ConfigManager
   cliExecutor: CliExecutor
   projectRecoveryService: ProjectRecoveryService
@@ -774,6 +786,50 @@ function streamOpenSpecCliMutation(
   const facets = getOpenSpecMutationFacets(args)
   if (!facets) return start(onEvent)
   return new CliMutationInvalidator(ctx.runtimeInvalidation).stream(facets, start, onEvent)
+}
+
+const projectInitializationOwners = new WeakMap<CliExecutor, ProjectInitializationOperationOwner>()
+const projectInitializationInput = z.object({ requestId: z.string().min(1).max(128) })
+
+function projectInitializationOwner(ctx: Context): ProjectInitializationOperationOwner {
+  const existing = projectInitializationOwners.get(ctx.cliExecutor)
+  if (existing) return existing
+  const owner = new ProjectInitializationOperationOwner()
+  projectInitializationOwners.set(ctx.cliExecutor, owner)
+  return owner
+}
+
+async function waitForLaunchProjectInitialization(ctx: Context): Promise<void> {
+  const timeoutAt = Date.now() + 5_000
+  while (Date.now() < timeoutAt) {
+    if ((await ctx.launchProjectAdapter.readLaunchProjectInitialization()).initialized) return
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  throw new Error(
+    'OpenSpec CLI exited successfully, but the Launch Project openspec/ directory did not settle.'
+  )
+}
+
+async function settleProjectInitializationReplacements(ctx: Context): Promise<void> {
+  ctx.rootContextProjectionService.refresh()
+  await Promise.all([
+    waitForLaunchProjectInitialization(ctx),
+    ctx.rootContextProjectionService.getCurrent(),
+  ])
+  await Promise.all([
+    fetchProjectBindingConfig(ctx),
+    fetchActiveRootConfig(ctx),
+    runPlanningRootRead(ctx, async ({ planningCliProjectionService }) => {
+      const projection = await planningCliProjectionService.getCurrent({
+        kind: 'opsx-config-bundle',
+      })
+      if (projection.kind !== 'opsx-config-bundle') {
+        throw new Error('Unexpected OPSX Config-bundle projection after project initialization.')
+      }
+      return projection.value
+    }),
+    ctx.agentDeliveryProjectionService.refresh(),
+  ])
 }
 
 /** Project-backend notification query, subscription, and mutation procedures. */
@@ -1595,7 +1651,7 @@ export const specRouter = router({
   save: publicProcedure
     .input(z.object({ identity: OwnedSpecIdentitySchema, content: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const specId = requireCanonicalOpenSpecEntityId(input.identity.specId, 'specId')
+      const specId = requireCanonicalOpenSpecSpecId(input.identity.specId)
       await runPlanningRoot(ctx, ({ adapter }) => adapter.writeSpec(specId, input.content))
       return { success: true }
     }),
@@ -1727,10 +1783,54 @@ export const changeRouter = router({
  * Init router - project initialization
  */
 export const initRouter = router({
-  init: publicProcedure.mutation(async ({ ctx }) => {
-    await ctx.launchProjectAdapter.init()
-    return { success: true }
+  get: publicProcedure.query(({ ctx }) =>
+    ctx.launchProjectAdapter.readLaunchProjectInitialization()
+  ),
+
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return observable<Awaited<ReturnType<OpenSpecAdapter['readLaunchProjectInitialization']>>>(
+      (emit) => {
+        const reactiveContext = new ReactiveContext()
+        const controller = new AbortController()
+        void (async () => {
+          try {
+            for await (const state of reactiveContext.stream(
+              () => ctx.launchProjectAdapter.readLaunchProjectInitialization(),
+              controller.signal
+            )) {
+              emit.next(state)
+            }
+          } catch (error: unknown) {
+            if (!controller.signal.aborted) {
+              emit.error(error instanceof Error ? error : new Error(String(error)))
+            }
+          }
+        })()
+        return () => controller.abort()
+      }
+    )
   }),
+
+  initStream: publicProcedure.input(projectInitializationInput).subscription(({ ctx, input }) => {
+    return createCliStreamObservable((onEvent) => {
+      return projectInitializationOwner(ctx).start({
+        requestId: input.requestId,
+        onEvent,
+        start: (operationEvent) =>
+          streamOpenSpecCliMutation(
+            ctx,
+            ['init'],
+            (mutationEvent) => ctx.cliExecutor.initProjectStream(ctx.projectDir, mutationEvent),
+            operationEvent
+          ),
+        settleSuccess: () => settleProjectInitializationReplacements(ctx),
+      })
+    })
+  }),
+
+  cancel: publicProcedure
+    .input(projectInitializationInput)
+    .mutation(({ ctx, input }) => projectInitializationOwner(ctx).cancel(input.requestId)),
 })
 
 /**
@@ -2031,17 +2131,6 @@ export const configRouter = router({
   }),
 })
 
-function buildPlanningRootUpdateArgs(
-  rootContext: PlanningRootServices['rootContext'],
-  options: { force?: boolean } = {}
-): string[] {
-  const planningRoot = rootContext.planningRoot
-  if (!planningRoot) throw new Error('Planning root is unavailable.')
-  const args = ['update', planningRoot.path]
-  if (options.force) args.push('--force')
-  return args
-}
-
 /**
  * CLI router - execute external openspec CLI commands
  */
@@ -2069,56 +2158,29 @@ export const cliRouter = router({
 
   /** 获取可用的工具列表（available: true） */
   getAvailableTools: publicProcedure.query(() => {
-    // 返回完整的工具信息，去掉 scope 和 detectionPath（前端不需要）
-    return getAvailableTools().map((tool) => ({
-      name: tool.name,
-      value: tool.value,
-      available: tool.available,
-      successLabel: tool.successLabel,
-    })) satisfies AIToolOption[]
+    return getAvailableTools()
   }),
 
   /** 获取所有工具列表（包括 available: false 的） */
   getAllTools: publicProcedure.query(() => {
-    // 返回完整的工具信息，去掉 scope 和 detectionPath（前端不需要）
-    return getAllTools().map((tool) => ({
-      name: tool.name,
-      value: tool.value,
-      available: tool.available,
-      successLabel: tool.successLabel,
-    })) satisfies AIToolOption[]
+    return getAllTools()
   }),
 
   /** Subscribe to launch-project tools detected through reactive filesystem reads. */
   subscribeDetectedProjectTools: publicProcedure.subscription(({ ctx }) => {
-    return createReactiveSubscription(async () => {
-      return (await getDetectedProjectTools(ctx.projectDir)).map((tool) => ({
-        name: tool.name,
-        value: tool.value,
-        available: tool.available,
-        successLabel: tool.successLabel,
-      })) satisfies AIToolOption[]
-    })
+    return createReactiveSubscription(() => getDetectedProjectTools(ctx.projectDir))
   }),
 
-  /** Subscribe to launch skills and environment-owned commands for one delivery contract. */
-  subscribeToolInitStates: publicProcedure
-    .input(
-      z.object({
-        delivery: z.enum(['both', 'skills', 'commands']),
-        workflows: z.array(z.string()).default([]),
+  /** Subscribe to Agent physical state through the Server-owned Environment policy. */
+  subscribeToolInitStates: publicProcedure.subscription(({ ctx }) => {
+    return observable<import('@openspecui/core').ToolInitState[]>((emit) => {
+      const subscription = ctx.agentDeliveryProjectionService.subscribe((event) => {
+        if (event.type === 'snapshot') emit.next([...event.projection.states])
+        else emit.error(event.error)
       })
-    )
-    .subscription(({ ctx, input }) => {
-      const projectToolInitStates = createToolInitStateProjection(ctx.projectDir, {
-        delivery: input.delivery,
-        workflows: input.workflows,
-      })
-      return createReactiveSubscription(async () => {
-        await ctx.toolCommandObservation.start()
-        return projectToolInitStates()
-      })
-    }),
+      return () => subscription.unsubscribe()
+    })
+  }),
 
   /** 获取已配置的工具列表（检查配置文件是否存在） */
   getConfiguredTools: publicProcedure.query(async ({ ctx }) => {
@@ -2129,27 +2191,6 @@ export const cliRouter = router({
   subscribeConfiguredTools: publicProcedure.subscription(({ ctx }) => {
     return createReactiveSubscription(() => getConfiguredTools(ctx.projectDir))
   }),
-
-  /** 初始化 OpenSpec（非交互式） */
-  init: publicProcedure
-    .input(
-      z
-        .object({
-          tools: z.union([z.array(z.string()), z.literal('all'), z.literal('none')]).optional(),
-          profile: z.enum(['core', 'custom']).optional(),
-          force: z.boolean().optional(),
-        })
-        .optional()
-    )
-    .mutation(async ({ ctx, input }) => {
-      return runOpenSpecCliMutation(ctx, ['init'], () =>
-        ctx.cliExecutor.init({
-          tools: input?.tools,
-          profile: input?.profile,
-          force: input?.force,
-        })
-      )
-    }),
 
   validate: publicProcedure
     .input(
@@ -2214,66 +2255,13 @@ export const cliRouter = router({
       )
     }),
 
-  /** Update instruction files only in the current Server-selected Planning root. */
-  update: publicProcedure
-    .input(z.object({ force: z.boolean().optional() }).optional())
-    .mutation(async ({ ctx, input }) => {
-      return runPlanningRoot(ctx, ({ rootContext }) => {
-        const args = buildPlanningRootUpdateArgs(rootContext, input)
-        return runOpenSpecCliMutation(ctx, args, () => ctx.cliExecutor.execute(args))
-      })
-    }),
-
-  /** Stream one Planning-root Update without accepting a browser path or Store selector. */
-  updateStream: publicProcedure
-    .input(z.object({ force: z.boolean().optional() }).optional())
-    .subscription(({ ctx, input }) => {
-      return createPlanningRootCliStreamObservable(ctx, ({ rootContext }, onEvent) => {
-        const args = buildPlanningRootUpdateArgs(rootContext, input)
-        return streamOpenSpecCliMutation(
-          ctx,
-          args,
-          (mutationEvent) => ctx.cliExecutor.executeStream(args, mutationEvent),
-          onEvent
-        )
-      })
-    }),
-
-  /** 流式执行 init（实时输出） */
-  initStream: publicProcedure
-    .input(
-      z
-        .object({
-          tools: z.union([z.array(z.string()), z.literal('all'), z.literal('none')]).optional(),
-          profile: z.enum(['core', 'custom']).optional(),
-          force: z.boolean().optional(),
-        })
-        .optional()
-    )
-    .subscription(({ ctx, input }) => {
-      return createCliStreamObservable((onEvent) =>
-        streamOpenSpecCliMutation(
-          ctx,
-          ['init'],
-          (mutationEvent) =>
-            ctx.cliExecutor.initStream(
-              {
-                tools: input?.tools,
-                profile: input?.profile,
-                force: input?.force,
-              },
-              mutationEvent
-            ),
-          onEvent
-        )
-      )
-    }),
-
   /** Strict validate then archive against one Server-owned Root Context selection. */
   archiveStrictStream: publicProcedure
     .input(
       z.object({
         changeId: z.string(),
+        /** Root generation that produced the displayed Archive Instructions. */
+        expectedRootGeneration: z.string().min(1),
         skipSpecs: z.boolean().optional(),
         noValidate: z.boolean().optional(),
       })
@@ -2283,7 +2271,14 @@ export const cliRouter = router({
         const changeId = requireCanonicalOpenSpecEntityId(input.changeId, 'changeId')
         return startPlanningRootCliStream(
           ctx,
-          ({ rootContext }, leasedEvent) => {
+          ({ rootContext, gitBindingToken }, leasedEvent) => {
+            if (input.expectedRootGeneration !== gitBindingToken) {
+              throw new TRPCError({
+                code: 'CONFLICT',
+                message:
+                  'Planning root changed before archive started. Refresh Archive inputs and try again.',
+              })
+            }
             const selector = getRootContextCliSelector(rootContext)
             return startStrictArchiveStream({
               skipValidation: input.noValidate === true,
@@ -2320,6 +2315,101 @@ export const cliRouter = router({
         )
       })
     }),
+})
+
+/** Config-owned Agent registry, policy, physical inventory, and CLI mutation boundary. */
+const agentIntegrationToolIdSchema = z
+  .string()
+  .min(1)
+  .refine(
+    (toolId) => getAvailableTools().some((tool) => tool.value === toolId),
+    'Agent tool must be an available OpenSpec 1.7 registry id.'
+  )
+
+export const agentIntegrationsRouter = router({
+  /** Pull the complete Environment-authoritative Agent projection. */
+  get: publicProcedure.query(({ ctx }) => ctx.agentDeliveryProjectionService.getCurrent()),
+
+  /** Refresh Environment authority and replace every retained Agent projection. */
+  refresh: publicProcedure.query(({ ctx }) => ctx.agentDeliveryProjectionService.refresh()),
+
+  /** Push complete replacement projections; callers never provide policy inputs. */
+  subscribe: publicProcedure.subscription(({ ctx }) => {
+    return observable<import('./agent-delivery-projection-service.js').AgentDeliveryProjection>(
+      (emit) => {
+        const subscription = ctx.agentDeliveryProjectionService.subscribe((event) => {
+          if (event.type === 'snapshot') emit.next(event.projection)
+          else emit.error(event.error)
+        })
+        return () => subscription.unsubscribe()
+      }
+    )
+  }),
+
+  /** Update only official Agent policy fields while retaining team-authored config extensions. */
+  updatePolicy: publicProcedure
+    .input(AgentDeliveryPolicyUpdateSchema)
+    .mutation(async ({ ctx, input }) => {
+      const environment = await ctx.environmentGlobalProjectionService.getCurrent()
+      const config = applyAgentDeliveryPolicy(environment.config, input)
+      await runOpenSpecCliMutation(ctx, ['config', 'set'], () =>
+        writeEnvironmentGlobalConfig({ cliExecutor: ctx.cliExecutor, config })
+      )
+      ctx.environmentGlobalProjectionService.refreshFile()
+      return ctx.agentDeliveryProjectionService.refresh()
+    }),
+
+  /** Initialize or add selected Agents in the launch project using authoritative profile policy. */
+  initStream: publicProcedure
+    .input(
+      z.object({
+        tools: z.union([z.array(agentIntegrationToolIdSchema).min(1), z.literal('all')]),
+        force: z.boolean().optional(),
+      })
+    )
+    .subscription(({ ctx, input }) => {
+      return createCliStreamObservable(async (onEvent) => {
+        const projection = await ctx.agentDeliveryProjectionService.getCurrent()
+        return streamOpenSpecCliMutation(
+          ctx,
+          ['init'],
+          (mutationEvent) =>
+            ctx.cliExecutor.initStream(
+              {
+                tools: input.tools,
+                profile: projection.policy.profile,
+                force: input.force,
+              },
+              mutationEvent
+            ),
+          onEvent
+        )
+      })
+    }),
+
+  /** Reconcile current Agent artifacts in the launch project. */
+  updateStream: publicProcedure.subscription(({ ctx }) => {
+    return createCliStreamObservable((onEvent) =>
+      streamOpenSpecCliMutation(
+        ctx,
+        ['update'],
+        (mutationEvent) => ctx.cliExecutor.executeStream(['update'], mutationEvent),
+        onEvent
+      )
+    )
+  }),
+
+  /** Force repair after explicit user confirmation for cleanup or migration work. */
+  repairStream: publicProcedure.subscription(({ ctx }) => {
+    return createCliStreamObservable((onEvent) =>
+      streamOpenSpecCliMutation(
+        ctx,
+        ['update', '--force'],
+        (mutationEvent) => ctx.cliExecutor.executeStream(['update', '--force'], mutationEvent),
+        onEvent
+      )
+    )
+  }),
 })
 
 /**
@@ -2442,6 +2532,27 @@ export const opsxRouter = router({
       )
       if (data.kind !== 'opsx-apply-instructions') {
         throw new Error('Unexpected OPSX Apply-instructions projection.')
+      }
+      return data.value
+    }),
+
+  archiveInstructions: publicProcedure
+    .input(
+      z.object({
+        change: z.string().optional(),
+        schema: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }): Promise<ArchiveInstructions> => {
+      const data = await runPlanningRootRead(ctx, ({ planningCliProjectionService }) =>
+        planningCliProjectionService.getCurrent({
+          kind: 'opsx-archive-instructions',
+          change: requireChangeId(input.change),
+          schema: input.schema,
+        })
+      )
+      if (data.kind !== 'opsx-archive-instructions') {
+        throw new Error('Unexpected OPSX Archive-instructions projection.')
       }
       return data.value
     }),
@@ -3484,22 +3595,33 @@ export const planningConfigRouter = router({
   activeRoot: publicProcedure.query(({ ctx }) => fetchActiveRootConfig(ctx)),
 
   subscribeActiveRoot: publicProcedure.subscription(({ ctx }) =>
-    createPlanningRootSubscription(ctx, ({ rootContext }) =>
+    createPlanningRootProjectionSubscription(ctx, ({ rootContext }) =>
       readActiveRootConfig({ launchProjectDir: ctx.projectDir, rootContext })
     )
   ),
 
   writeActiveRoot: publicProcedure
-    .input(z.object({ content: z.string() }))
+    .input(ActiveRootMutationSchema)
     .mutation(async ({ ctx, input }) => {
-      await runPlanningRoot(ctx, ({ rootContext }) =>
-        writeActiveRootConfig({
-          launchProjectDir: ctx.projectDir,
-          rootContext,
-          content: input.content,
-        })
+      const result = await runPlanningRoot(
+        ctx,
+        async ({ rootContext, planningCliProjectionService }) => {
+          const mutationResult = await mutateActiveRootConfig({
+            launchProjectDir: ctx.projectDir,
+            rootContext,
+            mutation: input,
+          })
+          if (mutationResult.state === 'applied') {
+            planningCliProjectionService.invalidateConfigDependentWork()
+          }
+          return mutationResult
+        }
       )
-      return { success: true }
+      if (result.state === 'applied') {
+        ctx.runtimeInvalidation.invalidate(['project', 'context', 'schemas'])
+        ctx.rootContextProjectionService.refresh()
+      }
+      return result
     }),
 
   /** Settled compatibility read from the runtime-environment Projection Work owner. */
@@ -3526,12 +3648,6 @@ export const planningConfigRouter = router({
       return () => subscription.unsubscribe()
     })
   ),
-
-  /** Apply the official Core profile preset in the backend runtime environment. */
-  applyCoreProfile: publicProcedure.mutation(async ({ ctx }) => {
-    const args = ['config', 'profile', 'core']
-    return runOpenSpecCliMutation(ctx, args, () => ctx.cliExecutor.execute(args))
-  }),
 
   /** Immediate file-native Pull for the CLI-selected editable config document. */
   readEnvironmentGlobalFileProjection: publicProcedure.query(({ ctx }) =>
@@ -3563,7 +3679,44 @@ export const planningConfigRouter = router({
       await runOpenSpecCliMutation(ctx, ['config', 'set'], () =>
         writeEnvironmentGlobalConfig({ cliExecutor: ctx.cliExecutor, config: input.config })
       )
-      return { success: true }
+      return {
+        success: true,
+        environment: EnvironmentGlobalProjectionStateSchema.parse(
+          ctx.environmentGlobalProjectionService.refresh()
+        ),
+        file: EnvironmentGlobalFileProjectionStateSchema.parse(
+          ctx.environmentGlobalProjectionService.refreshFile()
+        ),
+        rootContext: HostedRootContextProjectionStateSchema.parse(
+          ctx.rootContextProjectionService.refresh()
+        ),
+      }
+    }),
+
+  /** Set or clear the machine fallback without claiming that Root Context selected it yet. */
+  writeEnvironmentDefaultStore: publicProcedure
+    .input(EnvironmentDefaultStoreUpdateSchema)
+    .mutation(async ({ ctx, input }) => {
+      const evidence = await writeEnvironmentDefaultStore({
+        cliExecutor: ctx.cliExecutor,
+        update: input,
+      })
+      return {
+        kind: 'environment-default-store-update' as const,
+        configured: input.value
+          ? { state: 'configured' as const, id: input.value }
+          : { state: 'absent' as const, id: null },
+        evidence,
+        environment: EnvironmentGlobalProjectionStateSchema.parse(
+          ctx.environmentGlobalProjectionService.refresh()
+        ),
+        file: EnvironmentGlobalFileProjectionStateSchema.parse(
+          ctx.environmentGlobalProjectionService.refreshFile()
+        ),
+        rootContext: HostedRootContextProjectionStateSchema.parse(
+          ctx.rootContextProjectionService.refresh()
+        ),
+      }
     }),
 })
 
@@ -3596,6 +3749,7 @@ export const rootContextRouter = router({
  * Main app router
  */
 export const appRouter = router({
+  agentIntegrations: agentIntegrationsRouter,
   dashboard: dashboardRouter,
   git: gitRouter,
   spec: specRouter,

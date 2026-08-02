@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Lock workflow mode resolution and generated invocation payloads.
  * 2. Prove Root Context, Manager generation, and explicit Store selectors survive every action boundary.
  * 3. Preserve typed Status/Instructions paths, References, and process diagnostics.
  * 4. Prove project hooks receive and retain the same target/evidence contract.
- * 5. Lock the breaking workflow hook context to protocol v2.
+ * 5. Lock the breaking workflow hook context to protocol v2 and Archive instruction ownership.
  *
  * Original request (2026-07-15): "Change actions preserve CLI-owned evidence end to end."
  */
@@ -79,7 +79,7 @@ function statusFixture(): CliWorkflowStatus {
       requiresAffectedAreaSelection: false,
       constraints: ['Repo-local edits only.'],
     },
-    artifacts: [{ id: 'specs', outputPath: 'specs/**/*.md', status: 'done' }],
+    artifacts: [{ id: 'specs', outputPath: 'specs/**/*.md', status: 'done', requires: [] }],
     root: { path: '/planning', source: 'nearest' },
   }
 }
@@ -130,6 +130,8 @@ function applyFixture(): CliApplyInstructions {
     tasks: [{ id: '1', description: 'Implement authentication.', done: false }],
     state: 'ready',
     instruction: 'Implement pending tasks.',
+    context: 'Authentication changes require a threat model.',
+    operationGuidance: ['Run security-focused tests before completion.'],
     references: [{ store_id: 'platform', root: '/stores/platform', status: [] }],
     root: { path: '/planning', source: 'nearest' },
   }
@@ -172,7 +174,7 @@ function rootContext(source: 'nearest' | 'declared' | 'store' = 'nearest'): Root
 
 type WorkflowContracts = Pick<
   OpenSpecCliContractExecutor,
-  'workflowStatus' | 'artifactInstructions' | 'applyInstructions'
+  'workflowStatus' | 'artifactInstructions' | 'applyInstructions' | 'archiveInstructions'
 >
 
 function createContracts(): WorkflowContracts {
@@ -180,6 +182,14 @@ function createContracts(): WorkflowContracts {
     workflowStatus: vi.fn().mockResolvedValue(commandResult(statusFixture())),
     artifactInstructions: vi.fn().mockResolvedValue(commandResult(artifactFixture())),
     applyInstructions: vi.fn().mockResolvedValue(commandResult(applyFixture())),
+    archiveInstructions: vi.fn().mockResolvedValue(
+      commandResult({
+        changeName: 'add-auth',
+        context: 'Authentication changes require a threat model.',
+        operationGuidance: ['Review the final spec delta before moving the change.'],
+        root: { path: '/planning', source: 'nearest' },
+      })
+    ),
   }
 }
 
@@ -260,6 +270,9 @@ describe('WorkflowInvocationService', () => {
     if (result.kind !== 'agent-prompt') throw new Error('Expected an Agent prompt.')
     expect(result.text).toContain('planning root (OpenSpec write root): /planning')
     expect(result.text).toContain('/planning/openspec/changes/add-auth/specs/auth/spec.md')
+    expect(result.text).toContain('Authentication changes require a threat model.')
+    expect(result.text).toContain('Run security-focused tests before completion.')
+    expect(result.text).not.toContain('Preserve existing scenarios.')
     expect(result.text).toContain('Never reconstruct `<launch-project>/openspec`')
   })
 
@@ -398,8 +411,8 @@ describe('WorkflowInvocationService', () => {
     })
   })
 
-  it('keeps the resolved planning root around archive status evidence', async () => {
-    const { service } = createService({ root: rootContext('declared') })
+  it('uses selected-Root Archive Instructions instead of Status evidence', async () => {
+    const { service, contracts } = createService({ root: rootContext('declared') })
 
     const result = await service.runWorkflow({ action: 'archive', changeId: 'add-auth' }, 'compose')
 
@@ -407,9 +420,13 @@ describe('WorkflowInvocationService', () => {
     if (result.kind !== 'agent-prompt') throw new Error('Expected an Agent prompt.')
     expect(result.text).toContain('launch project (command cwd only): /launch')
     expect(result.text).toContain('planning root (OpenSpec write root): /planning')
-    expect(result.text).toContain('/planning/openspec/changes/add-auth')
+    expect(result.text).toContain('Authentication changes require a threat model.')
+    expect(result.text).toContain('Review the final spec delta before moving the change.')
     expect(result.text).not.toContain('CLI selector: --store')
     expect(result.text).not.toContain('/launch/openspec')
+    expect(contracts.archiveInstructions).toHaveBeenCalledWith('add-auth', {})
+    expect(contracts.workflowStatus).not.toHaveBeenCalled()
+    expect(result.evidence).toMatchObject({ kind: 'archive-instructions' })
   })
 
   it('attaches status evidence and Store selection to direct Verify commands', async () => {

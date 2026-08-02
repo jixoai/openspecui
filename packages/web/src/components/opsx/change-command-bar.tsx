@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Project official change-scoped OPSX actions with shared objective applicability locks.
- * 2. Delegate Archive applicability and diagnostics to the CLI-owned dialog.
+ * 2. Keep skipped artifacts outside Continue while delegating Archive authority to the dialog.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  * Original request (2026-07-28): Board and Change Detail must expose the same Apply boundary.
@@ -58,7 +58,10 @@ export function ChangeCommandBar({
       artifactId: selectedArtifactId,
       disabled:
         !selectedArtifactId ||
-        status.artifacts.find((a) => a.id === selectedArtifactId)?.status === 'blocked',
+        ['blocked', 'skipped'].includes(
+          status.artifacts.find((artifact) => artifact.id === selectedArtifactId)?.status ??
+            'blocked'
+        ),
       hint: !selectedArtifactId ? 'select an artifact' : undefined,
     },
     {

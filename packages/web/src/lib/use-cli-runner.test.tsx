@@ -1,23 +1,27 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Verify ordered CLI stream execution and immediate state visibility.
  * 2. Preserve multiline failure evidence and stop the queue after nonzero exit.
- * 3. Prove every queue item selects one exhaustive dedicated Server transport.
+ * 3. Prove every queue item selects one exhaustive generation-aware Server transport.
  * 4. Prove terminal transport rejection releases subscription ownership and command state.
  *
  * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  * Original request (2026-07-17): "Rejected settlement must never leave the Web command running."
+ * Review correction (2026-08-01): Archive transport carries the prepared Root generation.
+ * Owner Agent direction (2026-08-01): Agent commands must select the dedicated Agent Router streams.
+ * Review correction (2026-08-02): generic Planning-root Update is not a public Web transport.
  */
 import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   archiveStrictSubscribeMock,
-  initSubscribeMock,
+  agentInitSubscribeMock,
+  agentRepairSubscribeMock,
+  agentUpdateSubscribeMock,
   installSubscribeMock,
   setStreamEvents,
-  updateSubscribeMock,
   validateSubscribeMock,
 } = vi.hoisted(() => {
   let streamEvents: unknown[] = []
@@ -41,12 +45,13 @@ const {
         return { unsubscribe: vi.fn() }
       }
     ),
-    initSubscribeMock: createSubscribeMock(),
+    agentInitSubscribeMock: createSubscribeMock(),
+    agentRepairSubscribeMock: createSubscribeMock(),
+    agentUpdateSubscribeMock: createSubscribeMock(),
     installSubscribeMock: createSubscribeMock(),
     setStreamEvents: (events: unknown[]) => {
       streamEvents = events
     },
-    updateSubscribeMock: createSubscribeMock(),
     validateSubscribeMock: createSubscribeMock(),
   }
 })
@@ -57,18 +62,23 @@ vi.mock('./static-mode', () => ({
 
 vi.mock('./trpc', () => ({
   trpcClient: {
+    agentIntegrations: {
+      initStream: {
+        subscribe: agentInitSubscribeMock,
+      },
+      repairStream: {
+        subscribe: agentRepairSubscribeMock,
+      },
+      updateStream: {
+        subscribe: agentUpdateSubscribeMock,
+      },
+    },
     cli: {
       archiveStrictStream: {
         subscribe: archiveStrictSubscribeMock,
       },
-      initStream: {
-        subscribe: initSubscribeMock,
-      },
       installGlobalCliStream: {
         subscribe: installSubscribeMock,
-      },
-      updateStream: {
-        subscribe: updateSubscribeMock,
       },
       validateStream: {
         subscribe: validateSubscribeMock,
@@ -91,9 +101,10 @@ function queuedCommand(input: QueuedCommandInput): QueuedCommandInput {
 describe('useCliRunner', () => {
   beforeEach(() => {
     archiveStrictSubscribeMock.mockClear()
-    initSubscribeMock.mockClear()
+    agentInitSubscribeMock.mockClear()
+    agentRepairSubscribeMock.mockClear()
+    agentUpdateSubscribeMock.mockClear()
     installSubscribeMock.mockClear()
-    updateSubscribeMock.mockClear()
     validateSubscribeMock.mockClear()
     setStreamEvents([
       { type: 'command', data: 'pnpm exec openspec validate demo --type change' },
@@ -139,7 +150,12 @@ describe('useCliRunner', () => {
       result.current.commands.replaceAll([
         {
           type: 'archive-strict',
-          input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
+          input: {
+            changeId: 'add-search',
+            expectedRootGeneration: 'planning-generation-a',
+            skipSpecs: false,
+            noValidate: false,
+          },
         },
       ])
     })
@@ -149,10 +165,43 @@ describe('useCliRunner', () => {
     })
 
     expect(archiveStrictSubscribeMock).toHaveBeenCalledWith(
-      { changeId: 'add-search', skipSpecs: false, noValidate: false },
+      {
+        changeId: 'add-search',
+        expectedRootGeneration: 'planning-generation-a',
+        skipSpecs: false,
+        noValidate: false,
+      },
       expect.any(Object)
     )
     expect(result.current.status).toBe('success')
+  })
+
+  it('routes Agent Init, Update, and Repair through the Agent owner', async () => {
+    const { result } = renderHook(() => useCliRunner())
+
+    act(() => {
+      result.current.commands.replaceAll([
+        { type: 'agent-init', input: { tools: ['codex', 'claude'] } },
+        { type: 'agent-update' },
+        { type: 'agent-repair' },
+      ])
+    })
+
+    await act(async () => {
+      await result.current.commands.runAll()
+    })
+
+    expect(agentInitSubscribeMock).toHaveBeenCalledWith(
+      { tools: ['codex', 'claude'] },
+      expect.any(Object)
+    )
+    expect(agentUpdateSubscribeMock).toHaveBeenCalledWith(undefined, expect.any(Object))
+    expect(agentRepairSubscribeMock).toHaveBeenCalledWith(undefined, expect.any(Object))
+    expect(result.current.commands.list().map((command) => command.args)).toEqual([
+      ['init', '--tools', 'codex,claude'],
+      ['update'],
+      ['update', '--force'],
+    ])
   })
 
   it('uses the fixed Server-owned stream for global CLI installation', async () => {
@@ -173,11 +222,12 @@ describe('useCliRunner', () => {
   it.each([
     [
       'Strict Archive',
-      queuedCommand({ type: 'archive-strict', input: { changeId: 'demo' } }),
+      queuedCommand({
+        type: 'archive-strict',
+        input: { changeId: 'demo', expectedRootGeneration: 'planning-generation-a' },
+      }),
       archiveStrictSubscribeMock,
     ],
-    ['Init', queuedCommand({ type: 'init' }), initSubscribeMock],
-    ['Planning-root Update', queuedCommand({ type: 'planning-root-update' }), updateSubscribeMock],
     [
       'Validate',
       queuedCommand({ type: 'validate', input: { id: 'demo', type: 'change' } }),
@@ -226,23 +276,6 @@ describe('useCliRunner', () => {
 
   it.each([
     [
-      'Init',
-      queuedCommand({
-        type: 'init',
-        input: { tools: ['claude'], force: true },
-      }),
-      initSubscribeMock,
-      { tools: ['claude'], force: true },
-    ],
-    [
-      'Planning-root Update',
-      queuedCommand({
-        type: 'planning-root-update',
-      }),
-      updateSubscribeMock,
-      undefined,
-    ],
-    [
       'Validate',
       queuedCommand({
         type: 'validate',
@@ -286,7 +319,12 @@ describe('useCliRunner', () => {
       result.current.commands.replaceAll([
         {
           type: 'archive-strict',
-          input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
+          input: {
+            changeId: 'add-search',
+            expectedRootGeneration: 'planning-generation-a',
+            skipSpecs: false,
+            noValidate: false,
+          },
         },
       ])
     })
@@ -303,7 +341,12 @@ describe('useCliRunner', () => {
         status: 'error',
         stream: {
           type: 'archive-strict',
-          input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
+          input: {
+            changeId: 'add-search',
+            expectedRootGeneration: 'planning-generation-a',
+            skipSpecs: false,
+            noValidate: false,
+          },
         },
       }),
     ])
@@ -340,7 +383,12 @@ describe('useCliRunner', () => {
       result.current.commands.replaceAll([
         {
           type: 'archive-strict',
-          input: { changeId: 'add-search', skipSpecs: false, noValidate: false },
+          input: {
+            changeId: 'add-search',
+            expectedRootGeneration: 'planning-generation-a',
+            skipSpecs: false,
+            noValidate: false,
+          },
         },
       ])
     })

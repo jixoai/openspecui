@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Project one immutable export snapshot through the live provider-shaped API.
  * 2. Preserve compound Spec identity and published snapshot policy/provenance without invented CLI evidence.
- * 3. Reconstruct Dashboard, objective Kanban, workflow, schema, template, and entity reads without a backend.
+ * 3. Reconstruct Dashboard, Kanban, exact workflow dependencies, schema, template, and entity reads offline.
  * 4. Keep unsupported live mutations and provenance explicitly absent in static mode.
  * 5. Keep static Git snapshots ineligible for live backend binding authority.
  *
@@ -11,6 +11,7 @@
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  * Owner correction (2026-07-29): static project config does not publish daemon-owned App location.
+ * Original request (2026-08-01): static Status must preserve OpenSpec 1.7 artifact requires.
  */
 
 import type {
@@ -47,6 +48,7 @@ import {
   createStaticSpecCatalogOwnedProjection,
   createStaticSpecCatalogReferenceProjection,
   createStaticSpecCatalogReferenceSource,
+  specDocumentDisplayPath,
   specIdentityKey,
   specRoutePath,
   type SpecCatalog,
@@ -430,6 +432,7 @@ function buildChangeStatus(
         id: artifact.id,
         outputPath: artifact.outputPath,
         status: 'done' as const,
+        requires: artifact.requires,
         relativePath: `openspec/changes/${change.id}/${artifact.outputPath}`,
       }
     }
@@ -439,6 +442,7 @@ function buildChangeStatus(
       id: artifact.id,
       outputPath: artifact.outputPath,
       status: missingDeps.length > 0 ? ('blocked' as const) : ('ready' as const),
+      requires: artifact.requires,
       missingDeps: missingDeps.length > 0 ? missingDeps : undefined,
       relativePath: `openspec/changes/${change.id}/${artifact.outputPath}`,
     }
@@ -1385,9 +1389,7 @@ export async function getSearchDocuments(): Promise<ProjectSearchDocument[]> {
       scope: isReferenced ? 'referenced-specs' : 'active-root',
       title: spec.name,
       href: specRoutePath(spec.identity),
-      path: isReferenced
-        ? `referenced:${spec.identity.kind === 'referenced' ? spec.identity.storeId : ''}:${spec.identity.specId}/spec.md`
-        : `owned:openspec/specs/${spec.identity.specId}/spec.md`,
+      path: specDocumentDisplayPath(spec.identity),
       content: spec.content,
       updatedAt: spec.updatedAt,
     })

@@ -1,4 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Compose responsive project navigation, route surfaces, terminal regions, and global project gates.
+ * 2. Own the page-runtime lifetime of Launch Project initialization and the adaptive Config Guide.
+ *
+ * Original request (2026-08-01): globally offer project initialization when local `openspec/` is absent.
+ */
 import { CliHealthGate } from '@/components/cli-health-gate'
+import { ConfigGuideProvider } from '@/components/config/config-guide'
+import { ProjectInitializationProvider } from '@/components/config/project-initialization'
 import { GlobalArchiveModal } from '@/components/global-archive-modal'
 import { NotificationToastViewport } from '@/components/notifications/notification-toast'
 import { ProjectRecoveryGate } from '@/components/project-recovery-gate'
@@ -27,34 +36,38 @@ export function RootLayout() {
   }, [])
 
   return (
-    <div className="@container/app fixed inset-0" style={{ containerName: 'app' }}>
-      <div className="app-layout h-full">
-        <DesktopSidebar />
-        <div className="app-body flex min-h-0 flex-1 flex-col">
-          <ProjectRecoveryGate />
-          <CliHealthGate />
-          <MobileHeader />
-          <div className="flex min-h-0 flex-1 flex-col">
-            {hasMainContent && (
-              <main
-                className={`main-content scrollbar-thin scrollbar-track-transparent view-transition-route flex min-h-0 flex-col ${hasBottomContent ? 'flex-1' : 'flex-1'}`}
-              >
-                <Outlet />
-              </main>
-            )}
-            {hasMainContent && hasBottomContent && <ResizeHandle onResize={handleResize} />}
-            {hasBottomContent && (
-              <BottomAreaRouter height={hasMainContent ? bottomHeight : undefined} />
-            )}
+    <ProjectInitializationProvider enabled={!isStatic}>
+      <ConfigGuideProvider enabled={!isStatic}>
+        <div className="@container/app fixed inset-0" style={{ containerName: 'app' }}>
+          <div className="app-layout h-full">
+            <DesktopSidebar />
+            <div className="app-body flex min-h-0 flex-1 flex-col">
+              <ProjectRecoveryGate />
+              <CliHealthGate />
+              <MobileHeader />
+              <div className="flex min-h-0 flex-1 flex-col">
+                {hasMainContent && (
+                  <main
+                    className={`main-content scrollbar-thin scrollbar-track-transparent view-transition-route flex min-h-0 flex-col ${hasBottomContent ? 'flex-1' : 'flex-1'}`}
+                  >
+                    <Outlet />
+                  </main>
+                )}
+                {hasMainContent && hasBottomContent && <ResizeHandle onResize={handleResize} />}
+                {hasBottomContent && (
+                  <BottomAreaRouter height={hasMainContent ? bottomHeight : undefined} />
+                )}
+              </div>
+              <MobileTabBar />
+              <DesktopStatusBar />
+            </div>
           </div>
-          <MobileTabBar />
-          <DesktopStatusBar />
-        </div>
-      </div>
 
-      <GlobalArchiveModal />
-      <PopAreaRouter />
-      {!isStatic && <NotificationToastViewport />}
-    </div>
+          <GlobalArchiveModal />
+          <PopAreaRouter />
+          {!isStatic && <NotificationToastViewport />}
+        </div>
+      </ConfigGuideProvider>
+    </ProjectInitializationProvider>
   )
 }

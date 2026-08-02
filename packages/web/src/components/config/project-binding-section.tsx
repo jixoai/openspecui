@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Edit only launch-project Store and Reference declarations.
  * 2. Preserve parse failures and CLI warning severity without treating either as registry truth.
  * 3. Bind mutation controls and execution to loading/error/dirty lifecycle states.
  * 4. Keep failures and convergence direct while disclosing successful preview/write evidence on demand.
+ * 5. Publish the existing owner lifecycle as the Project Binding Guide stage without duplicate subscriptions.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
  * Original request (2026-07-18): "Project Binding must show direct Reference Store, root, and Doctor diagnostics."
@@ -12,9 +13,12 @@
  * Original request (2026-07-28): successful Config evidence should not outrank editable OPSX declarations.
  * Owner correction (2026-07-29): Store editing needs a freeform registry-backed Combobox and the binding cards must be reorganized around user tasks.
  * Owner same-root direction (2026-07-29): ignored Store declarations remain visible and repairable without becoming Root failures.
+ * Original request (2026-08-01): Project Binding must never mirror machine `defaultStore`.
  */
+import { useConfigGuideAnchor } from '@/components/config/config-guide'
 import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import { AsyncAction, ConfigFormSkeleton } from '@/components/realtime'
+import { selectProjectBindingGuideSignal } from '@/lib/config-guide-signals'
 import { trpcClient } from '@/lib/trpc'
 import { useProjectBindingSubscription } from '@/lib/use-planning-config'
 import { useStoreListProjection } from '@/lib/use-store-list-projection'
@@ -22,7 +26,7 @@ import type { PlanningConfigReference, ProjectBindingConfig } from '@openspecui/
 import { useMutation } from '@tanstack/react-query'
 import { AlertCircle, Info, Link2, Plus, Save, Trash2 } from 'lucide-react'
 import { Tooltip } from '../tooltip'
-import { ProjectStoreCombobox } from './project-store-combobox'
+import { StoreIdCombobox } from './store-id-combobox'
 import { useProjectBindingSettlement } from './use-project-binding-settlement'
 
 function currentRootPreview(config: ProjectBindingConfig) {
@@ -79,10 +83,40 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
     onSuccess: settlement.mutationSucceeded,
     onError: settlement.mutationFailed,
   })
+  const preview = config ? currentRootPreview(config) : null
+  const previewDiagnostics = preview
+    ? [
+        ...preview.context.diagnostics.root,
+        ...preview.context.diagnostics.doctor,
+        ...preview.context.diagnostics.context,
+        ...preview.context.references.flatMap((reference) => reference.status),
+      ]
+    : []
+  const guideSignal = selectProjectBindingGuideSignal({
+    available: config !== null && config !== undefined,
+    loading: isLoading,
+    transportError: subscriptionError?.message ?? null,
+    mutationPending: saveMutation.isPending,
+    dirty,
+    convergencePending: pendingConvergence !== null,
+    formError,
+    convergenceError,
+    failureDiagnostic:
+      preview?.error?.message ??
+      config?.binding.diagnostics[0]?.message ??
+      previewDiagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
+      null,
+    warningDiagnostic:
+      previewDiagnostics.find((diagnostic) => diagnostic.severity === 'warning')?.message ?? null,
+  })
+  const guideAnchor = useConfigGuideAnchor('project-binding', guideSignal)
 
   if (isStatic) {
     return (
-      <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
+      <div
+        {...guideAnchor}
+        className="text-muted-foreground rounded-md border border-dashed p-4 text-sm"
+      >
         Project Binding is not included in this static export.
       </div>
     )
@@ -90,7 +124,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
 
   if (isLoading && !config) {
     return (
-      <div className="space-y-4" aria-busy="true">
+      <div {...guideAnchor} className="space-y-4" aria-busy="true">
         <ConfigFormSkeleton fields={4} />
       </div>
     )
@@ -98,16 +132,18 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
 
   if (!config) {
     return (
-      <div role="alert" className="text-destructive rounded-md border p-4 text-sm">
+      <div {...guideAnchor} role="alert" className="text-destructive rounded-md border p-4 text-sm">
         {subscriptionError?.message ?? 'Project Binding is unavailable.'}
       </div>
     )
   }
 
-  const preview = currentRootPreview(config)
+  const currentPreview = currentRootPreview(config)
   const visibleError = subscriptionError?.message ?? formError
-  const referenceDiagnostics = preview.context.references.flatMap((reference) => reference.status)
-  const referenceErrors = preview.context.references.flatMap((reference) =>
+  const referenceDiagnostics = currentPreview.context.references.flatMap(
+    (reference) => reference.status
+  )
+  const referenceErrors = currentPreview.context.references.flatMap((reference) =>
     reference.status
       .filter((diagnostic) => diagnostic.severity === 'error')
       .map((diagnostic) => ({ storeId: reference.store_id, diagnostic }))
@@ -119,17 +155,17 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
   const showMutationTransitionError =
     mutationTransitionError !== null &&
     mutationTransitionError !== visibleError &&
-    mutationTransitionError !== preview.error?.message
+    mutationTransitionError !== currentPreview.error?.message
   const storeSuggestions = storeProjection.data?.stores ?? []
   const storeSuggestionsUnavailable =
     storeProjection.error !== null || storeProjection.data?.available === false
-  const ignoredStorePointer = preview.context.diagnostics.doctor.find(
+  const ignoredStorePointer = currentPreview.context.diagnostics.doctor.find(
     (diagnostic) => diagnostic.severity === 'warning' && diagnostic.code === 'root_pointer_ignored'
   )
   const ignoredStoreClearedInDraft = ignoredStorePointer !== undefined && storeId.trim() === ''
 
   return (
-    <div className="@container min-w-0 space-y-5">
+    <div {...guideAnchor} className="@container min-w-0 space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">Project Binding</h2>
@@ -164,11 +200,12 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
               content="Select a registered Store suggestion or enter an exact Store id. An empty value keeps the launch project's nearest OpenSpec root."
             />
           </div>
-          <ProjectStoreCombobox
+          <StoreIdCombobox
             id="project-binding-store"
             value={storeId}
             stores={storeSuggestions}
             disabled={saveMutation.isPending}
+            placeholder="No declared Store"
             onChange={settlement.editStore}
           />
           <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
@@ -294,22 +331,22 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="text-muted-foreground">Current preview</span>
         <InformationBadge
-          ariaLabel={`Root preview source ${preview.context.planningRoot?.source ?? 'unknown'}`}
-          tooltip={`Planning root: ${preview.context.planningRoot?.path ?? 'Not resolved'}`}
+          ariaLabel={`Root preview source ${currentPreview.context.planningRoot?.source ?? 'unknown'}`}
+          tooltip={`Planning root: ${currentPreview.context.planningRoot?.path ?? 'Not resolved'}`}
         >
-          {preview.context.planningRoot?.source ?? 'unknown'}
+          {currentPreview.context.planningRoot?.source ?? 'unknown'}
         </InformationBadge>
-        {preview.context.storeId ? (
+        {currentPreview.context.storeId ? (
           <InformationBadge
-            ariaLabel={`Root preview Store ${preview.context.storeId}`}
-            tooltip={`The current Root Context preview selected Store ${preview.context.storeId}.`}
+            ariaLabel={`Root preview Store ${currentPreview.context.storeId}`}
+            tooltip={`The current Root Context preview selected Store ${currentPreview.context.storeId}.`}
           >
-            Store {preview.context.storeId}
+            Store {currentPreview.context.storeId}
           </InformationBadge>
         ) : null}
         <InformationBadge
-          ariaLabel={`${preview.context.references.length} observed References, ${referenceErrors.length} errors, ${referenceDiagnostics.length} diagnostics`}
-          tooltip={`${preview.context.references.length} observed References · ${referenceErrors.length} errors · ${referenceDiagnostics.length} diagnostics`}
+          ariaLabel={`${currentPreview.context.references.length} observed References, ${referenceErrors.length} errors, ${referenceDiagnostics.length} diagnostics`}
+          tooltip={`${currentPreview.context.references.length} observed References · ${referenceErrors.length} errors · ${referenceDiagnostics.length} diagnostics`}
           tone={referenceErrors.length > 0 ? 'custom' : 'muted'}
           className={
             referenceErrors.length > 0
@@ -317,14 +354,14 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
               : undefined
           }
         >
-          References {preview.context.references.length}
+          References {currentPreview.context.references.length}
         </InformationBadge>
       </div>
 
-      {preview.error ? (
+      {currentPreview.error ? (
         <div className="text-destructive flex items-start gap-2 text-xs" role="alert">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>{preview.error.message}</span>
+          <span>{currentPreview.error.message}</span>
         </div>
       ) : null}
 
@@ -376,7 +413,7 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
 
       <EvidenceDisclosure
         title="Root preview and binding evidence"
-        summary={`${preview.context.references.length} References${mutationEvidence ? ' · latest write' : ''}`}
+        summary={`${currentPreview.context.references.length} References${mutationEvidence ? ' · latest write' : ''}`}
       >
         <div className="space-y-4">
           <section className="space-y-2">
@@ -384,20 +421,20 @@ export function ProjectBindingSection({ isStatic }: { isStatic: boolean }) {
             <dl className="@[32rem]:grid-cols-[auto_minmax(0,1fr)] grid min-w-0 gap-x-3 gap-y-1">
               <dt className="text-muted-foreground">Planning root</dt>
               <dd className="break-all font-mono">
-                {preview.context.planningRoot?.path ?? 'Not resolved'}
+                {currentPreview.context.planningRoot?.path ?? 'Not resolved'}
               </dd>
               <dt className="text-muted-foreground">Source</dt>
-              <dd>{preview.context.planningRoot?.source ?? 'unknown'}</dd>
+              <dd>{currentPreview.context.planningRoot?.source ?? 'unknown'}</dd>
               <dt className="text-muted-foreground">Store</dt>
-              <dd>{preview.context.storeId ?? 'none'}</dd>
+              <dd>{currentPreview.context.storeId ?? 'none'}</dd>
             </dl>
           </section>
 
           <section className="space-y-2">
             <h3 className="font-medium">Observed References</h3>
-            {preview.context.references.length > 0 ? (
+            {currentPreview.context.references.length > 0 ? (
               <div className="space-y-2">
-                {preview.context.references.map((reference) => (
+                {currentPreview.context.references.map((reference) => (
                   <div key={reference.store_id}>
                     <div className="font-medium">Store: {reference.store_id}</div>
                     {reference.root ? <div>Root: {reference.root}</div> : null}

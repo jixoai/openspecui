@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Adapt typed OPSX lifecycle Push/Pull, file-native schema, and artifact projections to React.
  * 2. Let routes defer expensive aggregate Status and Config subscriptions until primary content is renderable.
  * 3. Keep browser cache identity equal to the typed CLI selector across prefetch and route remounts.
  * 4. Keep optional Change, Schema, and artifact selectors from issuing unrelated projection work.
- * 5. Expose Status List authority when an operation surface must reject retained display data.
+ * 5. Expose Status, Config Bundle, Status List, and Archive Instructions authority to mutation surfaces.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
@@ -15,6 +15,7 @@
  */
 import type {
   ApplyInstructions,
+  ArchiveInstructions,
   ArtifactInstructions,
   ChangeFile,
   ChangeStatus,
@@ -66,7 +67,7 @@ export function getOpsxStatusSubscriptionCacheKey(input: OpsxStatusInput): strin
 
 export function useOpsxStatusSubscription(
   input: OpsxStatusInput
-): SubscriptionState<ChangeStatus | null> {
+): CliProjectionSubscriptionState<ChangeStatus | null> {
   const state = useCliProjectionSubscription<ChangeStatus | null>({
     selector: {
       kind: 'opsx-status',
@@ -115,7 +116,7 @@ export function useOpsxInstructionsSubscription(
 /** Subscribe to the aggregate config projection only after its owning route admits the work. */
 export function useOpsxConfigBundleSubscription(
   enabled = true
-): SubscriptionState<OpsxConfigBundle> {
+): CliProjectionSubscriptionState<OpsxConfigBundle> {
   return useCliProjectionSubscription<OpsxConfigBundle>({
     selector: { kind: 'opsx-config-bundle' },
     selectData(data: PlanningCliProjectionData) {
@@ -277,6 +278,38 @@ export function useOpsxApplyInstructionsSubscription(input: {
     cacheKey: enabled
       ? `opsx.subscribeApplyInstructions:${input.change}:${input.schema}`
       : 'opsx.apply-instructions:inactive',
+    enabled,
+  })
+  return enabled ? state : { ...state, data: null, isLoading: false }
+}
+
+export function useOpsxArchiveInstructionsSubscription(input: {
+  change?: string
+  schema?: string
+}): CliProjectionSubscriptionState<{
+  instructions: ArchiveInstructions
+  rootGeneration: string
+} | null> {
+  const enabled = Boolean(input.change)
+  const state = useCliProjectionSubscription<{
+    instructions: ArchiveInstructions
+    rootGeneration: string
+  } | null>({
+    selector: {
+      kind: 'opsx-archive-instructions',
+      change: input.change ?? '__inactive__',
+      schema: input.schema,
+    },
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'opsx-archive-instructions') {
+        throw new Error(`Expected opsx-archive-instructions projection, received ${data.kind}.`)
+      }
+      return { instructions: data.value, rootGeneration: data.rootGeneration }
+    },
+    staticLoader: async () => null,
+    cacheKey: enabled
+      ? `opsx.subscribeArchiveInstructions:${input.change}:${input.schema}`
+      : 'opsx.archive-instructions:inactive',
     enabled,
   })
   return enabled ? state : { ...state, data: null, isLoading: false }

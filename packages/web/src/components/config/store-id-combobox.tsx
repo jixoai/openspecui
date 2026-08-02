@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-29 Asia/Shanghai):
- * 1. Edit one launch-project Store id as a freeform controlled field.
+ * Orthogonal intents (created 2026-08-01 Asia/Shanghai):
+ * 1. Edit one exact Store id as a freeform controlled field.
  * 2. Offer read-only registered Store suggestions without making them authoritative.
- * 3. Keep the input keyboard accessible and bounded on narrow Config layouts.
+ * 3. Keep Store selection keyboard accessible and bounded on narrow Config layouts.
  *
  * Original request (2026-07-29): "Store 表单需要使用 Combobox 风格的组件。"
+ * Original request (2026-08-01): reuse Store suggestions for machine `defaultStore`.
  */
 import { cn } from '@/lib/utils'
 import { Combobox } from '@base-ui/react/combobox'
@@ -12,17 +13,21 @@ import type { StoreListEntry } from '@openspecui/core'
 import { Check, ChevronDown } from 'lucide-react'
 
 /** Controlled Store id editor with optional registry-backed suggestions. */
-export function ProjectStoreCombobox({
+export function StoreIdCombobox({
   id,
   value,
   stores,
   disabled,
+  ariaLabel = 'Store',
+  placeholder = 'No Store selected',
   onChange,
 }: {
   id?: string
   value: string
   stores: readonly StoreListEntry[]
   disabled?: boolean
+  ariaLabel?: string
+  placeholder?: string
   onChange: (value: string) => void
 }) {
   return (
@@ -32,7 +37,7 @@ export function ProjectStoreCombobox({
       inputValue={value}
       itemToStringLabel={(store) => store.id}
       itemToStringValue={(store) => store.id}
-      onInputValueChange={(nextValue) => onChange(nextValue)}
+      onInputValueChange={onChange}
       onValueChange={(nextValue) => {
         if (nextValue) onChange(nextValue.id)
       }}
@@ -46,13 +51,13 @@ export function ProjectStoreCombobox({
       >
         <Combobox.Input
           id={id}
-          aria-label="Store"
-          placeholder="No declared Store"
+          aria-label={ariaLabel}
+          placeholder={placeholder}
           disabled={disabled}
           className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none"
         />
         <Combobox.Trigger
-          aria-label="Show registered Store suggestions"
+          aria-label={`Show registered ${ariaLabel} suggestions`}
           disabled={disabled}
           className="text-muted-foreground hover:text-foreground inline-flex h-full w-9 shrink-0 items-center justify-center outline-none"
         >

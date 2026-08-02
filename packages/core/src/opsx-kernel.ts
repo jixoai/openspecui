@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Maintain reactive CLI-backed projections and their direct typed Projection Work readers.
  * 2. Share and release per-entity streams through one planning-root kernel lifecycle.
- * 3. Keep OpenSpec configuration ownership outside the workflow projection cache.
- * 4. Preserve typed Status/Instructions provenance with the resolved root selector.
+ * 3. Keep OpenSpec configuration ownership outside the workflow cache while tracking both YAML filename variants.
+ * 4. Preserve typed Status and Artifact/Apply/Archive Instructions provenance with the resolved root selector.
  * 5. Keep Change enumeration business truth in the typed CLI result while files only invalidate it.
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
@@ -15,6 +15,7 @@ import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import {
   CliApplyInstructionsSuccessSchema,
+  CliArchiveInstructionsSuccessSchema,
   CliArtifactInstructionsSuccessSchema,
   CliChangeListSchema,
   CliRootSchema,
@@ -36,6 +37,7 @@ import { toOpsxDisplayPath } from './opsx-display-path.js'
 import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
 import {
   ApplyInstructionsSchema,
+  ArchiveInstructionsSchema,
   ArtifactInstructionsSchema,
   ChangeStatusSchema,
   OpsxCliEvidenceSchema,
@@ -44,6 +46,7 @@ import {
   TemplatesSchema,
   isGlobPattern,
   type ApplyInstructions,
+  type ArchiveInstructions,
   type ArtifactInstructions,
   type ChangeStatus,
   type OpsxConfigBundle,
@@ -179,7 +182,10 @@ async function readGlobArtifactFiles(
 
 async function touchOpsxProjectDeps(projectDir: string): Promise<void> {
   const openspecDir = join(projectDir, 'openspec')
-  await reactiveReadFile(join(openspecDir, 'config.yaml'))
+  await Promise.all([
+    reactiveReadFile(join(openspecDir, 'config.yaml')),
+    reactiveReadFile(join(openspecDir, 'config.yml')),
+  ])
   const schemaRoot = join(openspecDir, 'schemas')
   const schemaDirs = await reactiveReadDir(schemaRoot, {
     directoriesOnly: true,
@@ -287,7 +293,7 @@ function readOpsxRoot(data: unknown) {
 
 function createOpsxCliEvidence(
   result: CliCommandResult<unknown>,
-  command: 'status' | 'instructions' | 'instructions apply',
+  command: 'status' | 'instructions' | 'instructions apply' | 'instructions archive',
   rootSelector: CliRootSelector
 ) {
   const root = readOpsxRoot(result.data)
@@ -342,6 +348,7 @@ export class OpsxKernel {
   private _statuses = new Map<string, ReactiveState<ChangeStatus>>()
   private _instructions = new Map<string, ReactiveState<ArtifactInstructions>>()
   private _applyInstructions = new Map<string, ReactiveState<ApplyInstructions>>()
+  private _archiveInstructions = new Map<string, ReactiveState<ArchiveInstructions>>()
   private _changeMetadata = new Map<string, ReactiveState<string | null>>()
   private _artifactOutputs = new Map<string, ReactiveState<string | null>>()
   private _globArtifactFiles = new Map<string, ReactiveState<GlobArtifactFile[]>>()
@@ -480,6 +487,15 @@ export class OpsxKernel {
     const state = this._applyInstructions.get(key)
     if (!state) {
       throw new Error(`Apply instructions not found for change "${changeId}"`)
+    }
+    return state.get()
+  }
+
+  getArchiveInstructions(changeId: string, schema?: string): ArchiveInstructions {
+    const key = `${changeId}:${schema ?? ''}`
+    const state = this._archiveInstructions.get(key)
+    if (!state) {
+      throw new Error(`Archive instructions not found for change "${changeId}"`)
     }
     return state.get()
   }
@@ -739,6 +755,11 @@ export class OpsxKernel {
       this._applyInstructions.set(applyKey, new ReactiveState<ApplyInstructions>(null!))
     }
 
+    const archiveKey = `${changeId}:`
+    if (!this._archiveInstructions.has(archiveKey)) {
+      this._archiveInstructions.set(archiveKey, new ReactiveState<ArchiveInstructions>(null!))
+    }
+
     // Start status + metadata streams
     await Promise.all([
       this.startStreamOnce(
@@ -759,6 +780,12 @@ export class OpsxKernel {
         () => this.fetchApplyInstructions(changeId, undefined),
         signal
       ),
+      this.startStreamOnce(
+        `change:${changeId}:archive:`,
+        this._archiveInstructions.get(archiveKey)!,
+        () => this.fetchArchiveInstructions(changeId, undefined),
+        signal
+      ),
     ])
 
     // Now warm up per-artifact instructions and outputs from the status
@@ -776,6 +803,8 @@ export class OpsxKernel {
             () => this.fetchInstructions(changeId, artifact.id, undefined),
             signal
           )
+
+          if (artifact.status === 'skipped') return
 
           // Warm up artifact output
           const outputKey = `${changeId}:${artifact.outputPath}`
@@ -901,6 +930,12 @@ export class OpsxKernel {
                   this._streamReady.delete(`change:${id}:apply:${key.slice(id.length + 1)}`)
                 }
               }
+              for (const key of this._archiveInstructions.keys()) {
+                if (key.startsWith(`${id}:`)) {
+                  this._archiveInstructions.delete(key)
+                  this._streamReady.delete(`change:${id}:archive:${key.slice(id.length + 1)}`)
+                }
+              }
               this._changeMetadata.delete(id)
               this._streamReady.delete(`change:${id}:metadata`)
               for (const key of this._artifactOutputs.keys()) {
@@ -1016,8 +1051,10 @@ export class OpsxKernel {
     })
     const changeRelDir = `openspec/changes/${changeId}`
     for (const artifact of status.artifacts) {
-      artifact.relativePath = `${changeRelDir}/${artifact.outputPath}`
-      await touchArtifactOutputDeps(this.projectDir, changeId, artifact.outputPath)
+      if (artifact.status !== 'skipped') {
+        artifact.relativePath = `${changeRelDir}/${artifact.outputPath}`
+        await touchArtifactOutputDeps(this.projectDir, changeId, artifact.outputPath)
+      }
     }
     return status
   }
@@ -1093,6 +1130,28 @@ export class OpsxKernel {
         trackedTaskProgress
       ),
     }
+  }
+
+  private async fetchArchiveInstructions(
+    changeId: string,
+    schema?: string
+  ): Promise<ArchiveInstructions> {
+    await touchOpsxProjectDeps(this.projectDir)
+    await touchOpsxChangeDeps(this.projectDir, changeId)
+
+    const result = await this.cliExecutor.contracts.archiveInstructions(changeId, {
+      ...this.rootSelector,
+      ...(schema ? { schema } : {}),
+    })
+    const data = requireCommandData(
+      'openspec instructions archive',
+      result,
+      CliArchiveInstructionsSuccessSchema
+    )
+    return ArchiveInstructionsSchema.parse({
+      ...data,
+      evidence: createOpsxCliEvidence(result, 'instructions archive', this.rootSelector),
+    })
   }
 
   private async fetchSchemaResolution(name: string): Promise<SchemaResolution> {
@@ -1275,6 +1334,14 @@ export class OpsxKernel {
     return this.fetchApplyInstructions(changeId, schema)
   }
 
+  /** Execute one Archive-instructions projection in the caller-owned Work generation. */
+  readArchiveInstructionsProjection(
+    changeId: string,
+    schema?: string
+  ): Promise<ArchiveInstructions> {
+    return this.fetchArchiveInstructions(changeId, schema)
+  }
+
   /** Execute the aggregate Schema bundle while retaining exact resolved-file dependencies. */
   async readConfigBundleProjection(): Promise<{
     value: OpsxConfigBundle
@@ -1397,6 +1464,20 @@ export class OpsxKernel {
       `change:${canonicalChangeId}:apply:${schema ?? ''}`,
       this._applyInstructions.get(key)!,
       () => this.fetchApplyInstructions(canonicalChangeId, schema),
+      this.controller.signal
+    )
+  }
+
+  async ensureArchiveInstructions(changeId: string, schema?: string): Promise<void> {
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const key = `${canonicalChangeId}:${schema ?? ''}`
+    if (!this._archiveInstructions.has(key)) {
+      this._archiveInstructions.set(key, new ReactiveState<ArchiveInstructions>(null!))
+    }
+    await this.startStreamOnce(
+      `change:${canonicalChangeId}:archive:${schema ?? ''}`,
+      this._archiveInstructions.get(key)!,
+      () => this.fetchArchiveInstructions(canonicalChangeId, schema),
       this.controller.signal
     )
   }

@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Verify change-toolbar workflow availability and action identity.
  * 2. Verify the shared Root Context gate overrides action-specific applicability.
+ * 3. Prove skipped artifacts satisfy Apply prerequisites but cannot be continued.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
@@ -61,6 +62,38 @@ describe('ChangeCommandBar', () => {
     fireEvent.click(archive)
     expect(onArchive).toHaveBeenCalledTimes(1)
     expect(onComposeAction).not.toHaveBeenCalledWith('archive', expect.anything())
+  })
+
+  it('enables Apply but disables Continue for a selected skipped artifact', () => {
+    const onComposeAction = vi.fn()
+    const skippedStatus: ChangeStatus = {
+      ...status,
+      applyRequires: ['specs'],
+      artifacts: [
+        {
+          id: 'specs',
+          outputPath: 'specs/**/*.md',
+          status: 'skipped',
+          requires: ['proposal'],
+        },
+      ],
+    }
+
+    render(
+      <ChangeCommandBar
+        status={skippedStatus}
+        selectedArtifactId="specs"
+        onComposeAction={onComposeAction}
+        onArchive={vi.fn()}
+        onVerify={vi.fn()}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+    const apply = screen.getByRole('button', { name: 'Apply' })
+    expect(apply).toBeEnabled()
+    fireEvent.click(apply)
+    expect(onComposeAction).toHaveBeenCalledWith('apply', undefined)
   })
 
   it('locks every action behind the shared Root Context gate', () => {

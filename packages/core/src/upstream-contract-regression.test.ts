@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-07-15 Asia/Shanghai):
- * 1. Pin the official OpenSpec v1.4, v1.5, and v1.6 source contracts used by OpenSpecUI.
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * 1. Pin the official OpenSpec v1.4, v1.5, v1.6, and v1.7 source contracts used by OpenSpecUI.
  * 2. Prevent a version-gate-only adaptation from masking missing workflow or root behavior.
  * 3. Keep validation, archive, task, and tool-delivery fixtures traceable to first-party source.
  *
  * Original request (2026-07-15): "1.4、1.5、1.6 第一方合同回归测试。"
+ * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -22,7 +23,7 @@ function readPinned(path: string): string {
   return readFileSync(resolve(upstreamRoot, path), 'utf8')
 }
 
-describe('first-party OpenSpec 1.4-1.6 contracts', () => {
+describe('first-party OpenSpec 1.4-1.7 contracts', () => {
   it('locks sync into the 1.4 core profile', () => {
     const profiles = readAtTag('v1.4.1', 'src/core/profiles.ts')
 
@@ -44,7 +45,7 @@ describe('first-party OpenSpec 1.4-1.6 contracts', () => {
     }
   })
 
-  it('locks the pinned v1.6 update profile and tool command delivery', () => {
+  it('preserves the v1.6 update profile and command delivery through the pinned v1.7 source', () => {
     const profiles = readPinned('src/core/profiles.ts')
     const skills = readPinned('src/core/shared/skill-generation.ts')
     const ohMyPi = readPinned('src/core/command-generation/adapters/oh-my-pi.ts')
@@ -58,7 +59,7 @@ describe('first-party OpenSpec 1.4-1.6 contracts', () => {
     expect(trae).toContain("path.join('.trae', 'commands', `opsx-${commandId}.md`)")
   })
 
-  it('locks the pinned v1.6 tracked-task, multiline, and archive safety fixes', () => {
+  it('preserves the v1.6 tracked-task, multiline, and archive safety fixes', () => {
     const taskProgress = readPinned('src/utils/task-progress.ts')
     const requirementText = readPinned('src/core/parsers/requirement-text.ts')
     const archive = readPinned('src/core/archive.ts')
@@ -75,11 +76,11 @@ describe('first-party OpenSpec 1.4-1.6 contracts', () => {
     expect(rootInspection).toContain('inspectOptionalPlanningDirectory')
   })
 
-  it('pins the reference checkout to the official v1.6.0 commit', () => {
+  it('pins the reference checkout to the official v1.7.0 commit', () => {
     const commit = execFileSync('git', ['-C', upstreamRoot, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
     }).trim()
 
-    expect(commit).toBe('e1b51d111ab446b54dee2d6159ac245f0339ae52')
+    expect(commit).toBe('4e16790d90d8f54d4773ad9a5e71a57cd9f1e86b')
   })
 })

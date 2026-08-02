@@ -1,19 +1,23 @@
 /**
- * Orthogonal intents (created 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Prove write, directory-create, remove, and external mutations share physical confinement.
  * 2. Prove owned mutations settle file, directory, existence, and stat projections before return.
  * 3. Prove direct settlement reaches multiple reactive subscribers without watcher timing.
+ * 4. Prove atomic replacement changes the inode without exposing temporary files to settled projections.
  *
  * Original request (2026-07-16): "Schema/Template mutations must reject symlink escape and settle reactive projections before success."
+ * Derived requirement (2026-08-02): "Raw Active Root YAML settles only after same-directory atomic replacement."
  */
-import { lstat, mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
 import {
+  compareAndWriteAtomicPhysicalReactiveFile,
   createPhysicalReactiveDirectory,
   removePhysicalReactivePath,
   runPhysicalReactivePathMutation,
+  writeAtomicPhysicalReactiveFile,
   writePhysicalReactiveFile,
 } from './physical-reactive-file-writer.js'
 import {
@@ -195,6 +199,61 @@ describe('physical reactive path mutations', () => {
 
     await firstStream.return(undefined)
     await secondStream.return(undefined)
+  })
+
+  it('atomically replaces a file and settles its exact and parent projections before return', async () => {
+    const targetDirectoryPath = join(rootPath, 'openspec', 'schemas', 'demo')
+    const targetPath = join(targetDirectoryPath, 'config.yaml')
+    const relativeTargetPath = join('openspec', 'schemas', 'demo', 'config.yaml')
+    await writeFile(targetPath, 'schema: old\n', 'utf8')
+    const before = await stat(targetPath)
+    const context = new ReactiveContext()
+    const stream = context.stream(async () => ({
+      content: await reactiveReadFile(targetPath),
+      entries: await reactiveReadDir(targetDirectoryPath),
+    }))
+    await expect(stream.next()).resolves.toEqual({
+      value: { content: 'schema: old\n', entries: ['config.yaml'] },
+      done: false,
+    })
+    const replacement = stream.next()
+
+    await writeAtomicPhysicalReactiveFile({
+      rootPath,
+      relativePath: relativeTargetPath,
+      content: 'schema: replacement\n',
+    })
+
+    const after = await stat(targetPath)
+    expect(after.ino).not.toBe(before.ino)
+    expect(await readFile(targetPath, 'utf8')).toBe('schema: replacement\n')
+    expect(await reactiveReadDir(targetDirectoryPath)).toEqual(['config.yaml'])
+    await expect(replacement).resolves.toEqual({
+      value: { content: 'schema: replacement\n', entries: ['config.yaml'] },
+      done: false,
+    })
+    await stream.return(undefined)
+  })
+
+  it('rejects externally replaced bytes and settles the external source without overwriting it', async () => {
+    const targetDirectoryPath = join(rootPath, 'openspec', 'schemas', 'demo')
+    const targetPath = join(targetDirectoryPath, 'config.yaml')
+    const relativeTargetPath = join('openspec', 'schemas', 'demo', 'config.yaml')
+    await writeFile(targetPath, 'schema: revision-a\n', 'utf8')
+    expect(await reactiveReadFile(targetPath)).toBe('schema: revision-a\n')
+    await writeFile(targetPath, 'schema: external\n', 'utf8')
+
+    const result = await compareAndWriteAtomicPhysicalReactiveFile({
+      rootPath,
+      relativePath: relativeTargetPath,
+      expectedContent: 'schema: revision-a\n',
+      content: 'schema: stale-writer\n',
+    })
+
+    expect(result).toEqual({ state: 'conflict', content: 'schema: external\n' })
+    expect(await readFile(targetPath, 'utf8')).toBe('schema: external\n')
+    expect(await reactiveReadFile(targetPath)).toBe('schema: external\n')
+    expect(await reactiveReadDir(targetDirectoryPath)).toEqual(['config.yaml'])
   })
 
   it('settles empty directory creation and guarded external mutation before returning', async () => {

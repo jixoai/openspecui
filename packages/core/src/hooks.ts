@@ -1,14 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Define the stable project document-read hook contract.
  * 2. Define the root-explicit OPSX workflow invocation hook v2 contract.
  * 3. Version document and workflow hooks independently after the workflow breaking change.
- * 4. Carry observed root generation on every Server-owned workflow target.
+ * 4. Carry observed root generation and Archive Instructions on every Server-owned workflow target.
  *
  * Original request (2026-07-15): "sync、update 的完整交付链。"
  */
 import type {
   CliApplyInstructions,
+  CliArchiveInstructions,
   CliArtifactInstructions,
   CliCommandResult,
   CliRootSelector,
@@ -154,6 +155,11 @@ export type WorkflowActionEvidenceV2 =
       kind: 'apply-instructions'
       options: CliWorkflowOptions
       result: CliCommandResult<CliApplyInstructions>
+    }
+  | {
+      kind: 'archive-instructions'
+      options: CliWorkflowOptions
+      result: CliCommandResult<CliArchiveInstructions>
     }
 
 /** Context passed to `onRunWorkflow`. */

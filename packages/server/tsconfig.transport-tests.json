@@ -6,6 +6,7 @@
   "include": [
     "bench/live-projection-loading.bench.ts",
     "src/access-gate.test.ts",
+    "src/agent-integrations-router.test.ts",
     "src/archive-router-subscription.test.ts",
     "src/cli-executor-tracing.test.ts",
     "src/hosted-admission.test.ts",

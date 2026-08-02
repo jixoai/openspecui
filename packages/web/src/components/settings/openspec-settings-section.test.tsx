@@ -1,659 +1,241 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Verify Settings projects shared CLI, Root, Environment, and launch-tool lifecycle truth.
- * 2. Verify Init mode, repair, pending, cancellation, terminal, and convergence behavior.
- * 3. Verify Settings derives current and compatible CLI labels from the shared compatibility law.
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * 1. Verify Settings renders Agent policy and physical state as a read-only summary.
+ * 2. Verify shared live replacement and stale-error projections remain readable.
+ * 3. Verify Agent mutations and terminal ownership no longer exist in Settings.
+ * 4. Verify configured, partial, drifted, failed, and unavailable counts remain source-distinct.
  *
- * Original request (2026-07-20): "Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics."
+ * Original request (2026-08-01): Settings only shows Agent status and navigates management to `/config/agents`.
  * Owner acceptance boundary (2026-07-20): final end-to-end browser walkthroughs remain owner-owned.
- * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
- * Original request (2026-07-28): Settings should summarize OpenSpec facts and defer evidence to Context and Config.
- * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
- * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
- * Owner Context direction (2026-07-29): Settings links to Config-owned Resolved Context.
  */
-import type { CliRunnerLine, CliStreamTransport, OverallStatus } from '@/lib/use-cli-runner'
-import type { SubscriptionState } from '@/lib/use-subscription'
-import type {
-  AIToolOption,
-  EnvironmentGlobalConfig,
-  RootContext,
-  RootContextState,
-  ToolInitState,
-} from '@openspecui/core'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { AgentIntegrationsProjection } from '@/lib/use-agent-integrations'
+import type { EnvironmentGlobalConfig, ToolInitState, ToolWorkflowId } from '@openspecui/core'
+import { cleanup, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpenSpecSettingsSections } from './openspec-settings-section'
 
-interface EnvironmentSubscriptionState extends SubscriptionState<EnvironmentGlobalConfig | null> {
-  refresh: () => Promise<void>
-  refreshPending: boolean
-}
-
-interface TestCliRunner {
-  lines: CliRunnerLine[]
-  status: OverallStatus
-  commands: {
-    replaceAll: (commands: CliStreamTransport[]) => void
-    runAll: () => Promise<void>
-  }
-  cancel: () => void
-  reset: () => void
-}
-
-const {
-  cancelMock,
-  contextSubscriptionMock,
-  detectedToolsSubscriptionMock,
-  environmentSubscriptionMock,
-  replaceAllMock,
-  resetMock,
-  runAllMock,
-  toolInitStatesSubscriptionMock,
-  useCliRunnerMock,
-  useQueryMock,
-} = vi.hoisted(() => ({
-  cancelMock: vi.fn<() => void>(),
-  contextSubscriptionMock: vi.fn<() => SubscriptionState<RootContextState>>(),
-  detectedToolsSubscriptionMock: vi.fn<() => SubscriptionState<AIToolOption[]>>(),
-  environmentSubscriptionMock: vi.fn<() => EnvironmentSubscriptionState>(),
-  replaceAllMock: vi.fn<(commands: CliStreamTransport[]) => void>(),
-  resetMock: vi.fn<() => void>(),
-  runAllMock: vi.fn<() => Promise<void>>(),
-  toolInitStatesSubscriptionMock:
-    vi.fn<
-      (input: {
-        delivery: 'both' | 'skills' | 'commands'
-        workflows: string[]
-      }) => SubscriptionState<ToolInitState[]>
-    >(),
-  useCliRunnerMock: vi.fn<() => TestCliRunner>(),
-  useQueryMock: vi.fn(),
+const { environmentSubscriptionMock, useAgentIntegrationsMock } = vi.hoisted(() => ({
+  environmentSubscriptionMock: vi.fn(),
+  useAgentIntegrationsMock: vi.fn(),
 }))
-
-vi.mock('@/lib/use-context-subscription', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/use-context-subscription')>()
-  return { ...actual, useContextSubscription: contextSubscriptionMock }
-})
 
 vi.mock('@/lib/use-planning-config', () => ({
   useEnvironmentGlobalConfigSubscription: environmentSubscriptionMock,
 }))
 
-vi.mock('./use-settings-tool-subscriptions', () => ({
-  useDetectedProjectToolsSubscription: detectedToolsSubscriptionMock,
-  useToolInitStatesSubscription: toolInitStatesSubscriptionMock,
+vi.mock('@/lib/use-agent-integrations', () => ({
+  useAgentIntegrations: useAgentIntegrationsMock,
 }))
 
-vi.mock('@/lib/use-cli-runner', () => ({
-  useCliRunner: useCliRunnerMock,
-}))
-
-vi.mock('@tanstack/react-query', () => ({
-  useQuery: useQueryMock,
-}))
-
-vi.mock('@/lib/trpc', () => ({
-  trpc: {
-    cli: {
-      getAllTools: {
-        queryOptions: () => ({ queryKey: ['cli.getAllTools'] }),
-      },
-    },
-  },
-}))
-
-vi.mock('@/components/copyable-path', () => ({
-  CopyablePath: ({ path }: { path: string }) => <code>{path}</code>,
+vi.mock('@/components/realtime', () => ({
+  RealtimeSkeletonLine: ({ className }: { className?: string }) => (
+    <div data-testid="skeleton-line" className={className} />
+  ),
 }))
 
 vi.mock('@/components/toc', () => ({
-  TocSection: ({ children }: { children: ReactNode }) => <section>{children}</section>,
-}))
-
-vi.mock('@/lib/view-transitions/navigation', () => ({
-  VTLink: ({
-    to,
-    search,
-    children,
-  }: {
-    to: string
-    search?: Record<string, string>
-    children: ReactNode
-  }) => {
-    const query = search ? new URLSearchParams(search).toString() : ''
-    return <a href={query ? `${to}?${query}` : to}>{children}</a>
-  },
-}))
-
-vi.mock('@/components/select', () => ({
-  Select: ({
-    value,
-    options,
-    onValueChange,
-    ariaLabel,
-    disabled,
-  }: {
-    value: string
-    options: Array<{ value: string; label: string }>
-    onValueChange: (value: string) => void
-    ariaLabel: string
-    disabled?: boolean
-  }) => (
-    <select
-      aria-label={ariaLabel}
-      value={value}
-      disabled={disabled}
-      onChange={(event) => onValueChange(event.target.value)}
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+  TocSection: ({ children, id }: { children: ReactNode; id: string }) => (
+    <section id={id}>{children}</section>
   ),
 }))
 
-vi.mock('@/components/switch', () => ({
-  Switch: ({
-    checked,
-    onCheckedChange,
-    ariaLabel,
-    disabled,
-  }: {
-    checked: boolean
-    onCheckedChange: (checked: boolean) => void
-    ariaLabel: string
-    disabled?: boolean
-  }) => (
-    <input
-      type="checkbox"
-      aria-label={ariaLabel}
-      checked={checked}
-      disabled={disabled}
-      onChange={(event) => onCheckedChange(event.target.checked)}
-    />
+vi.mock('./openspec-settings-diagnostics', () => ({
+  OpenSpecSettingsDiagnosticsSection: ({ index }: { index: number }) => (
+    <section data-testid="diagnostics-section" data-index={index} />
   ),
 }))
 
-vi.mock('@/components/dialog', () => ({
-  Dialog: ({
-    open,
-    title,
-    children,
-    footer,
-  }: {
-    open: boolean
-    title: ReactNode
-    children: ReactNode
-    footer: ReactNode
-  }) =>
-    open ? (
-      <div role="dialog">
-        <div>{title}</div>
-        <div>{children}</div>
-        <div>{footer}</div>
-      </div>
-    ) : null,
-}))
-
-vi.mock('@/components/cli-terminal', () => ({
-  CliTerminal: ({ lines }: { lines: CliRunnerLine[] }) => (
-    <div data-testid="cli-terminal">
-      {lines.map((line) => (
-        <div key={line.id}>{line.kind === 'ascii' ? line.text : 'rich terminal output'}</div>
-      ))}
-    </div>
+vi.mock('./settings-status-label', () => ({
+  SettingsStatusLabel: ({ children, status }: { children: ReactNode; status: string }) => (
+    <span data-status={status}>{children}</span>
   ),
 }))
 
-const ALL_TOOLS: AIToolOption[] = [
-  { name: 'Claude', value: 'claude', available: true, successLabel: 'Claude ready' },
-  { name: 'Cursor', value: 'cursor', available: true, successLabel: 'Cursor ready' },
-]
+const WORKFLOWS = ['propose', 'apply', 'verify', 'archive'] satisfies ToolWorkflowId[]
 
-function rootContext(overrides: Partial<RootContext> = {}): RootContext {
+function tool(value: string, available = true): AgentIntegrationsProjection['registry'][number] {
   return {
-    launchProject: { path: '/workspace/launch' },
-    planningRoot: {
-      path: '/workspace/planning',
-      source: 'store',
-      store_id: 'planning-store',
-      healthy: true,
-      status: [],
-    },
-    storeId: 'planning-store',
-    cli: { available: true, version: '1.6.0' },
-    references: [],
-    contextMembers: [],
-    dataScope: {
-      path: '/runtime/data/openspec',
-      source: 'xdg-data-home',
-      environmentVariable: 'XDG_DATA_HOME',
-    },
-    diagnostics: { root: [], doctor: [], context: [] },
-    evidence: { doctor: null, context: null },
-    observedAt: 10,
+    name: value,
+    value,
+    available,
+    skillsDir: available ? `.${value}` : null,
+    capability: available ? 'adapter-backed' : 'none',
+    command: null,
+  }
+}
+
+function state(
+  toolId: string,
+  readiness: ToolInitState['readiness'],
+  issues: ToolInitState['issues'] = []
+): ToolInitState {
+  return {
+    toolId,
+    toolName: toolId,
+    status: issues[0] ?? readiness,
+    readiness,
+    issues,
+    hasAnyArtifacts: readiness === 'partial' || readiness === 'initialized',
+    expectedSkillCount: WORKFLOWS.length,
+    presentExpectedSkillCount: readiness === 'initialized' ? WORKFLOWS.length : 0,
+    detectedSkillCount: readiness === 'initialized' ? WORKFLOWS.length : 0,
+    expectedCommandCount: WORKFLOWS.length,
+    presentExpectedCommandCount: readiness === 'initialized' ? WORKFLOWS.length : 0,
+    detectedCommandCount: readiness === 'initialized' ? WORKFLOWS.length : 0,
+    missingSkillWorkflows: readiness === 'initialized' ? [] : [...WORKFLOWS],
+    missingCommandWorkflows: readiness === 'initialized' ? [] : [...WORKFLOWS],
+    unexpectedSkillWorkflows: [],
+    unexpectedCommandWorkflows: [],
+    legacyCommandWorkflows: [],
+    installedSkillWorkflows: readiness === 'initialized' ? [...WORKFLOWS] : [],
+    installedCommandWorkflows: readiness === 'initialized' ? [...WORKFLOWS] : [],
+    generatedByVersion: readiness === 'initialized' ? '1.7.0' : null,
+  }
+}
+
+function projection(
+  overrides: Partial<AgentIntegrationsProjection> = {}
+): AgentIntegrationsProjection {
+  return {
+    registry: [tool('claude'), tool('codex'), tool('cursor'), tool('kimi'), tool('agents', false)],
+    policy: { profile: 'core', delivery: 'both', workflows: [...WORKFLOWS] },
+    states: [
+      state('claude', 'initialized'),
+      state('codex', 'partial', ['stale-version', 'cleanup-needed']),
+      state('cursor', 'uninitialized', ['migration-required']),
+      state('kimi', 'uninitialized'),
+      state('agents', 'unavailable'),
+    ],
     ...overrides,
   }
 }
 
-function readyRoot(context = rootContext()): RootContextState {
-  return {
-    state: 'ready',
-    data: context,
-    attempt: null,
-    error: null,
-    observedAt: context.observedAt,
-  }
-}
-
-function environmentConfig(): EnvironmentGlobalConfig {
-  const config = {
-    profile: 'core',
-    delivery: 'both',
-    workflows: ['propose', 'explore', 'apply', 'update', 'sync', 'archive'],
-  }
-  return {
-    kind: 'environment-global',
-    owner: {
-      kind: 'runtime-environment',
-      dataScope: {
-        path: '/runtime/data/openspec',
-        source: 'xdg-data-home',
-        environmentVariable: 'XDG_DATA_HOME',
-      },
-    },
-    configPath: '/runtime/data/openspec/config.json',
-    file: {
-      path: '/runtime/data/openspec/config.json',
-      format: 'json',
-      exists: true,
-      content: JSON.stringify(config),
-    },
-    config,
-    profileState: {
-      available: true,
-      profile: 'core',
-      delivery: 'both',
-      workflows: [...config.workflows],
-      driftStatus: 'in-sync',
-      warningText: null,
-    },
-    evidence: {
-      path: {
-        success: true,
-        stdout: '/runtime/data/openspec/config.json\n',
-        stderr: '',
-        exitCode: 0,
-      },
-      config: {
-        success: true,
-        stdout: JSON.stringify(config),
-        stderr: '',
-        exitCode: 0,
-        data: config,
-        payload: config,
-        diagnostics: [],
-      },
-      drift: { success: true, stdout: '', stderr: '', exitCode: 0 },
-    },
-  }
-}
-
-function toolState(toolId: 'claude' | 'cursor', status: ToolInitState['status']): ToolInitState {
-  const initialized = status === 'initialized'
-  const partial = status === 'partial'
-  return {
-    toolId,
-    toolName: toolId === 'claude' ? 'Claude' : 'Cursor',
-    status,
-    hasAnyArtifacts: initialized || partial,
-    expectedSkillCount: 0,
-    presentExpectedSkillCount: 0,
-    detectedSkillCount: 0,
-    expectedCommandCount: 2,
-    presentExpectedCommandCount: initialized ? 2 : partial ? 1 : 0,
-    detectedCommandCount: initialized ? 2 : partial ? 2 : 0,
-    missingSkillWorkflows: [],
-    missingCommandWorkflows: initialized ? [] : partial ? ['update'] : ['apply', 'update'],
-    unexpectedSkillWorkflows: [],
-    unexpectedCommandWorkflows: partial ? ['explore'] : [],
-    legacyCommandWorkflows: partial ? ['apply'] : [],
-  }
-}
-
-function rootSubscription(
-  data: RootContextState | undefined,
-  options: { isLoading?: boolean; error?: Error | null } = {}
-): SubscriptionState<RootContextState> {
-  return {
-    data,
-    isLoading: options.isLoading ?? false,
-    error: options.error ?? null,
-  }
-}
-
-function environmentSubscription(
-  data: EnvironmentGlobalConfig | null | undefined,
-  options: {
-    isLoading?: boolean
-    error?: Error | null
-    refreshPending?: boolean
-  } = {}
-): EnvironmentSubscriptionState {
-  return {
-    data,
-    isLoading: options.isLoading ?? false,
-    error: options.error ?? null,
-    refresh: vi.fn(async () => {}),
-    refreshPending: options.refreshPending ?? false,
-  }
-}
-
-function runner(status: OverallStatus = 'idle', lines: CliRunnerLine[] = []): TestCliRunner {
-  return {
-    lines,
-    status,
-    commands: { replaceAll: replaceAllMock, runAll: runAllMock },
-    cancel: cancelMock,
-    reset: resetMock,
-  }
-}
-
-function renderSection() {
-  return render(<OpenSpecSettingsSections diagnosticsIndex={0} initializationIndex={1} />)
+function renderSections() {
+  return render(<OpenSpecSettingsSections diagnosticsIndex={3} agentIntegrationsIndex={4} />)
 }
 
 describe('OpenSpecSettingsSections', () => {
   beforeEach(() => {
-    cancelMock.mockReset()
-    replaceAllMock.mockReset()
-    resetMock.mockReset()
-    runAllMock.mockReset().mockResolvedValue(undefined)
-    contextSubscriptionMock.mockReset().mockReturnValue(rootSubscription(readyRoot()))
-    environmentSubscriptionMock
-      .mockReset()
-      .mockReturnValue(environmentSubscription(environmentConfig()))
-    detectedToolsSubscriptionMock.mockReset().mockReturnValue({
-      data: [ALL_TOOLS[0]],
+    environmentSubscriptionMock.mockReturnValue({
+      data: null satisfies EnvironmentGlobalConfig | null,
       isLoading: false,
+      refreshPending: false,
       error: null,
+      refresh: vi.fn<() => Promise<void>>(),
     })
-    toolInitStatesSubscriptionMock.mockReset().mockReturnValue({
-      data: [toolState('claude', 'partial'), toolState('cursor', 'uninitialized')],
+    useAgentIntegrationsMock.mockReturnValue({
+      data: projection(),
       isLoading: false,
+      isRefreshing: false,
       error: null,
+      refresh: vi.fn(),
+      accept: vi.fn(),
     })
-    useCliRunnerMock.mockReset().mockReturnValue(runner())
-    useQueryMock.mockReset().mockReturnValue({ data: ALL_TOOLS, isLoading: false })
   })
 
-  afterEach(() => cleanup())
-
-  it.each([
-    {
-      name: 'current 1.6',
-      cli: { available: true, version: '1.6.9' },
-      label: 'Current 1.6 line',
-      message: 'matches the OpenSpecUI 6.x target line',
-    },
-    {
-      name: 'compatible 1.7',
-      cli: { available: true, version: '1.7.4' },
-      label: 'Compatible 1.7 line',
-      message: 'compatible with OpenSpecUI 6.x',
-    },
-    {
-      name: 'unavailable',
-      cli: { available: false, error: 'openspec executable missing' },
-      label: 'CLI unavailable',
-      message: 'openspec executable missing',
-    },
-    {
-      name: 'unparseable',
-      cli: { available: true, version: 'dev-snapshot' },
-      label: 'Version unparseable',
-      message: 'Unable to parse OpenSpec CLI version',
-    },
-  ])('uses the shared compatibility classifier for $name', async ({ cli, label, message }) => {
-    contextSubscriptionMock.mockReturnValue(rootSubscription(readyRoot(rootContext({ cli }))))
-
-    renderSection()
-
-    const compatibility = screen.getByRole('note', {
-      name: `OpenSpec CLI compatibility ${label}`,
-    })
-    fireEvent.focus(compatibility)
-    expect(await screen.findByText(new RegExp(message))).toBeVisible()
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
   })
 
-  it('renders Root loading as pending without claiming the CLI is unavailable', () => {
-    contextSubscriptionMock.mockReturnValue(
-      rootSubscription(
-        {
-          state: 'loading',
-          data: null,
-          attempt: null,
-          error: null,
-          observedAt: 0,
-        },
-        { isLoading: true }
-      )
-    )
+  it('renders a read-only Agent summary with Config-owned management navigation', () => {
+    renderSections()
 
-    const { container } = renderSection()
+    expect(screen.getByTestId('diagnostics-section')).toHaveAttribute('data-index', '3')
+    expect(screen.getByText('core profile · both')).toBeTruthy()
 
-    expect(screen.getByText('Root loading')).toBeTruthy()
-    expect(screen.getByText('CLI evidence pending')).toBeTruthy()
-    expect(container.querySelector('.rt-skeleton')).not.toBeNull()
-    expect(screen.queryByText('Resolving launch and planning roots...')).toBeNull()
-    expect(screen.queryByText('CLI unavailable')).toBeNull()
-  })
-
-  it('keeps ready, refreshing, stale failed-attempt, and transport-error Root states distinct', async () => {
-    const view = renderSection()
-    expect(screen.getByText('Root current')).toBeTruthy()
-    const launch = screen.getByRole('note', { name: 'Launch project path' })
-    fireEvent.focus(launch)
-    expect(await screen.findByText('/workspace/launch')).toBeVisible()
-    const planning = screen.getByRole('note', { name: 'Planning root selected' })
-    fireEvent.focus(planning)
-    await waitFor(() => expect(screen.getByText(/\/workspace\/planning/)).toBeVisible())
-
-    const current = rootContext()
-    contextSubscriptionMock.mockReturnValue(
-      rootSubscription({
-        state: 'refreshing',
-        data: current,
-        attempt: null,
-        error: null,
-        observedAt: 11,
-      })
-    )
-    view.rerender(<OpenSpecSettingsSections diagnosticsIndex={0} initializationIndex={1} />)
-    expect(screen.getByText('Root refreshing')).toBeTruthy()
-
-    const failedAttempt = rootContext({
-      planningRoot: null,
-      storeId: 'missing-store',
-      observedAt: 12,
-      diagnostics: {
-        root: [{ severity: 'error', code: 'root-missing', message: 'Store root missing' }],
-        doctor: [],
-        context: [],
-      },
-    })
-    contextSubscriptionMock.mockReturnValue(
-      rootSubscription({
-        state: 'error',
-        data: current,
-        attempt: failedAttempt,
-        error: { code: 'resolver-failed', message: 'Root refresh failed' },
-        observedAt: 12,
-      })
-    )
-    view.rerender(<OpenSpecSettingsSections diagnosticsIndex={0} initializationIndex={1} />)
-    expect(screen.getByText('Stale Root snapshot')).toBeTruthy()
-    expect(screen.getByText('Failed attempt: resolver-failed')).toBeTruthy()
-    expect(screen.getByText('Root refresh failed')).toBeTruthy()
-    expect(screen.getByText(/Attempted root: unresolved \| Store missing-store/)).toBeTruthy()
-
-    contextSubscriptionMock.mockReturnValue(
-      rootSubscription(readyRoot(current), { error: new Error('WebSocket disconnected') })
-    )
-    view.rerender(<OpenSpecSettingsSections diagnosticsIndex={0} initializationIndex={1} />)
-    expect(screen.getByText('Root transport error')).toBeTruthy()
-    expect(screen.getByText('WebSocket disconnected')).toBeTruthy()
-  })
-
-  it('projects current Environment truth and exact Context and Config destinations', () => {
-    renderSection()
-
-    expect(screen.getByText('Environment current')).toBeTruthy()
-    expect(screen.getByRole('note', { name: 'Environment profile core' })).toBeTruthy()
-    expect(screen.getByRole('note', { name: 'Environment delivery both' })).toBeTruthy()
-    expect(screen.getByRole('note', { name: 'Environment drift in-sync' })).toBeTruthy()
-    expect(screen.getByRole('note', { name: '6 effective workflows' })).toBeTruthy()
     expect(
-      screen.getByRole('note', { name: 'Environment data scope source xdg-data-home' })
+      screen.getByText('4 workflows are delivered under the Environment Global Agent policy.')
     ).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Resolved Context details' })).toHaveAttribute(
-      'href',
-      '/config/context'
+    expect(screen.getByText('2 integrations need attention')).toHaveAttribute(
+      'data-status',
+      'partial'
     )
-    expect(screen.getByRole('link', { name: /Environment Global config/ })).toHaveAttribute(
-      'href',
-      '/config?configTab=environment-global'
-    )
-    expect(screen.queryByRole('button', { name: /Run openspec update/i })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Set profile/i })).toBeNull()
-    expect(toolInitStatesSubscriptionMock).toHaveBeenCalledWith({
-      delivery: 'both',
-      workflows: ['propose', 'explore', 'apply', 'update', 'sync', 'archive'],
-    })
-  })
+    expect(screen.getByText('Configured').nextElementSibling).toHaveTextContent('2')
+    expect(screen.getByText('Partial').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Drifted').nextElementSibling).toHaveTextContent('2')
+    expect(screen.getByText('Failed').nextElementSibling).toHaveTextContent('0')
+    expect(screen.getByText('Unavailable').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('1 stale version')).toBeTruthy()
+    expect(screen.getByText('1 cleanup needed')).toBeTruthy()
+    expect(screen.getByText('1 migration required')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Manage' })).toHaveAttribute('href', '/config/agents')
 
-  it('locks Init while Environment Global is loading or refreshing', () => {
-    environmentSubscriptionMock.mockReturnValue(
-      environmentSubscription(undefined, { isLoading: true })
-    )
-    const view = renderSection()
-
-    expect(screen.getByText('Environment loading')).toBeTruthy()
-    expect(screen.getByText('Waiting for current Environment Global delivery')).toBeTruthy()
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByLabelText('Init Mode')).toBeNull()
-    expect(toolInitStatesSubscriptionMock).not.toHaveBeenCalled()
-
-    environmentSubscriptionMock.mockReturnValue(
-      environmentSubscription(environmentConfig(), { refreshPending: true })
-    )
-    view.rerender(<OpenSpecSettingsSections diagnosticsIndex={0} initializationIndex={1} />)
-    expect(screen.getByText('Environment refreshing')).toBeTruthy()
-    expect(screen.getByText('Waiting for current Environment Global delivery')).toBeTruthy()
-    expect(screen.queryByLabelText('Init Mode')).toBeNull()
+    expect(screen.queryByText('Cancel')).toBeNull()
   })
 
-  it('preserves stale Environment evidence while locking Init on subscription error', () => {
-    environmentSubscriptionMock.mockReturnValue(
-      environmentSubscription(environmentConfig(), {
-        error: new Error('Environment subscription disconnected'),
-      })
-    )
-
-    renderSection()
-
-    expect(screen.getByText('Stale environment projection')).toBeTruthy()
-    expect(screen.getByText('Environment subscription disconnected')).toBeTruthy()
-    expect(screen.getByText('Initialization locked by stale Environment Global state')).toBeTruthy()
-    expect(screen.getByRole('note', { name: 'Environment profile core' })).toBeTruthy()
-    expect(screen.queryByLabelText('Init Mode')).toBeNull()
-    expect(toolInitStatesSubscriptionMock).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    {
-      mode: 'auto',
-      action: 'Initialize (auto-detect)',
-      expected: { type: 'init', input: { force: true } },
-    },
-    {
-      mode: 'all',
-      action: 'Initialize with all tools',
-      expected: { type: 'init', input: { tools: 'all', force: true } },
-    },
-  ])(
-    'builds the $mode Init command through the typed runner',
-    async ({ mode, action, expected }) => {
-      renderSection()
-      if (mode === 'all') {
-        fireEvent.change(screen.getByLabelText('Init Mode'), { target: { value: 'all' } })
-      }
-
-      fireEvent.click(screen.getByRole('button', { name: action }))
-
-      await waitFor(() => expect(replaceAllMock).toHaveBeenLastCalledWith([expected]))
-      expect(screen.getByRole('dialog')).toBeTruthy()
-    }
-  )
-
-  it('builds selected Init from repairable tools and preserves partial and legacy evidence', async () => {
-    renderSection()
-    fireEvent.change(screen.getByLabelText('Init Mode'), { target: { value: 'selected' } })
-
-    expect(screen.getByText('missing commands: update')).toBeTruthy()
-    expect(screen.getByText('unexpected commands: explore')).toBeTruthy()
-    expect(screen.getByText('legacy commands: apply')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /^Claude/ }))
-    const action = screen.getByRole('button', { name: 'Initialize selected (1 repair)' })
-    expect(action).toBeEnabled()
-    fireEvent.click(action)
-
-    await waitFor(() =>
-      expect(replaceAllMock).toHaveBeenLastCalledWith([
-        { type: 'init', input: { tools: ['claude'], force: true } },
-      ])
-    )
-  })
-
-  it('locks pending controls while preserving terminal output and cancellation', async () => {
-    const view = renderSection()
-    fireEvent.click(screen.getByRole('button', { name: 'Initialize (auto-detect)' }))
-    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
-
-    useCliRunnerMock.mockReturnValue(
-      runner('running', [{ id: 'line-1', kind: 'ascii', text: 'initializing claude' }])
-    )
-    view.rerender(<OpenSpecSettingsSections diagnosticsIndex={0} initializationIndex={1} />)
-
-    expect(screen.getByText('initializing claude')).toBeTruthy()
-    expect(screen.getByLabelText('Init Mode')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Initializing' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(cancelMock).toHaveBeenCalled()
-  })
-
-  it('converges partial tool evidence after a successful Init subscription update', async () => {
-    const view = renderSection()
-    fireEvent.click(screen.getByRole('button', { name: 'Initialize (auto-detect)' }))
-    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
-
-    useCliRunnerMock.mockReturnValue(
-      runner('success', [{ id: 'line-1', kind: 'ascii', text: 'OpenSpec initialized' }])
-    )
-    toolInitStatesSubscriptionMock.mockReturnValue({
-      data: [toolState('claude', 'initialized'), toolState('cursor', 'uninitialized')],
+  it('renders replacement Agent projection updates from the shared live hook', () => {
+    const view = renderSections()
+    useAgentIntegrationsMock.mockReturnValue({
+      data: projection({
+        policy: { profile: 'custom', delivery: 'skills', workflows: ['apply'] },
+        states: [
+          state('claude', 'initialized'),
+          state('codex', 'initialized'),
+          state('cursor', 'initialized'),
+          state('kimi', 'initialized'),
+          state('agents', 'unavailable'),
+        ],
+      }),
       isLoading: false,
+      isRefreshing: false,
       error: null,
+      refresh: vi.fn(),
+      accept: vi.fn(),
     })
-    view.rerender(<OpenSpecSettingsSections diagnosticsIndex={0} initializationIndex={1} />)
+    view.rerender(<OpenSpecSettingsSections diagnosticsIndex={3} agentIntegrationsIndex={4} />)
 
-    expect(screen.getByText('OpenSpec initialized')).toBeTruthy()
-    expect(screen.getByText('1 initialized')).toBeTruthy()
-    expect(screen.getByText('0 repair needed')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Run init' })).toBeNull()
+    expect(screen.getByText('custom profile · skills')).toBeTruthy()
+    expect(
+      screen.getByText('1 workflow is delivered under the Environment Global Agent policy.')
+    ).toBeTruthy()
+    expect(screen.getByText('Agent integrations are current')).toHaveAttribute(
+      'data-status',
+      'initialized'
+    )
+  })
+
+  it('preserves the last Agent summary when the shared live projection fails', () => {
+    useAgentIntegrationsMock.mockReturnValue({
+      data: projection(),
+      isLoading: false,
+      isRefreshing: false,
+      error: new Error('Agent projection disconnected'),
+      refresh: vi.fn(),
+      accept: vi.fn(),
+    })
+    renderSections()
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.getByText(/Agent status may be stale/)).toHaveTextContent(
+      'Agent projection disconnected'
+    )
+    expect(screen.getByText('Agent projection failed')).toHaveAttribute('data-status', 'failed')
+    expect(screen.getByText('Failed').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('core profile · both')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Manage' })).toBeTruthy()
+  })
+
+  it('shows a terminal unavailable state when the shared projection has no data', () => {
+    useAgentIntegrationsMock.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isRefreshing: false,
+      error: new Error('Agent policy unavailable'),
+      refresh: vi.fn(),
+      accept: vi.fn(),
+    })
+    renderSections()
+
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.getByText(/Agent status is unavailable/)).toHaveTextContent(
+      'Agent policy unavailable'
+    )
+    expect(screen.getByText('Failed').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Configured').nextElementSibling).toHaveTextContent('—')
+    expect(screen.queryByLabelText('Loading Agent Integrations')).toBeNull()
   })
 })
