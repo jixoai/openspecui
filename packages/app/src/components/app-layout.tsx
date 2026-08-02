@@ -287,7 +287,7 @@ function AppLayoutSurface() {
             </div>
           ) : null}
           <main
-            className={`min-h-0 min-w-0 flex-1 ${workspacesVisible ? 'overflow-hidden' : 'overflow-auto'}`}
+            className={`bg-background min-h-0 min-w-0 flex-1 ${workspacesVisible ? 'overflow-hidden' : 'overflow-auto'}`}
             data-testid="app-main"
           >
             {workspacesMounted ? (
