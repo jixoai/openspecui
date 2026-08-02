@@ -547,8 +547,16 @@ function HostedShellRuntime({
         ...previous,
         status: 'loaded',
       }))
+      // First-load theme inheritance: push the current App theme to the freshly loaded iframe.
+      // This replaces URL-param inheritance (which would reload the iframe on every theme change).
+      if (appTheme) {
+        const iframe = iframeRefs.current[tabId]
+        if (iframe) {
+          broadcastThemeToIframes({ [tabId]: iframe }, appTheme)
+        }
+      }
     },
-    [updateTabFrameState]
+    [appTheme, updateTabFrameState]
   )
 
   const markFrameErrored = useCallback(

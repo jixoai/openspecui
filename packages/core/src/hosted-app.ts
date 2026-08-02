@@ -1,14 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Define browser-safe hosted backend metadata and compatibility capability facts.
  * 2. Normalize App/embedded launch locators and carry session-only credentials in fragments.
  * 3. Validate embedded UI origins without inventing backend authority.
  * 4. Re-export the browser-safe hosted runtime schema source without a Node-bearing Core root import.
- * 5. Carry the App-forced theme preference so new child windows inherit it.
+ * 5. Share the HostedShellTheme type so the App shell can force-sync theme to child windows.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Delivery correction (2026-07-24): privately carry the exact Access Gate credential to Project Web.
  * Original request (2026-08-02): App theme changes force-sync to child windows; new windows inherit.
+ * Owner correction (2026-08-03): theme must NOT ride the iframe URL — it reloads the iframe on every
+ *   change. New-window inheritance and live sync are both handled by postMessage (App → iframe onLoad,
+ *   and re-broadcast on theme change), so the URL stays stable.
  */
 import {
   HOSTED_SHELL_PROTOCOL_VERSION,
@@ -169,18 +172,10 @@ export function buildEmbeddedUiLaunchUrl(options: {
   apiBaseUrl: string
   sessionId: string
   credential?: string | null
-  /**
-   * App-forced theme preference. When provided, new child windows inherit it via
-   * a `theme` query param so they render the correct mode before any postMessage.
-   */
-  theme?: HostedShellTheme | null
 }): string {
   const url = new URL(normalizeEmbeddedUiUrl(options.embeddedUiUrl))
   url.searchParams.set('api', options.apiBaseUrl)
   url.searchParams.set('session', options.sessionId)
-  if (options.theme) {
-    url.searchParams.set('theme', options.theme)
-  }
   setAccessGateCredentialFragment(url, options.credential)
   return url.toString()
 }

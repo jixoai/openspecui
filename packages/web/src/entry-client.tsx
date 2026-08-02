@@ -16,9 +16,7 @@ import {
   consumeAccessGateLaunchCredential,
 } from './lib/access-gate-credential'
 import { getHealthUrl, getHostedApiState } from './lib/api-config'
-import { getHostedThemeOverride } from './lib/hosted-session'
 import { detectStaticMode, setStaticMode } from './lib/static-mode'
-import { applyTheme, persistTheme } from './lib/theme'
 
 const hasPrerenderedContent = () => {
   const root = document.getElementById('root')
@@ -99,13 +97,6 @@ async function main() {
       message: 'This embedded UI session needs explicit api and session query parameters.',
     })
     return
-  }
-
-  // App-forced theme override (URL param): apply before React renders to avoid FOUC.
-  const hostedThemeOverride = getHostedThemeOverride(window.location)
-  if (hostedThemeOverride) {
-    applyTheme(hostedThemeOverride)
-    persistTheme(hostedThemeOverride)
   }
 
   const isStatic = isSSGMode() || (await detectStaticMode())

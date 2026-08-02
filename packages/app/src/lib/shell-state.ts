@@ -8,7 +8,6 @@
  * Delivery correction (2026-07-24): only the matching locator may seed an iframe credential fragment.
  */
 import { buildEmbeddedUiLaunchUrl } from '@openspecui/core/hosted-app'
-import { getStoredHostedShellTheme } from './app-theme'
 import { readLaunchCredential } from './launch-credential'
 
 const SHELL_STORAGE_KEY = 'openspecui-app:shell'
@@ -261,7 +260,6 @@ export function buildHostedEmbeddedUiUrl(tab: HostedShellTab, embeddedUiUrl: str
     apiBaseUrl: tab.apiBaseUrl,
     sessionId: tab.sessionId,
     credential: readLaunchCredential(tab.apiBaseUrl),
-    theme: getStoredHostedShellTheme(),
   })
 }
 
