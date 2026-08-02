@@ -20,6 +20,9 @@ importers:
       '@opentui/react':
         specifier: ^0.1.79
         version: 0.1.79(react-devtools-core@7.0.1)(react@19.2.0)(stage-js@1.0.1)(typescript@5.9.3)(web-tree-sitter@0.25.10)(ws@8.19.0)
+      '@shockpkg/icon-encoder':
+        specifier: ^3.2.3
+        version: 3.2.3
       '@types/node':
         specifier: ^22.10.0
         version: 22.19.1
@@ -47,6 +50,9 @@ importers:
       shadcn:
         specifier: ^3.8.2
         version: 3.8.2(@types/node@22.19.1)(hono@4.10.6)(typescript@5.9.3)
+      sharp:
+        specifier: ^0.34.5
+        version: 0.34.5
       tsx:
         specifier: ^4.20.6
         version: 4.20.6

@@ -163,7 +163,14 @@ describe('OpenTray daemon presenter', () => {
       expect.objectContaining({
         platform: 'darwin',
         format: 'icns',
-        source: { type: 'file', path: '/package/app/native-icons/app-icon.icns' },
+        variant: ['default', 'light'],
+        source: { type: 'file', path: '/package/app/native-icons/app-icon/darwin-light.icns' },
+      }),
+      expect.objectContaining({
+        platform: 'darwin',
+        format: 'icns',
+        variant: 'dark',
+        source: { type: 'file', path: '/package/app/native-icons/app-icon/darwin-dark.icns' },
       }),
     ])
     expect(fixture.nativeCalls[0]?.runtime.appLaunch).toEqual(APP_LAUNCH)
