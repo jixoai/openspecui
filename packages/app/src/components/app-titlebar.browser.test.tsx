@@ -56,6 +56,9 @@ function SidebarViewTransitionHarness() {
         presentation={{ kind: 'opentray', insets: { left: 0, right: 0, top: 0, height: 32 } }}
         settingsActive={false}
         sidebarCollapsed={collapsed}
+        theme="system"
+        resolvedTheme="light"
+        onToggleTheme={() => {}}
       />
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <aside
@@ -90,6 +93,9 @@ describe('AppTitlebar browser boundary', () => {
           }}
           settingsActive={false}
           sidebarCollapsed={false}
+          theme="system"
+          resolvedTheme="light"
+          onToggleTheme={() => {}}
         />
         <TerminalTabs
           className="min-h-0 flex-1"
@@ -134,6 +140,9 @@ describe('AppTitlebar browser boundary', () => {
         }}
         settingsActive={false}
         sidebarCollapsed={false}
+        theme="system"
+        resolvedTheme="light"
+        onToggleTheme={() => {}}
       />
     )
 

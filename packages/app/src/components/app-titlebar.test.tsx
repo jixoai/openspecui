@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Prove self-drawn titlebar presence is exclusive to overlay-capable hosts.
  * 2. Prove titlebar pointer input remains a narrow component-level drag entry.
  * 3. Keep Browser and native-frame hosts free from artificial titlebar space.
  * 4. Prove the branded Settings control remains interactive and separate from drag authority.
  * 5. Prove the branded titlebar control toggles the shared desktop sidebar state.
+ * 6. Prove the overlay-only theme toggle cycles the App theme preference.
  *
  * Original request (2026-07-30): "顶部区域缺少一个自绘制的 titlebar 区域，它是通过 overlay-window-controls 得来的，主语它可以拖拽窗口。"
  * Owner correction (2026-07-30): "Settings 入口挪到titlebar右上角；logo要全面应用。"
@@ -12,12 +13,15 @@
  * Owner correction (2026-07-31): PWA overlay presentation is retired.
  * Owner correction (2026-07-31): OpenTray titlebar product name is "OpenSpecUI App".
  * Owner correction (2026-07-31): clicking either App brand toggles the desktop sidebar.
+ * Original request (2026-08-02): "在它左边新增一个 theme-toggle-icon-button"
  */
 // @vitest-environment jsdom
 
 import { fireEvent, render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import type { HostedShellTheme } from '../lib/app-theme'
 import type { AppTitlebarPresentation } from '../lib/titlebar-presentation'
+import type { ResolvedHostedShellTheme } from '../lib/use-hosted-shell-theme'
 import { AppTitlebar } from './app-titlebar'
 
 const ZERO_INSETS = { left: 0, right: 0, top: 0, height: 0 }
@@ -28,12 +32,16 @@ function renderTitlebar(
   onSettings = vi.fn(),
   settingsActive = false,
   onToggleSidebar = vi.fn(),
-  sidebarCollapsed = false
+  sidebarCollapsed = false,
+  theme: HostedShellTheme = 'system',
+  resolvedTheme: ResolvedHostedShellTheme = 'light',
+  onToggleTheme = vi.fn()
 ) {
   return {
     onPointerDown,
     onSettings,
     onToggleSidebar,
+    onToggleTheme,
     view: render(
       <AppTitlebar
         onSettings={onSettings}
@@ -42,6 +50,9 @@ function renderTitlebar(
         settingsActive={settingsActive}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={onToggleSidebar}
+        theme={theme}
+        resolvedTheme={resolvedTheme}
+        onToggleTheme={onToggleTheme}
       />
     ),
   }
@@ -101,5 +112,29 @@ describe('AppTitlebar', () => {
     expect(brand.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(brand)
     expect(onToggleSidebar).toHaveBeenCalledOnce()
+  })
+
+  it('cycles the App theme from the overlay theme toggle', () => {
+    const presentation: AppTitlebarPresentation = {
+      kind: 'opentray',
+      insets: { left: 72, right: 80, top: 0, height: 32 },
+    }
+    const onToggleTheme = vi.fn()
+    const { onToggleTheme: captured, view } = renderTitlebar(
+      presentation,
+      vi.fn(),
+      vi.fn(),
+      false,
+      vi.fn(),
+      false,
+      'dark',
+      'dark',
+      onToggleTheme
+    )
+    const toggle = view.getByRole('button', { name: 'Theme: dark' })
+
+    fireEvent.click(toggle)
+    expect(captured).toHaveBeenCalledOnce()
+    view.unmount()
   })
 })

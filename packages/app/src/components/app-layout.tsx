@@ -32,6 +32,7 @@ import {
 } from '../lib/running-backend-observation-provider'
 import { runSidebarViewTransition } from '../lib/sidebar-view-transition'
 import { StoresRuntimeProvider } from '../lib/stores-runtime'
+import { useHostedShellThemeState } from '../lib/use-hosted-shell-theme'
 import { useRouterContext } from '../lib/use-router-context'
 import { useTitlebarPresentation } from '../lib/use-titlebar-presentation'
 import { AppDaemonWorkspaceOwner, useAppDaemonWorkspace } from './app-daemon-workspace-owner'
@@ -86,6 +87,7 @@ function AppLayoutSurface() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const { appPresentation } = useRouterContext()
   const titlebar = useTitlebarPresentation(appPresentation === 'opentray-overlay')
+  const appTheme = useHostedShellThemeState()
   const workspacesVisible = pathname === '/workspaces'
   const hasOverlayTitlebar = titlebar.presentation.kind === 'opentray'
   const [workspacesMounted, setWorkspacesMounted] = useState(workspacesVisible)
@@ -163,6 +165,9 @@ function AppLayoutSurface() {
         settingsActive={pathname === '/settings'}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
+        theme={appTheme.theme}
+        resolvedTheme={appTheme.resolvedTheme}
+        onToggleTheme={appTheme.toggleTheme}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -185,7 +190,18 @@ function AppLayoutSurface() {
               title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               type="button"
             >
-              <img aria-hidden="true" className="h-4 w-4 shrink-0" src="/icon.svg" alt="" />
+              <img
+                aria-hidden="true"
+                className="app-titlebar-logo app-titlebar-logo-light h-4 w-4 shrink-0"
+                src="/icon.svg"
+                alt=""
+              />
+              <img
+                aria-hidden="true"
+                className="app-titlebar-logo app-titlebar-logo-dark h-4 w-4 shrink-0"
+                src="/icon.dark.svg"
+                alt=""
+              />
               <span className={sidebarCollapsed ? 'sr-only' : undefined}>OpenSpecUI App</span>
             </button>
           )}
