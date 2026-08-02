@@ -226,9 +226,31 @@ html.dark .app-titlebar-logo-dark {
   min-width: max-content;
 }
 
-html.dark .hosted-shell-root .hosted-shell-tabs [data-tab-trigger='true'].tab-selected {
-  background-color: var(--primary);
-  color: var(--primary-foreground);
+/*
+ * Workspace tabs dark-mode hierarchy (hosted-shell only).
+ * terminal-tabs.tsx is designed for a fixed dark terminal surface, but the hosted shell
+ * remaps --terminal to --background, so the brightness()/bg-terminal primitives collapse
+ * in dark mode: the active tab goes transparent-into-background and inactive tabs darken
+ * further, inverting the expected relief. Re-establish hierarchy explicitly here.
+ *
+ * Active (selected) tab: a distinct primary-tinted surface that wins over bg-transparent.
+ * Inactive tabs: lift slightly above the background instead of darkening under it.
+ * Selection indicator: give it a visible top edge instead of blending with --terminal.
+ */
+html.dark .hosted-shell-tabs [data-tab-trigger='true'].tab-selected {
+  background-color: color-mix(in srgb, var(--background) 82%, var(--foreground) 6%);
+}
+
+html.dark .hosted-shell-tabs [data-tab-item='true']:not(:has(.tab-selected)) {
+  filter: brightness(1.18);
+}
+
+html.dark .hosted-shell-tabs [data-tab-item='true']:not(:has(.tab-selected)):hover {
+  filter: brightness(1.26);
+}
+
+html.dark .hosted-shell-tabs [data-tabs-selection-indicator='true'] {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--foreground) 18%, transparent);
 }
 
 html[data-sidebar-vt] [data-app-sidebar] {
