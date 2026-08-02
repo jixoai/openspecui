@@ -1,16 +1,17 @@
 /**
- * Orthogonal intents (created 2026-08-02 Asia/Shanghai):
- * 1. Project hand-designed 1024² Default/Dark PNGs into platform-native App identity variants.
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Project hand-designed App identity variants into platform-native catalogs.
  *
  * Original request (2026-08-02): "我手动设计了 ./app-icon，请将它配置(复制)到 native-icons 中，
  *   你可以参考 ../skill-creator-v2 的配置。Windows 平台使用 light 风格"
+ * Owner correction (2026-08-02): macOS 用 Icon Composer 官方工具产出的 .icns 直传，
+ *   不再从 PNG 二次生成（避免视觉重量与官方产物不一致）；Win/Linux 仍从 PNG 生成。
  *
- * 设计来源已 baked-in squircle 蒙版（四角 alpha=0），故直接按尺寸 resize 嵌入，无需二次 squircle。
  * 输出对标 skill-creator-v2/resources/app-icon 的物理布局：
  *   darwin-light/dark.icns、win32-light/dark.ico、linux/{N}x{N}/app-icon.png。
  * Windows 使用 light 风格：win32-light.ico 声明 variant:['default','light']。
  *
- * 该脚本职责单一：读取 app-icon/*.png → 写入 resources/app-icon/。
+ * 该脚本职责单一：读取 app-icon/*.{icns,png} → 写入 resources/app-icon/。
  *   不负责 copy 进 packages/app/public（由 vite 插件在构建期同步）。
  */
 import { createHash } from 'node:crypto'
@@ -19,7 +20,7 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { IconIcns, IconIco } from '@shockpkg/icon-encoder'
+import { IconIco } from '@shockpkg/icon-encoder'
 import sharp from 'sharp'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -29,21 +30,13 @@ const SOURCE_DIR = join(rootDir, 'app-icon')
 const OUTPUT_DIR = join(rootDir, 'resources', 'app-icon')
 const CACHE_PATH = join(rootDir, 'node_modules', '.cache', 'openspecui', 'native-icons.json')
 
-/** 用户手绘源文件（iOS Default = light，iOS Dark = dark）。 */
-const LIGHT_SOURCE = join(SOURCE_DIR, 'openspecui-icon-composer-iOS-Default-1024@1x.png')
-const DARK_SOURCE = join(SOURCE_DIR, 'openspecui-icon-composer-iOS-Dark-1024@1x.png')
+/** macOS 源：Icon Composer 官方产出的 .icns（含正确的尺寸集与 dark mode 内嵌）。 */
+const DARWIN_LIGHT_SOURCE = join(SOURCE_DIR, 'app-icon.default.icns')
+const DARWIN_DARK_SOURCE = join(SOURCE_DIR, 'app-icon.dark.icns')
 
-/** ICNS 类型 → 目标像素尺寸（现代标准集，含 @2x 变体类型）。 */
-const ICNS_TYPES: ReadonlyArray<readonly [type: string, size: number]> = [
-  ['ic07', 128],
-  ['ic08', 256],
-  ['ic09', 512],
-  ['ic10', 1024],
-  ['ic11', 32],
-  ['ic12', 64],
-  ['ic13', 256],
-  ['ic14', 512],
-]
+/** Win/Linux 源：iOS Default/Dark PNG（squircle 已 baked-in）。 */
+const LIGHT_PNG_SOURCE = join(SOURCE_DIR, 'openspecui-icon-composer-iOS-Default-1024@1x.png')
+const DARK_PNG_SOURCE = join(SOURCE_DIR, 'openspecui-icon-composer-iOS-Dark-1024@1x.png')
 
 /** ICO 嵌入尺寸（Windows 标准，大尺寸用 PNG 编码）。 */
 const ICO_SIZES = [256, 128, 64, 48, 32, 16] as const
@@ -80,17 +73,6 @@ async function resizePng(source: string, size: number): Promise<Buffer> {
   return sharp(source).resize(size, size, { fit: 'fill' }).png().toBuffer()
 }
 
-/** 从单一源生成 ICNS：按类型目标尺寸 resize 后以 raw PNG 嵌入（避免 18MB 膨胀）。 */
-async function buildIcns(source: string): Promise<Uint8Array> {
-  const icns = new IconIcns()
-  icns.toc = true
-  for (const [type, size] of ICNS_TYPES) {
-    const png = await resizePng(source, size)
-    await icns.addFromPng(png, [type], true)
-  }
-  return icns.encode()
-}
-
 /** 从单一源生成 ICO：各尺寸 PNG 嵌入（256 等大尺寸自动用 PNG 编码）。 */
 async function buildIco(source: string): Promise<Uint8Array> {
   const ico = new IconIco()
@@ -107,15 +89,22 @@ async function writeBytes(path: string, data: Uint8Array): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  for (const source of [LIGHT_SOURCE, DARK_SOURCE]) {
+  for (const source of [
+    DARWIN_LIGHT_SOURCE,
+    DARWIN_DARK_SOURCE,
+    LIGHT_PNG_SOURCE,
+    DARK_PNG_SOURCE,
+  ]) {
     if (!existsSync(source)) {
       throw new Error(`hand-designed app-icon source not found: ${source}`)
     }
   }
 
   const sourceHash = createHash('sha256')
-  sourceHash.update(await sha256OfFile(LIGHT_SOURCE))
-  sourceHash.update(await sha256OfFile(DARK_SOURCE))
+  sourceHash.update(await sha256OfFile(DARWIN_LIGHT_SOURCE))
+  sourceHash.update(await sha256OfFile(DARWIN_DARK_SOURCE))
+  sourceHash.update(await sha256OfFile(LIGHT_PNG_SOURCE))
+  sourceHash.update(await sha256OfFile(DARK_PNG_SOURCE))
   const sourceSha256 = sourceHash.digest('hex')
 
   const cache = await readCache()
@@ -139,17 +128,17 @@ async function main(): Promise<void> {
   await rm(OUTPUT_DIR, { force: true, recursive: true })
   await mkdir(OUTPUT_DIR, { recursive: true })
 
-  // Darwin ICNS：light 与 dark 各一个独立文件（对标 skill-creator-v2 两变体布局）
-  await writeBytes(join(OUTPUT_DIR, 'darwin-light.icns'), await buildIcns(LIGHT_SOURCE))
-  await writeBytes(join(OUTPUT_DIR, 'darwin-dark.icns'), await buildIcns(DARK_SOURCE))
+  // Darwin ICNS：直接 copy Icon Composer 官方产出的 .icns（light=default, dark）
+  await writeBytes(join(OUTPUT_DIR, 'darwin-light.icns'), await readFile(DARWIN_LIGHT_SOURCE))
+  await writeBytes(join(OUTPUT_DIR, 'darwin-dark.icns'), await readFile(DARWIN_DARK_SOURCE))
 
   // Windows ICO：light=default，dark=dark（用户要求 Windows 使用 light 风格）
-  await writeBytes(join(OUTPUT_DIR, 'win32-light.ico'), await buildIco(LIGHT_SOURCE))
-  await writeBytes(join(OUTPUT_DIR, 'win32-dark.ico'), await buildIco(DARK_SOURCE))
+  await writeBytes(join(OUTPUT_DIR, 'win32-light.ico'), await buildIco(LIGHT_PNG_SOURCE))
+  await writeBytes(join(OUTPUT_DIR, 'win32-dark.ico'), await buildIco(DARK_PNG_SOURCE))
 
   // Linux PNG：复用 light 源（Linux 无明暗变体概念，隐式 default）
   for (const size of LINUX_SIZES) {
-    const png = await resizePng(LIGHT_SOURCE, size)
+    const png = await resizePng(LIGHT_PNG_SOURCE, size)
     await writeBytes(join(OUTPUT_DIR, 'linux', `${size}x${size}`, 'app-icon.png'), png)
   }
 

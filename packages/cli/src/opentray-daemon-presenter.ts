@@ -116,11 +116,7 @@ function buildNativeAppUrl(appUrl: string): string {
   return url.toString()
 }
 
-function nativeWindowOptions(
-  appUrl: string,
-  platform: NodeJS.Platform,
-  enableDevtools: boolean
-): WebviewWindowOptions {
+function nativeWindowOptions(appUrl: string, enableDevtools: boolean): WebviewWindowOptions {
   assertLoopbackAppUrl(appUrl)
   const nativeApiPolicy: WebviewNativeApiPolicy = {
     defaultSrc: ["'none'"],
@@ -309,7 +305,7 @@ async function createNativePresenter(options: {
   const resources = await options.driver.createNative({
     tray: trayOptions(brand.trayIcon),
     runtime: runtimeOptions(options.version, brand.appIcon, options.appLaunch),
-    window: nativeWindowOptions(options.appServer.url, options.platform, options.enableDevtools),
+    window: nativeWindowOptions(options.appServer.url, options.enableDevtools),
   })
   try {
     await resources.window.show()
