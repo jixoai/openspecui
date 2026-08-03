@@ -150,6 +150,24 @@ Server, Router, subscription, mutation, or static snapshot contract changed.
   implementation, tests, changeset, and matching task evidence; no unrelated worktree files were included and
   nothing was pushed.
 
+### Owner Title-sizing Correction
+
+- Red Chromium evidence failed all three 390px, 768px, and 1280px cases because the title still computed to
+  `white-space: nowrap` under the old single-line `truncate` owner. The 1280px fixture also established that the
+  previous `minmax(0, 1fr) auto` grid reserved Actions intrinsic width before title identity.
+- The shared wide Header now uses the owner-specified `auto 1fr` tracks. Title identity uses normal whitespace and
+  `overflow-wrap: anywhere`, so natural phrases and continuous identifiers remain readable instead of clipping.
+- The first implementation attempt correctly wrapped the title but let its `auto` track collapse the Actions `1fr`
+  track nearly to zero. Screenshot evidence showed buttons stacking along the right edge. The final layout gives the
+  Actions track a stable minimum interaction width and makes button labels respond to that track's own container;
+  constrained Actions use icons while wider Actions restore labels.
+- Final Chromium preparation passed `1` file / `5` tests: at 390px and 768px Actions remain below identity, at
+  1280px identity is wider than Actions while both remain in one Header row, and all widths preserve multiline title
+  text without horizontal overflow. Focused unit evidence passed `4` files / `23` tests; Web typecheck, clean SSG
+  client/server builds, `lint:ci`, strict Change validation, and `git diff --check` passed.
+- The correction was committed as `5634959f` (`fix(web): prioritize Change Detail titles`) with only the shared
+  Header/Action implementation, browser fixture, changeset, and matching checkpoint state. Nothing was pushed.
+
 ## Loopback Triggers
 
 - A required Evidence fact is absent from the existing `ChangeStatus` or retained Root Context contract.

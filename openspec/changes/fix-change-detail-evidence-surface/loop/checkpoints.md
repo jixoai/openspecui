@@ -67,7 +67,7 @@ Owner correction (2026-08-03): use `auto 1fr` to prioritize title identity and w
 - [x] 7.7 Record the corrected `auto 1fr` Header and wrapping-title contract.
 - [x] 7.8 Add red browser evidence for the old action-priority grid and single-line title truncation.
 - [x] 7.9 Prioritize title identity and preserve readable multiline titles without Header overflow.
-- [ ] 7.10 Re-run focused browser/unit/type gates, record evidence, and commit without pushing.
+- [x] 7.10 Re-run focused browser/unit/type gates, record evidence, and commit without pushing.
 
 ## 8. Owner and PR Boundaries
 
