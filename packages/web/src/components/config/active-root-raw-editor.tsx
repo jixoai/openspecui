@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
- * 1. Render the complete Active Root YAML escape hatch without owning revision admission.
+ * 1. Render the complete Active Root YAML escape hatch in natural page flow without owning revision admission.
  *
  * Original request (2026-08-01): retain raw YAML writing for organization and team-specific configuration keys.
  */
@@ -27,8 +27,8 @@ export function ActiveRootRawEditor({
       onSaveShortcut={onSaveShortcut}
       readOnly={readOnly}
       filename="config.yaml"
-      className="min-h-0 min-w-0 flex-1"
-      editorMinHeight="0px"
+      className="min-w-0"
+      editorMinHeight="clamp(24rem, 60vh, 48rem)"
     />
   )
 }

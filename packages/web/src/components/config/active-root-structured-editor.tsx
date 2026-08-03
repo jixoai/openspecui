@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
- * 1. Render schema/context and artifact-rule Structured fields as a container-responsive form.
+ * 1. Render schema/context and artifact-rule Structured fields as a naturally expanding container-responsive form.
  * 2. Render OpenSpec 1.7 apply/archive guidance separately from artifact rules.
  * 3. Preserve accessible read-only and editable states without acquiring mutation authority.
  *
@@ -37,10 +37,7 @@ export function ActiveRootStructuredEditor({
   const nextRuleId = useRef(1)
 
   return (
-    <div
-      aria-label="Structured Active Root fields"
-      className="@container scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent)] min-h-0 min-w-0 flex-1 space-y-5 overflow-y-auto pr-1"
-    >
+    <div aria-label="Structured Active Root fields" className="@container min-w-0 space-y-5">
       <div className="@2xl:grid-cols-2 grid min-w-0 grid-cols-1 gap-4">
         <label className="min-w-0 space-y-1.5 text-sm">
           <span className="font-medium">Schema</span>
