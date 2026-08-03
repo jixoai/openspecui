@@ -181,17 +181,15 @@ function AppLayoutSurface() {
         >
           {hasOverlayTitlebar ? null : (
             <div
-              className={`mb-4 flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between gap-1'}`}
+              className={`mb-4 flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}
             >
-              {/* Brand: display-only when expanded; clickable to expand when collapsed */}
               <button
                 aria-expanded={!sidebarCollapsed}
-                aria-label={sidebarCollapsed ? 'Expand sidebar' : undefined}
+                aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 className={`text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 items-center rounded-md text-xs font-semibold uppercase tracking-wide transition-colors ${
                   sidebarCollapsed ? 'justify-center px-0' : 'gap-2 px-2'
                 }`}
                 data-app-sidebar-brand
-                data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
                 onClick={sidebarCollapsed ? toggleSidebar : undefined}
                 title={sidebarCollapsed ? 'Expand sidebar' : undefined}
                 type="button"
@@ -210,7 +208,6 @@ function AppLayoutSurface() {
                 />
                 <span className={sidebarCollapsed ? 'sr-only' : undefined}>OpenSpecUI App</span>
               </button>
-              {/* Explicit sidebar toggle — visible only when expanded */}
               {!sidebarCollapsed ? (
                 <button
                   aria-label="Collapse sidebar"

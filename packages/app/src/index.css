@@ -227,8 +227,8 @@ html.dark .app-titlebar-logo-dark {
 /* webMode sidebar toggle: aria-pressed two-state affordance */
 .app-sidebar-toggle[data-pressed='true'],
 .app-titlebar-sidebar-toggle[data-pressed='true'] {
-  background-color: var(--accent);
-  color: var(--accent-foreground);
+  background-color: var(--primary);
+  color: var(--primary-foreground);
 }
 
 .hosted-shell-root .hosted-shell-tabs .tabs-button {
