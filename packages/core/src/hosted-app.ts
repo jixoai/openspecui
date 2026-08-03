@@ -1,12 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Define browser-safe hosted backend metadata and compatibility capability facts.
  * 2. Normalize App/embedded launch locators and carry session-only credentials in fragments.
  * 3. Validate embedded UI origins without inventing backend authority.
  * 4. Re-export the browser-safe hosted runtime schema source without a Node-bearing Core root import.
+ * 5. Share the HostedShellTheme type so the App shell can force-sync theme to child windows.
  *
  * Original request (2026-07-15): "app 模式提供了多标签管理。"
  * Delivery correction (2026-07-24): privately carry the exact Access Gate credential to Project Web.
+ * Original request (2026-08-02): App theme changes force-sync to child windows; new windows inherit.
+ * Owner correction (2026-08-03): theme must NOT ride the iframe URL — it reloads the iframe on every
+ *   change. New-window inheritance and live sync are both handled by postMessage (App → iframe onLoad,
+ *   and re-broadcast on theme change), so the URL stays stable.
  */
 import {
   HOSTED_SHELL_PROTOCOL_VERSION,
@@ -17,6 +22,13 @@ import {
   type HostedBackendHealthResponse,
   type HostedBackendRootSummary,
 } from './hosted-contract.js'
+
+/**
+ * App-scoped theme preference. Shared by App (master) and embedded Web (slave)
+ * for one-directional sync. The App is the single source of truth; child windows
+ * inherit and are force-synced but never echo back.
+ */
+export type HostedShellTheme = 'light' | 'dark' | 'system'
 
 export {
   HOSTED_SHELL_PROTOCOL_VERSION,

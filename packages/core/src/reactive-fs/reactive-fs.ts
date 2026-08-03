@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Cache reactive file, directory, existence, and stat reads.
  * 2. Bind cached reads to shared watcher roots and missing-path fallback checks.
  * 3. Settle overlapping cached projections as one coherent post-mutation snapshot.
  * 4. Release watcher, polling, state, and refresh registrations together.
+ * 5. Distinguish expected missing paths from integrity-relevant filesystem read failures.
  *
  * Original request (2026-07-16): "direct filesystem mutations update reactive state before returning."
+ * Original request (2026-08-01): nested Spec discovery must not silently drop unreadable subtrees.
  */
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
@@ -207,6 +209,8 @@ export async function reactiveReadDir(
     includeHidden?: boolean
     /** 排除的名称 */
     exclude?: string[]
+    /** Missing directories remain empty; other filesystem errors may fail the owning projection. */
+    throwOnError?: boolean
   } = {}
 ): Promise<string[]> {
   const normalizedPath = resolve(dirpath)
@@ -236,7 +240,13 @@ export async function reactiveReadDir(
           return true
         })
         .map((entry) => entry.name)
-    } catch {
+    } catch (error) {
+      if (
+        options.throwOnError === true &&
+        (error as NodeJS.ErrnoException | null)?.code !== 'ENOENT'
+      ) {
+        throw error
+      }
       return []
     }
   }

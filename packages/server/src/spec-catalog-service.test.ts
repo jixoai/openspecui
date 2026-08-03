@@ -1,20 +1,30 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prove owned Catalog membership and requirement counts come from exact-root CLI truth.
  * 2. Prove Catalog composition and exact CLI Store selection for duplicate Spec ids.
  * 3. Prove unrelated Stores cannot become project Reference documents.
+ * 4. Prove recursive owned document identity reaches the physical Adapter without flattening.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  */
 import {
+  clearCache,
   CliJsonValueSchema,
+  closeAllWatchers,
+  OpenSpecAdapter,
   OpenSpecCliContractExecutor,
   type CliCommandResult,
   type CliShowSpec,
   type CliSpecList,
   type RootContext,
 } from '@openspecui/core'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { DocumentService } from './document-service.js'
+import { createHookRuntime } from './hook-runtime.js'
 import {
   readSpecCatalog,
   readSpecDocument,
@@ -136,6 +146,47 @@ function createSource() {
 }
 
 describe('Spec Catalog service', () => {
+  it('reads a physical recursive owned Spec without flattening its identity', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openspecui-nested-spec-service-'))
+    const adapter = new OpenSpecAdapter(root)
+    const documentService = new DocumentService(root, adapter, createHookRuntime(root))
+    await adapter.writeSpec(
+      'platform/auth',
+      `# Platform Auth Specification
+
+## Purpose
+Nested authentication.
+
+## Requirements
+
+### Requirement: Preserve identity
+The platform SHALL preserve recursive Spec identity.
+`
+    )
+
+    try {
+      const source: SpecCatalogServiceSource = {
+        rootContext: rootContext(),
+        documentService,
+        contracts: createSource().source.contracts,
+      }
+
+      await expect(
+        readSpecDocument(source, { kind: 'owned', specId: 'platform/auth' })
+      ).resolves.toMatchObject({
+        identity: { kind: 'owned', specId: 'platform/auth' },
+        source: 'owned',
+        state: 'ready',
+        spec: { id: 'platform/auth', name: 'Platform Auth Specification' },
+        rawMarkdown: expect.stringContaining('Preserve identity'),
+      })
+    } finally {
+      clearCache()
+      await closeAllWatchers()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('keeps owned and multiple referenced duplicate ids source-distinct', async () => {
     const { source, listSpecs } = createSource()
 

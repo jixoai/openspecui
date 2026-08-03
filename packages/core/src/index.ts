@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Expose the public Core package contract through one stable barrel.
- * 2. Keep filesystem, CLI, Root Context, workflow, live, and static projection types source-distinct.
+ * 2. Keep filesystem, CLI, Root Context, workflow/operation inputs, live, and static types source-distinct.
  * 3. Publish browser-safe subpath contracts, including Dashboard Summary v2 and the external Codex command
  *    observation root, without forcing browser runtimes through this root.
  * 4. Export the typed Git repository binding and Dashboard provenance contracts.
@@ -14,6 +14,7 @@
  * Derived requirement (2026-07-19): "Project Binding writes return typed launch and transition evidence."
  * Derived requirement (2026-07-20): "Environment-global Codex command observation shares Core path truth."
  * Original request (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
+ * Original request (2026-08-01): preserve typed OpenSpec 1.7 Archive Instructions publicly.
  */
 /**
  * @openspecui/core
@@ -176,6 +177,7 @@ export {
   getSpecCatalogEntry,
   isReferencedSpecIdentity,
   mergeSpecCatalog,
+  specDocumentDisplayPath,
   specIdentityFromRoute,
   specIdentityKey,
   specRoutePath,
@@ -213,13 +215,36 @@ export {
 
 // Reactive file system for realtime updates
 export {
+  ActiveRootMutationSchema,
+  ActiveRootOfficialConfigSchema,
+  ActiveRootRevisionSchema,
+  ActiveRootStructuredUpdateSchema,
+  MAX_ACTIVE_ROOT_CONTEXT_BYTES,
+  inspectActiveRootOfficialConfig,
+  patchActiveRootOfficialFields,
+  validateActiveRootRawYaml,
+  type ActiveRootConfig,
+  type ActiveRootConfigDiagnostic,
+  type ActiveRootConfigFile,
+  type ActiveRootConfigInspection,
+  type ActiveRootMutation,
+  type ActiveRootMutationResult,
+  type ActiveRootOfficialConfig,
+  type ActiveRootRawValidation,
+  type ActiveRootRevision,
+  type ActiveRootStructuredUpdate,
+} from './active-root-config.js'
+export {
+  EnvironmentDefaultStoreUpdateSchema,
   EnvironmentGlobalConfigValueSchema,
   PlanningConfigJsonValueSchema,
   PlanningConfigReferenceSchema,
   ProjectBindingUpdateSchema,
+  inspectEnvironmentDefaultStore,
   inspectProjectBinding,
   updateProjectBindingContent,
-  type ActiveRootConfig,
+  type EnvironmentDefaultStoreState,
+  type EnvironmentDefaultStoreUpdate,
   type EnvironmentGlobalCliProjection,
   type EnvironmentGlobalConfig,
   type EnvironmentGlobalFileProjection,
@@ -603,16 +628,21 @@ export {
 } from './openspec-cli-worker.js'
 
 export {
+  compareAndWriteAtomicPhysicalReactiveFile,
   createPhysicalReactiveDirectory,
   removePhysicalReactivePath,
   runPhysicalReactivePathMutation,
+  writeAtomicPhysicalReactiveFile,
   writePhysicalReactiveFile,
+  type PhysicalReactiveFileCompareWrite,
+  type PhysicalReactiveFileCompareWriteResult,
   type PhysicalReactiveFileWrite,
   type PhysicalReactivePathTarget,
 } from './physical-reactive-file-writer.js'
 
 export {
   CliApplyInstructionsSchema,
+  CliArchiveInstructionsSchema,
   CliArchiveSchema,
   CliArtifactInstructionsSchema,
   CliChangeListSchema,
@@ -639,6 +669,7 @@ export {
   parseCliCommandResult,
   type CliApplyInstructions,
   type CliArchive,
+  type CliArchiveInstructions,
   type CliArtifactInstructions,
   type CliChangeList,
   type CliCommandResult,
@@ -760,16 +791,47 @@ export {
   getToolById,
   isToolConfigured,
   type AIToolOption,
+  type AgentCommandArtifact,
+  type AgentCommandContentFormat,
+  type AgentCommandFormat,
+  type AgentCommandInvocationStyle,
+  type AgentCommandSurfaceCapability,
+  type AgentDeliveryCleanup,
+  type AgentDeliveryMigration,
   type ToolConfig,
 } from './tool-config.js'
 
+export {
+  AgentDeliveryModeSchema,
+  AgentDeliveryPolicyUpdateSchema,
+  AgentDeliveryProfileSchema,
+  AgentDeliveryWorkflowSchema,
+  applyAgentDeliveryPolicy,
+  normalizeAgentDeliveryPolicy,
+  type AgentDeliveryMode,
+  type AgentDeliveryPolicy,
+  type AgentDeliveryPolicyUpdate,
+  type AgentDeliveryProfile,
+} from './agent-delivery-policy.js'
+
+export {
+  loadOpenSpecAgentCommandContents,
+  type AgentCommandContentCatalog,
+} from './agent-command-content.js'
+
 // Tool initialization state detection
 export {
+  PINNED_AGENT_GENERATOR_VERSION,
   TOOL_WORKFLOW_TO_SKILL_DIR,
   createToolInitStateProjection,
   getExternalCodexCommandObservationRoot,
   getToolInitStates,
+  type ToolInitCleanupState,
   type ToolInitDelivery,
+  type ToolInitIssue,
+  type ToolInitMigrationState,
+  type ToolInitProjectionOptions,
+  type ToolInitReadiness,
   type ToolInitState,
   type ToolInitStatus,
   type ToolWorkflowId,
@@ -981,6 +1043,7 @@ export { OpsxKernel } from './opsx-kernel.js'
 // OPSX CLI output schemas and types
 export {
   requireCanonicalOpenSpecEntityId,
+  requireCanonicalOpenSpecSpecId,
   requireOpenSpecEntityRelativePath,
   type OpenSpecEntityIdField,
   type OpenSpecEntityPathField,
@@ -1008,6 +1071,7 @@ export {
   ApplyInstructionsProjectionSchema,
   ApplyInstructionsSchema,
   ApplyTaskSchema,
+  ArchiveInstructionsSchema,
   ArtifactInstructionsSchema,
   ArtifactStatusSchema,
   ChangeStatusSchema,
@@ -1025,6 +1089,7 @@ export {
   isGlobPattern,
   type ApplyInstructions,
   type ApplyTask,
+  type ArchiveInstructions,
   type ArtifactInstructions,
   type ArtifactStatus,
   type ChangeStatus,

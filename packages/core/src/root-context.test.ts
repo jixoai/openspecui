@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Verify Root Context composes CLI and environment facts without rewriting evidence.
  * 2. Verify launch-project display identity retains a canonical physical comparison path.
- * 3. Verify Root readiness and error taxonomy remain CLI-owned.
+ * 3. Verify Root readiness, fallback provenance, and error taxonomy remain CLI-owned.
  *
  * Original request (2026-07-15): Root Context is the objective OpenSpec CLI projection.
  * Owner same-root direction (2026-07-29): compare Launch and Planning by physical identity before collapsing UI.
@@ -140,6 +140,46 @@ describe('resolveRootContext', () => {
     expect(state.data.cli.version).toBe('1.6.0')
     expect(state.data.dataScope.path).toBe('/runtime/data/openspec')
     expect(state.observedAt).toBe(123)
+  })
+
+  it('preserves global_default only when Doctor and Context agree on the effective Store', async () => {
+    const cli = createCli({
+      doctor: commandResult(
+        healthyDoctor({
+          root: {
+            path: '/stores/team-plans',
+            source: 'global_default',
+            store_id: 'team-plans',
+            healthy: true,
+            status: [],
+          },
+        })
+      ),
+      context: commandResult(
+        healthyContext({
+          root: {
+            path: '/stores/team-plans',
+            source: 'global_default',
+            store_id: 'team-plans',
+            role: 'openspec_root',
+          },
+        })
+      ),
+    })
+
+    const state = await resolveRootContext({
+      launchProjectDir: '/workspace/app',
+      cliExecutor: cli,
+      now: () => 321,
+    })
+
+    expect(state).toMatchObject({
+      state: 'ready',
+      data: {
+        planningRoot: { source: 'global_default', store_id: 'team-plans' },
+        storeId: 'team-plans',
+      },
+    })
   })
 
   it('returns CLI-owned failure evidence when root selection fails', async () => {
@@ -286,6 +326,17 @@ describe('getRootContextCliSelector', () => {
       getRootContextCliSelector({
         ...context,
         planningRoot: { ...context.planningRoot, source: 'declared', store_id: 'shared' },
+        storeId: 'shared',
+      })
+    ).toEqual({})
+    expect(
+      getRootContextCliSelector({
+        ...context,
+        planningRoot: {
+          ...context.planningRoot,
+          source: 'global_default',
+          store_id: 'shared',
+        },
         storeId: 'shared',
       })
     ).toEqual({})

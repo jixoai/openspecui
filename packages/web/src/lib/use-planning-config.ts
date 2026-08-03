@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Project ownership-specific planning-config facets into reactive Web state.
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Project ownership-specific planning-config facets and Active Root replacement lifecycle into Web state.
  * 2. Keep static Active Root content available without inventing owner provenance.
  * 3. Let Environment Global consumers explicitly refresh the CLI-owned reactive projection through readonly queries.
  * 4. Keep refresh pending until the replacement projection commits, then resolve awaiters.
@@ -10,12 +10,17 @@
  * Original request (2026-07-18): "Refresh completion must follow the committed subscription projection so Apply can safely dispatch its second operation."
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Owner correction (2026-07-31): Projection refresh remains readonly despite internal cache maintenance.
+ * Original request (2026-08-01): Active Root retains stale display but locks mutation during replacement refresh.
  */
 import type {
   ActiveRootConfig,
+  ActiveRootConfigDiagnostic,
+  ActiveRootOfficialConfig,
+  ActiveRootRevision,
   EnvironmentGlobalConfig,
   ProjectBindingConfig,
 } from '@openspecui/core'
+import { inspectActiveRootOfficialConfig } from '@openspecui/core/active-root-config'
 import {
   CliProjectionNoticeSchema,
   EnvironmentGlobalFileProjectionStateSchema,
@@ -31,7 +36,12 @@ import {
   type CliProjectionLifecycleSource,
   type CliProjectionSubscriptionState,
 } from './use-cli-projection'
-import { useSubscription, type SubscriptionState } from './use-subscription'
+import {
+  useReactiveProjectionSubscription,
+  useSubscription,
+  type ReactiveProjectionSubscriptionState,
+  type SubscriptionState,
+} from './use-subscription'
 
 /** Active-root configuration subscription with its current Root Context state. */
 export interface ActiveRootConfigView {
@@ -39,17 +49,24 @@ export interface ActiveRootConfigView {
   exists: boolean
   filePath: string | null
   owner: ActiveRootConfig['owner'] | null
+  revision: ActiveRootRevision | null
+  official: ActiveRootOfficialConfig
+  diagnostics: ActiveRootConfigDiagnostic[]
 }
 
 /** Subscription state that exposes an explicit invalidation-driven refresh action. */
 export interface RefreshableSubscriptionState<T> extends CliProjectionSubscriptionState<T> {}
 
-function toActiveRootConfigView(config: ActiveRootConfig): ActiveRootConfigView {
+/** Remove transport nesting while preserving every mutation-admission fact. */
+export function projectActiveRootConfigView(config: ActiveRootConfig): ActiveRootConfigView {
   return {
     content: config.file.content,
     exists: config.file.exists,
     filePath: config.file.path,
     owner: config.owner,
+    revision: config.revision,
+    official: config.official,
+    diagnostics: config.diagnostics,
   }
 }
 
@@ -76,24 +93,40 @@ export function useProjectBindingSubscription(): SubscriptionState<ProjectBindin
 }
 
 /** Subscribe to the selected writable root's config while preserving owner provenance in live mode. */
-export function useActiveRootConfigViewSubscription(): SubscriptionState<ActiveRootConfigView> {
+export function useActiveRootConfigViewSubscription(): ReactiveProjectionSubscriptionState<ActiveRootConfigView> {
   const subscribe = useCallback(
     (callbacks: {
-      onData: (data: ActiveRootConfigView) => void
+      onEvent: (
+        event: { type: 'recompute-started' } | { type: 'data'; data: ActiveRootConfigView }
+      ) => void
       onError: (error: Error) => void
     }) =>
       trpcClient.planningConfig.subscribeActiveRoot.subscribe(undefined, {
-        onData: (data) => callbacks.onData(toActiveRootConfigView(data)),
+        onData: (event) => {
+          if (event.type === 'recompute-started') {
+            callbacks.onEvent(event)
+            return
+          }
+          callbacks.onEvent({ type: 'data', data: projectActiveRootConfigView(event.data) })
+        },
         onError: callbacks.onError,
       }),
     []
   )
 
-  return useSubscription<ActiveRootConfigView>(
+  return useReactiveProjectionSubscription<ActiveRootConfigView>(
     subscribe,
     async () => {
       const content = await StaticProvider.getOpsxProjectConfig()
-      return { content, exists: content !== null, filePath: null, owner: null }
+      const inspection = inspectActiveRootOfficialConfig(content)
+      return {
+        content,
+        exists: content !== null,
+        filePath: null,
+        owner: null,
+        revision: null,
+        ...inspection,
+      }
     },
     [],
     'planningConfig.subscribeActiveRootView'

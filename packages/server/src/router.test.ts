@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Prove public Router owner boundaries and Planning-root stream settlement.
- * 2. Prove strict Archive identity, validation, diagnostics, and Store selection through its public route.
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Prove public Router owner boundaries and dedicated Planning-root stream settlement.
+ * 2. Prove strict Archive identity, generation, validation, diagnostics, and Store selection publicly.
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
  * 4. Prove stale Git binding intent conflicts before rebound repository side effects.
  * 5. Prove Root, Store, Planning CLI, and Environment Global Projection Work routes through their real Server owners.
@@ -16,8 +16,14 @@
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  * Owner correction (2026-07-31): Observation refresh is a query even when it maintains internal cache or stamp state.
  * Original request (2026-07-31): "手动刷新报错：Code Git snapshot failed: Invalid Dashboard projection Work event."
+ * Review correction (2026-08-01): Archive Instructions and mutation must share one Root generation.
+ * Original request (2026-08-01): configured machine fallback must not fabricate effective Root success.
+ * Original request (2026-08-01): Active Root Raw YAML must reject stale revisions and refresh dependent owners.
+ * Review correction (2026-08-02): generic CLI Init/Update transports must not bypass Agent ownership.
+ * Review correction (2026-08-02): Init cancellation and success require process and projection settlement.
  */
 import {
+  acquireWatcherRoot,
   CliExecutor,
   ConfigManager,
   createDocumentChecklistSummary,
@@ -33,6 +39,7 @@ import {
   type CliStreamHandle,
   type CliStreamSettlement,
   type ObservationRootOwner,
+  type PlanningCliProjectionData,
   type RuntimeRootInvalidationOwner,
 } from '@openspecui/core'
 import { DEFAULT_BELL_SOUND_ID, DEFAULT_NOTIFICATION_SOUND_ID } from '@openspecui/core/sounds'
@@ -376,6 +383,11 @@ const createMockAdapter = () => ({
   writeEntityFile: vi.fn().mockResolvedValue(undefined),
   validateSpec: vi.fn().mockResolvedValue({ valid: true, issues: [] }),
   validateChange: vi.fn().mockResolvedValue({ valid: true, issues: [] }),
+  readLaunchProjectInitialization: vi.fn().mockResolvedValue({
+    initialized: false,
+    launchProjectPath: '/tmp/openspecui-router-test',
+    openspecPath: '/tmp/openspecui-router-test/openspec',
+  }),
   init: vi.fn().mockResolvedValue(undefined),
   getDashboardData: vi.fn().mockResolvedValue(undefined),
 })
@@ -621,6 +633,7 @@ const createMockContext = (
     execute: vi.fn().mockResolvedValue({ success: true, stdout: '{}', stderr: '', exitCode: 0 }),
     executeStream: vi.fn(),
     initStream: vi.fn(),
+    initProjectStream: vi.fn(),
     archiveStream: vi.fn(),
     validateStream: vi.fn(),
     executeCommandStream: vi.fn(),
@@ -948,6 +961,16 @@ artifacts:
     observationEnvironment: { acquireRoot: async () => async () => {} },
     workOwner: createEnvironmentGlobalProjectionWorkOwner(projectionWorkRuntime),
   })
+  const agentDeliveryProjection = {
+    registry: [],
+    policy: { profile: 'core', delivery: 'skills', workflows: [] },
+    states: [],
+  } as const
+  const agentDeliveryProjectionService = {
+    getCurrent: vi.fn().mockResolvedValue(agentDeliveryProjection),
+    refresh: vi.fn().mockResolvedValue(agentDeliveryProjection),
+    subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
+  } as unknown as Context['agentDeliveryProjectionService']
   const gitRepositoryBindings = new GitRepositoryBindingService({
     launchProjectDir: projectDir,
     planningRootServices: planningRootResolver,
@@ -964,6 +987,7 @@ artifacts:
     storeContentProjectionService,
     rootContextProjectionService,
     environmentGlobalProjectionService,
+    agentDeliveryProjectionService,
     configManager: configManager as unknown as Context['configManager'],
     cliExecutor: cliExecutor as unknown as Context['cliExecutor'],
     projectRecoveryService: options.projectRecoveryService ?? createMockProjectRecoveryService(),
@@ -1130,57 +1154,6 @@ describe('appRouter', () => {
           false
         )
 
-        const bufferedUpdateStarted = Promise.withResolvers<string[]>()
-        const resumeBufferedUpdate = Promise.withResolvers<void>()
-        const execute = vi.spyOn(cliExecutor, 'execute').mockImplementationOnce(async (args) => {
-          bufferedUpdateStarted.resolve(args)
-          await resumeBufferedUpdate.promise
-          return { success: true, stdout: '{}', stderr: '', exitCode: 0 }
-        })
-        const bufferedUpdate = caller.cli.update({ force: true })
-        await bufferedUpdateStarted.promise
-        selectedRoot = rootA
-        const replacementA = caller.rootContext.get()
-        const aExposedBeforeBufferedUpdate = await Promise.race([
-          replacementA.then(() => true),
-          new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
-        ])
-        expect(aExposedBeforeBufferedUpdate).toBe(false)
-        resumeBufferedUpdate.resolve()
-        await Promise.all([bufferedUpdate, replacementA])
-        expect(execute).toHaveBeenCalledWith(['update', rootB, '--force'])
-        execute.mockRestore()
-
-        const streamedUpdateStarted = Promise.withResolvers<string[]>()
-        const streamedUpdateEvent = Promise.withResolvers<(event: CliStreamEvent) => void>()
-        const streamedUpdate = controlledStreamHandle()
-        const executeStream = vi
-          .spyOn(cliExecutor, 'executeStream')
-          .mockImplementationOnce((args, onEvent) => {
-            streamedUpdateStarted.resolve(args)
-            streamedUpdateEvent.resolve(onEvent)
-            return streamedUpdate.handle
-          })
-        const updateStream = await caller.cli.updateStream()
-        const updateCompleted = Promise.withResolvers<void>()
-        updateStream.subscribe({
-          complete: updateCompleted.resolve,
-          error: updateCompleted.reject,
-        })
-        await streamedUpdateStarted.promise
-        selectedRoot = rootB
-        const replacementB = caller.rootContext.get()
-        const bExposedBeforeStreamedUpdate = await Promise.race([
-          replacementB.then(() => true),
-          new Promise<false>((resolve) => setTimeout(() => resolve(false), 25)),
-        ])
-        expect(bExposedBeforeStreamedUpdate).toBe(false)
-        ;(await streamedUpdateEvent.promise)({ type: 'exit', exitCode: null })
-        streamedUpdate.settle(null)
-        await Promise.all([updateCompleted.promise, replacementB])
-        expect(executeStream).toHaveBeenCalledWith(['update', rootA], expect.any(Function))
-        executeStream.mockRestore()
-
         const archiveStarted = Promise.withResolvers<void>()
         const archiveEvent = Promise.withResolvers<(event: CliStreamEvent) => void>()
         const archiveTerminal = controlledStreamHandle()
@@ -1197,7 +1170,14 @@ describe('appRouter', () => {
             archiveEvent.resolve(onEvent)
             return archiveTerminal.handle
           })
-        const strictArchive = await caller.cli.archiveStrictStream({ changeId: 'archive-me' })
+        const archiveRootState = await caller.rootContext.get()
+        if (archiveRootState.state !== 'ready' || !archiveRootState.data.generation) {
+          throw new Error('Archive root generation was not ready.')
+        }
+        const strictArchive = await caller.cli.archiveStrictStream({
+          changeId: 'archive-me',
+          expectedRootGeneration: archiveRootState.data.generation,
+        })
         const archiveCompleted = Promise.withResolvers<void>()
         strictArchive.subscribe({
           complete: archiveCompleted.resolve,
@@ -1441,7 +1421,20 @@ describe('appRouter', () => {
         references: [{ id: 'platform' }],
       })
       const active = await caller.planningConfig.activeRoot()
-      await caller.planningConfig.writeActiveRoot({ content: 'schema: active\n' })
+      const beforeMutation = context.runtimeInvalidation.track('project', 'context', 'schemas')
+      const refreshRootContext = vi.spyOn(context.rootContextProjectionService, 'refresh')
+      const retireConfigWork = vi.spyOn(
+        planning.planningCliProjectionService,
+        'invalidateConfigDependentWork'
+      )
+      const mutation = await caller.planningConfig.writeActiveRoot({
+        mode: 'raw',
+        ownerPath: active.owner.path,
+        filePath: active.file.path,
+        revision: active.revision,
+        content: 'schema: active\n',
+      })
+      const afterMutation = context.runtimeInvalidation.track('project', 'context', 'schemas')
 
       expect(binding.kind).toBe('project-binding-update')
       expect(binding.launchWrite.owner.path).toBe(launchProject)
@@ -1452,6 +1445,15 @@ describe('appRouter', () => {
         storeId: 'shared',
         externalToLaunchProject: true,
       })
+      expect(mutation).toMatchObject({
+        state: 'applied',
+        config: { file: { content: 'schema: active\n' } },
+      })
+      expect(afterMutation).toEqual(
+        beforeMutation.map(({ facet, generation }) => ({ facet, generation: generation + 1 }))
+      )
+      expect(refreshRootContext).toHaveBeenCalledTimes(1)
+      expect(retireConfigWork).toHaveBeenCalledTimes(1)
       expect(context.planningRootServices.resolveRootContext).not.toHaveBeenCalled()
       await expect(
         readFile(join(launchProject, 'openspec', 'config.yaml'), 'utf8')
@@ -2689,18 +2691,34 @@ apply:
       expect(adapter.writeSpec).toHaveBeenCalledWith('test', '# Test')
     })
 
-    it('rejects a non-canonical spec id before Adapter mutation', async () => {
+    it('preserves every recursive Spec identity segment through public mutation', async () => {
       const adapter = createMockAdapter()
       const caller = createCaller(adapter)
 
       await expect(
         caller.spec.save({
-          identity: { kind: 'owned', specId: '../escaped' },
-          content: '# Escaped',
+          identity: { kind: 'owned', specId: 'platform/auth' },
+          content: '# Platform Auth',
         })
-      ).rejects.toThrow(/Invalid specId/)
-      expect(adapter.writeSpec).not.toHaveBeenCalled()
+      ).resolves.toEqual({ success: true })
+      expect(adapter.writeSpec).toHaveBeenCalledExactlyOnceWith('platform/auth', '# Platform Auth')
     })
+
+    it.each(['../escaped', 'platform//auth', '/platform/auth', '%2e%2e%2fescaped'])(
+      'rejects non-canonical Spec id %j before Adapter mutation',
+      async (specId) => {
+        const adapter = createMockAdapter()
+        const caller = createCaller(adapter)
+
+        await expect(
+          caller.spec.save({
+            identity: { kind: 'owned', specId },
+            content: '# Escaped',
+          })
+        ).rejects.toThrow(/Invalid specId/)
+        expect(adapter.writeSpec).not.toHaveBeenCalled()
+      }
+    )
 
     it('should validate a spec', async () => {
       const caller = createCaller()
@@ -2868,14 +2886,174 @@ apply:
   })
 
   describe('init', () => {
-    it('should initialize project', async () => {
+    it('pushes Launch Project initialization replacement through the public subscription', async () => {
+      const projectDir = await createTempProjectDir('openspecui-init-subscribe-')
+      await acquireWatcherRoot(projectDir)
+      const context = createMockContext(new OpenSpecAdapter(projectDir), { projectDir })
+      const stream = await appRouter.createCaller(context).init.subscribe()
+      const events: Awaited<ReturnType<OpenSpecAdapter['readLaunchProjectInitialization']>>[] = []
+      const subscription = stream.subscribe({ next: (event) => events.push(event) })
+
+      await vi.waitFor(() => expect(events.at(-1)?.initialized).toBe(false))
+      await mkdir(join(projectDir, 'openspec'), { recursive: true })
+      await vi.waitFor(() => expect(events.at(-1)?.initialized).toBe(true))
+
+      subscription.unsubscribe()
+    })
+
+    it('reads Launch Project initialization without starting a mutation', async () => {
       const adapter = createMockAdapter()
       const caller = createCaller(adapter)
 
-      const result = await caller.init.init()
+      const result = await caller.init.get()
 
-      expect(result.success).toBe(true)
-      expect(adapter.init).toHaveBeenCalled()
+      expect(result).toEqual({
+        initialized: false,
+        launchProjectPath: '/tmp/openspecui-router-test',
+        openspecPath: '/tmp/openspecui-router-test/openspec',
+      })
+      expect(adapter.init).not.toHaveBeenCalled()
+    })
+
+    it('streams only the fixed Launch Project tools-none command and cancels on detach', async () => {
+      const context = createMockContext()
+      const terminal = Promise.withResolvers<CliStreamSettlement>()
+      const cancel = vi.fn(() => terminal.promise)
+      const initProjectStream = vi.mocked(context.cliExecutor.initProjectStream)
+      initProjectStream.mockReturnValue({ settled: terminal.promise, cancel })
+      const stream = await appRouter
+        .createCaller(context)
+        .init.initStream({ requestId: 'init-detach' })
+      const subscription = stream.subscribe({ error() {} })
+
+      await vi.waitFor(() =>
+        expect(initProjectStream).toHaveBeenCalledWith(context.projectDir, expect.any(Function))
+      )
+      subscription.unsubscribe()
+      terminal.resolve({ reason: 'cancelled', exitCode: null })
+      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
+    })
+
+    it('keeps explicit cancellation pending until the CLI process settles', async () => {
+      const context = createMockContext()
+      const terminal = Promise.withResolvers<CliStreamSettlement>()
+      let mutationEvent: ((event: CliStreamEvent) => void) | null = null
+      const cancel = vi.fn(() => terminal.promise)
+      vi.mocked(context.cliExecutor.initProjectStream).mockImplementation((_path, onEvent) => {
+        mutationEvent = onEvent
+        return { settled: terminal.promise, cancel }
+      })
+      const caller = appRouter.createCaller(context)
+      const stream = await caller.init.initStream({ requestId: 'init-cancel' })
+      const events: CliStreamEvent[] = []
+      const complete = vi.fn()
+      stream.subscribe({ next: (event) => events.push(event), complete, error() {} })
+      await vi.waitFor(() => expect(mutationEvent).not.toBeNull())
+
+      let cancellationSettled = false
+      const cancellation = caller.init.cancel({ requestId: 'init-cancel' }).then((value) => {
+        cancellationSettled = true
+        return value
+      })
+      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
+      expect(cancellationSettled).toBe(false)
+
+      mutationEvent?.({ type: 'exit', exitCode: null })
+      terminal.resolve({ reason: 'cancelled', exitCode: null })
+
+      await expect(cancellation).resolves.toEqual({ reason: 'cancelled', exitCode: null })
+      await expect(caller.init.cancel({ requestId: 'init-cancel' })).resolves.toEqual({
+        reason: 'cancelled',
+        exitCode: null,
+      })
+      expect(events).toEqual([{ type: 'exit', exitCode: null }])
+      expect(complete).toHaveBeenCalledOnce()
+    })
+
+    it('replays an HTTP cancellation across repeated late Init subscriptions', async () => {
+      const context = createMockContext()
+      const caller = appRouter.createCaller(context)
+
+      await expect(caller.init.cancel({ requestId: 'init-early-cancel' })).resolves.toEqual({
+        reason: 'cancelled',
+        exitCode: null,
+      })
+
+      for (const replay of [1, 2]) {
+        const stream = await caller.init.initStream({ requestId: 'init-early-cancel' })
+        const events: CliStreamEvent[] = []
+        const complete = vi.fn()
+        stream.subscribe({ next: (event) => events.push(event), complete, error() {} })
+        await vi.waitFor(() => expect(events).toEqual([{ type: 'exit', exitCode: null }]))
+        expect(complete, `replay ${replay}`).toHaveBeenCalledOnce()
+      }
+      expect(context.cliExecutor.initProjectStream).not.toHaveBeenCalled()
+    })
+
+    it('withholds successful exit until every Init replacement owner settles', async () => {
+      const context = createMockContext()
+      vi.mocked(context.launchProjectAdapter.readLaunchProjectInitialization).mockResolvedValue({
+        initialized: true,
+        launchProjectPath: context.projectDir,
+        openspecPath: join(context.projectDir, 'openspec'),
+      })
+      const rootReplacement = await context.rootContextProjectionService.getCurrent()
+      const rootSettlement = Promise.withResolvers<typeof rootReplacement>()
+      const rootRefresh = vi.spyOn(context.rootContextProjectionService, 'refresh')
+      vi.spyOn(context.rootContextProjectionService, 'getCurrent').mockReturnValue(
+        rootSettlement.promise
+      )
+      const replacement = await context.agentDeliveryProjectionService.getCurrent()
+      const refreshSettlement = Promise.withResolvers<typeof replacement>()
+      const refresh = vi
+        .spyOn(context.agentDeliveryProjectionService, 'refresh')
+        .mockReturnValue(refreshSettlement.promise)
+      const planning = await resolveMockPlanningRoot(context)
+      const settledConfigBundle = {
+        kind: 'opsx-config-bundle',
+        value: { schemas: [], schemaDetails: {}, schemaResolutions: {} },
+        evidence: {
+          schemas: {
+            success: true,
+            stdout: '{}',
+            stderr: '',
+            exitCode: 0,
+            payload: {},
+            diagnostics: [],
+          },
+          schemaResolutions: {},
+        },
+      } satisfies Extract<PlanningCliProjectionData, { kind: 'opsx-config-bundle' }>
+      const configBundle = vi
+        .spyOn(planning.planningCliProjectionService, 'getCurrent')
+        .mockResolvedValue(settledConfigBundle)
+      vi.mocked(context.cliExecutor.initProjectStream).mockImplementation((_path, onEvent) => {
+        onEvent({ type: 'exit', exitCode: 0 })
+        return {
+          settled: Promise.resolve({ reason: 'exited', exitCode: 0 }),
+          cancel: () => Promise.resolve({ reason: 'cancelled', exitCode: null }),
+        }
+      })
+      const stream = await appRouter
+        .createCaller(context)
+        .init.initStream({ requestId: 'init-success' })
+      const events: CliStreamEvent[] = []
+      const complete = vi.fn()
+      stream.subscribe({ next: (event) => events.push(event), complete })
+
+      await vi.waitFor(() => expect(rootRefresh).toHaveBeenCalledOnce())
+      expect(events).toEqual([])
+      expect(complete).not.toHaveBeenCalled()
+
+      rootSettlement.resolve(rootReplacement)
+      await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce())
+      expect(events).toEqual([])
+
+      refreshSettlement.resolve(replacement)
+      await vi.waitFor(() => expect(events).toEqual([{ type: 'exit', exitCode: 0 }]))
+      expect(context.planningRootServices.resolveRootContext).toHaveBeenCalled()
+      expect(configBundle).toHaveBeenCalledWith({ kind: 'opsx-config-bundle' })
+      expect(complete).toHaveBeenCalledOnce()
     })
   })
 
@@ -2912,47 +3090,6 @@ apply:
       expect(completes).not.toHaveBeenCalled()
       subscription.unsubscribe()
       await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
-    })
-
-    it('invalidates once before projecting a rejected Planning-root Update handle', async () => {
-      const context = createMockContext()
-      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
-      const terminal = Promise.withResolvers<CliStreamSettlement>()
-      void terminal.promise.catch(() => {})
-      const cancel = vi.fn(() => terminal.promise)
-      const executeStream = context.cliExecutor.executeStream as unknown as ReturnType<typeof vi.fn>
-      executeStream.mockReturnValue({ settled: terminal.promise, cancel })
-      const stream = await appRouter.createCaller(context).cli.updateStream()
-      const events: CliStreamEvent[] = []
-      const errors: unknown[] = []
-      const observedInvalidation: Array<{ project: number; context: number }> = []
-      const completes = vi.fn()
-      const subscription = stream.subscribe({
-        next: (event) => events.push(event),
-        complete: completes,
-        error: (error) => {
-          observedInvalidation.push({
-            project: invalidation.current('project'),
-            context: invalidation.current('context'),
-          })
-          errors.push(error)
-        },
-      })
-      await vi.waitFor(() => expect(executeStream).toHaveBeenCalledOnce())
-      const failure = new Error('forced termination did not confirm Update child close')
-
-      terminal.reject(failure)
-
-      await vi.waitFor(() => expect(errors).toEqual([failure]), { timeout: 200 })
-      expect(observedInvalidation).toEqual([{ project: 1, context: 1 }])
-      expect(invalidation.current('project')).toBe(1)
-      expect(invalidation.current('context')).toBe(1)
-      expect(events.filter((event) => event.type === 'exit')).toEqual([])
-      expect(completes).not.toHaveBeenCalled()
-      subscription.unsubscribe()
-      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
-      expect(invalidation.current('project')).toBe(1)
-      expect(invalidation.current('context')).toBe(1)
     })
 
     it('derives buffered validate Store selection from Root Context', async () => {
@@ -3091,6 +3228,7 @@ apply:
       })
       const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
         changeId: 'add-search',
+        expectedRootGeneration: 'planning-binding',
         skipSpecs: true,
         noValidate: false,
       })
@@ -3135,6 +3273,7 @@ apply:
       })
       const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
         changeId: 'add-search',
+        expectedRootGeneration: 'planning-binding',
       })
       const errors: unknown[] = []
       const completes = vi.fn()
@@ -3189,6 +3328,7 @@ apply:
 
         const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
           changeId,
+          expectedRootGeneration: 'planning-binding',
           noValidate,
         })
         await expect(
@@ -3215,6 +3355,7 @@ apply:
       })
       const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
         changeId: 'add-search',
+        expectedRootGeneration: 'planning-binding',
         noValidate: false,
       })
       const events: Array<{ type: string; exitCode?: number | null }> = []
@@ -3243,6 +3384,7 @@ apply:
 
       const stream = await appRouter.createCaller(context).cli.archiveStrictStream({
         changeId: 'add-search',
+        expectedRootGeneration: 'planning-binding',
         noValidate: true,
       })
       await new Promise<void>((resolve, reject) => {
@@ -3357,93 +3499,41 @@ apply:
       subscription.unsubscribe()
     })
 
-    it('passes force flag to init command', async () => {
+    it('refreshes Environment and Root projections without fabricating effective fallback success', async () => {
       const context = createMockContext()
-      const caller = appRouter.createCaller(context)
-
-      await caller.cli.init({ force: true })
-
-      const initMock = context.cliExecutor.init as unknown as ReturnType<typeof vi.fn>
-      expect(initMock).toHaveBeenCalledWith({ force: true, profile: undefined, tools: undefined })
-      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
-      expect(invalidation.current('project')).toBe(1)
-      expect(invalidation.current('context')).toBe(1)
-    })
-
-    it('updates only the Server-selected Planning root', async () => {
-      const context = createMockContext()
-      const planning = await resolveMockPlanningRoot(context)
-      planning.rootContext = {
-        ...planning.rootContext,
-        planningRoot: {
-          path: '/stores/shared',
-          source: 'store',
-          store_id: 'shared',
-          healthy: true,
-          status: [],
-        },
-        storeId: 'shared',
-      }
       const execute = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
       const caller = appRouter.createCaller(context)
 
-      await caller.cli.update({ force: true })
-
-      expect(execute).toHaveBeenCalledWith(['update', '/stores/shared', '--force'])
-      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
-      expect(invalidation.current('project')).toBe(1)
-      expect(invalidation.current('context')).toBe(1)
-    })
-
-    it('settles streamed Planning-root Update invalidation before completing the client stream', async () => {
-      const context = createMockContext()
-      const planning = await resolveMockPlanningRoot(context)
-      planning.rootContext = {
-        ...planning.rootContext,
-        planningRoot: {
-          path: '/stores/shared',
-          source: 'store',
-          store_id: 'shared',
-          healthy: true,
-          status: [],
-        },
-        storeId: 'shared',
-      }
-      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
-      const executeStream = context.cliExecutor.executeStream as unknown as ReturnType<typeof vi.fn>
-      executeStream.mockImplementation((_args, onEvent) => {
-        onEvent({ type: 'exit', exitCode: null })
-        return settledStreamHandle(null)
-      })
-      const caller = appRouter.createCaller(context)
-      const stream = await caller.cli.updateStream()
-
-      await new Promise<void>((resolve, reject) => {
-        stream.subscribe({
-          error: reject,
-          complete: () => {
-            expect(invalidation.current('project')).toBe(1)
-            expect(invalidation.current('context')).toBe(1)
-            resolve()
-          },
-        })
+      const result = await caller.planningConfig.writeEnvironmentDefaultStore({
+        value: 'team-plans',
       })
 
-      expect(executeStream).toHaveBeenCalledWith(['update', '/stores/shared'], expect.any(Function))
+      expect(execute).toHaveBeenCalledWith([
+        'config',
+        'set',
+        'defaultStore',
+        'team-plans',
+        '--string',
+      ])
+      expect(result).toMatchObject({
+        kind: 'environment-default-store-update',
+        configured: { state: 'configured', id: 'team-plans' },
+        environment: { state: 'loading', data: null },
+        file: { state: 'loading', data: null },
+        rootContext: { state: 'loading', data: null },
+      })
     })
 
-    it('applies Core profile without relabeling config-home as data-home', async () => {
+    it('uses the distinct explicit-clear mutation for machine defaultStore', async () => {
       const context = createMockContext()
       const execute = context.cliExecutor.execute as unknown as ReturnType<typeof vi.fn>
 
-      await appRouter.createCaller(context).planningConfig.applyCoreProfile()
+      const result = await appRouter
+        .createCaller(context)
+        .planningConfig.writeEnvironmentDefaultStore({ value: null })
 
-      expect(execute).toHaveBeenCalledWith(['config', 'profile', 'core'])
-      const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
-      expect(invalidation.current('stores')).toBe(0)
-      expect(invalidation.current('worksets')).toBe(0)
-      expect(invalidation.current('schemas')).toBe(0)
-      expect(invalidation.current('context')).toBe(0)
+      expect(execute).toHaveBeenCalledWith(['config', 'unset', 'defaultStore'])
+      expect(result.configured).toEqual({ state: 'absent', id: null })
     })
   })
 

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.check.json",
+  "include": [
+    "src/environment-default-store-mutation.test.ts",
+    "src/environment-global-projection-service.test.ts",
+    "src/planning-config-service.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

@@ -121,14 +121,14 @@ await ctx.cliExecutor.archiveStream(changeId, options, (event) => {
 
 ## Important Reference Files
 
-**At the start of each session, read `references/openspec-0.16.0-report.md` to understand the OpenSpec domain model and architecture.**
+**At the start of each session, read `references/openspec-1.7.0-report.md` for the current OpenSpec protocol and OpenSpecUI adaptation boundary. Use `references/openspec-0.16.0-report.md` only as historical domain-model context.**
 
 This file contains:
 
-- OpenSpec core concepts and terminology
-- File structure and naming conventions
-- Workflow patterns (proposal → implementation → archive)
-- Relationship between specs, changes, and tasks
+- The exact pinned OpenSpec release and source commit
+- Workflow JSON and artifact-state protocol changes
+- Root, Store, Spec identity, and tool-delivery ownership
+- The approved decision frontier for the next OpenSpecUI major line
 
 ## README Versioning Convention
 

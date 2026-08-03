@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Select and operate the branded Web or retained Native App presentation lifecycle.
  * 2. Keep native/browser authority credential-safe and preserve truthful browser-capable fallback.
  * 3. Center only the first retained native window without overriding later user placement.
  * 4. Open native DevTools only for an explicitly identified development runtime.
  * 5. Persist cold launch only for Native appMode while delegating warm reopen to the extension.
+ * 6. Enable the overlay-window-controls contract plus native semantic-blur on every native platform.
  *
  * Original request (2026-07-29): "使用 appMode，并且 --web 只在最开始 start 的时候定好。"
  * Original request (2026-07-30): "初始使用placement center的窗口位置。"
@@ -13,6 +14,8 @@
  * Owner correction (2026-07-30): appMode must follow the complete skill-creator-v2/OpenTray lifecycle contract.
  * Owner diagnostic decision (2026-07-30): use OpenTray's local source selector so its window bridge is injected.
  * Owner-reported defect (2026-07-31): Tray Quit must release the daemon even when a native RPC is pending.
+ * Original request (2026-08-02): "修复 Windows 适配支持：目前 Windows 模式没有启用 overlay-window-control"；
+ *   参考 pnpm-pub，native 窗口启用 semantic blur 配合前端半透明 navbar/titlebar。
  */
 import type { WebviewNativeApiPolicy, WebviewWindowOptions } from '@opentray/ext-webview'
 import type {
@@ -107,30 +110,27 @@ function assertLoopbackAppUrl(appUrl: string): void {
   }
 }
 
-function buildNativeAppUrl(appUrl: string, platform: NodeJS.Platform): string {
-  if (platform === 'win32') return appUrl
+function buildNativeAppUrl(appUrl: string): string {
   const url = new URL(appUrl)
   url.searchParams.set('appMode', 'opentray-overlay')
   return url.toString()
 }
 
-function nativeWindowOptions(
-  appUrl: string,
-  platform: NodeJS.Platform,
-  enableDevtools: boolean
-): WebviewWindowOptions {
+function nativeWindowOptions(appUrl: string, enableDevtools: boolean): WebviewWindowOptions {
   assertLoopbackAppUrl(appUrl)
   const nativeApiPolicy: WebviewNativeApiPolicy = {
     defaultSrc: ["'none'"],
     window: ["'local'"],
   }
   return {
-    url: buildNativeAppUrl(appUrl, platform),
+    url: buildNativeAppUrl(appUrl),
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
     title: APP_TITLE,
     nativeWindowApi: true,
-    windowControlsOverlay: platform !== 'win32',
+    // darwin keeps native transparent caption controls; win32 now opts into the
+    // overlay so the self-drawn titlebar renders on every native platform.
+    windowControlsOverlay: true,
     nativeApiPolicy,
     ...(enableDevtools ? { devtools: true } : {}),
     style: {
@@ -138,6 +138,9 @@ function nativeWindowOptions(
       frameless: false,
       resizable: true,
       autoHide: false,
+      // Native gaussian-blur material (macOS NSVisualEffectView / Windows mica-acrylic)
+      // paints behind a transparent page so the frontend translucent titlebar reads through.
+      background: { kind: 'semantic', token: 'blur', state: 'active' },
     },
   }
 }
@@ -302,7 +305,7 @@ async function createNativePresenter(options: {
   const resources = await options.driver.createNative({
     tray: trayOptions(brand.trayIcon),
     runtime: runtimeOptions(options.version, brand.appIcon, options.appLaunch),
-    window: nativeWindowOptions(options.appServer.url, options.platform, options.enableDevtools),
+    window: nativeWindowOptions(options.appServer.url, options.enableDevtools),
   })
   try {
     await resources.window.show()

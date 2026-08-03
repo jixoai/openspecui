@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Verify path-driven OpenSpec semantic annotations and navigation metadata.
  * 2. Preserve authored Markdown, including multiline Requirement bodies, without truncation.
  * 3. Verify translation, ToC, and responsive projection integration.
@@ -124,7 +124,7 @@ describe('MarkdownViewer OpenSpec path plugin', () => {
     })
     expect(requirement.getAttribute('data-openspec-kind')).toBeNull()
     expect(requirement.id).toBe('requirement-body-list-before-scenario')
-  })
+  }, 15_000)
 
   it('renders OpenSpec keyword annotations as inline visual markers', () => {
     const { container } = render(

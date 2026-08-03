@@ -43,7 +43,7 @@
   flex-shrink: 0;
   align-items: center;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
-  background-color: color-mix(in srgb, var(--background) 92%, var(--muted));
+  background-color: var(--background);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
   color: var(--foreground);
   padding-inline-start: var(--app-titlebar-left);
@@ -51,6 +51,40 @@
   user-select: none;
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+/*
+ * Native gaussian-blur compositing — only under the OpenTray overlay, where a native
+ * window material sits behind the page (opentray-daemon-presenter style.background
+ * { kind: 'semantic', token: 'blur' }). Only the left sidebar is translucent so the
+ * native blur reads through it; the titlebar and main view stay opaque (bg-background),
+ * and the app-layout root + body are transparent so they never occlude the sidebar.
+ * In browser/native-frame mode the root keeps bg-background (set on the element) so the
+ * page has its normal opaque surface.
+ */
+[data-app-shell] {
+  background-color: var(--background);
+}
+
+:root:has([data-titlebar-presentation='opentray']) body {
+  background-color: transparent;
+}
+
+/* Under the overlay the root goes transparent so the sidebar blur is not occluded. */
+:root:has([data-titlebar-presentation='opentray']) [data-app-shell] {
+  background-color: transparent;
+}
+
+/* Main view surface stays opaque so only the sidebar reads the native blur. */
+:root:has([data-titlebar-presentation='opentray']) [data-app-shell-content] {
+  background-color: var(--background);
+}
+
+/* Left sidebar: the single translucent surface that lets the native blur through. */
+:root:has([data-titlebar-presentation='opentray']) [data-app-sidebar] {
+  background-color: color-mix(in srgb, var(--background) 60%, transparent);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 
 .app-titlebar-brand {
@@ -129,11 +163,26 @@ html.dark .app-titlebar-logo-dark {
   height: 1.25em;
 }
 
+.app-titlebar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  pointer-events: auto;
+}
+
+.app-titlebar-brand-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  pointer-events: auto;
+}
+
+.app-titlebar-sidebar-toggle,
+.app-titlebar-theme-toggle,
 .app-titlebar-settings {
   display: grid;
   width: 1.625rem;
   height: 1.625rem;
-  margin-inline: 0.1875rem 0.375rem;
   padding: 0;
   flex: 0 0 auto;
   place-items: center;
@@ -150,11 +199,15 @@ html.dark .app-titlebar-logo-dark {
   app-region: no-drag;
 }
 
+.app-titlebar-sidebar-toggle:hover,
+.app-titlebar-theme-toggle:hover,
 .app-titlebar-settings:hover {
   background-color: color-mix(in srgb, var(--muted) 84%, transparent);
   color: var(--foreground);
 }
 
+.app-titlebar-sidebar-toggle:focus-visible,
+.app-titlebar-theme-toggle:focus-visible,
 .app-titlebar-settings:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
@@ -165,8 +218,17 @@ html.dark .app-titlebar-logo-dark {
   color: var(--primary);
 }
 
+.app-titlebar-sidebar-toggle:active,
+.app-titlebar-theme-toggle:active,
 .app-titlebar-settings:active {
   background-color: color-mix(in srgb, var(--muted) 96%, transparent);
+}
+
+/* webMode sidebar toggle: aria-pressed two-state affordance */
+.app-sidebar-toggle[data-pressed='true'],
+.app-titlebar-sidebar-toggle[data-pressed='true'] {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
 }
 
 .hosted-shell-root .hosted-shell-tabs .tabs-button {
@@ -178,9 +240,31 @@ html.dark .app-titlebar-logo-dark {
   min-width: max-content;
 }
 
-html.dark .hosted-shell-root .hosted-shell-tabs [data-tab-trigger='true'].tab-selected {
-  background-color: var(--primary);
-  color: var(--primary-foreground);
+/*
+ * Workspace tabs dark-mode hierarchy (hosted-shell only).
+ * terminal-tabs.tsx is designed for a fixed dark terminal surface, but the hosted shell
+ * remaps --terminal to --background, so the brightness()/bg-terminal primitives collapse
+ * in dark mode: the active tab goes transparent-into-background and inactive tabs darken
+ * further, inverting the expected relief. Re-establish hierarchy explicitly here.
+ *
+ * Active (selected) tab: a distinct primary-tinted surface that wins over bg-transparent.
+ * Inactive tabs: lift slightly above the background instead of darkening under it.
+ * Selection indicator: give it a visible top edge instead of blending with --terminal.
+ */
+html.dark .hosted-shell-tabs [data-tab-item='true'] {
+  background-color: color-mix(in srgb, var(--background) 82%, var(--foreground) 12%);
+}
+
+html.dark .hosted-shell-tabs [data-tab-item='true']:not(:has(.tab-selected)) {
+  filter: brightness(1.18);
+}
+
+html.dark .hosted-shell-tabs [data-tab-item='true']:not(:has(.tab-selected)):hover {
+  filter: brightness(1.26);
+}
+
+html.dark .hosted-shell-tabs [data-tabs-selection-indicator='true'] {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--foreground) 18%, transparent);
 }
 
 html[data-sidebar-vt] [data-app-sidebar] {

@@ -163,7 +163,14 @@ describe('OpenTray daemon presenter', () => {
       expect.objectContaining({
         platform: 'darwin',
         format: 'icns',
-        source: { type: 'file', path: '/package/app/native-icons/app-icon.icns' },
+        variant: ['default', 'light'],
+        source: { type: 'file', path: '/package/app/native-icons/app-icon/darwin-light.icns' },
+      }),
+      expect.objectContaining({
+        platform: 'darwin',
+        format: 'icns',
+        variant: 'dark',
+        source: { type: 'file', path: '/package/app/native-icons/app-icon/darwin-dark.icns' },
       }),
     ])
     expect(fixture.nativeCalls[0]?.runtime.appLaunch).toEqual(APP_LAUNCH)
@@ -205,6 +212,7 @@ describe('OpenTray daemon presenter', () => {
             frameless: false,
             resizable: true,
             autoHide: false,
+            background: { kind: 'semantic', token: 'blur', state: 'active' },
           },
         }),
       })
@@ -378,7 +386,7 @@ describe('OpenTray daemon presenter', () => {
     await resolution.host.close()
   })
 
-  it('keeps the Windows native frame while preserving the same appMode contract', async () => {
+  it('enables the Windows overlay window controls and semantic blur with the appMode contract', async () => {
     const fixture = createFixture()
     const resolution = await createOpenTrayDaemonPresenter({
       appAssetsDir: '/package/app',
@@ -393,9 +401,15 @@ describe('OpenTray daemon presenter', () => {
     })
 
     expect(fixture.nativeCalls[0]?.window).toMatchObject({
-      url: fixture.appServer.url,
-      windowControlsOverlay: false,
-      style: { appMode: true, frameless: false, resizable: true, autoHide: false },
+      url: `${fixture.appServer.url}/?appMode=opentray-overlay`,
+      windowControlsOverlay: true,
+      style: {
+        appMode: true,
+        frameless: false,
+        resizable: true,
+        autoHide: false,
+        background: { kind: 'semantic', token: 'blur', state: 'active' },
+      },
     })
     await resolution.host.close()
   })

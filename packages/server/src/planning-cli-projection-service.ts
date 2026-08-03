@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Own selector-exact OPSX and Spec Projection Work, including Reference-content invalidation, for one Planning-root record.
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Own selector-exact OPSX Status/Instructions and Spec Projection Work for one Planning-root record.
  * 2. Execute typed Kernel/CLI readers against one reactive Manager-owned Root Context value per Work generation.
  * 3. Expose immediate Pull, lifecycle-only Push, explicit refresh, and settled compatibility reads.
  * 4. Share one bounded typed registry across replaceable Planning-root records.
+ * 5. Retire every config-dependent CLI Work generation before Active Root mutation settlement escapes its lease.
  *
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Owner architecture clarification (2026-07-26): "将这些变更信息收集起来作为触发器，更新底层幂等计算的缓存结果。"
@@ -77,6 +78,7 @@ export interface PlanningCliProjectionServiceOptions {
     | 'readStatusListProjection'
     | 'readInstructionsProjection'
     | 'readApplyInstructionsProjection'
+    | 'readArchiveInstructionsProjection'
     | 'readConfigBundleProjection'
     | 'readTemplatesProjection'
     | 'readTemplateContentsProjection'
@@ -119,6 +121,30 @@ export class PlanningCliProjectionService {
     const selector = this.selector(rawSelector)
     this.options.workOwner.registry.invalidate(this.identity(selector))
     return this.read(selector)
+  }
+
+  /** Retire every current-root CLI Work item whose result depends on Active Root configuration. */
+  invalidateConfigDependentWork(): void {
+    const rootContext = this.currentRootContext()
+    const planningRoot = rootContext.planningRoot
+    if (!planningRoot) return
+    const generation = rootContext.generation ?? this.options.gitBindingToken
+    this.options.workOwner.registry.invalidateMatching(
+      (identity) =>
+        identity.projectionKind === 'planning-cli' &&
+        identity.planningRoot.identity === planningRoot.path &&
+        identity.owner.generation === generation &&
+        (identity.selector === 'opsx-status' ||
+          identity.selector === 'opsx-change-list' ||
+          identity.selector === 'opsx-status-list' ||
+          identity.selector === 'opsx-instructions' ||
+          identity.selector === 'opsx-apply-instructions' ||
+          identity.selector === 'opsx-archive-instructions' ||
+          identity.selector === 'opsx-config-bundle' ||
+          identity.selector === 'opsx-templates' ||
+          identity.selector === 'opsx-template-contents'),
+      'dependency'
+    )
   }
 
   subscribe(
@@ -192,6 +218,10 @@ export class PlanningCliProjectionService {
         ...value,
         change: requireCanonicalOpenSpecEntityId(value.change, 'changeId'),
       }))
+      .with({ kind: 'opsx-archive-instructions' }, (value) => ({
+        ...value,
+        change: requireCanonicalOpenSpecEntityId(value.change, 'changeId'),
+      }))
       .otherwise((value) => value)
   }
 
@@ -244,8 +274,11 @@ export class PlanningCliProjectionService {
         { kind: 'opsx-status-list' },
         () => this.options.invalidation.track('schemas')
       )
-      .with({ kind: 'opsx-instructions' }, { kind: 'opsx-apply-instructions' }, () =>
-        this.options.invalidation.track('schemas')
+      .with(
+        { kind: 'opsx-instructions' },
+        { kind: 'opsx-apply-instructions' },
+        { kind: 'opsx-archive-instructions' },
+        () => this.options.invalidation.track('schemas')
       )
       .with(
         { kind: 'opsx-config-bundle' },
@@ -277,7 +310,8 @@ export class PlanningCliProjectionService {
         (identity.selector === 'spec-catalog' ||
           identity.selector === 'spec-document' ||
           identity.selector === 'opsx-instructions' ||
-          identity.selector === 'opsx-apply-instructions'),
+          identity.selector === 'opsx-apply-instructions' ||
+          identity.selector === 'opsx-archive-instructions'),
       'dependency'
     )
   }
@@ -317,6 +351,11 @@ export class PlanningCliProjectionService {
       .with({ kind: 'opsx-apply-instructions' }, async ({ change, schema }) => ({
         kind: 'opsx-apply-instructions' as const,
         value: await this.options.kernel.readApplyInstructionsProjection(change, schema),
+      }))
+      .with({ kind: 'opsx-archive-instructions' }, async ({ change, schema }) => ({
+        kind: 'opsx-archive-instructions' as const,
+        rootGeneration: rootContext.generation ?? this.options.gitBindingToken,
+        value: await this.options.kernel.readArchiveInstructionsProjection(change, schema),
       }))
       .with({ kind: 'opsx-config-bundle' }, async () => ({
         kind: 'opsx-config-bundle' as const,

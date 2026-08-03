@@ -1,17 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
- * 1. Exercise the real Config writeSchemaFile mutation function through React Query.
- * 2. Prove a readiness transition blocks schema/template file writes before transport.
- * 3. Preserve the shared Root Action contract for the Schema workspace.
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Exercise the real Schema detail writeSchemaFile mutation function through React Query.
+ * 2. Prove Root and Config Bundle authority transitions block file writes before transport.
+ * 3. Preserve retained Schema display while current mutation authority is absent.
  *
  * Original request (2026-07-18): "Schema/Template writes require real mutation-boundary evidence."
- * Owner Context direction (2026-07-29): keep Config title actions inside the route test boundary.
+ * Owner Config-workbench decision (2026-08-01): preserve mutation admission inside `/config/schemas/:id`.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Config } from './config'
+import { ConfigSchemaWorkspace } from './config-schema-detail'
 
 const { configBundleMock, rootActionMock, writeSchemaFileMock } = vi.hoisted(() => ({
   configBundleMock: vi.fn(),
@@ -149,7 +149,12 @@ vi.mock('@/lib/use-root-action-state', () => ({
   useRootActionState: rootActionMock,
 }))
 vi.mock('@/lib/use-opsx', () => ({
-  useOpsxConfigBundleSubscription: () => configBundleMock(),
+  useOpsxConfigBundleSubscription: () => ({
+    authority: { state: 'current' },
+    refresh: vi.fn(),
+    refreshPending: false,
+    ...configBundleMock(),
+  }),
   useOpsxSchemaFilesSubscription: () => ({
     data: [{ path: 'schema.yaml', type: 'file', content: 'artifacts: []\n' }],
     error: null,
@@ -174,7 +179,7 @@ function renderConfig() {
   })
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <Config />
+      <ConfigSchemaWorkspace schemaId="project-schema" onNavigate={() => undefined} />
     </QueryClientProvider>
   )
   return { queryClient, view }
@@ -207,7 +212,6 @@ describe('Config Schema file mutation boundary', () => {
       error: null,
     })
     writeSchemaFileMock.mockReset().mockResolvedValue(undefined)
-    window.history.replaceState(null, '', '/config?configTab=schema:project-schema')
   })
 
   afterEach(() => cleanup())
@@ -229,13 +233,40 @@ describe('Config Schema file mutation boundary', () => {
     })
     view.rerender(
       <QueryClientProvider client={queryClient}>
-        <Config />
+        <ConfigSchemaWorkspace schemaId="project-schema" onNavigate={() => undefined} />
       </QueryClientProvider>
     )
 
     await waitFor(() =>
       expect(screen.getByText('Planning root changed before schema write.')).toBeTruthy()
     )
+    expect(writeSchemaFileMock).not.toHaveBeenCalled()
+  })
+
+  it('retains Schema content but rejects a queued write after Config Bundle authority becomes stale', async () => {
+    const { queryClient, view } = renderConfig()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(screen.getByLabelText('Schema file editor'), {
+      target: { value: 'artifacts: [changed]\n' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    const retainedState = configBundleMock()
+    configBundleMock.mockReturnValue({
+      ...retainedState,
+      authority: { state: 'waiting', reason: 'pending' },
+    })
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <ConfigSchemaWorkspace schemaId="project-schema" onNavigate={() => undefined} />
+      </QueryClientProvider>
+    )
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Schema file editor')).toHaveAttribute('readonly')
+    )
+    expect(screen.getByLabelText('Schema file editor')).toHaveValue('artifacts: []\n')
     expect(writeSchemaFileMock).not.toHaveBeenCalled()
   })
 })

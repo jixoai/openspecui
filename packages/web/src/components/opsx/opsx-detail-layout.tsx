@@ -1,10 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Compose reusable OPSX detail headers, pages, tabs, diagnostics, and state panels.
  * 2. Preserve shared-element navigation and geometry-stable loading presentation.
+ * 3. Prioritize wrapping title identity before compact Actions consume the remaining inline-end column.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
+ * Original request (2026-08-03): prevent Change Detail evidence from growing the Header's right side.
+ * Owner correction (2026-08-03): Actions use title inline-end space before wrapping below at narrow widths.
+ * Owner correction (2026-08-03): use `auto 1fr` to prioritize title identity and wrap long titles.
  */
 import { AccessibleStatus, DetailPanelSkeleton } from '@/components/realtime'
 import { Tabs, type Tab } from '@/components/tabs'
@@ -29,16 +33,17 @@ interface OpsxDetailHeaderProps {
   icon: LucideIcon
   title: ReactNode
   subtitle: ReactNode
-  toolbar?: ReactNode
+  headerActions?: ReactNode
 }
 
 interface OpsxDetailPageProps extends OpsxDetailHeaderProps {
   diagnostics?: readonly OpsxEntityDiagnostic[]
+  statusRegion?: ReactNode
   children: ReactNode
 }
 
 interface OpsxDetailLoadingPageProps
-  extends Omit<OpsxDetailHeaderProps, 'title' | 'subtitle' | 'toolbar'> {
+  extends Omit<OpsxDetailHeaderProps, 'title' | 'subtitle' | 'headerActions'> {
   handoff: SharedElementHandoff | null
   fallbackTitle: string
   fallbackSubtitle: string
@@ -66,11 +71,14 @@ function OpsxDetailHeader({
   icon: Icon,
   title,
   subtitle,
-  toolbar,
+  headerActions,
 }: OpsxDetailHeaderProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-4">
+    <div
+      data-testid="opsx-detail-header"
+      className="@min-[56rem]:grid-cols-[auto_1fr] grid min-w-0 grid-cols-1 items-center gap-3"
+    >
+      <div data-testid="opsx-detail-header-identity" className="flex min-w-0 items-center gap-4">
         <VTLink
           to={backTo}
           vt={{ source: headerRef, sharedElements: sharedDescriptor }}
@@ -89,22 +97,42 @@ function OpsxDetailHeader({
               {...getSharedElementBinding(sharedDescriptor, 'icon')}
               className="h-6 w-6 shrink-0"
             />
-            <span {...getSharedElementBinding(sharedDescriptor, 'title')} className="truncate">
+            <span
+              {...getSharedElementBinding(sharedDescriptor, 'title')}
+              className="min-w-0 whitespace-normal [overflow-wrap:anywhere]"
+            >
               {title}
             </span>
           </h1>
-          <p className="text-muted-foreground truncate text-sm">{subtitle}</p>
+          <div className="text-muted-foreground min-w-0 text-sm">{subtitle}</div>
         </div>
       </div>
-      {toolbar}
+      {headerActions ? (
+        <div
+          data-testid="opsx-detail-header-actions"
+          className="@container @min-[56rem]:min-w-96 @min-[56rem]:justify-self-stretch @min-[56rem]:justify-end flex min-w-0 justify-start"
+        >
+          {headerActions}
+        </div>
+      ) : null}
     </div>
   )
 }
 
-export function OpsxDetailPage({ diagnostics, children, ...headerProps }: OpsxDetailPageProps) {
+export function OpsxDetailPage({
+  diagnostics,
+  statusRegion,
+  children,
+  ...headerProps
+}: OpsxDetailPageProps) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+    <div className="@container flex min-h-0 flex-1 flex-col gap-4 p-4">
       <OpsxDetailHeader {...headerProps} />
+      {statusRegion ? (
+        <div data-testid="opsx-detail-status-region" className="min-w-0">
+          {statusRegion}
+        </div>
+      ) : null}
       <OpsxDetailDiagnostics diagnostics={diagnostics ?? []} />
       {children}
     </div>

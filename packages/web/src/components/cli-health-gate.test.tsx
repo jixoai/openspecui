@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Lock the Web compatibility gate to the OpenSpecUI 6.1 / CLI 1.6 line.
- * 2. Prove the 1.7 compatible no-warning and unsupported-version escape hatch behavior.
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * 1. Lock the Web compatibility gate to the OpenSpecUI 7 / CLI 1.7 line.
+ * 2. Prove incompatible-version blocking and the current-page-runtime escape hatch.
  * 3. Prove shared Root Context is the gate's only CLI availability truth and refresh is readonly.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  * Owner correction (2026-07-31): Root observation refresh uses query transport.
+ * Original request (2026-08-01): "v7不兼容1.6.x，明确要求必须使用 v1.7.x。"
+ * Owner bypass-lifetime decision (2026-08-01): "仅当前页面会话有效"
  */
 import type { RootContext, RootContextState } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -133,19 +135,8 @@ describe('CliHealthGate', () => {
     cleanup()
   })
 
-  it('does not render for current OpenSpec CLI 1.6.x', async () => {
-    setAvailability({ available: true, version: '1.6.1' })
-    renderGate()
-
-    await waitFor(() => {
-      expect(screen.queryByText(/OpenSpec CLI .* Required/)).not.toBeInTheDocument()
-      expect(screen.queryByText(/compatible/)).not.toBeInTheDocument()
-    })
-  })
-
-  it('does not render an upgrade warning for compatible OpenSpec CLI 1.7.x', async () => {
+  it('does not render for current OpenSpec CLI 1.7.x', async () => {
     setAvailability({ available: true, version: '1.7.1' })
-
     renderGate()
 
     await waitFor(() => {
@@ -154,13 +145,13 @@ describe('CliHealthGate', () => {
     })
   })
 
-  it('blocks unsupported OpenSpec CLI versions', async () => {
-    setAvailability({ available: true, version: '1.5.1' })
+  it('blocks OpenSpec CLI 1.6.x in OpenSpecUI 7', async () => {
+    setAvailability({ available: true, version: '1.6.1' })
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.6.0 <1.8.0 Required/)).toBeInTheDocument()
-    expect(screen.getByText(/Detected OpenSpec CLI 1.5.1/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.7.0 <1.8.0 Required/)).toBeInTheDocument()
+    expect(screen.getByText(/Detected OpenSpec CLI 1.6.1/)).toBeInTheDocument()
   })
 
   it('offers a skip-version-check escape hatch when the CLI is available', async () => {
@@ -171,17 +162,23 @@ describe('CliHealthGate', () => {
     expect(await screen.findByText(/Skip version check/)).toBeInTheDocument()
   })
 
-  it('clears the blocking dialog after skipping the version check', async () => {
-    setAvailability({ available: true, version: '1.8.0' })
+  it('clears the blocking dialog after skipping the version check for the current runtime', async () => {
+    setAvailability({ available: true, version: '1.6.1' })
 
-    renderGate()
+    const firstRuntime = renderGate()
 
     const skip = await screen.findByText(/Skip version check/)
     fireEvent.click(skip)
 
     await waitFor(() => {
-      expect(screen.queryByText(/OpenSpec CLI >=1.6.0 <1.8.0 Required/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/OpenSpec CLI >=1.7.0 <1.8.0 Required/)).not.toBeInTheDocument()
     })
+
+    firstRuntime.unmount()
+    renderGate()
+
+    expect(await screen.findByText(/OpenSpec CLI >=1.7.0 <1.8.0 Required/)).toBeInTheDocument()
+    expect(screen.getByText(/Detected OpenSpec CLI 1.6.1/)).toBeInTheDocument()
   })
 
   it('does not offer a skip escape hatch when the CLI is unavailable', async () => {
@@ -189,7 +186,7 @@ describe('CliHealthGate', () => {
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.6.0 <1.8.0 Required/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.7.0 <1.8.0 Required/)).toBeInTheDocument()
     expect(screen.queryByText(/Skip version check/)).not.toBeInTheDocument()
   })
 

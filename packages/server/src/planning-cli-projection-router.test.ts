@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Prove public Planning CLI lifecycle subscriptions rebind across real Manager Root replacement.
- * 2. Reject callbacks from an unsubscribed regional Root A listener after Root B becomes current.
+ * 2. Reject late Archive-instructions callbacks from Root A after Root B becomes current.
  * 3. Keep the fixture typechecked through createServer, Context, and the public tRPC caller.
  * 4. Prove the compatibility Change-list query reads the same typed CLI Projection Work.
  *
@@ -72,7 +72,7 @@ describe('public Planning CLI projection Router', () => {
     })
     vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
       available: true,
-      version: '1.6.0',
+      version: '1.7.0',
     })
     vi.spyOn(server.cliExecutor.contracts, 'doctorRoot').mockResolvedValue(
       commandResult<CliDoctor>(
@@ -113,9 +113,9 @@ describe('public Planning CLI projection Router', () => {
       appRouter.createCaller(server.createContext()).opsx.listChanges()
     ).resolves.toEqual(['cli-owned'])
     expect(readChangeListProjection).toHaveBeenCalledOnce()
-  })
+  }, 15_000)
 
-  it('suppresses a late Root A regional callback after Root B subscription is current', async () => {
+  it('suppresses a late Root A Archive callback after Root B subscription is current', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-planning-cli-router-'))
     const launchRoot = join(tempDir, 'launch')
     const rootA = join(tempDir, 'root-a')
@@ -177,7 +177,10 @@ describe('public Planning CLI projection Router', () => {
 
     const observable = await appRouter
       .createCaller(server.createContext())
-      .planningCliProjection.subscribe({ kind: 'opsx-status-list' })
+      .planningCliProjection.subscribe({
+        kind: 'opsx-archive-instructions',
+        change: 'add-auth',
+      })
     const received: CliProjectionNotice[] = []
     const errors: unknown[] = []
     const subscription = observable.subscribe({

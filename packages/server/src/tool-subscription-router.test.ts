@@ -1,28 +1,31 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
- * 1. Prove public tool subscriptions preserve launch-local skills and physically scoped commands.
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * 1. Prove public Agent subscriptions consume Environment-owned policy and launch-local artifacts.
  * 2. Prove fixed global CLI installation retires runner authority and invalidates Root Context before public terminal settlement.
+ * 3. Prove commands-only subscriptions distinguish arbitrary content from exact runtime CLI output.
  *
  * Original request (2026-07-20): "Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics."
  * Derived requirement (2026-07-20): physically owned tool projections re-emit after external artifact creation and removal.
  * Derived requirement (2026-07-20): global CLI installation settlement refreshes Root Context availability.
- * Derived requirement (2026-07-26): environment-owned command observation survives root removal and recreation.
+ * Original request (2026-08-01): Codex is skills-only and allowlisted global prompts are cleanup evidence.
  */
 import {
   CliContextSchema,
   CliDoctorSchema,
   clearCache,
   closeAllWatchers,
+  loadOpenSpecAgentCommandContents,
   parseCliCommandResult,
   type AIToolOption,
   type CliCommandResult,
   type CliStreamEvent,
   type CliStreamSettlement,
+  type EnvironmentGlobalProjectionData,
   type ToolInitState,
 } from '@openspecui/core'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 import { appRouter } from './router.js'
@@ -31,6 +34,7 @@ import { createServer } from './server.js'
 // Core reactive-fs retries missing paths every 1,000ms; bound this fixture to four fallback cycles.
 const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
 const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS = REACTIVE_MISSING_PATH_FALLBACK_MS * 4
+const OPENSPEC_17_BIN = resolve(import.meta.dirname, '../../../references/openspec/bin/openspec.js')
 
 function commandResult<T>(data: T, schema: ZodType<T>): CliCommandResult<T> {
   return parseCliCommandResult(
@@ -44,9 +48,14 @@ function commandResult<T>(data: T, schema: ZodType<T>): CliCommandResult<T> {
   )
 }
 
-async function writeArtifact(filePath: string): Promise<void> {
+async function writeArtifact(filePath: string, content = '# external fixture\n'): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, '# external fixture\n', 'utf8')
+  await writeFile(filePath, content, 'utf8')
+}
+
+async function writeGeneratedSkill(filePath: string): Promise<void> {
+  await mkdir(dirname(filePath), { recursive: true })
+  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.7.0"\n---\n', 'utf8')
 }
 
 async function prepareCachedRunnerReplacement(
@@ -109,7 +118,13 @@ function findToolState(
   return states.find((state) => state.toolId === toolId)
 }
 
-async function createRouterFixture(options: { createCodexPrompts?: boolean } = {}) {
+async function createRouterFixture(
+  options: {
+    createCodexPrompts?: boolean
+    delivery?: 'both' | 'skills' | 'commands'
+    workflows?: string[]
+  } = {}
+) {
   const tempDir = await mkdtemp(join(tmpdir(), 'openspecui-tool-subscription-router-'))
   const launchRoot = join(tempDir, 'launch')
   const planningRoot = join(tempDir, 'planning')
@@ -129,7 +144,50 @@ async function createRouterFixture(options: { createCodexPrompts?: boolean } = {
   const releaseLaunchObservation = await server.observationEnvironment.acquireRoot(launchRoot)
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.6.0',
+    version: '1.7.0',
+  })
+  const environment = {
+    kind: 'environment-global',
+    owner: {
+      kind: 'runtime-environment',
+      dataScope: {
+        path: join(tempDir, 'data'),
+        source: 'user-home-default',
+        environmentVariable: null,
+      },
+    },
+    configPath: join(tempDir, 'config.json'),
+    config: {
+      profile: 'custom',
+      delivery: options.delivery ?? 'commands',
+      workflows: options.workflows ?? ['update'],
+    },
+    defaultStore: { state: 'absent', id: null },
+    profileState: {
+      available: true,
+      profile: 'custom',
+      delivery: options.delivery ?? 'commands',
+      workflows: options.workflows ?? ['update'],
+      driftStatus: 'in-sync',
+      warningText: null,
+    },
+    evidence: {
+      path: { success: true, stdout: '', stderr: '', exitCode: 0 },
+      config: {
+        success: true,
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+        data: {},
+        payload: {},
+        diagnostics: [],
+      },
+      drift: { success: true, stdout: '', stderr: '', exitCode: 0 },
+    },
+  } satisfies EnvironmentGlobalProjectionData
+  vi.spyOn(server.environmentGlobalProjectionService, 'getCurrent').mockResolvedValue(environment)
+  vi.spyOn(server.environmentGlobalProjectionService, 'subscribe').mockReturnValue({
+    unsubscribe() {},
   })
   vi.spyOn(server.cliExecutor.contracts, 'doctorRoot').mockResolvedValue(
     commandResult(
@@ -179,7 +237,6 @@ async function createRouterFixture(options: { createCodexPrompts?: boolean } = {
       await server.planningRootServices.dispose()
       await server.storeObservation.dispose()
       await server.dataHomeObserver.dispose()
-      await server.toolCommandObservation.dispose()
       server.projectInvalidation.dispose()
       await releaseLaunchObservation()
       await server.observationEnvironment.dispose()
@@ -260,13 +317,21 @@ describe('public tool subscriptions', () => {
     const launchUpdate = join(fixture.launchRoot, '.claude', 'commands', 'opsx', 'update.md')
 
     try {
+      await fixture.server.configManager.writeConfig({
+        cli: { command: process.execPath, args: [OPENSPEC_17_BIN] },
+      })
+      const commandContents = await loadOpenSpecAgentCommandContents(
+        await fixture.server.configManager.getCliCommand(),
+        ['update']
+      )
+      const officialUpdateContent = commandContents?.claude?.update
+      if (!officialUpdateContent) {
+        throw new Error('Runtime OpenSpec CLI did not provide the Claude/update command fixture.')
+      }
       await mkdir(join(fixture.launchRoot, '.claude', 'commands', 'opsx'), { recursive: true })
       await writeArtifact(planningUpdate)
       const caller = appRouter.createCaller(fixture.server.createContext())
-      const observable = await caller.cli.subscribeToolInitStates({
-        delivery: 'commands',
-        workflows: ['update'],
-      })
+      const observable = await caller.cli.subscribeToolInitStates()
       subscription = observable.subscribe({
         next: (value) => emissions.push(value),
         error: (error) => errors.push(error),
@@ -300,12 +365,16 @@ describe('public tool subscriptions', () => {
         (value) => {
           const claude = findToolState(value, 'claude')
           return (
-            claude?.status === 'partial' && claude.unexpectedCommandWorkflows.includes('explore')
+            claude?.readiness === 'partial' &&
+            claude.issues.includes('stale-version') &&
+            claude.unexpectedCommandWorkflows.includes('explore')
           )
         }
       )
       expect(findToolState(withUnexpected, 'claude')).toMatchObject({
-        status: 'partial',
+        status: 'stale-version',
+        readiness: 'partial',
+        issues: ['stale-version'],
         missingCommandWorkflows: ['update'],
         unexpectedCommandWorkflows: ['explore'],
       })
@@ -320,22 +389,44 @@ describe('public tool subscriptions', () => {
         (value) => {
           const claude = findToolState(value, 'claude')
           return (
-            claude?.status === 'partial' &&
+            claude?.readiness === 'partial' &&
+            claude.issues.includes('stale-version') &&
             claude.missingCommandWorkflows.length === 0 &&
             claude.unexpectedCommandWorkflows.includes('explore')
           )
         }
       )
       expect(findToolState(withExpectedAndUnexpected, 'claude')).toMatchObject({
+        status: 'stale-version',
+        readiness: 'partial',
         presentExpectedCommandCount: 1,
         missingCommandWorkflows: [],
         unexpectedCommandWorkflows: ['explore'],
       })
 
-      const initializedStart = emissions.length
+      const staleStart = emissions.length
       await rm(launchExplore)
-      const initialized = await waitForEmission(
+      const stale = await waitForEmission(
         'unexpected Launch explore command removal',
+        emissions,
+        errors,
+        staleStart,
+        (value) => findToolState(value, 'claude')?.status === 'stale-version'
+      )
+      expect(findToolState(stale, 'claude')).toMatchObject({
+        status: 'stale-version',
+        readiness: 'initialized',
+        generatedByVersion: null,
+        expectedSkillCount: 0,
+        expectedCommandCount: 1,
+        presentExpectedCommandCount: 1,
+        unexpectedCommandWorkflows: [],
+      })
+
+      const initializedStart = emissions.length
+      await writeArtifact(launchUpdate, officialUpdateContent)
+      const initialized = await waitForEmission(
+        'official Launch update command replacement',
         emissions,
         errors,
         initializedStart,
@@ -343,10 +434,9 @@ describe('public tool subscriptions', () => {
       )
       expect(findToolState(initialized, 'claude')).toMatchObject({
         status: 'initialized',
-        expectedSkillCount: 0,
-        expectedCommandCount: 1,
-        presentExpectedCommandCount: 1,
-        unexpectedCommandWorkflows: [],
+        readiness: 'initialized',
+        generatedByVersion: '1.7.0',
+        issues: [],
       })
 
       const uninitializedStart = emissions.length
@@ -369,8 +459,12 @@ describe('public tool subscriptions', () => {
     }
   }, 30_000)
 
-  it('observes environment-global Codex commands while keeping skills launch-local', async () => {
-    const fixture = await createRouterFixture({ createCodexPrompts: false })
+  it('observes allowlisted global Codex prompts as cleanup while keeping skills launch-local', async () => {
+    const fixture = await createRouterFixture({
+      createCodexPrompts: false,
+      delivery: 'both',
+      workflows: ['update'],
+    })
     const emissions: ToolInitState[][] = []
     const errors: unknown[] = []
     let subscription: { unsubscribe(): void } | null = null
@@ -395,7 +489,7 @@ describe('public tool subscriptions', () => {
       await writeArtifact(planningSkill)
       const observable = await appRouter
         .createCaller(fixture.server.createContext())
-        .cli.subscribeToolInitStates({ delivery: 'both', workflows: ['update'] })
+        .cli.subscribeToolInitStates()
       subscription = observable.subscribe({
         next: (value) => emissions.push(value),
         error: (error) => errors.push(error),
@@ -410,59 +504,64 @@ describe('public tool subscriptions', () => {
       )
       expect(findToolState(initial, 'codex')).toMatchObject({
         missingSkillWorkflows: ['update'],
-        missingCommandWorkflows: ['update'],
+        missingCommandWorkflows: [],
         presentExpectedSkillCount: 0,
         presentExpectedCommandCount: 0,
+        expectedCommandCount: 0,
       })
 
       const commandCreateStart = emissions.length
       await writeArtifact(externalCommand)
       const afterCommandCreate = await waitForEmission(
-        'environment-global Codex command creation',
+        'managed global Codex prompt creation',
         emissions,
         errors,
         commandCreateStart,
-        (value) => {
-          const codex = findToolState(value, 'codex')
-          return codex?.presentExpectedCommandCount === 1
-        }
+        (value) => findToolState(value, 'codex')?.status === 'cleanup-needed'
       )
       expect(findToolState(afterCommandCreate, 'codex')).toMatchObject({
-        status: 'partial',
+        status: 'cleanup-needed',
         missingSkillWorkflows: ['update'],
         missingCommandWorkflows: [],
         presentExpectedSkillCount: 0,
-        presentExpectedCommandCount: 1,
+        presentExpectedCommandCount: 0,
+        expectedCommandCount: 0,
+        detectedCommandCount: 0,
+        issues: ['cleanup-needed'],
+        cleanup: { workflows: ['update'] },
       })
 
       const skillCreateStart = emissions.length
-      await writeArtifact(launchSkill)
-      const initialized = await waitForEmission(
+      await writeGeneratedSkill(launchSkill)
+      const configuredWithCleanup = await waitForEmission(
         'Launch Codex skill creation',
         emissions,
         errors,
         skillCreateStart,
-        (value) => findToolState(value, 'codex')?.status === 'initialized'
+        (value) => findToolState(value, 'codex')?.readiness === 'initialized'
       )
-      expect(findToolState(initialized, 'codex')).toMatchObject({
+      expect(findToolState(configuredWithCleanup, 'codex')).toMatchObject({
+        status: 'cleanup-needed',
+        readiness: 'initialized',
         presentExpectedSkillCount: 1,
-        presentExpectedCommandCount: 1,
+        presentExpectedCommandCount: 0,
       })
 
       const commandRemoveStart = emissions.length
       await rm(externalCommandRoot, { recursive: true, force: true })
       const afterCommandRemove = await waitForEmission(
-        'environment-global Codex command-root removal',
+        'managed global Codex prompt-root removal',
         emissions,
         errors,
         commandRemoveStart,
-        (value) =>
-          findToolState(value, 'codex')?.missingCommandWorkflows.includes('update') === true
+        (value) => findToolState(value, 'codex')?.status === 'initialized'
       )
       expect(findToolState(afterCommandRemove, 'codex')).toMatchObject({
-        status: 'partial',
+        status: 'initialized',
+        readiness: 'initialized',
+        issues: [],
         missingSkillWorkflows: [],
-        missingCommandWorkflows: ['update'],
+        missingCommandWorkflows: [],
         presentExpectedSkillCount: 1,
         presentExpectedCommandCount: 0,
       })
@@ -470,18 +569,19 @@ describe('public tool subscriptions', () => {
       const commandRecreateStart = emissions.length
       await writeArtifact(externalCommand)
       const afterCommandRecreate = await waitForEmission(
-        'environment-global Codex command-root recreation',
+        'managed global Codex prompt-root recreation',
         emissions,
         errors,
         commandRecreateStart,
-        (value) => findToolState(value, 'codex')?.status === 'initialized'
+        (value) => findToolState(value, 'codex')?.status === 'cleanup-needed'
       )
       expect(findToolState(afterCommandRecreate, 'codex')).toMatchObject({
-        status: 'initialized',
+        status: 'cleanup-needed',
+        readiness: 'initialized',
         missingSkillWorkflows: [],
         missingCommandWorkflows: [],
         presentExpectedSkillCount: 1,
-        presentExpectedCommandCount: 1,
+        presentExpectedCommandCount: 0,
       })
     } finally {
       subscription?.unsubscribe()

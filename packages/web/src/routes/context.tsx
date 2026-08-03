@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Project one launch project's CLI-selected root as Config-owned Resolved Context.
  * 2. Present current, stale, terminal-error, and failed-attempt authority without hiding failures.
- * 3. Present the inherited Store registry/data scope as read-only environment evidence.
- * 4. Expose each Root Context command-evidence envelope through on-demand disclosure.
- * 5. Route static mode to publication-safe Context facts without starting the live owner.
+ * 3. Present inherited environment facts and CLI command envelopes through read-only evidence disclosure.
+ * 4. Route static mode to publication-safe Context facts without starting the live owner.
+ * 5. Publish current selected-Root usability to the Guide without creating another Context owner.
  *
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
@@ -15,12 +15,15 @@
  * Owner same-root direction (2026-07-29): consolidate Launch and Planning identity without hiding ignored-pointer evidence.
  * Owner Context direction (2026-07-29): move to `/config/context`, add a Config return, and separate direct facts from evidence.
  */
+import { useConfigGuideAnchor } from '@/components/config/config-guide'
+import { ConfigWorkbenchPage } from '@/components/config/config-workbench'
 import {
   ResolvedContextHeader,
   type ResolvedContextStatus,
 } from '@/components/config/resolved-context-header'
 import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import { DetailPanelSkeleton, RealtimeRevalidateCue } from '@/components/realtime'
+import { selectResolvedContextGuideSignal } from '@/lib/config-guide-signals'
 import { selectRootTopology } from '@/lib/root-topology'
 import { isStaticMode } from '@/lib/static-mode'
 import { selectRootContextSnapshot, useContextSubscription } from '@/lib/use-context-subscription'
@@ -52,61 +55,85 @@ function LiveContextView() {
         : projection?.state === 'refreshing' || authority.state !== 'current'
           ? 'refreshing'
           : 'ready'
+  const diagnostics = context
+    ? [
+        ...context.diagnostics.root,
+        ...context.diagnostics.doctor,
+        ...context.diagnostics.context,
+        ...context.references.flatMap((reference) => reference.status),
+      ]
+    : []
+  const guideSignal = selectResolvedContextGuideSignal({
+    available: context !== null,
+    loading,
+    transportError: transportError?.message ?? projectionError?.message ?? null,
+    authorityFailed: authority.state === 'failed',
+    refreshing: projection?.state === 'refreshing',
+    authorityCurrent: authority.state === 'current',
+    hasPlanningRoot: context?.planningRoot !== null && context?.planningRoot !== undefined,
+    cliAvailable: context?.cli.available ?? false,
+    cliError: context?.cli.error ?? null,
+    errorDiagnostic:
+      diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ?? null,
+    warningDiagnostic:
+      diagnostics.find((diagnostic) => diagnostic.severity === 'warning')?.message ?? null,
+  })
+  const guideAnchor = useConfigGuideAnchor('resolved-context', guideSignal)
 
   return (
-    <div className="space-y-6 p-4">
-      <ResolvedContextHeader status={pageStatus} />
+    <ConfigWorkbenchPage current="context" header={<ResolvedContextHeader status={pageStatus} />}>
+      <div {...guideAnchor} className="space-y-6">
+        {loading ? <DetailPanelSkeleton count={4} /> : null}
 
-      {loading ? <DetailPanelSkeleton count={4} /> : null}
-
-      {transportError || projectionError ? (
-        <div
-          role="alert"
-          className="text-destructive border-destructive/40 bg-destructive/10 flex items-start gap-2 rounded-lg border p-4 text-sm"
-        >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <div>
-            <p className="font-medium">Root Context is not ready.</p>
-            <p>{transportError?.message ?? projectionError?.message}</p>
-            {projection?.state === 'error' && projection.data ? (
-              <p className="text-muted-foreground mt-1 text-xs">
-                Showing the last successful observation while retaining the failed CLI attempt.
-              </p>
-            ) : null}
+        {transportError || projectionError ? (
+          <div
+            role="alert"
+            className="text-destructive border-destructive/40 bg-destructive/10 flex items-start gap-2 rounded-lg border p-4 text-sm"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <div>
+              <p className="font-medium">Root Context is not ready.</p>
+              <p>{transportError?.message ?? projectionError?.message}</p>
+              {projection?.state === 'error' && projection.data ? (
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Showing the last successful observation while retaining the failed CLI attempt.
+                </p>
+              ) : null}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {!loading && staleContext && failedAttempt ? (
-        <div className="space-y-6">
-          <ContextObservation label="Last successful Context (stale)" context={staleContext} />
+        {!loading && staleContext && failedAttempt ? (
+          <div className="space-y-6">
+            <ContextObservation label="Last successful Context (stale)" context={staleContext} />
+            <ContextObservation
+              label="Current failed attempt"
+              context={failedAttempt}
+              rootHeading="Attempted planning root"
+            />
+          </div>
+        ) : !loading && failedAttempt ? (
           <ContextObservation
             label="Current failed attempt"
             context={failedAttempt}
             rootHeading="Attempted planning root"
           />
-        </div>
-      ) : !loading && failedAttempt ? (
-        <ContextObservation
-          label="Current failed attempt"
-          context={failedAttempt}
-          rootHeading="Attempted planning root"
-        />
-      ) : !loading && context ? (
-        <RealtimeRevalidateCue active={projection?.state === 'refreshing'}>
-          <ContextBody
-            context={context}
-            actionStatus={
-              projection?.state === 'ready' && authority.state === 'current'
-                ? 'ready'
-                : authority.state === 'failed'
-                  ? 'blocked'
-                  : 'checking'
-            }
-          />
-        </RealtimeRevalidateCue>
-      ) : null}
-    </div>
+        ) : !loading && context ? (
+          <RealtimeRevalidateCue active={projection?.state === 'refreshing'}>
+            <ContextBody
+              context={context}
+              actionStatus={
+                projection?.state === 'ready' && authority.state === 'current'
+                  ? 'ready'
+                  : authority.state === 'failed'
+                    ? 'blocked'
+                    : 'checking'
+              }
+            />
+          </RealtimeRevalidateCue>
+        ) : null}
+      </div>
+    </ConfigWorkbenchPage>
   )
 }
 

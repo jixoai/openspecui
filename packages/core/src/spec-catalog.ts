@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Define collision-safe owned and referenced Spec identity.
  * 2. Build one source-aware live/static Spec Catalog with CLI-owned membership and source-exact provenance.
- * 3. Define source-distinct Spec detail projections without inventing upstream or snapshot fields.
- * 4. Publish browser-safe Catalog/document runtime schemas for typed Projection Pull.
+ * 3. Define shared route, cache, and display-path projections for complete recursive identities.
+ * 4. Define source-distinct Spec detail projections without inventing upstream or snapshot fields.
+ * 5. Publish browser-safe Catalog/document runtime schemas for typed Projection Pull.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  */
 import { match } from 'ts-pattern'
 import { z } from 'zod'
@@ -23,19 +25,31 @@ import {
   CliProjectionCommandEvidenceSchema,
   type CliProjectionCommandEvidence,
 } from './cli-projection.js'
+import { requireCanonicalOpenSpecSpecId } from './entity-id.js'
 import { SpecSchema, type Spec } from './schemas.js'
+
+const RecursiveSpecIdSchema = z.string().superRefine((value, context) => {
+  try {
+    requireCanonicalOpenSpecSpecId(value)
+  } catch (error) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: error instanceof Error ? error.message : 'Invalid specId.',
+    })
+  }
+})
 
 /** Runtime validator for one writable owned Spec identity. */
 export const OwnedSpecIdentitySchema = z.object({
   kind: z.literal('owned'),
-  specId: z.string().min(1),
+  specId: RecursiveSpecIdSchema,
 })
 
 /** Runtime validator for one Store-qualified read-only Spec identity. */
 export const ReferencedSpecIdentitySchema = z.object({
   kind: z.literal('referenced'),
   storeId: z.string().min(1),
-  specId: z.string().min(1),
+  specId: RecursiveSpecIdSchema,
 })
 
 /** Runtime validator for the complete compound Spec identity union. */
@@ -408,25 +422,37 @@ export const SpecDocumentProjectionSchema: z.ZodType<
 
 /** Build a collision-safe cache/search key for a compound Spec identity. */
 export function specIdentityKey(identity: SpecIdentity): string {
-  const specId = encodeURIComponent(identity.specId)
-  return identity.kind === 'owned'
+  const parsed = SpecIdentitySchema.parse(identity)
+  const specId = encodeURIComponent(parsed.specId)
+  return parsed.kind === 'owned'
     ? `owned:${specId}`
-    : `referenced:${encodeURIComponent(identity.storeId)}:${specId}`
+    : `referenced:${encodeURIComponent(parsed.storeId)}:${specId}`
 }
 
 /** Build the canonical live/static route for a compound Spec identity. */
 export function specRoutePath(identity: SpecIdentity): string {
-  const specId = encodeURIComponent(identity.specId)
-  return identity.kind === 'owned'
+  const parsed = SpecIdentitySchema.parse(identity)
+  const specId = encodeURIComponent(parsed.specId)
+  return parsed.kind === 'owned'
     ? `/specs/owned/${specId}`
-    : `/specs/referenced/${encodeURIComponent(identity.storeId)}/${specId}`
+    : `/specs/referenced/${encodeURIComponent(parsed.storeId)}/${specId}`
+}
+
+/** Build the shared user-visible document path for live and static search results. */
+export function specDocumentDisplayPath(identity: SpecIdentity): string {
+  const parsed = SpecIdentitySchema.parse(identity)
+  return parsed.kind === 'owned'
+    ? `owned:openspec/specs/${parsed.specId}/spec.md`
+    : `referenced:${parsed.storeId}:specs/${parsed.specId}/spec.md`
 }
 
 /** Recover compound Spec identity from canonical route parameters. */
 export function specIdentityFromRoute(params: { specId: string; storeId?: string }): SpecIdentity {
-  return params.storeId === undefined
-    ? { kind: 'owned', specId: params.specId }
-    : { kind: 'referenced', storeId: params.storeId, specId: params.specId }
+  return SpecIdentitySchema.parse(
+    params.storeId === undefined
+      ? { kind: 'owned', specId: params.specId }
+      : { kind: 'referenced', storeId: params.storeId, specId: params.specId }
+  )
 }
 
 /** Merge already projected owned and referenced entries without bare-id deduplication. */

@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Verify Settings preference, translation, terminal, and asset-management interactions under a bounded heavy-suite execution budget.
  * 2. Verify the route-level responsive ToC and static/dynamic composition boundaries.
- * 3. Keep extracted OpenSpec diagnostics and initialization behavior in focused component tests.
+ * 3. Keep extracted OpenSpec diagnostics and read-only Agent summary behavior in focused component tests.
  * 4. Prove live Settings composition is present before passive effects can run.
  * 5. Prove Terminal drafts synchronize by upstream field value without losing dirty edits.
  *
@@ -13,6 +13,7 @@
  * Owner correction (2026-07-29): Settings delegates scrolling to the shell and field density to its container.
  * Owner correction (2026-07-29): Settings no longer renders project-owned Hosted App URL configuration.
  * Owner correction (2026-07-31): Observed model metadata refresh uses readonly query transport.
+ * Original request (2026-08-01): Settings labels Agent Integrations and delegates management to Config.
  */
 import type {
   LocalModelAssetLog,
@@ -1055,7 +1056,10 @@ const {
     )
     localModelsMock.refreshArtifacts.mockImplementation(async ({ modelId }) => {
       const resolvedModelId = modelId ?? 'onnx-community/opus-mt-en-zh'
-      const asset = await localModelsMock.state({ modelId: resolvedModelId, selectedGroupId: 'q8' })
+      const asset = await localModelsMock.state({
+        modelId: resolvedModelId,
+        selectedGroupId: 'q8',
+      })
       return {
         modelId: resolvedModelId,
         selectedGroupId: 'q8',
@@ -2158,7 +2162,11 @@ vi.mock('@/components/settings/openspec-settings-section', () => ({
 vi.mock('@/components/toc', () => ({
   generateTimelineScope: () => '',
   Toc: ({ className, items }: { className?: string; items: { id: string; label: string }[] }) => {
-    tocRenderMock({ className, itemIds: items.map((item) => item.id) })
+    tocRenderMock({
+      className,
+      itemIds: items.map((item) => item.id),
+      itemLabels: items.map((item) => item.label),
+    })
     return <aside data-testid="settings-toc" className={className} />
   },
   TocSection: ({ children }: { children?: ReactNode }) => <section>{children}</section>,
@@ -2908,7 +2916,9 @@ describe('Settings', { timeout: 10_000 }, () => {
       translation: { targetLanguage: 'zh-Hant' },
     })
     expect(updateConfigMock).not.toHaveBeenCalledWith({ translation: { enabled: true } })
-    expect(updateConfigMock).not.toHaveBeenCalledWith({ translation: { displayMode: 'bilingual' } })
+    expect(updateConfigMock).not.toHaveBeenCalledWith({
+      translation: { displayMode: 'bilingual' },
+    })
     expect(updateConfigMock).not.toHaveBeenCalledWith({ translation: { cacheEnabled: true } })
     expect(updateConfigMock).not.toHaveBeenCalledWith({
       translation: { targetLanguage: 'zh-Hant' },
@@ -5479,7 +5489,9 @@ describe('Settings', { timeout: 10_000 }, () => {
     await waitFor(
       () =>
         expect(
-          screen.getByLabelText('Downloaded', { selector: '[data-local-plan-action="downloaded"]' })
+          screen.getByLabelText('Downloaded', {
+            selector: '[data-local-plan-action="downloaded"]',
+          })
         ).toBeTruthy(),
       { timeout: 4000 }
     )
@@ -6445,7 +6457,9 @@ describe('Settings', { timeout: 10_000 }, () => {
     expect(screen.queryByLabelText('Translation test source text')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Open translation test' }))
     const dialog = screen.getByRole('dialog', { name: 'Translation Test', hidden: true })
-    const sourceText = within(dialog).getByRole('textbox', { name: 'Translation test source text' })
+    const sourceText = within(dialog).getByRole('textbox', {
+      name: 'Translation test source text',
+    })
     expect(sourceText).toHaveValue('')
     expect(sourceText).toHaveAttribute('placeholder', 'My name is Sarah and I live in London.')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Run Test' }))
@@ -6486,7 +6500,9 @@ describe('Settings', { timeout: 10_000 }, () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Open translation test' }))
     const dialog = screen.getByRole('dialog', { name: 'Translation Test', hidden: true })
-    const sourceText = within(dialog).getByRole('textbox', { name: 'Translation test source text' })
+    const sourceText = within(dialog).getByRole('textbox', {
+      name: 'Translation test source text',
+    })
     expect(sourceText).toHaveValue('')
     expect(sourceText).toHaveAttribute(
       'placeholder',
@@ -6817,6 +6833,7 @@ describe('Settings', { timeout: 10_000 }, () => {
       expect.objectContaining({
         className: expect.stringContaining('toc-page-sidebar'),
         itemIds: expect.arrayContaining(['settings-translation']),
+        itemLabels: expect.arrayContaining(['Agent Integrations']),
       })
     )
 

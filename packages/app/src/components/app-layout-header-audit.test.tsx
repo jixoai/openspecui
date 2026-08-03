@@ -211,14 +211,13 @@ describe('App header audit (8.6/8.7)', () => {
     expect(mobileHeader?.querySelector('a[href="/environment"]')).toBeNull()
   })
 
-  it('mounts direct favorite secondary navigation on mobile without accordion chrome', async () => {
+  it('hides Workspace secondary navigation in the compact mobile header', async () => {
     const { container } = await renderAt(<RouterProvider router={routerFor('/workspaces')} />)
     const mobileSecondary = container.querySelector(
       '[data-testid="mobile-workspaces-secondary-nav"]'
     )
-    await vi.waitFor(() => expect(mobileSecondary?.textContent).toContain('favorite-project'))
-    expect(mobileSecondary?.textContent).not.toContain('Running')
-    expect(mobileSecondary?.textContent).not.toContain('Favorites')
+    expect(mobileSecondary?.classList.contains('hidden')).toBe(true)
+    expect(mobileSecondary?.textContent).toBe('')
     expect(localStorage.getItem('openspecui-app:workspace-directory-catalog')).toBeNull()
   })
 

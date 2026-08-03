@@ -1,5 +1,12 @@
+/**
+ * Orthogonal intents (created 2026-08-01 Asia/Shanghai):
+ * 1. Present artifact identity, path, dependency blockers, and official workflow state.
+ * 2. Keep skipped visually distinct from done, ready, blocked, and physical output existence.
+ *
+ * Original request (2026-08-01): adapt OpenSpec 1.7 skipped artifact semantics without fabricating files.
+ */
 import type { ArtifactStatus } from '@openspecui/core'
-import { AlertTriangle, CheckCircle2, Circle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Circle, SkipForward } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 const statusConfig: Record<
@@ -7,6 +14,7 @@ const statusConfig: Record<
   { label: string; className: string; icon: typeof Circle }
 > = {
   done: { label: 'Done', className: 'text-emerald-500', icon: CheckCircle2 },
+  skipped: { label: 'Skipped', className: 'text-violet-500', icon: SkipForward },
   ready: { label: 'Ready', className: 'text-sky-500', icon: Circle },
   blocked: { label: 'Blocked', className: 'text-amber-500', icon: AlertTriangle },
 }

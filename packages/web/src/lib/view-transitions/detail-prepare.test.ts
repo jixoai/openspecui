@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prove detail View Transition preparation primes authoritative caches.
  * 2. Prove Git preparation includes the current repository binding token.
  * 3. Prove Git handoff provenance matches both the target entity and repository binding.
  * 4. Prove late detail preparation retains the selector-exact cache consumed by the detail hook.
+ * 5. Prove encoded recursive Spec routes prepare the complete owned or Store-qualified identity.
  *
  * Original request (2026-07-16): "3.7 Git exposes explicit code-repository and planning-repository scopes when they differ"
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git prefetch bindings.
@@ -207,6 +208,36 @@ describe('prepareRouteDetailViewTransition', () => {
       'spec.subscribeDocument:referenced:platform-a:alpha',
       document
     )
+  })
+
+  it.each([
+    {
+      pathname: '/specs/owned/platform%2Fauth',
+      identity: { kind: 'owned' as const, specId: 'platform/auth' },
+      cacheKey: 'spec.subscribeDocument:owned:platform/auth',
+    },
+    {
+      pathname: '/specs/referenced/platform-a/platform%2Fauth',
+      identity: {
+        kind: 'referenced' as const,
+        storeId: 'platform-a',
+        specId: 'platform/auth',
+      },
+      cacheKey: 'spec.subscribeDocument:referenced:platform-a:platform/auth',
+    },
+  ])('prepares recursive Spec route $pathname without flattening', async (fixture) => {
+    const document = { identity: fixture.identity }
+    specDocumentQueryMock.mockResolvedValue(document)
+
+    await expect(
+      prepareRouteDetailViewTransition({
+        intent: { area: 'main', kind: 'route-detail', direction: 'forward' },
+        pathname: fixture.pathname,
+      })
+    ).resolves.toBe('ready')
+
+    expect(specDocumentQueryMock).toHaveBeenCalledExactlyOnceWith(fixture.identity)
+    expect(primeSubscriptionCacheMock).toHaveBeenCalledExactlyOnceWith(fixture.cacheKey, document)
   })
 
   it('primes the change status subscription cache before a forward detail VT', async () => {

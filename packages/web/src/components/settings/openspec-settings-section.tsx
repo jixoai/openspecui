@@ -1,30 +1,28 @@
 /**
- * Orthogonal intents (created 2026-07-20 Asia/Shanghai):
- * 1. Compose Settings OpenSpec diagnostics and initialization from one Environment Global subscription.
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * 1. Compose Settings OpenSpec diagnostics with a read-only Agent Integrations projection.
+ * 2. Keep Environment diagnostics independent from Config-owned Agent management authority.
  *
  * Original request (2026-07-20): "Split OpenSpec diagnostics/initialization out of the oversized Settings route."
+ * Original request (2026-08-01): Settings only summarizes Agent state and links management to Config.
  */
 import { useEnvironmentGlobalConfigSubscription } from '@/lib/use-planning-config'
-import { useMemo } from 'react'
 import {
   OpenSpecSettingsDiagnosticsSection,
   type SettingsEnvironmentDiagnostics,
 } from './openspec-settings-diagnostics'
-import {
-  OpenSpecSettingsInitializationSection,
-  type SettingsToolDeliveryInput,
-} from './openspec-settings-initialization'
+import { OpenSpecSettingsAgentIntegrationsSection } from './openspec-settings-initialization'
 
 /** ToC positions owned by the parent Settings composition. */
 export interface OpenSpecSettingsSectionsProps {
   diagnosticsIndex: number
-  initializationIndex: number
+  agentIntegrationsIndex: number
 }
 
-/** Render live Settings diagnostics and tool initialization from independent facts. */
+/** Render live diagnostics and the read-only Agent Integrations summary. */
 export function OpenSpecSettingsSections({
   diagnosticsIndex,
-  initializationIndex,
+  agentIntegrationsIndex,
 }: OpenSpecSettingsSectionsProps) {
   const environment = useEnvironmentGlobalConfigSubscription()
   const environmentDiagnostics: SettingsEnvironmentDiagnostics = {
@@ -33,20 +31,6 @@ export function OpenSpecSettingsSections({
     refreshPending: environment.refreshPending,
     error: environment.error,
   }
-  const environmentCurrent =
-    !environment.isLoading &&
-    !environment.refreshPending &&
-    environment.error === null &&
-    environment.data !== null &&
-    environment.data !== undefined
-  const profile = environment.data?.profileState
-  const toolInput = useMemo<SettingsToolDeliveryInput | null>(
-    () =>
-      environmentCurrent && profile?.available && profile.delivery
-        ? { delivery: profile.delivery, workflows: [...profile.workflows] }
-        : null,
-    [environmentCurrent, profile]
-  )
 
   return (
     <>
@@ -54,12 +38,7 @@ export function OpenSpecSettingsSections({
         index={diagnosticsIndex}
         environment={environmentDiagnostics}
       />
-      <OpenSpecSettingsInitializationSection
-        index={initializationIndex}
-        input={toolInput}
-        environmentWaiting={environment.isLoading || environment.refreshPending}
-        environmentError={environment.error}
-      />
+      <OpenSpecSettingsAgentIntegrationsSection index={agentIntegrationsIndex} />
     </>
   )
 }

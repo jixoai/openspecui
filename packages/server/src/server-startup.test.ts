@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Prove server startup publishes its actual bound port and keeps the canonical embedded entry available while runtime observers warm up.
  * 2. Prove shutdown awaits HTTP settlement, remains idempotent, and continues across independent owner failures.
  * 3. Prove backend shutdown settles attached Planning-root streams and buffered projection CLI children without client cooperation.
@@ -12,6 +12,7 @@
  * Built-runtime defect (2026-07-30): Direct Web shutdown must await HTTP closure and retire non-cooperative WebSocket and buffered CLI children after one signal.
  * Owner-reported defect (2026-07-31): A managed directory launch published `http://localhost:0`, leaving its Workspace permanently offline.
  * Owner-reported defect (2026-07-31): A healthy external dev backend appeared offline because the dynamic local App origin was rejected by CORS.
+ * Original request (2026-08-01): OpenSpecUI 7 requires OpenSpec CLI 1.7 before projection work is admitted.
  */
 import {
   ConfigManager,
@@ -467,13 +468,19 @@ describe('server startup runtime contract', () => {
       await writeFile(
         runnerPath,
         [
-          "const { writeFileSync } = require('node:fs')",
-          "if (process.argv.includes('--version')) process.stdout.write('1.6.0\\n')",
-          'else {',
-          `  writeFileSync(${JSON.stringify(readyPath)}, process.argv.slice(2).join(' '))`,
+          "const { appendFileSync } = require('node:fs')",
+          'const args = process.argv.slice(2)',
+          "const command = args.join(' ')",
+          "if (command === '--version') process.stdout.write('1.7.0\\n')",
+          `else if (command === 'config path') process.stdout.write(${JSON.stringify(`${join(projectDir, 'global-config.json')}\n`)})`,
+          "else if (command === 'config list --json') process.stdout.write('{}\\n')",
+          "else if (command === 'config list') process.stdout.write('')",
+          "else if (command === 'store list --json') {",
+          `  appendFileSync(${JSON.stringify(readyPath)}, process.argv.slice(2).join(' ') + '\\n')`,
           "  process.on('SIGTERM', () => {})",
           '  setInterval(() => {}, 1_000)',
           '}',
+          "else process.stdout.write('{}\\n')",
         ].join('\n'),
         'utf8'
       )

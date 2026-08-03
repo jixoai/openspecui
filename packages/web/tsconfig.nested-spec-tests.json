@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/vite-env.d.ts",
+    "src/types/global.d.ts",
+    "src/lib/static-data-provider.references.test.ts",
+    "src/lib/static-data-provider.spec.test.ts",
+    "src/lib/view-transitions/detail-prepare.test.ts",
+    "src/routes/spec-list-navigation.test.tsx",
+    "src/ssg/entry-server.test.ts",
+    "../server/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

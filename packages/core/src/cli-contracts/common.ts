@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Model OpenSpec CLI diagnostics without reinterpreting their meaning.
  * 2. Preserve root selection provenance exactly as emitted by the CLI.
  * 3. Preserve direct Reference indexes and their upstream health evidence.
@@ -20,7 +20,13 @@ export const CliDiagnosticSchema = z
   .passthrough()
 
 /** Upstream provenance for the CLI-selected planning root. */
-export const CliRootSourceSchema = z.enum(['store', 'declared', 'nearest', 'implicit'])
+export const CliRootSourceSchema = z.enum([
+  'store',
+  'declared',
+  'nearest',
+  'global_default',
+  'implicit',
+])
 
 /** CLI-selected planning root with upstream selection provenance. */
 export const CliRootSchema = z

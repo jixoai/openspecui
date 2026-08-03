@@ -1,9 +1,7 @@
 node_modules/
-packages/app/public/native-icons/app-icon.icns
-packages/app/public/native-icons/app-icon.ico
-packages/app/public/native-icons/app-icon.json
-packages/app/public/native-icons/app-icon.png
-packages/app/public/native-icons/linux/
+# App native icon variants are generated into resources/app-icon/ (committed) and
+# projected into public/native-icons/app-icon/ at build time.
+packages/app/public/native-icons/app-icon/
 .svelte-kit/
 dist/
 dist-ssg/
@@ -21,6 +19,7 @@ tmp/
 codedb.snapshot
 GOAL.md
 .zcode/
+.vitest-attachments/
 
 # Atomic staging directory used by the watched Web-to-CLI asset sync.
 packages/cli/.web-sync-*/

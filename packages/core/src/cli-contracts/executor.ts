@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (created 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Build root-aware read and workflow command argv.
  * 2. Build Store inspection and mutation argv through the official CLI surface.
  * 3. Build strict validate/archive argv without implicit recovery behavior.
- * 4. Parse every invocation through its command-specific evidence schema.
+ * 4. Parse every invocation, including Archive Instructions, through its command-specific evidence schema.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  */
@@ -26,6 +26,7 @@ import {
 } from './store.js'
 import {
   CliApplyInstructionsSchema,
+  CliArchiveInstructionsSchema,
   CliArchiveSchema,
   CliArtifactInstructionsSchema,
   CliChangeListSchema,
@@ -38,6 +39,7 @@ import {
   CliWorkflowStatusSchema,
   type CliApplyInstructions,
   type CliArchive,
+  type CliArchiveInstructions,
   type CliArtifactInstructions,
   type CliChangeList,
   type CliSchemas,
@@ -188,6 +190,20 @@ export class OpenSpecCliContractExecutor {
     return this.execute(
       this.withWorkflowOptions(['instructions', 'apply', '--change', changeId, '--json'], options),
       CliApplyInstructionsSchema
+    )
+  }
+
+  /** Read complete Archive Instructions evidence for one change. */
+  async archiveInstructions(
+    changeId: string,
+    options: CliWorkflowOptions = {}
+  ): Promise<CliCommandResult<CliArchiveInstructions>> {
+    return this.execute(
+      this.withWorkflowOptions(
+        ['instructions', 'archive', '--change', changeId, '--json'],
+        options
+      ),
+      CliArchiveInstructionsSchema
     )
   }
 

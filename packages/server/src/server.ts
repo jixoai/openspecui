@@ -1,16 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Bootstrap the HTTP/tRPC server and launch-project runtime services.
- * 2. Delegate OpenSpec filesystem ownership to the CLI-selected planning-root manager.
- * 3. Host Server-local terminal/Root Context notifications, sound, preview-resource, and translation HTTP boundaries.
- * 4. Host tRPC and PTY WebSocket transports with deterministic teardown.
- *    PTY planning-root creation and workflow input verify opaque Root generation provenance.
- * 5. Own the runtime observation environment and external Codex command lease while deferring expensive
- *    root-scoped projections until a foreground consumer requests them; keep Store-list registry/mutation
- *    evidence distinct from selector-exact Store-root observation.
- * 6. Initialize backend OpenTelemetry tracing (--otel diagnostic only) and expose the resolved Tracer
- *    through Context so procedure/planning-root instrumentation stays branch-free.
- * 7. Admit dynamic loopback App origins while keeping remote browser origins explicitly allowlisted.
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * 1. Bootstrap HTTP/tRPC, WebSocket, PTY, and launch-project runtime services.
+ * 2. Delegate planning-root, Store, Environment Global, Agent, and Root Context projection ownership.
+ * 3. Host notifications, sound, preview-resource, translation, and telemetry boundaries.
+ * 4. Admit dynamic loopback App origins and perform deterministic runtime teardown.
+ * 5. Bridge settled machine-global config changes into Root Context replacement.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "Every Planning-root execution surface uses the same operation lifetime owner."
@@ -26,6 +20,8 @@
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Built-runtime defect (2026-07-30): Direct Web shutdown must await HTTP closure and retire non-cooperative WebSocket and buffered CLI children after one signal.
  * Original request (2026-07-31): Trace every Planning-root write lock with timing, source, and stack evidence.
+ * Original request (2026-08-01): adapt OpenSpec 1.7 machine `defaultStore` fallback.
+ * Original request (2026-08-01): move Agent delivery projection ownership into the Server runtime.
  *
  * @module server
  */
@@ -37,7 +33,6 @@ import {
   computeEnvUri,
   ConfigManager,
   CustomSoundHashSchema,
-  getExternalCodexCommandObservationRoot,
   GlobalSettingsManager,
   NotificationPublishInputSchema,
   OpenSpecAdapter,
@@ -83,6 +78,7 @@ import {
   isLoopbackHostname,
   type AccessGate,
 } from './access-gate.js'
+import { AgentDeliveryProjectionService } from './agent-delivery-projection-service.js'
 import { createChangesProjectionWorkOwner } from './changes-projection-service.js'
 import { Ct2ModelAssetService } from './ct2-model-asset-service.js'
 import {
@@ -142,7 +138,6 @@ import {
   createStoreProjectionWorkOwner,
   StoreProjectionService,
 } from './store-projection-service.js'
-import { ToolCommandObservationService } from './tool-command-observation-service.js'
 import { initTracing, shutdownTracing, type TracingConfig } from './tracing.js'
 import { createRuntimeSqliteTranslationCacheAdapter } from './translation-cache-adapter.js'
 import { getDefaultTranslationCacheDatabasePath } from './translation-cache-path.js'
@@ -266,22 +261,12 @@ export function createServer(config: ServerConfig) {
     storeObservation,
     observationEnvironment,
   })
-  const toolCommandObservation = new ToolCommandObservationService(
-    observationEnvironment,
-    getExternalCodexCommandObservationRoot()
-  )
   const codeGitBinding = new LaunchGitRepositoryBindingOwner()
   const projectionWorkRuntime = createServerProjectionWorkRuntime()
   const dashboardProjectionWorkOwner = createDashboardProjectionWorkOwner(projectionWorkRuntime)
   const changesProjectionWorkOwner = createChangesProjectionWorkOwner(projectionWorkRuntime)
   const storeProjectionWorkOwner = createStoreProjectionWorkOwner(projectionWorkRuntime)
   const planningCliProjectionWorkOwner = createPlanningCliProjectionWorkOwner(projectionWorkRuntime)
-  const environmentGlobalProjectionService = new EnvironmentGlobalProjectionService({
-    dataScope,
-    cliExecutor,
-    observationEnvironment,
-    workOwner: createEnvironmentGlobalProjectionWorkOwner(projectionWorkRuntime),
-  })
   const storeProjectionService = new StoreProjectionService({
     dataScopePath: dataScope.path,
     cliExecutor,
@@ -317,6 +302,21 @@ export function createServer(config: ServerConfig) {
     dataScopePath: dataScope.path,
     planningRootServices,
     workOwner: createRootContextProjectionWorkOwner(projectionWorkRuntime),
+  })
+  const environmentGlobalProjectionService = new EnvironmentGlobalProjectionService({
+    dataScope,
+    cliExecutor,
+    observationEnvironment,
+    workOwner: createEnvironmentGlobalProjectionWorkOwner(projectionWorkRuntime),
+    onConfigFileSettled: () => rootContextProjectionService.refresh(),
+  })
+  environmentGlobalProjectionService.start()
+  const agentDeliveryProjectionService = new AgentDeliveryProjectionService({
+    projectDir: config.projectDir,
+    environmentGlobalProjectionService,
+    observationEnvironment,
+    cliExecutor,
+    cliCommandAuthority: configManager,
   })
   const gitRepositoryBindings = new GitRepositoryBindingService({
     launchProjectDir: config.projectDir,
@@ -581,8 +581,8 @@ export function createServer(config: ServerConfig) {
         storeContentProjectionService,
         rootContextProjectionService,
         environmentGlobalProjectionService,
+        agentDeliveryProjectionService,
         storeMutationService,
-        toolCommandObservation,
         configManager,
         cliExecutor,
         projectRecoveryService,
@@ -630,8 +630,8 @@ export function createServer(config: ServerConfig) {
       storeContentProjectionService,
       rootContextProjectionService,
       environmentGlobalProjectionService,
+      agentDeliveryProjectionService,
       storeMutationService,
-      toolCommandObservation,
       configManager,
       cliExecutor,
       projectRecoveryService,
@@ -667,8 +667,8 @@ export function createServer(config: ServerConfig) {
     storeContentProjectionService,
     rootContextProjectionService,
     environmentGlobalProjectionService,
+    agentDeliveryProjectionService,
     storeObservationFallback,
-    toolCommandObservation,
     adapter,
     configManager,
     cliExecutor,
@@ -828,6 +828,7 @@ export async function createWebSocketServer(
         await settleCleanupPhase(failures, [() => server.rootContextNotificationBridge.dispose()])
         await settleCleanupPhase(failures, [() => server.storeProjectionService.dispose()])
         await settleCleanupPhase(failures, [() => server.storeContentProjectionService.dispose()])
+        await settleCleanupPhase(failures, [() => server.agentDeliveryProjectionService.dispose()])
         await settleCleanupPhase(failures, [
           () => server.environmentGlobalProjectionService.dispose(),
         ])
@@ -836,7 +837,6 @@ export async function createWebSocketServer(
         await settleCleanupPhase(failures, [() => server.projectionWorkRuntime.clear()])
         await settleCleanupPhase(failures, [() => server.storeObservation.dispose()])
         await settleCleanupPhase(failures, [() => server.dataHomeObserver.dispose()])
-        await settleCleanupPhase(failures, [() => server.toolCommandObservation.dispose()])
         await settleCleanupPhase(failures, [() => server.projectInvalidation.dispose()])
         await settleCleanupPhase(failures, [() => server.observationEnvironment.dispose()])
         await settleCleanupPhase(failures, [

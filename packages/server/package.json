@@ -15,11 +15,16 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "typecheck": "tsc -p tsconfig.check.json --noEmit && tsc -p tsconfig.search-tests.json --noEmit && tsc -p tsconfig.git-tests.json --noEmit && tsc -p tsconfig.transport-tests.json --noEmit && tsc -p tsconfig.pty-tests.json --noEmit",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit && tsc -p tsconfig.search-tests.json --noEmit && tsc -p tsconfig.git-tests.json --noEmit && tsc -p tsconfig.transport-tests.json --noEmit && tsc -p tsconfig.pty-tests.json --noEmit && tsc -p tsconfig.workflow-contract-tests.json --noEmit && tsc -p tsconfig.nested-spec-tests.json --noEmit && tsc -p tsconfig.default-store-tests.json --noEmit && tsc -p tsconfig.agent-delivery-tests.json --noEmit && tsc -p tsconfig.project-initialization-tests.json --noEmit",
+    "typecheck:agent-delivery-tests": "tsc -p tsconfig.agent-delivery-tests.json --noEmit",
     "typecheck:git-tests": "tsc -p tsconfig.git-tests.json --noEmit",
     "typecheck:pty-tests": "tsc -p tsconfig.pty-tests.json --noEmit",
     "typecheck:search-tests": "tsc -p tsconfig.search-tests.json --noEmit",
     "typecheck:transport-tests": "tsc -p tsconfig.transport-tests.json --noEmit",
+    "typecheck:workflow-contract-tests": "tsc -p tsconfig.workflow-contract-tests.json --noEmit",
+    "typecheck:nested-spec-tests": "tsc -p tsconfig.nested-spec-tests.json --noEmit",
+    "typecheck:project-initialization-tests": "tsc -p tsconfig.project-initialization-tests.json --noEmit",
+    "typecheck:default-store-tests": "tsc -p tsconfig.default-store-tests.json --noEmit",
     "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=development\" tsx watch --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest"

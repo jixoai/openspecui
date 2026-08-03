@@ -22,7 +22,7 @@
  */
 import { selectWorkspaceDirectoryCatalogView } from '@openspecui/core/workspace-directory-catalog'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
-import { Boxes, Settings, Store, type LucideIcon } from 'lucide-react'
+import { Boxes, PanelLeftClose, Settings, Store, type LucideIcon } from 'lucide-react'
 import { useEffect, useState, type CSSProperties } from 'react'
 import { ConnectionObservationProvider } from '../lib/connection-observation'
 import { MutationObservationProvider } from '../lib/mutation-observation-provider'
@@ -32,6 +32,7 @@ import {
 } from '../lib/running-backend-observation-provider'
 import { runSidebarViewTransition } from '../lib/sidebar-view-transition'
 import { StoresRuntimeProvider } from '../lib/stores-runtime'
+import { useHostedShellThemeState } from '../lib/use-hosted-shell-theme'
 import { useRouterContext } from '../lib/use-router-context'
 import { useTitlebarPresentation } from '../lib/use-titlebar-presentation'
 import { AppDaemonWorkspaceOwner, useAppDaemonWorkspace } from './app-daemon-workspace-owner'
@@ -86,6 +87,7 @@ function AppLayoutSurface() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const { appPresentation } = useRouterContext()
   const titlebar = useTitlebarPresentation(appPresentation === 'opentray-overlay')
+  const appTheme = useHostedShellThemeState()
   const workspacesVisible = pathname === '/workspaces'
   const hasOverlayTitlebar = titlebar.presentation.kind === 'opentray'
   const [workspacesMounted, setWorkspacesMounted] = useState(workspacesVisible)
@@ -151,7 +153,8 @@ function AppLayoutSurface() {
 
   return (
     <div
-      className="bg-background text-foreground flex h-dvh min-h-0 flex-col overflow-hidden"
+      className="text-foreground flex h-dvh min-h-0 flex-col overflow-hidden"
+      data-app-shell
       data-titlebar-presentation={titlebar.presentation.kind}
       data-testid="app-layout"
       style={rootStyle}
@@ -163,6 +166,9 @@ function AppLayoutSurface() {
         settingsActive={pathname === '/settings'}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
+        theme={appTheme.theme}
+        resolvedTheme={appTheme.resolvedTheme}
+        onToggleTheme={appTheme.toggleTheme}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -174,20 +180,35 @@ function AppLayoutSurface() {
           data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
         >
           {hasOverlayTitlebar ? null : (
-            <button
-              aria-expanded={!sidebarCollapsed}
-              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className={`text-muted-foreground hover:bg-muted hover:text-foreground mb-4 flex h-8 items-center rounded-md text-xs font-semibold uppercase tracking-wide transition-colors ${
-                sidebarCollapsed ? 'justify-center px-0' : 'gap-2 px-2'
-              }`}
-              data-app-sidebar-brand
-              onClick={toggleSidebar}
-              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              type="button"
+            <div
+              className={`mb-4 flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}
             >
-              <img aria-hidden="true" className="h-4 w-4 shrink-0" src="/icon.svg" alt="" />
-              <span className={sidebarCollapsed ? 'sr-only' : undefined}>OpenSpecUI App</span>
-            </button>
+              <button
+                aria-expanded={!sidebarCollapsed}
+                aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                className={`text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 items-center rounded-md text-xs font-semibold uppercase tracking-wide transition-colors ${
+                  sidebarCollapsed ? 'justify-center px-0' : 'gap-2 px-2'
+                }`}
+                data-app-sidebar-brand
+                onClick={toggleSidebar}
+                title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                type="button"
+              >
+                <img aria-hidden="true" className="h-4 w-4 shrink-0" src="/icon.svg" alt="" />
+                <span className={sidebarCollapsed ? 'sr-only' : undefined}>OpenSpecUI App</span>
+              </button>
+              {!sidebarCollapsed ? (
+                <button
+                  aria-label="Collapse sidebar"
+                  className="app-sidebar-toggle hover:bg-muted text-muted-foreground hover:text-foreground border-border inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
+                  onClick={toggleSidebar}
+                  title="Collapse sidebar"
+                  type="button"
+                >
+                  <PanelLeftClose aria-hidden="true" className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
           )}
           <nav className="flex min-h-0 min-w-0 flex-col gap-1 overflow-hidden">
             <AppNavLink
@@ -231,8 +252,9 @@ function AppLayoutSurface() {
         {/* 移动端顶栏 */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-app-shell-content>
           <header className="border-border bg-background/80 sticky top-0 z-10 flex items-center gap-1 border-b px-2 py-2 backdrop-blur md:hidden">
-            {(hasOverlayTitlebar ? APP_NAV_ITEMS : APP_NAV_ITEMS.concat(SETTINGS_ITEM)).map(
-              (item) => {
+            <img aria-hidden="true" className="h-4 w-4 shrink-0" src="/icon.svg" alt="" />
+            <div className="flex items-center gap-1">
+              {APP_NAV_ITEMS.map((item) => {
                 const Icon = item.icon
                 return (
                   <Link
@@ -248,29 +270,27 @@ function AppLayoutSurface() {
                     <span className="hidden sm:inline">{item.label}</span>
                   </Link>
                 )
-              }
-            )}
+              })}
+            </div>
+            <div className="flex-1" />
+            <Link
+              aria-label="Settings"
+              to={SETTINGS_ITEM.to}
+              className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs ${
+                isActive(SETTINGS_ITEM.to)
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              <Settings className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{SETTINGS_ITEM.label}</span>
+            </Link>
           </header>
           {isActive('/workspaces') ? (
-            <div
-              className="border-border bg-background max-h-40 overflow-y-auto border-b px-2 py-1 md:hidden"
-              data-testid="mobile-workspaces-secondary-nav"
-            >
-              <WorkspacesSecondaryNav
-                favorites={favoriteDirectories}
-                runningPaths={runningProjectPaths}
-                pendingPath={favoritePendingPath}
-                onSelect={openFavorite}
-              />
-              {favoriteLaunchError ? (
-                <p role="alert" className="text-destructive px-2 py-1 text-xs">
-                  {favoriteLaunchError}
-                </p>
-              ) : null}
-            </div>
+            <div className="hidden" data-testid="mobile-workspaces-secondary-nav" />
           ) : null}
           <main
-            className={`min-h-0 min-w-0 flex-1 ${workspacesVisible ? 'overflow-hidden' : 'overflow-auto'}`}
+            className={`bg-background min-h-0 min-w-0 flex-1 ${workspacesVisible ? 'overflow-hidden' : 'overflow-auto'}`}
             data-testid="app-main"
           >
             {workspacesMounted ? (
@@ -285,6 +305,7 @@ function AppLayoutSurface() {
                   fallbackLaunchRequest={null}
                   initialError={null}
                   onOpenTaskManager={() => setTaskManagerOpen(true)}
+                  appTheme={appTheme.theme}
                 />
               </div>
             ) : null}

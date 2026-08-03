@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Verify Archive dialog dismissal remains explicit.
  * 2. Verify Root Context controls readiness and explicit Store command selection.
  * 3. Verify strict archive diagnostics remain visible without synthesized retry.
- * 4. Verify Archive queues only its typed transport without caller-authored command evidence.
+ * 4. Verify Archive consumes selected-Root operation inputs before queuing its typed transport.
+ * 5. Prove Archive inputs and mutation share one exact Root generation.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
@@ -12,14 +13,21 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GlobalArchiveModal } from './global-archive-modal'
 
-const { closeArchiveModalMock, replaceAllMock, rootActionMock, runAllMock, runnerMock } =
-  vi.hoisted(() => ({
-    closeArchiveModalMock: vi.fn(),
-    replaceAllMock: vi.fn(),
-    rootActionMock: vi.fn(),
-    runAllMock: vi.fn(),
-    runnerMock: vi.fn(),
-  }))
+const {
+  archiveInstructionsStateMock,
+  closeArchiveModalMock,
+  replaceAllMock,
+  rootActionMock,
+  runAllMock,
+  runnerMock,
+} = vi.hoisted(() => ({
+  archiveInstructionsStateMock: vi.fn(),
+  closeArchiveModalMock: vi.fn(),
+  replaceAllMock: vi.fn(),
+  rootActionMock: vi.fn(),
+  runAllMock: vi.fn(),
+  runnerMock: vi.fn(),
+}))
 
 vi.mock('@/lib/archive-modal-context', () => ({
   useArchiveModal: () => ({
@@ -34,6 +42,10 @@ vi.mock('@/lib/archive-modal-context', () => ({
 
 vi.mock('@/lib/use-cli-runner', () => ({
   useCliRunner: () => runnerMock(),
+}))
+
+vi.mock('@/lib/use-opsx', () => ({
+  useOpsxArchiveInstructionsSubscription: () => archiveInstructionsStateMock(),
 }))
 
 vi.mock('@/lib/view-transitions/navigation', () => ({
@@ -65,6 +77,29 @@ describe('GlobalArchiveModal', () => {
       reset: vi.fn(),
       cancel: vi.fn(),
     })
+    archiveInstructionsStateMock.mockReset().mockReturnValue({
+      data: {
+        rootGeneration: 'planning-generation-a',
+        instructions: {
+          changeName: 'add-terminal-spawn-command',
+          context: 'Preserve terminal ownership.',
+          operationGuidance: ['Review the final delta before archiving.'],
+          evidence: {
+            command: 'instructions archive',
+            success: true,
+            stdout: '{}',
+            stderr: '',
+            exitCode: 0,
+            payload: {},
+            diagnostics: [],
+            selector: { store: 'shared' },
+          },
+        },
+      },
+      isLoading: false,
+      error: null,
+      authority: { state: 'current' },
+    })
     rootActionMock.mockReset().mockReturnValue({
       status: 'ready',
       disabled: false,
@@ -78,6 +113,7 @@ describe('GlobalArchiveModal', () => {
           status: [],
         },
         storeId: 'shared',
+        generation: 'planning-generation-a',
         cli: { available: true, version: '1.6.0' },
         references: [],
         contextMembers: [],
@@ -119,6 +155,7 @@ describe('GlobalArchiveModal', () => {
           type: 'archive-strict',
           input: {
             changeId: 'add-terminal-spawn-command',
+            expectedRootGeneration: 'planning-generation-a',
             noValidate: false,
             skipSpecs: false,
           },
@@ -126,6 +163,69 @@ describe('GlobalArchiveModal', () => {
       ])
     })
     expect(JSON.stringify(replaceAllMock.mock.calls)).not.toContain('--store')
+    expect(screen.getByText('Preserve terminal ownership.')).toBeTruthy()
+    expect(screen.getByText('Review the final delta before archiving.')).toBeTruthy()
+  })
+
+  it('does not queue Archive when current Root Context and inputs have different generations', () => {
+    const rootAction = rootActionMock()
+    rootActionMock.mockReturnValue({
+      ...rootAction,
+      context: { ...rootAction.context, generation: 'planning-generation-b' },
+    })
+
+    render(<GlobalArchiveModal />)
+
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeDisabled()
+    expect(replaceAllMock).not.toHaveBeenCalled()
+  })
+
+  it('does not queue Archive before selected-Root instructions settle', () => {
+    archiveInstructionsStateMock.mockReturnValue({
+      data: null,
+      isLoading: true,
+      error: null,
+      authority: { state: 'waiting', reason: 'initial' },
+    })
+
+    render(<GlobalArchiveModal />)
+
+    expect(replaceAllMock).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeDisabled()
+    expect(screen.getByText('Loading archive inputs…')).toBeTruthy()
+  })
+
+  it('retains stale Archive inputs for reading but revokes execution authority', () => {
+    archiveInstructionsStateMock.mockReturnValue({
+      data: {
+        rootGeneration: 'planning-generation-a',
+        instructions: {
+          changeName: 'add-terminal-spawn-command',
+          context: 'Retained Root A context.',
+          operationGuidance: ['Retained guidance.'],
+          evidence: {
+            command: 'instructions archive',
+            success: true,
+            stdout: '{}',
+            stderr: '',
+            exitCode: 0,
+            payload: {},
+            diagnostics: [],
+            selector: { store: 'root-a' },
+          },
+        },
+      },
+      isLoading: false,
+      error: null,
+      authority: { state: 'waiting', reason: 'rebind' },
+    })
+
+    render(<GlobalArchiveModal />)
+
+    expect(screen.getByText('Retained Root A context.')).toBeTruthy()
+    expect(screen.getByText('Refreshing archive inputs…')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeDisabled()
+    expect(replaceAllMock).not.toHaveBeenCalled()
   })
 
   it('does not queue or start archive while Root Context is blocked', () => {

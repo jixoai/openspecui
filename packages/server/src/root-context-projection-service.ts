@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (created 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Own Root Context as launch-scoped CLI Projection Work.
  * 2. Cache only settled typed Root Context results while dependencies drive invalidation.
- * 3. Expose immediate lifecycle Pull, data-free Push, explicit refresh, and legacy settled reads.
+ * 3. Expose lifecycle Pull/Push and refresh when OpenSpec 1.7 machine fallback evidence changes.
  *
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  */
@@ -110,7 +110,7 @@ export class RootContextProjectionService {
       },
       owner: { generation: null, gitBindingToken: null },
       selector: JSON.stringify({ dataScopePath: this.options.dataScopePath }),
-      inputFingerprint: 'openspec-cli-1.6:doctor+context',
+      inputFingerprint: 'openspec-cli-1.7:doctor+context+global-default',
       protocolVersion: 1,
     }
   }

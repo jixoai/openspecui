@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Gate Web compatibility from the shared Root Context CLI evidence only.
  * 2. Preserve session-only bypass and execute-path repair controls.
  * 3. Revalidate the shared Root Context Work through readonly refresh after explicit repair.
@@ -10,6 +10,8 @@
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  * Owner correction (2026-07-31): Root observation refresh is readonly despite internal cache invalidation.
+ * Original request (2026-08-01): "v7不兼容1.6.x，明确要求必须使用 v1.7.x。"
+ * Owner bypass-lifetime decision (2026-08-01): "仅当前页面会话有效"
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
@@ -74,10 +76,7 @@ export function CliHealthGate() {
 
   const compatibility = classifyOpenSpecCliVersion(data?.version)
 
-  if (
-    data?.available &&
-    (compatibility.status === 'current' || compatibility.status === 'compatible' || forceBypassed)
-  ) {
+  if (data?.available && (compatibility.supported || forceBypassed)) {
     return null
   }
 

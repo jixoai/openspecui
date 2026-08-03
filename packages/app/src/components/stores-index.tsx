@@ -123,7 +123,7 @@ export function StoresIndex({
             </span>
           ) : null}
         </h1>
-        <div className="@sm:flex-row @sm:items-center flex flex-col gap-2">
+        <div className="flex flex-row items-center gap-2">
           {environments.length > 0 ? (
             <select
               value={envUri}
@@ -168,10 +168,10 @@ export function StoresIndex({
               onClick={onNewStore}
               disabled={!envUri || !canCreateStore}
               title={createStoreUnavailableReason ?? 'Create or register a Store'}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium disabled:opacity-50"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 @[280px]:w-auto @[280px]:px-3 inline-flex h-8 w-8 items-center justify-center gap-1.5 rounded-md px-0 text-sm font-medium disabled:opacity-50"
             >
-              <Plus className="h-4 w-4" />
-              New Store
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="@[280px]:not-sr-only sr-only">New Store</span>
             </button>
           ) : null}
         </div>

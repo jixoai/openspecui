@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prove live card commands respect Root and projection authority.
  * 2. Prove Apply/Archive remain Operator callbacks rather than lane mutations.
  * 3. Prove archive drop resolves DataTransfer identity against current active rows.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-28): implement accessible commands and current-row archive drag.
  * Owner correction (2026-07-28): remove double horizontal scrolling and let each lane scroll vertically.
+ * Original request (2026-08-01): keep Kanban fixtures aligned with exact OpenSpec 1.7 artifact dependencies.
  */
 import { createTrackedTaskProgress } from '@openspecui/core/task-progress'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -45,7 +46,7 @@ const readyStatus = {
   schemaName: 'spec-driven',
   isComplete: false,
   applyRequires: ['proposal'],
-  artifacts: [{ id: 'proposal', outputPath: 'proposal.md', status: 'done' as const }],
+  artifacts: [{ id: 'proposal', outputPath: 'proposal.md', status: 'done' as const, requires: [] }],
   provenance: { kind: 'static' as const },
 }
 

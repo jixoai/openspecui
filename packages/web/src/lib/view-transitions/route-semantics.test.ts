@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * 1. Prove route families and levels match the visible application hierarchy.
+ * 2. Prove top, detail, and pop navigation resolve to the intended transition contract.
+ * 3. Keep route normalization edge cases covered without browser-owned animation assertions.
+ *
+ * Original request (2026-08-03): make every Config owner-to-owner navigation use View Transitions.
+ */
 import { describe, expect, it } from 'vitest'
 import { describeRouteSemantic, resolveViewTransitionIntent } from './route-semantics'
 
@@ -20,6 +28,23 @@ describe('describeRouteSemantic', () => {
       family: 'specs',
       level: 'detail',
     })
+  })
+
+  it('classifies every Config owner and Schema entity as Config detail', () => {
+    for (const path of [
+      '/config/project',
+      '/config/root',
+      '/config/environment',
+      '/config/agents',
+      '/config/schemas',
+      '/config/schemas/project%2Fschema',
+      '/config/context',
+    ]) {
+      expect(describeRouteSemantic(path)).toMatchObject({
+        family: 'config',
+        level: 'detail',
+      })
+    }
   })
 })
 
@@ -58,6 +83,20 @@ describe('resolveViewTransitionIntent', () => {
         area: 'main',
         fromPath: '/specs',
         toPath: '/specs/referenced/platform/auth',
+      })
+    ).toEqual({
+      area: 'main',
+      kind: 'route-detail',
+      direction: 'forward',
+    })
+  })
+
+  it('keeps Config owner-to-owner navigation in the detail transition family', () => {
+    expect(
+      resolveViewTransitionIntent({
+        area: 'main',
+        fromPath: '/config/project',
+        toPath: '/config/agents',
       })
     ).toEqual({
       area: 'main',

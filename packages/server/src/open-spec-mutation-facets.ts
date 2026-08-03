@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Classify supported OpenSpec CLI mutations by their affected runtime facets.
  * 2. Keep read-only and unknown commands free from fabricated invalidation claims.
  * 3. Preserve one server-owned mapping for buffered and streaming execution paths.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-15): "操作成功底层是要推送变更的，然后让多端基于订阅拉取更新。"
  * Original request (2026-07-26): "OpenSpec config home 和 data home 是不同的客观范围。"
+ * Original request (2026-08-02): project Init must refresh Config, Root, Schema, and Agent projections before success.
  */
 import type { RuntimeInvalidationFacet } from '@openspecui/core'
 
@@ -55,6 +56,7 @@ export function getOpenSpecMutationFacets(
   if (args.includes('--help') || args.includes('-h')) return null
   const command = findCommand(args)
   if (!command) return null
+  if (command === 'init') return PROJECT_SCHEMA_FACETS
   if (PROJECT_MUTATION_COMMANDS.has(command)) return PROJECT_CONTEXT_FACETS
 
   const commandArgs = args.slice(args.indexOf(command) + 1)

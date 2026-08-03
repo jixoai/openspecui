@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/export.test.ts",
+    "../local-translator/src/huggingface-transformers.d.ts",
+    "../server/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

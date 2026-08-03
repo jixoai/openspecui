@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Cross a real guarded Server and the App mutation-ledger WebSocket transport.
  * 2. Prove locator credentials admit only their matching transport.
  * 3. Prove real lifecycle data commits through the framework-neutral owner.
@@ -7,6 +7,7 @@
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Full-gate correction (2026-07-31): wait for the closed listener's port before asserting same-locator reconnect behavior.
+ * Full-gate correction (2026-08-03): allow bounded mutation settlement under full App-suite concurrency.
  */
 import type { AccessGateCredential } from '@openspecui/core'
 import { isPortAvailable, startServer, type RunningServer } from '@openspecui/server'
@@ -38,6 +39,7 @@ const credentialB: AccessGateCredential = {
 const runningServers: RunningServer[] = []
 const tempDirs: string[] = []
 const credentialLocators = new Set<string>()
+const PROJECTION_WAIT_TIMEOUT_MS = 20_000
 
 afterEach(async () => {
   for (const apiBaseUrl of credentialLocators) clearLaunchCredential(apiBaseUrl)
@@ -60,7 +62,7 @@ async function waitForProjection(
     const timeout = setTimeout(() => {
       unsubscribe()
       reject(new Error(`Timed out waiting for ${label}.`))
-    }, 10_000)
+    }, PROJECTION_WAIT_TIMEOUT_MS)
     const unsubscribe = owner.subscribe(() => {
       const projection = select()
       if (!projection || !predicate(projection)) return

@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Provide shared semantic badges with compact box geometry and domain-owned color.
+ * 2. Preserve pill geometry only for compact numeric counts and explicitly circular indicators.
+ *
+ * Original request (2026-08-02): generalize the reduced-radius status styling across similar UI surfaces.
+ */
 import { cn } from '@/lib/utils'
 import type { HTMLAttributes } from 'react'
 
@@ -32,7 +39,7 @@ const shapeClassNames: Record<BadgeShape, string> = {
 export function Badge({
   tone = 'primary',
   size = 'xs',
-  shape = 'pill',
+  shape = 'box',
   className,
   ...props
 }: BadgeProps) {
@@ -65,6 +72,7 @@ export function CountBadge({
   count,
   max = 99,
   hideWhenZero = false,
+  shape = 'pill',
   title,
   ...props
 }: CountBadgeProps) {
@@ -73,7 +81,7 @@ export function CountBadge({
   const value = formatCountBadgeValue(count, max)
 
   return (
-    <Badge title={title} {...props}>
+    <Badge title={title} shape={shape} {...props}>
       {value}
     </Badge>
   )

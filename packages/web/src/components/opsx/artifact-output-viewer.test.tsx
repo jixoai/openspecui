@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * 1. Verify live and archived artifact output uses the shared document viewer contract.
+ * 2. Verify spec glob rendering preserves OpenSpec semantic headings.
+ * 3. Prove intentionally skipped artifacts never subscribe to or advertise physical output.
+ *
+ * Original request (2026-08-01): adapt OpenSpec 1.7 skipped artifacts without fabricating files.
+ */
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ArtifactOutputViewer, ContentFallbackViewer } from './artifact-output-viewer'
@@ -89,6 +97,23 @@ describe('ArtifactOutputViewer', () => {
     expect(
       within(content as HTMLElement).getByRole('heading', { name: 'Archived Summary' })
     ).toBeTruthy()
+    expect(artifactOutputMock).not.toHaveBeenCalled()
+    expect(globArtifactFilesMock).not.toHaveBeenCalled()
+  })
+
+  it('renders skipped artifacts without subscribing to physical output', () => {
+    render(
+      <ArtifactOutputViewer
+        changeId="skip-specs"
+        artifact={{ id: 'specs', outputPath: 'specs/**/*.md', status: 'skipped' }}
+      />
+    )
+
+    expect(screen.getByText(/This artifact is intentionally skipped by the Change/)).toBeTruthy()
+    expect(
+      screen.getByText(/No output file exists and no generation action is available/)
+    ).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
     expect(artifactOutputMock).not.toHaveBeenCalled()
     expect(globArtifactFilesMock).not.toHaveBeenCalled()
   })

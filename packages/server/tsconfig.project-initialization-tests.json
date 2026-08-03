@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.check.json",
+  "include": [
+    "src/project-initialization-operation.ts",
+    "src/project-initialization-router.typecheck.ts",
+    "../local-translator/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

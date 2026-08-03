@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * 1. Prove Adapter document reads and writes remain physically scoped and reactive.
+ * 2. Prove recursive Spec identities retain every segment across list, read, and write.
+ * 3. Prove schema-neutral Change and Archive projections preserve workflow evidence.
+ * 4. Prove filesystem symlink and traversal boundaries reject physical-root escape.
+ *
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
+ */
 import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -5,6 +14,7 @@ import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
 import { OpenSpecAdapter } from './adapter.js'
 import { clearCache, ReactiveContext, reactiveReadFile } from './reactive-fs/index.js'
 import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
+import type { ChangeFile } from './schemas.js'
 
 describe('OpenSpecAdapter change files', () => {
   let tempDir: string
@@ -133,6 +143,37 @@ describe('OpenSpecAdapter change files', () => {
     await secondListStream.return(undefined)
   })
 
+  it('lists, reads, and writes a recursive Spec identity without flattening', async () => {
+    await adapter.writeSpec('platform/auth', '# Platform Auth\n')
+
+    await expect(adapter.listSpecs()).resolves.toContain('platform/auth')
+    await expect(adapter.readSpecRaw('platform/auth')).resolves.toBe('# Platform Auth\n')
+    await expect(
+      readFile(join(tempDir, 'openspec', 'specs', 'platform', 'auth', 'spec.md'), 'utf8')
+    ).resolves.toBe('# Platform Auth\n')
+  })
+
+  it('fails loudly on Spec discovery errors and sorts recursive ids by code point', async () => {
+    await Promise.all([
+      adapter.writeSpec('alpha', '# Alpha\n'),
+      adapter.writeSpec('Zed', '# Zed\n'),
+      adapter.writeSpec('Ångstrom/nested', '# Angstrom\n'),
+    ])
+    await expect(adapter.listSpecs()).resolves.toEqual(['Zed', 'alpha', 'Ångstrom/nested'])
+
+    const invalidRoot = await createTempDir()
+    try {
+      await mkdir(join(invalidRoot, 'openspec'), { recursive: true })
+      await writeFile(join(invalidRoot, 'openspec', 'specs'), 'not a directory', 'utf8')
+      clearCache()
+      await expect(new OpenSpecAdapter(invalidRoot).listSpecs()).rejects.toMatchObject({
+        code: 'ENOTDIR',
+      })
+    } finally {
+      await cleanupTempDir(invalidRoot)
+    }
+  })
+
   it('settles newly created entity files for two directory subscribers', async () => {
     const firstContext = new ReactiveContext()
     const secondContext = new ReactiveContext()
@@ -143,13 +184,15 @@ describe('OpenSpecAdapter change files', () => {
     const firstUpdate = (async () => {
       while (true) {
         const result = await firstStream.next()
-        if (result.value?.some((file) => file.path === 'notes/reactive.md')) return result
+        if (result.value?.some((file: ChangeFile) => file.path === 'notes/reactive.md'))
+          return result
       }
     })()
     const secondUpdate = (async () => {
       while (true) {
         const result = await secondStream.next()
-        if (result.value?.some((file) => file.path === 'notes/reactive.md')) return result
+        if (result.value?.some((file: ChangeFile) => file.path === 'notes/reactive.md'))
+          return result
       }
     })()
 

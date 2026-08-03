@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:dist": "vite build --watch",
-    "build": "vite build",
+    "build": "pnpm -w build:native-icons && vite build",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.p2-tests.json --noEmit && tsc -p tsconfig.p3b-tests.json --noEmit && tsc -p tsconfig.p3c-tests.json --noEmit && tsc -p tsconfig.p4-tests.json --noEmit",
     "typecheck:p3b-tests": "tsc -p tsconfig.p3b-tests.json --noEmit",
     "typecheck:p3c-tests": "tsc -p tsconfig.p3c-tests.json --noEmit",

@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prove static provider hydrates compound referenced Spec routes and bodies.
  * 2. Prove static snapshot policy never becomes fabricated live CLI evidence.
  * 3. Prove omit/none policy produces an explicit omission error without leaking Store ids.
  * 4. Prove static Catalog retains omit, none, and unavailable Reference policy facts.
- * 5. Prove static search scopes referenced Specs to 'referenced-specs' only.
+ * 5. Prove static search scopes recursive referenced Specs with shared display paths.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  * Section 7.9/7.10 static parity coverage.
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  */
 import type { ExportSnapshot } from '@openspecui/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -35,13 +36,13 @@ function baseMeta(): ExportSnapshot['meta'] {
   }
 }
 
-function referencedSpec(): ExportSnapshot['specs'][number] {
+function referencedSpec(specId = 'auth'): ExportSnapshot['specs'][number] {
   return {
-    identity: { kind: 'referenced', storeId: 'team', specId: 'auth' },
+    identity: { kind: 'referenced', storeId: 'team', specId },
     source: 'referenced',
     readOnly: true,
     storeId: 'team',
-    id: 'auth',
+    id: specId,
     name: 'Team Auth',
     content: '# Team Auth\noverview body',
     overview: 'overview body',
@@ -237,5 +238,30 @@ describe('static-data-provider references', () => {
     expect(specDoc).toBeDefined()
     expect(specDoc?.scope).toBe('referenced-specs')
     expect(specDoc?.href).toBe('/specs/referenced/team/auth')
+    expect(specDoc?.path).toBe('referenced:team:specs/auth/spec.md')
+  })
+
+  it('preserves recursive referenced identity through static detail and search', async () => {
+    staticState.snapshot = snapshotWith([referencedSpec('platform/auth')], {
+      kind: 'include',
+      referenceSources: [{ storeId: 'team', state: 'ready', specCount: 1 }],
+    })
+    const { getSearchDocuments, getSpecDocument } = await import('./static-data-provider')
+
+    await expect(
+      getSpecDocument({ kind: 'referenced', storeId: 'team', specId: 'platform/auth' })
+    ).resolves.toMatchObject({
+      identity: { kind: 'referenced', storeId: 'team', specId: 'platform/auth' },
+      state: 'ready',
+    })
+    await expect(getSearchDocuments()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'spec:referenced:team:platform%2Fauth',
+          href: '/specs/referenced/team/platform%2Fauth',
+          path: 'referenced:team:specs/platform/auth/spec.md',
+        }),
+      ])
+    )
   })
 })

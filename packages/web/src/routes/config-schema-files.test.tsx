@@ -1,19 +1,20 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
- * 1. Exercise the Config route's independent Schema-files subscription topology.
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Exercise the Schema detail route's independent Schema-files subscription topology.
  * 2. Reach the real FileExplorer empty branches without a downstream mock.
  * 3. Preserve retained Schema-file selection when the projection has terminal error evidence.
  * 4. Distinguish initial unknown, terminal error, retained error, and settled-empty success facts.
+ * 5. Keep the Schema detail workspace directly returnable to its route-owned catalog.
  *
  * Owner-reported debt (2026-07-22): "整个过程中，几乎都在 Loading。"
  * Review finding (2026-07-23): Schema-files errors must not be projected as an empty FileExplorer.
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
- * Owner Context direction (2026-07-29): keep Config title actions inside the route test boundary.
+ * Owner Config-workbench decision (2026-08-01): preserve Schema file states inside `/config/schemas/:id`.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Config } from './config'
+import { ConfigSchemaWorkspace } from './config-schema-detail'
 
 const { configBundleMock, rootActionMock, schemaFilesMock } = vi.hoisted(() => ({
   configBundleMock: vi.fn(),
@@ -143,7 +144,7 @@ vi.mock('@/lib/use-root-action-state', () => ({
 }))
 
 function renderSchemaFiles() {
-  return render(<Config />)
+  return render(<ConfigSchemaWorkspace schemaId="project-schema" onNavigate={() => undefined} />)
 }
 
 describe('Config Schema-files projection topology', () => {
@@ -181,12 +182,20 @@ describe('Config Schema-files projection topology', () => {
       error: null,
     })
     schemaFilesMock.mockReset().mockReturnValue({ data: [], isLoading: false, error: null })
-    window.history.replaceState(null, '', '/config?configTab=schema:project-schema')
   })
 
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+  })
+
+  it('links the focused Schema detail workspace back to the Schema catalog', () => {
+    renderSchemaFiles()
+
+    expect(screen.getByRole('link', { name: 'Back to Schemas' })).toHaveAttribute(
+      'href',
+      '/config/schemas'
+    )
   })
 
   it('shows initial Schema-files loading without mounting a false empty FileExplorer', () => {

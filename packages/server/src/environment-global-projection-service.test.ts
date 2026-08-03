@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (created 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prove the CLI-resolved Environment Global config path remains a create/change/remove dependency.
  * 2. Prove Environment Global refresh failure retains the prior snapshot as display-only.
  * 3. Prove Environment Global lifecycle Push carries no config or failure business payload.
  * 4. Prove dynamic CLI path replacement retires the old physical dependency.
+ * 5. Keep Environment and Root refresh alive only after dependency-driven config-file settlement.
  *
  * Original request (2026-07-26): "将这些变更信息收集起来作为触发器，更新底层幂等计算的缓存结果。"
  */
@@ -31,7 +32,11 @@ function successfulResult(stdout: string): CliResult {
   return { success: true, stdout, stderr: '', exitCode: 0 }
 }
 
-async function createFixture(options: { configPath: string; initialContent?: string }) {
+async function createFixture(options: {
+  configPath: string
+  initialContent?: string
+  onConfigFileSettled?: () => void
+}) {
   const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-environment-projection-'))
   if (options.initialContent !== undefined) {
     await mkdir(dirname(options.configPath), { recursive: true })
@@ -40,11 +45,12 @@ async function createFixture(options: { configPath: string; initialContent?: str
   const cliExecutor = new CliExecutor(new ConfigManager(projectDir), projectDir)
   let executionFailure: Error | null = null
   let resolvedConfigPath = options.configPath
+  let configJson: Record<string, unknown> = { profile: 'core', delivery: 'both' }
   const execute = vi.spyOn(cliExecutor, 'execute').mockImplementation(async (args) => {
     if (executionFailure) throw executionFailure
     if (args.join(' ') === 'config path') return successfulResult(`${resolvedConfigPath}\n`)
     if (args.join(' ') === 'config list --json') {
-      return successfulResult(JSON.stringify({ profile: 'core', delivery: 'both' }))
+      return successfulResult(JSON.stringify(configJson))
     }
     if (args.join(' ') === 'config list') return successfulResult('Profile is in sync.')
     throw new Error(`Unexpected CLI arguments: ${args.join(' ')}`)
@@ -61,6 +67,7 @@ async function createFixture(options: { configPath: string; initialContent?: str
     cliExecutor,
     observationEnvironment,
     workOwner: createEnvironmentGlobalProjectionWorkOwner(runtime),
+    onConfigFileSettled: options.onConfigFileSettled,
   })
   return {
     execute,
@@ -69,6 +76,9 @@ async function createFixture(options: { configPath: string; initialContent?: str
     },
     setConfigPath(path: string) {
       resolvedConfigPath = path
+    },
+    setConfigJson(config: Record<string, unknown>) {
+      configJson = config
     },
     projectDir,
     invalidation,
@@ -83,11 +93,53 @@ function containsBusinessData(notice: CliProjectionNotice): boolean {
 }
 
 describe('EnvironmentGlobalProjectionService', () => {
+  it('keeps config-file observation alive and refreshes Environment plus Root without a file consumer', async () => {
+    clearCache()
+    const baseDir = await mkdtemp(join(tmpdir(), 'openspecui-global-config-bridge-'))
+    const configPath = join(baseDir, 'config.json')
+    const initialContent = '{"profile":"core"}\n'
+    const onConfigFileSettled = vi.fn()
+    const fixture = await createFixture({ configPath, initialContent, onConfigFileSettled })
+    const subscription = fixture.service.subscribe(() => {})
+
+    try {
+      await vi.waitFor(() => {
+        expect(fixture.service.read()).toMatchObject({
+          state: 'ready',
+          data: { defaultStore: { state: 'absent', id: null } },
+        })
+      })
+
+      fixture.setConfigJson({ profile: 'core', defaultStore: 'team-plans' })
+      await writeFile(configPath, '{"profile":"core","defaultStore":"team-plans"}\n', 'utf8')
+
+      await vi.waitFor(() => {
+        expect(fixture.service.read()).toMatchObject({
+          state: 'ready',
+          invalidationCause: 'dependency',
+          data: { defaultStore: { state: 'configured', id: 'team-plans' } },
+        })
+      })
+      expect(onConfigFileSettled).toHaveBeenCalledOnce()
+    } finally {
+      subscription.unsubscribe()
+      await fixture.service.dispose()
+      fixture.runtime.clear()
+      fixture.execute.mockRestore()
+      await fixture.observationEnvironment.dispose()
+      clearCache()
+      await closeAllWatchers()
+      await rm(fixture.projectDir, { recursive: true, force: true })
+      await rm(baseDir, { recursive: true, force: true })
+    }
+  })
+
   it('recomputes when the CLI-resolved config file is created, changed, and removed', async () => {
     clearCache()
     const baseDir = await mkdtemp(join(tmpdir(), 'openspecui-global-config-'))
     const configPath = join(baseDir, 'config.json')
-    const fixture = await createFixture({ configPath })
+    const onConfigFileSettled = vi.fn()
+    const fixture = await createFixture({ configPath, onConfigFileSettled })
     const notices: CliProjectionNotice[] = []
     const subscription = fixture.service.subscribe((notice) => notices.push(notice))
     const fileSubscription = fixture.service.subscribeFile(() => {})
@@ -137,7 +189,8 @@ describe('EnvironmentGlobalProjectionService', () => {
           snapshotGeneration: 4,
         })
       })
-      expect(fixture.execute).toHaveBeenCalledTimes(3)
+      expect(fixture.execute).toHaveBeenCalledTimes(12)
+      expect(onConfigFileSettled).toHaveBeenCalledTimes(3)
       expect(notices.every((notice) => !containsBusinessData(notice))).toBe(true)
     } finally {
       subscription.unsubscribe()

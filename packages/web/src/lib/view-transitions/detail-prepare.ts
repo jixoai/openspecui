@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Prime detail data into the exact cache consumed after forward route View Transitions.
- * 2. Preserve entity identity for Spec, Change, Archive, and Git detail routes.
+ * 2. Preserve recursive Spec identity plus Change, Archive, and Git detail routes.
  * 3. Keep Git prefetch repository binding aligned with the target route URL.
  * 4. Make cold detail preparation opportunistic within the route commit budget.
  *
@@ -9,6 +9,7 @@
  * Derived requirement (2026-07-19): Checkpoint 6.11 retires stale Git repository bindings.
  * Owner request (2026-07-23): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
  * Derived requirement (2026-07-23): Cold detail prefetch must commit without waiting beyond its bounded budget.
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  */
 import { getGitEntryMetaQueryKey, parseGitRepositoryScope } from '@/lib/git-panel'
 import * as StaticProvider from '@/lib/static-data-provider'

@@ -1,10 +1,12 @@
 /**
  * @vitest-environment node
  *
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
- * 1. Prove SSG enumerates and titles Owned Specs through compound identity.
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * 1. Prove SSG enumerates and titles owned and referenced recursive Spec identity.
  * 2. Prove the static server entry imports and renders without browser globals.
  * 3. Prove Config-owned Resolved Context and objective Kanban are generated through the static route manifest.
+ * 4. Keep machine Environment configuration outside the static Context publication boundary.
+ * 5. Prove static Config publishes only Active Root, Schema catalog/detail, and Context routes.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  * Derived requirement (2026-07-18): Static HTML pre-render must not evaluate browser-only toolkit modules.
@@ -12,6 +14,9 @@
  * Original request (2026-07-28): static Board uses the shared ReadonlyKanban.
  * Original request (2026-07-28): keep static provenance accessible after verbose evidence is collapsed.
  * Owner Context direction (2026-07-29): publish only `/config/context`, with no `/context` alias.
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
+ * Owner Config-workbench decision (2026-08-01): do not generate `/config/agents` in static exports.
+ * Owner Config-workbench decision (2026-08-01): publish read-only Config routes without Project or Environment authority.
  */
 import type { ExportSnapshot } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
@@ -45,9 +50,51 @@ function snapshot(): ExportSnapshot {
         createdAt: 1,
         updatedAt: 2,
       },
+      {
+        identity: { kind: 'referenced', storeId: 'team', specId: 'platform/auth' },
+        source: 'referenced',
+        readOnly: true,
+        storeId: 'team',
+        id: 'platform/auth',
+        name: 'Team Platform Auth',
+        content: '# Team Platform Auth',
+        overview: '',
+        requirements: [],
+        createdAt: 1,
+        updatedAt: 2,
+      },
     ],
     changes: [],
     archives: [],
+    opsx: {
+      configYaml: 'schema: spec-driven',
+      schemas: [
+        {
+          name: 'spec-driven',
+          description: 'Default workflow',
+          artifacts: [],
+          source: 'package',
+        },
+      ],
+      schemaDetails: {
+        'spec-driven': {
+          name: 'spec-driven',
+          description: 'Default workflow',
+          artifacts: [],
+          applyRequires: [],
+        },
+      },
+      schemaResolutions: {
+        'spec-driven': {
+          name: 'spec-driven',
+          source: 'package',
+          path: 'schemas/spec-driven',
+          shadows: [],
+        },
+      },
+      templates: {},
+      changeMetadata: {},
+    },
   }
 }
 
@@ -55,21 +102,56 @@ describe('static Spec routes', () => {
   it('enumerates and titles the compound Owned route', () => {
     const data = snapshot()
     expect(getRoutes(data)).toContain('/specs/owned/auth%2Fv2')
+    expect(getRoutes(data)).toContain('/specs/referenced/team/platform%2Fauth')
     expect(getRoutes(data)).toContain('/config/context')
+    expect(getRoutes(data)).toContain('/config/root')
+    expect(getRoutes(data)).toContain('/config/schemas')
+    expect(getRoutes(data)).toContain('/config/schemas/spec-driven')
+    expect(getRoutes(data)).not.toContain('/config/project')
+    expect(getRoutes(data)).not.toContain('/config/environment')
+    expect(getRoutes(data)).not.toContain('/config/agents')
     expect(getRoutes(data)).not.toContain('/context')
     expect(getRoutes(data)).toContain('/board')
     expect(getTitle('/config/context', data)).toBe('Resolved Context')
+    expect(getTitle('/config/root', data)).toBe('Active Root')
+    expect(getTitle('/config/schemas', data)).toBe('Schemas')
+    expect(getTitle('/config/schemas/spec-driven', data)).toBe('Schema: spec-driven')
     expect(getTitle('/board', data)).toBe('Kanban')
     expect(getTitle('/specs/owned/auth%2Fv2', data)).toBe('Auth V2')
+    expect(getTitle('/specs/referenced/team/platform%2Fauth', data)).toBe('Team Platform Auth')
     expect(getRoutes(data)).not.toContain('/specs/auth%2Fv2')
   })
+
+  it.each(['../secret', 'platform//auth', '/platform/auth', '%2e%2e%2fsecret'])(
+    'rejects unsafe snapshot Spec identity %j before route generation',
+    (specId) => {
+      const data = snapshot()
+      const firstSpec = data.specs[0]
+      if (!firstSpec) throw new Error('Expected one owned Spec fixture.')
+      firstSpec.identity = { kind: 'owned', specId }
+      firstSpec.id = specId
+
+      expect(() => getRoutes(data)).toThrow(/Invalid specId/)
+    }
+  )
 
   it('imports and renders the static server entry without browser globals', async () => {
     expect(globalThis).not.toHaveProperty('document')
     const { render } = await import('./entry-server')
 
     await expect(render('/dashboard', snapshot(), '/')).resolves.toContain('Dashboard')
-  }, 20_000)
+    await expect(render('/config/root', snapshot(), '/')).resolves.toContain('Active Root')
+    await expect(render('/config/schemas', snapshot(), '/')).resolves.toContain(
+      'Browse resolved OpenSpec workflow schemas'
+    )
+    await expect(render('/config/schemas/spec-driven', snapshot(), '/')).resolves.toContain(
+      'Schema: spec-driven'
+    )
+    await expect(render('/specs/owned/auth%2Fv2', snapshot(), '/')).resolves.toContain('auth/v2')
+    await expect(
+      render('/specs/referenced/team/platform%2Fauth', snapshot(), '/')
+    ).resolves.toContain('platform/auth')
+  }, 30_000)
 
   it('renders published Context provenance into the static server output', async () => {
     const { render } = await import('./entry-server')
@@ -81,5 +163,6 @@ describe('static Spec routes', () => {
     expect(html).toContain('aria-label="Static Context evidence boundary"')
     expect(html).toContain('Published Reference policy')
     expect(html).not.toContain('XDG_DATA_HOME')
-  }, 20_000)
+    expect(html).not.toContain('defaultStore')
+  }, 30_000)
 })

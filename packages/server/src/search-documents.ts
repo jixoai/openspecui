@@ -1,14 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Project Planning-root Specs, Changes, and Archives into search documents.
  * 2. Preserve compound identity for read-only Referenced Specs.
- * 3. Apply processed document reads without flattening entity provenance.
+ * 3. Share recursive Spec display paths across live and static search.
+ * 4. Apply processed document reads without flattening entity provenance.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  */
 import type { OpenSpecAdapter, OpsxEntityReadOptions, OpsxEntityStage } from '@openspecui/core'
 import {
+  specDocumentDisplayPath,
   specIdentityKey,
   specRoutePath,
   type ReferencedSpecCatalogEntry,
@@ -52,7 +55,7 @@ export async function collectSearchDocuments(
       scope: 'active-root',
       title: spec.name,
       href: specRoutePath(identity),
-      path: `owned:openspec/specs/${spec.id}/spec.md`,
+      path: specDocumentDisplayPath(identity),
       content: typeof raw === 'string' ? raw : raw.markdown,
       updatedAt: spec.updatedAt,
     })
@@ -65,7 +68,7 @@ export async function collectSearchDocuments(
       scope: 'referenced-specs',
       title: spec.name,
       href: specRoutePath(spec.identity),
-      path: `referenced:${spec.identity.storeId}:specs/${spec.identity.specId}`,
+      path: specDocumentDisplayPath(spec.identity),
       content: `Requirement count: ${spec.requirementCount}`,
       updatedAt: 0,
     })

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.check.json",
+  "include": [
+    "src/agent-integrations-router.test.ts",
+    "src/agent-delivery-projection-service.test.ts",
+    "src/agent-delivery-projection-service.ts",
+    "src/environment-global-projection-service.ts",
+    "../local-translator/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

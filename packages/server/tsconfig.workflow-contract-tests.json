@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.check.json",
+  "include": [
+    "src/archive-router-subscription.test.ts",
+    "src/workflow-invocation-service.test.ts",
+    "../local-translator/src/huggingface-transformers.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

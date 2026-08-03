@@ -1,21 +1,25 @@
 /**
- * Orthogonal intents (updated 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Run one Server-owned strict-validate-then-archive stream with explicit user options.
  * 2. Keep Root Context and Store selector derivation outside the browser command payload.
  * 3. Lock execution until Root Context is ready and show failed-attempt evidence.
- * 4. Queue Archive through one typed transport without independent command evidence.
+ * 4. Require selected-Root Archive Instructions before queuing the typed mutation transport.
+ * 5. Bind displayed Archive inputs and mutation admission to one exact Root generation.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
+ * Review correction (2026-08-01): prevent Root A guidance from authorizing an Archive mutation on Root B.
  */
 import { useArchiveModal } from '@/lib/archive-modal-context'
 import { useCliRunner } from '@/lib/use-cli-runner'
+import { useOpsxArchiveInstructionsSubscription } from '@/lib/use-opsx'
 import { useRootActionState } from '@/lib/use-root-action-state'
 import { useVTHrefNavigate } from '@/lib/view-transitions/navigation'
 import { Archive, CheckCircle, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { CliTerminal } from './cli-terminal'
 import { Dialog } from './dialog'
+import { OperationInputs } from './opsx/operation-inputs'
 import { RootActionNotice } from './root-action-notice'
 import { Switch } from './switch'
 
@@ -24,6 +28,17 @@ export function GlobalArchiveModal() {
   const { state, closeArchiveModal } = useArchiveModal()
   const rootAction = useRootActionState()
   const { open, changeId, changeName } = state
+  const archiveInstructionsState = useOpsxArchiveInstructionsSubscription({
+    change: open ? changeId : undefined,
+  })
+  const archiveProjection = archiveInstructionsState.data
+  const archiveInstructions = archiveProjection?.instructions
+  const archiveInstructionsCurrent = archiveInstructionsState.authority.state === 'current'
+  const archiveGenerationCurrent =
+    archiveProjection !== null &&
+    archiveProjection !== undefined &&
+    rootAction.context?.generation === archiveProjection.rootGeneration
+  const archiveExecutionReady = archiveInstructionsCurrent && archiveGenerationCurrent
 
   const [skipSpecs, setSkipSpecs] = useState(false)
   const [noValidate, setNoValidate] = useState(false)
@@ -61,14 +76,29 @@ export function GlobalArchiveModal() {
   }
 
   const buildQueue = useCallback(() => {
-    if (!changeId || rootAction.disabled) return []
+    if (!changeId || rootAction.disabled || !archiveInstructions || !archiveExecutionReady) {
+      return []
+    }
     return [
       {
         type: 'archive-strict' as const,
-        input: { changeId, skipSpecs, noValidate },
+        input: {
+          changeId,
+          expectedRootGeneration: archiveProjection.rootGeneration,
+          skipSpecs,
+          noValidate,
+        },
       },
     ]
-  }, [changeId, noValidate, rootAction.disabled, skipSpecs])
+  }, [
+    archiveInstructions,
+    archiveExecutionReady,
+    archiveProjection,
+    changeId,
+    noValidate,
+    rootAction.disabled,
+    skipSpecs,
+  ])
 
   const isRunning = status === 'running'
   const isArchiveSuccess = status === 'success' && !!detectedArchiveId
@@ -78,7 +108,7 @@ export function GlobalArchiveModal() {
 
   // 开始执行 archive（若之前失败则自动重置并重跑）
   const handleStartArchive = () => {
-    if (!changeId || rootAction.disabled) return
+    if (!changeId || rootAction.disabled || !archiveInstructions || !archiveExecutionReady) return
     commands.runAll()
   }
 
@@ -90,10 +120,28 @@ export function GlobalArchiveModal() {
   }
 
   useEffect(() => {
-    if (!open || !changeId || hasStarted || rootAction.disabled) return
+    if (
+      !open ||
+      !changeId ||
+      hasStarted ||
+      rootAction.disabled ||
+      !archiveInstructions ||
+      !archiveExecutionReady
+    ) {
+      return
+    }
     const queue = buildQueue()
     commands.replaceAll(queue)
-  }, [buildQueue, changeId, commands, hasStarted, open, rootAction.disabled])
+  }, [
+    archiveInstructions,
+    archiveExecutionReady,
+    buildQueue,
+    changeId,
+    commands,
+    hasStarted,
+    open,
+    rootAction.disabled,
+  ])
 
   if (!open || !changeId) return null
 
@@ -134,7 +182,9 @@ export function GlobalArchiveModal() {
         </button>
         <button
           onClick={archiveStatus === 'error' ? handleReset : handleStartArchive}
-          disabled={isRunning || rootAction.disabled}
+          disabled={
+            isRunning || rootAction.disabled || !archiveInstructions || !archiveExecutionReady
+          }
           className="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isRunning ? (
@@ -167,6 +217,31 @@ export function GlobalArchiveModal() {
     >
       <div className="space-y-4">
         <RootActionNotice state={rootAction} />
+
+        {archiveInstructionsState.error ? (
+          <div
+            role="alert"
+            className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border p-3 text-sm"
+          >
+            Archive inputs unavailable: {archiveInstructionsState.error.message}
+          </div>
+        ) : null}
+
+        {archiveInstructionsState.authority.state === 'waiting' ||
+        (archiveInstructionsCurrent && !archiveGenerationCurrent) ? (
+          <div className="bg-muted/50 text-muted-foreground rounded-md p-3 text-sm">
+            {archiveInstructions ? 'Refreshing archive inputs…' : 'Loading archive inputs…'}
+          </div>
+        ) : null}
+
+        {archiveInstructions ? (
+          <OperationInputs
+            title="Archive inputs"
+            context={archiveInstructions.context}
+            operationGuidance={archiveInstructions.operationGuidance}
+            showEmpty
+          />
+        ) : null}
 
         <div className="bg-muted/50 rounded-lg p-3">
           <p className="text-muted-foreground text-sm">Change to archive:</p>

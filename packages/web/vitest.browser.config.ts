@@ -1,3 +1,9 @@
+/**
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Configure Chromium component-test execution and source-safe package aliases.
+ *
+ * Original request (2026-08-02): "视觉相关的走查由我最后来做，你只需要完成基础的开发和单元测试（包括有些组件playwright测试）"
+ */
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { playwright } from '@vitest/browser-playwright'
@@ -9,6 +15,7 @@ const alias = {
   '@openspecui/core': resolve(__dirname, '../core/src'),
   '@openspecui/core/dashboard-display': resolve(__dirname, '../core/src/dashboard-display.ts'),
   '@openspecui/core/hosted-app': resolve(__dirname, '../core/src/hosted-app.ts'),
+  '@openspecui/core/active-root-config': resolve(__dirname, '../core/src/active-root-config.ts'),
   '@openspecui/core/translation-language-pair': resolve(
     __dirname,
     '../core/src/translation-language-pair.ts'

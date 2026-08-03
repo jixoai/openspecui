@@ -1,13 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
  * 1. Enumerate static routes from snapshot identities without loading the render runtime.
  * 2. Resolve static page titles through the same compound Spec identity contract.
- * 3. Preserve Context and objective readonly Kanban as generated static routes.
+ * 3. Preserve encoded recursive Spec route transport across static generation.
+ * 4. Preserve publication-safe Config Root, Schema catalog/detail, Context, and objective Kanban routes.
  *
  * Original request (2026-07-15): "Live and static modes share one source-aware Spec Catalog."
  * Owner acceptance feedback (2026-07-28): "Static 导出后的 /context 页面没数据。"
  * Owner Context direction (2026-07-29): publish only the canonical `/config/context` route.
  * Original request (2026-07-28): static Board uses the shared ReadonlyKanban.
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
+ * Owner Config-workbench decision (2026-08-01): generate read-only Config routes without live Project, Environment, or Agent owners.
  */
 import type { ExportSnapshot } from '@openspecui/core'
 import {
@@ -25,8 +28,13 @@ export function getRoutes(snapshot: ExportSnapshot): string[] {
     '/board',
     '/archive',
     '/config',
+    '/config/root',
+    '/config/schemas',
     '/config/context',
     '/settings',
+    ...(snapshot.opsx?.schemas.map(
+      (schema) => `/config/schemas/${encodeURIComponent(schema.name)}`
+    ) ?? []),
     ...snapshot.specs.map((spec) => specRoutePath(spec.identity)),
     ...snapshot.changes.map((change) => `/changes/${change.id}`),
     ...snapshot.archives.map((archive) => `/archive/${archive.id}`),
@@ -41,8 +49,13 @@ export function getTitle(path: string, snapshot: ExportSnapshot): string {
   if (path === '/board') return 'Kanban'
   if (path === '/archive') return 'Archived Changes'
   if (path === '/config') return 'Config'
+  if (path === '/config/root') return 'Active Root'
+  if (path === '/config/schemas') return 'Schemas'
   if (path === '/config/context') return 'Resolved Context'
   if (path === '/settings') return 'Settings'
+
+  const schemaMatch = path.match(/^\/config\/schemas\/([^/]+)$/)
+  if (schemaMatch) return `Schema: ${decodeURIComponent(schemaMatch[1] ?? '')}`
 
   const ownedSpecMatch = path.match(/^\/specs\/owned\/([^/]+)$/)
   if (ownedSpecMatch) {

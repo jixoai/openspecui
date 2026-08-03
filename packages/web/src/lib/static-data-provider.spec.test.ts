@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-18 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Verify static Spec details preserve processed Owned projection semantics.
  * 2. Verify current legal snapshots expose only Active-root Search documents.
+ * 3. Verify recursive owned Spec identity survives static lookup and search projection.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  */
 import type { ExportSnapshot } from '@openspecui/core'
 import {
@@ -27,8 +29,9 @@ function createSnapshot(): ExportSnapshot {
   return {
     meta: {
       timestamp: new Date().toISOString(),
+      observedAt: 1,
       version: '1.0.0',
-      projectDir: '/tmp/project',
+      projectName: 'project',
     },
     dashboard: {
       specsCount: 1,
@@ -72,6 +75,39 @@ describe('static-data-provider specs', () => {
         state: 'ready',
         rawMarkdown: '# CLI\n\n## Purpose\nProcessed content',
       }
+    )
+  })
+
+  it('serves and indexes a recursive owned Spec without flattening', async () => {
+    const baseSpec = createSnapshot().specs[0]
+    if (!baseSpec) throw new Error('Expected one owned Spec fixture.')
+    staticState.snapshot = {
+      ...createSnapshot(),
+      specs: [
+        {
+          ...baseSpec,
+          identity: { kind: 'owned', specId: 'platform/auth' },
+          id: 'platform/auth',
+          name: 'Platform Auth',
+        },
+      ],
+    }
+    const provider = await import('./static-data-provider')
+
+    await expect(
+      provider.getSpecDocument({ kind: 'owned', specId: 'platform/auth' })
+    ).resolves.toMatchObject({
+      identity: { kind: 'owned', specId: 'platform/auth' },
+      state: 'ready',
+    })
+    await expect(provider.getSearchDocuments()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'spec:owned:platform%2Fauth',
+          href: '/specs/owned/platform%2Fauth',
+          path: 'owned:openspec/specs/platform/auth/spec.md',
+        }),
+      ])
     )
   })
 

@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
  * 1. Project CLI-owned environment-global config, data-scope provenance, and raw evidence.
  * 2. Own the JSON draft and preserve unknown fields through the typed global-config write.
- * 3. Compose the focused Profile/Update lifecycle without a second reactive projection.
+ * 3. Give machine `defaultStore` and feature flags the structured Environment surface.
  * 4. State static unavailability without synthesizing runtime-environment facts.
  *
  * Original request (2026-07-15): "Config ownership separates launch-project binding, active-root config, and environment-global config."
@@ -13,7 +13,6 @@
  */
 import { ButtonGroup } from '@/components/button-group'
 import { CodeEditor } from '@/components/code-editor'
-import { EnvironmentGlobalProfileSection } from '@/components/config/environment-global-profile-section'
 import { EvidenceDisclosure, InformationBadge } from '@/components/information-disclosure'
 import { AsyncAction, DetailPanelSkeleton } from '@/components/realtime'
 import { trpcClient } from '@/lib/trpc'
@@ -22,13 +21,10 @@ import type { CliJsonValue } from '@openspecui/core'
 import { useMutation } from '@tanstack/react-query'
 import { Loader2, RefreshCw, Save } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  isCliJsonObject,
-  isRecordObject,
-  normalizeWorkflowList,
-} from './environment-global-config-utils'
+import { EnvironmentDefaultStoreSection } from './environment-default-store-section'
+import { isCliJsonObject, isRecordObject } from './environment-global-config-utils'
 
-type GlobalConfigTab = 'preview' | 'editor' | 'profile'
+type GlobalConfigTab = 'default-store' | 'preview' | 'editor'
 
 function JsonStructuredValue({ value }: { value: unknown }) {
   if (value === null) return <span className="text-muted-foreground font-mono text-xs">null</span>
@@ -70,7 +66,7 @@ function JsonStructuredValue({ value }: { value: unknown }) {
 
 /** Render and mutate only the backend runtime's CLI-owned global OpenSpec config. */
 export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean }) {
-  const [globalConfigTab, setGlobalConfigTab] = useState<GlobalConfigTab>('preview')
+  const [globalConfigTab, setGlobalConfigTab] = useState<GlobalConfigTab>('default-store')
   const [globalConfigDraft, setGlobalConfigDraft] = useState('{}')
   const [globalConfigDraftDirty, setGlobalConfigDraftDirty] = useState(false)
   const [globalConfigError, setGlobalConfigError] = useState<string | null>(null)
@@ -221,7 +217,8 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
     if (!isRecordObject(globalConfigData)) return {}
     return Object.fromEntries(
       Object.entries(globalConfigData).filter(
-        ([key]) => !['profile', 'delivery', 'workflows', 'featureFlags', 'telemetry'].includes(key)
+        ([key]) =>
+          !['defaultStore', 'profile', 'delivery', 'workflows', 'featureFlags'].includes(key)
       )
     )
   }, [globalConfigData])
@@ -239,9 +236,13 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
 
   const visibleError = subscriptionError?.message ?? globalConfigError ?? evidenceError
   const tabOptions = [
+    {
+      value: 'default-store' as const,
+      label: 'Default Store',
+      disabled: saveMutation.isPending,
+    },
     { value: 'preview' as const, label: 'Preview', disabled: saveMutation.isPending },
-    { value: 'editor' as const, label: 'Editor', disabled: saveMutation.isPending },
-    { value: 'profile' as const, label: 'Profile', disabled: saveMutation.isPending },
+    { value: 'editor' as const, label: 'Raw JSON', disabled: saveMutation.isPending },
   ]
 
   return (
@@ -339,50 +340,22 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
         </EvidenceDisclosure>
       ) : null}
 
-      {globalConfigTab === 'preview' ? (
+      {globalConfigTab === 'default-store' ? (
+        <EnvironmentDefaultStoreSection
+          config={environmentGlobalConfig ?? null}
+          projectionLocked={projectionLocked}
+          refresh={refresh}
+        />
+      ) : globalConfigTab === 'preview' ? (
         isLoading && !environmentGlobalConfig ? (
           <div className="space-y-3 p-4" aria-busy="true">
             <DetailPanelSkeleton count={6} />
           </div>
         ) : isRecordObject(globalConfigData) ? (
           <div className="min-h-0 flex-1 space-y-3 overflow-auto pr-1">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="border-border rounded-md border px-3 py-2 text-xs">
-                <div className="text-muted-foreground">profile</div>
-                <div className="mt-1 font-medium">
-                  {typeof globalConfigData.profile === 'string' ? globalConfigData.profile : 'N/A'}
-                </div>
-              </div>
-              <div className="border-border rounded-md border px-3 py-2 text-xs">
-                <div className="text-muted-foreground">delivery</div>
-                <div className="mt-1 font-medium">
-                  {typeof globalConfigData.delivery === 'string'
-                    ? globalConfigData.delivery
-                    : 'N/A'}
-                </div>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-muted-foreground text-xs">workflows</div>
-              {normalizeWorkflowList(globalConfigData.workflows).length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {normalizeWorkflowList(globalConfigData.workflows).map((workflow) => (
-                    <span key={workflow} className="bg-muted rounded px-2 py-0.5 text-[10px]">
-                      {workflow}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-muted-foreground text-xs">—</div>
-              )}
-            </div>
             <div className="space-y-1">
               <div className="text-muted-foreground text-xs">featureFlags</div>
               <JsonStructuredValue value={globalConfigData.featureFlags ?? {}} />
-            </div>
-            <div className="space-y-1">
-              <div className="text-muted-foreground text-xs">telemetry</div>
-              <JsonStructuredValue value={globalConfigData.telemetry ?? {}} />
             </div>
             {Object.keys(globalConfigOtherFields).length > 0 ? (
               <div className="space-y-1">
@@ -445,15 +418,6 @@ export function EnvironmentGlobalConfigSection({ isStatic }: { isStatic: boolean
             </AsyncAction>
           </div>
         </div>
-      ) : isRecordObject(globalConfigData) ? (
-        <EnvironmentGlobalProfileSection
-          config={globalConfigData}
-          profileState={environmentGlobalConfig?.profileState ?? null}
-          isSaving={saveMutation.isPending}
-          projectionLocked={projectionLocked}
-          saveConfig={saveConfig}
-          onRefresh={refresh}
-        />
       ) : (
         <div className="text-muted-foreground text-sm">Global config unavailable.</div>
       )}
