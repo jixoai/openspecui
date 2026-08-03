@@ -124,7 +124,7 @@ status region
 
 | Risk                                               | Mitigation                                                                                                                   |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Progressive disclosure hides a blocker             | Keep transport, Root, Reference, stale-authority, and divergence messages outside the Evidence tab and collapsed Apply input |
+| Supporting surfaces hide a blocker                  | Keep transport, Root, Reference, stale-authority, and divergence messages outside the Evidence tab and Apply-input Dialog    |
 | Generic extra tabs leak into Archive               | Make tabs caller-provided and assert Archive has no Evidence tab                                                             |
 | Hidden evidence forks live/static semantics        | Reuse `ChangeStatus`; render static/unavailable states explicitly and add no data source                                     |
 | A nested scroller recreates double-scroll behavior | Make the Evidence panel the tab's primary vertical owner; only the bounded raw payload may scroll internally                 |
