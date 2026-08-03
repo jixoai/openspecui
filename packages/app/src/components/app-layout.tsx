@@ -190,22 +190,11 @@ function AppLayoutSurface() {
                   sidebarCollapsed ? 'justify-center px-0' : 'gap-2 px-2'
                 }`}
                 data-app-sidebar-brand
-                onClick={sidebarCollapsed ? toggleSidebar : undefined}
-                title={sidebarCollapsed ? 'Expand sidebar' : undefined}
+                onClick={toggleSidebar}
+                title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 type="button"
               >
-                <img
-                  aria-hidden="true"
-                  className="app-titlebar-logo app-titlebar-logo-light h-4 w-4 shrink-0"
-                  src="/icon.svg"
-                  alt=""
-                />
-                <img
-                  aria-hidden="true"
-                  className="app-titlebar-logo app-titlebar-logo-dark h-4 w-4 shrink-0"
-                  src="/icon.dark.svg"
-                  alt=""
-                />
+                <img aria-hidden="true" className="h-4 w-4 shrink-0" src="/icon.svg" alt="" />
                 <span className={sidebarCollapsed ? 'sr-only' : undefined}>OpenSpecUI App</span>
               </button>
               {!sidebarCollapsed ? (
