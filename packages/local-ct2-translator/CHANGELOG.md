@@ -1,5 +1,13 @@
 # @openspecui/local-ct2-translator
 
+## 7.0.0
+
+### Patch Changes
+
+- Updated dependencies [da5d080]
+- Updated dependencies [da5d080]
+  - @openspecui/core@7.0.0
+
 ## 6.2.1
 
 ### Patch Changes

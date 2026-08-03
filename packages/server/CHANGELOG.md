@@ -1,5 +1,22 @@
 # @openspecui/server
 
+## 7.0.0
+
+### Major Changes
+
+- da5d080: Require OpenSpec CLI 1.7 for OpenSpecUI 7 and add the complete Agent delivery protocol, including the official registry, physical readiness and migration evidence, a live Config-owned Agent Integrations workbench, and a read-only Settings summary.
+
+### Patch Changes
+
+- Updated dependencies [da5d080]
+- Updated dependencies [da5d080]
+  - @openspecui/core@7.0.0
+  - @openspecui/local-ct2-translator@7.0.0
+  - @openspecui/local-llama-translator@7.0.0
+  - @openspecui/local-translator@7.0.0
+  - @openspecui/openai-completion-translator@7.0.0
+  - @openspecui/search@7.0.0
+
 ## 6.2.1
 
 ### Patch Changes
