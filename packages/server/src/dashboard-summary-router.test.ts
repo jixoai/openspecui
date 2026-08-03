@@ -10,9 +10,9 @@
  * Original request (2026-08-01): OpenSpecUI 7 requires OpenSpec CLI 1.7 for live projection readiness.
  */
 import {
-  CliExecutor,
   CliContextSchema,
   CliDoctorSchema,
+  CliExecutor,
   parseCliCommandResult,
   type CliCommandResult,
   type DashboardSummaryInvalidation,
@@ -123,10 +123,9 @@ describe('public Dashboard Summary v2 Router', () => {
       const wakes: DashboardSummaryInvalidation[] = []
       subscription = observable.subscribe({ next: (wake) => wakes.push(wake) })
 
-      await vi.waitFor(
-        () => expect(wakes.some((wake) => wake.state === 'ready')).toBe(true),
-        { timeout: 5_000 }
-      )
+      await vi.waitFor(() => expect(wakes.some((wake) => wake.state === 'ready')).toBe(true), {
+        timeout: 5_000,
+      })
       const wake = wakes.find((candidate) => candidate.state === 'ready')
       if (!wake) throw new Error('Expected the initial Dashboard Summary wake.')
       const doctorCallsBeforePull = fixture.doctorRoot.mock.calls.length

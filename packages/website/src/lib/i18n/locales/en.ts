@@ -89,8 +89,7 @@ export const en = {
     summary:
       'Start locally, then follow the upstream workflow, browser App, and source repository.',
     appTitle: 'app.openspecui.com',
-    appBody:
-      'Optional browser deployment. CLI App mode uses its own bundled local shell instead.',
+    appBody: 'Optional browser deployment. CLI App mode uses its own bundled local shell instead.',
     openspecTitle: 'openspec.dev',
     openspecBody: 'Official OpenSpec project site and workflow reference.',
     githubTitle: 'GitHub',

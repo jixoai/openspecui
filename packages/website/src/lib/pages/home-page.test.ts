@@ -24,9 +24,7 @@ describe('HomePage', () => {
     ).toBeVisible()
     expect(screen.getAllByText('npx openspecui@latest --app')).toHaveLength(2)
     expect(screen.getByText('npx openspecui@latest export -o ./dist')).toBeVisible()
-    expect(
-      screen.getByText('OpenSpecUI 7 requires OpenSpec CLI 1.7.x.')
-    ).toBeVisible()
+    expect(screen.getByText('OpenSpecUI 7 requires OpenSpec CLI 1.7.x.')).toBeVisible()
     expect(screen.queryByText(/PWA/i)).not.toBeInTheDocument()
 
     await fireEvent.change(screen.getByLabelText('Runner'), { target: { value: 'pnpm' } })

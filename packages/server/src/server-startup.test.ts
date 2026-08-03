@@ -469,7 +469,7 @@ describe('server startup runtime contract', () => {
         runnerPath,
         [
           "const { appendFileSync } = require('node:fs')",
-          "const args = process.argv.slice(2)",
+          'const args = process.argv.slice(2)',
           "const command = args.join(' ')",
           "if (command === '--version') process.stdout.write('1.7.0\\n')",
           `else if (command === 'config path') process.stdout.write(${JSON.stringify(`${join(projectDir, 'global-config.json')}\n`)})`,
