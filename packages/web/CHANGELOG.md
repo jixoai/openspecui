@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 7.0.1
+
+### Patch Changes
+
+- 2554bc5: Layer Kanban lane headers and bounded three-level progressive blur veils over independently scrolling row content.
+
 ## 7.0.0
 
 ### Major Changes
