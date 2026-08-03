@@ -271,7 +271,7 @@ Production owner: typed Guide reducer/orchestrator plus React-owned Base UI Popo
 - [x] 12.8 `pnpm --filter @openspecui/web build:ssg` passes from clean output.
 - [x] 12.9 `git diff --check` passes.
 - [x] 12.10 Numbered owner walkthrough document records exact head, setup, trigger, PASS/FAIL observations, and restore.
-- [ ] 12.11 Open/update PR only after local gates pass; include Changeset and exact evidence notes.
+- [x] 12.11 Open/update PR only after local gates pass; include Changeset and exact evidence notes.
 - [ ] 12.12 Required PR checks pass; Manager-mode merge decision is satisfied.
 - [ ] 12.13 Ask manager whether to release after merge; do not publish from the feature branch.
 - [ ] 12.14 If authorized, complete version PR, release workflow, npm dist-tag, remote tags, and GitHub Release evidence.
