@@ -180,6 +180,7 @@ Production owner: Planning Config typed mutation service and `/config/root`.
 - [x] 8.12 Preserve stale display but lock mutation during loading, refresh, transport error, CLI error, or Root change.
 - [x] 8.13 Add focused component tests for structured/raw switching, dirty state, conflict, retry, and shared Store notice.
 - [x] 8.14 Focused review passes before Init Alert work.
+- [x] 8.15 Remove Active Root's JS viewport-height owner, extra card shell, and internal Structured scroll owner.
 
 ## 9. Initialize Project Alert
 
@@ -240,6 +241,13 @@ Production owner: typed Guide reducer/orchestrator plus React-owned Base UI Popo
 - [x] 10.24 Reproduce a fully ready Guide auto-completing without interaction in reducer and Provider tests.
 - [x] 10.25 Require explicit Continue for every ready stage and prove observations alone never advance or complete.
 - [x] 10.26 Replace four mask regions with one SVG even-odd bevel path and prove hole/outside pointer hit testing.
+- [x] 10.27 Theme the SVG veil independently for light and dark surfaces and prove computed mask colors diverge in Chromium.
+- [x] 10.28 Replace the Config card grid with a stable top NavBar that becomes icon-only by container width.
+- [x] 10.29 Classify every `/config/**` route as Config detail and snapshot only the owner header/content during transitions.
+- [x] 10.30 Remove obsolete and failure-generated Config browser screenshots; no screenshot assertion owns these attachments.
+- [x] 10.31 Restyle the Config NavBar as one thin-line table row with foreground/background-only selection and no shadow.
+- [x] 10.32 Remove the default Back-to-Config action while preserving explicit nested-catalog return actions.
+- [x] 10.33 Remove the NavBar top rule; keep the full border color only on the bottom and use subdued internal dividers.
 
 ## 11. Static, Documentation, and Release Preparation
 

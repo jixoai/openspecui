@@ -5,23 +5,24 @@ Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 3. Record exact setup, trigger, PASS/FAIL observations, and restoration without credentials or private URLs.
 
 Original request (2026-08-02): the owner performs final visual walkthroughs; the agent supplies development, unit tests, and component Playwright preparation.
-Owner correction (2026-08-03): a fully ready Guide must not flicker into completion, and the Spotlight uses one SVG even-odd bevel hole.
+Owner correction (2026-08-03): a fully ready Guide must not flicker into completion; the Spotlight uses one theme-aware SVG even-odd bevel hole; Config navigation uses a top NavBar plus detail View Transitions.
 -->
 
 # Adaptive Config Guide Owner Walkthrough
 
 ## Evidence Boundary
 
-- Prepared against repository HEAD `353e3d5f94e961bd72abf21e2b729686980e37ed` with the uncommitted
+- Prepared against repository HEAD `732cbe4b446041560b38e90eafed6b511e4fafbe` with the uncommitted
   `target-openspec-cli-17-line` Apply worktree.
 - Automated evidence proves reducer, owner-signal selection, orchestration, headless presentation ownership, and basic
   Chromium component geometry. It does **not** claim final visual acceptance.
-- Automated preparation is green: Web Unit `178/178` files and `1102/1102` tests; component Chromium `5/5` files and
-  `9/9` tests; Storybook browser `4/4` files and `12/12` tests.
+- Automated preparation is green: Web Unit baseline `178/178` files and `1102/1102` tests; current component Chromium
+  `5/5` files and `11/11` tests; Storybook browser `4/4` files and `12/12` tests.
 - The Config Guide Chromium fixture uses the real Base UI Popover plus one SVG even-odd Spotlight mask. It proves the
   hole hits the real target, the painted exterior hits the mask, the target stays free of `inert`, every ready stage
-  requires Continue, and cancellation/completion remove the overlay and popover. It also proves missing-target failure
-  centers a usable OpenSpecUI surface and focuses Retry.
+  requires Continue, light/dark themes resolve distinct veil fills, and cancellation/completion remove the overlay and
+  popover. The Config workbench fixture proves the top NavBar remains overflow-free and switches labels by container
+  width. Missing-target failure centers a usable OpenSpecUI surface and focuses Retry.
 - Record each case as `PASS` or `FAIL` against the exact tested `git rev-parse HEAD`; do not record credentials,
   Authorization headers, launch fragments, or private backend URLs.
 
@@ -199,6 +200,8 @@ mv "$GUIDE_TMP/openspec/config.yaml.guide-backup" "$GUIDE_TMP/openspec/config.ya
 - Pointer input inside the bevel hole reaches the real semantic target; pointer input in the painted exterior is blocked.
 - Supporting browsers mirror the target's computed bevel radii. Safari and any browser without `corner-shape: bevel`
   use square hole corners rather than simulated round corners.
+- Switching between light and dark themes keeps the exterior veil visibly distinct from the page background; dark mode
+  uses a light neutral veil rather than reusing the light-mode black veil.
 
 **FAIL**
 
@@ -206,6 +209,59 @@ mv "$GUIDE_TMP/openspec/config.yaml.guide-backup" "$GUIDE_TMP/openspec/config.ya
   returns.
 - The mask uses multiple blocking rectangles, captures the hole, draws round corners, or diverges from the square
   unsupported-browser fallback.
+- The dark-theme veil visually disappears into the page background.
+
+## Case 8 — Config Top NavBar and Owner Transitions
+
+**Trigger**
+
+1. Open `Config → Overview` in a wide desktop window.
+2. Navigate `Overview → Project Binding → Active Root → Agents → Schemas → Context` through the top Config NavBar.
+3. Narrow the Config content container until the text labels no longer fit.
+
+**PASS**
+
+- The Config NavBar is the first workbench surface, remains visually stable at the top, and does not look or animate
+  like a tab strip.
+- The NavBar reads as one table-like row with thin outer/column rules. Actions have square geometry and no shadow;
+  selection changes only foreground/background color.
+- The NavBar has no top rule. Only its bottom rule uses the full border color; column separators are visibly more
+  subdued in both themes.
+- Every owner-to-owner navigation animates the owner header/content as one detail transition; the NavBar itself does not
+  flash, slide, or join the replaced snapshot.
+- Narrow containers show seven icon-only destinations without horizontal overflow. Each icon exposes a Tooltip and an
+  accessible name; widening the container restores labels.
+- The selected destination remains obvious through a contained selected state in both icon-only and labeled modes.
+- First-level owner pages do not repeat `<- Config`; a nested Schema detail page may still expose `<- Schemas`.
+
+**FAIL**
+
+- Only Overview navigation animates, owner-to-owner navigation cuts instantly, or the NavBar participates in the page
+  replacement animation.
+- Narrow mode wraps, scrolls horizontally, hides destinations, or uses a tab indicator.
+- Nav items look like independent bordered cards, use rounded corners/shadows, or first-level content repeats a Config
+  back action.
+- The top edge draws a rule, or internal separators are as strong as the bottom rule.
+
+## Case 9 — Active Root Natural Page Flow
+
+**Trigger**
+
+1. Open `Config → Active Root` with a configuration containing multiple artifact rules and operation guidance rows.
+2. Switch between Structured and Raw YAML modes, then resize the window vertically.
+
+**PASS**
+
+- Active Root metadata, notices, and editor content expand directly in the page without an extra outer Card shell.
+- The application main content remains the page scroll owner; Structured fields do not introduce an independent
+  vertical scrollbar.
+- Resizing does not cause an inline height to be recalculated or produce a clipped/empty editor frame.
+- Raw YAML keeps a useful CSS-defined minimum height while remaining part of normal page flow.
+
+**FAIL**
+
+- The Active Root surface has a dynamically changing inline height, nested page scrollbar, clipped content, or a
+  redundant bordered/background Card around the complete owner surface.
 
 ## Shared Restore
 
@@ -221,10 +277,12 @@ unset GUIDE_TMP
 
 | Case                                | Result  | Exact HEAD                                 | Observation                |
 | ----------------------------------- | ------- | ------------------------------------------ | -------------------------- |
-| 1. Initialize and Start Guide       | PENDING | `353e3d5f94e961bd72abf21e2b729686980e37ed` | Owner walkthrough required |
-| 2. Project Binding active edit      | PENDING | `353e3d5f94e961bd72abf21e2b729686980e37ed` | Owner walkthrough required |
-| 3. Active Root required/raw/warning | PENDING | `353e3d5f94e961bd72abf21e2b729686980e37ed` | Owner walkthrough required |
-| 4. Agent Delivery replacement       | PENDING | `353e3d5f94e961bd72abf21e2b729686980e37ed` | Owner walkthrough required |
-| 5. Resolved Context barrier         | PENDING | `353e3d5f94e961bd72abf21e2b729686980e37ed` | Owner walkthrough required |
-| 6. Keyboard/focus/restart           | PENDING | `353e3d5f94e961bd72abf21e2b729686980e37ed` | Owner walkthrough required |
-| 7. Ready steps and SVG bevel mask   | PENDING | `353e3d5f94e961bd72abf21e2b729686980e37ed` | Owner walkthrough required |
+| 1. Initialize and Start Guide       | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
+| 2. Project Binding active edit      | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
+| 3. Active Root required/raw/warning | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
+| 4. Agent Delivery replacement       | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
+| 5. Resolved Context barrier         | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
+| 6. Keyboard/focus/restart           | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
+| 7. Ready steps and SVG bevel mask   | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
+| 8. Config NavBar and owner VT       | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
+| 9. Active Root natural page flow    | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |

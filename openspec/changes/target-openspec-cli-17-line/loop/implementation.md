@@ -595,13 +595,48 @@ the `ENOTDIR` regression test, and code-point comparator. Result: `no findings`;
 - Final visual acceptance remains owner-owned; Case 7 in `loop/guide-owner-walkthrough.md` records the exact manual
   progression, interaction, bevel, and unsupported-browser observations.
 
+### Slice 10 Theme, Config NavBar, and Detail Transition Follow-up (2026-08-03)
+
+- Owner finding: the same black veil remained perceptible on light pages but disappeared against the black dark-theme
+  surface. The mask now consumes one theme token: a dark veil in light mode and a low-opacity light neutral veil in
+  dark mode. Real Chromium proves the computed SVG fill changes with the root theme.
+- Owner direction: fixed Config destinations now form one top NavBar rather than a card grid or tab strip. The NavBar
+  is the first workbench child, keeps seven equal-width route actions without horizontal scrolling, exposes accessible
+  names and Tooltips, hides labels in narrow containers, and reveals labels only when the Config container is wide.
+- Root cause for missing owner-to-owner animation: only exact `/config` belonged to the Config route family. Secondary
+  routes fell back to `unknown/detail`; route-detail disabled the root snapshot, while Config exposed no
+  `.vt-detail-content`, producing no visible transition. Every `/config/**` route now belongs to `config/detail`, and
+  only the owner header/content wrapper participates while the NavBar remains stable.
+- Red evidence: route semantics returned `unknown/detail`; the narrow fixture found the old header-first card grid and
+  no detail wrapper; the dark fixture retained the light-mode mask fill.
+- Green evidence: focused route semantics passes `13/13`; real Chromium Config workbench plus Guide passes `2/2`
+  files and `7/7` tests, including narrow/wide container geometry, mask hit testing, explicit progression, and theme
+  fill. Browser failure screenshots were transient Vitest attachments with no tracked snapshot contract and are
+  removed rather than published as product evidence.
+- Owner visual correction: the NavBar no longer renders seven outlined cards. One top/bottom rule and thin column
+  separators create a table-like row; route actions have square geometry and no shadow. Selection changes only
+  foreground/background color. First-level owner headers no longer repeat `<- Config`; only nested pages that explicitly
+  declare a direct catalog return, such as Schema detail → Schemas, keep a back action.
+- Follow-up evidence passes focused owner-route and Schema-return Unit `2/2` files and `9/9` tests plus real Chromium
+  workbench `1/1` file and `2/2` tests.
+- Owner border correction: the NavBar top rule is removed. Its single bottom rule uses the full `border` token, while
+  internal column separators use a 20% derived border color; Chromium proves the top is `0px`, bottom is `1px`, and
+  internal separator color differs from the bottom rule.
+- Active Root layout correction: `useViewportConstrainedHeight`, its measured wrapper, the inner Card shell, and the
+  Structured editor's internal vertical scrolling are removed. The semantic Guide anchor is now the single natural-flow
+  page section; Structured fields expand with document content, and Raw YAML uses only a CSS `clamp()` minimum height.
+- Red Chromium evidence observed the old `320px` inline height and missing natural surface. Green Chromium passes
+  NavBar plus Active Root `2/2` files and `3/3` tests, proving no height-hook call, no inline height, no card shell,
+  visible Structured overflow, subtle dividers, and horizontal containment.
+
 ## Decisions Taken
 
 1. OpenSpecUI 7 supports only OpenSpec CLI `>=1.7.0 <1.8.0`.
 2. Every other version opens the mismatch Dialog and is blocked by default.
 3. `Skip version check` is an explicit user-risk admission bypass held only by the current in-memory page runtime.
 4. The complete observable 1.7 workflow, Spec, Root, Schema, and Agent protocol ships in the 7.0 adaptation.
-5. Config is a route-backed workbench; dynamic Schema entities no longer share the fixed-owner tab strip.
+5. Config is a route-backed workbench with one stable top NavBar; dynamic Schema entities no longer share the
+   fixed-owner navigation plane, and owner header/content forms the detail-transition surface.
 6. `/config/agents` solely owns structured `profile`, `delivery`, and `workflows` mutation.
 7. Active Root provides structured official fields and a revision-aware raw YAML whole-document escape hatch.
 8. Unknown/custom YAML keys are preserved and not rejected merely for being outside the official model.
@@ -610,8 +645,8 @@ the `ENOTDIR` regression test, and code-point comparator. Result: `no findings`;
 10. The same Alert preserves successful command evidence and then offers `[Ok] [Start Guide]`; it does not open a
     second Dialog, and Agent installation remains a later Guide decision.
 11. One adaptive Guide owns Project Binding → Active Root → Agent Delivery → Resolved Context verification.
-12. Base UI may position/focus the Popover only; OpenSpecUI owns Spotlight, controls, readiness, routing, mutations,
-    completion, and all visual styling.
+12. Base UI may position/focus the Popover only; OpenSpecUI owns the theme-aware SVG Spotlight, controls, readiness,
+    routing, mutations, completion, and all visual styling.
 
 ## Divergence Notes
 

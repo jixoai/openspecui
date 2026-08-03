@@ -6,7 +6,7 @@ Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 
 Original request (2026-08-01): investigate and redesign incomplete Config surfaces for OpenSpecUI 7.
 Owner decisions (2026-08-01): Config workbench, `/config/agents`, raw YAML writes, adaptive Guide, and independent Init Alert.
-Owner correction (2026-08-03): ready stages require explicit Continue; Spotlight uses one SVG even-odd bevel mask.
+Owner correction (2026-08-03): ready stages require explicit Continue; Spotlight uses one theme-aware SVG even-odd bevel mask; Config uses a stable top NavBar and detail View Transitions; Active Root expands in natural page flow.
 -->
 
 # Delta for opsx-config-center
@@ -26,7 +26,7 @@ as one top-level application destination.
 - **AND** expose Config-owned Init, Guide, and Context actions
 - **AND** direct failures SHALL remain visible without hover or expansion
 
-### Requirement: Config view uses tabs
+### Requirement: Config view uses route-backed owner navigation
 
 Config SHALL NOT combine fixed owner domains and dynamic Schema entities in one horizontal tab strip. It SHALL use
 route-backed secondary pages: `/config/project`, `/config/root`, `/config/environment`, `/config/agents`,
@@ -39,11 +39,43 @@ route-backed secondary pages: `/config/project`, `/config/root`, `/config/enviro
 - **AND** Schema entities SHALL be reached through the Schema catalog rather than clipped dynamic tabs
 - **AND** each route SHALL have one page-level scroll owner
 
+#### Scenario: Adapt the Config NavBar by container width
+
+- **WHEN** the Config workbench container cannot display all owner labels without crowding
+- **THEN** the top Config NavBar SHALL preserve every destination as an icon-only action with an accessible name and Tooltip
+- **AND** labels SHALL appear when the Config container has sufficient inline space
+- **AND** destinations SHALL form one table-like row separated only by thin lines
+- **AND** the selected destination SHALL change only foreground and background colors without radius, border emphasis, or shadow
+- **AND** only the NavBar bottom rule SHALL use the full `border` color
+- **AND** the NavBar SHALL have no top rule and SHALL use a subdued derived color for internal column separators
+
+#### Scenario: Render a Config owner header
+
+- **WHEN** a first-level Config owner route renders its page header
+- **THEN** the shared NavBar SHALL provide the return path to Overview
+- **AND** the page content SHALL NOT repeat a default `<- Config` action
+- **AND** a nested entity page MAY expose an explicit return to its direct catalog owner
+
+#### Scenario: Navigate between Config owner pages
+
+- **WHEN** the user navigates from any `/config/**` owner page to another Config owner or Schema route
+- **THEN** both routes SHALL remain in the Config semantic family
+- **AND** the stable top NavBar SHALL remain outside the route detail snapshot
+- **AND** the owner header and content SHALL participate in one detail View Transition
+
 ### Requirement: Config view surfaces project configuration
 
 Project configuration SHALL be separated into Project Binding and Active Root owners. Project Binding SHALL own
 structured `store` and `references`. Active Root SHALL own structured `schema`, `context`, `rules`, and
 `operations`, while also exposing an explicit raw YAML whole-document mode.
+
+#### Scenario: Expand Active Root in the Config page
+
+- **WHEN** the Active Root owner renders Structured or Raw configuration content
+- **THEN** the content SHALL participate directly in the Config page's natural block flow
+- **AND** SHALL NOT calculate or write a viewport-constrained height from JavaScript
+- **AND** SHALL NOT add a second card shell or page-level overflow owner around the editor
+- **AND** Structured content SHALL expand naturally while Raw YAML MAY use a CSS-only minimum editor height
 
 #### Scenario: Save structured Active Root fields
 
@@ -141,3 +173,4 @@ mutation, or completion.
 - **AND** the real target SHALL remain interactive without target DOM mutation
 - **AND** the hole SHALL derive bevel cuts from computed target corner radii
 - **AND** browsers without `corner-shape: bevel` SHALL receive square hole corners
+- **AND** the painted veil SHALL use distinct theme-aware colors that remain perceptible on both light and dark surfaces
