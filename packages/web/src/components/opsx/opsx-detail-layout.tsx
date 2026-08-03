@@ -2,12 +2,13 @@
  * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Compose reusable OPSX detail headers, pages, tabs, diagnostics, and state panels.
  * 2. Preserve shared-element navigation and geometry-stable loading presentation.
- * 3. Keep compact Header actions at title inline-end until container-responsive block-end wrapping.
+ * 3. Prioritize wrapping title identity before compact Actions consume the remaining inline-end column.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
  * Original request (2026-08-03): prevent Change Detail evidence from growing the Header's right side.
  * Owner correction (2026-08-03): Actions use title inline-end space before wrapping below at narrow widths.
+ * Owner correction (2026-08-03): use `auto 1fr` to prioritize title identity and wrap long titles.
  */
 import { AccessibleStatus, DetailPanelSkeleton } from '@/components/realtime'
 import { Tabs, type Tab } from '@/components/tabs'
@@ -75,7 +76,7 @@ function OpsxDetailHeader({
   return (
     <div
       data-testid="opsx-detail-header"
-      className="@min-[56rem]:grid-cols-[minmax(0,1fr)_auto] grid min-w-0 grid-cols-1 items-center gap-3"
+      className="@min-[56rem]:grid-cols-[auto_1fr] grid min-w-0 grid-cols-1 items-center gap-3"
     >
       <div data-testid="opsx-detail-header-identity" className="flex min-w-0 items-center gap-4">
         <VTLink
@@ -96,7 +97,10 @@ function OpsxDetailHeader({
               {...getSharedElementBinding(sharedDescriptor, 'icon')}
               className="h-6 w-6 shrink-0"
             />
-            <span {...getSharedElementBinding(sharedDescriptor, 'title')} className="truncate">
+            <span
+              {...getSharedElementBinding(sharedDescriptor, 'title')}
+              className="min-w-0 whitespace-normal [overflow-wrap:anywhere]"
+            >
               {title}
             </span>
           </h1>
@@ -106,7 +110,7 @@ function OpsxDetailHeader({
       {headerActions ? (
         <div
           data-testid="opsx-detail-header-actions"
-          className="@min-[56rem]:justify-self-end min-w-0 justify-self-stretch"
+          className="@container @min-[56rem]:min-w-96 @min-[56rem]:justify-self-stretch @min-[56rem]:justify-end flex min-w-0 justify-start"
         >
           {headerActions}
         </div>

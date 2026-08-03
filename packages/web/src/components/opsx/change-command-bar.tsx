@@ -8,6 +8,7 @@
  * Original request (2026-07-28): Board and Change Detail must expose the same Apply boundary.
  * Original request (2026-08-03): Change Detail disabled reasons must remain in the default decision plane.
  * Owner correction (2026-08-03): remove repeated Unavailable prose and localize each reason to its action Tooltip.
+ * Owner correction (2026-08-03): keep Actions usable when a wrapping title receives Header width priority.
  */
 import { Tooltip } from '@/components/tooltip'
 import { getChangeApplyAvailability } from '@/lib/change-operator-availability'
@@ -137,7 +138,7 @@ export function ChangeCommandBar({
                 className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Icon className="h-3.5 w-3.5" aria-hidden />
-                <span className="hidden sm:inline">{btn.label}</span>
+                <span className="@min-[40rem]:inline hidden">{btn.label}</span>
               </button>
             </Tooltip>
             {btn.id === 'apply' ? applyInputsAction : null}
@@ -157,7 +158,7 @@ export function ChangeCommandBar({
           className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-          <span className="hidden sm:inline">Verify</span>
+          <span className="@min-[40rem]:inline hidden">Verify</span>
         </button>
       </Tooltip>
     </div>

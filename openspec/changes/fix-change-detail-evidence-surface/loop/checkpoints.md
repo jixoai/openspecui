@@ -65,8 +65,8 @@ Owner correction (2026-08-03): use `auto 1fr` to prioritize title identity and w
 - [x] 7.5 Replace the Apply-input disclosure with an Action-owned Dialog and attach applicability reasons to each disabled button Tooltip.
 - [x] 7.6 Re-run focused unit/browser/type checks, update implementation evidence, and commit only the correction without pushing.
 - [x] 7.7 Record the corrected `auto 1fr` Header and wrapping-title contract.
-- [ ] 7.8 Add red browser evidence for the old action-priority grid and single-line title truncation.
-- [ ] 7.9 Prioritize title identity and preserve readable multiline titles without Header overflow.
+- [x] 7.8 Add red browser evidence for the old action-priority grid and single-line title truncation.
+- [x] 7.9 Prioritize title identity and preserve readable multiline titles without Header overflow.
 - [ ] 7.10 Re-run focused browser/unit/type gates, record evidence, and commit without pushing.
 
 ## 8. Owner and PR Boundaries

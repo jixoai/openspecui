@@ -3,10 +3,12 @@
  * 1. Measure inline-end versus responsive block-end Header Action geometry in real Chromium.
  * 2. Prove long paths and raw CLI evidence remain horizontally contained at mobile, tablet, and desktop widths.
  * 3. Prove Evidence owns primary vertical scrolling after complete evidence is disclosed.
- * 4. Stop at component-browser preparation rather than claiming owner visual acceptance.
+ * 4. Prove title identity receives width priority and continuous long titles wrap instead of truncating.
+ * 5. Stop at component-browser preparation rather than claiming owner visual acceptance.
  *
  * Original request (2026-08-03): move unbounded Change Detail evidence out of the Header into a dedicated tab.
  * Owner correction (2026-08-03): keep Actions at title inline-end until responsive wrapping and unify subtitle badges.
+ * Owner correction (2026-08-03): use `auto 1fr` to prioritize title identity and wrap long titles.
  * Owner acceptance boundary (2026-07-20): final end-to-end visual walkthrough belongs to the owner.
  */
 import {
@@ -53,6 +55,8 @@ vi.mock('@/components/opsx/artifact-output-viewer', () => ({
 }))
 
 const longSegment = 'team-owned-reference-boundary-with-a-long-nontrivial-identity'
+const longTitle =
+  'fixChangeDetailTitlePriorityWithAnExtremelyLongContinuousIdentityThatMustRemainCompletelyReadableWithoutSingleLineTruncation'
 
 function changeStatus(): ChangeStatus {
   const artifactPaths = Object.fromEntries(
@@ -69,7 +73,7 @@ function changeStatus(): ChangeStatus {
   )
 
   return {
-    changeName: 'fix-change-detail-evidence-surface',
+    changeName: longTitle,
     schemaName: 'opsx-collab-pr-loop',
     isComplete: false,
     applyRequires: ['implementation'],
@@ -199,22 +203,40 @@ describe.each([390, 768, 1280])('Change Evidence at %ipx', (width) => {
     const header = screen.getByTestId('opsx-detail-header')
     const identity = screen.getByTestId('opsx-detail-header-identity')
     const actions = screen.getByTestId('opsx-detail-header-actions')
+    const title = screen.getByRole('heading', { level: 1 }).querySelector('span')
     const statusRegion = screen.getByTestId('opsx-detail-status-region')
     const evidence = screen.getByRole('region', { name: 'Change Evidence' })
 
     await waitFor(() => expect(host.getBoundingClientRect().width).toBe(width))
+    expect(title).not.toBeNull()
+    if (!title) throw new Error('Expected the Detail Header title span')
+    expect(getComputedStyle(title).whiteSpace).toBe('normal')
+    expect(getComputedStyle(title).overflowWrap).toBe('anywhere')
+    expect(title.getBoundingClientRect().height).toBeGreaterThan(
+      Number.parseFloat(getComputedStyle(title).fontSize) * 1.2
+    )
     expect(header).not.toContainElement(statusRegion)
     expect(header.nextElementSibling).toBe(statusRegion)
+    const identityHeight = identity.getBoundingClientRect().height
+    const actionsHeight = actions.getBoundingClientRect().height
     if (width === 1280) {
+      expect(identity.getBoundingClientRect().width).toBeGreaterThan(
+        actions.getBoundingClientRect().width
+      )
       expect(actions.getBoundingClientRect().top).toBeLessThan(
         identity.getBoundingClientRect().bottom
+      )
+      expect(header.getBoundingClientRect().height).toBeLessThanOrEqual(
+        Math.max(identityHeight, actionsHeight) + 1
       )
     } else {
       expect(actions.getBoundingClientRect().top).toBeGreaterThanOrEqual(
         identity.getBoundingClientRect().bottom
       )
+      expect(header.getBoundingClientRect().height).toBeLessThanOrEqual(
+        identityHeight + actionsHeight + 13
+      )
     }
-    expect(header.getBoundingClientRect().height).toBeLessThan(width === 1280 ? 100 : 180)
     expect(getComputedStyle(evidence).overflowY).toBe('auto')
     expect(getComputedStyle(evidence).overflowX).toBe('hidden')
 

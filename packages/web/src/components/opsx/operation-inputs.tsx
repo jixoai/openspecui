@@ -7,6 +7,7 @@
  * Original request (2026-08-01): preserve OpenSpec 1.7 Apply and Archive operation inputs end to end.
  * Original request (2026-08-03): keep Apply inputs collapsed on the Change Detail default surface.
  * Owner correction (2026-08-03): make Apply inputs one Header Action that opens a Dialog.
+ * Owner correction (2026-08-03): keep the Action usable when a wrapping title receives Header width priority.
  */
 import { Dialog } from '@/components/dialog'
 import { ListTree } from 'lucide-react'
@@ -88,7 +89,7 @@ export function OperationInputsDialogAction({
         className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition"
       >
         <ListTree className="h-3.5 w-3.5" aria-hidden />
-        <span className="hidden sm:inline">{title}</span>
+        <span className="@min-[40rem]:inline hidden">{title}</span>
       </button>
       <Dialog
         open={open}
