@@ -89,6 +89,11 @@ Server, Router, subscription, mutation, or static snapshot contract changed.
   App `10/10`, Web Chromium `14/14`, and Web Storybook `12/12`.
 - `CHANGESET_CHECK_BASE_SHA=159efa15459a2a94902e33562cbc75da060a5d14 pnpm changeset:check`, strict Change
   validation, and `git diff --check` passed.
+- Owner acceptance covers product implementation head `a4891a84800425e81a0bb7ae7f884008d713f0ff`.
+- The accepted Change Detail implementation shipped through PR #231. Its final head
+  `de6b66555b652c191d57b6484d25cf0678b33f1c` passed all required checks and merged as
+  `da5d080b8348125b290e3d4bf361d3b58eb7d082`; the later final-head delta only corrected clean-CI OpenSpec 1.7
+  reference preparation and did not alter the owner-accepted Change Detail surface.
 - Full `pnpm test:ci` passed Root `61/61`, Core `598/598`, and Server `628/628`, then stopped on three unrelated
   App failures: titlebar Settings ownership, mobile favorite navigation, and branded-titlebar `aria-expanded`.
 - Full `pnpm format:check` is blocked only by the pre-existing user-owned

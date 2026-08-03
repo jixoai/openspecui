@@ -1,9 +1,10 @@
 <!--
-Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 1. Specify OPSX-first project views and workflow actions.
 2. Keep runtime Settings distinct from Config-owned project declarations.
 
 Owner correction (2026-07-29): App shell location belongs to the local daemon, not Settings.
+Original request (2026-08-01): redesign Config and complete the OpenSpec 1.7 projection in OpenSpecUI 7.
 -->
 
 # opsx-ui-views Specification
@@ -69,7 +70,9 @@ The UI SHALL provide a schema browser backed by CLI schema data.
 
 ### Requirement: Settings View Content
 
-The UI SHALL surface runtime settings, tool status, and document translation settings without duplicating project configuration or App-daemon startup ownership.
+Settings SHALL contain OpenSpecUI application preferences and a concise read-only Agent Integrations summary. It
+SHALL NOT own OpenSpec initialization, Agent selection, profile/delivery/workflow mutation, update, repair, cleanup,
+or execution Terminal state.
 
 #### Scenario: Display tool configuration state
 
@@ -97,6 +100,13 @@ The UI SHALL surface runtime settings, tool status, and document translation set
 - **WHEN** runtime settings are rendered
 - **THEN** the UI SHALL include a dedicated Translation section
 - **AND** that section SHALL expose translation enablement, target language, translation display mode, and browser translation capability state
+
+#### Scenario: Open Agent summary in Settings
+
+- **WHEN** the user views Agent Integrations in Settings
+- **THEN** configured, partial, drifted, failed, and unavailable counts SHALL be readable
+- **AND** direct failures SHALL remain visible
+- **AND** a Manage action SHALL navigate to `/config/agents`
 
 ### Requirement: OPSX Command Panel
 
@@ -128,7 +138,8 @@ The UI SHALL surface OPSX agent invocation preference controls in runtime settin
 
 ### Requirement: Config View
 
-The UI SHALL provide a Config view dedicated to OPSX project configuration.
+The Config view SHALL be the workbench described by `opsx-config-center`, with overview actions and route-backed
+owner pages rather than a mixed fixed/dynamic tab strip.
 
 #### Scenario: Replace Project view
 
@@ -136,13 +147,6 @@ The UI SHALL provide a Config view dedicated to OPSX project configuration.
 - **WHEN** the primary navigation is displayed
 - **THEN** the UI SHALL present a single “Config” entry
 - **AND** the legacy “Project” entry SHALL NOT appear
-
-#### Scenario: Render config sections
-
-- **GIVEN** the Config view is open
-- **WHEN** it renders
-- **THEN** the UI SHALL display tabs for Config, Schemas, and Changes
-- **AND** each tab SHALL scope its respective content (config.yaml, schema/templates, change metadata)
 
 #### Scenario: Config view uses CLI data
 
@@ -157,17 +161,24 @@ The UI SHALL provide a Config view dedicated to OPSX project configuration.
 - **THEN** the UI SHALL present config.yaml as read-only
 - **AND** provide a clear Edit action to enable Save/Cancel
 
-#### Scenario: Schemas tab supports Preview and Edit modes
+#### Scenario: Schema owner supports Preview and Edit modes
 
-- **GIVEN** the Schemas tab is open
+- **GIVEN** a Schema owner route is open
 - **WHEN** the user toggles Preview/Edit
 - **THEN** the UI SHALL switch between structured preview and file editor views
 
 #### Scenario: Add/delete schema controls are available
 
-- **GIVEN** the Schemas tab is open
+- **GIVEN** the Schema catalog owner is open
 - **WHEN** the user is allowed to manage schemas
 - **THEN** the UI SHALL provide Add and Delete actions
+
+#### Scenario: Open Config actions
+
+- **WHEN** the user opens Config overview
+- **THEN** Init SHALL be available only when local setup is absent
+- **AND** Guide and Resolved Context actions SHALL be available according to current projection state
+- **AND** static mode SHALL not fabricate mutation authority
 
 ### Requirement: Desktop Navigation Collapse
 
@@ -831,3 +842,76 @@ selection, rather than as an independent persistent workspace area.
 - **AND** Tooltip SHALL contain only concise terminology help, status explanation, or a complete single value
 - **AND** long diagnostics, multi-record evidence, stderr, stdout, and raw payloads SHALL NOT exist only in Tooltip content
 - **AND** every disclosure SHALL remain keyboard accessible and bounded without page-level horizontal overflow.
+
+### Requirement: Recursive Spec Identity in Views
+
+Owned and referenced Spec views SHALL preserve the complete recursive Spec id across navigation, search, export,
+SSG route generation, hydration, and document lookup.
+
+#### Scenario: Navigate to a nested owned Spec
+
+- **GIVEN** the CLI reports Spec id `platform/auth`
+- **WHEN** the user opens the owned Spec
+- **THEN** the route and lookup SHALL address exactly `platform/auth`
+- **AND** SHALL NOT flatten it to `platform` or `auth`
+
+#### Scenario: Navigate to a nested referenced Spec
+
+- **GIVEN** Store `team` exposes Spec id `platform/auth`
+- **WHEN** the user opens it from search, catalog, or static export
+- **THEN** Store identity and complete Spec identity SHALL round-trip independently
+- **AND** traversal protection SHALL remain enforced
+
+### Requirement: Change Detail Evidence Surface
+
+Active Change Detail SHALL keep workflow decisions in a stable default plane and expose persistent source evidence
+through a dedicated routed tab without changing source or mutation authority.
+
+#### Scenario: Keep the Header independent from evidence volume
+
+- **GIVEN** a Change has workflow actions, Apply inputs, Root/Reference facts, and arbitrarily long CLI evidence
+- **WHEN** Change Detail renders
+- **THEN** the Header SHALL contain Change identity, subtitle scan badges, and compact Header actions
+- **AND** Actions SHALL occupy the title inline-end while the container has sufficient space
+- **AND** the complete Action row SHALL wrap to the title block-end only when the Header container becomes narrow
+- **AND** direct status SHALL render in a full-width region below the Header
+- **AND** verbose evidence SHALL NOT affect Header height or right-side width allocation
+
+#### Scenario: Keep the default decision plane actionable
+
+- **WHEN** the default Artifact or Content tab is active
+- **THEN** Change identity, Schema, artifact progress, Root/Store, References, and workflow actions SHALL remain directly visible
+- **AND** Schema, artifact progress, Root/Store, and References SHALL use Tooltip-backed badges in the subtitle
+- **AND** each action-specific unavailable reason SHALL be available from the corresponding disabled button Tooltip
+- **AND** Change Detail SHALL NOT render a duplicate `Unavailable:` action summary
+- **AND** transport errors, Root blockers, Reference failures, stale authority, and progress divergence SHALL remain visible without opening a tab, Tooltip, Dialog, or disclosure
+- **AND** non-empty Apply context or operation guidance SHALL expose one `Apply inputs` Action that opens a bounded Dialog
+- **AND** empty Apply inputs SHALL expose neither the Action nor the Dialog
+
+#### Scenario: Inspect complete Change evidence
+
+- **WHEN** the user selects the `Evidence` tab
+- **THEN** readable Root/Store facts, artifact outputs, References, CLI result, and raw CLI payload SHALL remain retrievable in source-attributed layers
+- **AND** the tab SHALL follow `Folder`, participate in the existing routed tab query, and SHALL NOT become the default tab
+- **AND** a Dialog SHALL NOT own persistent Change evidence
+
+#### Scenario: Preserve Reference evidence authority
+
+- **GIVEN** Root Context is current, retained during refresh/failure, or unavailable
+- **WHEN** Change Detail projects Reference evidence
+- **THEN** it SHALL distinguish `current`, `retained`, and `unavailable`
+- **AND** unavailable evidence SHALL NOT be presented as zero observed References
+- **AND** a static snapshot SHALL explicitly report that live CLI and Reference provenance are unavailable
+
+#### Scenario: Bound Evidence scrolling
+
+- **GIVEN** Evidence contains long paths, diagnostics, and raw JSON
+- **WHEN** its content exceeds the available tab space at narrow or wide container widths
+- **THEN** the Evidence panel SHALL own the tab's primary vertical scrolling
+- **AND** paths SHALL wrap, raw payload SHALL remain bounded, and no ancestor SHALL create page-level horizontal overflow
+
+#### Scenario: Keep Change evidence presentation pure
+
+- **WHEN** compact and complete Change evidence components render
+- **THEN** they SHALL consume already-resolved Change Status and Root Context presentation facts
+- **AND** SHALL NOT create subscriptions, authorize mutations, reconstruct CLI facts, or change static snapshot contracts

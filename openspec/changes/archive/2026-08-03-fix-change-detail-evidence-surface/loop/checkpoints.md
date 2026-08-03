@@ -72,6 +72,6 @@ Owner correction (2026-08-03): use `auto 1fr` to prioritize title identity and w
 ## 8. Owner and PR Boundaries
 
 - [x] 8.1 Owner completes final visual and end-to-end browser walkthrough.
-- [ ] 8.2 PR checks pass for the exact implementation head.
+- [x] 8.2 PR checks pass for the exact implementation head.
 - [x] 8.3 Owner approves merge.
-- [ ] 8.4 Archive the OpenSpec Change only after implementation, owner acceptance, and delivery evidence are complete.
+- [x] 8.4 Archive the OpenSpec Change only after implementation, owner acceptance, and delivery evidence are complete.

@@ -1,13 +1,14 @@
 <!--
-Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 1. Specify CLI discovery, execution, workflow mapping, error projection, config access, and Store fault tolerance.
 
-Compromise: these six tightly coupled CLI-integration concerns remain in one capability spec because splitting them would break the established public capability identity during the active 1.6 adaptation.
+Compromise: these six tightly coupled CLI-integration concerns remain in one capability spec because splitting them would break the established public capability identity during the OpenSpecUI 7 / OpenSpec CLI 1.7 adaptation.
 
 Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
 Original request (2026-07-31): "开始发布6.1.0；目前这个版本先给它支持1.7.*，因为基本兼容。"
 Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
 Original request (2026-07-15): "sync、update 的完整交付链。"
+Original request (2026-08-01): "openspec@v1.7.* 已经发布，我们开始 openspecui@v7.* 的适配计划。"
 -->
 
 # openspec-cli-integration Specification
@@ -20,43 +21,41 @@ Define how OpenSpecUI integrates with the OpenSpec CLI to execute OPSX workflows
 
 ### Requirement: CLI Discovery and Version Enforcement
 
-OpenSpecUI SHALL select the OpenSpec CLI command based on availability and enforce the shipped release line's CLI compatibility policy. OpenSpecUI 6.x is adapted to CLI 1.6.x, accepts CLI 1.7.x as compatible without claiming 1.7-specific feature completeness, and blocks older and future lines. This compatibility bridge does not define the later OpenSpecUI 7.x contract.
+OpenSpecUI 7 SHALL classify only OpenSpec CLI `>=1.7.0 <1.8.0` as supported and adapted. Every other detected
+version SHALL be incompatible and blocked by default. When an incompatible executable is available, the mismatch
+Dialog MAY expose `Skip version check`; that action SHALL bypass only the current Web page runtime's admission gate
+and SHALL NOT change the detected version, compatibility evidence, CLI payloads, downstream errors, or product
+support claim.
 
-#### Scenario: Enforce OpenSpecUI 6.1 compatibility range
+#### Scenario: Accept the adapted 1.7 line
 
-- **GIVEN** OpenSpecUI 6.1 evaluates an OpenSpec CLI version outside `>=1.6.0 <1.8.0`
-- **WHEN** OpenSpecUI initializes
-- **THEN** the UI SHALL block usage
-- **AND** present upgrade instructions
+- **GIVEN** OpenSpecUI 7 detects OpenSpec CLI `>=1.7.0 <1.8.0`
+- **WHEN** admission is evaluated
+- **THEN** normal interactions SHALL be admitted
+- **AND** no version mismatch Dialog SHALL be shown
 
-#### Scenario: Treat 1.6 runtime as current in 6.1
+#### Scenario: Block OpenSpec CLI 1.6
 
-- **GIVEN** OpenSpecUI 6.1 evaluates OpenSpec CLI `>=1.6.0 <1.7.0`
-- **WHEN** OpenSpecUI initializes
-- **THEN** the UI SHALL allow core interactions without a compatibility warning
+- **GIVEN** OpenSpecUI 7 detects an available OpenSpec CLI 1.6.x executable
+- **WHEN** admission is evaluated
+- **THEN** the mismatch Dialog SHALL block normal interactions
+- **AND** SHALL identify 1.7.x as the required line
 
-#### Scenario: Accept compatible 1.7 runtime in 6.1
+#### Scenario: Bypass only the current page runtime
 
-- **GIVEN** OpenSpecUI 6.1 evaluates OpenSpec CLI `>=1.7.0 <1.8.0`
-- **WHEN** OpenSpecUI initializes
-- **THEN** the UI SHALL allow core interactions
-- **AND** SHALL NOT display an upgrade warning
+- **GIVEN** an available incompatible executable is blocked
+- **WHEN** the user explicitly selects `Skip version check`
+- **THEN** the current Web page runtime MAY admit interactions at the user's risk
+- **AND** compatibility evidence SHALL remain incompatible
+- **AND** downstream protocol or execution failures SHALL remain visible
+- **WHEN** the page runtime is reconstructed, refreshed, or reopened
+- **THEN** the bypass SHALL be absent and the mismatch Dialog SHALL block again
 
-#### Scenario: Drop support for 1.5 and older runtimes in 6.1
+#### Scenario: Never persist the bypass
 
-- **GIVEN** OpenSpecUI 6.1 evaluates OpenSpec CLI `1.5.x` or older
-- **WHEN** OpenSpecUI initializes
-- **THEN** the UI SHALL block usage as unsupported
-
-#### Scenario: Preserve release-line directionality
-
-- **GIVEN** OpenSpecUI release-line compatibility is evaluated
-- **WHEN** version support is declared
-- **THEN** OpenSpecUI 3.x SHALL correspond to OpenSpec CLI 1.3.x
-- **AND** OpenSpecUI 4.x SHALL correspond to OpenSpec CLI 1.4.x
-- **AND** OpenSpecUI 5.x SHALL correspond to OpenSpec CLI 1.5.x
-- **AND** OpenSpecUI 6.1 SHALL target OpenSpec CLI 1.6.x while accepting 1.7.x as compatible
-- **AND** the compatibility bridge SHALL NOT define an OpenSpecUI 7.x CLI target
+- **WHEN** a version bypass is active
+- **THEN** browser storage, Workspace state, project configuration, Server state, and exported snapshots SHALL NOT
+  contain it
 
 ### Requirement: Safe CLI Execution
 
@@ -95,7 +94,8 @@ OpenSpecUI SHALL provide real-time CLI output to the UI terminal panel.
 
 ### Requirement: OPSX Command Mapping
 
-OpenSpecUI SHALL map UI actions to official OPSX CLI commands.
+OpenSpecUI SHALL map workflow actions and project setup to official OpenSpec 1.7 commands with exact selected-Root
+or Launch Project ownership.
 
 #### Scenario: Execute OPSX status
 
@@ -129,6 +129,30 @@ OpenSpecUI SHALL map UI actions to official OPSX CLI commands.
 - **WHEN** command invocation mode is active
 - **THEN** the system SHALL produce `/opsx:sync <change-id>`
 - **AND** preserve `sync` as the workflow action passed through the public hook contract
+
+#### Scenario: Request Apply Instructions with runtime inputs
+
+- **GIVEN** an active Change and current selected Root
+- **WHEN** Apply guidance is requested
+- **THEN** OpenSpecUI SHALL execute `openspec instructions apply --change <id> --json` with the current Root selector
+- **AND** preserve CLI-provided `context`, `operationGuidance`, `contextFiles`, and Root evidence as typed facts
+
+#### Scenario: Request Archive Instructions
+
+- **GIVEN** an active Change and current selected Root
+- **WHEN** Archive guidance is requested
+- **THEN** OpenSpecUI SHALL execute `openspec instructions archive --change <id> --json` with the current Root selector
+- **AND** preserve CLI-provided `context`, `operationGuidance`, and Root evidence
+- **AND** SHALL NOT derive Archive input from Status or artifact rules
+
+#### Scenario: Initialize only the Launch Project
+
+- **GIVEN** the Launch Project has no local OpenSpec initialization
+- **WHEN** the user explicitly confirms Initialize Project
+- **THEN** OpenSpecUI SHALL execute `openspec init <launch-project> --tools=none`
+- **AND** SHALL NOT target an external Active Root or Store
+- **AND** SHALL NOT select, install, migrate, or clean Agent artifacts
+- **AND** SHALL stream command and final settlement evidence
 
 ### Requirement: CLI Error Handling
 
@@ -232,3 +256,23 @@ OpenSpecUI SHALL retrieve registered-store discovery data from the OpenSpec CLI 
 - **WHEN** the UI requests store health
 - **THEN** the system SHALL execute `openspec store doctor --json` (optionally with a store id)
 - **AND** surface `openspec_root.healthy`, `metadata`, and `git` facts per store when present
+
+### Requirement: OpenSpec 1.7 Workflow Contract
+
+OpenSpecUI SHALL preserve the complete observable OpenSpec 1.7 Status and operation-instruction contracts without
+re-parsing OpenSpec files to invent missing facts.
+
+#### Scenario: Preserve skipped artifacts
+
+- **GIVEN** Status reports an artifact with `status: skipped` and `requires`
+- **WHEN** workflow state is projected
+- **THEN** the artifact SHALL satisfy downstream dependencies
+- **AND** SHALL NOT be presented as done, ready, blocked, missing, or a physical output file
+
+#### Scenario: Keep operation guidance separate
+
+- **GIVEN** project configuration contains artifact rules and operation guidance
+- **WHEN** Apply or Archive Instructions are projected
+- **THEN** `operationGuidance` SHALL remain operation input
+- **AND** artifact `rules` SHALL remain artifact-creation input
+- **AND** neither SHALL be synthesized from the other
