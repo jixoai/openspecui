@@ -1,15 +1,19 @@
 /**
- * Orthogonal intents (created 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Layer one semantic lane header and two visual edge veils over a full-height row scroller.
  * 2. Reserve readable header/footer landing space through density-owned scroll padding.
  * 3. Forward native section interactions without owning Kanban data or operations.
  *
  * Original request (2026-08-03): layer title and bottom space over a padded list with Grid, gradients, and progressive backdrop blur.
+ * Owner refinement (2026-08-04): follow Magic UI Progressive Blur with fewer blur levels because eight lane-edge instances render together.
  */
+import { ProgressiveBlur, type ProgressiveBlurLevels } from '@/components/progressive-blur'
 import { cn } from '@/lib/utils'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import './kanban-lane-viewport.css'
 import type { KanbanLaneId } from './kanban-model'
+
+const KANBAN_BLUR_LEVELS = [0.5, 2, 6] as const satisfies ProgressiveBlurLevels
 
 export interface KanbanLaneViewportProps
   extends Omit<ComponentPropsWithoutRef<'section'>, 'children'> {
@@ -45,18 +49,22 @@ export function KanbanLaneViewport({
         {children}
       </div>
 
-      <div
-        aria-hidden="true"
+      <ProgressiveBlur
+        position="top"
+        blurLevels={KANBAN_BLUR_LEVELS}
         data-kanban-lane-veil="top"
         className="kanban-lane-viewport__veil kanban-lane-viewport__veil--top"
+        surfaceClassName="kanban-lane-viewport__veil-surface kanban-lane-viewport__veil-surface--top"
       />
       <header data-kanban-lane-header={laneId} className="kanban-lane-viewport__header">
         {header}
       </header>
-      <div
-        aria-hidden="true"
+      <ProgressiveBlur
+        position="bottom"
+        blurLevels={KANBAN_BLUR_LEVELS}
         data-kanban-lane-veil="bottom"
         className="kanban-lane-viewport__veil kanban-lane-viewport__veil--bottom"
+        surfaceClassName="kanban-lane-viewport__veil-surface kanban-lane-viewport__veil-surface--bottom"
       />
     </section>
   )

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Prove live card commands respect Root and projection authority.
  * 2. Prove Apply/Archive remain Operator callbacks rather than lane mutations.
  * 3. Prove archive drop resolves DataTransfer identity against current active rows.
@@ -9,6 +9,7 @@
  * Owner correction (2026-07-28): remove double horizontal scrolling and let each lane scroll vertically.
  * Original request (2026-08-01): keep Kanban fixtures aligned with exact OpenSpec 1.7 artifact dependencies.
  * Original request (2026-08-03): layer title and bottom space over a padded list with Grid, gradients, and progressive backdrop blur.
+ * Owner refinement (2026-08-04): use three blur levels per edge because eight ProgressiveBlur instances render together.
  */
 import { createTrackedTaskProgress } from '@openspecui/core/task-progress'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -116,7 +117,9 @@ describe('InteractiveKanban', () => {
       expect(header).toHaveClass('kanban-lane-viewport__header')
       expect(rowScroller?.contains(header)).toBe(false)
       expect(lane.querySelectorAll('[data-kanban-lane-veil]')).toHaveLength(2)
+      expect(lane.querySelectorAll('[data-progressive-blur-layer]')).toHaveLength(6)
     })
+    expect(container.querySelectorAll('[data-progressive-blur-layer]')).toHaveLength(24)
   })
 
   it('launches explicit Apply and Archive callbacks for a current row', () => {

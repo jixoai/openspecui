@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Prove Kanban lane layers share one positioning-free Grid cell in Chromium.
  * 2. Prove compact/full padding geometry and progressive visual veils reach computed CSS.
  * 3. Prove one lane scrolls beneath its fixed header without moving a sibling lane.
  *
  * Original request (2026-08-03): layer title and bottom space over a padded list with Grid, gradients, and progressive backdrop blur.
+ * Owner refinement (2026-08-04): follow Magic UI Progressive Blur with only three blur levels because eight lane-edge instances render together.
  * Owner acceptance boundary (2026-07-20): Agents stop at basic component Playwright evidence.
  */
 import { cleanup, fireEvent, render } from '@testing-library/react'
@@ -45,7 +46,7 @@ describe('KanbanLaneViewport browser contract', () => {
   it('layers visual edges over independently scrolling padded lane content', async () => {
     const onHeaderAction = vi.fn()
     const view = render(
-      <div className="grid h-48 w-[36rem] grid-cols-2 gap-4">
+      <div className="grid h-48 w-[72rem] grid-cols-4 gap-4">
         <KanbanLaneViewport
           laneId="in-progress"
           density="full"
@@ -68,6 +69,22 @@ describe('KanbanLaneViewport browser contract', () => {
           header={<div className="flex h-full items-center px-1">Compact lane</div>}
         >
           <LaneRows prefix="compact" />
+        </KanbanLaneViewport>
+        <KanbanLaneViewport
+          laneId="no-tasks"
+          density="full"
+          className="h-full"
+          header={<div className="flex h-full items-center px-1">No tasks</div>}
+        >
+          <LaneRows prefix="no-tasks" />
+        </KanbanLaneViewport>
+        <KanbanLaneViewport
+          laneId="archived"
+          density="full"
+          className="h-full"
+          header={<div className="flex h-full items-center px-1">Archived</div>}
+        >
+          <LaneRows prefix="archived" />
         </KanbanLaneViewport>
       </div>
     )
@@ -114,7 +131,18 @@ describe('KanbanLaneViewport browser contract', () => {
     expect(getComputedStyle(header).gridArea).toBe(stackArea)
     expect(getComputedStyle(topVeil).gridArea).toBe(stackArea)
     expect(getComputedStyle(bottomVeil).gridArea).toBe(stackArea)
-    for (const layer of [fullScroller, header, topVeil, bottomVeil]) {
+    const topBlurLayers = topVeil.querySelectorAll<HTMLElement>('[data-progressive-blur-layer]')
+    const topSurface = requireElement(
+      topVeil.querySelector<HTMLElement>('[data-progressive-blur-surface]'),
+      'Expected top theme surface.'
+    )
+    const allVeils = view.container.querySelectorAll('[data-kanban-lane-veil]')
+    const allBlurLayers = view.container.querySelectorAll('[data-progressive-blur-layer]')
+
+    expect(allVeils).toHaveLength(8)
+    expect(allBlurLayers).toHaveLength(24)
+    expect(topBlurLayers).toHaveLength(3)
+    for (const layer of [fullScroller, header, topVeil, bottomVeil, topSurface, ...topBlurLayers]) {
       expect(getComputedStyle(layer).position).toBe('static')
     }
 
@@ -125,13 +153,18 @@ describe('KanbanLaneViewport browser contract', () => {
     expect(getComputedStyle(header).pointerEvents).toBe('none')
     expect(getComputedStyle(headerAction).pointerEvents).toBe('auto')
 
-    const topVeilStyle = getComputedStyle(topVeil)
-    const backdropFilter =
-      topVeilStyle.backdropFilter || topVeilStyle.getPropertyValue('-webkit-backdrop-filter')
-    const maskImage = topVeilStyle.maskImage || topVeilStyle.getPropertyValue('-webkit-mask-image')
-    expect(backdropFilter).toContain('blur(6px)')
-    expect(maskImage).toContain('linear-gradient')
-    expect(topVeilStyle.backgroundImage).toContain('linear-gradient')
+    const blurFilters = [...topBlurLayers].map((layer) => {
+      const style = getComputedStyle(layer)
+      return style.backdropFilter || style.getPropertyValue('-webkit-backdrop-filter')
+    })
+    const maskImages = [...topBlurLayers].map((layer) => {
+      const style = getComputedStyle(layer)
+      return style.maskImage || style.getPropertyValue('-webkit-mask-image')
+    })
+    expect(blurFilters).toEqual(['blur(0.5px)', 'blur(2px)', 'blur(6px)'])
+    expect(maskImages.every((maskImage) => maskImage.includes('linear-gradient'))).toBe(true)
+    expect(new Set(maskImages)).toHaveLength(3)
+    expect(getComputedStyle(topSurface).backgroundImage).toContain('linear-gradient')
 
     fireEvent.click(headerAction)
     expect(onHeaderAction).toHaveBeenCalledOnce()
@@ -163,15 +196,17 @@ describe('KanbanLaneViewport browser contract', () => {
         </KanbanLaneViewport>
       </div>
     )
-    const topVeil = requireElement(
-      view.container.querySelector<HTMLElement>('[data-kanban-lane-veil="top"]'),
-      'Expected themed top visual veil.'
+    const topSurface = requireElement(
+      view.container.querySelector<HTMLElement>(
+        '[data-kanban-lane-veil="top"] [data-progressive-blur-surface]'
+      ),
+      'Expected themed top veil surface.'
     )
-    const lightGradient = getComputedStyle(topVeil).backgroundImage
+    const lightGradient = getComputedStyle(topSurface).backgroundImage
 
     document.documentElement.classList.add('dark')
     await nextFrame()
 
-    expect(getComputedStyle(topVeil).backgroundImage).not.toBe(lightGradient)
+    expect(getComputedStyle(topSurface).backgroundImage).not.toBe(lightGradient)
   })
 })

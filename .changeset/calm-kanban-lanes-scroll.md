@@ -2,4 +2,4 @@
 '@openspecui/web': patch
 ---
 
-Layer Kanban lane headers and edge fades over independently scrolling row content.
+Layer Kanban lane headers and bounded three-level progressive blur veils over independently scrolling row content.

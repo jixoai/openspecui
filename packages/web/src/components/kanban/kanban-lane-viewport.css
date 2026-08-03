@@ -1,16 +1,17 @@
 /**
- * Orthogonal intents (created 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Define the positioning-free Grid stack shared by every Kanban lane.
  * 2. Blend rows beneath header/footer edges with theme-aware gradient and masked backdrop blur.
  * 3. Keep compact/full landing-space geometry explicit and stable.
  *
  * Original request (2026-08-03): layer title and bottom space over a padded list with Grid, gradients, and progressive backdrop blur.
+ * Owner refinement (2026-08-04): follow Magic UI Progressive Blur with fewer blur levels because eight lane-edge instances render together.
  */
 
 .kanban-lane-viewport {
   --kanban-lane-header-space: 2.75rem;
   --kanban-lane-footer-space: 0.5rem;
-  --kanban-lane-veil-tail: 1rem;
+  --kanban-lane-veil-tail: 1.5rem;
 
   grid-template: 'kanban-lane-stack' minmax(0, 1fr) / minmax(0, 1fr);
   isolation: isolate;
@@ -45,34 +46,35 @@
 .kanban-lane-viewport__veil {
   z-index: 1;
   pointer-events: none;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
 }
 
 .kanban-lane-viewport__veil--top {
   align-self: start;
   block-size: calc(var(--kanban-lane-header-space) + var(--kanban-lane-veil-tail));
+}
+
+.kanban-lane-viewport__veil-surface--top {
   background: linear-gradient(
     to bottom,
     var(--background) 0%,
-    color-mix(in oklab, var(--background) 96%, transparent) 64%,
-    color-mix(in oklab, var(--background) 72%, transparent) 82%,
+    color-mix(in oklab, var(--background) 98%, transparent) 46%,
+    color-mix(in oklab, var(--background) 82%, transparent) 66%,
+    color-mix(in oklab, var(--background) 42%, transparent) 84%,
     transparent 100%
   );
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 58%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 0%, black 58%, transparent 100%);
 }
 
 .kanban-lane-viewport__veil--bottom {
   align-self: end;
   block-size: calc(var(--kanban-lane-footer-space) + var(--kanban-lane-veil-tail));
+}
+
+.kanban-lane-viewport__veil-surface--bottom {
   background: linear-gradient(
     to top,
     var(--background) 0%,
-    color-mix(in oklab, var(--background) 90%, transparent) 46%,
-    color-mix(in oklab, var(--background) 60%, transparent) 72%,
+    color-mix(in oklab, var(--background) 86%, transparent) 38%,
+    color-mix(in oklab, var(--background) 48%, transparent) 68%,
     transparent 100%
   );
-  -webkit-mask-image: linear-gradient(to top, black 0%, black 32%, transparent 100%);
-  mask-image: linear-gradient(to top, black 0%, black 32%, transparent 100%);
 }

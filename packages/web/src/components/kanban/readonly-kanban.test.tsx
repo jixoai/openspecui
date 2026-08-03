@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Prove ReadonlyKanban renders exact lane facts and navigation.
  * 2. Prove the shared readonly surface exposes no operation or drag affordance.
  * 3. Lock its self-owned 1/2/4-column container topology without horizontal scrolling.
@@ -9,6 +9,7 @@
  * Owner correction (2026-07-28): use container queries for 4x1, 2x2, and 1x4 without horizontal scrolling.
  * Original request (2026-07-31): "Kanban 的高度可以固定下来，并且要让每个group都可以独立滚动"
  * Original request (2026-08-03): layer title and bottom space over a padded list with Grid, gradients, and progressive backdrop blur.
+ * Owner refinement (2026-08-04): use three blur levels per edge because eight ProgressiveBlur instances render together.
  */
 import { createTrackedTaskProgress } from '@openspecui/core/task-progress'
 import { cleanup, render, screen } from '@testing-library/react'
@@ -128,7 +129,9 @@ describe('ReadonlyKanban', () => {
       expect(header).toHaveClass('kanban-lane-viewport__header')
       expect(scroller?.contains(header)).toBe(false)
       expect(lane.querySelectorAll('[data-kanban-lane-veil]')).toHaveLength(2)
+      expect(lane.querySelectorAll('[data-progressive-blur-layer]')).toHaveLength(6)
     }
+    expect(container.querySelectorAll('[data-progressive-blur-layer]')).toHaveLength(24)
     expect(container.querySelectorAll('.rt-skeleton').length).toBeGreaterThan(0)
   })
 })

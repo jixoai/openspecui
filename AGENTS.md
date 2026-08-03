@@ -12,6 +12,7 @@ Owner decision (2026-07-28): implement the objective Kanban rewrite and replace 
 Owner layout correction (2026-07-28): "ReadonlyKanban必须是通过容器查询支持响应式。不允许发生横向滚动。空间足够的情况下就是 4*1，不是很够的情况下就是 2*2，拥挤的情况下就是 1*4。"
 Owner live-layout correction (2026-07-28): "到kanban页面（/board）这里空间一旦不够，横向会出现双滚动条。另外纵向滚动也不合理，每一列应该要能独立滚动。"
 Owner lane-viewport direction (2026-08-03): Kanban row content spans the header and bottom-space regions; internal padding reserves their landing space, while one Grid stack layers the semantic header and theme-aware gradient/progressive-blur veils over the scroller without relative/absolute positioning.
+Owner progressive-blur refinement (2026-08-04): follow Magic UI's overlapping masked backdrop-filter bands, but derive band widths from a three-level blur tuple because four lanes render eight edge veils concurrently.
 Original request (2026-07-15): "我个人的想法，是把 --app 模式提上日程。因为 app 模式提供了多标签管理。它天生适合多项目管理的这种场景。"
 Original request (2026-07-15): "我们可以在 cli 上新增一个 --auth 或者 --password。这样后端接口就必须带上这个 http header。"
 Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
@@ -424,6 +425,9 @@ every lane body owns an independent block-axis scrollbar. Do not let the route, 
 the block-axis scroller fills the complete lane and reserves header/footer landing space through padding and matching
 scroll-padding; the semantic header plus theme-aware gradient/masked-backdrop veils overlap that scroller in one CSS
 Grid area. Relative/absolute positioning and scroll-state JavaScript are forbidden for this lane-layer topology.
+Each edge veil uses overlapping masked backdrop-filter bands whose widths derive from the actual blur-level count;
+Kanban bounds the tuple to three levels so four lanes render 24 filter layers rather than Magic UI's default 64.
+The theme-aware surface gradient remains a distinct top layer so it does not obscure the content sampled by blur.
 
 ### 6.11 execution-scope law (2026-07-19)
 
