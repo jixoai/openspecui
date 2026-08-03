@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Prove every adaptive Guide stage status remains distinct in the reducer.
- * 2. Prove only objective ready facts may skip or advance.
+ * 2. Prove objective ready facts permit but never trigger progression without explicit user confirmation.
  * 3. Prove target failures and presentation callbacks cannot fabricate completion.
  *
  * Original request (2026-08-01): the Config Guide must adapt to current project configuration.
+ * Owner correction (2026-08-03): opening a fully ready Guide must still require explicit step interaction.
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -35,10 +36,19 @@ describe('Config Guide reducer', () => {
     }
   )
 
-  it('skips only ready stages and completes only after ready Resolved Context', () => {
+  it('does not advance through ready observations without explicit user confirmation', () => {
     let state = reduceConfigGuide(INITIAL_CONFIG_GUIDE_STATE, { type: 'start' })
     for (const stage of CONFIG_GUIDE_STAGES) {
       state = reduceConfigGuide(state, { type: 'observe', stage, signal: signal('ready') })
+    }
+    expect(state).toMatchObject({ lifecycle: 'active', stage: 'project-binding' })
+  })
+
+  it('completes only after explicit progression through ready stages', () => {
+    let state = reduceConfigGuide(INITIAL_CONFIG_GUIDE_STATE, { type: 'start' })
+    for (const stage of CONFIG_GUIDE_STAGES) {
+      state = reduceConfigGuide(state, { type: 'observe', stage, signal: signal('ready') })
+      state = reduceConfigGuide(state, { type: 'next' })
     }
     expect(state).toMatchObject({ lifecycle: 'complete', stage: null })
   })
@@ -68,6 +78,7 @@ describe('Config Guide reducer', () => {
       stage: 'project-binding',
       signal: signal('ready'),
     })
+    state = reduceConfigGuide(state, { type: 'next' })
     expect(state.stage).toBe('active-root')
     state = reduceConfigGuide(state, { type: 'previous' })
     expect(state).toMatchObject({ stage: 'project-binding', reviewing: true })
@@ -87,6 +98,7 @@ describe('Config Guide reducer', () => {
       stage: 'project-binding',
       signal: signal('ready'),
     })
+    state = reduceConfigGuide(state, { type: 'next' })
     expect(state.stage).toBe('active-root')
 
     state = reduceConfigGuide(state, { type: 'restart' })

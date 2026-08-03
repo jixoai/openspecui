@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 1. Track the actual implementation state against the approved ten-slice plan.
 2. Record settled architecture decisions and exact divergence/loopback boundaries.
 3. Name the current production owner, evidence state, and next executable slice.
@@ -14,7 +14,7 @@ Change             target-openspec-cli-17-line
 Schema             opsx-collab-pr-loop
 Planning           approved and complete
 Apply              started
-Current slice      9 / Initialize Project Alert — implementation and focused evidence in progress
+Current slice      10 / Adaptive Config Guide — automated preparation complete; owner acceptance pending
 Browser acceptance owner / manager
 ```
 
@@ -467,13 +467,13 @@ the `ENOTDIR` regression test, and code-point comparator. Result: `no findings`;
   Agent edits/repair work, and non-current or unusable Resolved Context remain non-ready.
 - Provider fixtures begin without mounted targets, navigate through the typed route owner, wait for semantic anchor
   registration, and fail into a retryable target state after the bounded settlement window.
-- Projection replacement, not a Driver callback, advances each paused stage. Completion appears only after the
-  Resolved Context replacement is current, has a selected Planning Root, and reports CLI availability.
+- Projection replacement, not a presentation callback, establishes readiness for each paused stage. Explicit Continue
+  advances only when that current stage is ready; completion requires Continue from ready Resolved Context.
 - Driver adapter fixtures prove unresolved stages hide Next, keyboard presentation remains enabled, reduced motion
   disables animation/smooth scrolling, and terminal failure exposes only typed Retry/Cancel callbacks.
 - Mutation check: changing `presentation-done` to force `complete` makes the named non-authoritative presentation
   fixture fail with `active → complete`; restoring the reducer returns it green.
-- Mutation check: accepting every status except `blocked` as skippable makes the named warning fixture advance from
+- Mutation check: accepting every status except `blocked` as progressable makes the named warning fixture advance from
   Project Binding to Active Root; restoring the exact `status === ready` guard returns it green.
 
 ### Slice 10 Adaptive Config Guide Green Evidence (2026-08-02)
@@ -483,11 +483,12 @@ the `ENOTDIR` regression test, and code-point comparator. Result: `no findings`;
   publishes no Guide action.
 - Project Binding, Active Root, Agent Delivery, and Resolved Context register stable route-owned semantic anchors and
   consume their existing owner projections. No Guide-specific tRPC query, subscription, or mutation owner exists.
-- The typed reducer skips only current `ready` stages. Dirty drafts, pending commands/writes, convergence barriers,
-  warnings, stale retained authority, blockers, and failures remain visible until replacement projections settle.
+- The typed reducer permits progression only from current `ready` stages. Dirty drafts, pending commands/writes,
+  convergence barriers, warnings, stale retained authority, blockers, and failures remain visible until replacement
+  projections settle; ready stages still require explicit Continue.
 - The orchestrator uses the existing typed/View-Transition navigation owner, waits up to five seconds for the target,
-  focuses it, lazy-loads Driver.js/CSS, and restores the original trigger on Escape/cancel. Restart re-evaluates the
-  retained projection facts from the first unresolved stage.
+  focuses it, lazy-loads Driver.js/CSS, and restores the original trigger on Escape/cancel. Restart re-evaluates fresh
+  projection facts from Project Binding.
 - Driver.js owns mask/focus/popover presentation only. OpenSpecUI owns route settlement, Escape cancellation,
   readiness, mutation handoff, target failure, and completion. Complete presentation exposes no Back transition.
 - Focused unit evidence currently passes 78/78 across the reducer, owner selectors, orchestrator, Driver adapter,
@@ -495,13 +496,104 @@ the `ENOTDIR` regression test, and code-point comparator. Result: `no findings`;
 - Basic Chromium component preparation passes 2/2 for desktop and narrow containers using the real Provider-to-adapter
   contract, semantic target focus, and no component horizontal overflow. Driver configuration itself is covered by
   the focused adapter unit tests because Driver's live positioning loop is not a reliable Vitest iframe fixture.
-- Full Web evidence passes 177/177 files and 1093/1093 unit tests. The package browser CI passes five Chromium files
-  with 7/7 tests plus four Storybook browser files with 12/12 tests. Its first integrated run exposed an incomplete
+- Full Web evidence passes 177/177 files and 1096/1096 unit tests. The package browser CI passes five Chromium files
+  with 8/8 tests plus four Storybook browser files with 12/12 tests. Its first integrated run exposed an incomplete
   Active Root `@/lib/trpc` browser mock that omitted `queryClient`; preserving the original typed module exports while
   overriding only `trpcClient.planningConfig.writeActiveRoot` repaired the fixture, and both its focused rerun and the
   complete browser channel returned green.
-- `loop/guide-owner-walkthrough.md` contains six numbered production-boundary cases with exact setup, trigger,
+- `loop/guide-owner-walkthrough.md` contains seven numbered production-boundary cases with exact setup, trigger,
   PASS/FAIL, restore, and pending result ledger. Final visual acceptance remains owner-owned.
+
+### Slice 10 Guide Presentation Generation Correction (2026-08-02)
+
+- Owner repro: clicking Guide caused accelerating flicker, progressively darker masking, a black page, and multiple
+  surviving Guide tooltips.
+- Exact cause: the Provider dispatched an equivalent observation from inside the presentation effect. The reducer
+  always returned a new state, so the effect destroyed/recreated Driver continuously. Concurrent lazy imports could
+  resolve after their effect cleanup and install orphaned Driver instances because cancellation was checked before,
+  but not after, asynchronous presentation creation.
+- Red evidence: the unchanged-stage Provider fixture timed out under continuous re-entry; a separately cancelled
+  deferred presentation resolved without invoking its cleanup.
+- Green correction: equivalent observations now return the same reducer state; anchors depend on the stable register
+  capability rather than changing Context snapshots; presentation effects depend only on relevant lifecycle scalars;
+  every async presentation checks its cancelled generation after creation and destroys itself immediately when stale.
+- Focused unit evidence passes 4 files and 23 tests. Real Driver.js Chromium evidence passes desktop and narrow
+  fixtures 2/2, proving one overlay plus one popover remain stable and both disappear after cancellation.
+- Stable-head full evidence on `87d50447c11d5ff2770c9f9064c1db688a2570fd` passes Web Unit `177/177` files and
+  `1096/1096` tests, Chromium `5/5` files and `9/9` tests, and Storybook browser `4/4` files and `12/12` tests; the
+  validation start and end HEAD are identical.
+- Final visual acceptance remains owner-owned; this evidence proves the production lifecycle seam, not visual taste.
+
+### Slice 10 Guide Terminal Presentation Correction (2026-08-02)
+
+- Owner repro: the completion popover used Driver.js default styling, floated from the viewport center, and provided no
+  usable next/dismiss action, leaving the page masked and preventing the owner from continuing.
+- Exact cause: Driver.js `highlight()` injects step-local `showButtons: []`, so global `showButtons` and callbacks do not
+  render. The completion command also omitted the mounted Resolved Context semantic element and fell back to a virtual
+  viewport target.
+- Red evidence: the adapter fixture proves global controls disappear under `highlight()`, while the completion browser
+  fixture requires a connected Resolved Context target and an actionable Done control.
+- Green correction: Back, Continue, Retry, Done, Close, labels, and callbacks now live on the exact step popover;
+  overlay clicks remain inert; completion reuses the connected Resolved Context anchor; every popover uses the
+  OpenSpecUI theme class.
+- Real Chromium completion evidence proves Resolved Context remains the active highlighted element, Done is visible,
+  and clicking Done removes both the Driver overlay and popover. Final visual acceptance remains owner-owned.
+
+### Slice 10 React-owned Headless Presentation Replacement (2026-08-02)
+
+- New red evidence: Driver's popover and mask remained visible while React replaced the target's complete `className`,
+  removing `driver-active-element`. Driver's global pointer-event CSS could therefore make the real highlighted owner
+  surface non-interactive even though geometry still appeared correct.
+- Ecosystem audit compared Zag Tour, Reactour, NextStep, Floating UI, and the already-installed Base UI. Dedicated Tour
+  libraries bring a second step/progression state machine; OpenSpecUI already owns that authority. Base UI provides the
+  required headless anchor positioning and focus primitives without duplicating Guide workflow truth.
+- Driver.js and its global CSS are removed. One lazy React presentation value now renders inside the persistent Guide
+  Provider tree. Base UI positions the Popover; OpenSpecUI renders the Spotlight, standard Button controls, and
+  token-native typography, borders, radii, color, focus, and shadows.
+- The presentation never adds target classes, `inert`, body state, or global third-party styles. The real semantic target
+  remains interactive; resize, capture-phase scroll, and `visualViewport` changes refresh Spotlight geometry.
+- The first React-owned implementation exposed a second feedback loop: `useVTHrefNavigate()` returned a new callback
+  after presentation state renders, retriggering the effect. Navigation now crosses that effect through a stable ref,
+  so presentation updates cannot cause cleanup/recreation.
+- Real Chromium passes the desktop, narrow, anchored-completion, and centered target-failure surfaces. The fixtures
+  prove one Spotlight/Popover, semantic anchoring, no target `inert`, responsive containment, visible Done/Close,
+  focused Retry, and complete cleanup. The desktop, narrow, and completion subset also passed three consecutive runs.
+- Final stable-head evidence on `87d50447c11d5ff2770c9f9064c1db688a2570fd`: Web typecheck passes; Web Unit passes
+  `177/177` files and `1096/1096` tests; Chromium passes `5/5` files and `9/9` tests; Storybook browser passes `4/4`
+  files and `12/12` tests; repository lint passes with zero warnings/errors across `1241` files; strict Change
+  validation and `git diff --check` pass; validation begins and ends at the same HEAD.
+- Repository `format:check` remains blocked only by unrelated owner-owned untracked files
+  `app-icon/gen-icns.deno.ts` and `openspecui-icon-composer.icon/icon.json`; this Apply did not format or modify them.
+  Final visual acceptance remains owner-owned.
+
+### Slice 10 Explicit Progression and SVG Spotlight Correction (2026-08-03)
+
+- Owner repro: opening a fully ready Guide flickered through several route targets and reached Configuration complete
+  without any user interaction.
+- Exact cause: the reducer's `observe(ready)` branch immediately searched for the next non-ready stage, while the
+  Provider deliberately suppressed presentation for a ready stage. Four ready observations therefore formed an
+  automatic Project Binding → Active Root → Agent Delivery → Resolved Context → complete chain.
+- Precise red command:
+  `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/config-guide.test.ts src/components/config/config-guide.test.tsx`.
+  The reducer received `complete` instead of active Project Binding, and the Provider rendered Configuration complete
+  instead of Project Binding. The same command passes `18/18` after correction.
+- Green progression: observations only replace typed signal evidence. Every stage remains visible; ready enables
+  Continue, explicit Continue performs the next transition, and non-ready states keep Continue unavailable.
+- Spotlight correction: four rectangular blockers are removed. One viewport SVG owns an even-odd mask path whose
+  painted exterior uses `visiblePainted` pointer hit testing, while its bevel hole leaves the real target interactive.
+  Computed per-corner border radii define each straight cut; browsers without `corner-shape: bevel` use zero-radius
+  square corners.
+- Focused evidence passes four unit files and `24/24` tests. Real Chromium passes `4/4`: desktop and narrow target
+  geometry, explicit Continue through four ready stages before anchored completion, and centered target-failure Retry.
+  Chromium `elementFromPoint` evidence hits the semantic target inside the hole and the SVG path outside it.
+- Full Web evidence passes `178/178` unit files and `1102/1102` tests. The package browser channel passes Chromium
+  `5/5` files and `9/9` tests plus Storybook `4/4` files and `12/12` tests; Web typecheck passes. These final checks,
+  repository lint (`0` warnings/errors across `1243` files), strict Change validation, and `git diff --check` ran against
+  `353e3d5f94e961bd72abf21e2b729686980e37ed`.
+- Repository `format:check` still reports only the unrelated owner-owned untracked files
+  `app-icon/gen-icns.deno.ts` and `openspecui-icon-composer.icon/icon.json`; this correction does not modify them.
+- Final visual acceptance remains owner-owned; Case 7 in `loop/guide-owner-walkthrough.md` records the exact manual
+  progression, interaction, bevel, and unsupported-browser observations.
 
 ## Decisions Taken
 
@@ -518,7 +610,8 @@ the `ENOTDIR` regression test, and code-point comparator. Result: `no findings`;
 10. The same Alert preserves successful command evidence and then offers `[Ok] [Start Guide]`; it does not open a
     second Dialog, and Agent installation remains a later Guide decision.
 11. One adaptive Guide owns Project Binding → Active Root → Agent Delivery → Resolved Context verification.
-12. Driver.js may render focus/popovers only; OpenSpecUI owns readiness, routing, mutations, and completion.
+12. Base UI may position/focus the Popover only; OpenSpecUI owns Spotlight, controls, readiness, routing, mutations,
+    completion, and all visual styling.
 
 ## Divergence Notes
 

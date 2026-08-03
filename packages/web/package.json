@@ -103,7 +103,6 @@
     "@rjsf/core": "^6.5.2",
     "@rjsf/utils": "^6.5.2",
     "@rjsf/validator-ajv8": "^6.5.2",
-    "driver.js": "^1.8.0",
     "media-icons": "^0.10.0",
     "motion": "12.42.2",
     "pdfjs-dist": "^5.7.284",

@@ -1,16 +1,17 @@
 /**
- * Orthogonal intents (created 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Persist one adaptive Config Guide runtime across route-backed owner pages.
  * 2. Register semantic anchors and projection-derived signals without creating duplicate subscriptions.
  * 3. Own route settlement, target failure, focus restoration, reduced motion, cancel, and restart.
- * 4. Keep the lazy Driver adapter presentation-only while the typed reducer owns progression.
+ * 4. Keep the lazy React presentation non-authoritative while the typed reducer requires explicit progression.
  *
  * Original request (2026-08-01): add a Guide action to Config for OpenSpec project setup.
+ * Owner correction (2026-08-03): ready observations must unlock Continue without advancing automatically.
  */
 import { useProjectInitialization } from '@/components/config/project-initialization'
 import {
-  CONFIG_GUIDE_STAGES,
   CONFIG_GUIDE_STAGE_META,
+  CONFIG_GUIDE_STAGES,
   INITIAL_CONFIG_GUIDE_STATE,
   reduceConfigGuide,
   type ConfigGuideStageId,
@@ -19,6 +20,8 @@ import {
 import { useVTHrefNavigate } from '@/lib/view-transitions/navigation'
 import {
   createContext,
+  lazy,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -28,7 +31,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { presentConfigGuide } from './config-guide-driver'
+import type { ConfigGuidePresentation } from './config-guide-presentation'
 
 interface ConfigGuideAnchorRecord {
   element: HTMLElement
@@ -49,6 +52,10 @@ interface ConfigGuideContextValue {
 }
 
 const ConfigGuideContext = createContext<ConfigGuideContextValue | null>(null)
+const ConfigGuidePresentationLayer = lazy(async () => {
+  const presentationModule = await import('./config-guide-presentation')
+  return { default: presentationModule.ConfigGuidePresentationLayer }
+})
 
 function reducedMotionPreferred(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
@@ -76,13 +83,14 @@ export function useConfigGuide() {
 /** Register one route-local semantic target and its projection-owned Guide signal. */
 export function useConfigGuideAnchor(stage: ConfigGuideStageId, signal: ConfigGuideStageSignal) {
   const guide = useConfigGuide()
+  const register = guide?.register
   const [element, setElement] = useState<HTMLElement | null>(null)
   const { detail, status, title } = signal
 
   useEffect(() => {
-    if (!guide || !element) return
-    return guide.register(stage, element, { detail, status, title })
-  }, [detail, element, guide, stage, status, title])
+    if (!register || !element) return
+    return register(stage, element, { detail, status, title })
+  }, [detail, element, register, stage, status, title])
 
   return {
     ref: setElement,
@@ -100,10 +108,12 @@ export function ConfigGuideProvider({
 }) {
   const initialization = useProjectInitialization()
   const navigate = useVTHrefNavigate()
+  const navigateRef = useRef(navigate)
+  navigateRef.current = navigate
   const [state, dispatch] = useReducer(reduceConfigGuide, INITIAL_CONFIG_GUIDE_STATE)
   const [anchorRevision, setAnchorRevision] = useState(0)
+  const [presentation, setPresentation] = useState<ConfigGuidePresentation | null>(null)
   const recordsRef = useRef(new Map<ConfigGuideStageId, ConfigGuideAnchorRecord>())
-  const cleanupPresentationRef = useRef<(() => void) | null>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
   const canStart = enabled && initialization?.projection?.initialized === true
 
@@ -125,7 +135,6 @@ export function ConfigGuideProvider({
 
   const restart = useCallback(() => {
     if (!canStart) return
-    cleanupPresentationRef.current?.()
     dispatch({ type: 'restart' })
   }, [canStart])
 
@@ -171,8 +180,6 @@ export function ConfigGuideProvider({
   }, [cancel, state.lifecycle])
 
   useEffect(() => {
-    cleanupPresentationRef.current?.()
-    cleanupPresentationRef.current = null
     if (!enabled) return
     if (state.lifecycle === 'idle') return
     if (state.lifecycle === 'cancelled') {
@@ -181,10 +188,19 @@ export function ConfigGuideProvider({
     }
 
     let cancelled = false
+    let activePresentation: ConfigGuidePresentation | null = null
+    const activatePresentation = (nextPresentation: ConfigGuidePresentation): boolean => {
+      if (cancelled) return false
+      activePresentation = nextPresentation
+      setPresentation(nextPresentation)
+      return true
+    }
     void (async () => {
       if (state.lifecycle === 'complete') {
-        cleanupPresentationRef.current = await presentConfigGuide({
+        const resolvedContext = recordsRef.current.get('resolved-context')
+        activatePresentation({
           kind: 'complete',
+          element: resolvedContext?.element.isConnected ? resolvedContext.element : undefined,
           label: 'Configuration complete',
           canGoBack: false,
           reducedMotion: reducedMotionPreferred(),
@@ -201,7 +217,7 @@ export function ConfigGuideProvider({
         return
       }
       if (state.lifecycle === 'target-failed' && state.stage) {
-        cleanupPresentationRef.current = await presentConfigGuide({
+        activatePresentation({
           kind: 'target-failed',
           label: CONFIG_GUIDE_STAGE_META[state.stage].label,
           canGoBack: false,
@@ -217,7 +233,7 @@ export function ConfigGuideProvider({
       const stage = state.stage
       const meta = CONFIG_GUIDE_STAGE_META[stage]
       const current = recordsRef.current.get(stage)
-      if (!current?.element.isConnected) await navigate({ href: meta.route })
+      if (!current?.element.isConnected) await navigateRef.current({ href: meta.route })
       const target = await waitForAnchor(recordsRef.current, stage, () => cancelled)
       if (cancelled) return
       if (!target) {
@@ -225,11 +241,10 @@ export function ConfigGuideProvider({
         return
       }
       dispatch({ type: 'observe', stage, signal: target.signal })
-      if (target.signal.status === 'ready' && !state.reviewing) return
 
       if (!target.element.hasAttribute('tabindex')) target.element.tabIndex = -1
       target.element.focus({ preventScroll: true })
-      cleanupPresentationRef.current = await presentConfigGuide({
+      activatePresentation({
         kind: 'stage',
         element: target.element,
         label: meta.label,
@@ -241,15 +256,14 @@ export function ConfigGuideProvider({
         onCancel: cancel,
       })
     })().catch(() => {
-      if (state.stage) dispatch({ type: 'target-missing', stage: state.stage })
+      if (!cancelled && state.stage) dispatch({ type: 'target-missing', stage: state.stage })
     })
 
     return () => {
       cancelled = true
-      cleanupPresentationRef.current?.()
-      cleanupPresentationRef.current = null
+      setPresentation((current) => (current === activePresentation ? null : current))
     }
-  }, [anchorRevision, cancel, enabled, navigate, restoreFocus, state])
+  }, [anchorRevision, cancel, enabled, restoreFocus, state.lifecycle, state.reviewing, state.stage])
 
   const value = useMemo<ConfigGuideContextValue>(
     () => ({
@@ -266,5 +280,12 @@ export function ConfigGuideProvider({
     [canStart, cancel, register, restart, start, state.lifecycle]
   )
 
-  return <ConfigGuideContext.Provider value={value}>{children}</ConfigGuideContext.Provider>
+  return (
+    <ConfigGuideContext.Provider value={value}>
+      {children}
+      <Suspense fallback={null}>
+        {presentation ? <ConfigGuidePresentationLayer presentation={presentation} /> : null}
+      </Suspense>
+    </ConfigGuideContext.Provider>
+  )
 }

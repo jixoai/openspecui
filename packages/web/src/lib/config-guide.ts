@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (created 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Define the adaptive Config Guide stage order, semantic routes, and anchors.
  * 2. Reduce projection-owned stage signals into active, paused, failed, cancelled, or complete lifecycle.
- * 3. Permit progression only from objective ready facts while presentation events remain non-authoritative.
+ * 3. Permit progression only when an explicit user intent is backed by an objective ready fact.
  *
  * Original request (2026-08-01): add a Config Guide that leads users through OpenSpec project configuration.
+ * Owner correction (2026-08-03): ready observations must not flicker through stages or complete without interaction.
  */
 export const CONFIG_GUIDE_STAGES = [
   'project-binding',
@@ -84,33 +85,38 @@ export const INITIAL_CONFIG_GUIDE_STATE: ConfigGuideState = {
   failure: null,
 }
 
+function signalsEqual(
+  left: ConfigGuideStageSignal | undefined,
+  right: ConfigGuideStageSignal
+): boolean {
+  return left?.status === right.status && left.title === right.title && left.detail === right.detail
+}
+
 function stageIndex(stage: ConfigGuideStageId): number {
   return CONFIG_GUIDE_STAGES.indexOf(stage)
 }
 
-function advance(fromIndex: number, signals: ConfigGuideState['signals']): ConfigGuideState {
-  for (let index = fromIndex; index < CONFIG_GUIDE_STAGES.length; index += 1) {
-    const stage = CONFIG_GUIDE_STAGES[index]
-    if (signals[stage]?.status !== 'ready') {
-      return {
-        lifecycle: 'active',
-        stage,
-        signals,
-        reviewing: false,
-        failure: null,
-      }
+function openStage(index: number, signals: ConfigGuideState['signals']): ConfigGuideState {
+  const stage = CONFIG_GUIDE_STAGES[index]
+  if (stage) {
+    return {
+      lifecycle: 'active',
+      stage,
+      signals,
+      reviewing: false,
+      failure: null,
     }
   }
   return { lifecycle: 'complete', stage: null, signals, reviewing: false, failure: null }
 }
 
-/** Pure Guide authority; Driver callbacks may request actions but cannot create readiness. */
+/** Pure Guide authority; presentation intents may request progression but cannot create readiness. */
 export function reduceConfigGuide(
   state: ConfigGuideState,
   action: ConfigGuideAction
 ): ConfigGuideState {
   if (action.type === 'start' || action.type === 'restart') {
-    return advance(0, {})
+    return openStage(0, {})
   }
   if (action.type === 'dismiss') return INITIAL_CONFIG_GUIDE_STATE
   if (action.type === 'cancel') return { ...state, lifecycle: 'cancelled', failure: null }
@@ -129,15 +135,8 @@ export function reduceConfigGuide(
       : reduceConfigGuide(state, { type: 'restart' })
   }
   if (action.type === 'observe') {
+    if (signalsEqual(state.signals[action.stage], action.signal)) return state
     const signals = { ...state.signals, [action.stage]: action.signal }
-    if (
-      state.lifecycle === 'active' &&
-      state.stage === action.stage &&
-      action.signal.status === 'ready' &&
-      !state.reviewing
-    ) {
-      return advance(stageIndex(action.stage) + 1, signals)
-    }
     return { ...state, signals }
   }
   if (state.lifecycle !== 'active' || !state.stage) return state
@@ -154,7 +153,7 @@ export function reduceConfigGuide(
   }
   if (action.type === 'next') {
     if (state.signals[state.stage]?.status !== 'ready') return state
-    return advance(stageIndex(state.stage) + 1, state.signals)
+    return openStage(stageIndex(state.stage) + 1, state.signals)
   }
   return state
 }

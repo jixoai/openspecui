@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 1. Track every approved implementation slice through fixed red, green, mutation, review, and delivery evidence.
 2. Preserve exact production ownership and prevent broad gates from hiding focused failures.
 3. Separate agent automation evidence from owner-only final browser acceptance and release decisions.
@@ -207,12 +207,12 @@ Production owner: one Launch Project initialization service, global Alert owner,
 
 ## 10. Adaptive Config Guide
 
-Production owner: typed Guide reducer/orchestrator and Driver.js presentation adapter.
+Production owner: typed Guide reducer/orchestrator plus React-owned Base UI Popover and OpenSpecUI Spotlight.
 
 ### Red Evidence
 
 - [x] 10.1 Add reducer fixtures for ready, required, warning, stale, blocked, failed, active-edit, and complete stages.
-- [x] 10.2 Prove only objectively ready stages skip.
+- [x] 10.2 Prove only objectively ready stages permit progression.
 - [x] 10.3 Add route transition/focus-anchor fixture and missing-target failure behavior.
 - [x] 10.4 Prove completion requires current usable Resolved Context.
 - [x] 10.5 Mutation check: letting Driver callbacks own readiness or skipping warnings makes reducer tests fail.
@@ -226,6 +226,20 @@ Production owner: typed Guide reducer/orchestrator and Driver.js presentation ad
 - [x] 10.10 Support keyboard navigation, focus restoration, reduced motion, cancel, and restart.
 - [x] 10.11 Add basic component-browser preparation evidence for desktop and narrow viewport.
 - [x] 10.12 Prepare owner walkthrough cases; do not claim final Guide acceptance.
+- [x] 10.13 Reproduce unchanged-stage presentation re-entry and late async cleanup as precise failing Provider tests.
+- [x] 10.14 Make observations idempotent, anchor registration stable, and presentation settlement generation-safe.
+- [x] 10.15 Prove real Driver.js keeps exactly one overlay/popover and removes both on cancellation in Chromium.
+- [x] 10.16 Add red evidence that `highlight()` clears global controls and completion loses both its anchor and dismissal.
+- [x] 10.17 Put controls on the exact step popover, theme it, and anchor completion to mounted Resolved Context.
+- [x] 10.18 Prove real Chromium exposes Done and removes both overlay/popover after completion dismissal.
+- [x] 10.19 Prove React can overwrite Driver's target class while its overlay/popover remain, disabling target interaction.
+- [x] 10.20 Audit headless Tour, Popover, mask, routing, focus, and controlled-state ecosystem boundaries.
+- [x] 10.21 Replace Driver with lazy Base UI Popover plus an OpenSpecUI-owned four-region Spotlight.
+- [x] 10.22 Keep navigation stable across presentation renders and remove Driver dependency/global CSS/DOM mutation.
+- [x] 10.23 Pass three consecutive real Chromium runs for desktop, narrow, completion, controls, and cleanup.
+- [x] 10.24 Reproduce a fully ready Guide auto-completing without interaction in reducer and Provider tests.
+- [x] 10.25 Require explicit Continue for every ready stage and prove observations alone never advance or complete.
+- [x] 10.26 Replace four mask regions with one SVG even-odd bevel path and prove hole/outside pointer hit testing.
 
 ## 11. Static, Documentation, and Release Preparation
 

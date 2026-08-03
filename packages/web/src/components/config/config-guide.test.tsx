@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Prove the root Guide orchestrator navigates and waits for route-owned semantic anchors.
- * 2. Prove replacement projection signals, not presentation callbacks, advance paused stages.
+ * 2. Prove replacement projections unlock Continue while only explicit user intent advances a ready stage.
  * 3. Prove missing targets, completion anchoring, cancellation, restart, focus restoration, and reduced motion remain explicit.
  * 4. Prove one presentation generation cannot leak or stack after effect replacement.
  *
  * Original request (2026-08-02): implement the adaptive Config Guide with unit and component evidence.
+ * Owner correction (2026-08-03): opening a fully ready Guide must not flicker into completion.
  */
 import {
   CONFIG_GUIDE_STAGE_META,
@@ -158,7 +159,7 @@ describe('ConfigGuideProvider', () => {
     vi.useRealTimers()
   })
 
-  it('waits for each route anchor and advances only from replacement ready projections', async () => {
+  it('waits for each route anchor and advances only after ready replacement plus Continue', async () => {
     render(
       <ConfigGuideProvider enabled>
         <GuideHarness />
@@ -216,7 +217,7 @@ describe('ConfigGuideProvider', () => {
     expect(latestPresentation().kind).toBe('stage')
   })
 
-  it('restores focus on cancel and restarts from the first unresolved projection', async () => {
+  it('restores focus on cancel and restarts from the first stage', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({ matches: true }))
