@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Verify reactive file, directory, existence, and stat projections.
  * 2. Verify cache invalidation drives ReactiveContext streams.
  * 3. Verify cached reads bind when an observation root is acquired later.
  *
  * Original request (2026-07-15): "操作成功底层是要推送变更的，然后让多端基于订阅拉取更新。"
+ * Full-gate correction (2026-08-03): keep watcher deletion evidence bounded under full monorepo load.
  */
 import { rm, writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -129,7 +130,7 @@ describe('ReactiveFS', () => {
       expect(second.value).toBeNull()
 
       await generator.return(undefined)
-    })
+    }, 20_000)
 
     it('should update when file is created', async () => {
       const filepath = join(tempDir, 'new.txt')

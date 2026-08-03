@@ -1,77 +1,69 @@
 {
-  "fill" : {
-    "automatic-gradient" : "gray:0.98000,1.00000"
+  "fill": {
+    "automatic-gradient": "gray:0.98000,1.00000"
   },
-  "groups" : [
+  "groups": [
     {
-      "blend-mode" : "normal",
-      "blur-material" : null,
-      "layers" : [
+      "blend-mode": "normal",
+      "blur-material": null,
+      "layers": [
         {
-          "fill-specializations" : [
+          "fill-specializations": [
             {
-              "appearance" : "tinted",
-              "value" : {
-                "solid" : "display-p3:1.00000,1.00000,1.00000,1.00000"
+              "appearance": "tinted",
+              "value": {
+                "solid": "display-p3:1.00000,1.00000,1.00000,1.00000"
               }
             }
           ],
-          "glass-specializations" : [
+          "glass-specializations": [
             {
-              "appearance" : "dark",
-              "value" : true
+              "appearance": "dark",
+              "value": true
             },
             {
-              "appearance" : "tinted",
-              "value" : true
+              "appearance": "tinted",
+              "value": true
             }
           ],
-          "image-name-specializations" : [
+          "image-name-specializations": [
             {
-              "value" : "icon.svg"
+              "value": "icon.svg"
             },
             {
-              "appearance" : "dark",
-              "value" : "icon.dark.svg"
+              "appearance": "dark",
+              "value": "icon.dark.svg"
             }
           ],
-          "name" : "icon.dark",
-          "position" : {
-            "scale" : 6,
-            "translation-in-points" : [
-              0,
-              0
-            ]
+          "name": "icon.dark",
+          "position": {
+            "scale": 6,
+            "translation-in-points": [0, 0]
           }
         }
       ],
-      "lighting" : "individual",
-      "position" : {
-        "scale" : 1,
-        "translation-in-points" : [
-          0,
-          0
-        ]
+      "lighting": "individual",
+      "position": {
+        "scale": 1,
+        "translation-in-points": [0, 0]
       },
-      "refractivity" : {
-        "depth" : 0,
-        "enabled" : false,
-        "strength" : 0.5
+      "refractivity": {
+        "depth": 0,
+        "enabled": false,
+        "strength": 0.5
       },
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.6
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.6
       },
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.2
+      "translucency": {
+        "enabled": true,
+        "value": 0.2
       }
     }
   ],
-  "supported-platforms" : {
-    "circles" : [
-      "watchOS"
-    ],
-    "squares" : "shared"
+  "supported-platforms": {
+    "circles": ["watchOS"],
+    "squares": "shared"
   }
 }

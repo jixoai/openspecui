@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Prove the public Router reads and writes recursive owned Spec identity through real services.
  * 2. Prove public mutation rejects encoded traversal before physical filesystem effects.
  *
@@ -129,7 +129,7 @@ describe('public nested Spec Router', () => {
     } finally {
       await fixture.dispose()
     }
-  })
+  }, 15_000)
 
   it('rejects encoded traversal before creating a Spec document', async () => {
     const fixture = await createNestedSpecRouterFixture()

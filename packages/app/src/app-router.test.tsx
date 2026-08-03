@@ -226,7 +226,7 @@ describe('app-router', () => {
     expect(layout?.firstElementChild).toBe(titlebar)
   })
 
-  it('moves Settings into the compact titlebar for overlay presentation', async () => {
+  it('keeps mobile Settings navigation while the overlay titlebar owns the desktop action', async () => {
     const router = routerFor(
       { ...EMPTY_CONTEXT, appPresentation: 'opentray-overlay' },
       '/workspaces'
@@ -236,7 +236,7 @@ describe('app-router', () => {
     await waitFor(() => {
       expect(container.querySelector('[data-app-titlebar="true"]')).toBeTruthy()
     })
-    expect(container.querySelector('a[href="/settings"]')).toBeNull()
+    expect(container.querySelector('a[href="/settings"]')).toBeTruthy()
     const settings = container.querySelector<HTMLButtonElement>('button[aria-label="Settings"]')
     expect(settings).toBeTruthy()
     await act(async () => settings?.click())

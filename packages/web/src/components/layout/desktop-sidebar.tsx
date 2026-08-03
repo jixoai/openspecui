@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Render accessible expanded/collapsed navigation for the project workspace.
  * 2. Preserve the Context route and search entry points across sidebar states.
  * 3. Render static links or live draggable areas from the canonical navigation registry.
@@ -7,6 +7,7 @@
  * Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
  * Derived requirement (2026-07-18): Checkpoint 6.9 replaces the project Stores route with Context.
  * Owner correction (2026-07-29): the navigation rail must not duplicate Context with a clickable Planning summary.
+ * Owner correction (2026-08-03): remove the dedicated `desktop-sidebar-toggle` pressed-state style.
  */
 import { getHostedScopedStorageKey } from '@/lib/hosted-session'
 import { getBasePath, isStaticMode } from '@/lib/static-mode'
@@ -78,7 +79,7 @@ export function DesktopSidebar() {
             type="button"
             aria-pressed={!collapsed}
             onClick={() => setCollapsed((current) => !current)}
-            className="desktop-sidebar-toggle hover:bg-muted text-muted-foreground hover:text-foreground border-border inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
+            className="hover:bg-muted text-muted-foreground hover:text-foreground border-border inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
             aria-label={collapseLabel}
             title={collapseLabel}
           >

@@ -1429,11 +1429,6 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
   padding: 0.5rem;
 }
 
-/* Sidebar toggle: explicit two-state affordance (aria-pressed). */
-.desktop-sidebar-toggle[aria-pressed='true'] {
-  background-color: var(--accent);
-  color: var(--accent-foreground);
-}
 .mobile-header,
 .mobile-tabbar {
   display: flex;

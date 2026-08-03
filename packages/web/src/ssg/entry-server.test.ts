@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  *
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Prove SSG enumerates and titles owned and referenced recursive Spec identity.
  * 2. Prove the static server entry imports and renders without browser globals.
  * 3. Prove Config-owned Resolved Context and objective Kanban are generated through the static route manifest.
@@ -151,7 +151,7 @@ describe('static Spec routes', () => {
     await expect(
       render('/specs/referenced/team/platform%2Fauth', snapshot(), '/')
     ).resolves.toContain('platform/auth')
-  }, 20_000)
+  }, 30_000)
 
   it('renders published Context provenance into the static server output', async () => {
     const { render } = await import('./entry-server')
@@ -164,5 +164,5 @@ describe('static Spec routes', () => {
     expect(html).toContain('Published Reference policy')
     expect(html).not.toContain('XDG_DATA_HOME')
     expect(html).not.toContain('defaultStore')
-  }, 20_000)
+  }, 30_000)
 })

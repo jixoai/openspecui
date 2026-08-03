@@ -82,10 +82,10 @@ export function AppTitlebar({
             </span>
             <span className="font-nav app-titlebar-text">OpenSpecUI App</span>
           </div>
-          {/* Persistent toggle-button: survives collapse, aria-pressed reflects open/closed */}
+          {/* Persistent toggle-button: survives collapse and exposes the controlled expansion state. */}
           <button
+            aria-expanded={!sidebarCollapsed}
             aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            aria-pressed={!sidebarCollapsed}
             className="app-titlebar-sidebar-toggle"
             data-pressed={!sidebarCollapsed ? 'true' : 'false'}
             onClick={onToggleSidebar}

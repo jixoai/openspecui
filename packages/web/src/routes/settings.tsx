@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Present backend, CLI execution, terminal, notification, and appearance settings.
- * 2. Compose the extracted OpenSpec diagnostics and initialization owner.
+ * 2. Compose OpenSpec diagnostics with the read-only Agent Integrations summary owned by Config.
  * 3. Bind network-triggered settings actions to visible loading and failure state.
  * 4. Delegate CLI installation and Init through single-source Server-owned transports.
  * 5. Preserve first-frame and dirty Terminal drafts through field-value Config synchronization.
@@ -13,6 +13,7 @@
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
  * Owner correction (2026-07-29): Settings uses one shell scroll owner and container-driven field density.
  * Owner correction (2026-07-29): remove project-level Hosted App URL configuration; the daemon owns its local App shell.
+ * Original request (2026-08-01): Settings labels Agent Integrations and delegates management to Config.
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -196,7 +197,7 @@ const SETTINGS_TOC_ITEMS: TocItem[] = [
   { id: 'settings-project-directory', label: 'Project Directory' },
   { id: 'settings-cli-configuration', label: 'CLI Configuration' },
   { id: 'settings-openspec-diagnostics', label: 'OpenSpec Diagnostics' },
-  { id: 'settings-init-openspec', label: 'Initialize OpenSpec' },
+  { id: 'settings-agent-integrations', label: 'Agent Integrations' },
   { id: 'settings-api-configuration', label: 'API Configuration' },
   { id: 'settings-file-watcher', label: 'File Watcher' },
 ]
@@ -1269,7 +1270,7 @@ export function Settings() {
 
               <OpenSpecSettingsSections
                 diagnosticsIndex={tocIndex('settings-openspec-diagnostics')}
-                initializationIndex={tocIndex('settings-init-openspec')}
+                agentIntegrationsIndex={tocIndex('settings-agent-integrations')}
               />
 
               {/* API Configuration */}

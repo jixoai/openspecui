@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Prove the public Dashboard Summary v2 Router serializes a real Server-owned wake-up.
  * 2. Prove the public typed pull correlates retained/current state without exposing Planning-root paths.
  * 3. Keep the fixture fully typed through createServer, createContext, and the tRPC caller.
@@ -7,8 +7,10 @@
  *
  * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
  * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
+ * Original request (2026-08-01): OpenSpecUI 7 requires OpenSpec CLI 1.7 for live projection readiness.
  */
 import {
+  CliExecutor,
   CliContextSchema,
   CliDoctorSchema,
   parseCliCommandResult,
@@ -38,10 +40,33 @@ function commandResult<T>(data: T, schema: ZodType<T>): CliCommandResult<T> {
 async function createSummaryRouterFixture() {
   const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-dashboard-summary-router-'))
   await mkdir(join(projectDir, 'openspec'), { recursive: true })
+  vi.spyOn(CliExecutor.prototype, 'execute').mockImplementation(async (args) => {
+    const command = args.join(' ')
+    if (command === 'config path') {
+      return {
+        success: true,
+        stdout: `${join(projectDir, 'global-config.json')}\n`,
+        stderr: '',
+        exitCode: 0,
+      }
+    }
+    if (command === 'config list --json') {
+      return { success: true, stdout: '{}\n', stderr: '', exitCode: 0 }
+    }
+    if (command === 'config list') {
+      return { success: true, stdout: '', stderr: '', exitCode: 0 }
+    }
+    return {
+      success: false,
+      stdout: '',
+      stderr: `Unexpected Dashboard fixture command: ${command}`,
+      exitCode: 1,
+    }
+  })
   const server = createServer({ projectDir, enableWatcher: false })
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.6.0',
+    version: '1.7.0',
   })
   const doctorRoot = vi
     .spyOn(server.cliExecutor.contracts, 'doctorRoot')
@@ -98,7 +123,10 @@ describe('public Dashboard Summary v2 Router', () => {
       const wakes: DashboardSummaryInvalidation[] = []
       subscription = observable.subscribe({ next: (wake) => wakes.push(wake) })
 
-      await vi.waitFor(() => expect(wakes.some((wake) => wake.state === 'ready')).toBe(true))
+      await vi.waitFor(
+        () => expect(wakes.some((wake) => wake.state === 'ready')).toBe(true),
+        { timeout: 5_000 }
+      )
       const wake = wakes.find((candidate) => candidate.state === 'ready')
       if (!wake) throw new Error('Expected the initial Dashboard Summary wake.')
       const doctorCallsBeforePull = fixture.doctorRoot.mock.calls.length
