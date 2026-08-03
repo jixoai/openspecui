@@ -272,8 +272,8 @@ Production owner: typed Guide reducer/orchestrator plus React-owned Base UI Popo
 - [x] 12.9 `git diff --check` passes.
 - [x] 12.10 Numbered owner walkthrough document records exact head, setup, trigger, PASS/FAIL observations, and restore.
 - [x] 12.11 Open/update PR only after local gates pass; include Changeset and exact evidence notes.
-- [ ] 12.12 Required PR checks pass; Manager-mode merge decision is satisfied.
-- [ ] 12.13 Ask manager whether to release after merge; do not publish from the feature branch.
-- [ ] 12.14 If authorized, complete version PR, release workflow, npm dist-tag, remote tags, and GitHub Release evidence.
-- [ ] 12.15 Archive the OpenSpec Change only after implementation, verification, merge, and explicit archive boundary.
+- [x] 12.12 Required PR checks pass; Manager-mode merge decision is satisfied.
+- [x] 12.13 Ask manager whether to release after merge; do not publish from the feature branch.
+- [x] 12.14 If authorized, complete version PR, release workflow, npm dist-tag, remote tags, and GitHub Release evidence.
+- [x] 12.15 Archive the OpenSpec Change only after implementation, verification, merge, and explicit archive boundary.
 - [x] 12.16 Correct the clean-CI pinned reference from the archived 1.6 SHA to exact OpenSpec 1.7 and rerun PR checks.

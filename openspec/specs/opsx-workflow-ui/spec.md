@@ -26,7 +26,8 @@ OpenSpecUI SHALL serve OPSX read data from the in-memory kernel state, with CLI/
 
 ### Requirement: CLI-Driven Artifact Status
 
-OpenSpecUI SHALL derive artifact status solely from `openspec status --json` output.
+Artifact state SHALL preserve OpenSpec 1.7 `done`, `ready`, `blocked`, and `skipped` values plus exact dependency
+arrays. `skipped` SHALL be dependency-satisfied but SHALL NOT imply a physical artifact or completed work.
 
 #### Scenario: Render artifact readiness from CLI
 
@@ -41,9 +42,17 @@ OpenSpecUI SHALL derive artifact status solely from `openspec status --json` out
 - **WHEN** watcher events are observed by reactive streams
 - **THEN** status streams SHALL re-execute and push updated artifact states
 
+#### Scenario: Render an intentionally skipped artifact
+
+- **GIVEN** Status reports `status: skipped`
+- **WHEN** the Change workflow is rendered
+- **THEN** the artifact SHALL be identified as intentionally skipped
+- **AND** SHALL NOT expose Create, Edit, or missing-file actions
+- **AND** dependent ready artifacts SHALL remain actionable when all other requirements are satisfied
+
 ### Requirement: CLI-Driven Artifact Instructions
 
-OpenSpecUI SHALL obtain artifact instructions exclusively from `openspec instructions --json`.
+Workflow actions SHALL consume the exact selected-Root instruction contract for artifacts, Apply, and Archive.
 
 #### Scenario: Load instructions for selected artifact
 
@@ -65,6 +74,19 @@ OpenSpecUI SHALL obtain artifact instructions exclusively from `openspec instruc
 - **WHEN** the kernel warms apply instructions
 - **THEN** OpenSpecUI SHALL preserve every CLI-provided context file path
 - **AND** legacy single-path values SHALL be normalized into one-item path arrays
+
+#### Scenario: Compose Apply with runtime inputs
+
+- **WHEN** Apply is invoked
+- **THEN** the Agent/CLI composition SHALL include CLI-provided project `context` and Apply `operationGuidance`
+- **AND** preserve their provenance separately from artifact rules
+
+#### Scenario: Compose Archive with runtime inputs
+
+- **WHEN** Archive is invoked
+- **THEN** the action SHALL first consume Archive Instructions for the selected Root
+- **AND** include CLI-provided `context` and Archive `operationGuidance`
+- **AND** SHALL NOT substitute Status evidence
 
 ### Requirement: Config-Centered Schema Metadata
 
@@ -187,7 +209,8 @@ OpenSpecUI SHALL support both compose-mode and command-mode agent handoff for OP
 
 ### Requirement: Skills-Based Tool Detection
 
-OpenSpecUI SHALL determine configured tools using skills directories rather than legacy slash-command files.
+Agent integration detection SHALL model OpenSpec 1.7 delivery capabilities and physical artifacts rather than
+assuming every tool has the same skills and command layout.
 
 #### Scenario: Detect configured tools via skills
 
@@ -200,6 +223,26 @@ OpenSpecUI SHALL determine configured tools using skills directories rather than
 - **GIVEN** a skills directory changes
 - **WHEN** watcher detects the change
 - **THEN** UI SHALL refresh tool detection state
+
+#### Scenario: Detect Codex skills-only delivery
+
+- **GIVEN** OpenSpec-managed Codex skills are current and no managed Codex command artifacts exist
+- **WHEN** Agent state is projected
+- **THEN** Codex SHALL be initialized and current for skills-only delivery
+- **AND** missing command files SHALL NOT create a partial state
+
+#### Scenario: Report migration and cleanup
+
+- **GIVEN** OpenSpec-managed artifacts remain in a retired or renamed tool location
+- **WHEN** Agent state is projected
+- **THEN** the UI SHALL identify the exact migration/cleanup requirement
+- **AND** SHALL NOT delete artifacts until the official CLI operation is explicitly executed
+
+#### Scenario: Preserve complete 1.7 inventory
+
+- **WHEN** the Agent registry is listed
+- **THEN** CodeArts Agent, Hermes, ZCode, Devin alias behavior, Qwen Markdown command format, and all other official
+  1.7 tools SHALL preserve their declared capability and physical metadata
 
 ### Requirement: CLI Health and Version Enforcement
 

@@ -659,6 +659,22 @@ the `ENOTDIR` regression test, and code-point comparator. Result: `no findings`;
 - Local replay initializes, verifies, installs, and builds the exact 1.7 submodule successfully; Web typecheck,
   repository format/lint, and `git diff --check` remain green before the PR is rechecked.
 
+### Delivery and Release Closure (2026-08-03)
+
+- Owner acceptance covers product implementation head `a4891a84800425e81a0bb7ae7f884008d713f0ff`.
+- PR #231 final head `de6b66555b652c191d57b6484d25cf0678b33f1c` passed Changeset Gate, CI Scope,
+  Fast Gate, Web browser, xterm browser, and aggregate Browser Gate checks, then merged as
+  `da5d080b8348125b290e3d4bf361d3b58eb7d082`.
+- The manager explicitly authorized stable `7.0.0` release after the implementation merge.
+- Version PR #232 head `d728414a0dfb5215e96f8b12ba169370cb3d839a` passed its required checks and merged as
+  `92972189747e3e435ce03bb1dcd273396910c42f`.
+- Release workflow `30812872998` completed successfully against exact main head
+  `92972189747e3e435ce03bb1dcd273396910c42f`.
+- npm `latest` and package versions are `7.0.0` for `openspecui`, `@openspecui/core`,
+  `@openspecui/search`, `@openspecui/server`, and `@openspecui/web`.
+- Remote package tags exist for those five publishable packages, and GitHub Release `openspecui@7.0.0` is
+  published as stable, non-draft, and non-prerelease.
+
 ## Divergence Notes
 
 No divergence from the approved plan is currently authorized.
