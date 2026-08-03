@@ -22,7 +22,7 @@
  */
 import { selectWorkspaceDirectoryCatalogView } from '@openspecui/core/workspace-directory-catalog'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
-import { Boxes, Settings, Store, type LucideIcon } from 'lucide-react'
+import { Boxes, PanelLeftClose, Settings, Store, type LucideIcon } from 'lucide-react'
 import { useEffect, useState, type CSSProperties } from 'react'
 import { ConnectionObservationProvider } from '../lib/connection-observation'
 import { MutationObservationProvider } from '../lib/mutation-observation-provider'
@@ -180,31 +180,49 @@ function AppLayoutSurface() {
           data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
         >
           {hasOverlayTitlebar ? null : (
-            <button
-              aria-expanded={!sidebarCollapsed}
-              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className={`text-muted-foreground hover:bg-muted hover:text-foreground mb-4 flex h-8 items-center rounded-md text-xs font-semibold uppercase tracking-wide transition-colors ${
-                sidebarCollapsed ? 'justify-center px-0' : 'gap-2 px-2'
-              }`}
-              data-app-sidebar-brand
-              onClick={toggleSidebar}
-              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              type="button"
+            <div
+              className={`mb-4 flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between gap-1'}`}
             >
-              <img
-                aria-hidden="true"
-                className="app-titlebar-logo app-titlebar-logo-light h-4 w-4 shrink-0"
-                src="/icon.svg"
-                alt=""
-              />
-              <img
-                aria-hidden="true"
-                className="app-titlebar-logo app-titlebar-logo-dark h-4 w-4 shrink-0"
-                src="/icon.dark.svg"
-                alt=""
-              />
-              <span className={sidebarCollapsed ? 'sr-only' : undefined}>OpenSpecUI App</span>
-            </button>
+              {/* Brand: display-only when expanded; clickable to expand when collapsed */}
+              <button
+                aria-expanded={!sidebarCollapsed}
+                aria-label={sidebarCollapsed ? 'Expand sidebar' : undefined}
+                className={`text-muted-foreground hover:bg-muted hover:text-foreground flex h-8 items-center rounded-md text-xs font-semibold uppercase tracking-wide transition-colors ${
+                  sidebarCollapsed ? 'justify-center px-0' : 'gap-2 px-2'
+                }`}
+                data-app-sidebar-brand
+                data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
+                onClick={sidebarCollapsed ? toggleSidebar : undefined}
+                title={sidebarCollapsed ? 'Expand sidebar' : undefined}
+                type="button"
+              >
+                <img
+                  aria-hidden="true"
+                  className="app-titlebar-logo app-titlebar-logo-light h-4 w-4 shrink-0"
+                  src="/icon.svg"
+                  alt=""
+                />
+                <img
+                  aria-hidden="true"
+                  className="app-titlebar-logo app-titlebar-logo-dark h-4 w-4 shrink-0"
+                  src="/icon.dark.svg"
+                  alt=""
+                />
+                <span className={sidebarCollapsed ? 'sr-only' : undefined}>OpenSpecUI App</span>
+              </button>
+              {/* Explicit sidebar toggle — visible only when expanded */}
+              {!sidebarCollapsed ? (
+                <button
+                  aria-label="Collapse sidebar"
+                  className="app-sidebar-toggle hover:bg-muted text-muted-foreground hover:text-foreground border-border inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
+                  onClick={toggleSidebar}
+                  title="Collapse sidebar"
+                  type="button"
+                >
+                  <PanelLeftClose aria-hidden="true" className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
           )}
           <nav className="flex min-h-0 min-w-0 flex-col gap-1 overflow-hidden">
             <AppNavLink
