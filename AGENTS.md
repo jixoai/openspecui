@@ -1,16 +1,19 @@
 <!--
-Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
 1. Bootstrap repository agents through CLAUDE.md.
 2. Enforce protected-branch, PR, CI, and release delivery policy.
 3. Protect static/SSG behavior and shared live/static projections.
 4. Preserve the OpenSpec adaptation baseline, source-distinct projections, Agent-delivery authority, and independent-review corrections.
-5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, CLI trace phase precision, buffered CLI process/Worker execution, live-projection loading, admission Pull, readonly refresh semantics, real-time visual lifecycle, OPSX-first information hierarchy, Change decision-plane/Evidence-tab ownership, Config-owned Resolved Context, explicit-step adaptive Config Guide authority, theme-aware SVG Guide veil, stable container-responsive Config NavBar and owner detail transitions, natural-flow Active Root layout, Terminal palette accessibility, container-responsive objective Kanban projection, live Board scroll ownership, OpenTray App-daemon hosting, App-build asset projection, Workspaces/Stores two-domain App information architecture, PWA retirement, App brand projection, foreground Server shutdown, on-demand native translation runtime dependency ownership, delivery-correction boundaries for the 1.6/6.1 line, and evidence-first planning for the OpenSpec 1.7/OpenSpecUI 7 line.
+5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, CLI trace phase precision, buffered CLI process/Worker execution, live-projection loading, admission Pull, readonly refresh semantics, real-time visual lifecycle, OPSX-first information hierarchy, Change decision-plane/Evidence-tab ownership, Config-owned Resolved Context, explicit-step adaptive Config Guide authority, theme-aware SVG Guide veil, stable container-responsive Config NavBar and owner detail transitions, natural-flow Active Root layout, Terminal palette accessibility, container-responsive objective Kanban projection, layered Kanban lane viewport ownership, live Board scroll ownership, OpenTray App-daemon hosting, App-build asset projection, Workspaces/Stores two-domain App information architecture, PWA retirement, App brand projection, foreground Server shutdown, on-demand native translation runtime dependency ownership, delivery-correction boundaries for the 1.6/6.1 line, and evidence-first planning for the OpenSpec 1.7/OpenSpecUI 7 line.
 
 Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配，目前我们的进度有点落后。你先了解项目，然后更新 references/openspec，然后使用 $wayfinder 和我讨论具体的适配计划。我们最终使用openspec来管理 wayfinder 产出的文档。"
 Original request (2026-07-28): "这个PR自身是否符合OPSX的开放式设计，是否会冲突？都需要进行深入的调查。"
 Owner decision (2026-07-28): implement the objective Kanban rewrite and replace Dashboard Workflow Progress with ReadonlyKanban.
 Owner layout correction (2026-07-28): "ReadonlyKanban必须是通过容器查询支持响应式。不允许发生横向滚动。空间足够的情况下就是 4*1，不是很够的情况下就是 2*2，拥挤的情况下就是 1*4。"
 Owner live-layout correction (2026-07-28): "到kanban页面（/board）这里空间一旦不够，横向会出现双滚动条。另外纵向滚动也不合理，每一列应该要能独立滚动。"
+Owner lane-viewport direction (2026-08-03): Kanban row content spans the header and bottom-space regions; internal padding reserves their landing space, while one Grid stack layers the semantic header and theme-aware gradient/progressive-blur veils over the scroller without relative/absolute positioning.
+Owner progressive-blur refinement (2026-08-04): follow Magic UI's overlapping masked backdrop-filter bands, but derive band widths from a three-level blur tuple because four lanes render eight edge veils concurrently.
+Owner veil-geometry correction (2026-08-04): remove `--kanban-lane-veil-tail`; ProgressiveBlur owns visual progression, while each veil's block size exactly equals its reserved header/footer padding space.
 Original request (2026-07-15): "我个人的想法，是把 --app 模式提上日程。因为 app 模式提供了多标签管理。它天生适合多项目管理的这种场景。"
 Original request (2026-07-15): "我们可以在 cli 上新增一个 --auth 或者 --password。这样后端接口就必须带上这个 http header。"
 Original request (2026-07-15): "我们这个项目本身只是 OpenSpec 的一个可视化投影，所以保持客观中立很重要。"
@@ -419,7 +422,15 @@ readonly projection; compact/full variants may change content density but never 
 The live Board follows a separate scroll contract: its route consumes the shell's remaining block-size and contains
 page overflow; the lane grid is the only inline-axis scroll owner; every lane header stays fixed inside its lane and
 every lane body owns an independent block-axis scrollbar. Do not let the route, `main-content`, a lane section, or
-`RealtimeRevalidateCue` become a competing scroll owner.
+`RealtimeRevalidateCue` become a competing scroll owner. Readonly and live lanes share one layered lane viewport:
+the block-axis scroller fills the complete lane and reserves header/footer landing space through padding and matching
+scroll-padding; the semantic header plus theme-aware gradient/masked-backdrop veils overlap that scroller in one CSS
+Grid area. Relative/absolute positioning and scroll-state JavaScript are forbidden for this lane-layer topology.
+Each edge veil uses overlapping masked backdrop-filter bands whose widths derive from the actual blur-level count;
+Kanban bounds the tuple to three levels so four lanes render 24 filter layers rather than Magic UI's default 64.
+The theme-aware surface gradient remains a distinct top layer so it does not obscure the content sampled by blur.
+ProgressiveBlur owns the entire visual transition inside that geometry: each veil's block size equals its matching
+header/footer padding space, with no synthetic tail extending the veil into unreserved row content.
 
 ### 6.11 execution-scope law (2026-07-19)
 

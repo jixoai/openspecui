@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Prove live card commands respect Root and projection authority.
  * 2. Prove Apply/Archive remain Operator callbacks rather than lane mutations.
  * 3. Prove archive drop resolves DataTransfer identity against current active rows.
- * 4. Prove one inline scroll owner and independent lane block-scroll owners.
+ * 4. Prove one inline scroll owner and independent layered lane block-scroll owners.
  *
  * Original request (2026-07-28): implement accessible commands and current-row archive drag.
  * Owner correction (2026-07-28): remove double horizontal scrolling and let each lane scroll vertically.
  * Original request (2026-08-01): keep Kanban fixtures aligned with exact OpenSpec 1.7 artifact dependencies.
+ * Original request (2026-08-03): layer title and bottom space over a padded list with Grid, gradients, and progressive backdrop blur.
+ * Owner refinement (2026-08-04): use three blur levels per edge because eight ProgressiveBlur instances render together.
  */
 import { createTrackedTaskProgress } from '@openspecui/core/task-progress'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -84,7 +86,7 @@ function props(overrides: Partial<InteractiveKanbanProps> = {}): InteractiveKanb
 describe('InteractiveKanban', () => {
   afterEach(cleanup)
 
-  it('owns horizontal overflow once and gives every lane an independent vertical row scroller', () => {
+  it('owns horizontal overflow once and gives every lane an independent layered row scroller', () => {
     const { container } = render(<InteractiveKanban {...props()} />)
 
     const root = container.firstElementChild
@@ -97,15 +99,27 @@ describe('InteractiveKanban', () => {
     expect(grid).toHaveClass('min-h-0', 'flex-1', 'overflow-x-auto', 'overflow-y-hidden')
 
     const lanes = container.querySelectorAll('[data-lane]')
-    const rowScrollers = container.querySelectorAll('[data-lane-scroll]')
+    const rowScrollers = container.querySelectorAll('[data-kanban-lane-scroll]')
     expect(lanes).toHaveLength(4)
     expect(rowScrollers).toHaveLength(4)
     lanes.forEach((lane) => {
-      expect(lane).toHaveClass('flex', 'min-h-0', 'flex-col', 'overflow-hidden')
-      const rowScroller = lane.querySelector('[data-lane-scroll]')
-      expect(rowScroller).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto', 'overflow-x-hidden')
-      expect(rowScroller?.contains(lane.querySelector('header'))).toBe(false)
+      expect(lane).toHaveClass('kanban-lane-viewport', 'grid', 'min-h-0', 'overflow-hidden')
+      expect(lane).not.toHaveClass('relative')
+
+      const rowScroller = lane.querySelector('[data-kanban-lane-scroll]')
+      const header = lane.querySelector('[data-kanban-lane-header]')
+      expect(rowScroller).toHaveClass(
+        'kanban-lane-viewport__scroll',
+        'min-h-0',
+        'overflow-y-auto',
+        'overflow-x-hidden'
+      )
+      expect(header).toHaveClass('kanban-lane-viewport__header')
+      expect(rowScroller?.contains(header)).toBe(false)
+      expect(lane.querySelectorAll('[data-kanban-lane-veil]')).toHaveLength(2)
+      expect(lane.querySelectorAll('[data-progressive-blur-layer]')).toHaveLength(6)
     })
+    expect(container.querySelectorAll('[data-progressive-blur-layer]')).toHaveLength(24)
   })
 
   it('launches explicit Apply and Archive callbacks for a current row', () => {

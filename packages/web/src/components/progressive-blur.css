@@ -1,0 +1,19 @@
+/**
+ * Orthogonal intents (created 2026-08-04 Asia/Shanghai):
+ * 1. Stack progressive blur bands and their optional surface tint without positioned layout.
+ * 2. Keep every visual layer inert so underlying scroll and header controls retain ownership.
+ *
+ * Original request (2026-08-04): refine Kanban edge fusion from Magic UI Progressive Blur while reducing blurLevels because eight instances render together.
+ */
+
+.progressive-blur {
+  pointer-events: none;
+}
+
+.progressive-blur__layer,
+.progressive-blur__surface {
+  grid-area: 1 / 1;
+  min-block-size: 0;
+  min-inline-size: 0;
+  pointer-events: none;
+}
