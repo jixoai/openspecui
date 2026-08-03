@@ -276,3 +276,4 @@ Production owner: typed Guide reducer/orchestrator plus React-owned Base UI Popo
 - [ ] 12.13 Ask manager whether to release after merge; do not publish from the feature branch.
 - [ ] 12.14 If authorized, complete version PR, release workflow, npm dist-tag, remote tags, and GitHub Release evidence.
 - [ ] 12.15 Archive the OpenSpec Change only after implementation, verification, merge, and explicit archive boundary.
+- [ ] 12.16 Correct the clean-CI pinned reference from the archived 1.6 SHA to exact OpenSpec 1.7 and rerun PR checks.

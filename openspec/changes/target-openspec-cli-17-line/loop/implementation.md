@@ -13,8 +13,8 @@ Original request (2026-08-01): complete the Change artifacts after interview, th
 Change             target-openspec-cli-17-line
 Schema             opsx-collab-pr-loop
 Planning           approved and complete
-Apply              started
-Current slice      10 / Adaptive Config Guide — automated preparation complete; owner acceptance pending
+Apply              complete
+Current slice      delivery closure / PR CI correction
 Browser acceptance owner / manager
 ```
 
@@ -647,6 +647,16 @@ the `ENOTDIR` regression test, and code-point comparator. Result: `no findings`;
 11. One adaptive Guide owns Project Binding → Active Root → Agent Delivery → Resolved Context verification.
 12. Base UI may position/focus the Popover only; OpenSpecUI owns the theme-aware SVG Spotlight, controls, readiness,
     routing, mutations, completion, and all visual styling.
+
+### PR CI Pinned-Reference Correction (2026-08-03)
+
+- PR #231 Fast Gate failed before tests because `scripts/prepare-openspec-reference.mjs` still required the archived
+  OpenSpec 1.6 SHA `e1b51d1`, while the repository gitlink correctly resolved OpenSpec 1.7 SHA `4e16790d`.
+- The Browser Gate failure was downstream `skipped` aggregation caused by the failed Fast Gate, not an independent
+  browser regression.
+- The correction updates the clean-CI reference preparer and the explicit Project Binding fixture to the exact 1.7
+  SHA without changing product behavior or the owner-accepted UI.
+- Local replay must initialize, verify, install, and build the exact 1.7 submodule before the PR is rechecked.
 
 ## Divergence Notes
 
