@@ -1,11 +1,14 @@
 /**
- * Orthogonal intents (created 2026-08-02 Asia/Shanghai):
- * 1. Give every Config owner one route-local, self-describing navigation plane.
- * 2. Keep narrow containers free of horizontal page scrolling through a responsive grid.
- * 3. Defer page scrolling to the application main host while keeping domain-local editors contained.
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * 1. Give every Config owner one route-local, self-describing top NavBar.
+ * 2. Keep narrow containers icon-only and free of horizontal page scrolling through container queries.
+ * 3. Keep the NavBar stable while route-owned header and content participate in detail View Transitions.
+ * 4. Defer page scrolling to the application main host while keeping domain-local editors contained.
  *
  * Owner Config-workbench decision (2026-08-01): replace fixed-owner and dynamic Schema tabs with route-backed pages.
  * Original request (2026-08-01): "还是说我们应该把它迁移到 config 页面下，毕竟 config 页面下有做二级页面的一个前例。"
+ * Owner correction (2026-08-03): replace the card grid with a top NavBar that becomes icon-only by container width.
+ * Owner correction (2026-08-03): use table-like thin separators, foreground/background-only selection, and no default Back-to-Config action.
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { VTLink } from '@/lib/view-transitions/navigation'
@@ -20,6 +23,7 @@ import {
   Waypoints,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Tooltip } from '../tooltip'
 
 export type ConfigSectionId =
   | 'overview'
@@ -107,40 +111,51 @@ export function ConfigWorkbenchPage({
       data-config-section={current}
       className="@container/config flex min-h-full w-full min-w-0 flex-col overflow-x-clip"
     >
-      <div className="shrink-0 space-y-4 px-4 pt-4">
-        {header}
-        <nav
-          aria-label="Config sections"
-          className="@[36rem]:grid-cols-4 @[72rem]:grid-cols-7 grid min-w-0 grid-cols-2 gap-2"
-        >
-          {navigation.map((item) => {
-            const selected = current === item.id
-            return (
+      <nav
+        aria-label="Config sections"
+        data-config-workbench-navbar
+        className={`bg-background/95 border-border divide-border/20 sticky top-0 z-20 grid min-w-0 shrink-0 gap-0 divide-x border-b p-0 backdrop-blur ${
+          staticMode ? 'grid-cols-4' : 'grid-cols-7'
+        }`}
+      >
+        {navigation.map((item) => {
+          const selected = current === item.id
+          return (
+            <Tooltip key={item.id} content={item.label}>
               <VTLink
-                key={item.id}
                 to={item.href}
+                aria-label={item.label}
                 aria-current={selected ? 'page' : undefined}
-                className={`focus-visible:ring-primary flex min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium outline-none focus-visible:ring-2 ${
+                className={`focus-visible:ring-primary @[64rem]:gap-2 flex min-h-10 min-w-0 items-center justify-center gap-0 px-2 text-xs font-bold outline-none transition-colors focus-visible:ring-2 ${
                   selected
-                    ? 'border-primary/50 bg-primary/10 text-foreground'
-                    : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 {item.icon}
-                <span className="min-w-0 truncate">{item.label}</span>
+                <span
+                  data-testid={`config-nav-label-${item.id}`}
+                  className="config-workbench-nav-label min-w-0 truncate"
+                  aria-hidden
+                >
+                  {item.label}
+                </span>
               </VTLink>
-            )
-          })}
-        </nav>
+            </Tooltip>
+          )
+        })}
+      </nav>
+      <div className="vt-detail-content min-w-0">
+        <div className="shrink-0 px-4 pt-4">{header}</div>
+        <div className="min-w-0 p-4">{children}</div>
       </div>
-      <div className="min-w-0 p-4">{children}</div>
     </div>
   )
 }
 
 /** Consistent title identity for focused Config owner routes. */
 export function ConfigOwnerHeader({
-  backHref = '/config',
+  backHref,
   backLabel = 'Config',
   description,
   icon,
@@ -156,14 +171,16 @@ export function ConfigOwnerHeader({
 }) {
   return (
     <header className="space-y-3">
-      <VTLink
-        to={backHref}
-        aria-label={`Back to ${backLabel}`}
-        className="text-muted-foreground hover:text-foreground focus-visible:ring-primary inline-flex min-h-8 items-center gap-1.5 rounded-md px-1 text-xs outline-none focus-visible:ring-2"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-        {backLabel}
-      </VTLink>
+      {backHref ? (
+        <VTLink
+          to={backHref}
+          aria-label={`Back to ${backLabel}`}
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-primary inline-flex min-h-8 items-center gap-1.5 rounded-md px-1 text-xs outline-none focus-visible:ring-2"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          {backLabel}
+        </VTLink>
+      ) : null}
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="font-nav flex min-w-0 items-center gap-2 text-2xl font-bold">

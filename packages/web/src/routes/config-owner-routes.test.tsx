@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (created 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Verify Project, Active Root, and Environment routes mount only their declared production owner.
  * 2. Verify each owner route inherits Config-local navigation without creating a nested page-scroll owner.
  * 3. Verify only Active Root forwards static publication mode to its read-only owner.
+ * 4. Verify the shared NavBar replaces redundant default Back-to-Config actions.
  *
  * Owner Config-workbench decision (2026-08-01): move fixed Config owners into focused route modules.
  * Original request (2026-08-01): "还是说我们应该把它迁移到 config 页面下，毕竟 config 页面下有做二级页面的一个前例。"
+ * Owner correction (2026-08-03): Config owner content no longer renders a redundant `<- Config` action.
  */
 import { cleanup, render, screen, within } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -59,7 +61,7 @@ function expectRouteFrame(currentLabel: string) {
     'aria-current',
     'page'
   )
-  expect(screen.getByRole('link', { name: 'Back to Config' })).toHaveAttribute('href', '/config')
+  expect(screen.queryByRole('link', { name: 'Back to Config' })).toBeNull()
 }
 
 describe('focused Config owner routes', () => {

@@ -2,10 +2,11 @@
  * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Render one React-owned Config Guide spotlight without mutating route-owned target DOM.
  * 2. Position a Base UI popover against a registered semantic anchor using OpenSpecUI components and tokens.
- * 3. Block pointer interaction outside the spotlight while preserving target, keyboard, dismissal, and reduced-motion behavior.
+ * 3. Block pointer interaction outside the theme-aware spotlight while preserving target, keyboard, dismissal, and reduced-motion behavior.
  *
  * Original request (2026-08-02): replace Driver.js with a headless framework and unify Guide styling with OpenSpecUI.
  * Owner correction (2026-08-03): use one event-aware SVG even-odd mask that mirrors project bevel geometry.
+ * Owner correction (2026-08-03): adapt the veil color so light and dark surfaces both preserve visible focus.
  */
 import type { ConfigGuideStageSignal } from '@/lib/config-guide'
 import { cn } from '@/lib/utils'
@@ -120,7 +121,7 @@ function ConfigGuideSpotlight({ element }: { element: HTMLElement | undefined })
       <path
         data-config-guide-overlay-mask
         d={paths.maskPath}
-        fill="rgb(0 0 0 / 0.55)"
+        fill="var(--config-guide-mask)"
         fillRule="evenodd"
         clipRule="evenodd"
         pointerEvents="visiblePainted"

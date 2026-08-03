@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * 1. Classify application paths into stable navigation families and hierarchy levels.
+ * 2. Resolve route navigation into top, detail, or pop View Transition intents.
+ * 3. Normalize equivalent path spellings before semantic comparison.
+ *
+ * Original request (2026-08-03): make every Config owner-to-owner navigation use View Transitions.
+ */
 export type VTArea = 'main' | 'bottom' | 'pop'
 export type RouteLevel = 'top' | 'detail' | 'pop'
 export type VTKind = 'route-top' | 'route-detail' | 'tab-carousel'
@@ -27,6 +35,7 @@ const ROUTE_SEMANTICS: readonly RouteSemanticMatcher[] = [
   { family: 'opsx-compose', level: 'pop', pattern: /^\/opsx-compose(?:\/|$)/ },
   { family: 'dashboard', level: 'top', pattern: /^\/dashboard$/ },
   { family: 'config', level: 'top', pattern: /^\/config$/ },
+  { family: 'config', level: 'detail', pattern: /^\/config\/.+$/ },
   { family: 'git', level: 'detail', pattern: /^\/git\/(?:uncommitted|commit\/[^/]+)$/ },
   { family: 'git', level: 'top', pattern: /^\/git$/ },
   {

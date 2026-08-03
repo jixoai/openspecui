@@ -3,11 +3,11 @@
  * 1. Exercise the Provider and React-owned Base UI/Spotlight presentation against a Chromium DOM.
  * 2. Prove desktop and narrow Config Guide targets remain present without horizontal component overflow.
  * 3. Prove ready stages require explicit Continue before completion and terminal controls dismiss cleanly.
- * 4. Prove one SVG even-odd bevel mask blocks outside interaction while the real target remains interactive.
+ * 4. Prove one theme-aware SVG even-odd bevel mask blocks outside interaction while the real target remains interactive.
  * 5. Stop at component preparation evidence without claiming owner visual acceptance.
  *
  * Original request (2026-08-02): complete basic development, unit tests, and necessary component Playwright tests.
- * Owner correction (2026-08-03): prevent no-interaction completion and replace four mask divs with a bevel SVG hole.
+ * Owner correction (2026-08-03): prevent no-interaction completion, use a bevel SVG hole, and adapt the veil to the active theme.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -106,6 +106,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  document.documentElement.classList.remove('dark')
   vi.unstubAllGlobals()
 })
 
@@ -179,6 +180,29 @@ describe.each([
     })
 
     rendered.unmount()
+  })
+})
+
+describe('Config Guide theme-aware Chromium fixture', () => {
+  it('uses distinct visible mask colors for light and dark surfaces', async () => {
+    render(
+      <ConfigGuideProvider enabled>
+        <GuideBrowserHarness width={720} />
+      </ConfigGuideProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Guide' }))
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-config-guide-overlay-mask]')).not.toBeNull()
+    )
+    const mask = document.querySelector<SVGPathElement>('[data-config-guide-overlay-mask]')
+    if (!mask) throw new Error('Expected the Config Guide mask')
+
+    const lightFill = getComputedStyle(mask).fill
+    document.documentElement.classList.add('dark')
+    await waitFor(() => expect(getComputedStyle(mask).fill).not.toBe(lightFill))
+    expect(getComputedStyle(mask).fill).not.toBe('rgba(0, 0, 0, 0.55)')
   })
 })
 
