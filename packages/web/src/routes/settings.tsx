@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
  * 1. Present backend, CLI execution, terminal, notification, and appearance settings.
- * 2. Compose extracted OpenSpec diagnostics and a read-only Agent Integrations summary.
+ * 2. Compose the extracted OpenSpec diagnostics and initialization owner.
  * 3. Bind network-triggered settings actions to visible loading and failure state.
- * 4. Delegate CLI installation through the single-source Server-owned transport.
+ * 4. Delegate CLI installation and Init through single-source Server-owned transports.
  * 5. Preserve first-frame and dirty Terminal drafts through field-value Config synchronization.
  *
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
@@ -13,7 +13,6 @@
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
  * Owner correction (2026-07-29): Settings uses one shell scroll owner and container-driven field density.
  * Owner correction (2026-07-29): remove project-level Hosted App URL configuration; the daemon owns its local App shell.
- * Original request (2026-08-01): Settings must route Agent management to Config instead of owning mutations.
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -27,7 +26,6 @@ import { OpenSpecSettingsSections } from '@/components/settings/openspec-setting
 import { SoundSettingControl } from '@/components/sound-setting-control'
 import { Switch } from '@/components/switch'
 import { TerminalInvocationSettings } from '@/components/terminal/terminal-invocation-settings'
-import { clearHostedThemeOverride } from '@/components/theme-bootstrap'
 import { generateTimelineScope, Toc, TocSection, type TocItem } from '@/components/toc'
 import { getApiBaseUrl } from '@/lib/api-config'
 import {
@@ -198,7 +196,7 @@ const SETTINGS_TOC_ITEMS: TocItem[] = [
   { id: 'settings-project-directory', label: 'Project Directory' },
   { id: 'settings-cli-configuration', label: 'CLI Configuration' },
   { id: 'settings-openspec-diagnostics', label: 'OpenSpec Diagnostics' },
-  { id: 'settings-agent-integrations', label: 'Agent Integrations' },
+  { id: 'settings-init-openspec', label: 'Initialize OpenSpec' },
   { id: 'settings-api-configuration', label: 'API Configuration' },
   { id: 'settings-file-watcher', label: 'File Watcher' },
 ]
@@ -691,9 +689,6 @@ export function Settings() {
               <ButtonGroup<Theme>
                 value={theme}
                 onChange={(nextTheme) => {
-                  clearHostedThemeOverride()
-                  applyTheme(nextTheme)
-                  persistTheme(nextTheme)
                   setTheme(nextTheme)
                   saveThemeMutation.mutate(nextTheme)
                 }}
@@ -1274,7 +1269,7 @@ export function Settings() {
 
               <OpenSpecSettingsSections
                 diagnosticsIndex={tocIndex('settings-openspec-diagnostics')}
-                agentIntegrationsIndex={tocIndex('settings-agent-integrations')}
+                initializationIndex={tocIndex('settings-init-openspec')}
               />
 
               {/* API Configuration */}
