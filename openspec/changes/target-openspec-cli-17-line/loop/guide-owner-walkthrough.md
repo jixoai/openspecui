@@ -12,8 +12,8 @@ Owner correction (2026-08-03): a fully ready Guide must not flicker into complet
 
 ## Evidence Boundary
 
-- Prepared against repository HEAD `732cbe4b446041560b38e90eafed6b511e4fafbe` with the uncommitted
-  `target-openspec-cli-17-line` Apply worktree.
+- Prepared against implementation HEAD `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4`; the following doc-only evidence
+  commit changes no product code.
 - Automated evidence proves reducer, owner-signal selection, orchestration, headless presentation ownership, and basic
   Chromium component geometry. It does **not** claim final visual acceptance.
 - Automated preparation is green: Web Unit baseline `178/178` files and `1102/1102` tests; current component Chromium
@@ -277,12 +277,12 @@ unset GUIDE_TMP
 
 | Case                                | Result  | Exact HEAD                                 | Observation                |
 | ----------------------------------- | ------- | ------------------------------------------ | -------------------------- |
-| 1. Initialize and Start Guide       | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
-| 2. Project Binding active edit      | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
-| 3. Active Root required/raw/warning | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
-| 4. Agent Delivery replacement       | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
-| 5. Resolved Context barrier         | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
-| 6. Keyboard/focus/restart           | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
-| 7. Ready steps and SVG bevel mask   | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
-| 8. Config NavBar and owner VT       | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
-| 9. Active Root natural page flow    | PENDING | `732cbe4b446041560b38e90eafed6b511e4fafbe` | Owner walkthrough required |
+| 1. Initialize and Start Guide       | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
+| 2. Project Binding active edit      | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
+| 3. Active Root required/raw/warning | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
+| 4. Agent Delivery replacement       | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
+| 5. Resolved Context barrier         | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
+| 6. Keyboard/focus/restart           | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
+| 7. Ready steps and SVG bevel mask   | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
+| 8. Config NavBar and owner VT       | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
+| 9. Active Root natural page flow    | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
