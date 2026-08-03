@@ -7,6 +7,7 @@
  *
  * Original request (2026-08-01): move Agent delivery into a Config secondary page and keep Settings read-only.
  * Review correction (2026-08-02): replacement inventory Push must not discard an unsaved Agent policy draft.
+ * Owner visual direction (2026-08-02): use compact box-radius geometry for semantic status and issue labels.
  */
 import {
   AgentIntegrationsCommandDialog,
@@ -72,10 +73,10 @@ function statusLabel(readiness: ToolInitReadiness): string {
     : readiness.charAt(0).toUpperCase() + readiness.slice(1)
 }
 
-function StatusPill({ state }: { state: ToolInitState }) {
+function StatusBadge({ state }: { state: ToolInitState }) {
   return (
     <span
-      className={`inline-flex min-h-6 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${READINESS_CLASS[state.readiness]}`}
+      className={`inline-flex min-h-6 items-center rounded border px-2 py-0.5 text-[11px] font-medium ${READINESS_CLASS[state.readiness]}`}
     >
       {statusLabel(state.readiness)}
     </span>
@@ -163,7 +164,7 @@ function AgentEvidence({ tool, state }: { tool: ToolConfig; state: ToolInitState
             </p>
           ) : null}
         </div>
-        <div className="border-border/60 @[42rem]:col-span-2 @[42rem]:grid-cols-2 grid min-w-0 gap-x-4 gap-y-1 border-t pt-2">
+        <div className="border-border/60 @[42rem]:col-span-2 @[42rem]:grid-cols-2 grid min-w-0 gap-x-4 gap-y-2 border-t pt-2">
           <WorkflowInventoryLine
             label="Installed skills"
             workflows={state.installedSkillWorkflows}
@@ -229,14 +230,14 @@ function AgentInventoryRow({
               <p className="truncate text-sm font-medium">{tool.name}</p>
               <p className="text-muted-foreground font-mono text-[11px]">{tool.value}</p>
             </div>
-            <StatusPill state={state} />
+            <StatusBadge state={state} />
           </div>
           {state.issues.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {state.issues.map((issue) => (
                 <span
                   key={issue}
-                  className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-800 dark:text-amber-200"
+                  className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-800 dark:text-amber-200"
                 >
                   <AlertTriangle className="h-3 w-3" aria-hidden />
                   {ISSUE_LABEL[issue]}

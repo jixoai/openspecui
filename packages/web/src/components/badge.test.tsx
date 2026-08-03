@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * 1. Prove semantic badges default to compact box geometry with domain-owned tones.
+ * 2. Prove numeric count badges retain pill geometry and count formatting behavior.
+ *
+ * Original request (2026-08-02): generalize the reduced-radius status styling across similar UI surfaces.
+ */
 import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { Badge, CountBadge, formatCountBadgeValue } from './badge'
@@ -27,6 +34,8 @@ describe('Badge', () => {
     expect(badge.getAttribute('data-ui-badge')).toBe('true')
     expect(badge.className).toContain('border-zinc-500/35')
     expect(badge.className).not.toContain('bg-primary')
+    expect(badge.className.split(' ')).toContain('rounded')
+    expect(badge.className.split(' ')).not.toContain('rounded-full')
   })
 })
 
@@ -41,5 +50,13 @@ describe('CountBadge', () => {
     const { container } = render(<CountBadge count={0} hideWhenZero />)
 
     expect(container.firstChild).toBeNull()
+  })
+
+  it('keeps numeric counts pill-shaped by default', () => {
+    const { container } = render(<CountBadge count={3} />)
+    const badge = container.firstElementChild
+
+    expect(badge).not.toBeNull()
+    expect(badge?.className.split(' ')).toContain('rounded-full')
   })
 })
