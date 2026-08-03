@@ -27,7 +27,7 @@
     "test:browser": "vitest --retry 2 --project storybook",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "test:browser:ci": "vitest run --config vitest.browser.config.ts src/components/realtime/realtime-atoms.browser.test.tsx src/components/config/active-root-config-section.browser.test.tsx src/components/config/agent-integrations-command-dialog.browser.test.tsx src/components/config/config-workbench.browser.test.tsx src/components/config/config-guide.browser.test.tsx src/components/change-evidence-surface.browser.test.tsx && vitest run --retry 2 --project storybook",
+    "test:browser:ci": "vitest run --config vitest.browser.config.ts src/components/realtime/realtime-atoms.browser.test.tsx src/components/kanban/kanban-lane-viewport.browser.test.tsx src/components/config/active-root-config-section.browser.test.tsx src/components/config/agent-integrations-command-dialog.browser.test.tsx src/components/config/config-workbench.browser.test.tsx src/components/config/config-guide.browser.test.tsx src/components/change-evidence-surface.browser.test.tsx && vitest run --retry 2 --project storybook",
     "test:project-binding": "tsx scripts/w2-project-binding-playwright.ts",
     "build:dist": "vite build --minify false --emptyOutDir false",
     "dev:dist": "vite build --watch --minify false --emptyOutDir true"

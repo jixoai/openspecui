@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (created 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Render live objective lanes with independent active/archive lifecycle evidence.
  * 2. Expose accessible Apply/Archive launchers without mutating projected state.
  * 3. Resolve archive drops through DataTransfer identity and current-row authority.
- * 4. Preserve progressive evidence while assigning one inline scroller and independent lane block scrollers.
+ * 4. Preserve progressive evidence while assigning one inline scroller and layered lane block scrollers.
  *
  * Original request (2026-07-28): implement the reviewed interactive Kanban rewrite.
  * Owner correction (2026-07-28): remove double horizontal scrolling and let each lane scroll vertically.
+ * Original request (2026-08-03): layer title and bottom space over a padded list with Grid, gradients, and progressive backdrop blur.
  */
 import { CountBadge } from '@/components/badge'
 import { ChangeListSkeleton, RealtimeRevalidateCue } from '@/components/realtime'
@@ -21,6 +22,7 @@ import type { DashboardArchiveRange } from '@openspecui/core/dashboard-display'
 import { AlertCircle, Archive, FileQuestion, ListChecks, Play } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState, type DragEvent } from 'react'
+import { KanbanLaneViewport } from './kanban-lane-viewport'
 import {
   getKanbanArchiveTimestamp,
   groupActiveKanbanItems,
@@ -130,8 +132,10 @@ export function InteractiveKanban({
           const updating = archived ? archiveState.updating : activeState.updating
 
           return (
-            <section
+            <KanbanLaneViewport
               key={lane.id}
+              laneId={lane.id}
+              density="full"
               data-lane={lane.id}
               onDragOver={
                 archived
@@ -157,86 +161,82 @@ export function InteractiveKanban({
               }
               onDrop={archived ? handleArchiveDrop : undefined}
               className={cn(
-                'border-border/70 flex min-h-0 min-w-0 flex-col overflow-hidden border-t transition-colors',
+                'transition-colors',
                 archived && dropActive && 'border-primary bg-primary/5'
               )}
-            >
-              <header className="flex h-11 min-w-0 shrink-0 items-center justify-between gap-2 px-1">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className={cn('h-2 w-2 shrink-0 rounded-full', lane.accentClass)} />
-                  <h2 className="truncate text-sm font-semibold">{lane.label}</h2>
-                  <CountBadge count={rowCount} tone="muted" size="xs" shape="pill" />
+              header={
+                <div className="flex h-full min-w-0 items-center justify-between gap-2 px-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className={cn('h-2 w-2 shrink-0 rounded-full', lane.accentClass)} />
+                    <h2 className="truncate text-sm font-semibold">{lane.label}</h2>
+                    <CountBadge count={rowCount} tone="muted" size="xs" shape="pill" />
+                  </div>
+                  {archived ? (
+                    <Select
+                      value={range}
+                      options={RANGE_OPTIONS}
+                      onValueChange={onRangeChange}
+                      ariaLabel="Archived time range"
+                      className="pointer-events-auto h-7 min-w-0 gap-1 px-2 text-xs"
+                    />
+                  ) : null}
                 </div>
-                {archived ? (
-                  <Select
-                    value={range}
-                    options={RANGE_OPTIONS}
-                    onValueChange={onRangeChange}
-                    ariaLabel="Archived time range"
-                    className="h-7 min-w-0 gap-1 px-2 text-xs"
-                  />
-                ) : null}
-              </header>
-
-              <div
-                data-lane-scroll
-                className="scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[color-mix(in_srgb,currentColor,transparent_78%)] min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-2 pr-1"
-              >
-                <RealtimeRevalidateCue active={updating && rowCount > 0}>
-                  <motion.div layout className="min-h-24 space-y-2">
-                    {initialLoading && rowCount === 0 ? <ChangeListSkeleton count={2} /> : null}
-                    <AnimatePresence initial={false} mode="popLayout">
-                      {archiveRows.map((item) => (
-                        <motion.div
-                          layout
-                          layoutId={`live-kanban:${item.id}`}
-                          key={`archived:${item.id}`}
-                          initial={{ opacity: 0, y: 4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.98 }}
-                        >
-                          <ArchivedRow item={item} />
-                        </motion.div>
-                      ))}
-                      {activeRows.map((item) => (
-                        <motion.div
-                          layout
-                          layoutId={`live-kanban:${item.id}`}
-                          key={`active:${item.id}`}
-                          initial={{ opacity: 0, y: 4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.98 }}
-                        >
-                          <ActiveRow
-                            item={item}
-                            status={statusById.get(item.id)}
-                            canApply={activeOperationsCurrent && applyStatusCurrent}
-                            canArchive={activeOperationsCurrent}
-                            canDragArchive={archiveDropCurrent}
-                            applyBlockedReason={
-                              rootBlockedReason ??
-                              (applyStatusCurrent ? null : 'Apply availability is not current.')
-                            }
-                            archiveBlockedReason={rootBlockedReason}
-                            onApply={onApply}
-                            onArchive={onArchive}
-                          />
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                    {!initialLoading && rowCount === 0 ? (
-                      <div className="border-border/60 text-muted-foreground flex h-20 items-center justify-center rounded-md border border-dashed">
-                        {lane.id === 'no-tasks' ? (
-                          <FileQuestion className="h-4 w-4" aria-label="No entries" />
-                        ) : (
-                          <ListChecks className="h-4 w-4" aria-label="No entries" />
-                        )}
-                      </div>
-                    ) : null}
-                  </motion.div>
-                </RealtimeRevalidateCue>
-              </div>
-            </section>
+              }
+            >
+              <RealtimeRevalidateCue active={updating && rowCount > 0}>
+                <motion.div layout className="min-h-24 space-y-2">
+                  {initialLoading && rowCount === 0 ? <ChangeListSkeleton count={2} /> : null}
+                  <AnimatePresence initial={false} mode="popLayout">
+                    {archiveRows.map((item) => (
+                      <motion.div
+                        layout
+                        layoutId={`live-kanban:${item.id}`}
+                        key={`archived:${item.id}`}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
+                      >
+                        <ArchivedRow item={item} />
+                      </motion.div>
+                    ))}
+                    {activeRows.map((item) => (
+                      <motion.div
+                        layout
+                        layoutId={`live-kanban:${item.id}`}
+                        key={`active:${item.id}`}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
+                      >
+                        <ActiveRow
+                          item={item}
+                          status={statusById.get(item.id)}
+                          canApply={activeOperationsCurrent && applyStatusCurrent}
+                          canArchive={activeOperationsCurrent}
+                          canDragArchive={archiveDropCurrent}
+                          applyBlockedReason={
+                            rootBlockedReason ??
+                            (applyStatusCurrent ? null : 'Apply availability is not current.')
+                          }
+                          archiveBlockedReason={rootBlockedReason}
+                          onApply={onApply}
+                          onArchive={onArchive}
+                        />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                  {!initialLoading && rowCount === 0 ? (
+                    <div className="border-border/60 text-muted-foreground flex h-20 items-center justify-center rounded-md border border-dashed">
+                      {lane.id === 'no-tasks' ? (
+                        <FileQuestion className="h-4 w-4" aria-label="No entries" />
+                      ) : (
+                        <ListChecks className="h-4 w-4" aria-label="No entries" />
+                      )}
+                    </div>
+                  ) : null}
+                </motion.div>
+              </RealtimeRevalidateCue>
+            </KanbanLaneViewport>
           )
         })}
       </div>

@@ -1,0 +1,78 @@
+/**
+ * Orthogonal intents (created 2026-08-03 Asia/Shanghai):
+ * 1. Define the positioning-free Grid stack shared by every Kanban lane.
+ * 2. Blend rows beneath header/footer edges with theme-aware gradient and masked backdrop blur.
+ * 3. Keep compact/full landing-space geometry explicit and stable.
+ *
+ * Original request (2026-08-03): layer title and bottom space over a padded list with Grid, gradients, and progressive backdrop blur.
+ */
+
+.kanban-lane-viewport {
+  --kanban-lane-header-space: 2.75rem;
+  --kanban-lane-footer-space: 0.5rem;
+  --kanban-lane-veil-tail: 1rem;
+
+  grid-template: 'kanban-lane-stack' minmax(0, 1fr) / minmax(0, 1fr);
+  isolation: isolate;
+}
+
+.kanban-lane-viewport[data-kanban-lane-density='compact'] {
+  --kanban-lane-header-space: 2.5rem;
+  --kanban-lane-footer-space: 1.5rem;
+}
+
+.kanban-lane-viewport__scroll,
+.kanban-lane-viewport__header,
+.kanban-lane-viewport__veil {
+  grid-area: kanban-lane-stack;
+}
+
+.kanban-lane-viewport__scroll {
+  z-index: 0;
+  padding-block-start: var(--kanban-lane-header-space);
+  padding-block-end: var(--kanban-lane-footer-space);
+  scroll-padding-block-start: var(--kanban-lane-header-space);
+  scroll-padding-block-end: var(--kanban-lane-footer-space);
+}
+
+.kanban-lane-viewport__header {
+  z-index: 2;
+  align-self: start;
+  block-size: var(--kanban-lane-header-space);
+  pointer-events: none;
+}
+
+.kanban-lane-viewport__veil {
+  z-index: 1;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.kanban-lane-viewport__veil--top {
+  align-self: start;
+  block-size: calc(var(--kanban-lane-header-space) + var(--kanban-lane-veil-tail));
+  background: linear-gradient(
+    to bottom,
+    var(--background) 0%,
+    color-mix(in oklab, var(--background) 96%, transparent) 64%,
+    color-mix(in oklab, var(--background) 72%, transparent) 82%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 58%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 0%, black 58%, transparent 100%);
+}
+
+.kanban-lane-viewport__veil--bottom {
+  align-self: end;
+  block-size: calc(var(--kanban-lane-footer-space) + var(--kanban-lane-veil-tail));
+  background: linear-gradient(
+    to top,
+    var(--background) 0%,
+    color-mix(in oklab, var(--background) 90%, transparent) 46%,
+    color-mix(in oklab, var(--background) 60%, transparent) 72%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(to top, black 0%, black 32%, transparent 100%);
+  mask-image: linear-gradient(to top, black 0%, black 32%, transparent 100%);
+}
