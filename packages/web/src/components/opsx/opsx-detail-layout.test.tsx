@@ -1,9 +1,10 @@
 /**
  * Orthogonal intents (created 2026-08-03 Asia/Shanghai):
- * 1. Prove compact Header actions remain inside the OPSX Detail Header.
+ * 1. Prove compact Header actions and subtitle facts remain inside the OPSX Detail Header.
  * 2. Prove arbitrary-height status content renders as a full-width Header sibling.
  *
  * Original request (2026-08-03): prevent Change Detail evidence from growing the Header's right side.
+ * Owner correction (2026-08-03): keep Actions at title inline-end until container-responsive wrapping.
  */
 import { render, screen } from '@testing-library/react'
 import { GitBranch } from 'lucide-react'
@@ -38,8 +39,12 @@ describe('OpsxDetailPage', () => {
     )
 
     const header = screen.getByTestId('opsx-detail-header')
+    const identity = screen.getByTestId('opsx-detail-header-identity')
+    const actions = screen.getByTestId('opsx-detail-header-actions')
     const statusRegion = screen.getByTestId('opsx-detail-status-region')
-    expect(header).toContainElement(screen.getByRole('button', { name: 'Compact action' }))
+    expect(identity).toHaveTextContent('Schema: spec-driven')
+    expect(actions).toContainElement(screen.getByRole('button', { name: 'Compact action' }))
+    expect(header).toContainElement(actions)
     expect(header).not.toContainElement(statusRegion)
     expect(header.nextElementSibling).toBe(statusRegion)
     expect(statusRegion).toHaveTextContent('Arbitrarily long status and evidence content')

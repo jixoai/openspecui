@@ -3,23 +3,25 @@
  * 1. Render schema-aware change artifacts and source files while retaining terminal status errors.
  * 2. Dispatch change workflows through routed compose/verify surfaces and the shared Operator launcher.
  * 3. Lock every change workflow action behind current Root Context and Status projection authority.
- * 4. Present Apply progress, project context, and operation guidance without conflating artifact rules.
- * 5. Keep compact Change context direct while routing complete CLI evidence through a dedicated tab.
+ * 4. Present Apply progress directly and expose project context/guidance through a Header Action Dialog.
+ * 5. Keep compact Change facts in subtitle badges while routing complete CLI evidence through a dedicated tab.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Original request (2026-07-28): Board and Change Detail must use the same Operator owners.
  * Original request (2026-08-01): preserve OpenSpec 1.7 Apply operation inputs end to end.
  * Original request (2026-08-03): move complete Change evidence into a dedicated tab page.
+ * Owner correction (2026-08-03): move Actions inline with the title, unify subtitle badges, and localize unavailable Tooltips.
  */
 import { ApplyProgressNotice } from '@/components/apply-progress-notice'
 import {
   ChangeContextSummary,
+  ChangeReferenceFailureNotice,
   type ChangeReferenceEvidence,
 } from '@/components/change-context-summary'
 import { ChangeEvidencePanel } from '@/components/change-evidence-panel'
 import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
-import { OperationInputsDisclosure } from '@/components/opsx/operation-inputs'
+import { OperationInputsDialogAction } from '@/components/opsx/operation-inputs'
 import { OpsxEntityDetailView } from '@/components/opsx/opsx-entity-detail-view'
 import { RootActionNotice } from '@/components/root-action-notice'
 import { buildOpsxComposeHref, type OpsxComposeActionId } from '@/lib/opsx-compose'
@@ -75,8 +77,6 @@ export function ChangeView() {
     return status.artifacts.find((a) => a.status === 'ready')?.id ?? status.artifacts[0]?.id
   }, [status])
 
-  const doneCount = status?.artifacts.filter((a) => a.status === 'done').length ?? 0
-  const totalCount = status?.artifacts.length ?? 0
   const isMissingChangeError =
     error?.message.includes(`Change '${changeId}' not found`) ||
     error?.message.includes(`Change "${changeId}" not found`)
@@ -117,6 +117,17 @@ export function ChangeView() {
         : [],
     [referenceEvidence, status]
   )
+  const hasReferenceFailures =
+    referenceEvidence.state !== 'unavailable' &&
+    referenceEvidence.references.some((reference) =>
+      reference.status.some((diagnostic) => diagnostic.severity === 'error')
+    )
+  const hasDirectStatus =
+    !statusCurrent ||
+    Boolean(error) ||
+    rootAction.status !== 'ready' ||
+    hasReferenceFailures ||
+    Boolean(applyInstructions?.applyInstructionProgress)
 
   return (
     <OpsxEntityDetailView
@@ -127,7 +138,29 @@ export function ChangeView() {
       icon={GitBranch}
       title={status?.changeName}
       subtitle={
-        status ? `Schema: ${status.schemaName} · ${doneCount}/${totalCount} artifacts` : undefined
+        status ? (
+          <ChangeContextSummary status={status} referenceEvidence={referenceEvidence} />
+        ) : undefined
+      }
+      headerActions={
+        status ? (
+          <ChangeCommandBar
+            status={status}
+            selectedArtifactId={selectedArtifactId}
+            actionDisabled={actionDisabled}
+            actionDisabledReason={actionDisabledReason}
+            applyInputsAction={
+              <OperationInputsDialogAction
+                title="Apply inputs"
+                context={applyInstructions?.context}
+                operationGuidance={applyInstructions?.operationGuidance}
+              />
+            }
+            onComposeAction={handleComposeAction}
+            onArchive={handleArchive}
+            onVerify={handleVerify}
+          />
+        ) : undefined
       }
       handoff={handoff}
       isLoading={(isLoading || rootAction.status === 'checking') && !status}
@@ -166,18 +199,8 @@ export function ChangeView() {
       initialTab={selectedArtifactId}
       supplementaryTabs={supplementaryTabs}
       statusRegion={
-        status ? (
+        status && hasDirectStatus ? (
           <div className="flex min-w-0 flex-col gap-2">
-            <ChangeCommandBar
-              status={status}
-              selectedArtifactId={selectedArtifactId}
-              actionDisabled={actionDisabled}
-              actionDisabledReason={actionDisabledReason}
-              onComposeAction={handleComposeAction}
-              onArchive={handleArchive}
-              onVerify={handleVerify}
-            />
-            <ChangeContextSummary status={status} referenceEvidence={referenceEvidence} />
             {!statusCurrent && !error ? (
               <div
                 role="status"
@@ -201,17 +224,11 @@ export function ChangeView() {
               </div>
             ) : null}
             <RootActionNotice state={rootAction} />
+            <ChangeReferenceFailureNotice referenceEvidence={referenceEvidence} />
             {applyInstructions ? (
-              <>
-                <ApplyProgressNotice
-                  applyInstructionProgress={applyInstructions.applyInstructionProgress}
-                />
-                <OperationInputsDisclosure
-                  title="Apply inputs"
-                  context={applyInstructions.context}
-                  operationGuidance={applyInstructions.operationGuidance}
-                />
-              </>
+              <ApplyProgressNotice
+                applyInstructionProgress={applyInstructions.applyInstructionProgress}
+              />
             ) : null}
           </div>
         ) : null

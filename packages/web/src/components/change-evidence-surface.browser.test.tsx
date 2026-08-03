@@ -1,11 +1,12 @@
 /**
  * Orthogonal intents (created 2026-08-03 Asia/Shanghai):
- * 1. Measure Change Detail Header, status-region, and Evidence-tab geometry in real Chromium.
+ * 1. Measure inline-end versus responsive block-end Header Action geometry in real Chromium.
  * 2. Prove long paths and raw CLI evidence remain horizontally contained at mobile, tablet, and desktop widths.
  * 3. Prove Evidence owns primary vertical scrolling after complete evidence is disclosed.
  * 4. Stop at component-browser preparation rather than claiming owner visual acceptance.
  *
  * Original request (2026-08-03): move unbounded Change Detail evidence out of the Header into a dedicated tab.
+ * Owner correction (2026-08-03): keep Actions at title inline-end until responsive wrapping and unify subtitle badges.
  * Owner acceptance boundary (2026-07-20): final end-to-end visual walkthrough belongs to the owner.
  */
 import {
@@ -13,11 +14,13 @@ import {
   type ChangeReferenceEvidence,
 } from '@/components/change-context-summary'
 import { ChangeEvidencePanel } from '@/components/change-evidence-panel'
+import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
+import { OperationInputsDialogAction } from '@/components/opsx/operation-inputs'
 import { OpsxDetailPage, OpsxDetailTabs } from '@/components/opsx/opsx-detail-layout'
 import { OpsxEntityDetailView } from '@/components/opsx/opsx-entity-detail-view'
 import type { ChangeStatus, CliReferenceIndexEntry } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { FileSearch, GitBranch } from 'lucide-react'
+import { GitBranch } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { page } from 'vitest/browser'
@@ -143,15 +146,23 @@ function ChangeEvidenceHarness() {
         sharedDescriptor={{ family: 'changes', entityId: status.changeName }}
         icon={GitBranch}
         title={status.changeName}
-        subtitle="Schema: opsx-collab-pr-loop · 0/1 artifacts"
+        subtitle={<ChangeContextSummary status={status} referenceEvidence={referenceEvidence} />}
         headerActions={
-          <button type="button" aria-label="Inspect Change evidence" className="p-2">
-            <FileSearch className="h-4 w-4" />
-          </button>
+          <ChangeCommandBar
+            status={status}
+            selectedArtifactId="implementation"
+            applyInputsAction={
+              <OperationInputsDialogAction
+                title="Apply inputs"
+                context="Preserve the project-specific evidence boundary."
+              />
+            }
+            onComposeAction={() => undefined}
+            onArchive={() => undefined}
+            onVerify={() => undefined}
+          />
         }
-        statusRegion={
-          <ChangeContextSummary status={status} referenceEvidence={referenceEvidence} />
-        }
+        statusRegion={<div role="status">Direct status</div>}
       >
         <OpsxDetailTabs
           tabsRef={{ current: null }}
@@ -186,13 +197,24 @@ describe.each([390, 768, 1280])('Change Evidence at %ipx', (width) => {
 
     const host = screen.getByTestId('change-detail-browser-host')
     const header = screen.getByTestId('opsx-detail-header')
+    const identity = screen.getByTestId('opsx-detail-header-identity')
+    const actions = screen.getByTestId('opsx-detail-header-actions')
     const statusRegion = screen.getByTestId('opsx-detail-status-region')
     const evidence = screen.getByRole('region', { name: 'Change Evidence' })
 
     await waitFor(() => expect(host.getBoundingClientRect().width).toBe(width))
     expect(header).not.toContainElement(statusRegion)
     expect(header.nextElementSibling).toBe(statusRegion)
-    expect(header.getBoundingClientRect().height).toBeLessThan(100)
+    if (width === 1280) {
+      expect(actions.getBoundingClientRect().top).toBeLessThan(
+        identity.getBoundingClientRect().bottom
+      )
+    } else {
+      expect(actions.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+        identity.getBoundingClientRect().bottom
+      )
+    }
+    expect(header.getBoundingClientRect().height).toBeLessThan(width === 1280 ? 100 : 180)
     expect(getComputedStyle(evidence).overflowY).toBe('auto')
     expect(getComputedStyle(evidence).overflowX).toBe('hidden')
 

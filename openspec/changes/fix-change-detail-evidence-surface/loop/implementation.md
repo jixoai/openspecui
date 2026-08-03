@@ -9,7 +9,7 @@ Original request (2026-08-03): implement the approved Change Detail Evidence-tab
 
 ## Implementation State
 
-Status: **Production, browser preparation, documentation, review, and scoped implementation commit complete; full repository gate and owner acceptance pending.**
+Status: **Owner-corrected production, browser preparation, documentation, and focused gates complete; correction commit, full repository gate, and owner acceptance pending.**
 
 The approved scope is limited to the Web Change Detail presentation, shared OPSX detail layout/tabs interface,
 focused OpenSpec/docs vocabulary, checked tests, browser preparation evidence, and one Web patch changeset.
@@ -19,7 +19,10 @@ focused OpenSpec/docs vocabulary, checked tests, browser preparation evidence, a
 - Use a dedicated `Evidence` tab, not a Dialog, for persistent read-only Change evidence.
 - Replace the ambiguous Header `toolbar` ownership with compact `headerActions` and a full-width `statusRegion`.
 - Append caller-owned `supplementaryTabs` after `Folder`; active Change supplies Evidence and Archive supplies none.
-- Keep Apply inputs action-adjacent but collapsed; keep all failures, blockers, stale authority, and divergence direct.
+- Keep Actions at the title inline-end until the Header container wraps the complete row below.
+- Project Schema, artifact progress, Root/Store, and References through one Tooltip-backed subtitle badge row.
+- Expose non-empty Apply inputs as an Action-owned bounded Dialog.
+- Keep action-specific applicability on each disabled button Tooltip while global authority and failure messages remain direct.
 - Model Reference evidence as `current | retained | unavailable`; never coerce unavailable Root Context to an empty observed list.
 - Keep the current Core/Server/static snapshot contracts unchanged.
 
@@ -119,6 +122,28 @@ Server, Router, subscription, mutation, or static snapshot contract changed.
   separators in the Reference-authority vocabulary.
 - Final focused evidence after all review corrections: Web typecheck passed; unit `8` files / `34` tests and Chromium
   `1` file / `5` tests passed. Post-correction inspection found no remaining Standards or Spec blocker.
+
+### Owner Action-topology Correction
+
+- Red evidence against the first implementation produced `7` focused unit failures: Actions remained in the
+  block-end status region, Schema/progress were plain text, compact Root/Reference facts stayed outside the subtitle,
+  and action applicability was duplicated as an `Unavailable:` sentence. The Apply-input component produced `2`
+  additional focused failures because the requested Dialog Action did not exist. Chromium failed all three geometry
+  cases because the responsive Header identity/Actions owners did not exist.
+- The shared Detail Header now uses its own container: Actions occupy title inline-end at the wide threshold and wrap
+  as one block-end row below it at narrower widths. Change Detail passes the command surface through `headerActions`,
+  while the full-width status region renders only direct transport, Root, Reference, stale-authority, and progress
+  evidence and is absent when none exists.
+- `ChangeContextSummary` now owns Tooltip-backed Schema, artifact progress, Root/Store, and Reference subtitle badges.
+  Direct Reference failures use a separate status-region notice so a failure cannot expand or be hidden inside the
+  subtitle.
+- Non-empty Apply context/guidance now exposes one `Apply inputs` Action backed by the native bounded Dialog; empty
+  inputs expose no Action. Local Continue/Fast-forward/Apply applicability is attached through the shared disabled
+  button Tooltip owner, and the duplicate unavailable summary was removed.
+- Focused green evidence passed `8` unit files / `35` tests and `1` Chromium file / `5` tests at 390px, 768px, and
+  1280px. Web typecheck and clean SSG client/server builds passed. Web browser CI passed Chromium `6` files / `16`
+  tests and Storybook `4` files / `12` tests. `lint:ci`, explicit changed-file formatting, strict Change validation,
+  changeset validation, and `git diff --check` passed.
 
 ## Loopback Triggers
 

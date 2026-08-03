@@ -58,10 +58,10 @@ Owner correction (2026-08-03): refine Header action placement, Apply-input owner
 ## 7. Owner Correction
 
 - [x] 7.1 Update intake, research, and delta requirements for the corrected Header and Action topology.
-- [ ] 7.2 Add red evidence for block-end-only Actions, page-owned Apply inputs, plain-text subtitle facts, and repeated unavailable prose.
-- [ ] 7.3 Keep Actions at title inline-end until the Header container responsively wraps the complete row below.
-- [ ] 7.4 Move Schema, artifact progress, Root/Store, and References into one Tooltip-backed subtitle badge row.
-- [ ] 7.5 Replace the Apply-input disclosure with an Action-owned Dialog and attach applicability reasons to each disabled button Tooltip.
+- [x] 7.2 Add red evidence for block-end-only Actions, page-owned Apply inputs, plain-text subtitle facts, and repeated unavailable prose.
+- [x] 7.3 Keep Actions at title inline-end until the Header container responsively wraps the complete row below.
+- [x] 7.4 Move Schema, artifact progress, Root/Store, and References into one Tooltip-backed subtitle badge row.
+- [x] 7.5 Replace the Apply-input disclosure with an Action-owned Dialog and attach applicability reasons to each disabled button Tooltip.
 - [ ] 7.6 Re-run focused unit/browser/type checks, update implementation evidence, and commit only the correction without pushing.
 
 ## 8. Owner and PR Boundaries

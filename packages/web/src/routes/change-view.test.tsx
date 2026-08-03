@@ -2,13 +2,14 @@
  * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Verify change detail fallbacks and schema-driven artifact rendering.
  * 2. Verify retained errors and non-current authority lock actions without entering the Header.
- * 3. Verify Apply inputs remain separate and collapsed until explicitly requested.
+ * 3. Verify Apply inputs remain separate and open from a Header Action Dialog.
  * 4. Verify active Change alone owns the routed Evidence tab and explicit unavailable facts.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Original request (2026-07-28): keep progress divergence direct while compressing its source counts.
  * Original request (2026-08-03): move complete Change evidence into a dedicated tab page.
+ * Owner correction (2026-08-03): move Actions inline with the title, unify subtitle badges, and localize unavailable Tooltips.
  */
 import type { RootActionState } from '@/lib/use-root-action-state'
 import type { ChangeStatus } from '@openspecui/core'
@@ -335,7 +336,7 @@ describe('ChangeView', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('renders actions below the Header and keeps Evidence outside the default Artifact tab', () => {
+  it('renders Actions and scan badges in the Header while keeping Evidence outside the default Artifact tab', () => {
     statusMock.mockReturnValue({
       data: {
         changeName: 'Extract Terminal View Webcomponent',
@@ -360,7 +361,12 @@ describe('ChangeView', () => {
     render(<ChangeView />)
 
     expect(screen.getByText('Extract Terminal View Webcomponent')).toBeTruthy()
-    expect(screen.getByText('Schema: opsx-collab-pr-loop · 1/2 artifacts')).toBeTruthy()
+    expect(
+      screen.getByRole('note', { name: 'Workflow schema opsx-collab-pr-loop' })
+    ).toHaveTextContent('Schema: opsx-collab-pr-loop')
+    expect(screen.getByRole('note', { name: 'Artifact progress 1 of 2' })).toHaveTextContent(
+      '1/2 artifacts'
+    )
     expect(screen.getByRole('button', { name: 'Update' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Verify' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'intake' })).toBeTruthy()
@@ -370,10 +376,9 @@ describe('ChangeView', () => {
     expect(screen.getByText('artifact:implementation')).toBeTruthy()
     expect(screen.queryByRole('region', { name: 'Change Evidence' })).toBeNull()
     const header = screen.getByTestId('opsx-detail-header')
-    const statusRegion = screen.getByTestId('opsx-detail-status-region')
-    expect(header).not.toContainElement(screen.getByRole('button', { name: 'Update' }))
-    expect(statusRegion).toContainElement(screen.getByRole('button', { name: 'Update' }))
-    expect(statusRegion).toHaveTextContent('References unavailable')
+    expect(header).toContainElement(screen.getByRole('button', { name: 'Update' }))
+    expect(header).toContainElement(screen.getByText('References unavailable'))
+    expect(screen.queryByTestId('opsx-detail-status-region')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Archive' }))
     expect(openArchiveModalMock).toHaveBeenCalledWith(
@@ -424,9 +429,11 @@ describe('ChangeView', () => {
 
     expect(screen.getByRole('note', { name: 'Apply instructions progress 0 of 0' })).toBeTruthy()
     expect(screen.getByRole('note', { name: 'Tracked artifact glob progress 1 of 3' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Apply inputs/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Apply inputs' })).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByText('Preserve the project-specific deployment boundary.')).not.toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: /Apply inputs/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply inputs' }))
+    expect(screen.getByRole('dialog', { name: 'Apply inputs' })).toBeVisible()
     expect(screen.getByText('Project context')).toBeVisible()
     expect(screen.getByText('Preserve the project-specific deployment boundary.')).toBeVisible()
     expect(screen.getByText('Operation guidance')).toBeVisible()
