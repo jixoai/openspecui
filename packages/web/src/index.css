@@ -78,6 +78,7 @@
   --readonly-code-add-fg: color-mix(in oklab, oklch(0.48 0.12 151) 82%, var(--foreground));
   --readonly-code-del-bg: color-mix(in oklab, oklch(0.76 0.16 22) 24%, var(--background));
   --readonly-code-del-fg: color-mix(in oklab, oklch(0.5 0.14 22) 82%, var(--foreground));
+  --config-guide-mask: oklch(0 0 0 / 0.58);
 }
 
 .dark {
@@ -153,6 +154,17 @@
   --readonly-code-add-fg: color-mix(in oklab, oklch(0.9 0.08 151) 84%, white);
   --readonly-code-del-bg: color-mix(in oklab, oklch(0.36 0.09 22) 64%, var(--background));
   --readonly-code-del-fg: color-mix(in oklab, oklch(0.92 0.08 22) 84%, white);
+  --config-guide-mask: oklch(1 0 0 / 0.18);
+}
+
+.config-workbench-nav-label {
+  display: none;
+}
+
+@container config (min-width: 64rem) {
+  .config-workbench-nav-label {
+    display: inline;
+  }
 }
 
 @theme inline {
@@ -1415,6 +1427,12 @@ html[data-vt-kind='tab-carousel'][data-vt-direction='backward']::view-transition
   width: 3.5rem;
   min-width: 3.5rem;
   padding: 0.5rem;
+}
+
+/* Sidebar toggle: explicit two-state affordance (aria-pressed). */
+.desktop-sidebar-toggle[aria-pressed='true'] {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
 }
 .mobile-header,
 .mobile-tabbar {

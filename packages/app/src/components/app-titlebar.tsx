@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Render a dedicated self-drawn titlebar only for overlay-capable App hosts.
  * 2. Keep the titlebar's blank surface as the sole pointer entry for native window dragging.
  * 3. Reserve the geometry published by the exclusive titlebar presentation owner.
  * 4. Own the overlay-only Settings entry and application brand identity.
- * 5. Toggle the shared desktop sidebar from the interactive brand control.
+ * 5. Toggle the shared desktop sidebar from an explicit icon-button next to the brand.
  * 6. Cycle the App theme preference from the overlay-only theme toggle.
  *
  * Original request (2026-07-30): "顶部区域缺少一个自绘制的 titlebar 区域，它是通过 overlay-window-controls 得来的，主语它可以拖拽窗口。"
@@ -12,10 +12,12 @@
  * Owner correction (2026-07-30): "titlebar的高度过高，适当压缩到合理的高度。"
  * Owner correction (2026-07-31): PWA overlay presentation is retired.
  * Owner correction (2026-07-31): OpenTray titlebar product name is "OpenSpecUI App".
- * Owner correction (2026-07-31): clicking either App brand toggles the desktop sidebar.
  * Original request (2026-08-02): "在它左边新增一个 theme-toggle-icon-button"
+ * Original request (2026-08-03): sidebar toggle discoverability — brand logo is display-only
+ *   when expanded; an explicit PanelLeftClose icon-button sits at its right. Collapsed: the
+ *   icon-button hides and the logo becomes clickable to expand.
  */
-import { Monitor, Moon, Settings, Sun } from 'lucide-react'
+import { Monitor, Moon, PanelLeftClose, Settings, Sun } from 'lucide-react'
 import type { PointerEventHandler } from 'react'
 import type { HostedShellTheme } from '../lib/app-theme'
 import type { AppTitlebarPresentation } from '../lib/titlebar-presentation'
@@ -64,12 +66,14 @@ export function AppTitlebar({
       onPointerDown={onPointerDown}
     >
       <div className="app-titlebar-content">
+        {/* Brand: display-only when expanded; clickable to expand when collapsed */}
         <button
           aria-expanded={!sidebarCollapsed}
-          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : undefined}
           className="app-titlebar-brand"
-          onClick={onToggleSidebar}
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
+          onClick={sidebarCollapsed ? onToggleSidebar : undefined}
+          title={sidebarCollapsed ? 'Expand sidebar' : undefined}
           type="button"
         >
           <span aria-hidden="true" className="app-titlebar-mark">
@@ -78,6 +82,18 @@ export function AppTitlebar({
           </span>
           <span className="font-nav app-titlebar-text">OpenSpecUI App</span>
         </button>
+        {/* Explicit sidebar toggle — visible only when expanded */}
+        {!sidebarCollapsed ? (
+          <button
+            aria-label="Collapse sidebar"
+            className="app-titlebar-sidebar-toggle"
+            onClick={onToggleSidebar}
+            title="Collapse sidebar"
+            type="button"
+          >
+            <PanelLeftClose aria-hidden="true" size={15} strokeWidth={1.8} />
+          </button>
+        ) : null}
         <div className="app-titlebar-actions">
           <button
             aria-label={themeLabel}

@@ -76,8 +76,9 @@ export function DesktopSidebar() {
         <Tooltip content={collapseLabel} sideOffset={12}>
           <button
             type="button"
+            aria-pressed={!collapsed}
             onClick={() => setCollapsed((current) => !current)}
-            className="hover:bg-muted text-muted-foreground hover:text-foreground inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+            className="desktop-sidebar-toggle hover:bg-muted text-muted-foreground hover:text-foreground border-border inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
             aria-label={collapseLabel}
             title={collapseLabel}
           >
