@@ -62,7 +62,7 @@ Owner correction (2026-08-03): refine Header action placement, Apply-input owner
 - [x] 7.3 Keep Actions at title inline-end until the Header container responsively wraps the complete row below.
 - [x] 7.4 Move Schema, artifact progress, Root/Store, and References into one Tooltip-backed subtitle badge row.
 - [x] 7.5 Replace the Apply-input disclosure with an Action-owned Dialog and attach applicability reasons to each disabled button Tooltip.
-- [ ] 7.6 Re-run focused unit/browser/type checks, update implementation evidence, and commit only the correction without pushing.
+- [x] 7.6 Re-run focused unit/browser/type checks, update implementation evidence, and commit only the correction without pushing.
 
 ## 8. Owner and PR Boundaries
 

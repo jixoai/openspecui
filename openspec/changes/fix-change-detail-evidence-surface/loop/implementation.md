@@ -9,7 +9,7 @@ Original request (2026-08-03): implement the approved Change Detail Evidence-tab
 
 ## Implementation State
 
-Status: **Owner-corrected production, browser preparation, documentation, and focused gates complete; correction commit, full repository gate, and owner acceptance pending.**
+Status: **Owner-corrected production, browser preparation, documentation, focused gates, and correction commit complete; full repository gate and owner acceptance pending.**
 
 The approved scope is limited to the Web Change Detail presentation, shared OPSX detail layout/tabs interface,
 focused OpenSpec/docs vocabulary, checked tests, browser preparation evidence, and one Web patch changeset.
@@ -144,6 +144,11 @@ Server, Router, subscription, mutation, or static snapshot contract changed.
   1280px. Web typecheck and clean SSG client/server builds passed. Web browser CI passed Chromium `6` files / `16`
   tests and Storybook `4` files / `12` tests. `lint:ci`, explicit changed-file formatting, strict Change validation,
   changeset validation, and `git diff --check` passed.
+- After the final `applyInputsAction` contract rename, Web typecheck, the same `8` unit files / `35` tests, and the
+  `1` Chromium file / `5` tests passed again. `lint:ci`, strict Change validation, and `git diff --check` also passed.
+  The correction was committed as `1224d60b` (`fix(web): refine Change Detail actions`) with only the Change-owned
+  implementation, tests, changeset, and matching task evidence; no unrelated worktree files were included and
+  nothing was pushed.
 
 ## Loopback Triggers
 
