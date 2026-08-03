@@ -6,6 +6,7 @@
  *
  * Original request (2026-08-03): layer title and bottom space over a padded list with Grid, gradients, and progressive backdrop blur.
  * Owner refinement (2026-08-04): follow Magic UI Progressive Blur with only three blur levels because eight lane-edge instances render together.
+ * Owner correction (2026-08-04): remove the synthetic veil tail because ProgressiveBlur already owns the visual progression.
  * Owner acceptance boundary (2026-07-20): Agents stop at basic component Playwright evidence.
  */
 import { cleanup, fireEvent, render } from '@testing-library/react'
@@ -117,6 +118,14 @@ describe('KanbanLaneViewport browser contract', () => {
       fullLane.querySelector<HTMLElement>('[data-kanban-lane-veil="bottom"]'),
       'Expected bottom visual veil.'
     )
+    const compactTopVeil = requireElement(
+      compactLane.querySelector<HTMLElement>('[data-kanban-lane-veil="top"]'),
+      'Expected compact top visual veil.'
+    )
+    const compactBottomVeil = requireElement(
+      compactLane.querySelector<HTMLElement>('[data-kanban-lane-veil="bottom"]'),
+      'Expected compact bottom visual veil.'
+    )
     const firstRow = requireElement(
       fullLane.querySelector<HTMLElement>('[data-testid="full-row-0"]'),
       'Expected first full lane row.'
@@ -150,6 +159,10 @@ describe('KanbanLaneViewport browser contract', () => {
     expect(getComputedStyle(fullScroller).paddingBlockEnd).toBe('8px')
     expect(getComputedStyle(compactScroller).paddingBlockStart).toBe('40px')
     expect(getComputedStyle(compactScroller).paddingBlockEnd).toBe('24px')
+    expect(getComputedStyle(topVeil).blockSize).toBe('44px')
+    expect(getComputedStyle(bottomVeil).blockSize).toBe('8px')
+    expect(getComputedStyle(compactTopVeil).blockSize).toBe('40px')
+    expect(getComputedStyle(compactBottomVeil).blockSize).toBe('24px')
     expect(getComputedStyle(header).pointerEvents).toBe('none')
     expect(getComputedStyle(headerAction).pointerEvents).toBe('auto')
 

@@ -6,12 +6,12 @@
  *
  * Original request (2026-08-03): layer title and bottom space over a padded list with Grid, gradients, and progressive backdrop blur.
  * Owner refinement (2026-08-04): follow Magic UI Progressive Blur with fewer blur levels because eight lane-edge instances render together.
+ * Owner correction (2026-08-04): remove the synthetic veil tail because ProgressiveBlur already owns the visual progression.
  */
 
 .kanban-lane-viewport {
   --kanban-lane-header-space: 2.75rem;
   --kanban-lane-footer-space: 0.5rem;
-  --kanban-lane-veil-tail: 1.5rem;
 
   grid-template: 'kanban-lane-stack' minmax(0, 1fr) / minmax(0, 1fr);
   isolation: isolate;
@@ -50,7 +50,7 @@
 
 .kanban-lane-viewport__veil--top {
   align-self: start;
-  block-size: calc(var(--kanban-lane-header-space) + var(--kanban-lane-veil-tail));
+  block-size: var(--kanban-lane-header-space);
 }
 
 .kanban-lane-viewport__veil-surface--top {
@@ -66,7 +66,7 @@
 
 .kanban-lane-viewport__veil--bottom {
   align-self: end;
-  block-size: calc(var(--kanban-lane-footer-space) + var(--kanban-lane-veil-tail));
+  block-size: var(--kanban-lane-footer-space);
 }
 
 .kanban-lane-viewport__veil-surface--bottom {
