@@ -252,8 +252,9 @@ function AppLayoutSurface() {
         {/* 移动端顶栏 */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-app-shell-content>
           <header className="border-border bg-background/80 sticky top-0 z-10 flex items-center gap-1 border-b px-2 py-2 backdrop-blur md:hidden">
-            {(hasOverlayTitlebar ? APP_NAV_ITEMS : APP_NAV_ITEMS.concat(SETTINGS_ITEM)).map(
-              (item) => {
+            <img aria-hidden="true" className="h-4 w-4 shrink-0" src="/icon.svg" alt="" />
+            <div className="flex items-center gap-1">
+              {APP_NAV_ITEMS.map((item) => {
                 const Icon = item.icon
                 return (
                   <Link
@@ -269,26 +270,24 @@ function AppLayoutSurface() {
                     <span className="hidden sm:inline">{item.label}</span>
                   </Link>
                 )
-              }
-            )}
+              })}
+            </div>
+            <div className="flex-1" />
+            <Link
+              aria-label="Settings"
+              to={SETTINGS_ITEM.to}
+              className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs ${
+                isActive(SETTINGS_ITEM.to)
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              <Settings className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{SETTINGS_ITEM.label}</span>
+            </Link>
           </header>
           {isActive('/workspaces') ? (
-            <div
-              className="border-border bg-background max-h-40 overflow-y-auto border-b px-2 py-1 md:hidden"
-              data-testid="mobile-workspaces-secondary-nav"
-            >
-              <WorkspacesSecondaryNav
-                favorites={favoriteDirectories}
-                runningPaths={runningProjectPaths}
-                pendingPath={favoritePendingPath}
-                onSelect={openFavorite}
-              />
-              {favoriteLaunchError ? (
-                <p role="alert" className="text-destructive px-2 py-1 text-xs">
-                  {favoriteLaunchError}
-                </p>
-              ) : null}
-            </div>
+            <div className="hidden" data-testid="mobile-workspaces-secondary-nav" />
           ) : null}
           <main
             className={`bg-background min-h-0 min-w-0 flex-1 ${workspacesVisible ? 'overflow-hidden' : 'overflow-auto'}`}
