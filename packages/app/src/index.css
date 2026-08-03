@@ -170,6 +170,13 @@ html.dark .app-titlebar-logo-dark {
   pointer-events: auto;
 }
 
+.app-titlebar-brand-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  pointer-events: auto;
+}
+
 .app-titlebar-sidebar-toggle,
 .app-titlebar-theme-toggle,
 .app-titlebar-settings {
@@ -215,6 +222,12 @@ html.dark .app-titlebar-logo-dark {
 .app-titlebar-theme-toggle:active,
 .app-titlebar-settings:active {
   background-color: color-mix(in srgb, var(--muted) 96%, transparent);
+}
+
+/* webMode sidebar toggle: aria-pressed two-state affordance */
+.app-sidebar-toggle[data-pressed='true'] {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
 }
 
 .hosted-shell-root .hosted-shell-tabs .tabs-button {

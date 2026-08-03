@@ -66,34 +66,40 @@ export function AppTitlebar({
       onPointerDown={onPointerDown}
     >
       <div className="app-titlebar-content">
-        {/* Brand: display-only when expanded; clickable to expand when collapsed */}
-        <button
-          aria-expanded={!sidebarCollapsed}
-          aria-label={sidebarCollapsed ? 'Expand sidebar' : undefined}
-          className="app-titlebar-brand"
-          data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
-          onClick={sidebarCollapsed ? onToggleSidebar : undefined}
-          title={sidebarCollapsed ? 'Expand sidebar' : undefined}
-          type="button"
-        >
-          <span aria-hidden="true" className="app-titlebar-mark">
-            <img className="app-titlebar-logo app-titlebar-logo-light" src="/icon.svg" alt="" />
-            <img className="app-titlebar-logo app-titlebar-logo-dark" src="/icon.dark.svg" alt="" />
-          </span>
-          <span className="font-nav app-titlebar-text">OpenSpecUI App</span>
-        </button>
-        {/* Explicit sidebar toggle — visible only when expanded */}
-        {!sidebarCollapsed ? (
+        {/* Brand + sidebar toggle grouped together on the left */}
+        <div className="app-titlebar-brand-group">
           <button
-            aria-label="Collapse sidebar"
-            className="app-titlebar-sidebar-toggle"
-            onClick={onToggleSidebar}
-            title="Collapse sidebar"
+            aria-expanded={!sidebarCollapsed}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : undefined}
+            className="app-titlebar-brand"
+            data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
+            onClick={sidebarCollapsed ? onToggleSidebar : undefined}
+            title={sidebarCollapsed ? 'Expand sidebar' : undefined}
             type="button"
           >
-            <PanelLeftClose aria-hidden="true" size={15} strokeWidth={1.8} />
+            <span aria-hidden="true" className="app-titlebar-mark">
+              <img className="app-titlebar-logo app-titlebar-logo-light" src="/icon.svg" alt="" />
+              <img
+                className="app-titlebar-logo app-titlebar-logo-dark"
+                src="/icon.dark.svg"
+                alt=""
+              />
+            </span>
+            <span className="font-nav app-titlebar-text">OpenSpecUI App</span>
           </button>
-        ) : null}
+          {/* Explicit sidebar toggle — visible only when expanded */}
+          {!sidebarCollapsed ? (
+            <button
+              aria-label="Collapse sidebar"
+              className="app-titlebar-sidebar-toggle"
+              onClick={onToggleSidebar}
+              title="Collapse sidebar"
+              type="button"
+            >
+              <PanelLeftClose aria-hidden="true" size={15} strokeWidth={1.8} />
+            </button>
+          ) : null}
+        </div>
         <div className="app-titlebar-actions">
           <button
             aria-label={themeLabel}
