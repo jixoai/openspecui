@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
- * Orthogonal intents (created 2026-07-20 Asia/Shanghai):
- * 1. Initialize the pinned OpenSpec 1.6 reference submodule for clean CI checkouts.
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * 1. Initialize the pinned OpenSpec 1.7 reference submodule for clean CI checkouts.
  * 2. Build the ignored CLI distribution consumed by pinned integration fixtures.
  * 3. Reject submodule drift before any fixture can execute a different upstream revision.
  *
  * Original request (2026-07-20): "Clean CI must build the pinned references/openspec CLI before
  * the Fast Gate and pinned integration fixtures use bin/openspec.js."
+ * Original request (2026-08-03): release OpenSpecUI 7.0.0 against the pinned OpenSpec CLI 1.7 source.
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -15,7 +16,7 @@ import process from 'node:process'
 
 const REPOSITORY_ROOT = process.cwd()
 const REFERENCE_PATH = resolve(REPOSITORY_ROOT, 'references/openspec')
-const EXPECTED_COMMIT = 'e1b51d111ab446b54dee2d6159ac245f0339ae52'
+const EXPECTED_COMMIT = '4e16790d90d8f54d4773ad9a5e71a57cd9f1e86b'
 const CLI_DIST_PATH = resolve(REFERENCE_PATH, 'dist/cli/index.js')
 
 function commandFor(command) {

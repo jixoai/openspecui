@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Execute one deterministic same-origin Project Binding A-to-B acceptance flow.
- * 2. Pin the OpenSpec 1.6 executable, Store registry scope, and disposable roots.
+ * 2. Pin the OpenSpec 1.7 executable, Store registry scope, and disposable roots.
  * 3. Assert desktop/mobile layout and browser error hygiene with bounded cleanup.
  *
  * Original request (2026-07-19): "只需要做好单位页面验收以及多标签页面的单元测试。"
  * Derived requirement (2026-07-20): W2 B2.5 needs one bounded Playwright fixture; manual
  * multi-tab acceptance remains owner-owned. This command is intentionally excluded from the
  * default browser lane and does not exercise App iframe or WebSocket error-propagation policy.
+ * Original request (2026-08-03): release OpenSpecUI 7.0.0 against the pinned OpenSpec CLI 1.7 source.
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -22,7 +23,7 @@ const TSX_CLI = join(REPO_ROOT, 'packages/web/node_modules/tsx/dist/cli.mjs')
 const VITE_CLI = join(REPO_ROOT, 'packages/web/node_modules/vite/bin/vite.js')
 const PINNED_OPENSPEC_ROOT = join(REPO_ROOT, 'references/openspec')
 const PINNED_OPENSPEC_BIN = join(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
-const PINNED_OPENSPEC_COMMIT = 'e1b51d111ab446b54dee2d6159ac245f0339ae52'
+const PINNED_OPENSPEC_COMMIT = '4e16790d90d8f54d4773ad9a5e71a57cd9f1e86b'
 const BACKEND_PORT = 14_236
 const WEB_PORT = 14_237
 const STARTUP_TIMEOUT_MS = 30_000

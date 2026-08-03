@@ -656,7 +656,8 @@ the `ENOTDIR` regression test, and code-point comparator. Result: `no findings`;
   browser regression.
 - The correction updates the clean-CI reference preparer and the explicit Project Binding fixture to the exact 1.7
   SHA without changing product behavior or the owner-accepted UI.
-- Local replay must initialize, verify, install, and build the exact 1.7 submodule before the PR is rechecked.
+- Local replay initializes, verifies, installs, and builds the exact 1.7 submodule successfully; Web typecheck,
+  repository format/lint, and `git diff --check` remain green before the PR is rechecked.
 
 ## Divergence Notes
 
