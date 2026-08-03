@@ -5,6 +5,7 @@ Orthogonal intents (created 2026-08-03 Asia/Shanghai):
 3. Preserve the owner-only final browser, PR, merge, and archive boundaries.
 
 Original request (2026-08-03): implement the approved Change Detail Evidence-tab plan.
+Owner correction (2026-08-03): refine Header action placement, Apply-input ownership, subtitle badges, and action-specific unavailable Tooltips.
 -->
 
 ## 1. Research and Planning
@@ -54,9 +55,18 @@ Original request (2026-08-03): implement the approved Change Detail Evidence-tab
 - [x] 6.6 Independent code review reports no blocking findings.
 - [x] 6.7 Commit only this Change's implementation and evidence on the current feature branch; do not push.
 
-## 7. Owner and PR Boundaries
+## 7. Owner Correction
 
-- [ ] 7.1 Owner completes final visual and end-to-end browser walkthrough.
-- [ ] 7.2 PR checks pass for the exact implementation head.
-- [ ] 7.3 Owner approves merge.
-- [ ] 7.4 Archive the OpenSpec Change only after implementation, owner acceptance, and delivery evidence are complete.
+- [x] 7.1 Update intake, research, and delta requirements for the corrected Header and Action topology.
+- [ ] 7.2 Add red evidence for block-end-only Actions, page-owned Apply inputs, plain-text subtitle facts, and repeated unavailable prose.
+- [ ] 7.3 Keep Actions at title inline-end until the Header container responsively wraps the complete row below.
+- [ ] 7.4 Move Schema, artifact progress, Root/Store, and References into one Tooltip-backed subtitle badge row.
+- [ ] 7.5 Replace the Apply-input disclosure with an Action-owned Dialog and attach applicability reasons to each disabled button Tooltip.
+- [ ] 7.6 Re-run focused unit/browser/type checks, update implementation evidence, and commit only the correction without pushing.
+
+## 8. Owner and PR Boundaries
+
+- [ ] 8.1 Owner completes final visual and end-to-end browser walkthrough.
+- [ ] 8.2 PR checks pass for the exact implementation head.
+- [ ] 8.3 Owner approves merge.
+- [ ] 8.4 Archive the OpenSpec Change only after implementation, owner acceptance, and delivery evidence are complete.

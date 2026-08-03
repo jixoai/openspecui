@@ -5,6 +5,7 @@ Orthogonal intents (created 2026-08-03 Asia/Shanghai):
 3. Bound automated preparation while reserving final browser acceptance for the owner.
 
 Original request (2026-08-03): "changeDetail页面有严重的BUG：右上角这里有一坨内容，这些内容没有任何高度限制，而且非常影响观感，思考一下有没有优化的方案方法？"
+Owner correction (2026-08-03): Actions stay at the title inline-end until a narrow container wraps them below; Apply inputs become a Dialog action; Schema, artifact progress, Root, and References become subtitle badges; action-specific unavailable reasons belong to the corresponding button Tooltip.
 -->
 
 ## User Input
@@ -19,9 +20,12 @@ Original request (2026-08-03): "changeDetail页面有严重的BUG：右上角这
 
 ## Objective Scope
 
-- Keep Change identity, Schema, artifact progress, workflow actions, disabled reasons, errors, blockers, stale authority, and progress divergence in the default decision plane.
+- Keep Change identity, subtitle status badges, workflow actions, errors, blockers, stale authority, and progress divergence in the default decision plane.
+- Keep Actions at the title inline-end when space permits and wrap the complete action row below the title only at narrow container widths.
 - Move persistent Root, Store, Reference, artifact-path, action-context, and raw CLI evidence into a dedicated `Evidence` tab after `Folder`.
-- Keep Apply context and operation guidance near the workflow actions through a collapsed-by-default disclosure.
+- Expose non-empty Apply context and operation guidance as one workflow action that opens a bounded Dialog.
+- Present Schema, artifact completion, Root source/Store, and Reference state as Tooltip-backed subtitle badges.
+- Attach action-specific unavailable reasons to the corresponding disabled action Tooltip instead of rendering a repeated summary line.
 - Separate compact header content from a full-width action/status region in the shared OPSX detail layout.
 - Preserve live/static source distinctions and current/retained/unavailable Reference states without fabricating zero counts.
 - Make the Evidence panel mobile-first, horizontally overflow-free, and the primary vertical scroll owner for its tab.
@@ -31,7 +35,7 @@ Original request (2026-08-03): "changeDetail页面有严重的BUG：右上角这
 - Do not change Core, Server, Router, subscription, mutation, or OpenSpec CLI contracts.
 - Do not add an Evidence tab to Archive Detail.
 - Do not use a Dialog for persistent Change evidence.
-- Do not hide errors, blockers, stale authority, or Reference failures inside a Tooltip, Dialog, or collapsed panel.
+- Do not hide transport errors, Root blockers, stale authority, progress divergence, or Reference failures inside a Tooltip or Dialog.
 - Do not complete, rewrite, or claim the pending Config Guide owner walkthrough.
 
 ## Acceptance Boundary
@@ -39,7 +43,10 @@ Original request (2026-08-03): "changeDetail页面有严重的BUG：右上角这
 - Change Header height and width allocation are independent from evidence volume; no workflow or evidence tree renders as its right-side sibling.
 - The default Artifact/Content tab excludes verbose paths, Reference detail, and raw CLI payload while keeping workflow actions and direct failures visible.
 - `Evidence` is routable through the existing tab query, displays readable facts through raw CLI evidence, and never becomes the default tab.
-- Apply inputs are absent when empty and collapsed when present; expansion preserves complete context and guidance.
+- Apply inputs are absent when empty and appear as a workflow action when present; its Dialog preserves complete context and guidance.
+- At wide container widths Actions occupy the title inline-end; at narrow widths they wrap as one block-end row without horizontal overflow.
+- Schema, artifact completion, Root source/Store, and Reference status occupy the subtitle as compact badges with complete Tooltip explanations.
+- Each action-specific unavailable reason is reachable from its own disabled button Tooltip, with no duplicate `Unavailable:` summary line.
 - Missing Root Context renders Reference evidence as unavailable, retained Root Context remains source-attributed, and static mode explicitly reports unavailable CLI provenance.
 - Focused checked Vitest and basic component-browser fixtures cover behavior and 390px, 768px, and 1280px container geometry without page-level horizontal overflow.
 - CI-equivalent checks, clean SSG build, strict Change validation, changeset validation, and `git diff --check` pass at the implementation head.

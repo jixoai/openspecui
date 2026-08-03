@@ -6,6 +6,7 @@ Orthogonal intents (created 2026-08-03 Asia/Shanghai):
 4. Preserve static/live truth and owner-only final browser acceptance.
 
 Original request (2026-08-03): optimize when and where Change Detail evidence is visible, and decide between Dialog and a dedicated tab page.
+Owner correction (2026-08-03): keep Actions inline with the title until responsive wrapping, move Apply inputs to an Action-owned Dialog, unify scan facts as subtitle badges, and move applicability reasons to button Tooltips.
 -->
 
 ## Research Findings
@@ -52,23 +53,56 @@ Tier 3: audit evidence
 - Apply context and operation guidance are action inputs, not audit evidence. They remain adjacent to workflow actions but collapse until explicitly requested.
 - A Dialog is rejected because evidence is persistent, read-only, route-addressable, long-form, and compared repeatedly with Artifact tabs. Dialog ownership remains reserved for temporary operations and confirmation.
 
+### Owner correction after the first implementation
+
+The first implementation correctly removed complete evidence from the Header, but placed the entire command row at
+the title block-end and left scan facts in a second status row. It also treated Apply inputs as page content and
+duplicated action applicability through both button titles and an `Unavailable:` sentence. The corrected topology is:
+
+```text
+Header
+├─ identity
+│  ├─ title
+│  `─ subtitle: [Schema] [artifact progress] [Root/Store] [References]
+`─ Actions -------------------------- inline-end when space permits
+   ├─ workflow commands
+   └─ Apply inputs -> bounded Dialog
+
+narrow container
+├─ identity + subtitle badges
+`─ Actions -------------------------- one block-end row
+
+status region
+`─ direct transport / Root / Reference / divergence messages only
+```
+
+- Apply inputs are transient supporting material for deciding or dispatching Apply. A Dialog is appropriate here
+  because the user explicitly requests the material from an Action and returns to the same workflow decision plane.
+- Schema, progress, Root, and Reference facts share one scan vocabulary and physical subtitle owner. Their full
+  explanation remains keyboard-reachable through the existing `InformationBadge` + `Tooltip` contract.
+- Action-specific applicability is local to the disabled command. Its Tooltip is the single presentation owner;
+  Root/Status authority failures remain direct because they lock the whole action set and require repair context.
+
 ## Decision & Plan (For Approval)
 
 1. Add a focused delta for `opsx-ui-views` defining the default decision plane, the routable Evidence tab, direct failures, explicit static/unavailable evidence, and one-tab scroll ownership.
 2. Replace the shared `toolbar` interface with `headerActions` plus a full-width `statusRegion`; active Change passes all workflow content through `statusRegion`, while Archive remains unchanged.
 3. Add optional `supplementaryTabs` to `OpsxEntityDetailView`; append them after `Folder` and preserve the existing query key. Active Change supplies one `evidence` tab, while Archive supplies none.
 4. Split Change evidence presentation into a compact summary and a full Evidence panel. Derive one typed Reference presentation state at `ChangeView` so unavailable is never displayed as zero.
-5. Order the Change status region as compact workflow actions/scan facts, then direct failure/blocker/divergence notices, then one collapsed Apply-input disclosure when content exists.
-6. Give the Evidence panel the remaining tab height and primary vertical scrolling. Wrap paths, bound raw payload code, and prohibit page-level horizontal overflow.
-7. Preserve all existing Core/Server/Router/subscription/mutation contracts and static snapshot structure.
-8. Update source-intent headers, `AGENTS.md`, `i18n.zh.md`, Web browser-test admission, and an `@openspecui/web` patch changeset.
+5. Place the complete action row at the Header inline-end and use the Header container to wrap it below the identity only when space is constrained.
+6. Render Schema, artifact progress, Root/Store, and Reference facts as one subtitle badge row; keep Reference failures direct below the Header.
+7. Render non-empty Apply inputs as an Action-owned Dialog and remove the page disclosure.
+8. Attach action-specific applicability reasons to the corresponding disabled button Tooltip and remove the repeated unavailable summary.
+9. Give the Evidence panel the remaining tab height and primary vertical scrolling. Wrap paths, bound raw payload code, and prohibit page-level horizontal overflow.
+10. Preserve all existing Core/Server/Router/subscription/mutation contracts and static snapshot structure.
+11. Update source-intent headers, `AGENTS.md`, `i18n.zh.md`, Web browser-test admission, and the existing `@openspecui/web` patch changeset.
 
 ### Production owners and fixed evidence
 
 | Production owner              | Precise red fixed point                                                                                     | Green result                                                                                                                   |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Shared OPSX detail layout     | A long caller toolbar is a descendant of the Header and grows its right side                                | Header contains identity/compact actions only; full-width status region is a sibling below it                                  |
-| Change default decision plane | Artifact view exposes verbose evidence and expanded Apply context before user intent                        | Actions/direct failures remain visible; verbose evidence and Apply inputs require explicit disclosure/tab selection            |
+| Shared OPSX detail layout     | Actions always consume a block-end row even when inline space is available                                  | Actions occupy title inline-end by default and wrap as one row only below the responsive container threshold                   |
+| Change default decision plane | Scan facts occupy a second row; Apply inputs are page content; applicability is duplicated as prose         | Subtitle owns all scan badges; Apply inputs open from one Action; each unavailable reason belongs to its button Tooltip        |
 | Change Evidence tab           | No routable tab owns complete evidence or vertical scrolling; missing Root Context reads as zero References | `?artifact=evidence` selects a bounded panel with complete source evidence and explicit current/retained/unavailable semantics |
 
 ## Capability Impact
@@ -77,12 +111,13 @@ Tier 3: audit evidence
 
 - One route-preserving `Evidence` tab for active Changes.
 - Explicit current, retained, unavailable, and static Reference-evidence presentation.
-- A collapsed Apply-input disclosure on Change Detail.
+- An Action-owned Apply-input Dialog on Change Detail.
 
 ### Modified Behavior
 
-- Change workflow content moves out of the Header into a full-width region.
-- Compact scan facts remain direct while verbose CLI evidence leaves the default Artifact surface.
+- Change workflow Actions occupy the Header inline-end and responsively wrap below the title.
+- Compact scan facts share the subtitle while verbose CLI evidence leaves the default Artifact surface.
+- Action applicability is available through the corresponding disabled button Tooltip; global authority failures remain direct.
 - Shared detail callers can append caller-owned tabs without changing Archive behavior.
 
 ## Risks and Mitigations

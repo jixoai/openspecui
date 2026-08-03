@@ -5,6 +5,7 @@ Orthogonal intents (created 2026-08-03 Asia/Shanghai):
 3. Preserve direct failures and explicit static unavailability.
 
 Original request (2026-08-03): move unbounded Change Detail evidence out of the Header while preserving necessary and complete information.
+Owner correction (2026-08-03): Actions use title inline-end space before responsive wrapping; Apply inputs use an Action-owned Dialog; subtitle facts use badges; action-specific unavailable reasons use button Tooltips.
 -->
 
 # Delta for opsx-ui-views
@@ -20,16 +21,22 @@ through a dedicated routed tab without changing source or mutation authority.
 
 - **GIVEN** a Change has workflow actions, Apply inputs, Root/Reference facts, and arbitrarily long CLI evidence
 - **WHEN** Change Detail renders
-- **THEN** the Header SHALL contain only Change identity and compact Header actions
-- **AND** workflow actions and direct status SHALL render in a full-width region below the Header
+- **THEN** the Header SHALL contain Change identity, subtitle scan badges, and compact Header actions
+- **AND** Actions SHALL occupy the title inline-end while the container has sufficient space
+- **AND** the complete Action row SHALL wrap to the title block-end only when the Header container becomes narrow
+- **AND** direct status SHALL render in a full-width region below the Header
 - **AND** verbose evidence SHALL NOT affect Header height or right-side width allocation
 
 #### Scenario: Keep the default decision plane actionable
 
 - **WHEN** the default Artifact or Content tab is active
-- **THEN** Change identity, Schema, artifact progress, workflow actions, and disabled reasons SHALL remain directly visible
+- **THEN** Change identity, Schema, artifact progress, Root/Store, References, and workflow actions SHALL remain directly visible
+- **AND** Schema, artifact progress, Root/Store, and References SHALL use Tooltip-backed badges in the subtitle
+- **AND** each action-specific unavailable reason SHALL be available from the corresponding disabled button Tooltip
+- **AND** Change Detail SHALL NOT render a duplicate `Unavailable:` action summary
 - **AND** transport errors, Root blockers, Reference failures, stale authority, and progress divergence SHALL remain visible without opening a tab, Tooltip, Dialog, or disclosure
-- **AND** Apply context and operation guidance SHALL be absent when empty and collapsed by default when present
+- **AND** non-empty Apply context or operation guidance SHALL expose one `Apply inputs` Action that opens a bounded Dialog
+- **AND** empty Apply inputs SHALL expose neither the Action nor the Dialog
 
 #### Scenario: Inspect complete Change evidence
 
