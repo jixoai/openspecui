@@ -51,7 +51,7 @@ Owner correction (2026-08-03): use `auto 1fr` to prioritize title identity and w
 - [x] 6.1 Focused checked Web Vitest and typecheck pass.
 - [x] 6.2 Focused component-browser preparation fixture passes.
 - [x] 6.3 Clean Web SSG build passes.
-- [ ] 6.4 Repository `format:check`, `lint:ci`, `typecheck`, `test:ci`, and `test:browser:ci` pass.
+- [x] 6.4 Repository `format:check`, `lint:ci`, `typecheck`, `test:ci`, and `test:browser:ci` pass.
 - [x] 6.5 Strict Change validation, changeset validation, and `git diff --check` pass.
 - [x] 6.6 Independent code review reports no blocking findings.
 - [x] 6.7 Commit only this Change's implementation and evidence on the current feature branch; do not push.
@@ -71,7 +71,7 @@ Owner correction (2026-08-03): use `auto 1fr` to prioritize title identity and w
 
 ## 8. Owner and PR Boundaries
 
-- [ ] 8.1 Owner completes final visual and end-to-end browser walkthrough.
+- [x] 8.1 Owner completes final visual and end-to-end browser walkthrough.
 - [ ] 8.2 PR checks pass for the exact implementation head.
-- [ ] 8.3 Owner approves merge.
+- [x] 8.3 Owner approves merge.
 - [ ] 8.4 Archive the OpenSpec Change only after implementation, owner acceptance, and delivery evidence are complete.

@@ -5,6 +5,7 @@ Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 3. Separate agent automation evidence from owner-only final browser acceptance and release decisions.
 
 Original request (2026-08-01): create the complete Change files, then begin the OpenSpecUI 7 adaptation.
+Owner acceptance (2026-08-03): all final production walkthrough cases passed after the owner's fixes; proceed with Change closure.
 -->
 
 ## 1. Research and Planning
@@ -251,25 +252,25 @@ Production owner: typed Guide reducer/orchestrator plus React-owned Base UI Popo
 
 ## 11. Static, Documentation, and Release Preparation
 
-- [ ] 11.1 Update static route trees/manifests and shared mappings for nested Specs and Config Context only.
-- [ ] 11.2 Prove static output does not expose Agent inventory, environment paths, Init/Guide mutation, or raw authority.
-- [ ] 11.3 Clean and rebuild SSG; run the real CLI export path after clean Server/Web builds.
-- [ ] 11.4 Update README, adaptation docs, screenshots/copy where applicable, and public version claims.
-- [ ] 11.5 Add a major Changeset for every affected publishable package.
-- [ ] 11.6 Keep `AGENTS.md`, `CLAUDE.md`, `i18n.zh.md`, Change artifacts, and `GOAL.md` synchronized.
+- [x] 11.1 Update static route trees/manifests and shared mappings for nested Specs and Config Context only.
+- [x] 11.2 Prove static output does not expose Agent inventory, environment paths, Init/Guide mutation, or raw authority.
+- [x] 11.3 Clean and rebuild SSG; run the real CLI export path after clean Server/Web builds.
+- [x] 11.4 Update README, adaptation docs, screenshots/copy where applicable, and public version claims.
+- [x] 11.5 Add a major Changeset for every affected publishable package.
+- [x] 11.6 Keep `AGENTS.md`, `CLAUDE.md`, `i18n.zh.md`, Change artifacts, and `GOAL.md` synchronized.
 
 ## 12. PR, Merge, Release, and Archive Gates
 
-- [ ] 12.1 Every changed TS/TSX file has an accurate timestamped orthogonal-intent/original-request header.
-- [ ] 12.2 All focused reviews pass before full gates.
-- [ ] 12.3 `pnpm format:check` passes.
-- [ ] 12.4 `pnpm lint:ci` passes.
-- [ ] 12.5 `pnpm typecheck` passes.
-- [ ] 12.6 `pnpm test:ci` passes.
-- [ ] 12.7 `pnpm test:browser:ci` passes.
-- [ ] 12.8 `pnpm --filter @openspecui/web build:ssg` passes from clean output.
-- [ ] 12.9 `git diff --check` passes.
-- [ ] 12.10 Numbered owner walkthrough document records exact head, setup, trigger, PASS/FAIL observations, and restore.
+- [x] 12.1 Every changed TS/TSX file has an accurate timestamped orthogonal-intent/original-request header.
+- [x] 12.2 All focused reviews pass before full gates.
+- [x] 12.3 `pnpm format:check` passes.
+- [x] 12.4 `pnpm lint:ci` passes.
+- [x] 12.5 `pnpm typecheck` passes.
+- [x] 12.6 `pnpm test:ci` passes.
+- [x] 12.7 `pnpm test:browser:ci` passes.
+- [x] 12.8 `pnpm --filter @openspecui/web build:ssg` passes from clean output.
+- [x] 12.9 `git diff --check` passes.
+- [x] 12.10 Numbered owner walkthrough document records exact head, setup, trigger, PASS/FAIL observations, and restore.
 - [ ] 12.11 Open/update PR only after local gates pass; include Changeset and exact evidence notes.
 - [ ] 12.12 Required PR checks pass; Manager-mode merge decision is satisfied.
 - [ ] 12.13 Ask manager whether to release after merge; do not publish from the feature branch.

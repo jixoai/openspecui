@@ -6,6 +6,7 @@ Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 
 Original request (2026-08-02): the owner performs final visual walkthroughs; the agent supplies development, unit tests, and component Playwright preparation.
 Owner correction (2026-08-03): a fully ready Guide must not flicker into completion; the Spotlight uses one theme-aware SVG even-odd bevel hole; Config navigation uses a top NavBar plus detail View Transitions.
+Owner acceptance (2026-08-03): all nine production walkthrough cases passed after the owner's final fixes.
 -->
 
 # Adaptive Config Guide Owner Walkthrough
@@ -16,8 +17,8 @@ Owner correction (2026-08-03): a fully ready Guide must not flicker into complet
   commit changes no product code.
 - Automated evidence proves reducer, owner-signal selection, orchestration, headless presentation ownership, and basic
   Chromium component geometry. It does **not** claim final visual acceptance.
-- Automated preparation is green: Web Unit baseline `178/178` files and `1102/1102` tests; current component Chromium
-  `5/5` files and `11/11` tests; Storybook browser `4/4` files and `12/12` tests.
+- Automated preparation is green: Web Unit baseline `181/181` files and `1115/1115` tests; current component Chromium
+  `6/6` files and `16/16` tests; Storybook browser `4/4` files and `12/12` tests.
 - The Config Guide Chromium fixture uses the real Base UI Popover plus one SVG even-odd Spotlight mask. It proves the
   hole hits the real target, the painted exterior hits the mask, the target stays free of `inert`, every ready stage
   requires Continue, light/dark themes resolve distinct veil fills, and cancellation/completion remove the overlay and
@@ -25,6 +26,8 @@ Owner correction (2026-08-03): a fully ready Guide must not flicker into complet
   width. Missing-target failure centers a usable OpenSpecUI surface and focuses Retry.
 - Record each case as `PASS` or `FAIL` against the exact tested `git rev-parse HEAD`; do not record credentials,
   Authorization headers, launch fragments, or private backend URLs.
+- Final owner acceptance was reported against `a4891a84800425e81a0bb7ae7f884008d713f0ff` after the owner completed
+  the last interaction and styling corrections.
 
 ## Shared Setup
 
@@ -275,14 +278,14 @@ unset GUIDE_TMP
 
 ## Result Ledger
 
-| Case                                | Result  | Exact HEAD                                 | Observation                |
-| ----------------------------------- | ------- | ------------------------------------------ | -------------------------- |
-| 1. Initialize and Start Guide       | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
-| 2. Project Binding active edit      | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
-| 3. Active Root required/raw/warning | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
-| 4. Agent Delivery replacement       | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
-| 5. Resolved Context barrier         | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
-| 6. Keyboard/focus/restart           | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
-| 7. Ready steps and SVG bevel mask   | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
-| 8. Config NavBar and owner VT       | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
-| 9. Active Root natural page flow    | PENDING | `e4e899f4e45b6d42ee4e41a6fd435af6f516fda4` | Owner walkthrough required |
+| Case                                | Result | Exact HEAD                                 | Observation                             |
+| ----------------------------------- | ------ | ------------------------------------------ | --------------------------------------- |
+| 1. Initialize and Start Guide       | PASS   | `c1c3bd0d34128ef9a1d86f23276116e4d4aa7426` | Owner reported final walkthrough passed |
+| 2. Project Binding active edit      | PASS   | `c1c3bd0d34128ef9a1d86f23276116e4d4aa7426` | Owner reported final walkthrough passed |
+| 3. Active Root required/raw/warning | PASS   | `c1c3bd0d34128ef9a1d86f23276116e4d4aa7426` | Owner reported final walkthrough passed |
+| 4. Agent Delivery replacement       | PASS   | `c1c3bd0d34128ef9a1d86f23276116e4d4aa7426` | Owner reported final walkthrough passed |
+| 5. Resolved Context barrier         | PASS   | `c1c3bd0d34128ef9a1d86f23276116e4d4aa7426` | Owner reported final walkthrough passed |
+| 6. Keyboard/focus/restart           | PASS   | `c1c3bd0d34128ef9a1d86f23276116e4d4aa7426` | Owner reported final walkthrough passed |
+| 7. Ready steps and SVG bevel mask   | PASS   | `c1c3bd0d34128ef9a1d86f23276116e4d4aa7426` | Owner reported final walkthrough passed |
+| 8. Config NavBar and owner VT       | PASS   | `c1c3bd0d34128ef9a1d86f23276116e4d4aa7426` | Owner reported final walkthrough passed |
+| 9. Active Root natural page flow    | PASS   | `c1c3bd0d34128ef9a1d86f23276116e4d4aa7426` | Owner reported final walkthrough passed |
