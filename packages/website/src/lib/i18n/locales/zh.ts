@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Provide the canonical Chinese product-site copy.
  * 2. 让启动指引与本地 App daemon 和显式 Direct Web 合同一致。
+ * 3. 发布 OpenSpecUI 7 与 OpenSpec CLI 1.7 的兼容边界，并移除已退役的 PWA 表述。
  *
  * Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
+ * Original request (2026-08-03): "可以发布新版7.0.0了。记得文档也要跟新"
  */
 import type { WebsiteContent } from '$lib/i18n/schema'
 
@@ -26,19 +28,19 @@ export const zh = {
   nav: {
     home: '首页',
     hooks: 'Hooks',
-    app: '独立 PWA',
+    app: '浏览器 App',
     github: 'GitHub',
   },
   hero: {
     title: '用一个贴近 CLI 本质的 UI 来操作 OpenSpec。',
     summary:
       'OpenSpecUI 为 OpenSpec 项目提供可视化的 dashboard、config 界面、change 工作流视图、terminal tabs，以及静态导出能力，同时不遮蔽底层工作流。',
-    primaryCta: '打开独立 PWA',
+    primaryCta: '打开浏览器 App',
     secondaryCta: '阅读 Hooks 文档',
     sidebarEyebrow: '默认路径',
     sidebarTitle: '一个本地 App daemon',
     sidebarBody:
-      '将项目投递到随当前版本打包的 App shell。默认使用原生 OpenTray；显式 Web 模式使用 Browser/PWA 宿主。',
+      '将项目投递到随当前版本打包的 App shell。默认使用原生 OpenTray；显式 Web 模式打开浏览器界面。',
     badges: {
       live: '实时模式',
       hosted: 'App daemon',
@@ -60,7 +62,7 @@ export const zh = {
       '启动项目 backend 并显式打开 Direct Project Web；若 daemon 已运行，也会保留该 Workspace。',
     exportLabel: '静态导出',
     exportSummary: '生成可部署的静态快照，用于文档站点或离线审阅。',
-    compatibility: 'OpenSpecUI 6.1 面向 OpenSpec CLI 1.6.x，并将 1.7.x 作为兼容线。',
+    compatibility: 'OpenSpecUI 7 要求 OpenSpec CLI 1.7.x。',
   },
   modes: {
     title: '选择合适的界面',
@@ -72,7 +74,7 @@ export const zh = {
       },
       {
         title: 'App daemon 模式',
-        body: '适合在一个保留式 OpenTray 或 Browser/PWA App shell 中管理多个项目 Workspace。',
+        body: '适合在一个保留式 OpenTray 或浏览器 App shell 中管理多个项目 Workspace。',
       },
       {
         title: '静态导出',
@@ -82,9 +84,9 @@ export const zh = {
   },
   links: {
     title: '继续深入',
-    summary: '先从本地运行，再查看上游工作流、独立 PWA 与源码仓库。',
+    summary: '先从本地运行，再查看上游工作流、浏览器 App 与源码仓库。',
     appTitle: 'app.openspecui.com',
-    appBody: '可选的独立 Browser/PWA 部署；CLI App 模式始终使用自己打包的本地 shell。',
+    appBody: '可选的浏览器部署；CLI App 模式始终使用自己打包的本地 shell。',
     openspecTitle: 'openspec.dev',
     openspecBody: 'OpenSpec 官方站点与工作流参考。',
     githubTitle: 'GitHub',

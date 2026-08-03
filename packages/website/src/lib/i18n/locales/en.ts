@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Provide the canonical English product-site copy.
  * 2. Keep launch guidance aligned with the local App daemon and explicit Direct Web contract.
+ * 3. Publish the OpenSpecUI 7 and OpenSpec CLI 1.7 compatibility boundary without retired PWA language.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
+ * Original request (2026-08-03): "可以发布新版7.0.0了。记得文档也要跟新"
  */
 import type { WebsiteContent } from '$lib/i18n/schema'
 
@@ -26,19 +28,19 @@ export const en = {
   nav: {
     home: 'Home',
     hooks: 'Hooks',
-    app: 'Standalone PWA',
+    app: 'Browser App',
     github: 'GitHub',
   },
   hero: {
     title: 'Operate OpenSpec through a UI that stays close to the CLI.',
     summary:
       'OpenSpecUI gives OpenSpec projects a concrete dashboard, config surface, change workflow views, terminal tabs, and static export capabilities without hiding the underlying workflow.',
-    primaryCta: 'Open standalone PWA',
+    primaryCta: 'Open browser App',
     secondaryCta: 'Read hooks docs',
     sidebarEyebrow: 'Default path',
     sidebarTitle: 'One local App daemon',
     sidebarBody:
-      'Serve a project into the bundled same-version App shell. Native OpenTray is the default host; explicit Web mode uses the browser/PWA presenter.',
+      'Serve a project into the bundled same-version App shell. Native OpenTray is the default host; explicit Web mode opens the browser presentation.',
     badges: {
       live: 'Live mode',
       hosted: 'App daemon',
@@ -62,7 +64,7 @@ export const en = {
       'Start the project backend and explicitly open Direct Project Web. A running daemon also retains the Workspace.',
     exportLabel: 'Static export',
     exportSummary: 'Generate a deployable snapshot for docs hosting or offline review.',
-    compatibility: 'OpenSpecUI 6.1 targets OpenSpec CLI 1.6.x and accepts 1.7.x as compatible.',
+    compatibility: 'OpenSpecUI 7 requires OpenSpec CLI 1.7.x.',
   },
   modes: {
     title: 'Choose the right surface',
@@ -74,7 +76,7 @@ export const en = {
       },
       {
         title: 'App daemon mode',
-        body: 'Best for keeping multiple project Workspaces in one retained OpenTray or Browser/PWA App shell.',
+        body: 'Best for keeping multiple project Workspaces in one retained OpenTray or browser App shell.',
       },
       {
         title: 'Static export',
@@ -85,10 +87,10 @@ export const en = {
   links: {
     title: 'Go deeper',
     summary:
-      'Start locally, then follow the upstream workflow, standalone PWA, and source repository.',
+      'Start locally, then follow the upstream workflow, browser App, and source repository.',
     appTitle: 'app.openspecui.com',
     appBody:
-      'Optional standalone browser/PWA deployment. CLI App mode uses its own bundled local shell instead.',
+      'Optional browser deployment. CLI App mode uses its own bundled local shell instead.',
     openspecTitle: 'openspec.dev',
     openspecBody: 'Official OpenSpec project site and workflow reference.',
     githubTitle: 'GitHub',

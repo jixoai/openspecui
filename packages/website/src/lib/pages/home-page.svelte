@@ -1,10 +1,11 @@
 <!--
-Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 1. Present the current OpenSpecUI product modes and launch commands.
 2. Keep App-daemon and Direct Web examples explicit and parser-valid.
-3. Link the standalone PWA without presenting it as the CLI App target.
+3. Link the browser App without reviving the retired PWA product direction.
 
 Original request (2026-07-29): "支持 openspecui --web，并放弃 App 外壳部署位置配置。"
+Original request (2026-08-03): "可以发布新版7.0.0了。记得文档也要跟新"
 -->
 <script lang="ts">
   import ArrowUpRight from 'lucide-svelte/icons/arrow-up-right'

@@ -1,16 +1,15 @@
 <!--
-Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
 1. 说明当前 OpenSpec 兼容线与项目工作流。
 2. 说明 serve、App daemon、Direct Web 与静态导出命令。
 3. 说明项目 Hooks，同时保持 OpenSpec CLI 的事实权威。
 
 原始需求（2026-07-29）："补充 openspecui --web == openspecui serve --web；README 文档需要补充这些命令的介绍。"
-原始需求（2026-08-01）："v7不兼容1.6.x，明确要求必须使用 v1.7.x。"
 -->
 
 # OpenSpec UI
 
-[English](./README.md) | [中文](./README-zh.md)
+[English](./README-1.6.0.md) | [中文](./README-zh-1.6.0.md)
 
 OpenSpecUI 是 OpenSpec 工作流的 Web 界面（动态模式 + 静态导出）。
 
@@ -18,20 +17,18 @@ OpenSpecUI 是 OpenSpec 工作流的 Web 界面（动态模式 + 静态导出）
 
 | OpenSpecUI        | OpenSpec CLI 线                                |
 | ----------------- | ---------------------------------------------- |
-| `@latest` / `@^7` | `>=1.7.0 <1.8.0`                               |
-| `@^6`             | 当前：`>=1.6.0 <1.7.0`；兼容：`>=1.7.0 <1.8.0` |
+| `@latest` / `@^6` | 当前：`>=1.6.0 <1.7.0`；兼容：`>=1.7.0 <1.8.0` |
 | `@^5`             | 当前：`>=1.5.0 <1.6.0`；接受：`>=1.4.0 <1.6.0` |
 | `@^4`             | 当前：`>=1.4.0 <1.5.0`；接受：`>=1.3.0 <1.5.0` |
 | `@^3`             | `>=1.3.0 <1.4.0`                               |
 | `@^2`             | `>=1.2.0 <1.3.0`                               |
 | `@^1`             | `>=1.0.0 <1.2.0`                               |
 
-OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 7 仅适配 OpenSpec CLI 1.7.x。
-OpenSpecUI 6.1 则保留为历史 1.6.x 产品线，并维持其临时的 1.7 兼容桥接。
+OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 6.1 仍适配 OpenSpec CLI
+1.6.x，并将 1.7.x 作为兼容桥接；该桥接不承诺 1.7 特有能力，也不定义后续 OpenSpecUI 7.x 的边界。
 
 历史文档：
 
-- 1.6：[`README-zh-1.6.0.md`](./README-zh-1.6.0.md)
 - 1.3：[`README-zh-1.3.0.md`](./README-zh-1.3.0.md)
 - 1.2：[`README-zh-1.2.0.md`](./README-zh-1.2.0.md)
 - 1.x UI / 1.2 之前 CLI 线：[`README-zh-1.x.md`](./README-zh-1.x.md)
@@ -53,9 +50,11 @@ openspecui
 
 ## OpenSpec CLI 兼容性
 
-- OpenSpecUI 7 要求 OpenSpec CLI `>=1.7.0 <1.8.0`。
-- OpenSpec CLI 1.6.x、更旧的 CLI 线及 CLI `>=1.8.0` 均不受 OpenSpecUI 7 支持，并会被默认阻断。
-- 若不兼容的 CLI 可执行文件仍然存在，版本不匹配对话框会提供 **Skip version check**。该绕过只在当前页面运行期有效，刷新或重新打开后清除，也不构成兼容性承诺。
+- OpenSpecUI 6.1 面向 OpenSpec CLI `>=1.6.0 <1.7.0`；CLI `>=1.7.0 <1.8.0` 仍保持兼容。
+- 更旧的 CLI 线和 CLI `>=1.8.0` 不受 OpenSpecUI 6.1 支持。
+- 如果 CLI 不在 `>=1.6.0 <1.8.0` 范围内，界面会显示 `OpenSpec CLI Required` 并阻断核心操作，直到升级。
+- 可在 **Settings → OpenSpec Profile & Sync** 查看 profile/workflow 同步状态。
+- OpenSpec CLI 1.6 的默认 `core` profile 包含 `/opsx:sync` 与 `/opsx:update`，并支持 Oh My Pi 和 Trae command delivery。
 
 升级 CLI：
 
