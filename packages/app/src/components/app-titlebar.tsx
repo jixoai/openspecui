@@ -17,7 +17,7 @@
  *   when expanded; an explicit PanelLeftClose icon-button sits at its right. Collapsed: the
  *   icon-button hides and the logo becomes clickable to expand.
  */
-import { Monitor, Moon, PanelLeftClose, Settings, Sun } from 'lucide-react'
+import { Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun } from 'lucide-react'
 import type { PointerEventHandler } from 'react'
 import type { HostedShellTheme } from '../lib/app-theme'
 import type { AppTitlebarPresentation } from '../lib/titlebar-presentation'
@@ -66,16 +66,11 @@ export function AppTitlebar({
       onPointerDown={onPointerDown}
     >
       <div className="app-titlebar-content">
-        {/* Brand + sidebar toggle grouped together on the left */}
+        {/* Brand (display-only) + persistent sidebar toggle grouped together */}
         <div className="app-titlebar-brand-group">
-          <button
-            aria-expanded={!sidebarCollapsed}
-            aria-label={sidebarCollapsed ? 'Expand sidebar' : undefined}
+          <div
             className="app-titlebar-brand"
             data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
-            onClick={sidebarCollapsed ? onToggleSidebar : undefined}
-            title={sidebarCollapsed ? 'Expand sidebar' : undefined}
-            type="button"
           >
             <span aria-hidden="true" className="app-titlebar-mark">
               <img className="app-titlebar-logo app-titlebar-logo-light" src="/icon.svg" alt="" />
@@ -86,19 +81,23 @@ export function AppTitlebar({
               />
             </span>
             <span className="font-nav app-titlebar-text">OpenSpecUI App</span>
-          </button>
-          {/* Explicit sidebar toggle — visible only when expanded */}
-          {!sidebarCollapsed ? (
-            <button
-              aria-label="Collapse sidebar"
-              className="app-titlebar-sidebar-toggle"
-              onClick={onToggleSidebar}
-              title="Collapse sidebar"
-              type="button"
-            >
+          </div>
+          {/* Persistent toggle-button: survives collapse, aria-pressed reflects open/closed */}
+          <button
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-pressed={!sidebarCollapsed}
+            className="app-titlebar-sidebar-toggle"
+            data-pressed={!sidebarCollapsed ? 'true' : 'false'}
+            onClick={onToggleSidebar}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            type="button"
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen aria-hidden="true" size={15} strokeWidth={1.8} />
+            ) : (
               <PanelLeftClose aria-hidden="true" size={15} strokeWidth={1.8} />
-            </button>
-          ) : null}
+            )}
+          </button>
         </div>
         <div className="app-titlebar-actions">
           <button

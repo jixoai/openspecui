@@ -225,7 +225,8 @@ html.dark .app-titlebar-logo-dark {
 }
 
 /* webMode sidebar toggle: aria-pressed two-state affordance */
-.app-sidebar-toggle[data-pressed='true'] {
+.app-sidebar-toggle[data-pressed='true'],
+.app-titlebar-sidebar-toggle[data-pressed='true'] {
   background-color: var(--accent);
   color: var(--accent-foreground);
 }
