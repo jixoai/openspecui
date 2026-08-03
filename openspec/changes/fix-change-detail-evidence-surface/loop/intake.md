@@ -6,6 +6,7 @@ Orthogonal intents (created 2026-08-03 Asia/Shanghai):
 
 Original request (2026-08-03): "changeDetail页面有严重的BUG：右上角这里有一坨内容，这些内容没有任何高度限制，而且非常影响观感，思考一下有没有优化的方案方法？"
 Owner correction (2026-08-03): Actions stay at the title inline-end until a narrow container wraps them below; Apply inputs become a Dialog action; Schema, artifact progress, Root, and References become subtitle badges; action-specific unavailable reasons belong to the corresponding button Tooltip.
+Owner correction (2026-08-03): the wide Header uses `grid-template-columns: auto 1fr` so title identity receives width priority; long titles wrap instead of truncating.
 -->
 
 ## User Input
@@ -21,7 +22,7 @@ Owner correction (2026-08-03): Actions stay at the title inline-end until a narr
 ## Objective Scope
 
 - Keep Change identity, subtitle status badges, workflow actions, errors, blockers, stale authority, and progress divergence in the default decision plane.
-- Keep Actions at the title inline-end when space permits and wrap the complete action row below the title only at narrow container widths.
+- Keep Actions at the title inline-end when space permits; use `auto 1fr` for the wide Header so identity/title receives width priority, then wrap the complete action row below only at narrow container widths.
 - Move persistent Root, Store, Reference, artifact-path, action-context, and raw CLI evidence into a dedicated `Evidence` tab after `Folder`.
 - Expose non-empty Apply context and operation guidance as one workflow action that opens a bounded Dialog.
 - Present Schema, artifact completion, Root source/Store, and Reference state as Tooltip-backed subtitle badges.
@@ -44,7 +45,8 @@ Owner correction (2026-08-03): Actions stay at the title inline-end until a narr
 - The default Artifact/Content tab excludes verbose paths, Reference detail, and raw CLI payload while keeping workflow actions and direct failures visible.
 - `Evidence` is routable through the existing tab query, displays readable facts through raw CLI evidence, and never becomes the default tab.
 - Apply inputs are absent when empty and appear as a workflow action when present; its Dialog preserves complete context and guidance.
-- At wide container widths Actions occupy the title inline-end; at narrow widths they wrap as one block-end row without horizontal overflow.
+- At wide container widths the Header uses `auto 1fr`, identity/title receives width priority, and Actions occupy the remaining inline-end column; at narrow widths Actions wrap as one block-end row without horizontal overflow.
+- Long Change titles wrap within the identity column, including continuous long tokens, instead of clipping or using ellipsis.
 - Schema, artifact completion, Root source/Store, and Reference status occupy the subtitle as compact badges with complete Tooltip explanations.
 - Each action-specific unavailable reason is reachable from its own disabled button Tooltip, with no duplicate `Unavailable:` summary line.
 - Missing Root Context renders Reference evidence as unavailable, retained Root Context remains source-attributed, and static mode explicitly reports unavailable CLI provenance.

@@ -6,6 +6,7 @@ Orthogonal intents (created 2026-08-03 Asia/Shanghai):
 
 Original request (2026-08-03): implement the approved Change Detail Evidence-tab plan.
 Owner correction (2026-08-03): refine Header action placement, Apply-input ownership, subtitle badges, and action-specific unavailable Tooltips.
+Owner correction (2026-08-03): use `auto 1fr` to prioritize title identity and wrap long titles.
 -->
 
 ## 1. Research and Planning
@@ -63,6 +64,10 @@ Owner correction (2026-08-03): refine Header action placement, Apply-input owner
 - [x] 7.4 Move Schema, artifact progress, Root/Store, and References into one Tooltip-backed subtitle badge row.
 - [x] 7.5 Replace the Apply-input disclosure with an Action-owned Dialog and attach applicability reasons to each disabled button Tooltip.
 - [x] 7.6 Re-run focused unit/browser/type checks, update implementation evidence, and commit only the correction without pushing.
+- [x] 7.7 Record the corrected `auto 1fr` Header and wrapping-title contract.
+- [ ] 7.8 Add red browser evidence for the old action-priority grid and single-line title truncation.
+- [ ] 7.9 Prioritize title identity and preserve readable multiline titles without Header overflow.
+- [ ] 7.10 Re-run focused browser/unit/type gates, record evidence, and commit without pushing.
 
 ## 8. Owner and PR Boundaries
 

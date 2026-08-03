@@ -7,6 +7,7 @@ Orthogonal intents (created 2026-08-03 Asia/Shanghai):
 
 Original request (2026-08-03): optimize when and where Change Detail evidence is visible, and decide between Dialog and a dedicated tab page.
 Owner correction (2026-08-03): keep Actions inline with the title until responsive wrapping, move Apply inputs to an Action-owned Dialog, unify scan facts as subtitle badges, and move applicability reasons to button Tooltips.
+Owner correction (2026-08-03): prioritize title identity with `grid-template-columns: auto 1fr` at wide widths and wrap long titles instead of truncating them.
 -->
 
 ## Research Findings
@@ -83,13 +84,23 @@ status region
 - Action-specific applicability is local to the disabled command. Its Tooltip is the single presentation owner;
   Root/Status authority failures remain direct because they lock the whole action set and require repair context.
 
+### Owner title-sizing correction
+
+- The first responsive implementation used `minmax(0, 1fr) auto`, which reserves the Actions intrinsic width first
+  and forces identity/title to absorb all remaining compression.
+- The title span also used single-line `truncate`, so a long Change identity disappeared behind an ellipsis instead
+  of contributing stable Header height.
+- The corrected wide topology is `auto 1fr`: identity/title receives content-width priority, Actions use the
+  remaining column and retain their own wrapping. The title uses normal whitespace plus overflow wrapping so both
+  natural phrases and continuous identifiers remain readable.
+
 ## Decision & Plan (For Approval)
 
 1. Add a focused delta for `opsx-ui-views` defining the default decision plane, the routable Evidence tab, direct failures, explicit static/unavailable evidence, and one-tab scroll ownership.
 2. Replace the shared `toolbar` interface with `headerActions` plus a full-width `statusRegion`; active Change passes all workflow content through `statusRegion`, while Archive remains unchanged.
 3. Add optional `supplementaryTabs` to `OpsxEntityDetailView`; append them after `Folder` and preserve the existing query key. Active Change supplies one `evidence` tab, while Archive supplies none.
 4. Split Change evidence presentation into a compact summary and a full Evidence panel. Derive one typed Reference presentation state at `ChangeView` so unavailable is never displayed as zero.
-5. Place the complete action row at the Header inline-end and use the Header container to wrap it below the identity only when space is constrained.
+5. Place the complete action row at the Header inline-end; use `auto 1fr` at wide widths to prioritize identity/title, let Actions consume the remaining column, and use the Header container to wrap Actions below only when space is constrained.
 6. Render Schema, artifact progress, Root/Store, and Reference facts as one subtitle badge row; keep Reference failures direct below the Header.
 7. Render non-empty Apply inputs as an Action-owned Dialog and remove the page disclosure.
 8. Attach action-specific applicability reasons to the corresponding disabled button Tooltip and remove the repeated unavailable summary.
@@ -99,11 +110,11 @@ status region
 
 ### Production owners and fixed evidence
 
-| Production owner              | Precise red fixed point                                                                                     | Green result                                                                                                                   |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Shared OPSX detail layout     | Actions always consume a block-end row even when inline space is available                                  | Actions occupy title inline-end by default and wrap as one row only below the responsive container threshold                   |
-| Change default decision plane | Scan facts occupy a second row; Apply inputs are page content; applicability is duplicated as prose         | Subtitle owns all scan badges; Apply inputs open from one Action; each unavailable reason belongs to its button Tooltip        |
-| Change Evidence tab           | No routable tab owns complete evidence or vertical scrolling; missing Root Context reads as zero References | `?artifact=evidence` selects a bounded panel with complete source evidence and explicit current/retained/unavailable semantics |
+| Production owner              | Precise red fixed point                                                                                     | Green result                                                                                                                    |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Shared OPSX detail layout     | Actions reserve intrinsic width before a single-line truncated title, or always consume a block-end row     | Wide Header uses `auto 1fr`; long titles wrap and Actions use the remaining column, then move below at the responsive threshold |
+| Change default decision plane | Scan facts occupy a second row; Apply inputs are page content; applicability is duplicated as prose         | Subtitle owns all scan badges; Apply inputs open from one Action; each unavailable reason belongs to its button Tooltip         |
+| Change Evidence tab           | No routable tab owns complete evidence or vertical scrolling; missing Root Context reads as zero References | `?artifact=evidence` selects a bounded panel with complete source evidence and explicit current/retained/unavailable semantics  |
 
 ## Capability Impact
 
@@ -115,21 +126,22 @@ status region
 
 ### Modified Behavior
 
-- Change workflow Actions occupy the Header inline-end and responsively wrap below the title.
+- Change workflow Actions occupy the remaining Header inline-end column after title identity and responsively wrap below the title.
+- Long Change titles wrap inside the identity column instead of truncating.
 - Compact scan facts share the subtitle while verbose CLI evidence leaves the default Artifact surface.
 - Action applicability is available through the corresponding disabled button Tooltip; global authority failures remain direct.
 - Shared detail callers can append caller-owned tabs without changing Archive behavior.
 
 ## Risks and Mitigations
 
-| Risk                                               | Mitigation                                                                                                                   |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Supporting surfaces hide a blocker                  | Keep transport, Root, Reference, stale-authority, and divergence messages outside the Evidence tab and Apply-input Dialog    |
-| Generic extra tabs leak into Archive               | Make tabs caller-provided and assert Archive has no Evidence tab                                                             |
-| Hidden evidence forks live/static semantics        | Reuse `ChangeStatus`; render static/unavailable states explicitly and add no data source                                     |
-| A nested scroller recreates double-scroll behavior | Make the Evidence panel the tab's primary vertical owner; only the bounded raw payload may scroll internally                 |
-| Tests assert class names instead of behavior       | Test public DOM regions, tab selection, accessible disclosure, visible failure states, and real component geometry           |
-| Existing user work is overwritten                  | Restrict edits/staging to Change Detail, OpenSpec artifacts, docs vocabulary, test admission, and the new changeset          |
+| Risk                                               | Mitigation                                                                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Supporting surfaces hide a blocker                 | Keep transport, Root, Reference, stale-authority, and divergence messages outside the Evidence tab and Apply-input Dialog |
+| Generic extra tabs leak into Archive               | Make tabs caller-provided and assert Archive has no Evidence tab                                                          |
+| Hidden evidence forks live/static semantics        | Reuse `ChangeStatus`; render static/unavailable states explicitly and add no data source                                  |
+| A nested scroller recreates double-scroll behavior | Make the Evidence panel the tab's primary vertical owner; only the bounded raw payload may scroll internally              |
+| Tests assert class names instead of behavior       | Test public DOM regions, tab selection, accessible disclosure, visible failure states, and real component geometry        |
+| Existing user work is overwritten                  | Restrict edits/staging to Change Detail, OpenSpec artifacts, docs vocabulary, test admission, and the new changeset       |
 
 ## Verification Strategy
 
