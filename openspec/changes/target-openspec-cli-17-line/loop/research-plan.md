@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 1. Record objective OpenSpec 1.7 protocol and current OpenSpecUI implementation constraints.
 2. Define the approved Config workbench, initialization Alert, Agent Delivery, and Guide product story.
 3. Decompose the adaptation into owner-specific implementation slices with fixed evidence.
@@ -8,6 +8,7 @@ Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
 Original request (2026-08-01): "更新本地references/openspec，目前 `openspec@v1.7.*` 已经发布，我们开始 `openspecui@v7.*` 的适配计划"
 Owner execution request (2026-08-01): complete the interview, create the full Change artifact set, then begin implementation.
 Owner Config direction (2026-08-01): route-backed Config workbench, Agent Delivery owner, raw YAML escape hatch, adaptive Guide, and independent `openspec init --tools=none` Alert.
+Owner Guide correction (2026-08-03): ready observations unlock explicit Continue without auto-advance; Spotlight uses one SVG even-odd bevel mask.
 -->
 
 ## Research Findings
@@ -172,8 +173,8 @@ Project Binding → Active Root → Agent Delivery → Resolved Context verifica
 
 The Guide starts only after local initialization or when local setup already exists. Objective ready stages are
 skipped. Warnings, stale authority, blockers, and failures remain visible. OpenSpecUI owns stage derivation, Router
-navigation, focus targets, mutation handoff, and completion. Driver.js is the preferred lightweight visual actuator;
-it owns only focus, mask, and popover presentation.
+navigation, focus targets, mutation handoff, completion, Spotlight geometry, controls, and styles. The headless Base UI
+Popover owns only anchor positioning and focus primitives; it does not mutate route-owned target DOM.
 
 ### 9. Existing Architecture Constraints
 
@@ -294,14 +295,15 @@ session dismissal resets on page reconstruction, and success alone enables Guide
 
 ### Slice 9 — Adaptive Config Guide
 
-Production owner: typed Config guide state/orchestrator plus Driver.js adapter.
+Production owner: typed Config guide state/orchestrator plus React-owned Base UI Popover and Spotlight.
 
 1. Derive stage status from current Config/Root/Agent projections.
 2. Navigate to route-backed targets and wait for registered focus anchors.
-3. Skip only objectively ready stages.
+3. Keep every stage visible; let only current `ready` unlock explicit Continue.
 4. Pause at stale, warning, blocked, failed, or user-edit states.
-5. Finish only when Resolved Context is current and the selected Root is usable.
-6. Provide reduced-motion and keyboard-accessible behavior; unload Driver.js outside guide use.
+5. Finish only after explicit Continue from current Resolved Context with a usable selected Root.
+6. Render one SVG even-odd Spotlight mask whose bevel cuts follow computed target radii and fall back to square corners.
+7. Provide reduced-motion and keyboard-accessible behavior; lazy-load the React presentation outside guide use.
 
 Fixed evidence: state reducer tests plus basic component-browser focus/navigation fixtures. Final UX walkthrough remains
 owner-owned.
@@ -351,7 +353,7 @@ Production owner: package manifests, docs, Changesets, CI, and owner walkthrough
 | Agent registry drifts again                              | Central typed registry with completeness tests against official 1.7 metadata evidence.      |
 | Init accidentally installs Agent artifacts               | Fixed `--tools=none` arguments and exact command-plan tests.                                |
 | Startup Alert blocks Store-backed users                  | Separate local initialization from effective Root readiness; allow dismissal.               |
-| Guide library becomes workflow authority                 | Typed OpenSpecUI reducer/orchestrator owns truth; Driver.js remains an adapter.             |
+| Guide library becomes workflow authority                 | Typed OpenSpecUI reducer owns truth; Base UI supplies positioning/focus primitives only.    |
 | Guide targets disappear across responsive routes         | Registered semantic anchors, route settlement waits, and missing-target failure state.      |
 | Static Config fabricates mutation authority              | Static routes remain read-only and publish only approved snapshot facts.                    |
 | Scope becomes impossible to review                       | Ten ordered slices, each with one production owner and focused evidence before broad gates. |

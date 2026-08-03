@@ -1,10 +1,10 @@
 <!--
-Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 1. Bootstrap repository agents through CLAUDE.md.
 2. Enforce protected-branch, PR, CI, and release delivery policy.
 3. Protect static/SSG behavior and shared live/static projections.
 4. Preserve the OpenSpec adaptation baseline, source-distinct projections, Agent-delivery authority, and independent-review corrections.
-5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, CLI trace phase precision, buffered CLI process/Worker execution, live-projection loading, admission Pull, readonly refresh semantics, real-time visual lifecycle, OPSX-first information hierarchy, Config-owned Resolved Context, adaptive Config Guide authority, Terminal palette accessibility, container-responsive objective Kanban projection, live Board scroll ownership, OpenTray App-daemon hosting, App-build asset projection, Workspaces/Stores two-domain App information architecture, PWA retirement, App brand projection, foreground Server shutdown, on-demand native translation runtime dependency ownership, delivery-correction boundaries for the 1.6/6.1 line, and evidence-first planning for the OpenSpec 1.7/OpenSpecUI 7 line.
+5. Fix App, project workspace, runtime-environment ownership, interaction-latency authority, CLI trace phase precision, buffered CLI process/Worker execution, live-projection loading, admission Pull, readonly refresh semantics, real-time visual lifecycle, OPSX-first information hierarchy, Config-owned Resolved Context, explicit-step adaptive Config Guide authority, Terminal palette accessibility, container-responsive objective Kanban projection, live Board scroll ownership, OpenTray App-daemon hosting, App-build asset projection, Workspaces/Stores two-domain App information architecture, PWA retirement, App brand projection, foreground Server shutdown, on-demand native translation runtime dependency ownership, delivery-correction boundaries for the 1.6/6.1 line, and evidence-first planning for the OpenSpec 1.7/OpenSpecUI 7 line.
 
 Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配，目前我们的进度有点落后。你先了解项目，然后更新 references/openspec，然后使用 $wayfinder 和我讨论具体的适配计划。我们最终使用openspec来管理 wayfinder 产出的文档。"
 Original request (2026-07-28): "这个PR自身是否符合OPSX的开放式设计，是否会冲突？都需要进行深入的调查。"
@@ -106,6 +106,13 @@ Owner Active-Root YAML decision (2026-08-01): preserve raw YAML writes because O
 Owner Config-Guide decision (2026-08-01): "同意" — Config ships one adaptive `Configure this project` Guide, skips objectively ready stages, and finishes at Resolved Context verification instead of maintaining page-specific static tours.
 Owner initialization-entry request (2026-08-01): when the Launch Project has no local `openspec/` directory, OpenSpecUI globally offers guided setup; Config exposes an Init action backed by official `openspec init`.
 Owner initialization-Alert decision (2026-08-01): Initialize Project is a separate Alert that explicitly runs `openspec init --tools=none`, shows execution evidence, and after success offers `[Ok] [Start Guide]`; Agent selection remains a later Guide concern.
+Owner-reported defect (2026-08-02): "Guide有问题，一点击就疯狂闪烁，然后，越来越深，最后黑屏了，只剩下几个guide-tooltip". Repeated Guide effect generations stacked Driver.js overlays/popovers because unchanged observations retriggered presentation and cancelled async presentations could still resolve after cleanup.
+Owner-reported defect (2026-08-02): the Guide completion popover used unthemed Driver.js defaults, positioned from a virtual center instead of the mounted Resolved Context anchor, and exposed no actionable Done/Close controls, so the user could not finish or dismiss the Guide.
+Owner Guide-presentation decision (2026-08-02): replace Driver.js with the existing headless Base UI Popover plus an OpenSpecUI-owned Spotlight; preserve the typed Guide reducer as the sole workflow authority and prohibit presentation code from mutating route-owned target DOM.
+Owner-reported defect (2026-08-03): "我重点测试 Guide，结果打开后闪烁了几下，然后一下子就到了 Configuration complete。我都没进行交互呢".
+Owner Guide-progression correction (2026-08-03): a current `ready` projection only unlocks Continue; observations never auto-advance or auto-complete. Every stage remains an explicit step, and completion requires the user's Continue intent while Resolved Context is ready.
+Owner Spotlight correction (2026-08-03): replace the four masking elements with one SVG even-odd path whose painted region blocks outside pointer input and whose hole remains interactive; derive each bevel cut from the target's computed corner radii, and use square corners when `corner-shape: bevel` is unsupported.
+Owner visual direction (2026-08-02): reduced small-elevation shadows and compact box-radius status labels must generalize to equivalent semantic UI; pill geometry remains reserved for counts, circular indicators, and genuinely continuous controls.
 Slice 5 review correction (2026-08-01): Environment Global config-file observation is a Server-lifetime capability, not a Config-page side effect. Dependency-settled external edits refresh both Environment CLI truth and Root Context; a current replacement that disagrees with a structured `defaultStore` mutation must unlock with explicit conflict evidence rather than retain a permanent pending lock.
 Owner acceptance (2026-07-31): Worker execution is materially faster and becomes the default; process is explicit or a fallback only when the importable OpenSpec CLI JavaScript module cannot be found.
 Owner finding (2026-07-31): `VP_NO_UPDATE_CHECK` is not a contributing factor to the observed CLI startup latency.
@@ -255,17 +262,30 @@ and machine-level diagnostics remain environment-owned. A Config `Guide` is a ty
 owned by OpenSpecUI; a JavaScript tour library may focus elements and render popovers but must not invent readiness,
 mutation authority, or completion state.
 The initial Guide is one adaptive sequence: Project Binding → Active Root → Agent Delivery → Resolved Context
-verification. Objective ready stages may be skipped; blockers, warnings, failures, and stale authority must remain
-visible and must not be bypassed by presentation-library callbacks.
+verification. Every stage remains visible. A current `ready` signal enables explicit Continue; no observation may
+auto-advance or auto-complete. Blockers, warnings, failures, and stale authority remain visible with Continue disabled.
 The root-layout Guide provider persists across these route-backed owners and consumes only their existing projection
 facts. Every owner registers one stable semantic anchor and a typed signal in `ready | required | warning | stale |
-blocked | failed | active-edit`; only `ready` may advance or skip. Route navigation uses the existing typed View
+blocked | failed | active-edit`; only an explicit user progression intent backed by current `ready` may advance. Route navigation uses the existing typed View
 Transition owner, then waits for the declared anchor before focus. Missing targets become retryable typed failures.
-Projection replacement alone resumes edits or mutations. Driver.js is lazy-loaded only while the runtime is active
-and owns mask, focus presentation, popover, and keyboard presentation callbacks; OpenSpecUI owns Escape cancellation,
-focus restoration, restart, readiness, and the completion barrier. Completion requires every preceding stage ready
-plus a current Resolved Context with an available CLI and usable selected Planning Root. Static mode registers no
-Guide mutation/runtime authority.
+Projection replacement refreshes the visible stage and may unlock Continue, but never advances by itself. The presentation layer is lazy React UI inside the persistent
+Guide Provider tree: Base UI owns only collision-aware Popover positioning/focus primitives, while OpenSpecUI owns the
+SVG Spotlight mask, target geometry, controls, Escape cancellation, focus restoration, restart, readiness, and the
+completion barrier. Completion requires explicit Continue from a current Resolved Context with an available CLI and
+usable selected Planning Root after every preceding stage was explicitly continued. Static mode registers no Guide mutation/runtime authority.
+The Guide has exactly one React-owned presentation value. Equivalent observations are reducer-idempotent;
+semantic-anchor registration depends on the stable registration capability rather than the changing Context value;
+the View-Transition navigation capability crosses the presentation effect through a stable ref so presentation renders
+cannot restart the effect. Cancellation, route replacement, restart, and unmount clear only the matching presentation
+value. No presentation library may add classes, `inert`, body state, or global CSS to route-owned targets.
+The Spotlight renders one viewport SVG. Its even-odd mask path uses painted-region pointer hit testing so the bevel hole
+leaves the semantic anchor interactive while the surrounding mask blocks input. Each cut reads the target's computed
+corner radius when `corner-shape: bevel` is supported; unsupported browsers use the project's zero-radius square fallback.
+Target geometry tracks resize, capture-phase scroll, and `visualViewport` changes. Back, Continue, Retry, Done, and
+Close use OpenSpecUI Button and token styles. Completion anchors mounted Resolved Context; target failure uses a centered
+dialog. Every terminal action removes both Spotlight and Popover rather than leaving the page interaction-blocked.
+Semantic status and issue labels use compact box-radius geometry. Pill geometry is reserved for numeric counts,
+circular indicators, switches, progress tracks, and other shapes whose meaning depends on full rounding.
 When the Launch Project has no local `openspec/` directory, a separate Initialize Project Alert offers the exact
 official `openspec init <launch-project> --tools=none` mutation. It never auto-runs, never targets an external Active
 Root, and never installs or migrates Agent artifacts. The Alert owns confirmation, command preview, streaming/final

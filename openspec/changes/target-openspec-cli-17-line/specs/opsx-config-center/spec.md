@@ -1,11 +1,12 @@
 <!--
-Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 1. Replace mixed Config tabs with route-backed owner pages.
 2. Define Environment, Agent Delivery, Active Root, Init Alert, and adaptive Guide ownership.
 3. Preserve custom YAML through structured and raw editing.
 
 Original request (2026-08-01): investigate and redesign incomplete Config surfaces for OpenSpecUI 7.
 Owner decisions (2026-08-01): Config workbench, `/config/agents`, raw YAML writes, adaptive Guide, and independent Init Alert.
+Owner correction (2026-08-03): ready stages require explicit Continue; Spotlight uses one SVG even-odd bevel mask.
 -->
 
 # Delta for opsx-config-center
@@ -119,15 +120,24 @@ Config SHALL provide one typed adaptive Guide for Project Binding, Active Root, 
 verification. A guide library MAY render focus and popovers but SHALL NOT own readiness, navigation authority,
 mutation, or completion.
 
-#### Scenario: Skip only ready stages
+#### Scenario: Ready stages require explicit continuation
 
-- **GIVEN** one or more Guide stages are objectively current and ready
-- **WHEN** the Guide starts or resumes
-- **THEN** those stages MAY be skipped
-- **AND** warning, stale, blocked, failed, or active-edit stages SHALL NOT be skipped
+- **GIVEN** a Guide stage is objectively current and ready
+- **WHEN** the Guide observes that projection
+- **THEN** the stage SHALL remain visible and SHALL enable Continue
+- **AND** SHALL NOT advance until the user explicitly activates Continue
+- **AND** warning, stale, blocked, failed, or active-edit stages SHALL keep Continue disabled
 
 #### Scenario: Complete the Guide
 
-- **WHEN** Resolved Context is current and reports a usable selected Root after all required stages
-- **THEN** the Guide MAY complete
+- **WHEN** Resolved Context is current, reports a usable selected Root, and the user explicitly activates Continue
+- **THEN** the Guide MAY complete after every preceding stage was explicitly continued
 - **AND** presentation callbacks alone SHALL NOT mark completion
+
+#### Scenario: Preserve target interaction through one bevel mask
+
+- **WHEN** the Guide highlights a mounted semantic target
+- **THEN** one SVG even-odd mask SHALL block pointer input only outside the hole
+- **AND** the real target SHALL remain interactive without target DOM mutation
+- **AND** the hole SHALL derive bevel cuts from computed target corner radii
+- **AND** browsers without `corner-shape: bevel` SHALL receive square hole corners

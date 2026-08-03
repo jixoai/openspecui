@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
 1. Preserve the manager's original OpenSpec 1.7/OpenSpecUI 7 adaptation request.
 2. Define the complete observable protocol scope without authorizing parallel OpenSpec logic.
 3. Fix the release, evidence, review, and browser-acceptance boundaries for this loop.
@@ -16,6 +16,8 @@ Owner Config-guide request (2026-08-01): add a `Guide` action to Config, use a J
 Owner Config-workbench decision (2026-08-01): "同意" — adopt the route-backed Config workbench and make `/config/agents` the sole structured owner of Agent delivery policy.
 Owner Active-Root YAML decision (2026-08-01): preserve raw YAML writes because teams may extend the document beyond the official OpenSpec standard; OpenSpecUI aligns official fields but cannot define every organization or individual's configuration contract.
 Owner Config-Guide decision (2026-08-01): "同意" — ship one adaptive `Configure this project` Guide that skips objectively ready stages and ends at Resolved Context verification; do not create separate static tours per Config page.
+Owner Config-Guide correction (2026-08-03): every stage remains visible; `ready` only unlocks explicit Continue and observations never auto-advance or auto-complete.
+Owner Spotlight correction (2026-08-03): one SVG even-odd mask replaces four overlay regions and mirrors computed bevel radii with a square unsupported-browser fallback.
 Owner initialization-entry request (2026-08-01): when OpenSpecUI starts on a project without a local `openspec/` directory, open a global Dialog offering guided project setup; Config also exposes an Init action that executes the official `openspec init` workflow.
 Owner initialization-Alert decision (2026-08-01): Initialize Project is an independent Alert that explicitly runs `openspec init --tools=none`, shows command execution through settlement, and on success offers `[Ok] [Start Guide]`; experienced users may continue independently while new users enter the Guide.
 -->
@@ -127,8 +129,9 @@ The loop is implementation-complete only when all of the following are objective
   structured projection after atomic settlement. Unknown fields are not rejected merely because the official
   OpenSpec model does not define them.
 - Config ships one adaptive `Configure this project` Guide: Project Binding → Active Root → Agent Delivery →
-  Resolved Context verification. Ready stages are skipped from objective projections; blockers, warnings, and
-  failures remain explicit. The guide library owns only focus/popover presentation.
+  Resolved Context verification. Every stage remains visible; current `ready` enables Continue, explicit Continue
+  advances, and observations never auto-complete. Blockers, warnings, and failures keep Continue disabled. The
+  headless presentation owns only focus/popover primitives; OpenSpecUI owns one SVG bevel Spotlight mask.
 
 ## Initialization Investigation
 
@@ -208,10 +211,10 @@ Settings becomes a read-only Agent summary and link. The current Initialize Open
 providing an independent structured editor for Agent policy. Its raw source becomes evidence or an advanced
 passthrough editor that excludes fields owned by Agent Delivery.
 
-The Guide is not allowed to own completion state. OpenSpecUI owns a typed, state-derived setup workflow and Router /
-mutation orchestration; Driver.js is the recommended lightweight focus/popover actuator. A guide step may wait for
-an element or navigate to a Config subpage, but objective readiness comes from Root Context, Planning Config, Schema,
-and Agent delivery projections.
+The Guide presentation is not allowed to own completion state. OpenSpecUI owns a typed, state-derived setup workflow,
+Router/mutation orchestration, Spotlight, controls, and visual language; the headless Base UI Popover supplies only
+anchor positioning and focus primitives. A guide step may wait for an element or navigate to a Config subpage, but
+objective readiness comes from Root Context, Planning Config, Schema, and Agent delivery projections.
 
 ## Interview Result
 
