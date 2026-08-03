@@ -1,5 +1,16 @@
 # @openspecui/server
 
+## 7.0.1
+
+### Patch Changes
+
+- @openspecui/core@7.0.1
+- @openspecui/local-ct2-translator@7.0.1
+- @openspecui/local-llama-translator@7.0.1
+- @openspecui/local-translator@7.0.1
+- @openspecui/openai-completion-translator@7.0.1
+- @openspecui/search@7.0.1
+
 ## 7.0.0
 
 ### Major Changes
