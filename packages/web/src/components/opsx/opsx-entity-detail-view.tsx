@@ -1,3 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * 1. Own the shared loading, unavailable, and ready topology for OPSX entity details.
+ * 2. Preserve routed Artifact, Content, and Folder presentation across active and archived entities.
+ * 3. Forward compact Header actions, full-width status content, and caller-owned supplementary tabs.
+ *
+ * Original request (2026-07-28): share one schema-neutral detail surface across active Changes and Archives.
+ * Original request (2026-08-03): add a Change-only Evidence tab without changing Archive Detail.
+ */
+import type { Tab } from '@/components/tabs'
 import type { VTLinkProps } from '@/lib/view-transitions/navigation'
 import type { SharedElementHandoff } from '@/lib/view-transitions/shared-elements'
 import { useRoutedCarouselTabs } from '@/lib/view-transitions/tabs'
@@ -26,7 +36,8 @@ interface OpsxEntityDetailViewProps {
   icon: LucideIcon
   title?: ReactNode
   subtitle?: ReactNode
-  toolbar?: ReactNode
+  headerActions?: ReactNode
+  statusRegion?: ReactNode
   diagnostics?: readonly OpsxEntityDiagnostic[]
   handoff: SharedElementHandoff | null
   isLoading: boolean
@@ -40,6 +51,7 @@ interface OpsxEntityDetailViewProps {
   folder: OpsxEntityDetailFolder
   tabsQueryKey: string
   initialTab?: string
+  supplementaryTabs?: readonly Tab[]
 }
 
 type OpsxEntityDetailReadyProps = Pick<
@@ -55,7 +67,9 @@ type OpsxEntityDetailReadyProps = Pick<
   | 'icon'
   | 'title'
   | 'subtitle'
-  | 'toolbar'
+  | 'headerActions'
+  | 'statusRegion'
+  | 'supplementaryTabs'
   | 'diagnostics'
   | 'entityId'
 > & {
@@ -75,7 +89,9 @@ function OpsxEntityDetailReadyView({
   icon,
   title,
   subtitle,
-  toolbar,
+  headerActions,
+  statusRegion,
+  supplementaryTabs,
   diagnostics,
   entityId,
   headerRef,
@@ -88,8 +104,9 @@ function OpsxEntityDetailReadyView({
         hideEmptyArtifacts,
         contentFallback,
         folder,
+        supplementaryTabs,
       }),
-    [artifacts, contentFallback, folder, hideEmptyArtifacts]
+    [artifacts, contentFallback, folder, hideEmptyArtifacts, supplementaryTabs]
   )
 
   const { tabsRef, selectedTab, onTabChange } = useRoutedCarouselTabs({
@@ -107,7 +124,8 @@ function OpsxEntityDetailReadyView({
       icon={icon}
       title={title ?? entityId}
       subtitle={subtitle ?? entityId}
-      toolbar={toolbar}
+      headerActions={headerActions}
+      statusRegion={statusRegion}
       diagnostics={diagnostics}
     >
       <OpsxDetailTabs
@@ -128,7 +146,8 @@ export function OpsxEntityDetailView({
   icon,
   title,
   subtitle,
-  toolbar,
+  headerActions,
+  statusRegion,
   diagnostics,
   handoff,
   isLoading,
@@ -141,6 +160,7 @@ export function OpsxEntityDetailView({
   folder,
   tabsQueryKey,
   initialTab,
+  supplementaryTabs,
 }: OpsxEntityDetailViewProps) {
   const headerRef = useRef<HTMLDivElement | null>(null)
   const sharedDescriptor = useMemo(
@@ -174,7 +194,8 @@ export function OpsxEntityDetailView({
         icon={icon}
         title={title ?? entityId}
         subtitle={subtitle ?? entityId}
-        toolbar={toolbar}
+        headerActions={headerActions}
+        statusRegion={statusRegion}
         diagnostics={diagnostics}
       >
         <OpsxDetailStatePanel message={notFoundMessage} />
@@ -192,7 +213,8 @@ export function OpsxEntityDetailView({
         icon={icon}
         title={title ?? entityId}
         subtitle={subtitle ?? entityId}
-        toolbar={toolbar}
+        headerActions={headerActions}
+        statusRegion={statusRegion}
         diagnostics={diagnostics}
       >
         <OpsxDetailStatePanel
@@ -216,7 +238,8 @@ export function OpsxEntityDetailView({
       icon={icon}
       title={title}
       subtitle={subtitle}
-      toolbar={toolbar}
+      headerActions={headerActions}
+      statusRegion={statusRegion}
       diagnostics={diagnostics}
       headerRef={headerRef}
       sharedDescriptor={sharedDescriptor}
@@ -226,6 +249,7 @@ export function OpsxEntityDetailView({
       folder={folder}
       tabsQueryKey={tabsQueryKey}
       initialTab={initialTab}
+      supplementaryTabs={supplementaryTabs}
     />
   )
 }

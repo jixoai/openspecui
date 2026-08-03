@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * 1. Verify Archive route identity, loading, missing, and error boundaries.
+ * 2. Preserve schema-driven Artifact/Content plus Folder presentation.
+ * 3. Prove active-Change supplementary Evidence never leaks into Archive Detail.
+ *
+ * Original request (2026-07-15): project Archives resolve from the current writable Planning root.
+ * Original request (2026-08-03): add an Evidence tab only to active Change Detail.
+ */
 import type { OpsxEntityDetail } from '@openspecui/core'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -172,6 +181,7 @@ describe('ArchiveView', () => {
     expect(screen.getByText(/Schema: custom-audit/)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'summary' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Folder' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Evidence' })).toBeNull()
     expect(screen.getByText('1 file')).toBeTruthy()
     expect(artifactOutputSubscriptionMock).not.toHaveBeenCalled()
     expect(globArtifactFilesSubscriptionMock).not.toHaveBeenCalled()

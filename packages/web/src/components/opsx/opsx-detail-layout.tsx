@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Compose reusable OPSX detail headers, pages, tabs, diagnostics, and state panels.
  * 2. Preserve shared-element navigation and geometry-stable loading presentation.
+ * 3. Keep compact Header actions physically separate from full-width status content.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
+ * Original request (2026-08-03): prevent Change Detail evidence from growing the Header's right side.
  */
 import { AccessibleStatus, DetailPanelSkeleton } from '@/components/realtime'
 import { Tabs, type Tab } from '@/components/tabs'
@@ -29,16 +31,17 @@ interface OpsxDetailHeaderProps {
   icon: LucideIcon
   title: ReactNode
   subtitle: ReactNode
-  toolbar?: ReactNode
+  headerActions?: ReactNode
 }
 
 interface OpsxDetailPageProps extends OpsxDetailHeaderProps {
   diagnostics?: readonly OpsxEntityDiagnostic[]
+  statusRegion?: ReactNode
   children: ReactNode
 }
 
 interface OpsxDetailLoadingPageProps
-  extends Omit<OpsxDetailHeaderProps, 'title' | 'subtitle' | 'toolbar'> {
+  extends Omit<OpsxDetailHeaderProps, 'title' | 'subtitle' | 'headerActions'> {
   handoff: SharedElementHandoff | null
   fallbackTitle: string
   fallbackSubtitle: string
@@ -66,10 +69,13 @@ function OpsxDetailHeader({
   icon: Icon,
   title,
   subtitle,
-  toolbar,
+  headerActions,
 }: OpsxDetailHeaderProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div
+      data-testid="opsx-detail-header"
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3"
+    >
       <div className="flex min-w-0 items-center gap-4">
         <VTLink
           to={backTo}
@@ -96,15 +102,25 @@ function OpsxDetailHeader({
           <p className="text-muted-foreground truncate text-sm">{subtitle}</p>
         </div>
       </div>
-      {toolbar}
+      {headerActions}
     </div>
   )
 }
 
-export function OpsxDetailPage({ diagnostics, children, ...headerProps }: OpsxDetailPageProps) {
+export function OpsxDetailPage({
+  diagnostics,
+  statusRegion,
+  children,
+  ...headerProps
+}: OpsxDetailPageProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
       <OpsxDetailHeader {...headerProps} />
+      {statusRegion ? (
+        <div data-testid="opsx-detail-status-region" className="min-w-0">
+          {statusRegion}
+        </div>
+      ) : null}
       <OpsxDetailDiagnostics diagnostics={diagnostics ?? []} />
       {children}
     </div>

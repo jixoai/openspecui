@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * 1. Build shared Artifact, fallback Content, and Folder tabs for OPSX entities.
+ * 2. Append caller-owned supplementary tabs without changing Archive defaults.
+ *
+ * Original request (2026-08-03): add a dedicated active-Change Evidence tab after Folder.
+ */
 import { FolderEditorViewer } from '@/components/folder-editor-viewer'
 import type { Tab } from '@/components/tabs'
 import type { OpsxEntityFile } from '@openspecui/core'
@@ -69,11 +76,13 @@ export function buildOpsxEntityDetailTabs({
   hideEmptyArtifacts,
   contentFallback,
   folder,
+  supplementaryTabs = [],
 }: {
   artifacts: readonly ArtifactOutputDescriptor[]
   hideEmptyArtifacts: boolean
   contentFallback?: OpsxEntityDetailContentFallback
   folder: OpsxEntityDetailFolder
+  supplementaryTabs?: readonly Tab[]
 }): Tab[] {
   const visibleArtifacts = hideEmptyArtifacts
     ? artifacts.filter((artifact) => (artifact.files?.length ?? 0) > 0)
@@ -86,5 +95,5 @@ export function buildOpsxEntityDetailTabs({
         ? [createContentFallbackTab(contentFallback)]
         : []
 
-  return [...primaryTabs, createFolderTab(folder)]
+  return [...primaryTabs, createFolderTab(folder), ...supplementaryTabs]
 }

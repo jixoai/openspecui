@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
  * 1. Verify change detail fallbacks and schema-driven artifact rendering.
- * 2. Verify retained status errors and non-current Status authority lock the workflow toolbar.
- * 3. Verify OpenSpec 1.7 Apply context and operation guidance remain separate visible inputs.
+ * 2. Verify retained errors and non-current authority lock actions without entering the Header.
+ * 3. Verify Apply inputs remain separate and collapsed until explicitly requested.
+ * 4. Verify active Change alone owns the routed Evidence tab and explicit unavailable facts.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Original request (2026-07-28): keep progress divergence direct while compressing its source counts.
+ * Original request (2026-08-03): move complete Change evidence into a dedicated tab page.
  */
 import type { RootActionState } from '@/lib/use-root-action-state'
 import type { ChangeStatus } from '@openspecui/core'
@@ -20,6 +22,7 @@ const applyInstructionsMock = vi.hoisted(() => vi.fn())
 const changeFilesMock = vi.hoisted(() => vi.fn())
 const rootActionMock = vi.hoisted(() => vi.fn())
 const openArchiveModalMock = vi.hoisted(() => vi.fn())
+const routedTabState = vi.hoisted(() => ({ selectedTab: undefined as string | undefined }))
 
 const rootActionFailureCases: Array<Extract<RootActionState, { status: 'blocked' | 'checking' }>> =
   [
@@ -134,7 +137,7 @@ vi.mock('@/lib/view-transitions/shared-elements', () => ({
 vi.mock('@/lib/view-transitions/tabs', () => ({
   useRoutedCarouselTabs: ({ initialTab }: { initialTab?: string }) => ({
     tabsRef: { current: null },
-    selectedTab: initialTab,
+    selectedTab: routedTabState.selectedTab ?? initialTab,
     onTabChange: vi.fn(),
   }),
 }))
@@ -179,6 +182,7 @@ describe('ChangeView', () => {
       evidence: [],
     })
     openArchiveModalMock.mockReset()
+    routedTabState.selectedTab = undefined
     changeFilesMock.mockReturnValue({
       data: [{ path: 'notes/decision.md', type: 'file', content: '# Decision' }],
       isLoading: false,
@@ -220,6 +224,57 @@ describe('ChangeView', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Error loading change: status transport failed'
     )
+  })
+
+  it('keeps non-current Status authority and its action lock directly visible', () => {
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+      authority: { state: 'waiting' },
+    })
+
+    render(<ChangeView />)
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Change status is refreshing; actions remain read-only.'
+    )
+    expect(screen.getByRole('button', { name: 'Update' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Verify' })).toBeDisabled()
+  })
+
+  it('keeps Root and Status authority locks independently visible', () => {
+    rootActionMock.mockReturnValue({
+      status: 'checking',
+      disabled: true,
+      context: null,
+      observedAt: 2,
+      title: 'Refreshing planning root',
+      message: 'Root-dependent actions remain locked while OpenSpec refreshes root selection.',
+      evidence: [],
+    })
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+      authority: { state: 'waiting' },
+    })
+
+    render(<ChangeView />)
+
+    const statuses = screen.getAllByRole('status')
+    expect(
+      statuses.some((status) =>
+        status.textContent?.includes('Change status is refreshing; actions remain read-only.')
+      )
+    ).toBe(true)
+    expect(
+      statuses.some((status) =>
+        status.textContent?.includes(
+          'Root-dependent actions remain locked while OpenSpec refreshes root selection.'
+        )
+      )
+    ).toBe(true)
   })
 
   it.each(rootActionFailureCases)(
@@ -280,7 +335,7 @@ describe('ChangeView', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('renders change artifacts, folder, and toolbar through the shared detail view', () => {
+  it('renders actions below the Header and keeps Evidence outside the default Artifact tab', () => {
     statusMock.mockReturnValue({
       data: {
         changeName: 'Extract Terminal View Webcomponent',
@@ -311,7 +366,14 @@ describe('ChangeView', () => {
     expect(screen.getByRole('button', { name: 'intake' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'implementation' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Folder' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Evidence' })).toBeTruthy()
     expect(screen.getByText('artifact:implementation')).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Change Evidence' })).toBeNull()
+    const header = screen.getByTestId('opsx-detail-header')
+    const statusRegion = screen.getByTestId('opsx-detail-status-region')
+    expect(header).not.toContainElement(screen.getByRole('button', { name: 'Update' }))
+    expect(statusRegion).toContainElement(screen.getByRole('button', { name: 'Update' }))
+    expect(statusRegion).toHaveTextContent('References unavailable')
 
     fireEvent.click(screen.getByRole('button', { name: 'Archive' }))
     expect(openArchiveModalMock).toHaveBeenCalledWith(
@@ -362,12 +424,30 @@ describe('ChangeView', () => {
 
     expect(screen.getByRole('note', { name: 'Apply instructions progress 0 of 0' })).toBeTruthy()
     expect(screen.getByRole('note', { name: 'Tracked artifact glob progress 1 of 3' })).toBeTruthy()
-    expect(screen.getByRole('region', { name: 'Apply inputs' })).toBeTruthy()
-    expect(screen.getByText('Project context')).toBeTruthy()
-    expect(screen.getByText('Preserve the project-specific deployment boundary.')).toBeTruthy()
-    expect(screen.getByText('Operation guidance')).toBeTruthy()
-    expect(screen.getByText('Implement tasks in order.')).toBeTruthy()
-    expect(screen.getByText('Run focused verification before marking work complete.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Apply inputs/ })).toBeTruthy()
+    expect(screen.getByText('Preserve the project-specific deployment boundary.')).not.toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: /Apply inputs/ }))
+    expect(screen.getByText('Project context')).toBeVisible()
+    expect(screen.getByText('Preserve the project-specific deployment boundary.')).toBeVisible()
+    expect(screen.getByText('Operation guidance')).toBeVisible()
+    expect(screen.getByText('Implement tasks in order.')).toBeVisible()
+    expect(screen.getByText('Run focused verification before marking work complete.')).toBeVisible()
+  })
+
+  it('routes static Change evidence into its dedicated tab', () => {
+    routedTabState.selectedTab = 'evidence'
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    expect(screen.getByRole('region', { name: 'Change Evidence' })).toHaveTextContent(
+      'CLI Change context and Reference evidence are unavailable in this static snapshot.'
+    )
+    expect(screen.queryByText('artifact:implementation')).toBeNull()
   })
 
   it('falls back to the shared content document tab when no artifact tab is available', () => {
@@ -388,6 +468,7 @@ describe('ChangeView', () => {
 
     expect(screen.getByRole('button', { name: 'Content' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Folder' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Evidence' })).toBeTruthy()
     expect(screen.getByText('fallback:Content')).toBeTruthy()
   })
 
