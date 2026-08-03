@@ -1,5 +1,15 @@
 # @openspecui/web
 
+## 7.0.0
+
+### Major Changes
+
+- da5d080: Require OpenSpec CLI 1.7 for OpenSpecUI 7 and add the complete Agent delivery protocol, including the official registry, physical readiness and migration evidence, a live Config-owned Agent Integrations workbench, and a read-only Settings summary.
+
+### Patch Changes
+
+- da5d080: Move verbose Change Detail provenance into a routed Evidence tab, keep global workflow blockers direct, expose Apply inputs through a Header Action Dialog, prioritize readable wrapping titles, and prevent long evidence from expanding the Header or overflowing narrow layouts.
+
 ## 6.2.1
 
 ## 6.2.0

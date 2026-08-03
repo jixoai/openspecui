@@ -1,5 +1,15 @@
 # @openspecui/core
 
+## 7.0.0
+
+### Major Changes
+
+- da5d080: Require OpenSpec CLI 1.7 for OpenSpecUI 7 and add the complete Agent delivery protocol, including the official registry, physical readiness and migration evidence, a live Config-owned Agent Integrations workbench, and a read-only Settings summary.
+
+### Minor Changes
+
+- da5d080: Sync the App theme preference to embedded Workspace windows. The App is the single theme master: when its theme changes, every open Workspace iframe is force-synced via postMessage, new child windows inherit the theme on first load via postMessage, and child-side theme changes never echo back. The iframe URL stays stable so theme changes never reload the iframe. The App-pushed theme takes priority over backend config.theme so reconnection cannot revert it.
+
 ## 6.2.1
 
 ## 6.2.0

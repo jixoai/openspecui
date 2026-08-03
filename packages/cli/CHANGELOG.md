@@ -1,5 +1,17 @@
 # openspecui
 
+## 7.0.0
+
+### Major Changes
+
+- da5d080: Require OpenSpec CLI 1.7 for OpenSpecUI 7 and add the complete Agent delivery protocol, including the official registry, physical readiness and migration evidence, a live Config-owned Agent Integrations workbench, and a read-only Settings summary.
+
+### Minor Changes
+
+- da5d080: Strengthen App dark-mode support and fix Windows overlay window controls. Add a theme toggle to the titlebar and an Appearance section in Settings (light/dark/system), apply the dark logo variant in the sidebar, render a translucent frosted titlebar backed by the native semantic-blur window material, and enable the self-drawn overlay titlebar on Windows so it matches macOS instead of keeping the native frame.
+- da5d080: Sync the App theme preference to embedded Workspace windows. The App is the single theme master: when its theme changes, every open Workspace iframe is force-synced via postMessage, new child windows inherit the theme on first load via postMessage, and child-side theme changes never echo back. The iframe URL stays stable so theme changes never reload the iframe. The App-pushed theme takes priority over backend config.theme so reconnection cannot revert it.
+- da5d080: Replace the single-source generated App icon with hand-designed light/dark variant assets. Darwin and Windows now project two AppIcon entries (`variant: ['default','light']` plus `variant: 'dark'`) from committed `resources/app-icon/`, generated from the designed 1024² PNGs via `scripts/build-native-icons.ts`. Windows uses the light variant. Linux keeps the implicit default PNG sizes.
+
 ## 6.2.1
 
 ### Patch Changes
