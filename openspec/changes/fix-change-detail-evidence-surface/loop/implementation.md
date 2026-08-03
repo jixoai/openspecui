@@ -9,7 +9,7 @@ Original request (2026-08-03): implement the approved Change Detail Evidence-tab
 
 ## Implementation State
 
-Status: **Production, browser preparation, documentation, and review complete; full repository gate and commit closure pending.**
+Status: **Production, browser preparation, documentation, review, and scoped implementation commit complete; full repository gate and owner acceptance pending.**
 
 The approved scope is limited to the Web Change Detail presentation, shared OPSX detail layout/tabs interface,
 focused OpenSpec/docs vocabulary, checked tests, browser preparation evidence, and one Web patch changeset.
@@ -99,6 +99,10 @@ Server, Router, subscription, mutation, or static snapshot contract changed.
   failures plus an objective `ENOSPC` while only `2.2 GiB` remained on the shared Data volume. It still passed
   `179/181` files and `1109/1112` tests. Focused Change tests remained green, and no production timeout was widened or
   unrelated temporary data removed to manufacture a green result.
+- The scoped implementation and matching evidence were committed on the current feature branch as
+  `7fc074025e2f9bfef6e772af9405bd237dbb4e49` (`fix(web): restructure Change Detail evidence`). No user-owned App,
+  Guide, Settings, Server-test, icon, lockfile, or other unrelated worktree changes were included, and nothing was
+  pushed.
 
 ### Independent Review Corrections
 

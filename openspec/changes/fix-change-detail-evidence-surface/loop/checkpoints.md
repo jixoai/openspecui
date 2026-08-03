@@ -52,7 +52,7 @@ Original request (2026-08-03): implement the approved Change Detail Evidence-tab
 - [ ] 6.4 Repository `format:check`, `lint:ci`, `typecheck`, `test:ci`, and `test:browser:ci` pass.
 - [x] 6.5 Strict Change validation, changeset validation, and `git diff --check` pass.
 - [x] 6.6 Independent code review reports no blocking findings.
-- [ ] 6.7 Commit only this Change's implementation and evidence on the current feature branch; do not push.
+- [x] 6.7 Commit only this Change's implementation and evidence on the current feature branch; do not push.
 
 ## 7. Owner and PR Boundaries
 
