@@ -136,6 +136,78 @@ jobs:
           CI_SCOPE_JSON: ${{ needs.ci-scope.outputs.scope_json }}
         run: node scripts/ci-fast-gate.mjs
 
+  quality-windows:
+    name: Windows Portability Gate
+    runs-on: windows-latest
+    needs: [changeset-gate, ci-scope]
+    timeout-minutes: 45
+    steps:
+      - name: Skip for changeversion release PR
+        if: ${{ startsWith(github.head_ref, 'chore/release/changeversion-') }}
+        shell: pwsh
+        run: Write-Output 'Skipping Windows Portability Gate for automated changeversion release PR.'
+
+      - name: Checkout
+        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Bun
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare pinned OpenSpec CLI
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
+        shell: pwsh
+        run: node scripts/prepare-openspec-reference.mjs
+
+      - name: Run Windows test gate
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          needs.ci-scope.outputs.fast_mode != 'skip'
+        shell: pwsh
+        run: pnpm test:ci
+
+      - name: Run Windows typecheck gate
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          needs.ci-scope.outputs.fast_mode != 'skip'
+        shell: pwsh
+        run: pnpm typecheck
+
+      - name: Build and smoke installed Windows CLI
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          needs.ci-scope.outputs.fast_mode != 'skip'
+        shell: pwsh
+        run: |
+          pnpm --filter openspecui build
+          bun scripts/windows-installed-cli-smoke.sh.ts
+
   quality-browser-shard:
     name: Browser Gate (${{ matrix.label }})
     runs-on: ubuntu-latest
