@@ -1,5 +1,14 @@
+/**
+ * Orthogonal intents (created 2026-08-09 Asia/Shanghai):
+ * 1. Execute release preflight and delivery commands through one shell-independent invocation owner.
+ * 2. Preserve human-readable command evidence separately from the resolved executable boundary.
+ * 3. Preserve inherited environment and explicit capture/inherit stdio contracts.
+ *
+ * Original request (2026-08-04): "这个项目之前都是在macOS上做到开发，现在我们在Windows，所以开始一系列的适配。"
+ */
 import process from 'node:process'
 
+import { resolveCommandInvocation } from '../command-invocation.mjs'
 import type { ReleasePlan } from './types'
 
 type CommandSpec = {
@@ -21,9 +30,6 @@ const DEFAULT_WAIT_TIMEOUT_MS = 5 * 60 * 1000
 const DEFAULT_WAIT_INTERVAL_MS = 5000
 
 function commandFor(bin: 'git' | 'npm' | 'pnpm'): string {
-  if (process.platform === 'win32' && bin !== 'git') {
-    return `${bin}.cmd`
-  }
   return bin
 }
 
@@ -58,8 +64,9 @@ export function resolveCommandStdio(mode: 'capture' | 'inherit'): SpawnStdio {
 }
 
 async function runAndCapture(spec: CommandSpec): Promise<{ exitCode: number; stdout: string }> {
+  const invocation = resolveCommandInvocation(spec.cmd, spec.args)
   const child = Bun.spawn({
-    cmd: [spec.cmd, ...spec.args],
+    cmd: [invocation.command, ...invocation.args],
     cwd: spec.cwd,
     env: cloneCommandEnv(spec.env),
     ...resolveCommandStdio('capture'),
@@ -81,8 +88,9 @@ async function runAndCapture(spec: CommandSpec): Promise<{ exitCode: number; std
 export async function runLoggedCommand(spec: CommandSpec, onLine: LogFn): Promise<void> {
   onLine(`$ ${toCommandLine(spec)}`)
 
+  const invocation = resolveCommandInvocation(spec.cmd, spec.args)
   const child = Bun.spawn({
-    cmd: [spec.cmd, ...spec.args],
+    cmd: [invocation.command, ...invocation.args],
     cwd: spec.cwd,
     env: cloneCommandEnv(spec.env),
     ...resolveCommandStdio('inherit'),

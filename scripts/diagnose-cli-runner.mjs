@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Reproduce the production CLI-runner resolution path and report every candidate attempt (no short-circuit).
  * 2. Surface Windows npm-global extension-less shim defects that `spawn({shell:false})` cannot execute.
  * 3. Emit machine-readable JSON via --json so users can paste objective evidence into bug reports.
+ * 4. Resolve Windows command shims without shell argv loss and retire timed-out probe trees safely.
+ * 5. Let stdout/stderr flush before publishing the diagnostic exit status.
  *
  * Original request (2026-07-30, issue #209): "看一下 issues209，分析一下可能的问题，以及我们应该提供什么分析工具或者分析脚本"
  * Owner decision (2026-07-30): ship a zero-dependency diagnostic script first; CLI integration is deferred
  *   until it proves useful in real environments.
+ * Compromise (2026-08-09): this plain-Node zero-dependency diagnostic mirrors the Core Windows
+ *   PID/executable verification locally because it cannot import repository TypeScript source.
  *
  * Scope: this script READS the environment and PROBES candidates exactly like
  * packages/core/src/config.ts does. It never mutates anything and never installs packages.
@@ -16,10 +20,14 @@
  */
 import { execFile, spawn } from 'node:child_process'
 import { arch, homedir, platform } from 'node:os'
-import { resolve } from 'node:path'
-import { argv, cwd, exit, env as nodeEnv, stderr, stdout, versions } from 'node:process'
+import { resolve, win32 } from 'node:path'
+import process, { argv, cwd, env as nodeEnv, stderr, stdout, versions } from 'node:process'
+import {
+  resolveCommandInvocation,
+  resolveWindowsCommandInvocation,
+} from './lib/command-invocation.mjs'
 
-const CLI_PROBE_TIMEOUT_MS = 20_000
+const CLI_PROBE_TIMEOUT_MS = Number(nodeEnv.OPENSPECUI_CLI_PROBE_TIMEOUT_MS) || 20_000
 const SHELL_RESOLVE_TIMEOUT_MS = 5_000
 
 const PACKAGE_MANAGER_RUNNERS = [
@@ -52,7 +60,7 @@ async function resolveShellCandidates(command, workdir, probeEnv) {
   if (!isBareExecutable(command)) return []
   try {
     if (platform() === 'win32') {
-      const { stdout } = await execFileAsyncP('where', [command], {
+      const { stdout } = await execFileAsyncP('where.exe', [command], {
         cwd: workdir,
         env: probeEnv,
         encoding: 'utf8',
@@ -89,9 +97,9 @@ async function resolveShellCandidates(command, workdir, probeEnv) {
 
 const execFileAsyncP = (cmd, args, opts) =>
   new Promise((res, rej) => {
-    execFile(cmd, args, opts, (err, out) => {
+    execFile(cmd, args, opts, (err, stdoutText, stderrText) => {
       if (err) rej(err)
-      else res(out)
+      else res({ stdout: stdoutText, stderr: stderrText })
     })
   })
 
@@ -125,14 +133,55 @@ function commandToString(parts) {
   return parts.map(formatToken).join(' ').trim()
 }
 
+function resolveProbeInvocation(commandParts) {
+  const [command, ...args] = commandParts
+  const versionArgs = [...args, '--version']
+  if (platform() !== 'win32') return { command, args: versionArgs }
+  if (isBareExecutable(command)) return resolveCommandInvocation(command, versionArgs)
+  if (command.toLowerCase().endsWith('.cmd')) {
+    return resolveWindowsCommandInvocation(command, versionArgs, [command])
+  }
+  return { command, args: versionArgs }
+}
+
+async function terminateProbeTree(child, expectedExecutablePath) {
+  if (platform() !== 'win32') {
+    child.kill()
+    return
+  }
+  if (typeof child.pid !== 'number') return
+  const query = `[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); Get-CimInstance Win32_Process -Filter "ProcessId = ${child.pid}" | Select-Object ProcessId,ExecutablePath | ConvertTo-Json -Compress`
+  const { stdout: processJson } = await execFileAsyncP(
+    'powershell.exe',
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', query],
+    { encoding: 'utf8', timeout: SHELL_RESOLVE_TIMEOUT_MS }
+  )
+  if (!processJson.trim()) return
+  const record = JSON.parse(processJson)
+  const expected = win32.normalize(expectedExecutablePath).toLowerCase()
+  const actual =
+    typeof record.ExecutablePath === 'string'
+      ? win32.normalize(record.ExecutablePath).toLowerCase()
+      : null
+  if (actual !== expected) {
+    throw new Error(
+      `Refusing to terminate PID ${child.pid}: expected ${expected}, observed ${actual ?? 'no executable path'}.`
+    )
+  }
+  await execFileAsyncP('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
+    encoding: 'utf8',
+    timeout: SHELL_RESOLVE_TIMEOUT_MS,
+  })
+}
+
 function probeOne(commandParts, workdir, probeEnv) {
   return new Promise((resolveProbe) => {
-    const [cmd, ...cmdArgs] = commandParts
     let stdoutStr = ''
     let stderrStr = ''
     let timedOut = false
     let settled = false
     let timer = null
+    let terminationError = null
 
     const finish = (result) => {
       if (settled) return
@@ -142,8 +191,10 @@ function probeOne(commandParts, workdir, probeEnv) {
     }
 
     let child
+    let invocation
     try {
-      child = spawn(cmd, [...cmdArgs, '--version'], {
+      invocation = resolveProbeInvocation(commandParts)
+      child = spawn(invocation.command, invocation.args, {
         cwd: workdir,
         shell: false,
         env: probeEnv,
@@ -154,18 +205,21 @@ function probeOne(commandParts, workdir, probeEnv) {
         success: false,
         error: err instanceof Error ? `${err.message}` : String(err),
         exitCode: null,
-        spawnStage: 'sync-throw',
+        spawnStage: invocation ? 'sync-throw' : 'resolve',
       })
       return
     }
 
     timer = setTimeout(() => {
       timedOut = true
-      try {
-        child.kill()
-      } catch {
-        // ignore
-      }
+      void terminateProbeTree(child, invocation.command).catch((error) => {
+        terminationError = error instanceof Error ? error.message : String(error)
+        try {
+          child.kill()
+        } catch {
+          // The close/error event remains the result authority.
+        }
+      })
     }, CLI_PROBE_TIMEOUT_MS)
 
     child.stdout?.on('data', (d) => {
@@ -201,7 +255,7 @@ function probeOne(commandParts, workdir, probeEnv) {
         command: commandToString(commandParts),
         success: false,
         error: timedOut
-          ? 'CLI probe timed out'
+          ? `CLI probe timed out${terminationError ? `; ${terminationError}` : ''}`
           : stderrStr.trim() || `Exit code ${exitCode ?? 'null'}`,
         stderr: stderrStr.trim() || undefined,
         exitCode,
@@ -223,7 +277,8 @@ function buildCandidates({ includeNetwork }) {
 async function detectWindowsNpmGlobalBin() {
   if (platform() !== 'win32') return undefined
   try {
-    const { stdout } = await execFileAsyncP('npm', ['config', 'get', 'prefix'], {
+    const invocation = resolveCommandInvocation('npm', ['config', 'get', 'prefix'])
+    const { stdout } = await execFileAsyncP(invocation.command, invocation.args, {
       encoding: 'utf8',
       timeout: SHELL_RESOLVE_TIMEOUT_MS,
     })
@@ -311,7 +366,8 @@ async function main() {
 
   if (asJson) {
     stdout.write(`${JSON.stringify(report, null, 2)}\n`)
-    exit(firstSuccess ? 0 : 1)
+    process.exitCode = firstSuccess ? 0 : 1
+    return
   }
 
   // Human-readable output
@@ -402,10 +458,10 @@ async function main() {
   println(`Re-run with --json for a machine-readable report to attach to your issue.`)
 
   stderr.write(`${out.join('\n')}\n`)
-  exit(firstSuccess ? 0 : 1)
+  process.exitCode = firstSuccess ? 0 : 1
 }
 
 main().catch((err) => {
   stderr.write(`Diagnostic failed: ${err instanceof Error ? err.stack : String(err)}\n`)
-  exit(2)
+  process.exitCode = 2
 })

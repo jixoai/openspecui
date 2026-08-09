@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove production Server composition resolves Launch and current Planning cwd at PTY spawn.
  * 2. Prove workflow input revalidates Root generation for both Launch Agents and Planning PTYs.
+ * 3. Settle shared watcher owners before removing Windows PTY fixtures.
  *
  * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
  * Review correction (2026-07-20): production cwd evidence must cross createWebSocketServer and PlanningRootServiceManager.runOperation.
@@ -18,13 +19,14 @@ import {
   type PtyServerMessage,
 } from '@openspecui/core'
 import { closeSync, openSync } from 'node:fs'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp } from 'node:fs/promises'
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { devNull, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WebSocket, { type RawData } from 'ws'
 import type { ZodType } from 'zod'
+import { removeServerTestDirectories } from './server-test-cleanup.js'
 import { createServer as createApplicationServer, createWebSocketServer } from './server.js'
 
 const { spawnMock, writeMock } = vi.hoisted(() => ({
@@ -131,7 +133,7 @@ async function disposeProductionSocketHarness(harness: ProductionSocketHarness):
   harness.client.terminate()
   await harness.runtime.close()
   await closeHttpServer(harness.httpServer)
-  await rm(harness.tempDir, { recursive: true, force: true })
+  await removeServerTestDirectories([harness.tempDir])
 }
 
 describe('production PTY cwd owner', () => {

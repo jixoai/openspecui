@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Prove one current system emission can establish live Server metadata.
  * 2. Prove reconnecting transport lifecycle retires stale connected truth.
+ * 3. Prove Windows drive and UNC project paths produce compact project labels.
  *
  * Owner-reported defect (2026-07-22): Killing the backend leaves the bottom status bar green and Live.
  */
@@ -68,6 +69,34 @@ describe('useServerStatus', () => {
     systemSubscriptionsRef.subscriptions = []
     document.title = ''
     vi.clearAllMocks()
+  })
+
+  it.each([
+    ['E:\\dev\\github\\openspecui', 'openspecui'],
+    ['E:\\dev\\github\\openspecui\\', 'openspecui'],
+    ['\\\\server\\share\\openspecui', 'openspecui'],
+  ])('derives the project label from Windows path %s', async (projectDir, expectedName) => {
+    getOrCreateWsClientInstanceMock.mockReturnValue(null)
+    systemSubscribeMock.mockImplementation((_input: undefined, handlers: SystemHandlers) => {
+      systemHandlersRef.handlers.push(handlers)
+      return { unsubscribe: vi.fn() }
+    })
+
+    const { useServerStatus } = await import('./use-server-status')
+    const { result, unmount } = renderHook(() => useServerStatus())
+    act(() => {
+      systemHandlersRef.handlers[0]?.onData({
+        projectDir,
+        watcherEnabled: true,
+        projectRecovery: idleRecovery,
+      })
+    })
+
+    await waitFor(() => {
+      expect(result.current.dirName).toBe(expectedName)
+      expect(document.title).toBe(`${expectedName} - OpenSpec UI`)
+    })
+    unmount()
   })
 
   it('retires a prior system emission while its WebSocket transport reconnects', async () => {

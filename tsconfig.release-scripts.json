@@ -1,20 +1,40 @@
 {
-  // Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
-  // 1. Typecheck release entrypoints and their transitive owners.
+  // Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+  // 1. Typecheck release, development, diagnostic, and cross-platform repository-script entrypoints with their transitive owners.
   // 2. Typecheck focused release tests instead of relying on transpilation.
+  // 3. Typecheck the cross-platform Project Binding Playwright acceptance entrypoint.
+  // 4. Typecheck the shared bounded asset-directory projection and its lock evidence.
+  // Windows correction (2026-08-04): typecheck the formatter's pnpm subprocess boundary.
   // Original request (2026-07-28): "我想先发布一个beta版本"
+  // Original request (2026-08-04): "这个项目之前都是在macOS上做到开发，现在我们在Windows，所以开始一系列的适配。"
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
     "types": ["node"]
   },
   "include": [
+    "packages/core/test-utimes-watcher.ts",
+    "packages/web/scripts/w2-project-binding-playwright.ts",
     "scripts/changeversion-auto.ts",
     "scripts/create-github-release.ts",
+    "scripts/dev.ts",
+    "scripts/format-check.ts",
+    "scripts/windows-installed-cli-smoke.sh.ts",
     "scripts/publish-packages.ts",
     "scripts/lib/changeversion/**/*.ts",
+    "scripts/lib/bun-process-supervisor.ts",
+    "scripts/lib/bun-process-supervisor.test.ts",
+    "scripts/lib/argument-batches.ts",
+    "scripts/lib/argument-batches.test.ts",
+    "scripts/lib/dev-process-supervisor.ts",
+    "scripts/lib/dev-task-termination.ts",
+    "scripts/lib/dev-task-termination.test.ts",
+    "scripts/lib/command-invocation.d.mts",
+    "scripts/lib/atomic-directory-projection.ts",
+    "scripts/lib/atomic-directory-projection.test.ts",
     "scripts/lib/publish-packages/**/*.ts",
     "scripts/lib/release/channel*.ts",
-    "scripts/lib/release/github-release*.ts"
+    "scripts/lib/release/github-release*.ts",
+    "scripts/lib/pnpm-invocation.d.mts"
   ]
 }

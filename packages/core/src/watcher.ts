@@ -1,6 +1,18 @@
+/**
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * 1. Project legacy OpenSpec directory changes for compatibility consumers.
+ * 2. Settle every native watcher handle before runtime teardown completes.
+ * 3. Interpret native recursive-watch paths without assuming one directory separator.
+ *
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ */
 import { EventEmitter } from 'events'
 import { watch, type FSWatcher } from 'fs'
 import { join } from 'path'
+
+function watchedPathSegments(filename: string): string[] {
+  return filename.split(/[\\/]+/).filter(Boolean)
+}
 
 /**
  * File change event types
@@ -59,13 +71,14 @@ export class OpenSpecWatcher extends EventEmitter {
 
     // Watch specs directory
     this.watchDir(this.specsDir, (filename, eventType) => {
-      const match = filename.match(/^([^/]+)\//)
-      if (match) {
-        this.emitDebounced(`spec:${match[1]}`, {
+      const segments = watchedPathSegments(filename)
+      const id = segments.length > 1 ? segments[0] : undefined
+      if (id) {
+        this.emitDebounced(`spec:${id}`, {
           type: 'spec',
           action: eventType === 'rename' ? 'create' : 'update',
-          id: match[1],
-          path: join(this.specsDir, filename),
+          id,
+          path: join(this.specsDir, ...segments),
           timestamp: Date.now(),
         })
       }
@@ -73,16 +86,17 @@ export class OpenSpecWatcher extends EventEmitter {
 
     // Watch changes directory
     this.watchDir(this.changesDir, (filename, eventType) => {
+      const segments = watchedPathSegments(filename)
       // Skip archive directory events (handled separately)
-      if (filename.startsWith('archive/')) return
+      if (segments[0] === 'archive') return
 
-      const match = filename.match(/^([^/]+)\//)
-      if (match) {
-        this.emitDebounced(`change:${match[1]}`, {
+      const id = segments.length > 1 ? segments[0] : undefined
+      if (id) {
+        this.emitDebounced(`change:${id}`, {
           type: 'change',
           action: eventType === 'rename' ? 'create' : 'update',
-          id: match[1],
-          path: join(this.changesDir, filename),
+          id,
+          path: join(this.changesDir, ...segments),
           timestamp: Date.now(),
         })
       }
@@ -90,13 +104,14 @@ export class OpenSpecWatcher extends EventEmitter {
 
     // Watch archive directory
     this.watchDir(this.archiveDir, (filename, eventType) => {
-      const match = filename.match(/^([^/]+)\//)
-      if (match) {
-        this.emitDebounced(`archive:${match[1]}`, {
+      const segments = watchedPathSegments(filename)
+      const id = segments.length > 1 ? segments[0] : undefined
+      if (id) {
+        this.emitDebounced(`archive:${id}`, {
           type: 'archive',
           action: eventType === 'rename' ? 'create' : 'update',
-          id: match[1],
-          path: join(this.archiveDir, filename),
+          id,
+          path: join(this.archiveDir, ...segments),
           timestamp: Date.now(),
         })
       }
@@ -121,17 +136,34 @@ export class OpenSpecWatcher extends EventEmitter {
    * Stop watching for file changes
    */
   stop(): void {
-    for (const watcher of this.watchers) {
+    for (const watcher of this.takeWatchers()) {
       watcher.close()
     }
-    this.watchers = []
+  }
 
+  /** Close every watcher and wait until native filesystem handles are released. */
+  async close(): Promise<void> {
+    await Promise.all(
+      this.takeWatchers().map(
+        (watcher) =>
+          new Promise<void>((resolve) => {
+            watcher.once('close', resolve)
+            watcher.close()
+          })
+      )
+    )
+  }
+
+  private takeWatchers(): FSWatcher[] {
+    const watchers = this.watchers
+    this.watchers = []
     for (const timer of this.debounceTimers.values()) {
       clearTimeout(timer)
     }
     this.debounceTimers.clear()
 
     this.emit('stopped')
+    return watchers
   }
 
   /**

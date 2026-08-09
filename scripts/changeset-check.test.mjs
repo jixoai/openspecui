@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
+ * 1. Prove private package changes do not require a release changeset.
+ * 2. Keep the Git and Node integration fixture bounded on slower Windows filesystems.
+ *
+ * Original request (2026-08-04): "Make equivalent package scripts work on Windows."
+ */
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -63,7 +70,7 @@ describe('changeset-check', () => {
     writeFileSync(join(rootDir, 'packages', 'local-translator', 'src.ts'), 'export const x = 1\n')
     spawnSync('git', ['add', '.'], { cwd: rootDir, stdio: 'ignore' })
 
-    const result = spawnSync('node', ['scripts/changeset-check.mjs'], {
+    const result = spawnSync(process.execPath, ['scripts/changeset-check.mjs'], {
       cwd: rootDir,
       encoding: 'utf8',
       env: {
@@ -74,5 +81,5 @@ describe('changeset-check', () => {
 
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('No release-affecting changes under packages/.')
-  })
+  }, 15_000)
 })

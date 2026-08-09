@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove Store CLI Work retains A while invalidation-driven B runs and settles.
  * 2. Prove two subscribers share one CLI run and Push contains only the typed lifecycle notice.
  * 3. Prove List ignores Store content while selected/all Doctor track exact typed-list roots.
  * 4. Prove concurrent healthy Store List and Doctor Work install no polling timer.
- * 5. Prove typed add/move/remove and the Server-owned list lease keep dynamic roots current.
+ * 5. Prove dynamic Store leases normalize physical roots natively while preserving CLI truth.
  *
  * Original request (2026-07-26): "从轮询这种模式中彻底解放出来，真正基于文件、甚至是文件内容结构的变更去拉取更新。"
  */
@@ -19,7 +19,7 @@ import {
 } from '@openspecui/core'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createServerProjectionWorkRuntime } from './projection-work/runtime.js'
 import type { StoreDoctorDependencyObservationFactory } from './store-doctor-dependency-observer.js'
@@ -396,6 +396,9 @@ describe('StoreProjectionService', () => {
   })
 
   it('reconciles typed CLI list truth through real Store root leases', async () => {
+    const storeA = resolve('/stores/A')
+    const storeB = resolve('/stores/B')
+    const storeA2 = resolve('/stores/A-v2')
     const observationReleases = new Map<string, ReturnType<typeof vi.fn>>()
     const acquireObservationRoot = vi.fn<ObservationRootOwner['acquireRoot']>(async (rootPath) => {
       const release = vi.fn(async () => {})
@@ -430,12 +433,12 @@ describe('StoreProjectionService', () => {
         expect(fixture.service.readList()).toMatchObject({ state: 'ready', workGeneration: 1 })
       })
       expect(storeObservation.getObservedStores()).toEqual([
-        { storeId: 'alpha', rootPath: '/stores/A' },
-        { storeId: 'beta', rootPath: '/stores/B' },
+        { storeId: 'alpha', rootPath: storeA },
+        { storeId: 'beta', rootPath: storeB },
       ])
       expect(acquireObservationRoot.mock.calls.map(([rootPath]) => rootPath)).toEqual([
-        '/stores/A',
-        '/stores/B',
+        storeA,
+        storeB,
       ])
 
       fixture.invalidation.invalidate(['stores'])
@@ -443,14 +446,14 @@ describe('StoreProjectionService', () => {
         expect(fixture.service.readList()).toMatchObject({ state: 'ready', workGeneration: 2 })
       })
       expect(storeObservation.getObservedStores()).toEqual([
-        { storeId: 'alpha', rootPath: '/stores/A-v2' },
+        { storeId: 'alpha', rootPath: storeA2 },
       ])
-      expect(observationReleases.get('/stores/A')).toHaveBeenCalledTimes(1)
-      expect(observationReleases.get('/stores/B')).toHaveBeenCalledTimes(1)
+      expect(observationReleases.get(storeA)).toHaveBeenCalledTimes(1)
+      expect(observationReleases.get(storeB)).toHaveBeenCalledTimes(1)
       expect(acquireObservationRoot.mock.calls.map(([rootPath]) => rootPath)).toEqual([
-        '/stores/A',
-        '/stores/B',
-        '/stores/A-v2',
+        storeA,
+        storeB,
+        storeA2,
       ])
 
       fixture.invalidation.invalidate(['stores'])
@@ -458,7 +461,7 @@ describe('StoreProjectionService', () => {
         expect(fixture.service.readList()).toMatchObject({ state: 'ready', workGeneration: 3 })
       })
       expect(storeObservation.getObservedStores()).toEqual([])
-      expect(observationReleases.get('/stores/A-v2')).toHaveBeenCalledTimes(1)
+      expect(observationReleases.get(storeA2)).toHaveBeenCalledTimes(1)
       expect(listCalls).toBe(3)
     } finally {
       subscription.unsubscribe()

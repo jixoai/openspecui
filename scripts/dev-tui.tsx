@@ -1,5 +1,16 @@
 #!/usr/bin/env bun
 /** @jsxImportSource @opentui/react */
+/**
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * 1. Present and control the repository development task graph through one terminal UI.
+ * 2. Own task terminal rendering, output snapshots, keyboard control, and port observations.
+ * 3. Launch shell-independent task invocations and retire their verified process trees.
+ * 4. Bootstrap required build outputs before entering the interactive development runtime.
+ * 5. Settle interactive Stop/Restart failures as visible task evidence.
+ *
+ * Original request (2026-07-30): "pnpm dev should start and supervise the complete development task graph."
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ */
 
 import {
   createCliRenderer,
@@ -17,7 +28,12 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import {
+  resolveBunTaskInvocation,
+  terminateBunWindowsProcessTree,
+} from './lib/bun-process-supervisor'
 import { createDevTasks, getHostedAppWebDistPath, type DevTask } from './lib/dev-task-definitions'
+import { settleDevTaskTermination } from './lib/dev-task-termination'
 
 type CliOptions = {
   dir?: string
@@ -36,6 +52,11 @@ type TaskTerminalRuntime = {
   rows: number
   parser: HeadlessTerminal
   pty: Bun.Terminal | null
+}
+
+type TaskProcessRuntime = {
+  child: Bun.Subprocess
+  expectedExecutablePath: string
 }
 
 const HOME_TAB_ID = '__home__'
@@ -428,11 +449,14 @@ function tryKillPid(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
-async function terminateProcessTree(rootPid: number): Promise<void> {
+async function terminateProcessTree(
+  rootPid: number,
+  expectedExecutablePath: string
+): Promise<void> {
   if (!Number.isFinite(rootPid) || rootPid <= 0) return
 
   if (process.platform === 'win32') {
-    await runTextCommand(['taskkill', '/PID', String(rootPid), '/T', '/F'])
+    await terminateBunWindowsProcessTree(rootPid, expectedExecutablePath)
     return
   }
 
@@ -564,7 +588,7 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
   const [runningPidsByTask, setRunningPidsByTask] = useState<Record<string, number>>({})
   const [boundPortsByTask, setBoundPortsByTask] = useState<Record<string, string>>({})
 
-  const processByTaskRef = useRef(new Map<string, Bun.Subprocess>())
+  const processByTaskRef = useRef(new Map<string, TaskProcessRuntime>())
   const restartQueueRef = useRef(new Set<string>())
   const shuttingDownRef = useRef(false)
   const didAutoStartRef = useRef(false)
@@ -770,7 +794,8 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
         FORCE_COLOR: task.env?.FORCE_COLOR ?? process.env.FORCE_COLOR ?? '1',
       }
 
-      const spawnCmd = [task.command, ...task.args]
+      const invocation = resolveBunTaskInvocation(task.command, task.args)
+      const spawnCmd = [invocation.command, ...invocation.args]
       const child = pty
         ? Bun.spawn({
             cmd: spawnCmd,
@@ -786,7 +811,10 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
             stdout: 'pipe',
             stderr: 'pipe',
           })
-      processByTaskRef.current.set(task.id, child)
+      processByTaskRef.current.set(task.id, {
+        child,
+        expectedExecutablePath: invocation.expectedExecutablePath,
+      })
       setRunningPidsByTask((prev) => ({ ...prev, [task.id]: child.pid }))
 
       if (!pty) {
@@ -839,13 +867,23 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
     [disposeTaskTerminal, enqueueTerminalWrite, taskById]
   )
 
-  const stopTask = useCallback((taskId: string) => {
-    restartQueueRef.current.delete(taskId)
-    const processRef = processByTaskRef.current.get(taskId)
-    if (!processRef) return
-    const pid = processRef.pid
-    void terminateProcessTree(pid)
-  }, [])
+  const stopTask = useCallback(
+    (taskId: string) => {
+      restartQueueRef.current.delete(taskId)
+      const processRef = processByTaskRef.current.get(taskId)
+      if (!processRef) return
+      const pid = processRef.child.pid
+      void settleDevTaskTermination({
+        action: 'stop',
+        taskId,
+        terminate: () => terminateProcessTree(pid, processRef.expectedExecutablePath),
+        onFailure: ({ message }) => {
+          enqueueTerminalWrite(taskId, `\r\n[stop error] ${message}\r\n`)
+        },
+      })
+    },
+    [enqueueTerminalWrite]
+  )
 
   const restartTask = useCallback(
     (taskId: string) => {
@@ -854,18 +892,28 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
         startTask(taskId, { focus: true })
         return
       }
-      const pid = processRef.pid
+      const pid = processRef.child.pid
       restartQueueRef.current.add(taskId)
-      void terminateProcessTree(pid)
+      void settleDevTaskTermination({
+        action: 'restart',
+        taskId,
+        terminate: () => terminateProcessTree(pid, processRef.expectedExecutablePath),
+        onFailure: ({ message }) => {
+          restartQueueRef.current.delete(taskId)
+          enqueueTerminalWrite(taskId, `\r\n[restart error] ${message}\r\n`)
+        },
+      })
     },
-    [startTask]
+    [enqueueTerminalWrite, startTask]
   )
 
   const terminateAll = useCallback(async () => {
     restartQueueRef.current.clear()
     const terminateTasks: Promise<void>[] = []
-    for (const child of processByTaskRef.current.values()) {
-      terminateTasks.push(terminateProcessTree(child.pid))
+    for (const processRef of processByTaskRef.current.values()) {
+      terminateTasks.push(
+        terminateProcessTree(processRef.child.pid, processRef.expectedExecutablePath)
+      )
     }
     processByTaskRef.current.clear()
     for (const taskId of terminalByTaskRef.current.keys()) {

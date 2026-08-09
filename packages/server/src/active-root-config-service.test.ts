@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Verify exact Active Root owner, source, official projection, diagnostics, and revision.
  * 2. Verify Structured saves preserve every unowned YAML node and representable presentation detail.
  * 3. Verify serialized parallel and observed external replacements return latest-source conflicts.
  * 4. Verify Raw mode accepts custom YAML and rejects syntax errors before physical mutation.
- * 5. Verify successful saves atomically replace and reactively settle before returning.
+ * 5. Verify successful saves atomically replace and reactively settle with platform-valid physical evidence.
  *
  * Original request (2026-08-01): preserve raw YAML writes for team-defined keys outside the official standard.
  * Derived checkpoint (2026-08-02): Structured and Raw mutations are revision-aware and recover the latest source.
+ * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
  */
 import { ReactiveContext, type ActiveRootMutationResult, type RootContext } from '@openspecui/core'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
@@ -244,6 +245,7 @@ describe('Active Root config service', () => {
   it('atomically replaces and publishes the new revision before mutation success', async () => {
     const fixture = await createFixture()
     const before = await stat(fixture.configPath)
+    const replacementContent = 'schema: atomically-replaced\n'
     const context = new ReactiveContext()
     const stream = context.stream(() => readActiveRootConfig(fixture.input))
     const loaded = (await stream.next()).value
@@ -255,17 +257,19 @@ describe('Active Root config service', () => {
       mutation: {
         mode: 'raw',
         ...locator(loaded),
-        content: 'schema: atomically-replaced\n',
+        content: replacementContent,
       },
     })
 
     requireApplied(result)
     const after = await stat(fixture.configPath)
-    expect(after.ino).not.toBe(before.ino)
+    await expect(readFile(fixture.configPath, 'utf8')).resolves.toBe(replacementContent)
+    expect(after.size).toBe(Buffer.byteLength(replacementContent))
+    if (process.platform !== 'win32') expect(after.ino).not.toBe(before.ino)
     await expect(replacement).resolves.toMatchObject({
       value: {
         revision: result.config.revision,
-        file: { content: 'schema: atomically-replaced\n' },
+        file: { content: replacementContent },
       },
     })
     await stream.return(undefined)

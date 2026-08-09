@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
  * 1. Cross real HTTP mutation admission and WebSocket lifecycle delivery.
  * 2. Prove delayed CLI admission, request-id deduplication, and terminal invalidation order.
  * 3. Preserve pre-admission rejection and deterministic CLI failure as non-indeterminate evidence.
  * 4. Prove Store mutation invalidation wakes two lifecycle-only clients into typed Pulls and one CLI replacement.
+ * 5. Bound Windows transport settlement and cleanup through shared Server test owners.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-08-04): "这个项目之前都是在macOS上做到开发，现在我们在Windows，所以开始一系列的适配。"
  */
 import {
   ConfigManager,
@@ -14,12 +16,16 @@ import {
   type StoreMutationLifecycleEvent,
 } from '@openspecui/core'
 import { createTRPCClient, createWSClient, httpBatchLink, wsLink } from '@trpc/client'
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import { findAvailablePort } from './port-utils.js'
+import {
+  removeServerTestDirectories,
+  SERVER_FIXTURE_TEST_TIMEOUT_MS,
+} from './server-test-cleanup.js'
 import { startServer, type AppRouter, type RunningServer } from './server.js'
 import { createDeferred } from './test-support/deferred.js'
 
@@ -51,7 +57,7 @@ function expectLifecycleOnlyNotices(notices: readonly CliProjectionNotice[]): vo
 afterEach(async () => {
   for (const client of wsClients.splice(0)) client.close()
   await Promise.all(runningServers.splice(0).map((server) => server.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await removeServerTestDirectories(tempDirs.splice(0))
 })
 
 async function createTempDir(prefix: string): Promise<string> {
@@ -184,7 +190,7 @@ async function startProjectionCliServer() {
   return { listTracePath, server }
 }
 
-describe('Store mutation ledger transport', () => {
+describe('Store mutation ledger transport', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS }, () => {
   it('wakes two Store clients into one replacement Pull after mutation terminal', async () => {
     const fixture = await startProjectionCliServer()
     const firstWs = createWSClient({

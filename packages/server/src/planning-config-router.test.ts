@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove the typed public Project Binding mutation settles after the launch write and preview.
  * 2. Prove a retiring Planning-root lease cannot turn write-then-converge back into a full wait.
  * 3. Require explicit launch-write and asynchronous transition evidence in the public response.
  * 4. Prove the real Root Context subscription observes B only after the A lease is released.
+ * 5. Settle shared watcher owners before removing Windows Router fixtures.
  *
  * Original request (2026-07-19): "同意，开始更新 openspec change，然后继续迭代推进。"
  * Derived requirement (2026-07-19): W2 uses write-then-converge and remains independent of W3 transport behavior.
@@ -18,12 +19,16 @@ import {
   type ProjectBindingConfig,
   type ProjectBindingUpdateResult,
 } from '@openspecui/core'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 import { appRouter } from './router.js'
+import {
+  removeServerTestDirectories,
+  SERVER_FIXTURE_TEST_TIMEOUT_MS,
+} from './server-test-cleanup.js'
 import { createServer } from './server.js'
 
 type ConvergingUpdateResult = Extract<
@@ -211,7 +216,7 @@ async function createRouterFixture() {
       await server.observationEnvironment.dispose()
       server.projectRecoveryService.dispose()
       server.translationCacheService.close()
-      await rm(tempDir, { recursive: true, force: true })
+      await removeServerTestDirectories([tempDir])
     },
   }
 }
@@ -299,7 +304,7 @@ function expectWriteThenConvergeEvidence(
   expect(value.launchWrite.file.content).toContain('references:\n  - platform')
 }
 
-describe('public Project Binding Router', () => {
+describe('public Project Binding Router', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS }, () => {
   it('keeps converging and preview-error Root Context pairs correlated in checked types', () => {
     expect(correlatedResultTypeEvidence).toEqual({
       convergingExists: true,

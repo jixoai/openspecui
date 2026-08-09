@@ -1,3 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * 1. Resolve local translation model catalogs and versioned profile manifests.
+ * 2. Own resumable download, pause, cancellation, retry, progress, and bounded Windows finalization.
+ * 3. Materialize downloaded profiles and platform-appropriate Hugging Face cache pointers.
+ * 4. Preserve selected-group authority while background work settles.
+ * 5. Publish typed lifecycle snapshots and bounded diagnostics.
+ *
+ * Original request (2026-08-04): "Adapt macOS-first development and runtime paths to Windows."
+ */
 import { downloadFile, fileDownloadInfo } from '@huggingface/hub'
 import type {
   ConfigManager,
@@ -23,17 +33,18 @@ import {
   LocalModelLifecycleFileStateSchema,
   LocalModelLifecycleGroupStateSchema,
   LocalModelProfileManifestSchema,
+  replaceFileAtomically,
   selectLocalDownloadGroup,
 } from '@openspecui/core'
 import { observable } from '@trpc/server/observable'
 import { existsSync } from 'node:fs'
 import {
   copyFile,
+  link,
   lstat,
   mkdir,
   open,
   readlink,
-  rename,
   rm,
   stat,
   symlink,
@@ -1966,13 +1977,13 @@ async function streamDownloadToIncompleteFile(input: {
   return true
 }
 
-async function finalizeDownloadedFile(input: {
+/** Commit one complete model file without deleting the previous target before replacement succeeds. */
+export async function finalizeDownloadedFile(input: {
   incompletePath: string
   targetPath: string
 }): Promise<void> {
   await mkdir(dirname(input.targetPath), { recursive: true })
-  await rm(input.targetPath, { force: true })
-  await rename(input.incompletePath, input.targetPath)
+  await replaceFileAtomically(input.incompletePath, input.targetPath)
 }
 
 async function mirrorDownloadedFileToHubCache(input: {
@@ -1984,7 +1995,11 @@ async function mirrorDownloadedFileToHubCache(input: {
   await rm(input.cachePaths.blobPath, { force: true })
   await copyFile(input.targetPath, input.cachePaths.blobPath)
   await unlink(input.cachePaths.pointerPath).catch(() => undefined)
-  await symlink(input.cachePaths.blobPath, input.cachePaths.pointerPath)
+  if (process.platform === 'win32') {
+    await link(input.cachePaths.blobPath, input.cachePaths.pointerPath)
+  } else {
+    await symlink(input.cachePaths.blobPath, input.cachePaths.pointerPath)
+  }
 }
 
 interface HubCacheFilePaths {

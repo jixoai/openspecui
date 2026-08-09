@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Prove watcher-root path-liveness and replacement recovery.
  * 2. Prove explicitly opted-in missing paths accept one coalesced ancestor creation event.
+ * 3. Prove recursive event matching follows native path separators.
  *
  * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
  * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { realpathSync } from 'node:fs'
 import { mkdir, rename, rm } from 'node:fs/promises'
@@ -31,6 +33,34 @@ afterEach(async () => {
 })
 
 describe('ProjectWatcher path liveness', () => {
+  it('matches recursive descendants through native path separators', async () => {
+    const root = await createTempRoot()
+    const subscribedPath = join(root, 'openspec')
+    const watcher = new ProjectWatcher(root)
+    const subscription = {
+      path: subscribedPath,
+      watchChildren: true,
+      watchAncestorsWhileMissing: false,
+      awaitingPathCreation: false,
+      callback: () => {},
+    }
+    const matchPath = (
+      watcher as unknown as {
+        matchPath(event: { type: 'update'; path: string }, input: typeof subscription): boolean
+      }
+    ).matchPath.bind(watcher)
+
+    expect(
+      matchPath(
+        { type: 'update', path: join(subscribedPath, 'changes', 'add-auth.md') },
+        subscription
+      )
+    ).toBe(true)
+    expect(
+      matchPath({ type: 'update', path: join(root, 'openspec-other', 'change.md') }, subscription)
+    ).toBe(false)
+  })
+
   it('keeps ancestor matching disabled for ordinary missing-path subscriptions', async () => {
     const root = await createTempRoot()
     const target = join(root, 'data', 'openspec', 'schemas')

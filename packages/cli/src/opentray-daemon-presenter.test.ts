@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Prove branded native appMode/DevTools bootstrap and one-shot placement through the production presenter.
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
+ * 1. Prove host-native branded appMode/DevTools bootstrap and one-shot placement through the presenter.
  * 2. Prove retained activation, hide-versus-destroy semantics, and exact final teardown order.
  * 3. Prove Web import isolation, platform selection, and native fallback truth.
  * 4. Prove native page authority uses OpenTray local matching while bootstrap remains IPv4-loopback-only.
@@ -17,6 +17,7 @@
  * Owner diagnostic decision (2026-07-30): use OpenTray's local source selector so its window bridge is injected.
  * Owner-reported defect (2026-07-31): Tray Quit must not leave the daemon App HTTP server alive.
  */
+import { join } from 'node:path'
 import type { OpenTrayAppLaunchOptions } from 'opentray'
 import { describe, expect, it, vi } from 'vitest'
 import type { LocalAppServer } from './local-app-server.js'
@@ -33,6 +34,8 @@ const APP_LAUNCH: OpenTrayAppLaunchOptions = {
   args: ['/package/dist/cli.mjs', 'start'],
   cwd: '/package',
 }
+const APP_ASSETS_DIR = join('/package', 'app')
+const appAssetPath = (...segments: string[]) => join(APP_ASSETS_DIR, ...segments)
 
 function createFixture(
   options: {
@@ -146,7 +149,7 @@ describe('OpenTray daemon presenter', () => {
   it('bootstraps one native appMode window and reuses it through ordered activation', async () => {
     const fixture = createFixture()
     const resolution = await createOpenTrayDaemonPresenter({
-      appAssetsDir: '/package/app',
+      appAssetsDir: APP_ASSETS_DIR,
       appLaunch: APP_LAUNCH,
       appServer: fixture.appServer,
       requestedHostMode: 'native',
@@ -164,13 +167,19 @@ describe('OpenTray daemon presenter', () => {
         platform: 'darwin',
         format: 'icns',
         variant: ['default', 'light'],
-        source: { type: 'file', path: '/package/app/native-icons/app-icon/darwin-light.icns' },
+        source: {
+          type: 'file',
+          path: appAssetPath('native-icons', 'app-icon', 'darwin-light.icns'),
+        },
       }),
       expect.objectContaining({
         platform: 'darwin',
         format: 'icns',
         variant: 'dark',
-        source: { type: 'file', path: '/package/app/native-icons/app-icon/darwin-dark.icns' },
+        source: {
+          type: 'file',
+          path: appAssetPath('native-icons', 'app-icon', 'darwin-dark.icns'),
+        },
       }),
     ])
     expect(fixture.nativeCalls[0]?.runtime.appLaunch).toEqual(APP_LAUNCH)
@@ -178,16 +187,16 @@ describe('OpenTray daemon presenter', () => {
     expect(fixture.nativeCalls[0]?.tray.icon).toEqual({
       'darwin-icon-only': {
         type: 'file',
-        path: '/package/app/native-icons/tray-icon.png',
+        path: appAssetPath('native-icons', 'tray-icon.png'),
         isTemplate: true,
       },
       'win32-icon-only': {
         type: 'file',
-        path: '/package/app/native-icons/tray-icon.png',
+        path: appAssetPath('native-icons', 'tray-icon.png'),
       },
       'linux-icon-only': {
         type: 'file',
-        path: '/package/app/native-icons/tray-icon.png',
+        path: appAssetPath('native-icons', 'tray-icon.png'),
       },
     })
     expect(fixture.nativeCalls[0]).toEqual(

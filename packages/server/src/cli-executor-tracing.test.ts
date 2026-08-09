@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Prove an eager JSON response can finish before its child process settles without writing to
  *    an ended response Span.
  * 2. Exercise the real OpenTelemetry SDK diagnostic boundary instead of a mocked Span facade.
  * 3. Preserve queue, cwd, runner, parent, and real child-concurrency evidence on exported Spans.
  * 4. Prove Worker execution exports mode, module, lifecycle, and concurrency evidence without a child PID.
+ * 5. Bind eager-process trace export to observed child retirement instead of a fixed platform timer.
  *
  * Original request (2026-07-31): "终端大量报错，比如: Cannot execute the operation on ended Span"
  * Original request (2026-07-31): "我发现otel里面没有追踪这个信息。"
@@ -78,6 +79,47 @@ function diagnosticText(message: string, args: readonly unknown[]): string {
     .join(' ')
 }
 
+function readFixtureProcessId(stdout: string): number {
+  const parsed: unknown = JSON.parse(stdout)
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('CLI tracing fixture did not return an object.')
+  }
+  const record = parsed as Record<string, unknown>
+  if (record.ok !== true || typeof record.pid !== 'number') {
+    throw new Error('CLI tracing fixture did not return its process identity.')
+  }
+  return record.pid
+}
+
+async function waitForProcessExit(pid: number, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') return
+      throw error
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  throw new Error(`CLI tracing fixture process ${pid} did not exit within ${timeoutMs}ms.`)
+}
+
+async function waitForExportedSpanEvents(
+  readSpans: () => ReadonlyArray<{ name: string; events: readonly string[] }>,
+  spanName: string,
+  events: readonly string[],
+  timeoutMs = 5_000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const span = readSpans().find((candidate) => candidate.name === spanName)
+    if (span && events.every((event) => span.events.includes(event))) return
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error(`${spanName} did not export ${events.join(', ')} within ${timeoutMs}ms.`)
+}
+
 describe('CLI executor tracing lifecycle', () => {
   let sdk: NodeSDK | null = null
   let originalSpawnMode: string | undefined
@@ -144,15 +186,19 @@ describe('CLI executor tracing lifecycle', () => {
       '-e',
       [
         "process.on('SIGTERM', () => setTimeout(() => process.exit(0), 50))",
-        'process.stdout.write(JSON.stringify({ ok: true }))',
+        'process.stdout.write(JSON.stringify({ ok: true, pid: process.pid }))',
         'setInterval(() => {}, 1_000)',
       ].join(';'),
       '--',
       '--json',
     ])
 
-    expect(result).toMatchObject({ success: true, stdout: '{"ok":true}', exitCode: 0 })
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(result).toMatchObject({ success: true, exitCode: 0 })
+    await waitForProcessExit(readFixtureProcessId(result.stdout))
+    await waitForExportedSpanEvents(() => exportedSpans, 'cli.process -e', [
+      'cli.process.exit.observed',
+      'cli.process.close.observed',
+    ])
 
     expect(
       diagnostics.filter((message) => message.includes('Operation attempted on ended Span'))

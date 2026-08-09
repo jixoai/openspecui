@@ -1,15 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Cross real CLI private Direct/App launch and the public Project Web shell.
  * 2. Cross App locator binding, iframe bootstrap, and child-style fragment consumption/removal.
  * 3. Terminate after protected tRPC HTTP, tRPC subscription, and PTY auth-first succeed.
  * 4. Supply a physical minimal Web root without relying on generated workspace assets.
+ * 5. Settle shared watcher owners before removing Windows transport fixtures.
  *
  * Original request (2026-07-24): "Add the strongest feasible terminating gated Direct/App fixture."
  * Delivery correction (2026-07-25): the clean-CI fixture must own its physical Web assets.
  * Review correction (2026-07-26): an explicit empty Web root must not select packaged assets.
  */
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -24,6 +25,7 @@ import {
 import { buildDirectWebLaunchUrl, buildHostedAppLaunchUrl } from '../../cli/src/hosted-app'
 import { startServer, type RunningServer } from '../../cli/src/index'
 import { findAvailablePort } from './port-utils'
+import { removeServerTestDirectories } from './server-test-cleanup.js'
 
 vi.mock(import('../../web/src/lib/terminal-bell-sound-engine'), async (importOriginal) => {
   const actual = await importOriginal()
@@ -85,7 +87,7 @@ class ObservedWebSocket extends NodeWebSocket {
 afterEach(async () => {
   for (const socket of sockets.splice(0)) socket.terminate()
   await Promise.all(servers.splice(0).map((server) => server.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await removeServerTestDirectories(tempDirs.splice(0))
   ObservedWebSocket.instances = []
   vi.restoreAllMocks()
   vi.unstubAllGlobals()

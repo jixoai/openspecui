@@ -1,18 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Resolve an installed OpenSpec package's importable CLI module from its configured runner and
  *    distinguish objective module absence from Worker startup/execution failure.
  * 2. Execute one buffered OpenSpec command inside an isolated Node Worker with project cwd semantics.
  * 3. Project Worker stdout, stderr, cancellation, and settlement through the buffered spawn contract.
+ * 4. Treat observed Worker stderr as exit-owned evidence and settle it through the real Worker exit
+ *    instead of eager JSON retirement.
  *
  * Original request (2026-07-31): "直接寻址到本地 openspec 背后的 js，直接用 worker_thread 来运行它。"
  * Original request (2026-07-31): "通过 OPENSPEC_SPAWN_MODE=process|worker 来进行区分两种模式。"
+ * Original request (2026-08-06): "continue"
  */
 import { access, realpath } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { Worker } from 'node:worker_threads'
 import {
+  EAGER_JSON_EXIT_GRACE_MS,
   formatSpawnError,
   type BufferedSpawnPhase,
   type BufferedSpawnPhaseEvent,
@@ -215,6 +219,19 @@ export function runOpenSpecCliWorker(options: {
     let completedExitCode: number | null = null
     let workerError: ReturnType<typeof formatSpawnError> | undefined
     let aborted = false
+    let eagerJsonTimer: NodeJS.Timeout | null = null
+    let eagerJsonImmediate: NodeJS.Immediate | null = null
+
+    const clearEagerJsonResolution = () => {
+      if (eagerJsonTimer) {
+        clearTimeout(eagerJsonTimer)
+        eagerJsonTimer = null
+      }
+      if (eagerJsonImmediate) {
+        clearImmediate(eagerJsonImmediate)
+        eagerJsonImmediate = null
+      }
+    }
 
     const observe = (
       phase: BufferedSpawnPhase,
@@ -224,6 +241,7 @@ export function runOpenSpecCliWorker(options: {
     const finish = (reason: BufferedSpawnResultReason, exitCode: number | null) => {
       if (settled) return
       settled = true
+      clearEagerJsonResolution()
       phases.resultResolvedAt = performance.now()
       phases.resultReason = reason
       observe('result-resolved', { reason })
@@ -303,15 +321,40 @@ export function runOpenSpecCliWorker(options: {
           stdout += data.toString()
           if (
             options.eagerResolveJson &&
-            !phases.eagerResolved &&
+            !phases.jsonCompleteAt &&
             stdout.trimStart().startsWith('{')
           ) {
             try {
               JSON.parse(stdout)
-              phases.eagerResolved = true
               phases.jsonCompleteAt = performance.now()
               observe('json-complete-observed')
-              requestTermination('eager-json')
+              eagerJsonTimer = setTimeout(() => {
+                eagerJsonTimer = null
+                if (
+                  settled ||
+                  phases.exitAt ||
+                  workerError ||
+                  completedExitCode !== null ||
+                  stderr.length > 0
+                ) {
+                  return
+                }
+                eagerJsonImmediate = setImmediate(() => {
+                  eagerJsonImmediate = null
+                  if (
+                    settled ||
+                    phases.exitAt ||
+                    workerError ||
+                    completedExitCode !== null ||
+                    stderr.length > 0
+                  ) {
+                    return
+                  }
+                  phases.eagerResolved = true
+                  requestTermination('eager-json')
+                  finish('eager-json', 0)
+                })
+              }, EAGER_JSON_EXIT_GRACE_MS)
             } catch {
               // A later stdout chunk may complete the JSON document.
             }
@@ -333,6 +376,7 @@ export function runOpenSpecCliWorker(options: {
         })
         worker.once('exit', (workerExitCode) => {
           options.signal?.removeEventListener('abort', onAbort)
+          clearEagerJsonResolution()
           phases.exitAt = performance.now()
           const exitCode = aborted
             ? null

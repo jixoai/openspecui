@@ -1,11 +1,13 @@
 #!/usr/bin/env bun
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
  * 1. Materialize the current CLI package tag as a GitHub Release.
  * 2. Preserve changelog-derived notes across create and update.
  * 3. Mark prerelease versions without making them latest.
+ * 4. Execute Git and GitHub CLI subprocesses through the shell-independent command owner.
  *
  * Original request (2026-07-28): "我想先发布一个beta版本"
+ * Original request (2026-08-04): "这个项目之前都是在macOS上做到开发，现在我们在Windows，所以开始一系列的适配。"
  */
 
 import { spawnSync } from 'node:child_process'
@@ -13,6 +15,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { resolveCommandInvocation } from './lib/command-invocation.mjs'
 import {
   extractChangelogSection,
   formatGithubReleaseNotes,
@@ -32,16 +35,13 @@ type CaptureResult = {
   stdout: string
 }
 
-function commandFor(bin: 'gh' | 'git'): string {
-  if (process.platform === 'win32') return `${bin}.cmd`
-  return bin
-}
-
 function runCapture(command: string, args: string[], cwd: string): CaptureResult {
-  const result = spawnSync(command, args, {
+  const invocation = resolveCommandInvocation(command, args)
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
   })
   return {
     status: result.status ?? 1,
@@ -51,9 +51,11 @@ function runCapture(command: string, args: string[], cwd: string): CaptureResult
 }
 
 function runOrThrow(command: string, args: string[], cwd: string): void {
-  const result = spawnSync(command, args, {
+  const invocation = resolveCommandInvocation(command, args)
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd,
     stdio: 'inherit',
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
   })
   if ((result.status ?? 1) !== 0) {
     throw new Error(`${command} ${args.join(' ')} failed with code ${result.status ?? 1}`)
@@ -78,7 +80,7 @@ function readCliChangelog(rootDir: string): string {
 
 function ensureTagExists(rootDir: string, tag: string): void {
   const result = runCapture(
-    commandFor('git'),
+    'git',
     ['rev-parse', '--verify', '--quiet', `refs/tags/${tag}`],
     rootDir
   )
@@ -88,7 +90,7 @@ function ensureTagExists(rootDir: string, tag: string): void {
 }
 
 function releaseExists(rootDir: string, tag: string): boolean {
-  const result = runCapture(commandFor('gh'), ['release', 'view', tag], rootDir)
+  const result = runCapture('gh', ['release', 'view', tag], rootDir)
   if (result.status === 0) return true
   const detail = `${result.stdout}\n${result.stderr}`.toLowerCase()
   if (detail.includes('release not found')) return false
@@ -123,14 +125,14 @@ function main(): void {
     if (releaseExists(rootDir, tag)) {
       console.log(`[release] updating GitHub release ${tag}`)
       runOrThrow(
-        commandFor('gh'),
+        'gh',
         ['release', 'edit', tag, '--title', title, '--notes-file', notesPath, ...channelFlags],
         rootDir
       )
     } else {
       console.log(`[release] creating GitHub release ${tag}`)
       runOrThrow(
-        commandFor('gh'),
+        'gh',
         [
           'release',
           'create',

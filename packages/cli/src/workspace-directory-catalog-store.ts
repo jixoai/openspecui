@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (created 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Own the daemon user-level Workspace directory catalog across App windows and daemon restarts.
- * 2. Serialize catalog mutations and publish each replacement through atomic file rename.
+ * 2. Serialize catalog mutations and retry transient Windows replacement locks.
  * 3. Degrade missing or malformed persisted data to an empty credential-free catalog.
  *
  * Owner correction (2026-07-31): "Favorites Recent 这些数据你是不是存储在前端？要存储在后端啊"
+ * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
  */
+import { replaceFileAtomically } from '@openspecui/core'
 import {
   createEmptyWorkspaceDirectoryCatalog,
   parseWorkspaceDirectoryCatalog,
@@ -15,7 +17,7 @@ import {
   type WorkspaceDirectoryCatalog,
 } from '@openspecui/core/workspace-directory-catalog'
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 export interface WorkspaceDirectoryCatalogStore {
@@ -55,10 +57,9 @@ export function createWorkspaceDirectoryCatalogStore(options: {
         encoding: 'utf8',
         mode: 0o600,
       })
-      await rename(temporaryPath, options.filePath)
-    } catch (error) {
-      await rm(temporaryPath, { force: true }).catch(() => {})
-      throw error
+      await replaceFileAtomically(temporaryPath, options.filePath)
+    } finally {
+      await rm(temporaryPath, { force: true }).catch(() => undefined)
     }
   }
 

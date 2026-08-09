@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "vite.sync-cli-web.ts",
+    "vite.sync-cli-web.test.ts",
+    "vite.test-workers.ts",
+    "vite.test-workers.test.ts"
+  ],
+  "exclude": ["node_modules", "dist", "dist-ssg"]
+}

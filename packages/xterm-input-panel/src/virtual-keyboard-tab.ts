@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
+ * 1. Render the platform-aware Pixi virtual keyboard surface.
+ * 2. Translate key, modifier, repeat, and swipe gestures into typed panel events.
+ * 3. Keep layout, resize, and theme projection synchronized with the host element.
+ * 4. Retire late Pixi initialization after disconnect so detached render loops cannot survive.
+ *
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows, then handle similar portability failures."
+ */
 import { LitElement, css, html } from 'lit'
 import {
   Application,
@@ -73,6 +82,7 @@ export class VirtualKeyboardTab extends LitElement {
   private _resizeObserver: ResizeObserver | null = null
   private _theme: PixiTheme = resolvePixiTheme(this)
   private _unsubTheme: (() => void) | null = null
+  private _connectionGeneration = 0
   private _repeatTimer: ReturnType<typeof setTimeout> | null = null
   private _repeatInterval: ReturnType<typeof setInterval> | null = null
 
@@ -90,16 +100,18 @@ export class VirtualKeyboardTab extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback()
+    const connectionGeneration = ++this._connectionGeneration
     this._theme = resolvePixiTheme(this)
     this._unsubTheme = onThemeChange((theme) => {
       this._theme = theme
       this._layoutKeys()
     }, this)
     await this.updateComplete
-    await this._initPixi()
+    await this._initPixi(connectionGeneration)
   }
 
   disconnectedCallback() {
+    this._connectionGeneration += 1
     super.disconnectedCallback()
     this._cancelRepeat()
     this._resizeObserver?.disconnect()
@@ -123,7 +135,7 @@ export class VirtualKeyboardTab extends LitElement {
     return LAYOUTS[this._hostPlatform()]
   }
 
-  private async _initPixi() {
+  private async _initPixi(connectionGeneration: number) {
     const host = this.shadowRoot?.querySelector('.pixi-host') as HTMLElement
     if (!host) return
 
@@ -135,6 +147,11 @@ export class VirtualKeyboardTab extends LitElement {
       resolution: window.devicePixelRatio || 1,
       autoDensity: false,
     })
+
+    if (!this.isConnected || connectionGeneration !== this._connectionGeneration) {
+      app.destroy()
+      return
+    }
 
     host.appendChild(app.canvas as HTMLCanvasElement)
     this._app = app

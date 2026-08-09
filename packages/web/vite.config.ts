@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Configure Project Web build, aliases, tests, and development backend proxies.
  * 2. Emit preview entrypoints and one stable Access Gate resource-worker entrypoint.
+ * 3. Keep build-projection tests inside the default unit-test topology.
  *
  * Original request (2026-07-24): "完整审计 Project Web 的 HTTP/tRPC WS/PTY/raw resource 网络路径。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
@@ -11,6 +12,7 @@ import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import { createCliWebSyncPlugin } from './vite.sync-cli-web'
+import { resolveWebUnitMaxWorkers } from './vite.test-workers'
 
 function resolveBackendTarget(): string {
   const explicit =
@@ -114,10 +116,14 @@ export default defineConfig(({ isSsrBuild }) => {
           },
           test: {
             name: 'unit',
-            maxWorkers: '50%',
+            maxWorkers: resolveWebUnitMaxWorkers(),
             environment: 'jsdom',
             setupFiles: './src/test/setup.ts',
-            include: ['src/**/*.test.{ts,tsx}'],
+            include: [
+              'src/**/*.test.{ts,tsx}',
+              'vite.sync-cli-web.test.ts',
+              'vite.test-workers.test.ts',
+            ],
             exclude: ['src/**/*.browser.test.{ts,tsx}'],
           },
         },

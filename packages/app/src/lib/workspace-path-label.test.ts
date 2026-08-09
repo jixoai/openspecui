@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Prove the path-first label uses verified GitHub org/repo or falls back to the directory basename (4.0e).
  * 2. Prove branch is the subtitle and the complete path stays retrievable.
  * 3. Prove changing remote/branch updates display only and never identity.
+ * 4. Prove Windows drive, trailing-separator, and UNC paths use the directory basename.
  *
  * Original request (2026-07-30): "Tab这里默认写仓库路径 org/repo，如果没有就使用path的foldername；subtitle写git分支名"
  */
@@ -71,6 +72,12 @@ describe('selectWorkspacePathLabel (4.0e)', () => {
     expect(directoryBasename('/a/b/c/')).toBe('c')
     expect(directoryBasename('/a/b/c')).toBe('c')
     expect(directoryBasename('/')).toBe('/')
+  })
+
+  it('derives Windows drive and UNC basenames without treating the full path as a title', () => {
+    expect(directoryBasename('C:\\repo\\openspecui')).toBe('openspecui')
+    expect(directoryBasename('C:\\repo\\openspecui\\')).toBe('openspecui')
+    expect(directoryBasename('\\\\server\\share\\openspecui\\')).toBe('openspecui')
   })
 
   it('changing the remote or branch updates display only; the path detail (identity) is unchanged', () => {

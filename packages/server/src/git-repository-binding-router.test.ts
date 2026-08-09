@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Prove the typed public Router rejects stale Planning refresh intent.
  * 2. Prove the conflict happens before the rebound repository receives a refresh stamp.
  * 3. Preserve Dashboard Git-region refresh while Code Git remains Planning-failure independent.
+ * 4. Dispose every Server owner and expose projection failures before removing Windows Git fixtures.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
+ * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
  */
 import {
   CliContextSchema,
@@ -16,13 +18,18 @@ import {
   type GitRepositoryScopes,
 } from '@openspecui/core'
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 import { appRouter } from './router.js'
+import {
+  disposeServerTestFixture,
+  removeServerTestDirectories,
+  SERVER_FIXTURE_TEST_TIMEOUT_MS,
+} from './server-test-cleanup.js'
 import { createServer } from './server.js'
 
 const runCommand = promisify(execFile)
@@ -145,325 +152,342 @@ async function createRouterFixture() {
     },
     async dispose() {
       vi.restoreAllMocks()
-      await server.storeObservationFallback.dispose()
-      await server.planningRootServices.dispose()
-      await server.storeObservation.dispose()
-      await server.dataHomeObserver.dispose()
-      server.projectInvalidation.dispose()
-      await server.observationEnvironment.dispose()
-      server.projectRecoveryService.dispose()
-      server.translationCacheService.close()
-      await rm(tempDir, { recursive: true, force: true })
+      await disposeServerTestFixture(server)
+      await removeServerTestDirectories([tempDir])
     },
   }
 }
 
-describe('public Git repository binding Router', () => {
-  it('observes Code once for one public projection and compares Planning to that descriptor', async () => {
-    const fixture = await createRouterFixture()
-    let subscription: { unsubscribe(): void } | null = null
+describe(
+  'public Git repository binding Router',
+  { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS },
+  () => {
+    it('observes Code once for one public projection and compares Planning to that descriptor', async () => {
+      const fixture = await createRouterFixture()
+      let subscription: { unsubscribe(): void } | null = null
 
-    try {
-      const resolveCodeScope = vi.spyOn(fixture.server.gitRepositoryBindings, 'resolveCodeScope')
-      const resolvePlanningScopes = vi.spyOn(
-        fixture.server.gitRepositoryBindings,
-        'resolvePlanningScopes'
+      try {
+        const resolveCodeScope = vi.spyOn(fixture.server.gitRepositoryBindings, 'resolveCodeScope')
+        const resolvePlanningScopes = vi.spyOn(
+          fixture.server.gitRepositoryBindings,
+          'resolvePlanningScopes'
+        )
+        const caller = appRouter.createCaller(fixture.server.createContext())
+        const observable = await caller.git.subscribeScopes()
+        const emissions: GitRepositoryScopes[] = []
+        subscription = observable.subscribe({ next: (value) => emissions.push(value) })
+
+        await vi.waitFor(() =>
+          expect(emissions.some((value) => value.planningState === 'settled')).toBe(true)
+        )
+        expect(resolveCodeScope).toHaveBeenCalledOnce()
+        expect(resolvePlanningScopes).toHaveBeenCalledOnce()
+        const codeOnly = emissions[0]
+        const planningCall = resolvePlanningScopes.mock.calls[0]
+        if (!codeOnly || !planningCall) throw new Error('Expected Code-first projection evidence.')
+        expect(planningCall[0]).toEqual(codeOnly.code)
+      } finally {
+        subscription?.unsubscribe()
+        await fixture.dispose()
+      }
+    })
+
+    it('keeps public Code Git usable while the initial Planning transition is deferred', async () => {
+      const fixture = await createRouterFixture()
+      const deferredDoctor =
+        createDeferred<
+          Awaited<ReturnType<typeof fixture.server.cliExecutor.contracts.doctorRoot>>
+        >()
+      const readyDoctor = commandResult(
+        {
+          root: { path: fixture.rootA, source: 'nearest', healthy: true, status: [] },
+          store: null,
+          references: [],
+          status: [],
+        },
+        CliDoctorSchema
       )
-      const caller = appRouter.createCaller(fixture.server.createContext())
-      const observable = await caller.git.subscribeScopes()
+      fixture.doctorRootMock.mockImplementationOnce(() => deferredDoctor.promise)
       const emissions: GitRepositoryScopes[] = []
-      subscription = observable.subscribe({ next: (value) => emissions.push(value) })
+      const planningEmission = createDeferred<GitRepositoryScopes>()
+      const streamErrors: unknown[] = []
+      let subscription: { unsubscribe(): void } | null = null
 
-      await vi.waitFor(() =>
-        expect(emissions.some((value) => value.planningState === 'settled')).toBe(true)
+      try {
+        const caller = appRouter.createCaller(fixture.server.createContext())
+        const observable = await caller.git.subscribeScopes()
+        subscription = observable.subscribe({
+          next(scopes) {
+            emissions.push(scopes)
+            if (scopes.planning) planningEmission.resolve(scopes)
+          },
+          error(error) {
+            streamErrors.push(error)
+            planningEmission.reject(error)
+          },
+        })
+
+        await vi.waitFor(() => expect(emissions).toHaveLength(1), {
+          timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS,
+        })
+        const codeOnly = emissions[0]
+        if (!codeOnly) throw new Error('Expected the Code-first Git scope emission.')
+        expect(streamErrors).toEqual([])
+        expect(codeOnly.planningState).toBe('resolving')
+        expect(codeOnly.planning).toBeNull()
+        expect(codeOnly.code.rootPath).toBe(fixture.codeRoot)
+        await vi.waitFor(() => expect(fixture.doctorRootMock).toHaveBeenCalledOnce())
+
+        const token = codeOnly.code.bindingToken
+        const [code, overview, history, refresh] = await Promise.all([
+          caller.git.code(),
+          caller.git.overview({ scope: 'code', expectedBindingToken: token }),
+          caller.git.listEntries({
+            scope: 'code',
+            expectedBindingToken: token,
+            limit: 10,
+          }),
+          caller.dashboard.refreshGitSnapshot({
+            scope: 'code',
+            expectedBindingToken: token,
+            reason: 'deferred-planning-code-refresh',
+          }),
+        ])
+
+        expect(code.bindingToken).toBe(token)
+        expect(overview.currentWorktree?.path).toBe(code.repository?.topLevel)
+        expect(history.items).toEqual([])
+        expect(refresh).toEqual({ success: true })
+
+        deferredDoctor.resolve(readyDoctor)
+        const enriched = await planningEmission.promise
+        expect(enriched.code.bindingToken).toBe(token)
+        expect(enriched.planningState).toBe('settled')
+        expect(enriched.planning?.rootPath).toBe(fixture.rootA)
+      } finally {
+        deferredDoctor.resolve(readyDoctor)
+        subscription?.unsubscribe()
+        await fixture.dispose()
+      }
+    })
+
+    it('stops subscription emission and settles the deferred Manager transition after unsubscribe', async () => {
+      const fixture = await createRouterFixture()
+      const deferredDoctor =
+        createDeferred<
+          Awaited<ReturnType<typeof fixture.server.cliExecutor.contracts.doctorRoot>>
+        >()
+      const readyDoctor = commandResult(
+        {
+          root: { path: fixture.rootA, source: 'nearest', healthy: true, status: [] },
+          store: null,
+          references: [],
+          status: [],
+        },
+        CliDoctorSchema
       )
-      expect(resolveCodeScope).toHaveBeenCalledOnce()
-      expect(resolvePlanningScopes).toHaveBeenCalledOnce()
-      const codeOnly = emissions[0]
-      const planningCall = resolvePlanningScopes.mock.calls[0]
-      if (!codeOnly || !planningCall) throw new Error('Expected Code-first projection evidence.')
-      expect(planningCall[0]).toEqual(codeOnly.code)
-    } finally {
-      subscription?.unsubscribe()
-      await fixture.dispose()
-    }
-  })
+      fixture.doctorRootMock.mockImplementationOnce(() => deferredDoctor.promise)
+      const emissions: GitRepositoryScopes[] = []
+      const firstEmission = createDeferred<void>()
 
-  it('keeps public Code Git usable while the initial Planning transition is deferred', async () => {
-    const fixture = await createRouterFixture()
-    const deferredDoctor =
-      createDeferred<Awaited<ReturnType<typeof fixture.server.cliExecutor.contracts.doctorRoot>>>()
-    const readyDoctor = commandResult(
-      {
-        root: { path: fixture.rootA, source: 'nearest', healthy: true, status: [] },
-        store: null,
-        references: [],
-        status: [],
-      },
-      CliDoctorSchema
-    )
-    fixture.doctorRootMock.mockImplementationOnce(() => deferredDoctor.promise)
-    const emissions: GitRepositoryScopes[] = []
-    const planningEmission = createDeferred<GitRepositoryScopes>()
-    const streamErrors: unknown[] = []
-    let subscription: { unsubscribe(): void } | null = null
+      try {
+        const caller = appRouter.createCaller(fixture.server.createContext())
+        const observable = await caller.git.subscribeScopes()
+        const subscription = observable.subscribe({
+          next(scopes) {
+            emissions.push(scopes)
+            firstEmission.resolve(undefined)
+          },
+          error: firstEmission.reject,
+        })
 
-    try {
-      const caller = appRouter.createCaller(fixture.server.createContext())
-      const observable = await caller.git.subscribeScopes()
-      subscription = observable.subscribe({
-        next(scopes) {
-          emissions.push(scopes)
-          if (scopes.planning) planningEmission.resolve(scopes)
-        },
-        error(error) {
-          streamErrors.push(error)
-          planningEmission.reject(error)
-        },
-      })
+        await firstEmission.promise
+        await vi.waitFor(() => expect(fixture.doctorRootMock).toHaveBeenCalledOnce())
+        subscription.unsubscribe()
+        deferredDoctor.resolve(readyDoctor)
 
-      await vi.waitFor(() => expect(emissions).toHaveLength(1))
-      const codeOnly = emissions[0]
-      if (!codeOnly) throw new Error('Expected the Code-first Git scope emission.')
-      expect(streamErrors).toEqual([])
-      expect(codeOnly.planningState).toBe('resolving')
-      expect(codeOnly.planning).toBeNull()
-      expect(codeOnly.code.rootPath).toBe(fixture.codeRoot)
-      await vi.waitFor(() => expect(fixture.doctorRootMock).toHaveBeenCalledOnce())
+        await expect(
+          fixture.server.planningRootServices.runOperation(({ rootContext }) =>
+            Promise.resolve(rootContext.planningRoot?.path)
+          )
+        ).resolves.toBe(fixture.rootA)
+        expect(emissions).toHaveLength(1)
+        expect(emissions[0]?.planningState).toBe('resolving')
+        expect(emissions[0]?.planning).toBeNull()
+      } finally {
+        deferredDoctor.resolve(readyDoctor)
+        await fixture.dispose()
+      }
+    })
 
-      const token = codeOnly.code.bindingToken
-      const [code, overview, history, refresh] = await Promise.all([
-        caller.git.code(),
-        caller.git.overview({ scope: 'code', expectedBindingToken: token }),
-        caller.git.listEntries({
-          scope: 'code',
-          expectedBindingToken: token,
-          limit: 10,
-        }),
-        caller.dashboard.refreshGitSnapshot({
-          scope: 'code',
-          expectedBindingToken: token,
-          reason: 'deferred-planning-code-refresh',
-        }),
-      ])
+    it('rejects stale Refresh before touching the rebound Planning repository', async () => {
+      const fixture = await createRouterFixture()
+      const { rootB, server } = fixture
 
-      expect(code.bindingToken).toBe(token)
-      expect(overview.currentWorktree?.path).toBe(code.repository?.topLevel)
-      expect(history.items).toEqual([])
-      expect(refresh).toEqual({ success: true })
+      try {
+        const caller = appRouter.createCaller(server.createContext())
+        const bindingA = (await caller.git.scopes()).planning
+        if (!bindingA) throw new Error('Expected Root A Planning repository binding.')
+        fixture.selectRoot(rootB)
+        const rootBGitDir = (
+          await runCommand('git', ['rev-parse', '--git-dir'], { cwd: rootB })
+        ).stdout.trim()
+        const rootBStamp = resolve(rootB, rootBGitDir, 'openspecui-dashboard-git-refresh.stamp')
 
-      deferredDoctor.resolve(readyDoctor)
-      const enriched = await planningEmission.promise
-      expect(enriched.code.bindingToken).toBe(token)
-      expect(enriched.planningState).toBe('settled')
-      expect(enriched.planning?.rootPath).toBe(fixture.rootA)
-    } finally {
-      deferredDoctor.resolve(readyDoctor)
-      subscription?.unsubscribe()
-      await fixture.dispose()
-    }
-  })
+        const staleRefresh = await caller.git
+          .refresh({
+            scope: 'planning',
+            expectedBindingToken: bindingA.bindingToken,
+            reason: 'stale-root-a-refresh',
+          })
+          .then(
+            (value) => ({ status: 'fulfilled' as const, value }),
+            (reason: unknown) => ({ status: 'rejected' as const, reason })
+          )
 
-  it('stops subscription emission and settles the deferred Manager transition after unsubscribe', async () => {
-    const fixture = await createRouterFixture()
-    const deferredDoctor =
-      createDeferred<Awaited<ReturnType<typeof fixture.server.cliExecutor.contracts.doctorRoot>>>()
-    const readyDoctor = commandResult(
-      {
-        root: { path: fixture.rootA, source: 'nearest', healthy: true, status: [] },
-        store: null,
-        references: [],
-        status: [],
-      },
-      CliDoctorSchema
-    )
-    fixture.doctorRootMock.mockImplementationOnce(() => deferredDoctor.promise)
-    const emissions: GitRepositoryScopes[] = []
-    const firstEmission = createDeferred<void>()
+        await expect(pathExists(rootBStamp)).resolves.toBe(false)
+        expect(staleRefresh).toMatchObject({
+          status: 'rejected',
+          reason: { code: 'CONFLICT' },
+        })
 
-    try {
-      const caller = appRouter.createCaller(fixture.server.createContext())
-      const observable = await caller.git.subscribeScopes()
-      const subscription = observable.subscribe({
-        next(scopes) {
-          emissions.push(scopes)
-          firstEmission.resolve(undefined)
-        },
-        error: firstEmission.reject,
-      })
+        const bindingB = (await caller.git.scopes()).planning
+        if (!bindingB) throw new Error('Expected Root B Planning repository binding.')
+        await expect(
+          caller.git.refresh({
+            scope: 'planning',
+            expectedBindingToken: bindingB.bindingToken,
+            reason: 'current-root-b-refresh',
+          })
+        ).resolves.toEqual({ success: true })
+        await expect(pathExists(rootBStamp)).resolves.toBe(true)
+      } finally {
+        await fixture.dispose()
+      }
+    })
 
-      await firstEmission.promise
-      await vi.waitFor(() => expect(fixture.doctorRootMock).toHaveBeenCalledOnce())
-      subscription.unsubscribe()
-      deferredDoctor.resolve(readyDoctor)
+    it('pushes a refreshed Dashboard Git region after a successful Code Git refresh', async () => {
+      const fixture = await createRouterFixture()
+      const emissions: DashboardGitSnapshot[] = []
+      const failures: unknown[] = []
+      let unsubscribe: () => void = () => undefined
 
-      await expect(
-        fixture.server.planningRootServices.runOperation(({ rootContext }) =>
-          Promise.resolve(rootContext.planningRoot?.path)
+      try {
+        const caller = appRouter.createCaller(fixture.server.createContext())
+        const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
+        await fixture.server.planningRootServices.runOperation(({ dashboardProjectionService }) => {
+          unsubscribe = dashboardProjectionService.subscribeGit((event) => {
+            if (event.type === 'snapshot' && event.snapshot.freshness === 'current') {
+              emissions.push(event.snapshot.data)
+            }
+            if (event.type === 'failed') failures.push(event.error)
+          }).unsubscribe
+        })
+        await vi.waitFor(
+          () => {
+            if (failures.length > 0) {
+              throw new Error('Dashboard Git projection failed before its initial snapshot.', {
+                cause: failures[0],
+              })
+            }
+            expect(emissions).toHaveLength(1)
+          },
+          { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS }
         )
-      ).resolves.toBe(fixture.rootA)
-      expect(emissions).toHaveLength(1)
-      expect(emissions[0]?.planningState).toBe('resolving')
-      expect(emissions[0]?.planning).toBeNull()
-    } finally {
-      deferredDoctor.resolve(readyDoctor)
-      await fixture.dispose()
-    }
-  })
 
-  it('rejects stale Refresh before touching the rebound Planning repository', async () => {
-    const fixture = await createRouterFixture()
-    const { rootB, server } = fixture
-
-    try {
-      const caller = appRouter.createCaller(server.createContext())
-      const bindingA = (await caller.git.scopes()).planning
-      if (!bindingA) throw new Error('Expected Root A Planning repository binding.')
-      fixture.selectRoot(rootB)
-      const rootBGitDir = (
-        await runCommand('git', ['rev-parse', '--git-dir'], { cwd: rootB })
-      ).stdout.trim()
-      const rootBStamp = resolve(rootB, rootBGitDir, 'openspecui-dashboard-git-refresh.stamp')
-
-      const staleRefresh = await caller.git
-        .refresh({
-          scope: 'planning',
-          expectedBindingToken: bindingA.bindingToken,
-          reason: 'stale-root-a-refresh',
+        await expect(
+          caller.dashboard.refreshGitSnapshot({
+            scope: 'code',
+            expectedBindingToken,
+            reason: 'dashboard-code-refresh',
+          })
+        ).resolves.toEqual({ success: true })
+        await vi.waitFor(() => expect(emissions).toHaveLength(2), {
+          timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS,
         })
-        .then(
-          (value) => ({ status: 'fulfilled' as const, value }),
-          (reason: unknown) => ({ status: 'rejected' as const, reason })
+        expect(emissions.at(-1)?.bindingToken).toBe(expectedBindingToken)
+      } finally {
+        unsubscribe()
+        await fixture.dispose()
+      }
+    })
+
+    it('keeps Launch Code ownership stable across Planning replacement in real server composition', async () => {
+      const fixture = await createRouterFixture()
+
+      try {
+        const { server } = fixture
+        const scopesA = await server.gitRepositoryBindings.resolveScopes()
+        const planningA = scopesA.planning
+        if (!planningA) throw new Error('Expected a distinct Planning repository for A.')
+
+        const dashboardA = await server.planningRootServices.runOperation(
+          ({ dashboardOverviewService }) => dashboardOverviewService.getCurrent()
+        )
+        expect(dashboardA.git.bindingToken).toBe(scopesA.code.bindingToken)
+        expect('codeBindingToken' in server.planningRootServices).toBe(false)
+
+        fixture.selectRoot(fixture.rootB)
+        const scopesB = await server.gitRepositoryBindings.resolveScopes()
+        const planningB = scopesB.planning
+        if (!planningB) throw new Error('Expected a distinct Planning repository for B.')
+        expect(scopesB.code.bindingToken).toBe(scopesA.code.bindingToken)
+        expect(planningB.bindingToken).not.toBe(planningA.bindingToken)
+
+        const dashboardB = await server.planningRootServices.runOperation(
+          ({ dashboardOverviewService }) => dashboardOverviewService.getCurrent()
+        )
+        expect(dashboardB.git.bindingToken).toBe(scopesB.code.bindingToken)
+        expect(dashboardB.git.bindingToken).toBe(scopesA.code.bindingToken)
+
+        fixture.selectRoot(fixture.rootA)
+        const scopesA2 = await server.gitRepositoryBindings.resolveScopes()
+        const planningA2 = scopesA2.planning
+        if (!planningA2) throw new Error('Expected a distinct Planning repository for A2.')
+        const dashboardA2 = await server.planningRootServices.runOperation(
+          ({ dashboardOverviewService }) => dashboardOverviewService.getCurrent()
         )
 
-      await expect(pathExists(rootBStamp)).resolves.toBe(false)
-      expect(staleRefresh).toMatchObject({
-        status: 'rejected',
-        reason: { code: 'CONFLICT' },
-      })
+        expect(scopesA2.code.bindingToken).toBe(scopesA.code.bindingToken)
+        expect(planningA2.bindingToken).not.toBe(planningA.bindingToken)
+        expect(planningA2.bindingToken).not.toBe(planningB.bindingToken)
+        expect(dashboardA2.git.bindingToken).toBe(scopesA2.code.bindingToken)
+        expect(dashboardA2.git.bindingToken).toBe(scopesA.code.bindingToken)
+      } finally {
+        await fixture.dispose()
+      }
+    })
 
-      const bindingB = (await caller.git.scopes()).planning
-      if (!bindingB) throw new Error('Expected Root B Planning repository binding.')
-      await expect(
-        caller.git.refresh({
-          scope: 'planning',
-          expectedBindingToken: bindingB.bindingToken,
-          reason: 'current-root-b-refresh',
-        })
-      ).resolves.toEqual({ success: true })
-      await expect(pathExists(rootBStamp)).resolves.toBe(true)
-    } finally {
-      await fixture.dispose()
-    }
-  })
+    it('keeps Code Git refresh successful when the Planning projection fails', async () => {
+      const fixture = await createRouterFixture()
 
-  it('pushes a refreshed Dashboard Git region after a successful Code Git refresh', async () => {
-    const fixture = await createRouterFixture()
-    const emissions: DashboardGitSnapshot[] = []
-    let unsubscribe: () => void = () => undefined
+      try {
+        const caller = appRouter.createCaller(fixture.server.createContext())
+        const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
+        fixture.failRoot()
+        const codeGitDir = (
+          await runCommand('git', ['rev-parse', '--git-dir'], {
+            cwd: fixture.codeRoot,
+          })
+        ).stdout.trim()
+        const codeStamp = resolve(
+          fixture.codeRoot,
+          codeGitDir,
+          'openspecui-dashboard-git-refresh.stamp'
+        )
 
-    try {
-      const caller = appRouter.createCaller(fixture.server.createContext())
-      const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
-      await fixture.server.planningRootServices.runOperation(({ dashboardProjectionService }) => {
-        unsubscribe = dashboardProjectionService.subscribeGit((event) => {
-          if (event.type === 'snapshot' && event.snapshot.freshness === 'current') {
-            emissions.push(event.snapshot.data)
-          }
-        }).unsubscribe
-      })
-      await vi.waitFor(() => expect(emissions).toHaveLength(1))
-
-      await expect(
-        caller.dashboard.refreshGitSnapshot({
-          scope: 'code',
-          expectedBindingToken,
-          reason: 'dashboard-code-refresh',
-        })
-      ).resolves.toEqual({ success: true })
-      await vi.waitFor(() => expect(emissions).toHaveLength(2))
-      expect(emissions.at(-1)?.bindingToken).toBe(expectedBindingToken)
-    } finally {
-      unsubscribe()
-      await fixture.dispose()
-    }
-  })
-
-  it('keeps Launch Code ownership stable across Planning replacement in real server composition', async () => {
-    const fixture = await createRouterFixture()
-
-    try {
-      const { server } = fixture
-      const scopesA = await server.gitRepositoryBindings.resolveScopes()
-      const planningA = scopesA.planning
-      if (!planningA) throw new Error('Expected a distinct Planning repository for A.')
-
-      const dashboardA = await server.planningRootServices.runOperation(
-        ({ dashboardOverviewService }) => dashboardOverviewService.getCurrent()
-      )
-      expect(dashboardA.git.bindingToken).toBe(scopesA.code.bindingToken)
-      expect('codeBindingToken' in server.planningRootServices).toBe(false)
-
-      fixture.selectRoot(fixture.rootB)
-      const scopesB = await server.gitRepositoryBindings.resolveScopes()
-      const planningB = scopesB.planning
-      if (!planningB) throw new Error('Expected a distinct Planning repository for B.')
-      expect(scopesB.code.bindingToken).toBe(scopesA.code.bindingToken)
-      expect(planningB.bindingToken).not.toBe(planningA.bindingToken)
-
-      const dashboardB = await server.planningRootServices.runOperation(
-        ({ dashboardOverviewService }) => dashboardOverviewService.getCurrent()
-      )
-      expect(dashboardB.git.bindingToken).toBe(scopesB.code.bindingToken)
-      expect(dashboardB.git.bindingToken).toBe(scopesA.code.bindingToken)
-
-      fixture.selectRoot(fixture.rootA)
-      const scopesA2 = await server.gitRepositoryBindings.resolveScopes()
-      const planningA2 = scopesA2.planning
-      if (!planningA2) throw new Error('Expected a distinct Planning repository for A2.')
-      const dashboardA2 = await server.planningRootServices.runOperation(
-        ({ dashboardOverviewService }) => dashboardOverviewService.getCurrent()
-      )
-
-      expect(scopesA2.code.bindingToken).toBe(scopesA.code.bindingToken)
-      expect(planningA2.bindingToken).not.toBe(planningA.bindingToken)
-      expect(planningA2.bindingToken).not.toBe(planningB.bindingToken)
-      expect(dashboardA2.git.bindingToken).toBe(scopesA2.code.bindingToken)
-      expect(dashboardA2.git.bindingToken).toBe(scopesA.code.bindingToken)
-    } finally {
-      await fixture.dispose()
-    }
-  })
-
-  it('keeps Code Git refresh successful when the Planning projection fails', async () => {
-    const fixture = await createRouterFixture()
-
-    try {
-      const caller = appRouter.createCaller(fixture.server.createContext())
-      const expectedBindingToken = (await caller.git.scopes()).code.bindingToken
-      fixture.failRoot()
-      const codeGitDir = (
-        await runCommand('git', ['rev-parse', '--git-dir'], {
-          cwd: fixture.codeRoot,
-        })
-      ).stdout.trim()
-      const codeStamp = resolve(
-        fixture.codeRoot,
-        codeGitDir,
-        'openspecui-dashboard-git-refresh.stamp'
-      )
-
-      await expect(
-        caller.dashboard.refreshGitSnapshot({
-          scope: 'code',
-          expectedBindingToken,
-          reason: 'planning-failed-code-refresh',
-        })
-      ).resolves.toEqual({ success: true })
-      await expect(pathExists(codeStamp)).resolves.toBe(true)
-      await vi.waitFor(() => expect(fixture.doctorRootMock).toHaveBeenCalledTimes(2))
-    } finally {
-      await fixture.dispose()
-    }
-  })
-})
+        await expect(
+          caller.dashboard.refreshGitSnapshot({
+            scope: 'code',
+            expectedBindingToken,
+            reason: 'planning-failed-code-refresh',
+          })
+        ).resolves.toEqual({ success: true })
+        await expect(pathExists(codeStamp)).resolves.toBe(true)
+        await vi.waitFor(() => expect(fixture.doctorRootMock).toHaveBeenCalledTimes(2))
+      } finally {
+        await fixture.dispose()
+      }
+    })
+  }
+)

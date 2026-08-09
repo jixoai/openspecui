@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Original request (2026-08-04): "The project was developed on macOS and now needs Windows adaptation."
+ * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
  * 1. Resolve the physical host manifest that owns on-demand runtime installation.
  * 2. Read declared runtime ranges without treating optional peers as install-time dependencies.
  * 3. Normalize legacy on-demand optional dependency records after package-manager installation.
+ * 4. Execute the npm dependency probe through Core's shell-independent Windows-safe spawn owner.
  *
  * Original request (2026-07-31): "这个依赖好像会导致安装的时候仍然会被强制装上去，可能要改成 peerDependencies 会更好"
  */
-import { createCleanCliEnv } from '@openspecui/core'
-import { spawn } from 'node:child_process'
+import { createCleanCliEnv, spawnSafe } from '@openspecui/core'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
@@ -84,11 +85,14 @@ export async function readRuntimeHostPackageDependencyTree(input: {
   packageNames: readonly string[]
 }): Promise<RuntimePackageDependencyTreeNode> {
   const args = ['list', '--json', '--omit=dev', '--depth=1', ...input.packageNames]
-  const child = spawn('npm', args, {
+  const started = spawnSafe('npm', args, {
     cwd: input.runtimeHost.packageDir,
-    shell: false,
     env: createCleanCliEnv(),
   })
+  if (!started.ok) {
+    throw new Error(`Unable to start npm list: ${started.error.message}`)
+  }
+  const { child } = started
 
   const stdoutChunks: string[] = []
   const stderrChunks: string[] = []

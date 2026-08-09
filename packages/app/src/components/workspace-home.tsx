@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Fixed, non-closeable, non-reorderable Workspace Home surface (4.0a).
  * 2. Favorites above, path-input launch form in the middle, Recent below, Task Manager entry.
  * 3. Pure presentation composed by the future Workspace shell; callbacks stay owned by the caller.
+ * 4. Present a platform-neutral directory prompt for macOS, Linux, and Windows callers.
  *
  * Original request (2026-07-30): "Workspace需要记住曾经打开的目录，并且支持收藏。关键是，支持直接从目录直接启动 openspecui 服务。"
  * Owner correction (2026-07-31): "Task manager按钮应该有 bg-primary 的样式"
@@ -147,7 +148,7 @@ export function WorkspaceHome({
               onKeyDown={(event) => {
                 if (event.key === 'Enter') submit()
               }}
-              placeholder="/Users/you/projects/your-project"
+              placeholder="C:\projects\your-project or /home/you/projects/your-project"
               className="border-border bg-background focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-50"
             />
             <button

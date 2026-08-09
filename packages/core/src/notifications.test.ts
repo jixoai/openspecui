@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Verify typed terminal-control notification parsing.
  * 2. Verify stable typed notification grouping and aggregation.
  * 3. Verify root-context source grouping has no backend identity.
+ * 4. Verify OSC 7 working directories preserve host-native drive and UNC identity.
  *
  * Original checkpoint (2026-07-16): "6.15 Notifications remain project-backend scoped and add root/context health without cross-backend record merging."
  */
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   TerminalNotificationParser,
@@ -61,18 +63,32 @@ describe('TerminalNotificationParser', () => {
 
   it('extracts terminal title, cwd, and prompt state controls', () => {
     const parser = new TerminalNotificationParser()
+    const cwd = process.platform === 'win32' ? 'C:\\Users\\kzf\\project' : '/Users/kzf/project'
     const result = parser.push(
-      '\x1b]0;Claude Code\x07\x1b]7;file://host/Users/kzf/project\x07\x1b]133;A\x07\x1b]133;B\x07\x1b]133;C\x07\x1b]133;D;7\x07'
+      `\x1b]0;Claude Code\x07\x1b]7;${pathToFileURL(cwd).href}\x07\x1b]133;A\x07\x1b]133;B\x07\x1b]133;C\x07\x1b]133;D;7\x07`
     )
 
     expect(result.output).toBe('')
     expect(result.events).toEqual([
       { type: 'title', title: 'Claude Code', target: 'both' },
-      { type: 'cwd', cwd: '/Users/kzf/project' },
+      { type: 'cwd', cwd },
       { type: 'prompt-state', state: 'prompt-start' },
       { type: 'prompt-state', state: 'prompt-end' },
       { type: 'prompt-state', state: 'command-start' },
       { type: 'prompt-state', state: 'command-end', exitCode: 7 },
+    ])
+  })
+
+  it.runIf(process.platform === 'win32')('extracts Windows drive and UNC OSC 7 paths', () => {
+    const parser = new TerminalNotificationParser()
+    const result = parser.push(
+      '\x1b]7;file:///C:/Users/test/project\x07\x1b]7;file://server/share/project\x07'
+    )
+
+    expect(result.output).toBe('')
+    expect(result.events).toEqual([
+      { type: 'cwd', cwd: 'C:\\Users\\test\\project' },
+      { type: 'cwd', cwd: '\\\\server\\share\\project' },
     ])
   })
 

@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
+ * 1. Render platform-aware shortcut pages through Pixi.
+ * 2. Own shortcut page selection and command dispatch.
+ * 3. Keep shortcut layout, resize, and theme projection synchronized.
+ * 4. Retire late Pixi initialization after disconnect so detached render loops cannot survive.
+ *
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows, then handle similar portability failures."
+ */
 import { css, html, LitElement } from 'lit'
 import { createElement, SquareSlash, SquareTerminal } from 'lucide'
 import {
@@ -149,6 +158,7 @@ export class ShortcutTab extends LitElement {
   private _resizeObserver: ResizeObserver | null = null
   private _theme: PixiTheme = resolvePixiTheme(this)
   private _unsubTheme: (() => void) | null = null
+  private _connectionGeneration = 0
   private _renderedItems: RenderedShortcut[] = []
 
   constructor() {
@@ -159,6 +169,7 @@ export class ShortcutTab extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback()
+    const connectionGeneration = ++this._connectionGeneration
     this._theme = resolvePixiTheme(this)
     this._unsubTheme = onThemeChange((theme) => {
       this._theme = theme
@@ -166,10 +177,11 @@ export class ShortcutTab extends LitElement {
     }, this)
     this._ensureActivePage()
     await this.updateComplete
-    await this._initPixi()
+    await this._initPixi(connectionGeneration)
   }
 
   disconnectedCallback() {
+    this._connectionGeneration += 1
     super.disconnectedCallback()
     this._resizeObserver?.disconnect()
     this._resizeObserver = null
@@ -217,7 +229,7 @@ export class ShortcutTab extends LitElement {
     }
   }
 
-  private async _initPixi() {
+  private async _initPixi(connectionGeneration: number) {
     const host = this.shadowRoot?.querySelector('.pixi-host') as HTMLElement
     if (!host) return
 
@@ -228,6 +240,11 @@ export class ShortcutTab extends LitElement {
       resolution: window.devicePixelRatio || 1,
       autoDensity: false,
     })
+
+    if (!this.isConnected || connectionGeneration !== this._connectionGeneration) {
+      app.destroy()
+      return
+    }
 
     host.appendChild(app.canvas as HTMLCanvasElement)
     this._app = app

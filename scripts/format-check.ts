@@ -1,7 +1,18 @@
 #!/usr/bin/env tsx
+/**
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
+ * 1. Check every changed supported text file with the repository formatter.
+ * 2. Invoke pnpm without asking Node to execute a Windows command shim directly.
+ * 3. Bound formatter argv batches so large Windows worktrees do not exceed the
+ *    command-line length limit.
+ *
+ * Original request (2026-08-04): "Make equivalent package scripts work on Windows."
+ */
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import process from 'node:process'
+import { splitArgumentsByLength } from './lib/argument-batches'
+import { resolvePnpmInvocation } from './lib/pnpm-invocation.mjs'
 
 const SUPPORTED_EXTENSIONS = new Set([
   '.cjs',
@@ -40,6 +51,10 @@ function hasSupportedExtension(file: string): boolean {
   return SUPPORTED_EXTENSIONS.has(file.slice(dotIndex))
 }
 
+// `pnpm exec` may still cross an npm-style `.cmd` boundary internally on Windows,
+// whose practical command-line limit is lower than CreateProcess' native limit.
+const FORMATTER_ARGV_LIMIT = 4_000
+
 function getChangedFiles(): string[] {
   const baseSha = process.env.FORMAT_CHECK_BASE_SHA?.trim()
   if (baseSha) {
@@ -72,11 +87,29 @@ function main(): number {
   }
 
   console.log(`[format:check] Checking ${changedFiles.length} changed file(s).`)
-  const pnpmCmd = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-  const result = spawnSync(pnpmCmd, ['exec', 'prettier', '--check', ...changedFiles], {
-    stdio: 'inherit',
-  })
-  return result.status ?? 1
+  const fixedArgs = ['exec', 'prettier', '--check']
+  const invocation = resolvePnpmInvocation(fixedArgs)
+  const batches = splitArgumentsByLength(
+    invocation.command,
+    fixedArgs,
+    changedFiles,
+    FORMATTER_ARGV_LIMIT
+  )
+  console.log(`[format:check] Running ${batches.length} formatter batch(es).`)
+
+  for (const [index, files] of batches.entries()) {
+    const result = spawnSync(invocation.command, [...invocation.args, ...files], {
+      stdio: 'inherit',
+      windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+    })
+    if (result.error) throw result.error
+    if ((result.status ?? 1) !== 0) return result.status ?? 1
+    console.log(
+      `[format:check] Batch ${index + 1}/${batches.length} passed (${files.length} file(s)).`
+    )
+  }
+
+  return 0
 }
 
 process.exit(main())

@@ -1,8 +1,10 @@
 {
-  // Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+  // Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
   // 1. Typecheck CLI against workspace source contracts without generated-package artifacts.
   // 2. Preserve CLI-local module path mappings while mirroring required Core subpaths.
+  // 3. Typecheck package-local operational scripts with the CLI source graph.
   // Release correction (2026-07-31): resolve Store-content Core source types in clean CI.
+  // Windows correction (2026-08-04): typecheck the platform-neutral Web asset projection script.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
@@ -37,6 +39,7 @@
     }
   },
   "include": [
+    "scripts/**/*",
     "src/**/*",
     "src/**/*.tsx",
     "../server/src/**/*.ts",

@@ -1,18 +1,23 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Own lexical and existing-ancestor physical confinement for root-scoped mutations.
- * 2. Execute direct or atomic UTF-8 write, directory-create, remove, and guarded external mutations.
+ * 2. Execute direct or atomic UTF-8 write, including bounded Windows replacement retries.
  * 3. Settle overlapping reactive projections before returning any terminal outcome.
  * 4. Keep TOCTOU and hard-link alias limitations explicit at the mutation seam.
  *
  * Original request (2026-07-16): "建立唯一的 physical/reactive entity-write owner。"
  * Original request (2026-07-16): "Schema/Template mutations must reject symlink escape and settle reactive projections before success."
  * Derived requirement (2026-08-02): "Raw Active Root YAML uses same-directory atomic replacement before reactive settlement."
+ * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
  */
 import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, open, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { settleReactiveFileWrite, settleReactivePathMutation } from './reactive-fs/index.js'
+
+const WINDOWS_FILE_REPLACEMENT_RETRY_LIMIT = 80
+const WINDOWS_FILE_REPLACEMENT_RETRY_DELAY_MS = 25
 
 /** One non-root path selected relative to an existing physical ownership root. */
 export interface PhysicalReactivePathTarget {
@@ -52,6 +57,34 @@ function isMissingPath(error: unknown): boolean {
     'code' in error &&
     (error as { code?: unknown }).code === 'ENOENT'
   )
+}
+
+function isRetryableWindowsFileReplacementError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return false
+  const code = (error as { code?: unknown }).code
+  return code === 'EACCES' || code === 'EBUSY' || code === 'EPERM'
+}
+
+/** Commit one prepared replacement through rename, retrying transient Windows file locks. */
+export async function replaceFileAtomically(
+  temporaryPath: string,
+  targetPath: string
+): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rename(temporaryPath, targetPath)
+      return
+    } catch (error) {
+      if (
+        process.platform !== 'win32' ||
+        !isRetryableWindowsFileReplacementError(error) ||
+        attempt >= WINDOWS_FILE_REPLACEMENT_RETRY_LIMIT
+      ) {
+        throw error
+      }
+      await delay(WINDOWS_FILE_REPLACEMENT_RETRY_DELAY_MS)
+    }
+  }
 }
 
 function ensureContained(rootPath: string, candidatePath: string, boundary: string): void {
@@ -216,7 +249,7 @@ export async function writeAtomicPhysicalReactiveFile(
         await temporaryFile.close()
         temporaryFile = null
         await assertMutationTarget(target)
-        await rename(temporaryPath, target.targetPath)
+        await replaceFileAtomically(temporaryPath, target.targetPath)
       } finally {
         await temporaryFile?.close().catch(() => undefined)
         await rm(temporaryPath, { force: true }).catch(() => undefined)
@@ -273,7 +306,7 @@ export async function compareAndWriteAtomicPhysicalReactiveFile(
         if (currentContent !== input.expectedContent) {
           return { state: 'conflict' as const, content: currentContent }
         }
-        await rename(temporaryPath, target.targetPath)
+        await replaceFileAtomically(temporaryPath, target.targetPath)
         committed = true
         return { state: 'written' as const }
       } finally {

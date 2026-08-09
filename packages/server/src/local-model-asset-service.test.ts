@@ -1,3 +1,13 @@
+/**
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
+ * 1. Resolve local translation model catalogs and versioned profile manifests.
+ * 2. Own resumable download, pause, cancellation, retry, and progress lifecycle.
+ * 3. Materialize downloaded profiles and platform-appropriate Hugging Face cache pointers.
+ * 4. Keep persisted-state observation bounded to Windows filesystem scheduling without relaxing Unix timing.
+ *
+ * Original request (2026-08-04): "Adapt macOS-first development and runtime paths to Windows."
+ * Original request (2026-08-06): "?? Windows ???????????????????"
+ */
 import {
   LocalModelLifecycleGroupStateSchema,
   LocalModelProfileManifestSchema,
@@ -29,6 +39,7 @@ const TEST_GROUP_Q4 = `q4-${TEST_SHORT_COMMIT_HASH}`
 const TEST_GROUP_Q4F16 = `q4f16-${TEST_SHORT_COMMIT_HASH}`
 const TEST_GROUP_BNB4 = `bnb4-${TEST_SHORT_COMMIT_HASH}`
 const TEST_GROUP_Q8 = `q8-${TEST_SHORT_COMMIT_HASH}`
+const LOCAL_MODEL_STATE_WAIT_TIMEOUT_MS = process.platform === 'win32' ? 5_000 : 1_000
 
 function testRepositoryFile(path: string, size: number) {
   return {
@@ -2354,7 +2365,7 @@ async function waitForState(
     status?: string
     files?: Array<{ path?: string; downloadedBytes?: number }>
   }> = []
-  while (Date.now() - startedAt < 1000) {
+  while (Date.now() - startedAt < LOCAL_MODEL_STATE_WAIT_TIMEOUT_MS) {
     const content = await readFile(indexPath, 'utf8').catch(() => '[]')
     const parsed = JSON.parse(content) as Array<{
       status?: string

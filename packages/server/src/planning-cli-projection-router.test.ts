@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Prove public Planning CLI lifecycle subscriptions rebind across real Manager Root replacement.
  * 2. Reject late Archive-instructions callbacks from Root A after Root B becomes current.
- * 3. Keep the fixture typechecked through createServer, Context, and the public tRPC caller.
+ * 3. Keep the fixture typechecked and settle shared watcher owners before Windows cleanup.
  * 4. Prove the compatibility Change-list query reads the same typed CLI Projection Work.
  *
  * Original request (2026-07-26): "操作成功底层是要推送变更的，然后让多端基于订阅拉取更新。"
  * Owner architecture clarification (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
+ * Original request (2026-08-06): "Windows compatibility and adaptation, including the core and peripheral scripts."
  */
 import {
   CliContextSchema,
@@ -18,12 +19,17 @@ import {
   type CliDoctor,
   type CliProjectionNotice,
 } from '@openspecui/core'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PlanningCliProjectionService } from './planning-cli-projection-service.js'
 import { appRouter } from './router.js'
+import {
+  disposeServerTestFixture,
+  removeServerTestDirectories,
+  SERVER_FIXTURE_TEST_TIMEOUT_MS,
+} from './server-test-cleanup.js'
 import { createServer } from './server.js'
 
 const disposers: Array<() => Promise<void>> = []
@@ -51,7 +57,7 @@ function lifecycleNotice(identity: string): CliProjectionNotice {
 afterEach(async () => {
   vi.restoreAllMocks()
   await Promise.all(disposers.splice(0).map((dispose) => dispose()))
-})
+}, SERVER_FIXTURE_TEST_TIMEOUT_MS)
 
 describe('public Planning CLI projection Router', () => {
   it('serves the compatibility Change list from typed CLI Projection Work', async () => {
@@ -60,15 +66,8 @@ describe('public Planning CLI projection Router', () => {
     await mkdir(join(launchRoot, 'openspec', 'changes', 'physical-only'), { recursive: true })
     const server = createServer({ projectDir: launchRoot, enableWatcher: false })
     disposers.push(async () => {
-      await server.storeObservationFallback.dispose()
-      await server.planningRootServices.dispose()
-      await server.storeObservation.dispose()
-      await server.dataHomeObserver.dispose()
-      server.projectInvalidation.dispose()
-      await server.observationEnvironment.dispose()
-      server.projectRecoveryService.dispose()
-      server.translationCacheService.close()
-      await rm(tempDir, { recursive: true, force: true })
+      await disposeServerTestFixture(server)
+      await removeServerTestDirectories([tempDir])
     })
     vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
       available: true,
@@ -125,15 +124,8 @@ describe('public Planning CLI projection Router', () => {
     )
     const server = createServer({ projectDir: launchRoot, enableWatcher: false })
     disposers.push(async () => {
-      await server.storeObservationFallback.dispose()
-      await server.planningRootServices.dispose()
-      await server.storeObservation.dispose()
-      await server.dataHomeObserver.dispose()
-      server.projectInvalidation.dispose()
-      await server.observationEnvironment.dispose()
-      server.projectRecoveryService.dispose()
-      server.translationCacheService.close()
-      await rm(tempDir, { recursive: true, force: true })
+      await disposeServerTestFixture(server)
+      await removeServerTestDirectories([tempDir])
     })
     let selectedRoot = rootA
     vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({

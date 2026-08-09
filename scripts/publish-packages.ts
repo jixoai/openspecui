@@ -1,11 +1,13 @@
 #!/usr/bin/env bun
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
  * 1. Publish only registry-missing public workspace versions in dependency order.
  * 2. Recover missing Changesets tags independently from registry publication.
  * 3. Emit an objective workflow release/no-op decision.
+ * 4. Execute registry, VCS, and package-manager subprocesses through one command owner.
  *
  * Original request (2026-07-28): "我想先发布一个beta版本"
+ * Original request (2026-08-04): "这个项目之前都是在macOS上做到开发，现在我们在Windows，所以开始一系列的适配。"
  */
 
 import { spawnSync } from 'node:child_process'
@@ -13,6 +15,7 @@ import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 
+import { resolveCommandInvocation } from './lib/command-invocation.mjs'
 import { createPackageReleaseWork } from './lib/publish-packages/release-work'
 import { preparePublishDirectory, resolveRepositoryUrl } from './lib/publish-packages/repository'
 import {
@@ -28,18 +31,13 @@ type CaptureResult = {
   stdout: string
 }
 
-function commandFor(bin: 'git' | 'npm' | 'pnpm'): string {
-  if (process.platform === 'win32') {
-    return `${bin}.cmd`
-  }
-  return bin
-}
-
 function runCapture(command: string, args: string[], cwd: string): CaptureResult {
-  const result = spawnSync(command, args, {
+  const invocation = resolveCommandInvocation(command, args)
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
   })
   return {
     status: result.status ?? 1,
@@ -49,9 +47,11 @@ function runCapture(command: string, args: string[], cwd: string): CaptureResult
 }
 
 function runInherit(command: string, args: string[], cwd: string): void {
-  const result = spawnSync(command, args, {
+  const invocation = resolveCommandInvocation(command, args)
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd,
     stdio: 'inherit',
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
   })
   if ((result.status ?? 1) !== 0) {
     throw new Error(`${command} ${args.join(' ')} failed with code ${result.status ?? 1}`)
@@ -64,11 +64,7 @@ function isMissingPackageError(result: CaptureResult): boolean {
 }
 
 function isVersionPublished(rootDir: string, pkg: PublishablePackage): boolean {
-  const result = runCapture(
-    commandFor('npm'),
-    ['view', `${pkg.name}@${pkg.version}`, 'version'],
-    rootDir
-  )
+  const result = runCapture('npm', ['view', `${pkg.name}@${pkg.version}`, 'version'], rootDir)
   if (result.status === 0) {
     return result.stdout === pkg.version
   }
@@ -93,7 +89,7 @@ function publishPackage(
   console.log(`[publish] ${pkg.name}@${pkg.version}`)
 
   try {
-    runInherit(commandFor('npm'), args, prepared.dir)
+    runInherit('npm', args, prepared.dir)
   } finally {
     prepared.cleanup()
   }
@@ -101,13 +97,13 @@ function publishPackage(
 
 function createChangesetTags(rootDir: string): void {
   console.log('[publish] creating release tags via changeset tag')
-  runInherit(commandFor('pnpm'), ['exec', 'changeset', 'tag'], rootDir)
+  runInherit('pnpm', ['exec', 'changeset', 'tag'], rootDir)
 }
 
 function localTagExists(rootDir: string, pkg: PublishablePackage): boolean {
   const tag = getPackageReleaseTag(pkg.name, pkg.version)
   const result = runCapture(
-    commandFor('git'),
+    'git',
     ['rev-parse', '--verify', '--quiet', `refs/tags/${tag}`],
     rootDir
   )

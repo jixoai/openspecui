@@ -1,4 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
+ * 1. Read and classify GitHub PR mergeability for release automation.
+ * 2. Execute GitHub CLI through the shared shell-independent command owner.
+ *
+ * Original request (2026-07-28): "Publish a beta version first."
+ * Original request (2026-08-04): "The project was developed on macOS and now needs Windows adaptation."
+ */
 import { spawnSync } from 'node:child_process'
+
+import { resolveCommandInvocation } from '../command-invocation.mjs'
 
 const DEFAULT_POLL_INTERVAL_MS = 5000
 const READY_MERGE_STATES = new Set(['CLEAN', 'HAS_HOOKS', 'UNSTABLE'])
@@ -21,14 +31,12 @@ type WaitOptions = {
   sleepMs?: (ms: number) => void
 }
 
-function commandForGh(): string {
-  return process.platform === 'win32' ? 'gh.exe' : 'gh'
-}
-
 function runCaptureResult(args: string[]): CaptureRunResult {
-  const result = spawnSync(commandForGh(), args, {
+  const invocation = resolveCommandInvocation('gh', args)
+  const result = spawnSync(invocation.command, invocation.args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
   })
   return {
     status: result.status ?? 1,

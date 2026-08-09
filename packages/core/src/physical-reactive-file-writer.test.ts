@@ -1,14 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove write, directory-create, remove, and external mutations share physical confinement.
  * 2. Prove owned mutations settle file, directory, existence, and stat projections before return.
  * 3. Prove direct settlement reaches multiple reactive subscribers without watcher timing.
- * 4. Prove atomic replacement changes the inode without exposing temporary files to settled projections.
+ * 4. Prove atomic replacement changes the inode and survives transient Windows target locks.
  *
  * Original request (2026-07-16): "Schema/Template mutations must reject symlink escape and settle reactive projections before success."
  * Derived requirement (2026-08-02): "Raw Active Root YAML settles only after same-directory atomic replacement."
+ * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
  */
-import { lstat, mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readFile, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
@@ -16,6 +17,7 @@ import {
   compareAndWriteAtomicPhysicalReactiveFile,
   createPhysicalReactiveDirectory,
   removePhysicalReactivePath,
+  replaceFileAtomically,
   runPhysicalReactivePathMutation,
   writeAtomicPhysicalReactiveFile,
   writePhysicalReactiveFile,
@@ -59,7 +61,7 @@ describe('physical reactive path mutations', () => {
     const schemaRelativePath = join('openspec', 'schemas', 'demo')
     const escapedDirectory = join(rootPath, schemaRelativePath, 'escaped')
     await writeFile(join(externalPath, 'outside.md'), '# Outside\n', 'utf8')
-    await symlink(externalPath, escapedDirectory, 'dir')
+    await symlink(externalPath, escapedDirectory, process.platform === 'win32' ? 'junction' : 'dir')
 
     await expect(
       writePhysicalReactiveFile({
@@ -82,6 +84,9 @@ describe('physical reactive path mutations', () => {
     ).rejects.toThrow(/physical root/i)
     await expect(readFile(join(externalPath, 'written.md'), 'utf8')).rejects.toThrow()
     await expect(readFile(join(externalPath, 'outside.md'), 'utf8')).resolves.toBe('# Outside\n')
+
+    // Windows file symlinks require an elevated privilege, while junctions above cover directory escape.
+    if (process.platform === 'win32') return
 
     const externalTarget = join(externalPath, 'target.md')
     const linkedTarget = join(rootPath, schemaRelativePath, 'target.md')
@@ -234,6 +239,29 @@ describe('physical reactive path mutations', () => {
     })
     await stream.return(undefined)
   })
+
+  it.runIf(process.platform === 'win32')(
+    'retries a prepared replacement until a transient Windows target lock is released',
+    async () => {
+      const temporaryPath = join(rootPath, 'replacement.tmp')
+      const targetPath = join(rootPath, 'replacement.txt')
+      await writeFile(temporaryPath, 'replacement\n', 'utf8')
+      await writeFile(targetPath, 'original\n', 'utf8')
+      const targetHandle = await open(targetPath, 'r')
+      let targetClosed = false
+
+      try {
+        const replacement = replaceFileAtomically(temporaryPath, targetPath)
+        await new Promise((resolve) => setTimeout(resolve, 750))
+        await targetHandle.close()
+        targetClosed = true
+        await expect(replacement).resolves.toBeUndefined()
+        await expect(readFile(targetPath, 'utf8')).resolves.toBe('replacement\n')
+      } finally {
+        if (!targetClosed) await targetHandle.close()
+      }
+    }
+  )
 
   it('rejects externally replaced bytes and settles the external source without overwriting it', async () => {
     const targetDirectoryPath = join(rootPath, 'openspec', 'schemas', 'demo')

@@ -1,8 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Original request (2026-08-04): "The project was developed on macOS and now needs Windows adaptation."
+ * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
  * 1. Prove runtime-host manifest discovery and package-manager tree parsing.
  * 2. Prove on-demand runtime ranges use installed optional dependencies or optional peers.
  * 3. Prove legacy duplicated runtime dependency records are normalized safely.
+ * 4. Prove the runtime npm probe executes through the shared shell-independent spawn owner.
  *
  * Original request (2026-07-31): "这个依赖好像会导致安装的时候仍然会被强制装上去，可能要改成 peerDependencies 会更好"
  */
@@ -14,6 +16,7 @@ import {
   hasRuntimePackageDependencyPath,
   normalizeRuntimeHostOptionalDependencies,
   readRuntimeHostPackageDependencyRequest,
+  readRuntimeHostPackageDependencyTree,
   resolveRuntimeHostPackageContext,
   type RuntimeHostPackageContext,
   type RuntimePackageDependencyTreeNode,
@@ -149,6 +152,27 @@ describe('hasRuntimePackageDependencyPath', () => {
     ).toBe(true)
     expect(hasRuntimePackageDependencyPath(tree, ['onnxruntime-node'])).toBe(false)
   })
+})
+
+describe('readRuntimeHostPackageDependencyTree', () => {
+  afterEach(async () => {
+    await Promise.all(createdDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  })
+
+  it('runs npm through the shell-independent Core spawn owner', async () => {
+    const dir = await createTempTree()
+    await writeFile(
+      join(dir, 'package.json'),
+      JSON.stringify({ name: 'openspecui-runtime-fixture', version: '1.0.0' }, null, 2)
+    )
+
+    const tree = await readRuntimeHostPackageDependencyTree({
+      runtimeHost: createRuntimeHostContext(dir),
+      packageNames: [],
+    })
+
+    expect(tree).toMatchObject({ name: 'openspecui-runtime-fixture', version: '1.0.0' })
+  }, 20_000)
 })
 
 describe('normalizeRuntimeHostOptionalDependencies', () => {

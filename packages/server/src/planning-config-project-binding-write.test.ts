@@ -1,14 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-20 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove launch Project Binding writes reject intermediate and final config symlink escapes.
  * 2. Prove the physical owner settles file, directory, existence, and stat projections before return.
  * 3. Preserve launch-write reread evidence for both config.yaml and config.yml ownership.
+ * 4. Use junction evidence and explicit file-symlink capability bounds on Windows.
  *
  * Original request (2026-07-19): "Project Binding launch writes must use the physical/reactive owner."
  */
 import {
   clearCache,
-  closeAllWatchers,
   ReactiveContext,
   reactiveExists,
   reactiveReadDir,
@@ -16,13 +16,15 @@ import {
   reactiveStat,
   updateProjectBindingContent,
 } from '@openspecui/core'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { writeProjectBindingConfig } from './planning-config-service.js'
+import { removeServerTestDirectories } from './server-test-cleanup.js'
 
 const tempDirs: string[] = []
+const fileSymlinkTest = process.platform === 'win32' ? it.skip : it
 
 async function createTempDir(prefix: string): Promise<string> {
   const path = await mkdtemp(join(tmpdir(), prefix))
@@ -32,8 +34,7 @@ async function createTempDir(prefix: string): Promise<string> {
 
 afterEach(async () => {
   clearCache()
-  await closeAllWatchers()
-  await Promise.all(tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+  await removeServerTestDirectories(tempDirs.splice(0))
 })
 
 describe('Project Binding physical/reactive launch owner', () => {
@@ -170,7 +171,11 @@ describe('Project Binding physical/reactive launch owner', () => {
     const externalRoot = await createTempDir('openspecui-binding-external-')
     const externalConfig = join(externalRoot, 'config.yaml')
     await writeFile(externalConfig, 'store: external\n', 'utf8')
-    await symlink(externalRoot, join(launchRoot, 'openspec'), 'dir')
+    await symlink(
+      externalRoot,
+      join(launchRoot, 'openspec'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
 
     await expect(
       writeProjectBindingConfig({
@@ -181,7 +186,7 @@ describe('Project Binding physical/reactive launch owner', () => {
     await expect(readFile(externalConfig, 'utf8')).resolves.toBe('store: external\n')
   })
 
-  it.each(['yaml', 'yml'] as const)(
+  fileSymlinkTest.each(['yaml', 'yml'] as const)(
     'rejects a final config.%s symlink without changing its external file',
     async (extension) => {
       const launchRoot = await createTempDir(`openspecui-binding-${extension}-`)

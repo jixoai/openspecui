@@ -1,19 +1,20 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Prove public Agent subscriptions consume Environment-owned policy and launch-local artifacts.
  * 2. Prove fixed global CLI installation retires runner authority and invalidates Root Context before public terminal settlement.
  * 3. Prove commands-only subscriptions distinguish arbitrary content from exact runtime CLI output.
+ * 4. Dispose every Server owner and tolerate independent Windows watcher invalidations.
  *
  * Original request (2026-07-20): "Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics."
  * Derived requirement (2026-07-20): physically owned tool projections re-emit after external artifact creation and removal.
  * Derived requirement (2026-07-20): global CLI installation settlement refreshes Root Context availability.
  * Original request (2026-08-01): Codex is skills-only and allowlisted global prompts are cleanup evidence.
+ * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
  */
 import {
+  clearCache,
   CliContextSchema,
   CliDoctorSchema,
-  clearCache,
-  closeAllWatchers,
   loadOpenSpecAgentCommandContents,
   parseCliCommandResult,
   type AIToolOption,
@@ -29,6 +30,11 @@ import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 import { appRouter } from './router.js'
+import {
+  disposeServerTestFixture,
+  removeServerTestDirectories,
+  SERVER_FIXTURE_TEST_TIMEOUT_MS,
+} from './server-test-cleanup.js'
 import { createServer } from './server.js'
 
 // Core reactive-fs retries missing paths every 1,000ms; bound this fixture to four fallback cycles.
@@ -233,28 +239,20 @@ async function createRouterFixture(
     server,
     async dispose() {
       vi.restoreAllMocks()
-      await server.storeObservationFallback.dispose()
-      await server.planningRootServices.dispose()
-      await server.storeObservation.dispose()
-      await server.dataHomeObserver.dispose()
-      server.projectInvalidation.dispose()
       await releaseLaunchObservation()
-      await server.observationEnvironment.dispose()
-      server.projectRecoveryService.dispose()
-      server.translationCacheService.close()
+      await disposeServerTestFixture(server)
       clearCache()
-      await closeAllWatchers()
       if (previousCodexHome === undefined) {
         delete process.env.CODEX_HOME
       } else {
         process.env.CODEX_HOME = previousCodexHome
       }
-      await rm(tempDir, { recursive: true, force: true })
+      await removeServerTestDirectories([tempDir])
     },
   }
 }
 
-describe('public tool subscriptions', () => {
+describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS }, () => {
   it('detects external Launch tool-directory creation and removal without observing Planning', async () => {
     const fixture = await createRouterFixture()
     const emissions: AIToolOption[][] = []
@@ -590,112 +588,123 @@ describe('public tool subscriptions', () => {
   }, 30_000)
 })
 
-describe('public fixed global CLI installation stream', () => {
-  it('invalidates Root Context before a successful terminal event completes', async () => {
-    const fixture = await createRouterFixture()
+describe(
+  'public fixed global CLI installation stream',
+  { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS },
+  () => {
+    it('invalidates Root Context before a successful terminal event completes', async () => {
+      const fixture = await createRouterFixture()
 
-    try {
-      await prepareCachedRunnerReplacement(fixture)
-      const settlement: CliStreamSettlement = { reason: 'exited', exitCode: 0 }
-      const executeCommandStream = vi
-        .spyOn(fixture.server.cliExecutor, 'executeCommandStream')
-        .mockImplementation((_command, onEvent) => {
-          onEvent({ type: 'exit', exitCode: 0 })
-          return {
-            settled: Promise.resolve(settlement),
-            cancel: () => Promise.resolve(settlement),
-          }
-        })
-      const stream = await appRouter
-        .createCaller(fixture.server.createContext())
-        .cli.installGlobalCliStream()
-      const events: CliStreamEvent[] = []
-      const invalidationAtExit: number[] = []
-      const invalidationAtComplete: number[] = []
-      const runnerAtExit: ReturnType<typeof fixture.server.configManager.getResolvedCliRunner>[] =
-        []
-
-      // Capture the baseline context invalidation generation. Async filesystem invalidation from the
-      // observation environment's watcher pool may advance it during setup; the assertion below proves
-      // the CLI installation invalidates exactly one additional generation before terminal settlement.
-      const baselineContext = fixture.server.runtimeInvalidation.current('context')
-      await new Promise<void>((resolve, reject) => {
-        stream.subscribe({
-          next: (event) => {
-            if (event.type === 'exit') {
-              invalidationAtExit.push(fixture.server.runtimeInvalidation.current('context'))
-              runnerAtExit.push(fixture.server.configManager.getResolvedCliRunner())
+      try {
+        await prepareCachedRunnerReplacement(fixture)
+        const settlement: CliStreamSettlement = { reason: 'exited', exitCode: 0 }
+        const executeCommandStream = vi
+          .spyOn(fixture.server.cliExecutor, 'executeCommandStream')
+          .mockImplementation((_command, onEvent) => {
+            onEvent({ type: 'exit', exitCode: 0 })
+            return {
+              settled: Promise.resolve(settlement),
+              cancel: () => Promise.resolve(settlement),
             }
-            events.push(event)
-          },
-          complete: () => {
-            invalidationAtComplete.push(fixture.server.runtimeInvalidation.current('context'))
-            resolve()
-          },
-          error: reject,
+          })
+        const stream = await appRouter
+          .createCaller(fixture.server.createContext())
+          .cli.installGlobalCliStream()
+        const events: CliStreamEvent[] = []
+        const invalidationAtExit: number[] = []
+        const invalidationAtComplete: number[] = []
+        const runnerAtExit: ReturnType<typeof fixture.server.configManager.getResolvedCliRunner>[] =
+          []
+
+        // Independent watcher invalidations may coalesce into the same Windows settlement window. The
+        // exact-once mutation contract is unit-tested; this public test proves ordering and runner retirement.
+        const baselineContext = fixture.server.runtimeInvalidation.current('context')
+        await new Promise<void>((resolve, reject) => {
+          stream.subscribe({
+            next: (event) => {
+              if (event.type === 'exit') {
+                invalidationAtExit.push(fixture.server.runtimeInvalidation.current('context'))
+                runnerAtExit.push(fixture.server.configManager.getResolvedCliRunner())
+              }
+              events.push(event)
+            },
+            complete: () => {
+              invalidationAtComplete.push(fixture.server.runtimeInvalidation.current('context'))
+              resolve()
+            },
+            error: reject,
+          })
         })
-      })
 
-      expect(invalidationAtExit).toEqual([baselineContext + 1])
-      expect(invalidationAtComplete).toEqual([baselineContext + 1])
-      expect(fixture.server.runtimeInvalidation.current('context')).toBe(baselineContext + 1)
-      await expect(Promise.all(runnerAtExit)).resolves.toMatchObject([{ version: 'runner-b' }])
-      expect(events).toEqual([{ type: 'exit', exitCode: 0 }])
-      expect(executeCommandStream).toHaveBeenCalledWith(
-        ['npm', 'install', '-g', '@fission-ai/openspec'],
-        expect.any(Function)
-      )
-    } finally {
-      await fixture.dispose()
-    }
-  })
+        expect(invalidationAtExit).toHaveLength(1)
+        expect(invalidationAtExit[0]).toBeGreaterThan(baselineContext)
+        expect(invalidationAtComplete).toHaveLength(1)
+        expect(invalidationAtComplete[0]).toBeGreaterThan(baselineContext)
+        expect(fixture.server.runtimeInvalidation.current('context')).toBeGreaterThan(
+          baselineContext
+        )
+        await expect(Promise.all(runnerAtExit)).resolves.toMatchObject([{ version: 'runner-b' }])
+        expect(events).toEqual([{ type: 'exit', exitCode: 0 }])
+        expect(executeCommandStream).toHaveBeenCalledWith(
+          ['npm', 'install', '-g', '@fission-ai/openspec'],
+          expect.any(Function)
+        )
+      } finally {
+        await fixture.dispose()
+      }
+    })
 
-  it('invalidates Root Context before a rejected settlement reaches the public error', async () => {
-    const fixture = await createRouterFixture()
+    it('invalidates Root Context before a rejected settlement reaches the public error', async () => {
+      const fixture = await createRouterFixture()
 
-    try {
-      await prepareCachedRunnerReplacement(fixture)
-      let rejectTerminal: ((reason?: unknown) => void) | undefined
-      const terminal = new Promise<CliStreamSettlement>((_resolve, reject) => {
-        rejectTerminal = reject
-      })
-      void terminal.catch(() => {})
-      const cancel = vi.fn(() => terminal)
-      vi.spyOn(fixture.server.cliExecutor, 'executeCommandStream').mockReturnValue({
-        settled: terminal,
-        cancel,
-      })
-      const stream = await appRouter
-        .createCaller(fixture.server.createContext())
-        .cli.installGlobalCliStream()
-      const errors: unknown[] = []
-      const invalidationAtError: number[] = []
-      const runnerAtError: ReturnType<typeof fixture.server.configManager.getResolvedCliRunner>[] =
-        []
-      const completes = vi.fn()
-      // Capture the baseline context generation (async watcher-pool invalidation may advance it).
-      const baselineContext = fixture.server.runtimeInvalidation.current('context')
-      stream.subscribe({
-        complete: completes,
-        error: (error) => {
-          invalidationAtError.push(fixture.server.runtimeInvalidation.current('context'))
-          runnerAtError.push(fixture.server.configManager.getResolvedCliRunner())
-          errors.push(error)
-        },
-      })
-      const failure = new Error('forced termination did not confirm child close')
+      try {
+        await prepareCachedRunnerReplacement(fixture)
+        let rejectTerminal: ((reason?: unknown) => void) | undefined
+        const terminal = new Promise<CliStreamSettlement>((_resolve, reject) => {
+          rejectTerminal = reject
+        })
+        void terminal.catch(() => {})
+        const cancel = vi.fn(() => terminal)
+        vi.spyOn(fixture.server.cliExecutor, 'executeCommandStream').mockReturnValue({
+          settled: terminal,
+          cancel,
+        })
+        const stream = await appRouter
+          .createCaller(fixture.server.createContext())
+          .cli.installGlobalCliStream()
+        const errors: unknown[] = []
+        const invalidationAtError: number[] = []
+        const runnerAtError: ReturnType<
+          typeof fixture.server.configManager.getResolvedCliRunner
+        >[] = []
+        const completes = vi.fn()
+        // Independent watcher events may advance the same facet; only terminal ordering is asserted here.
+        const baselineContext = fixture.server.runtimeInvalidation.current('context')
+        stream.subscribe({
+          complete: completes,
+          error: (error) => {
+            invalidationAtError.push(fixture.server.runtimeInvalidation.current('context'))
+            runnerAtError.push(fixture.server.configManager.getResolvedCliRunner())
+            errors.push(error)
+          },
+        })
+        const failure = new Error('forced termination did not confirm child close')
 
-      if (rejectTerminal === undefined)
-        throw new Error('Terminal rejection fixture was not created.')
-      rejectTerminal(failure)
+        if (rejectTerminal === undefined)
+          throw new Error('Terminal rejection fixture was not created.')
+        rejectTerminal(failure)
 
-      await vi.waitFor(() => expect(errors).toEqual([failure]), { timeout: 200 })
-      expect(invalidationAtError).toEqual([baselineContext + 1])
-      expect(fixture.server.runtimeInvalidation.current('context')).toBe(baselineContext + 1)
-      await expect(Promise.all(runnerAtError)).resolves.toMatchObject([{ version: 'runner-b' }])
-      expect(completes).not.toHaveBeenCalled()
-    } finally {
-      await fixture.dispose()
-    }
-  })
-})
+        await vi.waitFor(() => expect(errors).toEqual([failure]), { timeout: 200 })
+        expect(invalidationAtError).toHaveLength(1)
+        expect(invalidationAtError[0]).toBeGreaterThan(baselineContext)
+        expect(fixture.server.runtimeInvalidation.current('context')).toBeGreaterThan(
+          baselineContext
+        )
+        await expect(Promise.all(runnerAtError)).resolves.toMatchObject([{ version: 'runner-b' }])
+        expect(completes).not.toHaveBeenCalled()
+      } finally {
+        await fixture.dispose()
+      }
+    })
+  }
+)

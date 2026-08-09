@@ -1,14 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Prove the public Search subscription remains registered.
  * 2. Prove Search queries delegate through the Manager-owned Planning-root service.
  * 3. Prove query and subscription normalize source scope at the public boundary.
  * 4. Prove two public clients retain independent physical Search dependencies.
+ * 5. Settle shared watcher owners before removing Windows Search fixtures.
  *
  * Original request (2026-07-16): "你先负责后端（内核）的开发，我让ClaudeCode先帮你吧前端相关的代码先初步做一下。"
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  * Derived requirement (2026-07-19): Shared provider work cannot retire a waiting Search client.
+ * Original request (2026-08-06): "Windows compatibility and adaptation, including the core and peripheral scripts."
  */
 import {
   clearCache,
@@ -21,13 +23,18 @@ import {
 } from '@openspecui/core'
 import type { SearchHit } from '@openspecui/search'
 import { NodeWorkerSearchProvider } from '@openspecui/search/node'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 import { appRouter } from './router.js'
 import { SearchService } from './search-service.js'
+import {
+  disposeServerTestFixture,
+  removeServerTestDirectories,
+  SERVER_FIXTURE_TEST_TIMEOUT_MS,
+} from './server-test-cleanup.js'
 import { createServer } from './server.js'
 
 type ServerFixture = ReturnType<typeof createServer>
@@ -115,22 +122,15 @@ async function createSearchCaller() {
 }
 
 async function disposeFixture({ projectDir, server }: (typeof fixtures)[number]) {
-  await server.storeObservationFallback.dispose()
-  await server.planningRootServices.dispose()
-  await server.storeObservation.dispose()
-  await server.dataHomeObserver.dispose()
-  server.projectInvalidation.dispose()
-  await server.observationEnvironment.dispose()
-  server.projectRecoveryService.dispose()
-  server.translationCacheService.close()
-  await rm(projectDir, { recursive: true, force: true })
+  await disposeServerTestFixture(server)
+  await removeServerTestDirectories([projectDir])
 }
 
 afterEach(async () => {
   await Promise.all(fixtures.splice(0).map(disposeFixture))
   clearCache()
   vi.restoreAllMocks()
-})
+}, SERVER_FIXTURE_TEST_TIMEOUT_MS)
 
 function createSpecMarkdown(marker: string): string {
   return `# Auth Specification
@@ -164,7 +164,7 @@ const activeRootHit = {
   updatedAt: 1,
 } satisfies SearchHit
 
-describe('search router', () => {
+describe('search router', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS }, () => {
   it('registers search.subscribe procedure', async () => {
     const { caller } = await createSearchCaller()
     expect(caller.search.subscribe).toBeTypeOf('function')

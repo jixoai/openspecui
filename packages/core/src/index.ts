@@ -1,11 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Expose the public Core package contract through one stable barrel.
  * 2. Keep filesystem, CLI, Root Context, workflow/operation inputs, live, and static types source-distinct.
  * 3. Publish browser-safe subpath contracts, including Dashboard Summary v2 and the external Codex command
  *    observation root, without forcing browser runtimes through this root.
  * 4. Export the typed Git repository binding and Dashboard provenance contracts.
- * 5. Export the generic CLI-backed projection lifecycle while preserving the browser-safe subpath.
+ * 5. Export the generic CLI-backed projection lifecycle and argv-safe subprocess/invocation/tree owners while preserving browser-safe subpaths.
  *
  * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
  * Original request (2026-07-17): "Root-scoped stream startup returns an owned handle, not a void cancel function."
@@ -15,6 +15,8 @@
  * Derived requirement (2026-07-20): "Environment-global Codex command observation shares Core path truth."
  * Original request (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
  * Original request (2026-08-01): preserve typed OpenSpec 1.7 Archive Instructions publicly.
+ * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 /**
  * @openspecui/core
@@ -368,6 +370,19 @@ export {
   type ServePresentationMode,
 } from './global-settings.js'
 
+// Cross-platform non-shell child-process ownership
+export {
+  terminateChildProcessTree,
+  terminateWindowsProcessTreeByIdentity,
+} from './child-process-tree.js'
+export {
+  resolveCommandInvocation,
+  resolveWindowsCommandInvocation,
+  type CommandInvocation,
+  type CommandInvocationOptions,
+} from './command-invocation.js'
+export { spawnSafe, type SafeSpawnResult } from './spawn-safe.js'
+
 export {
   buildRuntimePackageInstallCommand,
   detectRuntimePackageManager,
@@ -631,6 +646,7 @@ export {
   compareAndWriteAtomicPhysicalReactiveFile,
   createPhysicalReactiveDirectory,
   removePhysicalReactivePath,
+  replaceFileAtomically,
   runPhysicalReactivePathMutation,
   writeAtomicPhysicalReactiveFile,
   writePhysicalReactiveFile,

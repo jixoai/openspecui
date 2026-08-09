@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * 1. Parse terminal control sequences into typed UI events without leaking control bytes.
+ * 2. Convert OSC 7 file URLs into host-native drive, UNC, or POSIX working directories.
+ *
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ */
+import { fileURLToPath } from 'node:url'
 import type {
   NotificationAction,
   NotificationPublishInput,
@@ -77,7 +85,11 @@ function parseFileUriPath(value: string): string | null {
   try {
     const url = new URL(trimmed)
     if (url.protocol !== 'file:') return null
-    return decodeURIComponent(url.pathname)
+    try {
+      return fileURLToPath(url)
+    } catch {
+      return null
+    }
   } catch {
     return trimmed
   }

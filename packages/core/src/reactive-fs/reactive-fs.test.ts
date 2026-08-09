@@ -1,21 +1,26 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-07 Asia/Shanghai):
  * 1. Verify reactive file, directory, existence, and stat projections.
  * 2. Verify cache invalidation drives ReactiveContext streams.
  * 3. Verify cached reads bind when an observation root is acquired later.
+ * 4. Reuse one stable suite-level watcher root while clearing test-owned contents between cases.
+ * 5. Settle initial Windows fixture events before asserting the next external mutation.
  *
  * Original request (2026-07-15): "操作成功底层是要推送变更的，然后让多端基于订阅拉取更新。"
  * Full-gate correction (2026-08-03): keep watcher deletion evidence bounded under full monorepo load.
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { rm, writeFile } from 'fs/promises'
 import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   cleanupTempDir,
+  cleanupTempDirContents,
   createTempDir,
   createTempFile,
   createTempSubDir,
   waitForDebounce,
+  waitForWatcherSettlement,
 } from '../__tests__/test-utils.js'
 import { ReactiveContext } from './reactive-context.js'
 import {
@@ -26,18 +31,28 @@ import {
   reactiveReadFile,
   reactiveStat,
 } from './reactive-fs.js'
-import { acquireWatcherRoot, closeAllWatchers } from './watcher-pool.js'
+import { acquireWatcherRoot, closeAllWatchers, isWatcherPoolInitialized } from './watcher-pool.js'
 
 describe('ReactiveFS', () => {
   let tempDir: string
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     tempDir = await createTempDir()
-    await acquireWatcherRoot(tempDir)
+  })
+
+  beforeEach(async () => {
+    if (!isWatcherPoolInitialized()) {
+      await acquireWatcherRoot(tempDir)
+    }
     clearCache()
   })
 
   afterEach(async () => {
+    clearCache()
+    await cleanupTempDirContents(tempDir)
+  })
+
+  afterAll(async () => {
     clearCache()
     await closeAllWatchers()
     await cleanupTempDir(tempDir)
@@ -55,6 +70,7 @@ describe('ReactiveFS', () => {
       expect(first.value).toBe('initial')
 
       const releaseRoot = await acquireWatcherRoot(tempDir)
+      await waitForWatcherSettlement()
       await writeFile(filepath, 'updated', 'utf8')
       await waitForDebounce(300)
 
@@ -98,6 +114,7 @@ describe('ReactiveFS', () => {
       // 获取初始值
       const first = await generator.next()
       expect(first.value).toBe('initial')
+      await waitForWatcherSettlement()
 
       // 修改文件
       await writeFile(filepath, 'updated', 'utf-8')
@@ -120,6 +137,7 @@ describe('ReactiveFS', () => {
       // 获取初始值
       const first = await generator.next()
       expect(first.value).toBe('content')
+      await waitForWatcherSettlement()
 
       // 删除文件
       await rm(filepath)
@@ -141,6 +159,7 @@ describe('ReactiveFS', () => {
       // 获取初始值（文件不存在）
       const first = await generator.next()
       expect(first.value).toBeNull()
+      await waitForWatcherSettlement()
 
       // 创建文件
       await writeFile(filepath, 'created', 'utf-8')
@@ -234,6 +253,7 @@ describe('ReactiveFS', () => {
       // 获取初始值
       const first = await generator.next()
       expect(first.value).toContain('initial.txt')
+      await waitForWatcherSettlement()
 
       // 添加新文件
       await createTempFile(tempDir, 'added.txt', 'content')
@@ -293,6 +313,7 @@ describe('ReactiveFS', () => {
       // 获取初始值
       const first = await generator.next()
       expect(first.value).toBe(false)
+      await waitForWatcherSettlement()
 
       // 创建文件
       await writeFile(filepath, 'content', 'utf-8')
@@ -336,6 +357,7 @@ describe('ReactiveFS', () => {
       // 获取初始值
       const first = await generator.next()
       expect(first.value).toBe(true)
+      await waitForWatcherSettlement()
 
       // 删除文件
       await rm(filepath)
@@ -463,6 +485,7 @@ describe('ReactiveFS', () => {
       // 获取初始值
       const first = await generator.next()
       expect(first.value).toBe('content1-content2')
+      await waitForWatcherSettlement()
 
       // 修改 file1
       await writeFile(file1, 'updated1', 'utf-8')
@@ -495,6 +518,7 @@ describe('ReactiveFS', () => {
       const first = await generator.next()
       expect(first.value.content).toBe('content')
       expect(first.value.count).toBe(1)
+      await waitForWatcherSettlement()
 
       // 添加新文件
       await createTempFile(tempDir, 'new.txt', 'new')

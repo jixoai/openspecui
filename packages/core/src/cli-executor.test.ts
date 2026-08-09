@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
- * 1. Verify buffered and streaming CLI execution, bounded runner probes, disposal, and error behavior.
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * 1. Verify buffered and streaming CLI execution, including exact Windows command-shim argv, bounded
+ *    runner probes, disposal, and error behavior.
  * 2. Preserve the launch process environment without loading project-owned environment files.
- * 3. Verify OpenSpec lifecycle command construction, fixed project bootstrap, and cancellation.
+ * 3. Verify OpenSpec lifecycle commands, fixed project bootstrap, and cross-platform tree cancellation.
  * 4. Prove cancellation ownership and forced-timeout settlement remain immutable through late close.
  * 5. Prove late close clears the Core-owned direct-child slot exactly once.
  *
@@ -14,12 +15,21 @@
  * Owner diagnosis (2026-07-31): explicit process-mode lifecycle evidence must tolerate the observed Node startup tail.
  * Original request (2026-08-02): lock `openspec init <launch-project> --tools=none` before the Alert can execute it.
  * Review correction (2026-08-02): command evidence must preserve argv boundaries for paths containing spaces.
+ * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
+ * Original request (2026-08-06): "continue"
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import { ChildProcess } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
+import {
+  readWindowsProcessTable,
+  resolveWindowsProcessTreePids,
+  terminateChildProcessTree,
+} from './child-process-tree.js'
 import {
   CliExecutor,
   type CliResult,
@@ -39,6 +49,61 @@ vi.mock('./spawn-safe.js', async (importOriginal) => {
     spawnSafe: vi.fn(actual.spawnSafe),
   }
 })
+
+const ECHO_SCRIPT = 'process.stdout.write(process.argv.slice(1).join(" "))'
+const TSX_WINDOWS_SHIM = fileURLToPath(
+  new URL('../../../node_modules/.bin/tsx.cmd', import.meta.url)
+)
+const WINDOWS_SPECIAL_ARGUMENTS = [
+  '',
+  'space separated',
+  'a&b',
+  '%PATH%',
+  'a^b',
+  'a"b',
+  'C:\\space path\\',
+  '(x)|y<z>',
+]
+
+async function createWindowsNodeCommandShim(root: string): Promise<string> {
+  const commandShim = join(root, 'openspec.cmd')
+  const entry = join(root, 'node_modules', 'openspec', 'bin', 'openspec.js')
+  await mkdir(join(root, 'node_modules', 'openspec', 'bin'), { recursive: true })
+  await writeFile(
+    commandShim,
+    [
+      '@ECHO off',
+      'IF EXIST "%~dp0\\node.exe" (',
+      '  "%~dp0\\node.exe" "%~dp0\\node_modules\\openspec\\bin\\openspec.js" %*',
+      ') ELSE (',
+      '  node "%~dp0\\node_modules\\openspec\\bin\\openspec.js" %*',
+      ')',
+      '',
+    ].join('\r\n')
+  )
+  await writeFile(entry, 'process.stdout.write(JSON.stringify(process.argv.slice(2)))\n')
+  return commandShim
+}
+
+async function waitForWindowsProcessTree(rootPid: number): Promise<number[]> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const pids = resolveWindowsProcessTreePids(rootPid, await readWindowsProcessTable())
+    if (pids.length > 1) return pids
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100))
+  }
+  return [rootPid]
+}
+
+async function waitForWindowsProcessesToExit(pids: readonly number[]): Promise<number[]> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const rows = await readWindowsProcessTable()
+    const remaining = pids.filter((pid) => rows.some((row) => row.ProcessId === pid))
+    if (remaining.length === 0) return []
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100))
+  }
+  const rows = await readWindowsProcessTable()
+  return pids.filter((pid) => rows.some((row) => row.ProcessId === pid))
+}
 
 describe('CliExecutor', () => {
   let tempDir: string
@@ -63,7 +128,9 @@ describe('CliExecutor', () => {
   describe('execute()', () => {
     it('should execute command and return result', async () => {
       // 使用 echo 命令测试基本执行
-      await configManager.writeConfig({ cli: { command: 'echo' } })
+      await configManager.writeConfig({
+        cli: { command: process.execPath, args: ['-e', ECHO_SCRIPT] },
+      })
       clearCache()
 
       const result = await cliExecutor.execute(['hello', 'world'])
@@ -75,7 +142,9 @@ describe('CliExecutor', () => {
 
     it('should handle command with multiple parts', async () => {
       // 测试带参数的命令
-      await configManager.writeConfig({ cli: { command: 'echo test' } })
+      await configManager.writeConfig({
+        cli: { command: process.execPath, args: ['-e', ECHO_SCRIPT, 'test'] },
+      })
       clearCache()
 
       const result = await cliExecutor.execute(['arg1'])
@@ -398,6 +467,26 @@ describe('CliExecutor', () => {
   })
 
   describe('stream settlement ownership', () => {
+    it.runIf(process.platform === 'win32')(
+      'preserves shell-sensitive argv through a real npm-style .cmd stream',
+      async () => {
+        const command = await createWindowsNodeCommandShim(tempDir)
+        await configManager.writeConfig({ cli: { command } })
+        clearCache()
+        const events: CliStreamEvent[] = []
+        const handle = cliExecutor.executeStream(WINDOWS_SPECIAL_ARGUMENTS, (event) =>
+          events.push(event)
+        )
+
+        await expect(handle.settled).resolves.toEqual({ reason: 'exited', exitCode: 0 })
+        const stdout = events
+          .filter((event) => event.type === 'stdout')
+          .map((event) => event.data ?? '')
+          .join('')
+        expect(JSON.parse(stdout)).toEqual(WINDOWS_SPECIAL_ARGUMENTS)
+      }
+    )
+
     it('serializes command evidence without shell interpretation or argv loss', async () => {
       await configManager.writeConfig({ cli: { command: process.execPath } })
       clearCache()
@@ -440,6 +529,42 @@ describe('CliExecutor', () => {
       await expect(handle.cancel()).resolves.toEqual({ reason: 'exited', exitCode })
       expect(events.filter((event) => event.type === 'exit')).toEqual([{ type: 'exit', exitCode }])
     })
+
+    it.runIf(process.platform === 'win32')(
+      'cancels a real tsx.cmd stream and retires every recorded descendant',
+      async () => {
+        await configManager.writeConfig({ cli: { command: TSX_WINDOWS_SHIM } })
+        clearCache()
+        const spawn = vi.mocked(spawnSafe)
+        spawn.mockClear()
+        const ready = Promise.withResolvers<void>()
+        const handle = cliExecutor.executeStream(
+          ['-e', "process.stdout.write('ready\\n'); setInterval(() => {}, 1_000)"],
+          (event) => {
+            if (event.type === 'stdout' && event.data?.includes('ready')) ready.resolve()
+          }
+        )
+
+        let child: ChildProcess | undefined
+        try {
+          await ready.promise
+          const started = spawn.mock.results.at(-1)?.value
+          expect(started?.ok).toBe(true)
+          if (!started?.ok) return
+          child = started.child
+          const trackedPids = await waitForWindowsProcessTree(child.pid ?? -1)
+          expect(trackedPids.length).toBeGreaterThan(1)
+
+          await expect(handle.cancel()).resolves.toMatchObject({ reason: 'cancelled' })
+
+          await expect(waitForWindowsProcessesToExit(trackedPids)).resolves.toEqual([])
+        } finally {
+          await handle.cancel().catch(() => undefined)
+          if (child) await terminateChildProcessTree(child, 'SIGKILL').catch(() => undefined)
+        }
+      },
+      20_000
+    )
 
     it.skipIf(process.platform === 'win32')(
       'settles a natural signal exit with a null exit code',
@@ -548,7 +673,9 @@ describe('CliExecutor', () => {
 
   describe('executeCommandStream()', () => {
     it('should resolve bare openspec through the configured runner', async () => {
-      await configManager.writeConfig({ cli: { command: 'echo' } })
+      await configManager.writeConfig({
+        cli: { command: process.execPath, args: ['-e', ECHO_SCRIPT] },
+      })
       clearCache()
 
       const events: CliStreamEvent[] = []
@@ -565,7 +692,7 @@ describe('CliExecutor', () => {
 
       expect(events[0]).toMatchObject({
         type: 'command',
-        data: JSON.stringify(['echo', 'hello', 'world']),
+        data: JSON.stringify([process.execPath, '-e', ECHO_SCRIPT, 'hello', 'world']),
       })
       expect(
         events.some((event) => event.type === 'stdout' && event.data?.includes('hello world'))
@@ -684,8 +811,10 @@ describe('CliExecutor', () => {
     // 这些测试使用真实的 CLI 命令
     // 根据用户要求：在临时文件中使用真实的 CLI
 
-    it('should execute echo command', async () => {
-      await configManager.writeConfig({ cli: { command: 'echo' } })
+    it('should execute a portable output command', async () => {
+      await configManager.writeConfig({
+        cli: { command: process.execPath, args: ['-e', ECHO_SCRIPT] },
+      })
       clearCache()
 
       const result = await cliExecutor.execute(['test', 'message'])
@@ -715,14 +844,18 @@ describe('CliExecutor', () => {
     it('should handle command with environment variables', async () => {
       await configManager.writeConfig({ cli: { command: 'node' } })
       clearCache()
+      const homeEnvironmentVariable = process.platform === 'win32' ? 'USERPROFILE' : 'HOME'
+      const expectedHome = process.env[homeEnvironmentVariable]
+
+      expect(expectedHome).toBeTypeOf('string')
 
       const result = await cliExecutor.execute([
         '-e',
-        "process.stdout.write(process.env.HOME || '')",
+        `process.stdout.write(process.env.${homeEnvironmentVariable} || '')`,
       ])
 
       expect(result.success).toBe(true)
-      expect(result.stdout.trim()).toBe(process.env.HOME)
+      expect(result.stdout.trim()).toBe(expectedHome)
     })
   })
 })

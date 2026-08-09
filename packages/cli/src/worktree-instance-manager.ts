@@ -1,19 +1,21 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
  * 1. Own reusable worktree Server instances and their readiness lifecycle.
  * 2. Select worker-thread or process bootstrap without exposing private runtime inputs through argv or URLs.
  * 3. Propagate one parent Access Gate and resolved Web asset root through child launch and readiness.
- * 4. Preserve nested worker handoff delegation and deterministic child teardown through explicit serve ownership.
+ * 4. Preserve nested handoff delegation and deterministic worker/process-tree teardown through explicit ownership.
  *
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
  * Delivery correction (2026-07-26): nested worktree Servers reuse the parent runtime's Web assets.
  * Owner correction (2026-07-29): daemon start is not a project Server command; child processes use serve.
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { findAvailablePort } from '@openspecui/server'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
+import { terminateChildProcessTree } from '../../core/src/child-process-tree.js'
 
 import {
   OPENSPECUI_RUNTIME_CAPABILITIES,
@@ -27,6 +29,7 @@ import type {
 } from './worktree-server-worker'
 import {
   WORKTREE_ACCESS_GATE_CREDENTIAL_ENV,
+  WORKTREE_PROCESS_CLOSE_MESSAGE,
   WORKTREE_SERVER_WORKER_KIND,
   WORKTREE_WEB_ASSETS_DIR_ENV,
 } from './worktree-server-worker'
@@ -343,7 +346,7 @@ class ProcessWorktreeServerRuntime implements WorktreeServerRuntime {
     this.child = spawn(plan.command, plan.args, {
       cwd: plan.cwd,
       env: plan.env,
-      stdio: 'inherit',
+      stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
       detached: process.platform !== 'win32',
     })
   }
@@ -496,7 +499,7 @@ async function isHealthyInstance(
   }
 }
 
-function killChildProcess(child: ChildProcess, signal: NodeJS.Signals): void {
+async function killChildProcess(child: ChildProcess, signal: NodeJS.Signals): Promise<void> {
   if (process.platform !== 'win32' && child.pid) {
     try {
       process.kill(-child.pid, signal)
@@ -506,7 +509,7 @@ function killChildProcess(child: ChildProcess, signal: NodeJS.Signals): void {
     }
   }
 
-  child.kill(signal)
+  await terminateChildProcessTree(child, signal)
 }
 
 function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
@@ -535,14 +538,35 @@ async function stopChildProcess(child: ChildProcess): Promise<void> {
     return
   }
 
-  killChildProcess(child, 'SIGTERM')
+  if (await requestChildProcessShutdown(child)) {
+    const exitedGracefully = await waitForChildExit(child, 5_000)
+    if (exitedGracefully) {
+      return
+    }
+  }
+
+  await killChildProcess(child, 'SIGTERM')
   const exited = await waitForChildExit(child, 5_000)
   if (exited) {
     return
   }
 
-  killChildProcess(child, 'SIGKILL')
+  await killChildProcess(child, 'SIGKILL')
   await waitForChildExit(child, 1_000)
+}
+
+function requestChildProcessShutdown(child: ChildProcess): Promise<boolean> {
+  if (!child.connected) return Promise.resolve(false)
+
+  return new Promise((resolvePromise) => {
+    try {
+      child.send(WORKTREE_PROCESS_CLOSE_MESSAGE, (error) => {
+        resolvePromise(error === null)
+      })
+    } catch {
+      resolvePromise(false)
+    }
+  })
 }
 
 function waitForWorkerExit(worker: Worker, timeoutMs: number): Promise<boolean> {

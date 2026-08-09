@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Bootstrap HTTP/tRPC, WebSocket, PTY, and launch-project runtime services.
  * 2. Delegate planning-root, Store, Environment Global, Agent, and Root Context projection ownership.
  * 3. Host notifications, sound, preview-resource, translation, and telemetry boundaries.
- * 4. Admit dynamic loopback App origins and perform deterministic runtime teardown.
+ * 4. Admit dynamic loopback App origins and await deterministic native-handle teardown.
  * 5. Bridge settled machine-global config changes into Root Context replacement.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
@@ -821,7 +821,7 @@ export async function createWebSocketServer(
           () => ptyManager.closeAll(),
           () => closeWebSocketServer(ptyWss),
           () => closeWebSocketServer(wss),
-          () => server.watcher?.stop(),
+          () => server.watcher?.close(),
         ])
         await settleCleanupPhase(failures, [() => server.storeObservationFallback.dispose()])
         await settleCleanupPhase(failures, [() => server.storeMutationService.dispose()])

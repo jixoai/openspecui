@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
  * 1. Execute buffered CLI work through process/Worker backends with runner recovery,
  *    observer-explicit OTel phase evidence, bounded probes, and owner-scoped disposal.
- * 2. Own streaming CLI processes through cancellation request, escalation, and confirmed settlement.
+ * 2. Own streaming CLI process trees through cancellation request, escalation, and confirmed settlement.
  * 3. Retain lifecycle helpers and add the fixed-path, tools-none project bootstrap stream.
  * 4. Expose the physically separated OpenSpec 1.6 typed command facade.
  * 5. Clear the Core-owned direct-child slot independently from stream settlement, and keep
@@ -20,6 +20,7 @@
  * Original request (2026-07-31): "在主线程，通过 OPENSPEC_SPAWN_MODE=process|worker 来进行区分两种模式。"
  * Original request (2026-08-02): initialize the Launch Project with `openspec init <path> --tools=none`.
  * Review correction (2026-08-02): streamed command evidence must preserve argv boundaries.
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { context, trace, type Attributes, type Span } from '@opentelemetry/api'
 import { type ChildProcess } from 'child_process'
@@ -27,6 +28,7 @@ import { realpathSync } from 'node:fs'
 import { loadavg } from 'node:os'
 import { isAbsolute } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import { terminateChildProcessTree } from './child-process-tree.js'
 import { CliBufferedAdmission, type CliBufferedAdmissionLease } from './cli-buffered-admission.js'
 import { OpenSpecCliContractExecutor } from './cli-contracts/index.js'
 import { CliStreamChildOwner } from './cli-stream-child-owner.js'
@@ -810,18 +812,14 @@ export class CliExecutor {
     const requestChildTermination = (child: ChildProcess) => {
       if (terminationStarted || settled) return
       terminationStarted = true
-      try {
-        child.kill('SIGTERM')
-      } catch {
-        // A concurrent close/error event remains the settlement authority.
-      }
+      void terminateChildProcessTree(child).catch(() => {
+        // The bounded close confirmation remains the settlement authority.
+      })
       terminationTimer = setTimeout(() => {
         if (settled || !childOwner.owns(child)) return
-        try {
-          child.kill('SIGKILL')
-        } catch {
+        void terminateChildProcessTree(child, 'SIGKILL').catch(() => {
           // The close event may already be queued; the bounded confirmation still applies.
-        }
+        })
         forceCloseTimer = setTimeout(() => {
           if (!settled && childOwner.owns(child)) failTermination()
         }, STREAM_FORCE_CLOSE_TIMEOUT_MS)

@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Separate HTTP server readiness from pinned OpenSpec CLI root resolution.
  * 2. Exercise lifecycle-only WebSocket Push followed by typed HTTP Root Projection Pull.
  * 3. Preserve pinned CLI runner start/exit timing for timeout classification.
+ * 4. Use file URLs and settled watcher cleanup for Windows CLI fixtures.
  *
  * Original request (2026-07-19): "设计并（必要时）实现一个 type-safe、可 checked 的
  * cold-start/rootContext HTTP+WS fixture test，隔离 pinned OpenSpec CLI。"
@@ -17,14 +18,16 @@ import {
 } from '@openspecui/core'
 import { createTRPCClient, createWSClient, httpBatchLink, wsLink } from '@trpc/client'
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import { z } from 'zod'
 import { findAvailablePort } from './port-utils.js'
+import { removeServerTestDirectories } from './server-test-cleanup.js'
 import type { AppRouter, RunningServer } from './server.js'
 import { startServer } from './server.js'
 
@@ -124,6 +127,7 @@ async function writePinnedRunner(
   const runnerSource = `
 const fs = require('node:fs')
 const cliPath = ${JSON.stringify(CLI_BIN)}
+const cliUrl = ${JSON.stringify(pathToFileURL(CLI_BIN).href)}
 const dataHome = ${JSON.stringify(dataHome)}
 const tracePath = ${JSON.stringify(tracePath)}
 const args = process.argv.slice(2)
@@ -134,7 +138,7 @@ process.env.OPEN_SPEC_INTERACTIVE = '0'
 process.env.OPENSPEC_TELEMETRY = '0'
 process.env.NO_COLOR = '1'
 process.on('exit', (code) => writeTrace({ phase: 'exit', args, at: Date.now(), code, cliPath }))
-import(cliPath)
+import(cliUrl)
 `
   await writeFile(runnerPath, runnerSource, 'utf8')
   return runnerPath
@@ -160,9 +164,7 @@ describe('pinned OpenSpec 1.7 Root Context cold start', () => {
   afterEach(async () => {
     for (const client of wsClients.splice(0)) client.close()
     await Promise.all(runningServers.splice(0).map((server) => server.close()))
-    await Promise.all(
-      temporaryDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
-    )
+    await removeServerTestDirectories(temporaryDirs.splice(0))
   })
 
   it('separates HTTP readiness from typed HTTP/WS Root Context readiness', async () => {

@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Prove ChangeList click B crosses the real VTLink, detail preparation, and navigation coordinator.
  * 2. Assert one resolved Change-detail route with the exact collision-safe handoff.
  * 3. Stabilize only transport and native-transition runtime edges for an in-memory Router fixture.
  *
  * Original request (2026-07-23): "List mutations and route changes preserve physical continuity through existing motion/View Transition patterns."
+ * Derived requirement (2026-08-06): full-suite scheduling must await asynchronous onResolved evidence.
  */
 import type { SubscriptionState } from '@/lib/use-subscription'
 import type { ChangeMeta, ChangeStatus } from '@openspecui/core'
@@ -189,7 +190,7 @@ describe('ChangeList detail navigation', () => {
       preparedStatus
     )
     expect(runViewTransitionMock).toHaveBeenCalledOnce()
-    expect(resolvedDetailPaths).toEqual(['/changes/b'])
+    await waitFor(() => expect(resolvedDetailPaths).toEqual(['/changes/b']))
     expect(router.state.location.state).toMatchObject({
       __vtHandoff: {
         family: 'changes',

@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Start the embedded Server and its worktree children with one resolved Project Web/preview asset root.
  * 2. Resolve one Access Gate credential and deliver it to Server, private browser, and worktree children.
  * 3. Keep inherited child credentials silent while coordinating deterministic runtime teardown.
- * 4. Bootstrap only worker-thread payloads owned by the worktree Server protocol.
+ * 4. Bootstrap and fully settle only worker-thread payloads owned by the worktree Server protocol.
  * 5. Forward diagnostic tracing configuration into the embedded Server owner.
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
@@ -11,8 +11,10 @@
  * Review correction (2026-07-26): explicit Web asset roots are presence-sensitive.
  * Delivery correction (2026-07-26): nested worktree Servers inherit the resolved parent asset root.
  * Original request (2026-07-30): "通过 --otel --otel-endpoint 来开启。"
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import {
+  closeAllWatchers,
   generateAccessGateCredential,
   normalizeAccessGatePassword,
   type AccessGateCredential,
@@ -350,13 +352,42 @@ async function runWorktreeServerWorker(
     gitWorktreeHandoff: createParentPortWorktreeHandoffService(port),
   })
   port.postMessage({ type: 'ready', serverUrl: server.url })
+  let closePromise: Promise<void> | null = null
   port.on('message', (message: unknown) => {
     if (message === 'close') {
-      void server.close().finally(() => {
-        process.exit(0)
-      })
+      closePromise ??= closeWorktreeServerWorker(server, port)
+      void closePromise
     }
   })
+}
+
+async function closeWorktreeServerWorker(
+  server: RunningServer,
+  port: NonNullable<typeof parentPort>
+): Promise<void> {
+  const failures: unknown[] = []
+  try {
+    await server.close()
+  } catch (error) {
+    failures.push(error)
+  }
+  try {
+    await closeAllWatchers()
+  } catch (error) {
+    failures.push(error)
+  }
+
+  if (failures.length > 0) {
+    port.postMessage(
+      toWorkerErrorMessage(
+        failures.length === 1
+          ? failures[0]
+          : new AggregateError(failures, 'Worktree worker teardown failed.')
+      )
+    )
+    process.exitCode = 1
+  }
+  port.close()
 }
 
 if (!isMainThread) {

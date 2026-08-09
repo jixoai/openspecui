@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Prove the public PTY protocol strips arbitrary client cwd input.
- * 2. Prove the real WebSocket handler resolves cwd at create-message handling time.
+ * 2. Prove the real WebSocket handler resolves cwd at create-message handling time with a host-native executable.
  * 3. Prove real PtyManager creation and list replies preserve cwd target identity.
  * 4. Prove unavailable Planning-root resolution prevents process spawn.
  * 5. Prove workflow input requires current Root evidence and a compatible live terminal.
@@ -174,7 +174,7 @@ describe('PTY cwd public contract', () => {
       type: 'create',
       requestId: 'planning-terminal',
       cwdTarget: 'planning-root',
-      command: '/bin/sh',
+      command: process.execPath,
       cwd: '/attacker',
     }
 
@@ -187,7 +187,7 @@ describe('PTY cwd public contract', () => {
 
     expect(resolvedTargets).toEqual(['planning-root'])
     expect(spawnMock).toHaveBeenCalledWith(
-      '/bin/sh',
+      process.execPath,
       [],
       expect.objectContaining({ cwd: '/planning-current' })
     )

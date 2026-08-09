@@ -1,3 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * 1. Project translation-engine inventory, selection, lifecycle, and immutable settings snapshots.
+ * 2. Install and cancel managed local runtime dependencies through observable, bounded process settlement.
+ * 3. Own local model search, download plans, persisted asset readiness, and profile validation.
+ * 4. Execute browser, OpenAI, and managed-local batch translation with cache-aware events.
+ * 5. Preserve CT2/llama runtime policy, directional language constraints, and resource limits.
+ *
+ * Original request (2026-05-22): "Server provides engine registry, installation sessions, installation logs, selection, and translation."
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ */
 import {
   buildRuntimePackageInstallCommand,
   checkLocalDirectionalModelLanguagePair,
@@ -13,6 +24,8 @@ import {
   LocalModelAssetStateSchema,
   resolveRuntimePackageInstallStrategy,
   shouldShowTranslationEngineInstallGate,
+  spawnSafe,
+  terminateChildProcessTree,
   TRANSLATION_ENGINE_MANIFESTS,
   type BatchTranslateEvent,
   type BatchTranslateInput,
@@ -34,7 +47,7 @@ import {
   type TranslatorFactory,
 } from '@openspecui/core'
 import { observable } from '@trpc/server/observable'
-import { spawn } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { readFile, stat } from 'node:fs/promises'
 import { freemem, totalmem } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -1208,7 +1221,8 @@ async function installManagedLocalRuntime(
   return finalLifecycle
 }
 
-async function runRuntimeInstallCommand(input: {
+/** Run one package-manager installation with bounded cross-platform tree cancellation. */
+export async function runRuntimeInstallCommand(input: {
   command: {
     cmd: string
     args: string[]
@@ -1217,54 +1231,97 @@ async function runRuntimeInstallCommand(input: {
   cwd: string
   signal?: AbortSignal
   onLog?: (event: TranslationEngineInstallLogEvent) => void
+  terminationTimeoutMs?: number
 }): Promise<string | null> {
-  let child
-  try {
-    child = spawn(input.command.cmd, input.command.args, {
-      cwd: input.cwd,
-      shell: false,
-      env: createCleanCliEnv(),
+  if (input.signal?.aborted) return 'Translation runtime installation cancelled.'
+  const started = spawnSafe(input.command.cmd, input.command.args, {
+    cwd: input.cwd,
+    shell: false,
+    env: createCleanCliEnv(),
+  })
+  if (!started.ok) return started.error.message
+  const { child } = started
+  const completion = new Promise<string | null>((resolve) => {
+    child.stdout?.on('data', (data: Buffer) => {
+      input.onLog?.({ stream: 'stdout', text: data.toString() })
     })
-  } catch (error) {
-    return error instanceof Error ? error.message : String(error)
-  }
-
-  const abort = () => {
-    try {
-      child.kill()
-    } catch {
-      // ignore
-    }
-  }
+    child.stderr?.on('data', (data: Buffer) => {
+      input.onLog?.({ stream: 'stderr', text: data.toString() })
+    })
+    child.once('error', (error) => resolve(error.message))
+    child.once('close', (exitCode) => {
+      resolve(
+        exitCode === 0
+          ? null
+          : `${input.command.displayCommand} exited with code ${exitCode ?? 'unknown'}.`
+      )
+    })
+  })
+  let requestAbort: (() => void) | null = null
+  const abortRequested = new Promise<void>((resolve) => {
+    requestAbort = resolve
+  })
+  const abort = () => requestAbort?.()
   input.signal?.addEventListener('abort', abort, { once: true })
-
   try {
-    await new Promise<void>((resolve, reject) => {
-      child.stdout?.on('data', (data: Buffer) => {
-        input.onLog?.({ stream: 'stdout', text: data.toString() })
-      })
-      child.stderr?.on('data', (data: Buffer) => {
-        input.onLog?.({ stream: 'stderr', text: data.toString() })
-      })
-      child.on('error', (error) => {
-        reject(error)
-      })
-      child.on('close', (exitCode) => {
-        if (exitCode === 0) {
-          resolve()
-          return
-        }
-        reject(
-          new Error(`${input.command.displayCommand} exited with code ${exitCode ?? 'unknown'}.`)
-        )
-      })
-    })
-    return null
-  } catch (error) {
-    return error instanceof Error ? error.message : String(error)
+    const outcome = await Promise.race([
+      completion.then((result) => ({ kind: 'complete' as const, result })),
+      abortRequested.then(() => ({ kind: 'abort' as const })),
+    ])
+    if (outcome.kind === 'complete') return outcome.result
+    return settleRuntimeInstallCancellation(child, completion, input.terminationTimeoutMs ?? 5_000)
   } finally {
     input.signal?.removeEventListener('abort', abort)
   }
+}
+
+async function settleRuntimeInstallCancellation(
+  child: ChildProcess,
+  completion: Promise<string | null>,
+  timeoutMs: number
+): Promise<string> {
+  const failures: unknown[] = []
+  const terminate = async (signal: NodeJS.Signals) => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    try {
+      await Promise.race([
+        terminateChildProcessTree(child, signal),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`Timed out requesting ${signal} for runtime installation.`)),
+            timeoutMs
+          )
+        }),
+      ])
+    } catch (error) {
+      failures.push(error)
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
+  const waitForCompletion = async (): Promise<boolean> => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    try {
+      return await Promise.race([
+        completion.then(() => true),
+        new Promise<false>((resolve) => {
+          timer = setTimeout(() => resolve(false), timeoutMs)
+        }),
+      ])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
+
+  await terminate('SIGTERM')
+  if (await waitForCompletion()) return 'Translation runtime installation cancelled.'
+  await terminate('SIGKILL')
+  if (await waitForCompletion()) return 'Translation runtime installation cancelled.'
+
+  const failureText = failures
+    .map((error) => (error instanceof Error ? error.message : String(error)))
+    .join(' ')
+  return `Translation runtime installation cancellation did not settle.${failureText ? ` ${failureText}` : ''}`
 }
 
 function getManagedLocalRuntimeSpec(engineId: ManagedLocalTranslationEngineId): {

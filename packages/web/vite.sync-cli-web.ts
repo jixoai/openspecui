@@ -1,6 +1,14 @@
-import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+/**
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * 1. Resolve and project the completed Web build into the CLI runtime asset tree.
+ * 2. Commit the projection through the shared bounded directory-swap owner.
+ *
+ * Original request (2026-08-04): "Make equivalent package scripts work on Windows."
+ */
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { Plugin } from 'vite'
+import { projectDirectoryAtomically } from '../../scripts/lib/atomic-directory-projection'
 
 export function resolveCliWebSyncPaths(rootDir: string): {
   sourceDir: string
@@ -12,19 +20,11 @@ export function resolveCliWebSyncPaths(rootDir: string): {
   }
 }
 
-export function syncCliWebAssets(sourceDir: string, targetDir: string): void {
+export async function syncCliWebAssets(sourceDir: string, targetDir: string): Promise<void> {
   if (!existsSync(sourceDir)) {
     return
   }
-
-  const targetParentDir = dirname(targetDir)
-  const stagingDir = join(targetParentDir, `.web-sync-${process.pid}`)
-
-  mkdirSync(targetParentDir, { recursive: true })
-  rmSync(stagingDir, { recursive: true, force: true })
-  cpSync(sourceDir, stagingDir, { recursive: true })
-  rmSync(targetDir, { recursive: true, force: true })
-  renameSync(stagingDir, targetDir)
+  await projectDirectoryAtomically(sourceDir, targetDir)
 }
 
 export function createCliWebSyncPlugin(rootDir: string): Plugin {
@@ -33,8 +33,8 @@ export function createCliWebSyncPlugin(rootDir: string): Plugin {
   return {
     name: 'openspecui-sync-cli-web',
     apply: 'build',
-    writeBundle() {
-      syncCliWebAssets(sourceDir, targetDir)
+    async writeBundle() {
+      await syncCliWebAssets(sourceDir, targetDir)
     },
   }
 }

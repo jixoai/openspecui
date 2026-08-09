@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Serve the same-release App shell from a loopback-only HTTP endpoint.
- * 2. Enforce bounded static paths, MIME types, cache policy, and SPA fallback.
+ * 2. Enforce platform-neutral bounded static paths, MIME types, cache policy, and SPA fallback.
  * 3. Publish transient Workspace authority through snapshot Pull, invalidation Push, and open-by-id.
  * 4. Expose same-origin managed directory start/Stop without accepting executable or port input.
  * 5. Publish the daemon-owned Favorites/Recent catalog and same-origin favorite mutations.
  *
  * Original request (2026-07-29): "daemon 使用随 CLI 发布的本地 App 外壳。"
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import {
   AppDaemonOpenWorkspaceResponseSchema,
@@ -30,7 +31,7 @@ import { createReadStream } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServer } from 'node:http'
-import { extname, join, relative, resolve, sep } from 'node:path'
+import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { DaemonWorkspaceSnapshotSchema, type DaemonWorkspaceBinding } from './daemon-protocol.js'
 
 const MIME_TYPES: Readonly<Record<string, string>> = {
@@ -54,7 +55,7 @@ export interface LocalAppServer {
 
 function isInsideRoot(root: string, candidate: string): boolean {
   const path = relative(root, candidate)
-  return path === '' || (!path.startsWith(`..${sep}`) && path !== '..' && !path.startsWith(sep))
+  return path === '' || (!path.startsWith(`..${sep}`) && path !== '..' && !isAbsolute(path))
 }
 
 async function isFile(path: string): Promise<boolean> {

@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
+ * 1. Prove source-mode conditional exports select TypeScript while published default resolves dist.
+ * 2. Prove source startup and CLI Web asset projection are shell-independent across Windows and POSIX.
+ * 3. Prove CLI source runtime dependencies remain workspace-only development dependencies.
+ *
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ * Windows correction (2026-08-04): use a directory junction when symlink privileges are unavailable.
+ */
 import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
@@ -66,7 +75,11 @@ async function createConditionalExportFixture(): Promise<{ appDir: string }> {
   await writeFile(join(packageDir, 'src', 'worker.ts'), 'export const mode = "source"\n', 'utf8')
   await writeFile(join(packageDir, 'dist', 'index.mjs'), 'export const mode = "dist"\n', 'utf8')
   await writeFile(join(packageDir, 'dist', 'worker.mjs'), 'export const mode = "dist"\n', 'utf8')
-  await symlink(packageDir, join(appDir, 'node_modules', 'fixture-package'), 'dir')
+  await symlink(
+    packageDir,
+    join(appDir, 'node_modules', 'fixture-package'),
+    process.platform === 'win32' ? 'junction' : 'dir'
+  )
 
   return { appDir }
 }
@@ -136,11 +149,24 @@ describe('development conditional exports', () => {
     expectDevelopmentExport(searchPackage, './node', './src/node.ts', './dist/node.mjs')
   })
 
-  it('runs the CLI source dev script with the development export condition', () => {
+  it('uses shell-independent source dev and CLI Web asset projection scripts', () => {
     const cliPackage = readPackageJson('packages/cli/package.json')
+    const serverPackage = readPackageJson('packages/server/package.json')
 
-    expect(cliPackage.scripts?.dev).toContain('--conditions=development')
-    expect(cliPackage.scripts?.dev).toContain('tsx src/cli.ts')
+    expect(cliPackage.scripts?.dev).toBe('tsx --conditions=development src/cli.ts')
+    expect(serverPackage.scripts?.dev).toBe(
+      "tsx watch --conditions=development --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts"
+    )
+    expect(cliPackage.scripts?.['build:copy-web']).toBe('bun scripts/copy-web-assets.ts')
+
+    for (const command of [
+      cliPackage.scripts?.dev,
+      serverPackage.scripts?.dev,
+      cliPackage.scripts?.['build:copy-web'],
+    ]) {
+      expect(command).not.toContain('NODE_OPTIONS=')
+      expect(command).not.toMatch(/(?:^|&&\s*)(?:rm|cp)\s/)
+    }
   })
 
   it('declares source-runtime workspace dependencies for the CLI package', () => {
@@ -151,15 +177,6 @@ describe('development conditional exports', () => {
       '@openspecui/server': 'workspace:*',
     })
     expect(cliPackage.dependencies).not.toHaveProperty('@openspecui/server')
-  })
-
-  it('uses an expandable NODE_OPTIONS assignment for source dev scripts', () => {
-    const cliPackage = readPackageJson('packages/cli/package.json')
-    const serverPackage = readPackageJson('packages/server/package.json')
-    const expectedPrefix = 'NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=development"'
-
-    expect(cliPackage.scripts?.dev).toContain(expectedPrefix)
-    expect(serverPackage.scripts?.dev).toContain(expectedPrefix)
   })
 
   it('resolves package self-references to dist by default', async () => {
