@@ -1,5 +1,12 @@
 # openspecui
 
+## 7.0.2
+
+### Patch Changes
+
+- 48b6983: Make source development, CLI asset projection, release automation, and on-demand runtime package probes work on Windows; isolate explicit daemon homes with independent named pipes; and allow bounded source daemon cold starts to settle.
+- f09e062: Hide Windows child-process console windows across daemon execution. `spawnSafe` now defaults to `windowsHide: true` (explicit caller opt-out preserved), Git/runner-probe/export/worktree/translation subprocesses set it explicitly, and the daemon opens external URLs through a hidden detached `explorer.exe` instead of the `open` package's visible PowerShell, so a console-less App daemon no longer flashes a cmd window per executed command.
+
 ## 7.0.1
 
 ## 7.0.0
