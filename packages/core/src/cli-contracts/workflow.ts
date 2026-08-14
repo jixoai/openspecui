@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Model camelCase workflow JSON independently from Store-family JSON.
- * 2. Preserve strict validate and archive outcomes, including failure payloads.
+ * 2. Preserve strict validate and archive outcomes, including failure payloads and retirement warnings.
  * 3. Preserve multiline requirement bodies from `show --json`.
- * 4. Preserve complete OpenSpec 1.7 Status and operation-Instruction contracts as CLI facts.
- * 5. Export the successful Spec-document schema for browser-safe projection validation.
+ * 4. Preserve complete OpenSpec 1.8/1.9 Status and operation-Instruction contracts as CLI facts.
+ * 5. Decode `schemas --json` as a success/failure sum type and archived validation as a Validate report.
+ * 6. Export the successful Spec-document schema for browser-safe projection validation.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { z } from 'zod'
 import {
@@ -62,8 +64,29 @@ export const CliSchemaInfoSchema = z
   })
   .passthrough()
 
-/** Typed result of `openspec schemas --json`. */
-export const CliSchemasSchema = z.array(CliSchemaInfoSchema)
+/** Successful `openspec schemas --json` result: a bare SchemaInfo array. */
+export const CliSchemasSuccessSchema = z.array(CliSchemaInfoSchema)
+
+/**
+ * Failed `openspec schemas --json` result for OpenSpec 1.9: the CLI emits
+ * `{ schemas: [], root: null, status }` when Root selection fails. The empty
+ * array is transport shape, not an empty successful catalog.
+ */
+export const CliSchemasFailureSchema = z
+  .object({
+    schemas: z.array(CliSchemaInfoSchema),
+    root: z.null(),
+    status: z.array(CliDiagnosticSchema).min(1),
+  })
+  .passthrough()
+
+/** Typed sum result of `openspec schemas --json`. */
+export const CliSchemasSchema = z.union([CliSchemasSuccessSchema, CliSchemasFailureSchema])
+
+/** Distinguish the selected-Root failure envelope from a successful schema array. */
+export function isCliSchemasFailure(schemas: CliSchemas): schemas is CliSchemasFailure {
+  return !Array.isArray(schemas)
+}
 
 /** CLI resolution for one schema, including lower-priority shadows. */
 export const CliSchemaShadowSchema = z
@@ -174,7 +197,10 @@ export const CliWorkflowStatusSuccessSchema = z
     planningHome: CliPlanningHomeSchema,
     changeRoot: z.string(),
     artifactPaths: z.record(CliArtifactPathSchema),
-    isComplete: z.boolean(),
+    /** Required planning-artifact completion fact since OpenSpec 1.8. */
+    isPlanningComplete: z.boolean(),
+    /** Retained upstream compatibility alias, kept only as raw CLI evidence. */
+    isComplete: z.boolean().optional(),
     applyRequires: z.array(z.string()),
     nextSteps: z.array(z.string()),
     actionContext: CliActionContextSchema,
@@ -342,6 +368,8 @@ export const CliArchiveSchema = z
         path: z.string(),
         specsUpdated: z.boolean(),
         totals: CliArchiveTotalsSchema.optional(),
+        /** Upstream spec-rebuild warnings, including retirement and scenario-loss notices. */
+        warnings: z.array(z.string()).optional(),
       })
       .passthrough()
       .nullable(),
@@ -353,6 +381,8 @@ export const CliArchiveSchema = z
 export type CliChangeList = z.infer<typeof CliChangeListSchema>
 export type CliSpecList = z.infer<typeof CliSpecListSchema>
 export type CliSchemas = z.infer<typeof CliSchemasSchema>
+export type CliSchemasSuccess = z.infer<typeof CliSchemasSuccessSchema>
+export type CliSchemasFailure = z.infer<typeof CliSchemasFailureSchema>
 export type CliSchemaResolution = z.infer<typeof CliSchemaResolutionSchema>
 export type CliSchemaWhich = z.infer<typeof CliSchemaWhichSchema>
 export type CliTemplates = z.infer<typeof CliTemplatesSchema>

@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir } from './__tests__/test-utils.js'
 import { CliExecutor } from './cli-executor.js'
+import { CliProjectionCommandError } from './cli-projection.js'
 import { ConfigManager } from './config.js'
 import { OpsxKernel } from './opsx-kernel.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
@@ -267,6 +268,7 @@ if (args[0] === 'status' && args.includes('--json')) {
     },
     changeRoot: projectDir + '/openspec/changes/' + changeName,
     artifactPaths: {},
+    isPlanningComplete: false,
     isComplete: false,
     applyRequires: [],
     nextSteps: [],
@@ -314,6 +316,63 @@ process.exit(2)
     } finally {
       kernel.dispose()
       await executor.dispose()
+    }
+  })
+})
+
+describe('OpsxKernel schemas failure-envelope projection', () => {
+  it('preserves a 1.9 selected-Root failure as CLI evidence instead of an empty catalog', async () => {
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-opsx-schemas-failure-'))
+    tempDirs.push(projectDir)
+
+    const cliPath = join(projectDir, 'fake-openspec.mjs')
+    await writeFile(
+      cliPath,
+      `
+const args = process.argv.slice(2)
+if (args.includes('--version')) {
+  console.log('1.9.0')
+  process.exit(0)
+}
+if (args[0] === 'schemas' && args.includes('--json')) {
+  console.log(JSON.stringify({
+    schemas: [],
+    root: null,
+    status: [
+      { severity: 'error', code: 'root-selection', message: 'No openspec root found for schemas.' },
+    ],
+  }))
+  process.exit(1)
+}
+process.exit(2)
+`.trimStart(),
+      'utf8'
+    )
+
+    const config = new ConfigManager(projectDir)
+    await config.writeConfig({ cli: { command: process.execPath, args: [cliPath] } })
+    const executor = new CliExecutor(config, projectDir)
+    const kernel = new OpsxKernel(projectDir, executor, new RuntimeInvalidationIndex(), {})
+
+    try {
+      const bundle = await kernel.readConfigBundleProjection()
+      throw new Error(`Expected the failure envelope to reject, got ${JSON.stringify(bundle)}`)
+    } catch (error) {
+      expect(error).toBeInstanceOf(CliProjectionCommandError)
+      if (error instanceof CliProjectionCommandError) {
+        expect(error.message).toContain('No openspec root found for schemas.')
+        expect(error.cliEvidence.diagnostics).toEqual([
+          {
+            severity: 'error',
+            code: 'root-selection',
+            message: 'No openspec root found for schemas.',
+          },
+        ])
+        expect(error.cliEvidence.exitCode).toBe(1)
+        expect(error.cliEvidence.success).toBe(false)
+      }
+    } finally {
+      kernel.dispose()
     }
   })
 })

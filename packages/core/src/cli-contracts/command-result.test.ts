@@ -227,7 +227,7 @@ describe('OpenSpec CLI command contract parsing', () => {
     expect(parsed.exitCode).toBe(1)
   })
 
-  it('preserves the complete 1.6 workflow Status action contract', () => {
+  it('preserves the complete 1.8/1.9 workflow Status action contract', () => {
     const parsed = parseCliCommandResult(
       result({
         changeName: 'add-auth',
@@ -246,6 +246,7 @@ describe('OpenSpec CLI command contract parsing', () => {
             existingOutputPaths: ['/store/openspec/changes/add-auth/specs/auth/spec.md'],
           },
         },
+        isPlanningComplete: false,
         isComplete: false,
         applyRequires: ['tasks'],
         nextSteps: ['Run openspec instructions tasks --change "add-auth" --store shared --json.'],

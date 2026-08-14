@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
- * 1. Fail CI unless the OpenSpec reference checkout resolves to the 1.6 line.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Fail CI unless the OpenSpec reference checkout resolves to the 1.9 line.
  * 2. Invoke Git through a shell-independent argument vector.
  *
  * Original request (2026-07-14): "Update references/openspec."
  * Original request (2026-08-04): "Make equivalent package scripts work on Windows."
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -27,11 +28,11 @@ try {
     'describe',
     '--tags',
     '--match',
-    'v1.6.*',
+    'v1.9.*',
     '--always',
   ])
-  if (!describe.startsWith('v1.6.')) {
-    throw new Error(`references/openspec must point to OpenSpec v1.6.x, but got "${describe}".`)
+  if (!describe.startsWith('v1.9.')) {
+    throw new Error(`references/openspec must point to OpenSpec v1.9.x, but got "${describe}".`)
   }
   console.log(`[openspec-ref-check] OK: ${describe}`)
 } catch (error) {

@@ -91,6 +91,8 @@ export interface CliStoreRemoveOptions {
 export type CliValidateTarget =
   | { kind: 'item'; id: string; type?: 'change' | 'spec' }
   | { kind: 'scope'; scope: 'all' | 'changes' | 'specs' }
+  /** OpenSpec 1.9 archived-task validation over the resolved root's archive. */
+  | { kind: 'archived' }
 
 /** JSON Validate options, including explicit target and root selection. */
 export interface CliValidateJsonOptions extends CliRootSelector {
@@ -271,14 +273,16 @@ export class OpenSpecCliContractExecutor {
     return this.execute(args, CliStoreCleanupSchema)
   }
 
-  /** Validate an item or scope without inferring retries or readiness. */
+  /** Validate an item, scope, or the archive without inferring retries or readiness. */
   async validate(options: CliValidateJsonOptions): Promise<CliCommandResult<CliValidate>> {
     const args = ['validate']
     if (options.target.kind === 'item') {
       args.push(options.target.id)
       if (options.target.type) args.push('--type', options.target.type)
-    } else {
+    } else if (options.target.kind === 'scope') {
       args.push(`--${options.target.scope}`)
+    } else {
+      args.push('--archived')
     }
     if (options.strict) args.push('--strict')
     args.push('--json')

@@ -19,8 +19,9 @@ import {
   CliArtifactInstructionsSuccessSchema,
   CliChangeListSchema,
   CliRootSchema,
-  CliSchemasSchema,
+  CliSchemasSuccessSchema,
   CliWorkflowStatusSuccessSchema,
+  isCliSchemasFailure,
   type CliCommandResult,
   type CliRootSelector,
 } from './cli-contracts/index.js'
@@ -993,8 +994,18 @@ export class OpsxKernel {
     this.runtimeInvalidation.track('schemas')
     await touchOpsxProjectDeps(this.projectDir)
     const result = await this.cliExecutor.contracts.schemas()
+    // OpenSpec 1.9 selected-Root failures emit `{ schemas: [], root: null, status }`
+    // with a failing exit code. Preserve that envelope as typed CLI failure
+    // evidence instead of letting it pass as an empty successful catalog.
+    if (result.data && isCliSchemasFailure(result.data)) {
+      throw new CliProjectionCommandError(
+        result.data.status.map((diagnostic) => diagnostic.message).join('\n') ||
+          'openspec schemas failed to select a Root.',
+        result
+      )
+    }
     return {
-      value: requireCommandData('openspec schemas', result, CliSchemasSchema),
+      value: requireCommandData('openspec schemas', result, CliSchemasSuccessSchema),
       evidence: toCliProjectionCommandEvidence(result),
     }
   }
