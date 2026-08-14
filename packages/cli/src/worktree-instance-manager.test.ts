@@ -5,7 +5,9 @@
  * 3. Prove readiness authenticates with the inherited Gate while unguarded readiness remains unchanged.
  * 4. Cross both bootstraps into guarded child Servers and settle owners before Windows cwd cleanup.
  * 5. Keep the bounded Windows lock-release budget ahead of slow hosted runners: the production
- *    worker child's cwd release can lag its awaited exit while a fresh runner deletes the tree.
+ *    worker child's cwd release can lag its awaited exit while a fresh runner deletes the tree,
+ *    and its graceful-then-forced shutdown escalation (5 s + 5 s + kill) can exceed the default
+ *    10 s hook budget, so cleanup owns an explicit bounded hook timeout.
  *
  * Original request (2026-08-14): first hosted-runner Windows lane run hit EBUSY rmdir on the awaited-exit fixture.
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
@@ -68,7 +70,7 @@ afterEach(async () => {
     )
   )
   vi.unstubAllEnvs()
-})
+}, 30_000)
 
 async function createWorkspaceFixture(): Promise<{ repoRoot: string; runtimeDir: string }> {
   const repoRoot = await mkdtemp(join(tmpdir(), 'openspecui-worktree-manager-'))
