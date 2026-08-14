@@ -7,7 +7,10 @@
  * 3. Launch shell-independent task invocations and retire their verified process trees.
  * 4. Bootstrap required build outputs before entering the interactive development runtime.
  * 5. Settle interactive Stop/Restart failures as visible task evidence.
+ * 6. Hide probe/task subprocess consoles (`windowsHide`) and observe ports through one bounded
+ *    per-cycle probe set so the development runtime never flashes consoles or floods WMI.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-30): "pnpm dev should start and supervise the complete development task graph."
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
@@ -360,6 +363,7 @@ async function runTextCommand(
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
+    windowsHide: true,
   })
 
   const timer = setTimeout(() => child.kill(), timeoutMs)
@@ -393,41 +397,39 @@ function parseProcessTree(output: string): Map<number, number[]> {
 async function getProcessTreePids(rootPid: number): Promise<number[]> {
   if (!Number.isFinite(rootPid) || rootPid <= 0) return []
 
-  if (process.platform === 'win32') {
-    const psCommand = [
-      'powershell',
-      '-NoProfile',
-      '-Command',
-      'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId | ConvertTo-Csv -NoTypeInformation',
-    ]
-    const { stdout } = await runTextCommand(psCommand)
-    const childrenMap = new Map<number, number[]>()
-    for (const line of stdout.split('\n')) {
-      const match = line.match(/"(\d+)","(\d+)"/)
-      if (!match) continue
-      const pid = Number(match[1])
-      const ppid = Number(match[2])
-      if (!Number.isFinite(pid) || !Number.isFinite(ppid)) continue
-      const list = childrenMap.get(ppid) ?? []
-      list.push(pid)
-      childrenMap.set(ppid, list)
-    }
-
-    const queue = [rootPid]
-    const all = new Set<number>(queue)
-    while (queue.length > 0) {
-      const current = queue.shift()!
-      for (const child of childrenMap.get(current) ?? []) {
-        if (all.has(child)) continue
-        all.add(child)
-        queue.push(child)
-      }
-    }
-    return [...all]
-  }
-
   const { stdout } = await runTextCommand(['ps', '-eo', 'pid=,ppid='])
   const childrenMap = parseProcessTree(stdout)
+  return collectTreePidsFromChildrenMap(rootPid, childrenMap)
+}
+
+/** Read the Windows parent→children map once so one cycle serves every task observation. */
+async function readWindowsChildrenMap(): Promise<Map<number, number[]>> {
+  const psCommand = [
+    'powershell',
+    '-NoProfile',
+    '-Command',
+    'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId | ConvertTo-Csv -NoTypeInformation',
+  ]
+  const { stdout } = await runTextCommand(psCommand)
+  const childrenMap = new Map<number, number[]>()
+  for (const line of stdout.split('\n')) {
+    const match = line.match(/"(\d+)","(\d+)"/)
+    if (!match) continue
+    const pid = Number(match[1])
+    const ppid = Number(match[2])
+    if (!Number.isFinite(pid) || !Number.isFinite(ppid)) continue
+    const list = childrenMap.get(ppid) ?? []
+    list.push(pid)
+    childrenMap.set(ppid, list)
+  }
+  return childrenMap
+}
+
+function collectTreePidsFromChildrenMap(
+  rootPid: number,
+  childrenMap: ReadonlyMap<number, readonly number[]>
+): number[] {
+  if (!Number.isFinite(rootPid) || rootPid <= 0) return []
   const queue = [rootPid]
   const all = new Set<number>(queue)
   while (queue.length > 0) {
@@ -522,12 +524,12 @@ function parseLinuxPorts(output: string, pidSet: ReadonlySet<number>): string[] 
   return [...ports].sort()
 }
 
-function parseWindowsPorts(
+function parseWindowsPortsByOwner(
   output: string,
   protocol: 'TCP' | 'UDP',
-  pidSet: ReadonlySet<number>
-): string[] {
-  const ports = new Set<string>()
+  pidOwner: ReadonlyMap<number, string>,
+  portsByTask: ReadonlyMap<string, Set<string>>
+): void {
   for (const line of output.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed.startsWith(protocol)) continue
@@ -535,12 +537,13 @@ function parseWindowsPorts(
     const local = parts[1] ?? ''
     const pidToken = protocol === 'TCP' ? parts[4] : parts[3]
     const pid = Number(pidToken)
-    if (!Number.isFinite(pid) || !pidSet.has(pid)) continue
+    if (!Number.isFinite(pid)) continue
+    const owner = pidOwner.get(pid)
+    if (owner === undefined) continue
     const port = extractPort(local)
     if (!port) continue
-    ports.add(`${protocol}:${port}`)
+    portsByTask.get(owner)?.add(`${protocol}:${port}`)
   }
-  return [...ports]
 }
 
 async function collectPortsForPids(pids: number[]): Promise<string[]> {
@@ -565,17 +568,6 @@ async function collectPortsForPids(pids: number[]): Promise<string[]> {
     return parseLinuxPorts(stdout, pidSet)
   }
 
-  if (process.platform === 'win32') {
-    const [tcpResult, udpResult] = await Promise.all([
-      runTextCommand(['netstat', '-ano', '-p', 'tcp']),
-      runTextCommand(['netstat', '-ano', '-p', 'udp']),
-    ])
-    return [
-      ...parseWindowsPorts(tcpResult.stdout, 'TCP', pidSet),
-      ...parseWindowsPorts(udpResult.stdout, 'UDP', pidSet),
-    ].sort()
-  }
-
   return []
 }
 
@@ -589,6 +581,7 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
   const [boundPortsByTask, setBoundPortsByTask] = useState<Record<string, string>>({})
 
   const processByTaskRef = useRef(new Map<string, TaskProcessRuntime>())
+  const runningPidsByTaskRef = useRef<Record<string, number>>({})
   const restartQueueRef = useRef(new Set<string>())
   const shuttingDownRef = useRef(false)
   const didAutoStartRef = useRef(false)
@@ -810,6 +803,7 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
             stdin: 'ignore',
             stdout: 'pipe',
             stderr: 'pipe',
+            windowsHide: true,
           })
       processByTaskRef.current.set(task.id, {
         child,
@@ -975,15 +969,46 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
   }, [activeTabId, setTaskOutput, snapshotTaskOutput])
 
   useEffect(() => {
+    runningPidsByTaskRef.current = runningPidsByTask
+  }, [runningPidsByTask])
+
+  useEffect(() => {
     let cancelled = false
+    let inFlight = false
 
-    const pollPorts = async () => {
-      const entries = Object.entries(runningPidsByTask)
-      if (entries.length === 0) {
-        if (!cancelled) setBoundPortsByTask({})
-        return
+    const observeWindowsPorts = async (): Promise<Record<string, string>> => {
+      const entries = Object.entries(runningPidsByTaskRef.current)
+      if (entries.length === 0) return {}
+      // One process-table read and one netstat pair serve every task in this cycle.
+      const childrenMap = await readWindowsChildrenMap()
+      const pidOwner = new Map<number, string>()
+      const portsByTask = new Map<string, Set<string>>()
+      for (const [taskId, rootPid] of entries) {
+        portsByTask.set(taskId, new Set())
+        for (const pid of collectTreePidsFromChildrenMap(rootPid, childrenMap)) {
+          pidOwner.set(pid, taskId)
+        }
       }
+      if (pidOwner.size === 0) {
+        return Object.fromEntries(entries.map(([taskId]) => [taskId, '-']))
+      }
+      const [tcpResult, udpResult] = await Promise.all([
+        runTextCommand(['netstat', '-ano', '-p', 'tcp']),
+        runTextCommand(['netstat', '-ano', '-p', 'udp']),
+      ])
+      parseWindowsPortsByOwner(tcpResult.stdout, 'TCP', pidOwner, portsByTask)
+      parseWindowsPortsByOwner(udpResult.stdout, 'UDP', pidOwner, portsByTask)
+      return Object.fromEntries(
+        entries.map(([taskId]) => {
+          const ports = [...(portsByTask.get(taskId) ?? [])].sort()
+          return [taskId, ports.length > 0 ? ports.join(',') : '-']
+        })
+      )
+    }
 
+    const observePosixPorts = async (): Promise<Record<string, string>> => {
+      const entries = Object.entries(runningPidsByTaskRef.current)
+      if (entries.length === 0) return {}
       const next: Record<string, string> = {}
       await Promise.all(
         entries.map(async ([taskId, pid]) => {
@@ -992,8 +1017,21 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
           next[taskId] = ports.length > 0 ? ports.join(',') : '-'
         })
       )
+      return next
+    }
 
-      if (!cancelled) setBoundPortsByTask(next)
+    const pollPorts = async () => {
+      if (inFlight) return
+      inFlight = true
+      try {
+        const next =
+          process.platform === 'win32' ? await observeWindowsPorts() : await observePosixPorts()
+        if (!cancelled) setBoundPortsByTask(next)
+      } catch {
+        // Keep the previous projection; the next bounded cycle retries.
+      } finally {
+        inFlight = false
+      }
     }
 
     void pollPorts()
@@ -1005,7 +1043,7 @@ function DevApp({ tasks }: { tasks: readonly DevTask[] }) {
       cancelled = true
       clearInterval(timer)
     }
-  }, [runningPidsByTask])
+  }, [setBoundPortsByTask])
 
   useKeyboard((key) => {
     const keyName = key.name ?? key.sequence
@@ -1226,6 +1264,7 @@ const bootstrap = Bun.spawnSync({
   cwd: process.cwd(),
   stdout: 'inherit',
   stderr: 'inherit',
+  windowsHide: true,
 })
 if (bootstrap.exitCode !== 0) {
   throw new Error(`Failed to build @openspecui/core (exit ${bootstrap.exitCode})`)
@@ -1235,6 +1274,7 @@ const searchBootstrap = Bun.spawnSync({
   cwd: process.cwd(),
   stdout: 'inherit',
   stderr: 'inherit',
+  windowsHide: true,
 })
 if (searchBootstrap.exitCode !== 0) {
   throw new Error(`Failed to build @openspecui/search (exit ${searchBootstrap.exitCode})`)
@@ -1245,6 +1285,7 @@ const webBootstrap = Bun.spawnSync({
   cwd: repoRoot,
   stdout: 'inherit',
   stderr: 'inherit',
+  windowsHide: true,
 })
 if (webBootstrap.exitCode !== 0) {
   throw new Error(
