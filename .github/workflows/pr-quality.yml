@@ -147,6 +147,18 @@ jobs:
         shell: pwsh
         run: Write-Output 'Skipping Windows Portability Gate for automated changeversion release PR.'
 
+      # GitHub runner TEMP is the 8.3 short form (RUNNER~1); where.exe, realpath, and libuv
+      # fs-event reporting canonicalize to the long form, and mixing the two breaks path
+      # assertions and crashes libuv directory watchers. Pin TEMP/TMP to the long form.
+      - name: Canonicalize TEMP to the long path form
+        if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
+        shell: pwsh
+        run: |
+          $longTemp = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($env:TEMP).Path
+          Write-Output "TEMP long form: $longTemp"
+          "TEMP=$longTemp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "TMP=$longTemp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Checkout
         if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         uses: actions/checkout@v4
