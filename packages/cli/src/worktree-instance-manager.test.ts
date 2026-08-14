@@ -4,7 +4,10 @@
  * 2. Prove worker-thread and process children inherit the exact parent Access Gate and Web asset root without argv leakage.
  * 3. Prove readiness authenticates with the inherited Gate while unguarded readiness remains unchanged.
  * 4. Cross both bootstraps into guarded child Servers and settle owners before Windows cwd cleanup.
+ * 5. Keep the bounded Windows lock-release budget ahead of slow hosted runners: the production
+ *    worker child's cwd release can lag its awaited exit while a fresh runner deletes the tree.
  *
+ * Original request (2026-08-14): first hosted-runner Windows lane run hit EBUSY rmdir on the awaited-exit fixture.
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
  * Delivery correction (2026-07-26): clean child fixtures own one minimal physical Web asset root.
  * Owner correction (2026-07-29): daemon start is not a project Server command; child processes use serve.
@@ -59,8 +62,8 @@ afterEach(async () => {
       rm(dir, {
         recursive: true,
         force: true,
-        maxRetries: process.platform === 'win32' ? 5 : 0,
-        retryDelay: 50,
+        maxRetries: process.platform === 'win32' ? 30 : 0,
+        retryDelay: 100,
       })
     )
   )
