@@ -174,7 +174,10 @@ jobs:
         if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # Pin the Windows lane to the Node line the repository develops against. Newer
+          # hosted 24.x builds (24.19) crashed vitest fork workers at suite teardown across
+          # packages while every test passed; 24.6.x matches the development environment.
+          node-version: 24.6.0
 
       - name: Setup pnpm
         if: >-
