@@ -1,8 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-14 Asia/Shanghai):
  * 1. Parse terminal control sequences into typed UI events without leaking control bytes.
  * 2. Convert OSC 7 file URLs into host-native drive, UNC, or POSIX working directories.
+ * 3. Treat the OSC 7 hostname as informational context on POSIX: `fileURLToPath` rejects
+ *    non-local hosts there, so the pathname is resolved after stripping the emitting host.
  *
+ * Original request (2026-08-14): first ubuntu CI run of this branch failed the PTY cwd contract.
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { fileURLToPath } from 'node:url'
@@ -88,7 +91,12 @@ function parseFileUriPath(value: string): string | null {
     try {
       return fileURLToPath(url)
     } catch {
-      return null
+      // POSIX `fileURLToPath` rejects non-local hostnames, but OSC 7 carries the emitting
+      // host only as context; the pathname is the portable working directory there.
+      // Windows keeps hostname → UNC behavior from the first `fileURLToPath` attempt.
+      if (process.platform === 'win32') return null
+      if (url.hostname === '' || url.hostname === 'localhost') return null
+      return fileURLToPath(new URL(`file://${url.pathname}`))
     }
   } catch {
     return trimmed
