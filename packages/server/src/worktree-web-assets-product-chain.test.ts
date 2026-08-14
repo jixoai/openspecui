@@ -1,15 +1,18 @@
 /**
- * Orthogonal intents (created 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove CLI startServer carries its resolved Web asset root through the real Git worktree handoff.
  * 2. Keep the upstream-owner fixture inside the checked Server transport-test lane.
+ * 3. Settle shared watcher owners before removing Windows Git fixtures.
+ * 4. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-25): "格式问题？md文件有什么格式问题，直接快速处理掉，然后继续工作"
  * Review correction (2026-07-26): downstream Manager fixtures cannot prove the startServer owner transition.
  */
 import { isHostedBackendHealthResponse } from '@openspecui/core'
 import { createTRPCClient, httpBatchLink } from '@trpc/client'
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -17,6 +20,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { startServer, type RunningServer } from '../../cli/src/index.js'
 import { findAvailablePort } from './port-utils.js'
 import type { AppRouter } from './router.js'
+import { removeServerTestDirectories } from './server-test-cleanup.js'
 
 const runCommand = promisify(execFile)
 const servers: RunningServer[] = []
@@ -25,11 +29,11 @@ let nextPreferredPort = 36_300
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await removeServerTestDirectories(tempDirs.splice(0))
 })
 
 async function runGit(cwd: string, args: string[]): Promise<void> {
-  await runCommand('git', args, { cwd })
+  await runCommand('git', args, { cwd, windowsHide: true })
 }
 
 async function createProductChainFixture(): Promise<{

@@ -38,8 +38,10 @@
     "src/reactive-subscription.test.ts",
     "src/dashboard-projection-service.test.ts",
     "src/live-projection-loading-summary.test.ts",
+    "src/local-model-download-finalization.test.ts",
     "src/tool-subscription-router.test.ts",
     "src/translation-engine-worker.test.ts",
+    "src/translation-runtime-install-process.test.ts",
     "src/worktree-web-assets-product-chain.test.ts",
     "../local-translator/src/huggingface-transformers.d.ts"
   ],

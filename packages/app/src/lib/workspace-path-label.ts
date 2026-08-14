@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Derive a path-first Workspace label from objective project path and Git facts (4.0e).
  * 2. Keep this a pure presentation selector: it never mutates directory, backend, tab, frame, or identity.
  * 3. Treat Git facts as display metadata only; canonical physical directory remains the durable identity.
@@ -84,9 +84,9 @@ export function parseGitHubSlug(remote: string | null | undefined): string | nul
 
 /** Derive the canonical directory basename for the title fallback. */
 export function directoryBasename(projectPath: string): string {
-  const normalized = projectPath.replace(/\/+$/, '')
+  const normalized = projectPath.replace(/[\\/]+$/, '')
   if (!normalized) return projectPath
-  const segments = normalized.split('/')
+  const segments = normalized.split(/[\\/]+/)
   return segments[segments.length - 1] || normalized
 }
 

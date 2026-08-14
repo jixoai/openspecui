@@ -1,10 +1,14 @@
 /**
- * Orthogonal intents (created 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-07 Asia/Shanghai):
  * 1. Prove pinned OpenSpec 1.6 Store-list truth installs Reference Store observation.
  * 2. Prove a physical referenced Spec edit invalidates the production Planning Catalog Work.
  * 3. Prove replacement Catalog and Instructions truth comes from real selector-exact OpenSpec CLI results.
  * 4. Prove Spec-content invalidation does not wake the independent Store Doctor Work.
+ * 5. Treat work generations as monotonic replacement authority across host watcher event counts.
+ * 6. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  * Original request (2026-07-26): "真正基于文件、甚至是文件内容结构的变更去拉取更新。"
  * Owner architecture clarification (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
  */
@@ -68,7 +72,7 @@ function runCli(args: readonly string[], cwd: string, env: NodeJS.ProcessEnv): P
     execFile(
       process.execPath,
       [CLI_BIN, ...args],
-      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000 },
+      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000, windowsHide: true },
       (error, stdout, stderr) => {
         const exitCode = typeof error?.code === 'number' ? error.code : error ? 1 : 0
         complete({ success: exitCode === 0, stdout, stderr, exitCode })
@@ -280,17 +284,23 @@ describe('Planning CLI Reference Store observation', () => {
           () => {
             expect(planningProjection.read(CATALOG_SELECTOR)).toMatchObject({
               state: 'ready',
-              workGeneration: catalogGeneration + 1,
             })
+            expect(planningProjection.read(CATALOG_SELECTOR).workGeneration).toBeGreaterThan(
+              catalogGeneration
+            )
             expect(referencedRequirementCount(planningProjection)).toBe(2)
             expect(planningProjection.read(INSTRUCTIONS_SELECTOR)).toMatchObject({
               state: 'ready',
-              workGeneration: instructionsGeneration + 1,
             })
+            expect(planningProjection.read(INSTRUCTIONS_SELECTOR).workGeneration).toBeGreaterThan(
+              instructionsGeneration
+            )
             expect(planningProjection.read(APPLY_SELECTOR)).toMatchObject({
               state: 'ready',
-              workGeneration: applyGeneration + 1,
             })
+            expect(planningProjection.read(APPLY_SELECTOR).workGeneration).toBeGreaterThan(
+              applyGeneration
+            )
             expect(referencedSummary(planningProjection, INSTRUCTIONS_SELECTOR)).toBe(
               'Shared identity facts 2.'
             )

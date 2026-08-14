@@ -4,7 +4,10 @@
  * 2. Distinguish a valid non-repository path from an identity-command failure.
  * 3. Canonicalize repository paths for binding identity and stale-intent checks.
  * 4. Propagate cooperative cancellation into Git subprocess ownership.
+ * 5. Hide the Git subprocess console window (`windowsHide`) so Git executed by a console-less
+ *    Windows daemon never flashes a cmd window.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves objective Planning Git failures.
  * Original request (2026-07-31): "Code Git Snapshot，它非常慢，有时候甚至要十几秒"
@@ -59,6 +62,7 @@ export async function defaultRunGit(
       encoding: 'utf8',
       maxBuffer: 8 * 1024 * 1024,
       signal,
+      windowsHide: true,
     })
     return { ok: true, stdout }
   } catch (error: unknown) {

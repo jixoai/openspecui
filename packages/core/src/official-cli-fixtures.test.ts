@@ -3,7 +3,9 @@
  * 1. Execute pinned official OpenSpec 1.4, 1.5, and 1.6 npm packages.
  * 2. Prove root, Store, Reference, workflow-delivery, and failure contracts on real roots.
  * 3. Prove tracked-glob and archive safety behavior without source-string assertions.
+ * 4. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-15): "1.4、1.5、1.6 第一方合同回归测试。"
  */
 import { execFile } from 'node:child_process'
@@ -61,7 +63,7 @@ function runCli(
     execFile(
       process.execPath,
       [CLI_BINS[version], ...args],
-      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000 },
+      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000, windowsHide: true },
       (error, stdout, stderr) => {
         complete({
           exitCode: typeof error?.code === 'number' ? error.code : error ? 1 : 0,

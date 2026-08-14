@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Prove production CLI execution preserves Server ownership and the presentation matrix.
  * 2. Prove no-open bypasses every daemon, prompt, registration, activation, and Browser effect.
  * 3. Prove daemon-only commands never start a project Server.
- * 4. Prove the preference fallback, implicit-default warning, and Radio cancel/write flow.
+ * 4. Prove the preference fallback, implicit-default warning, Radio flow, and native physical paths.
  *
  * Original request (2026-07-29): "--no-open 不询问、不启动 daemon、不投递 Workspace。"
  * Original request (2026-08-01): "全局偏好 + 交互式 Radio；非 tty 无偏好默认 web + 警告。"
  */
+import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ProjectWebPresentationRequest } from './browser-start-command-presenter.js'
 import type { ServeCommandPlan } from './cli-command.js'
@@ -153,7 +154,10 @@ describe('CLI execution owner', () => {
     await executeCliCommand(servePlan({ open: false }), harness.dependencies)
 
     expect(harness.events).toEqual(['server.start'])
-    expect(harness.serverOptions[0]).toMatchObject({ open: false, projectDir: '/workspace' })
+    expect(harness.serverOptions[0]).toMatchObject({
+      open: false,
+      projectDir: resolve('/workspace'),
+    })
   })
 
   it('warns and uses Direct Web when non-interactive with no preference', async () => {

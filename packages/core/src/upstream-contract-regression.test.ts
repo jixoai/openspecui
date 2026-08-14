@@ -3,7 +3,9 @@
  * 1. Pin the official OpenSpec v1.4, v1.5, v1.6, and v1.7 source contracts used by OpenSpecUI.
  * 2. Prevent a version-gate-only adaptation from masking missing workflow or root behavior.
  * 3. Keep validation, archive, task, and tool-delivery fixtures traceable to first-party source.
+ * 4. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-15): "1.4、1.5、1.6 第一方合同回归测试。"
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  */
@@ -16,7 +18,10 @@ const repositoryRoot = resolve(import.meta.dirname, '../../..')
 const upstreamRoot = resolve(repositoryRoot, 'references/openspec')
 
 function readAtTag(tag: 'v1.4.1' | 'v1.5.0', path: string): string {
-  return execFileSync('git', ['-C', upstreamRoot, 'show', `${tag}:${path}`], { encoding: 'utf8' })
+  return execFileSync('git', ['-C', upstreamRoot, 'show', `${tag}:${path}`], {
+    encoding: 'utf8',
+    windowsHide: true,
+  })
 }
 
 function readPinned(path: string): string {
@@ -79,6 +84,7 @@ describe('first-party OpenSpec 1.4-1.7 contracts', () => {
   it('pins the reference checkout to the official v1.7.0 commit', () => {
     const commit = execFileSync('git', ['-C', upstreamRoot, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
+      windowsHide: true,
     }).trim()
 
     expect(commit).toBe('4e16790d90d8f54d4773ad9a5e71a57cd9f1e86b')

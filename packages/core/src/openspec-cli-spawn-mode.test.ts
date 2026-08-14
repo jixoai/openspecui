@@ -1,8 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Prove Worker is the default buffered OpenSpec CLI execution boundary and process remains explicit.
  * 2. Prove Worker execution receives the requested project cwd and CLI argv through CliExecutor.
  * 3. Permit process fallback only when the importable CLI JavaScript module cannot be located.
+ * 4. Preserve Windows argv boundaries and delayed CLI failure evidence before eager JSON retirement.
+ * Original request (2026-08-05): "Continue the Windows adaptation and fix equivalent failures together."
+ * Original request (2026-08-06): "continue"
  *
  * Original request (2026-07-31): "在主线程，通过 OPENSPEC_SPAWN_MODE=process|worker 来进行区分两种模式。"
  * Owner acceptance (2026-07-31): "worker 效果很好，将worker作为默认标准，只有找不到js的时候，才回退到process模式。"
@@ -55,6 +58,13 @@ async function writeCliFixture(root: string): Promise<string> {
       "    if (argv[2] === 'hang') {",
       "      writeFileSync(argv[3], 'started')",
       '      await new Promise(() => setInterval(() => {}, 1_000))',
+      '    }',
+      "    if (argv[2] === 'delayed-failure') {",
+      '      process.stdout.write(JSON.stringify({ ok: false }))',
+      '      await new Promise((resolve) => setTimeout(resolve, 40))',
+      "      process.stderr.write('delayed worker fixture failure')",
+      '      process.exitCode = 7',
+      '      return',
       '    }',
       '    process.stdout.write(JSON.stringify({',
       '      argv: argv.slice(2),',
@@ -143,7 +153,7 @@ describe('CliExecutor OpenSpec spawn mode', () => {
     tempDir = await createTempDir()
     const cliBin = await writeCliFixture(tempDir)
     const configManager = new ConfigManager(tempDir)
-    await configManager.writeConfig({ cli: { command: `${process.execPath} ${cliBin}` } })
+    await configManager.writeConfig({ cli: { command: process.execPath, args: [cliBin] } })
     clearCache()
     cliExecutor = new CliExecutor(configManager, tempDir)
   })
@@ -196,7 +206,7 @@ describe('CliExecutor OpenSpec spawn mode', () => {
     const processOnlyRunner = await writeProcessOnlyFixture(tempDir)
     const configManager = new ConfigManager(tempDir)
     await configManager.writeConfig({
-      cli: { command: `${process.execPath} ${processOnlyRunner}` },
+      cli: { command: process.execPath, args: [processOnlyRunner] },
     })
     await cliExecutor.dispose()
     cliExecutor = new CliExecutor(configManager, tempDir)
@@ -235,6 +245,24 @@ describe('CliExecutor OpenSpec spawn mode', () => {
     expect(result.stderr).toContain('worker-execution-failure')
   })
 
+  it('preserves delayed Worker JSON failure evidence before eager retirement', async () => {
+    process.env[SPAWN_MODE_ENV] = 'worker'
+
+    const result = await cliExecutor.execute(['delayed-failure', '--json'])
+
+    expect(result).toMatchObject({
+      success: false,
+      stdout: '{"ok":false}',
+      stderr: 'delayed worker fixture failure',
+      exitCode: 7,
+      spawnMode: 'worker',
+      phases: {
+        eagerResolved: false,
+        resultReason: 'close',
+      },
+    })
+  })
+
   it('returns the same doctor JSON from the installed OpenSpec CLI in both modes', async () => {
     process.env[TELEMETRY_ENV] = '0'
     await mkdir(join(tempDir, 'openspec', 'changes'), { recursive: true })
@@ -243,7 +271,7 @@ describe('CliExecutor OpenSpec spawn mode', () => {
     const openspecEntry = require.resolve('openspec-cli-16')
     const openspecBin = join(openspecEntry, '..', '..', 'bin', 'openspec.js')
     const configManager = new ConfigManager(tempDir)
-    await configManager.writeConfig({ cli: { command: `${process.execPath} ${openspecBin}` } })
+    await configManager.writeConfig({ cli: { command: process.execPath, args: [openspecBin] } })
     await cliExecutor.dispose()
     cliExecutor = new CliExecutor(configManager, tempDir)
 
@@ -263,7 +291,7 @@ describe('CliExecutor OpenSpec spawn mode', () => {
     const openspecEntry = require.resolve('openspec-cli-16')
     const openspecBin = join(openspecEntry, '..', '..', 'bin', 'openspec.js')
     const configManager = new ConfigManager(tempDir)
-    await configManager.writeConfig({ cli: { command: `${process.execPath} ${openspecBin}` } })
+    await configManager.writeConfig({ cli: { command: process.execPath, args: [openspecBin] } })
     await cliExecutor.dispose()
     cliExecutor = new CliExecutor(configManager, tempDir)
 
@@ -277,7 +305,7 @@ describe('CliExecutor OpenSpec spawn mode', () => {
     process.env[SPAWN_MODE_ENV] = 'worker'
     const vitePlusRunner = await writeVitePlusFixture(tempDir)
     const configManager = new ConfigManager(tempDir)
-    await configManager.writeConfig({ cli: { command: vitePlusRunner } })
+    await configManager.writeConfig({ cli: { command: vitePlusRunner, args: null } })
     await cliExecutor.dispose()
     cliExecutor = new CliExecutor(configManager, tempDir)
 

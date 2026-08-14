@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Prove server startup publishes its actual bound port and keeps the canonical embedded entry available while runtime observers warm up.
- * 2. Prove shutdown awaits HTTP settlement, remains idempotent, and continues across independent owner failures.
+ * 2. Prove shutdown awaits runtime settlement and permits bounded Windows temp-root cleanup.
  * 3. Prove backend shutdown settles attached Planning-root streams and buffered projection CLI children without client cooperation.
  * 4. Prove preview assets remain bound to the current Planning-root lifecycle.
  * 5. Prove Root Context health records stay Server-local and retire with the running Server lifecycle.
@@ -13,6 +13,8 @@
  * Owner-reported defect (2026-07-31): A managed directory launch published `http://localhost:0`, leaving its Workspace permanently offline.
  * Owner-reported defect (2026-07-31): A healthy external dev backend appeared offline because the dynamic local App origin was rejected by CORS.
  * Original request (2026-08-01): OpenSpecUI 7 requires OpenSpec CLI 1.7 before projection work is admitted.
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ * Original request (2026-08-06): "Windows compatibility and adaptation, including the core and peripheral scripts."
  */
 import {
   ConfigManager,
@@ -25,7 +27,7 @@ import {
 } from '@openspecui/core'
 import { createTRPCClient, createWSClient, wsLink } from '@trpc/client'
 import { observable, type Observer } from '@trpc/server/observable'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -63,10 +65,16 @@ vi.mock('@openspecui/core', async () => {
 
 import type { NotificationService } from './notification-service.js'
 import { findAvailablePort } from './port-utils.js'
+import {
+  disposeServerTestFixture,
+  removeServerTestDirectories,
+  SERVER_FIXTURE_TEST_TIMEOUT_MS,
+} from './server-test-cleanup.js'
 import { createServer, startServer, type AppRouter, type RunningServer } from './server.js'
 
 const tempDirs: string[] = []
 const runningServers: RunningServer[] = []
+const serverFixtures: Array<ReturnType<typeof createServer>> = []
 const wsClients: Array<ReturnType<typeof createWSClient>> = []
 
 function commandResult<T>(data: T): CliCommandResult<T> {
@@ -145,9 +153,10 @@ function removeRunningServer(server: RunningServer): void {
 afterEach(async () => {
   for (const client of wsClients.splice(0)) client.close()
   await Promise.all(runningServers.splice(0).map((server) => server.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await Promise.all(serverFixtures.splice(0).map(disposeServerTestFixture))
+  await removeServerTestDirectories(tempDirs.splice(0))
   vi.clearAllMocks()
-})
+}, SERVER_FIXTURE_TEST_TIMEOUT_MS)
 
 async function createProjectDir(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'openspecui-server-startup-'))
@@ -542,6 +551,7 @@ describe('server startup runtime contract', () => {
       enableWatcher: false,
       previewAssetsDir,
     })
+    serverFixtures.push(server)
     let selectedRoot = rootA
     vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
       available: true,
@@ -626,8 +636,5 @@ describe('server startup runtime contract', () => {
       new Request(`http://openspecui.test${replacementPreview.entryPathname}`)
     )
     expect(replacementResponse.ok).toBe(true)
-    await server.planningRootServices.dispose()
-    server.projectInvalidation.dispose()
-    await server.observationEnvironment.dispose()
   })
 })

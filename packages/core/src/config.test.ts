@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-29 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Verify persisted UI configuration defaults, presence, and writes.
  * 2. Verify CLI runner selection, caching, invalidation, and parsing.
  * 3. Verify reactive configuration convergence and watcher cleanup.
@@ -12,6 +12,7 @@
  *
  * Compromise: this historical suite follows the monolithic ConfigManager surface; splitting its existing
  * domains is outside the bounded 6.13 correction.
+ * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
  */
 import { access, chmod, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -677,36 +678,39 @@ describe('ConfigManager', () => {
       }
     })
 
-    it('should resolve openspec via shell lookup when PATH misses the shim directory', async () => {
-      const fakeCliPath = join(tempDir, 'openspec-cli')
-      const fakeShellPath = join(tempDir, 'lookup-shell.sh')
+    it.skipIf(process.platform === 'win32')(
+      'should resolve openspec via POSIX shell lookup when PATH misses the shim directory',
+      async () => {
+        const fakeCliPath = join(tempDir, 'openspec-cli')
+        const fakeShellPath = join(tempDir, 'lookup-shell.sh')
 
-      await writeFile(
-        fakeCliPath,
-        '#!/bin/sh\nif [ "$1" = "--version" ]; then\n  echo "1.2.0"\n  exit 0\nfi\nexit 1\n',
-        'utf8'
-      )
-      await writeFile(
-        fakeShellPath,
-        `#!/bin/sh\nif [ "$1" = "-lc" ]; then\n  printf '%s\\n' '${fakeCliPath}'\n  exit 0\nfi\nexit 1\n`,
-        'utf8'
-      )
-      await Promise.all([chmod(fakeCliPath, 0o755), chmod(fakeShellPath, 0o755)])
+        await writeFile(
+          fakeCliPath,
+          '#!/bin/sh\nif [ "$1" = "--version" ]; then\n  echo "1.2.0"\n  exit 0\nfi\nexit 1\n',
+          'utf8'
+        )
+        await writeFile(
+          fakeShellPath,
+          `#!/bin/sh\nif [ "$1" = "-lc" ]; then\n  printf '%s\\n' '${fakeCliPath}'\n  exit 0\nfi\nexit 1\n`,
+          'utf8'
+        )
+        await Promise.all([chmod(fakeCliPath, 0o755), chmod(fakeShellPath, 0o755)])
 
-      const previousPath = process.env.PATH
-      const previousShell = process.env.SHELL
+        const previousPath = process.env.PATH
+        const previousShell = process.env.SHELL
 
-      process.env.PATH = '/usr/bin:/bin'
-      process.env.SHELL = fakeShellPath
+        process.env.PATH = '/usr/bin:/bin'
+        process.env.SHELL = fakeShellPath
 
-      try {
-        const command = await configManager.getCliCommand()
-        expect(command).toEqual([fakeCliPath])
-      } finally {
-        process.env.PATH = previousPath
-        process.env.SHELL = previousShell
+        try {
+          const command = await configManager.getCliCommand()
+          expect(command).toEqual([fakeCliPath])
+        } finally {
+          process.env.PATH = previousPath
+          process.env.SHELL = previousShell
+        }
       }
-    })
+    )
 
     it('pickWindowsExecutablePath prefers a PATHEXT-matching entry over the extension-less shim', () => {
       // Reproduces the issue #209 `where openspec` shape: extension-less shim first, then .cmd.

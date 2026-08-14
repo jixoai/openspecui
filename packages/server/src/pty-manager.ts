@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Own PTY session process, ordered input, buffer, title, and lifecycle state.
  * 2. Spawn each session at an explicitly resolved launch-project or planning-root cwd and retain its immutable Root generation.
  * 3. Preserve the inherited backend environment, including XDG_DATA_HOME, across cwd targets.
  * 4. List and close server-owned sessions for reconnect and teardown.
+ * 5. Resolve Windows Agent launchers to native argv while retaining the requested display command.
  *
  * Original request (2026-07-16): "3.8 Terminal exposes explicit launch-project cwd and planning-root cwd while preserving inherited XDG_DATA_HOME"
  * Owner-reported defect (2026-07-21): Pre-created Agent terminals are absent from Compose Send.
@@ -11,6 +12,7 @@
  */
 import * as pty from '@lydell/node-pty'
 import {
+  resolveCommandInvocation,
   resolveTerminalShellDefaults,
   type TerminalCwdTarget,
   type TerminalShellDefaults,
@@ -164,7 +166,12 @@ export class PtySession extends EventEmitter {
     this.maxBufferLines = opts.scrollback ?? DEFAULT_SCROLLBACK
     this.maxBufferBytes = opts.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES
 
-    this.process = pty.spawn(this.command, this.args, {
+    const invocation = resolveCommandInvocation(this.command, this.args, {
+      cwd: opts.cwd,
+      env: process.env,
+    })
+
+    this.process = pty.spawn(invocation.command, invocation.args, {
       name: 'xterm-256color',
       cols: opts.cols ?? 80,
       rows: opts.rows ?? 24,

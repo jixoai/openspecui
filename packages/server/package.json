@@ -25,7 +25,7 @@
     "typecheck:nested-spec-tests": "tsc -p tsconfig.nested-spec-tests.json --noEmit",
     "typecheck:project-initialization-tests": "tsc -p tsconfig.project-initialization-tests.json --noEmit",
     "typecheck:default-store-tests": "tsc -p tsconfig.default-store-tests.json --noEmit",
-    "dev": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=development\" tsx watch --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts",
+    "dev": "tsx watch --conditions=development --include '../core/dist/**' --include '../search/dist/**' src/standalone.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

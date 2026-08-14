@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-10 Asia/Shanghai):
 1. Sequence independently reviewable production boundaries.
 2. Bind every checkpoint to focused evidence and implementation-state updates.
 3. Protect credentials, backend ownership, and host-mode invariants.
@@ -128,13 +128,25 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 - [x] 9.9 Clean package builds, a real `pnpm pack`, tar inspection, isolated installation, and installed runtime exercises prove daemon, bundled App, and OpenTray artifacts; pnpm 10.22.0 does not implement `pack --dry-run`.
 - [x] 9.10 Synchronize exact command outputs, counts, candidate commit, known limitations, and all divergence decisions into `implementation.md`.
 
+### Windows portability evidence addendum (2026-08-09 Asia/Shanghai)
+
+- The source start command remains `tsx --conditions=development`; no POSIX `NODE_OPTIONS` assignment, `cross-env`, or replacement `start.bun.ts` is required.
+- Core/CLI/Server now share the native argv-preserving resolver for package-manager, export, buffered CLI, and PTY subprocesses; opaque `.cmd` launchers are rejected.
+- App/Web/CLI directory publication shares bounded atomic swap/rollback; daemon and Workspace aliases converge through canonical physical-path identity.
+- Watcher separators, OSC 7 drive/UNC paths, Windows labels/placeholders, translation cancellation, local-model finalization, Dev TUI rejection handling, Web worker concurrency, formatter argv batching, and host-native PTY/tracing fixtures have focused red/green evidence.
+- Exact `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`, `pnpm test:browser:ci`, and `git diff --check` gates pass on the implementation head recorded in `implementation.md`. Owner/native/browser acceptance and all delivery tasks below remain unchanged.
+- Final clean build, pack inspection, offline isolated install, installed daemon start/stop, installed Direct Web health, foreground shutdown, and port-release evidence pass on Windows; source-workspace resolution is not required by the installed package.
+- The Windows PR job now preserves that distribution evidence through `Setup Bun -> build -> typed installed-package smoke`; local YAML parsing and two local script executions pass, while the first GitHub-hosted result remains a PR-stage boundary.
+- The Owner walkthrough is now a current PowerShell procedure against the installed CLI; stale Bash, Unix socket, old package-version, and obsolete PWA-install instructions were removed without changing Owner checkbox authority.
+- The App mutation transport integration fixture configures a deterministic external CLI runner while preserving the real Server, Access Gate, HTTP, WebSocket, and mutation ledger. This removes unrelated OpenSpec CLI cold-start latency without widening the 20-second lifecycle observation bound.
+
 ## 10. Owner Acceptance, PR, and Merge
 
 - [x] 10.1 Provide numbered acceptance cases with exact isolated setup, trigger, expected observation, and restore commands for native and Web modes.
 - [ ] 10.2 Owner accepts interactive prompt, multiple Workspaces, Open in browser, daemon restart convergence, and immutable-mode diagnostics.
 - [ ] 10.3 Owner accepts macOS/Windows OpenTray window lifecycle, overlay/native-frame hit regions, retained focus, and visual presentation on supported available platforms.
 - [ ] 10.4 Owner accepts Web daemon browser/PWA behavior; Agent automation is not recorded as final browser acceptance.
-- [ ] 10.5 Confirm `openspec/config.yaml` and all unrelated user changes are excluded from commits and PR scope.
+- [x] 10.5 Confirm `openspec/config.yaml` and all unrelated user changes are excluded from commits and PR scope.
 - [ ] 10.6 Open or update the feature-branch PR only after local gates and Owner acceptance; required CI checks pass on the exact head.
 - [ ] 10.7 Archive this Change only after implementation and Owner acceptance are complete; preserve exact acceptance and residual-risk evidence.
 - [ ] 10.8 Merge only after archive/PR checks pass and Manager authorizes or the Manager-mode policy permits auto-merge.

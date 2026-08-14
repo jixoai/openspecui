@@ -5,7 +5,10 @@
  * 3. Own local-directory project children through the managed daemon control boundary.
  * 4. Project source or packaged CLI execution into the public native cold-launch lifecycle.
  * 5. Own the user-level Favorites/Recent catalog behind the local App control boundary.
+ * 6. Hide daemon-owned subprocess console windows (`windowsHide`) and open external URLs through a
+ *    hidden detached `explorer.exe` so the console-less Windows daemon never flashes a cmd window.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-29): "多次执行 openspecui --app 只是在激活同一个 daemon。"
  * Owner correction (2026-07-30): "pnpm openspecui这种开发模式下，应该要启动 opentray 的 devtools。"
  * Owner correction (2026-07-30): appMode must include the durable `openspecui start` cold-launch vector.
@@ -13,7 +16,7 @@
  */
 import { resolveOpenSpecSpawnMode } from '@openspecui/core'
 import type { AppDaemonWorkspaceBinding } from '@openspecui/core/app-daemon-control'
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -72,6 +75,7 @@ async function inspectManagedProjectGit(
       const result = await execFileAsync('git', ['-C', projectDir, ...args], {
         encoding: 'utf8',
         timeout: 3_000,
+        windowsHide: true,
       })
       return result.stdout.trim() || null
     } catch {
@@ -89,6 +93,28 @@ async function inspectManagedProjectGit(
 /** Distinguish the source CLI launched by `pnpm openspecui` from a packaged CLI runtime. */
 export function isDevelopmentCliRuntime(runtimeDir: string): boolean {
   return basename(runtimeDir) === 'src'
+}
+
+/**
+ * Open one external URL from the console-less daemon.
+ *
+ * Windows uses `explorer.exe` directly: it is a GUI-subsystem executable, so it never creates a
+ * console window, and a single argv element reaches the default URL handler without cmd.exe.
+ * Its exit status is not success evidence, so the launch is fire-and-forget. POSIX keeps `open`.
+ */
+export async function openExternalUrlHidden(target: string): Promise<void> {
+  if (process.platform !== 'win32') {
+    const open = await import('open')
+    await open.default(target)
+    return
+  }
+  const child = spawn('explorer.exe', [target], {
+    windowsHide: true,
+    detached: true,
+    stdio: 'ignore',
+  })
+  child.unref()
+  child.once('error', () => undefined)
 }
 
 /** Detect and consume the private detached-daemon bootstrap marker. */
@@ -192,12 +218,7 @@ export async function runDaemonProcess(options: {
       }
     },
   })
-  const openExternalUrl =
-    options.openExternalUrl ??
-    (async (target: string) => {
-      const open = await import('open')
-      await open.default(target)
-    })
+  const openExternalUrl = options.openExternalUrl ?? openExternalUrlHidden
   const version = readCliPackageVersion(runtimeDir)
   const reportDiagnostic = (diagnostic: DaemonPresenterDiagnostic) => {
     process.stderr.write(

@@ -1,27 +1,32 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Prove the public Agent Router exposes complete projection without client-authored policy inputs.
  * 2. Prove structured policy mutation preserves environment-global extension fields and refreshes authority.
  * 3. Prove Agent Init streams use Server-owned profile policy and propagate cancellation to the CLI handle.
  * 4. Prove Init admission rejects unknown and unavailable registry ids before CLI execution.
- * 5. Prove refresh, Push, Update, and Repair bind exact owners and preserve settlement/cancellation.
+ * 5. Prove refresh, Push, Update, Repair, and Windows fixture cleanup preserve exact owner settlement.
  *
  * Original request (2026-08-01): move Agent policy, inventory, Init/Update/repair, cancel, and Terminal evidence to Config.
+ * Original request (2026-08-06): "Windows compatibility and adaptation, including the core and peripheral scripts."
  */
 
 import {
   clearCache,
-  closeAllWatchers,
   type CliStreamHandle,
   type CliStreamSettlement,
   type EnvironmentGlobalProjectionData,
 } from '@openspecui/core'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentDeliveryProjection } from './agent-delivery-projection-service.js'
 import { appRouter } from './router.js'
+import {
+  disposeServerTestFixture,
+  removeServerTestDirectories,
+  SERVER_FIXTURE_TEST_TIMEOUT_MS,
+} from './server-test-cleanup.js'
 import { createServer } from './server.js'
 
 const disposals: Array<() => Promise<void>> = []
@@ -99,27 +104,17 @@ async function createFixture() {
   })
   disposals.push(async () => {
     vi.restoreAllMocks()
-    await server.agentDeliveryProjectionService.dispose()
-    await server.environmentGlobalProjectionService.dispose()
-    await server.storeObservationFallback.dispose()
-    await server.planningRootServices.dispose()
-    await server.storeObservation.dispose()
-    await server.dataHomeObserver.dispose()
-    server.projectInvalidation.dispose()
     await releaseRoot()
-    await server.observationEnvironment.dispose()
-    server.projectRecoveryService.dispose()
-    server.translationCacheService.close()
+    await disposeServerTestFixture(server)
     clearCache()
-    await closeAllWatchers()
-    await rm(root, { recursive: true, force: true })
+    await removeServerTestDirectories([root])
   })
   return { configPath, environment, server }
 }
 
 afterEach(async () => {
   for (const dispose of disposals.splice(0)) await dispose()
-})
+}, SERVER_FIXTURE_TEST_TIMEOUT_MS)
 
 describe('agentIntegrationsRouter', () => {
   it('removes generic CLI Init and Update transports that bypass the Agent owner', async () => {

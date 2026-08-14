@@ -1,9 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Build a static OpenSpec project snapshot from its resolved planning artifacts.
  * 2. Preserve Reference-aware export and publication-redaction policy.
  * 3. Package and launch the static site with the locally resolved Web distribution.
+ * 4. Execute local, production, and preview tooling through an argv-safe subprocess owner.
+ * 5. Hide snapshot Git subprocess console windows (`windowsHide`) so export evidence gathering
+ *    never flashes a cmd window under a console-less Windows parent.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  */
 import {
@@ -25,7 +29,7 @@ import {
 } from '@openspecui/core'
 import { parseOpsxSchemaDetail } from '@openspecui/core/opsx-schema-detail'
 import { createHookRuntime, DocumentService } from '@openspecui/server'
-import { execFile, spawn } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -37,6 +41,7 @@ import {
   materializeReferences,
   resolveOmitPolicy,
 } from './export-references.js'
+import { runExportSubprocess } from './export-subprocess.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const execFileAsync = promisify(execFile)
@@ -173,6 +178,7 @@ async function readDefaultBranch(projectDir: string): Promise<string> {
         cwd: projectDir,
         encoding: 'utf8',
         maxBuffer: 1024 * 1024,
+        windowsHide: true,
       }
     )
     const branch = stdout.trim()
@@ -186,6 +192,7 @@ async function readDefaultBranch(projectDir: string): Promise<string> {
       cwd: projectDir,
       encoding: 'utf8',
       maxBuffer: 1024 * 1024,
+      windowsHide: true,
     })
     const branch = stdout.trim()
     if (branch.length > 0 && branch !== 'HEAD') return branch
@@ -282,6 +289,7 @@ async function readSnapshotGit(projectDir: string): Promise<ExportSnapshot['git'
       cwd: projectDir,
       encoding: 'utf8',
       maxBuffer: 1024 * 1024,
+      windowsHide: true,
     })
     const latestSeconds = Number(latestTsRaw.trim())
     const latestCommitTs =
@@ -296,6 +304,7 @@ async function readSnapshotGit(projectDir: string): Promise<ExportSnapshot['git'
           cwd: projectDir,
           encoding: 'utf8',
           maxBuffer: 1024 * 1024,
+          windowsHide: true,
         }
       )
       repositoryUrl = normalizeRepositoryUrl(remoteRaw)
@@ -310,6 +319,7 @@ async function readSnapshotGit(projectDir: string): Promise<ExportSnapshot['git'
         cwd: projectDir,
         encoding: 'utf8',
         maxBuffer: 8 * 1024 * 1024,
+        windowsHide: true,
       }
     )
 
@@ -710,20 +720,6 @@ function findLocalWebPackage(): string | null {
   return null
 }
 
-/**
- * Run a command and wait for it to complete
- */
-function runCommand(cmd: string, args: string[], cwd: string): Promise<void> {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn(cmd, args, { stdio: 'inherit', cwd, shell: false })
-    child.on('close', (code) => {
-      if (code === 0) resolvePromise()
-      else reject(new Error(`Command failed with exit code ${code}`))
-    })
-    child.on('error', (err) => reject(err))
-  })
-}
-
 type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'deno'
 
 type MinimalPackageJson = {
@@ -906,11 +902,11 @@ async function exportHtml(options: ExportOptions): Promise<void> {
     // Local development: run SSG CLI directly via tsx
     console.log('\n[Local dev mode] Running SSG from local web package...')
     const ssgCli = join(localWebPkg, 'src', 'ssg', 'cli.ts')
-    await runCommand(
-      'pnpm',
-      ['tsx', ssgCli, '--data', dataJsonPath, '--output', outputDir, '--base-path', basePath],
-      localWebPkg
-    )
+    await runExportSubprocess({
+      command: 'pnpm',
+      args: ['tsx', ssgCli, '--data', dataJsonPath, '--output', outputDir, '--base-path', basePath],
+      cwd: localWebPkg,
+    })
   } else {
     // Production: call the bundled SSG CLI from @openspecui/web
     console.log('\n[Production mode] Running SSG via @openspecui/web...')
@@ -920,11 +916,19 @@ async function exportHtml(options: ExportOptions): Promise<void> {
     const execCmd = getExecCommand(pm, webPkgSpec)
 
     try {
-      await runCommand(
-        execCmd.cmd,
-        [...execCmd.args, '--data', dataJsonPath, '--output', outputDir, '--base-path', basePath],
-        process.cwd()
-      )
+      await runExportSubprocess({
+        command: execCmd.cmd,
+        args: [
+          ...execCmd.args,
+          '--data',
+          dataJsonPath,
+          '--output',
+          outputDir,
+          '--base-path',
+          basePath,
+        ],
+        cwd: process.cwd(),
+      })
     } catch (err) {
       console.error('\nSSG failed. Make sure @openspecui/web is installed:')
       console.error(`  ${pm} add @openspecui/web`)
@@ -944,7 +948,7 @@ async function exportHtml(options: ExportOptions): Promise<void> {
 
     const pm = detectPackageManager()
     const { cmd, args } = getRunCommand(pm, 'vite')
-    await runCommand(cmd, [...args, ...viteArgs], outputDir)
+    await runExportSubprocess({ command: cmd, args: [...args, ...viteArgs], cwd: outputDir })
   }
 }
 

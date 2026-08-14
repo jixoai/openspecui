@@ -1,24 +1,31 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
  * 1. Execute one deterministic same-origin Project Binding A-to-B acceptance flow.
  * 2. Pin the OpenSpec 1.7 executable, Store registry scope, and disposable roots.
- * 3. Assert desktop/mobile layout and browser error hygiene with bounded cleanup.
+ * 3. Assert desktop/mobile layout and browser error hygiene with bounded process-tree cleanup.
+ * 4. Resolve repository, temporary, and isolated home paths through native Windows APIs.
+ * 5. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-19): "只需要做好单位页面验收以及多标签页面的单元测试。"
  * Derived requirement (2026-07-20): W2 B2.5 needs one bounded Playwright fixture; manual
  * multi-tab acceptance remains owner-owned. This command is intentionally excluded from the
  * default browser lane and does not exercise App iframe or WebSocket error-propagation policy.
  * Original request (2026-08-03): release OpenSpecUI 7.0.0 against the pinned OpenSpec CLI 1.7 source.
+ * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
+import { terminateChildProcessTree } from '../../core/src/child-process-tree.js'
 
 const execFileAsync = promisify(execFile)
-const REPO_ROOT = resolve(dirname(new URL(import.meta.url).pathname), '../../..')
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const TSX_CLI = join(REPO_ROOT, 'packages/web/node_modules/tsx/dist/cli.mjs')
 const VITE_CLI = join(REPO_ROOT, 'packages/web/node_modules/vite/bin/vite.js')
 const PINNED_OPENSPEC_ROOT = join(REPO_ROOT, 'references/openspec')
@@ -40,6 +47,7 @@ const children: ChildProcess[] = []
 
 function fixtureEnv(dataHome: string): NodeJS.ProcessEnv {
   const env = { ...process.env }
+  const homeDir = join(dataHome, 'home')
   for (const key of [
     'HTTP_PROXY',
     'HTTPS_PROXY',
@@ -55,7 +63,8 @@ function fixtureEnv(dataHome: string): NodeJS.ProcessEnv {
   return {
     ...env,
     XDG_DATA_HOME: dataHome,
-    HOME: join(dataHome, 'home'),
+    HOME: homeDir,
+    USERPROFILE: homeDir,
     XDG_CONFIG_HOME: join(dataHome, 'config'),
     XDG_STATE_HOME: join(dataHome, 'state'),
     XDG_CACHE_HOME: join(dataHome, 'cache'),
@@ -83,6 +92,7 @@ async function runPinnedCli(
       env,
       timeout: ACTION_TIMEOUT_MS,
       maxBuffer: 4 * 1024 * 1024,
+      windowsHide: true,
     })
     return { exitCode: 0, stdout: result.stdout, stderr: result.stderr }
   } catch (error) {
@@ -106,6 +116,7 @@ async function assertPinnedCli(env: NodeJS.ProcessEnv): Promise<void> {
   const { stdout } = await execFileAsync('git', ['-C', PINNED_OPENSPEC_ROOT, 'rev-parse', 'HEAD'], {
     cwd: REPO_ROOT,
     env,
+    windowsHide: true,
   })
   if (stdout.trim() !== PINNED_OPENSPEC_COMMIT) {
     throw new Error(`Pinned OpenSpec SHA mismatch: ${stdout.trim()}`)
@@ -160,6 +171,7 @@ function spawnChild(
     env,
     detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   })
   const output: string[] = []
   child.stdout?.on('data', (chunk: Buffer) => output.push(chunk.toString()))
@@ -255,18 +267,20 @@ async function cleanupBrowser(
 
 async function cleanupChildren(): Promise<void> {
   const runningChildren = children.splice(0)
-  for (const child of runningChildren) {
-    if (typeof child.pid !== 'number') continue
-    if (process.platform !== 'win32') {
+  await Promise.allSettled(
+    runningChildren.map(async (child) => {
+      if (typeof child.pid !== 'number') return
+      if (process.platform === 'win32') {
+        await terminateChildProcessTree(child, 'SIGTERM')
+        return
+      }
       try {
         process.kill(-child.pid, 'SIGTERM')
       } catch {
         child.kill('SIGTERM')
       }
-    } else {
-      child.kill('SIGTERM')
-    }
-  }
+    })
+  )
   const exited = await Promise.all(
     runningChildren.map(
       (child) =>
@@ -280,18 +294,20 @@ async function cleanupChildren(): Promise<void> {
         })
     )
   )
-  runningChildren.forEach((child, index) => {
-    if (exited[index] || typeof child.pid !== 'number') return
-    if (process.platform !== 'win32') {
+  await Promise.allSettled(
+    runningChildren.map(async (child, index) => {
+      if (exited[index] || typeof child.pid !== 'number') return
+      if (process.platform === 'win32') {
+        await terminateChildProcessTree(child, 'SIGKILL')
+        return
+      }
       try {
         process.kill(-child.pid, 'SIGKILL')
       } catch {
         child.kill('SIGKILL')
       }
-    } else {
-      child.kill('SIGKILL')
-    }
-  })
+    })
+  )
 }
 
 async function main(): Promise<void> {
@@ -299,7 +315,7 @@ async function main(): Promise<void> {
   let browser: Browser | null = null
   let context: BrowserContext | null = null
   try {
-    base = await realpath(await mkdtemp(join('/tmp', 'openspecui-w2-b25-playwright-')))
+    base = await realpath(await mkdtemp(join(tmpdir(), 'openspecui-w2-b25-playwright-')))
     const launch = join(base, 'launch')
     const rootA = join(base, 'root-a')
     const rootB = join(base, 'root-b')
@@ -471,7 +487,14 @@ async function main(): Promise<void> {
   } finally {
     await cleanupBrowser(browser, context)
     await cleanupChildren()
-    if (base) await rm(base, { recursive: true, force: true })
+    if (base) {
+      await rm(base, {
+        recursive: true,
+        force: true,
+        maxRetries: process.platform === 'win32' ? 20 : 0,
+        retryDelay: 50,
+      })
+    }
   }
 }
 

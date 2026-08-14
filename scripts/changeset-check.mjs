@@ -1,10 +1,16 @@
 #!/usr/bin/env node
+/**
+ * Orthogonal intents (created 2026-08-14 Asia/Shanghai):
+ * 1. Hide Git subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
+ *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
+ */
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 function gitOutput(args) {
-  const result = spawnSync('git', args, { encoding: 'utf8' })
+  const result = spawnSync('git', args, { encoding: 'utf8', windowsHide: true })
   if (result.status !== 0) {
     const message = result.stderr?.trim() || `git ${args.join(' ')} failed`
     throw new Error(message)

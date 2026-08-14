@@ -1,15 +1,17 @@
 /**
- * Orthogonal intents (created 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-07 Asia/Shanghai):
  * 1. Prove Launch Project local initialization remains independent from a usable external Store Root.
  * 2. Prove the local `openspec/` directory projection replaces reactively after physical initialization.
  * 3. Reject a same-named ordinary file as initialized project structure.
+ * 4. Let the native watcher settle before asserting external directory creation delivery on Windows.
  *
  * Original request (2026-08-01): missing local OpenSpec setup must still offer Init when an external Store is usable.
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
+import { cleanupTempDir, createTempDir, waitForWatcherSettlement } from './__tests__/test-utils.js'
 import { OpenSpecAdapter } from './adapter.js'
 import { clearCache, ReactiveContext } from './reactive-fs/index.js'
 import { acquireWatcherRoot, closeAllWatchers } from './reactive-fs/watcher-pool.js'
@@ -61,6 +63,7 @@ describe('Launch Project initialization projection', () => {
     })
 
     const replacement = stream.next()
+    await waitForWatcherSettlement()
     await mkdir(join(launchProject, 'openspec'), { recursive: true })
     await expect(replacement).resolves.toMatchObject({ value: { initialized: true } })
     await stream.return(undefined)

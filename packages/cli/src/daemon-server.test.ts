@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
- * 1. Prove IPC bind ownership, mode-0600 Unix endpoints, and stale-socket recovery.
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
+ * 1. Prove native-host IPC bind ownership, including Unix mode/stale-socket behavior.
  * 2. Prove Workspace credentials remain private while opaque-id browser actions resolve server-side.
  * 3. Prove stop tears down only daemon host and endpoint state.
  * 4. Prove endpoint authority is released even when host teardown reports a failure.
@@ -14,6 +14,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { resolveDaemonPaths } from './daemon-paths.js'
 import type {
   DaemonManagedProjectControl,
   DaemonPresentationHost,
@@ -53,8 +54,10 @@ async function startFixture(
   host: DaemonPresentationHost,
   options?: { managedProject?: DaemonManagedProjectControl }
 ) {
-  const runDir = join(tempDir, 'run')
-  const endpoint = join(runDir, 'daemon.sock')
+  const { endpoint, runDir } = resolveDaemonPaths({
+    platform: process.platform,
+    openspecuiHome: tempDir,
+  })
   const server = await startDaemonServer({
     endpoint,
     runDir,
@@ -62,7 +65,7 @@ async function startFixture(
     hostMode: 'web',
     host,
     managedProject: options?.managedProject,
-    platform: 'darwin',
+    platform: process.platform,
   })
   runningServers.push(server)
   return { server, endpoint, runDir }
@@ -101,7 +104,7 @@ function createManagedControl() {
 }
 
 describe('daemon IPC server', () => {
-  it('publishes credential-free status and a private Unix socket', async () => {
+  it('publishes credential-free status over the private native IPC endpoint', async () => {
     const tempDir = await createTempDir()
     try {
       const { host } = createHost()
@@ -117,7 +120,9 @@ describe('daemon IPC server', () => {
           appUrl: host.appUrl,
         },
       })
-      expect((await stat(endpoint)).mode & 0o777).toBe(0o600)
+      if (process.platform !== 'win32') {
+        expect((await stat(endpoint)).mode & 0o777).toBe(0o600)
+      }
       expect(JSON.stringify(response)).not.toContain('credential')
     } finally {
       await cleanupTempDir(tempDir)
@@ -188,7 +193,7 @@ describe('daemon IPC server', () => {
     }
   })
 
-  it('rejects a second live owner and recovers a stale Unix endpoint', async () => {
+  it('rejects a second live owner and recovers released endpoint authority', async () => {
     const tempDir = await createTempDir()
     try {
       const firstHost = createHost()
@@ -200,21 +205,23 @@ describe('daemon IPC server', () => {
           version: '6.1.0',
           hostMode: 'web',
           host: createHost().host,
-          platform: 'darwin',
+          platform: process.platform,
         })
       ).rejects.toBeInstanceOf(DaemonAlreadyRunningError)
 
       await fixture.server.close()
       runningServers.splice(runningServers.indexOf(fixture.server), 1)
       await mkdir(fixture.runDir, { recursive: true })
-      await writeFile(fixture.endpoint, 'stale')
+      if (process.platform !== 'win32') {
+        await writeFile(fixture.endpoint, 'stale')
+      }
       const recovered = await startDaemonServer({
         endpoint: fixture.endpoint,
         runDir: fixture.runDir,
         version: '6.1.0',
         hostMode: 'web',
         host: createHost().host,
-        platform: 'darwin',
+        platform: process.platform,
       })
       runningServers.push(recovered)
       await expect(
@@ -246,8 +253,10 @@ describe('daemon IPC server', () => {
     const tempDir = await createTempDir()
     let winner: RunningDaemonServer | null = null
     try {
-      const runDir = join(tempDir, 'run')
-      const endpoint = join(runDir, 'daemon.sock')
+      const { endpoint, runDir } = resolveDaemonPaths({
+        platform: process.platform,
+        openspecuiHome: tempDir,
+      })
       const attempts = await Promise.allSettled(
         [createHost().host, createHost().host].map((host) =>
           startDaemonServer({
@@ -256,7 +265,7 @@ describe('daemon IPC server', () => {
             version: '6.1.0',
             hostMode: 'web',
             host,
-            platform: 'darwin',
+            platform: process.platform,
           })
         )
       )
@@ -301,7 +310,7 @@ describe('daemon IPC server', () => {
         version: '6.1.0',
         hostMode: 'web',
         host: createHost().host,
-        platform: 'darwin',
+        platform: process.platform,
       })
       runningServers.push(replacement)
 
@@ -325,8 +334,10 @@ describe('daemon IPC server', () => {
 
   it('rejects a connected daemon endpoint that never acknowledges the initial Workspace lease', async () => {
     const tempDir = await createTempDir()
-    const runDir = join(tempDir, 'run')
-    const endpoint = join(runDir, 'silent.sock')
+    const { endpoint, runDir } = resolveDaemonPaths({
+      platform: process.platform,
+      openspecuiHome: join(tempDir, 'silent'),
+    })
     await mkdir(runDir, { recursive: true })
     const silentServer = createServer((socket) => {
       socket.on('data', () => {})

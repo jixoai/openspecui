@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove Adapter document reads and writes remain physically scoped and reactive.
  * 2. Prove recursive Spec identities retain every segment across list, read, and write.
  * 3. Prove schema-neutral Change and Archive projections preserve workflow evidence.
  * 4. Prove filesystem symlink and traversal boundaries reject physical-root escape.
  *
  * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
+ * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
  */
 import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -73,10 +74,17 @@ describe('OpenSpecAdapter change files', () => {
     const externalDir = await createTempDir()
     try {
       await mkdir(join(tempDir, 'openspec', 'specs'), { recursive: true })
-      await symlink(externalDir, join(tempDir, 'openspec', 'specs', 'escaped'))
+      await symlink(
+        externalDir,
+        join(tempDir, 'openspec', 'specs', 'escaped'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
 
       await expect(adapter.writeSpec('escaped', '# Escaped\n')).rejects.toThrow(/physical root/i)
       await expect(readFile(join(externalDir, 'spec.md'), 'utf8')).rejects.toThrow()
+
+      // Windows file symlinks require elevated privileges; the junction above covers directory escape.
+      if (process.platform === 'win32') return
 
       const changeDir = join(tempDir, 'openspec', 'changes', 'existing-target')
       const externalTarget = join(externalDir, 'proposal.md')

@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Prove the fixed Workspace Home renders Favorites/path form/Recent/Task Manager entry (4.0a).
  * 2. Prove path submission binds a loading lock and surfaces errors (4.0b).
  * 3. Prove an unsupported App delivery presents directory launch as unsupported.
  * 4. Prove Task Manager remains the primary secondary action on Home.
+ * 5. Prove directory launch copy does not imply a macOS-only path contract.
  *
  * Original request (2026-07-30): "Workspace需要记住曾经打开的目录，并且支持收藏。"
  * Owner correction (2026-07-31): "Task manager按钮应该有 bg-primary 的样式"
@@ -99,7 +100,9 @@ describe('Workspace Home (4.0a/4.0b)', () => {
     const taskManagerClassName = screen.getByRole('button', { name: 'Task Manager' }).className
     expect(taskManagerClassName).toContain('bg-primary')
     expect(taskManagerClassName).toContain('text-primary-foreground')
-    expect(screen.getByPlaceholderText(/your-project/)).toBeTruthy()
+    expect(
+      screen.getByPlaceholderText('C:\\projects\\your-project or /home/you/projects/your-project')
+    ).toBeTruthy()
 
     // Favorites row uses the path-first label (basename fallback).
     expect(screen.getByLabelText('Open /projects/fav')).toBeTruthy()

@@ -1,16 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-07-22 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Prove PTY creation reports failures and preserves backend-resolved session facts.
  * 2. Prove launch-project and Planning-root cwd targets are resolved only by the Server.
  * 3. Prove terminal control sequences preserve output while driving bounded notification fanout.
  * 4. Prove OSC and process-title precedence remains stable across updates.
- * 5. Prove reconnect retains the terminal target-title snapshot and session identity.
+ * 5. Prove reconnect retains terminal identity through host-native cwd fixtures.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-20): PTY create carries opaque planning-root generation evidence.
  * Owner-reported defect (2026-07-21): Starting an Agent terminal can starve the Server and page.
  * Owner clarification (2026-07-22): The whole application becomes unresponsive, not only one PTY socket.
  * Review correction (2026-07-22): Handler evidence must compile against real Manager, Session, WebSocket, and protocol contracts.
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import type { IEvent, IPty } from '@lydell/node-pty'
 import {
@@ -21,6 +22,8 @@ import {
 } from '@openspecui/core'
 import { closeSync, openSync } from 'node:fs'
 import { devNull } from 'node:os'
+import { resolve } from 'node:path'
+import process from 'node:process'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import WebSocket, { WebSocketServer } from 'ws'
 import { NotificationService } from './notification-service.js'
@@ -44,6 +47,8 @@ interface MockPtyWithFd extends IPty {
 
 const mockPtyFd = openSync(devNull, 'w')
 const sessions: TestPtySession[] = []
+const LAUNCH_CWD = process.cwd()
+const PLANNING_CWD = resolve(LAUNCH_CWD, '..')
 
 function createPtyEvent<T>(): IEvent<T> {
   return () => ({ dispose: () => undefined })
@@ -84,7 +89,7 @@ class TestPtySession extends PtySession {
     }
   ) {
     super(id, {
-      command: opts.command,
+      command: process.execPath,
       cwd: opts.cwd,
       cwdTarget: opts.cwdTarget,
       rootGeneration: opts.rootGeneration,
@@ -137,7 +142,7 @@ function createMockPtySession(
     title: opts.title ?? opts.command ?? 'Shell',
     command: opts.command ?? 'bash',
     cwdTarget: opts.cwdTarget ?? 'launch-project',
-    cwd: opts.cwd ?? '/launch',
+    cwd: opts.cwd ?? LAUNCH_CWD,
     rootGeneration: opts.rootGeneration ?? null,
   })
   sessions.push(session)
@@ -166,7 +171,7 @@ function createPtyWebSocketHandler(
     withCwdTarget: async (cwdTarget, task) =>
       task({
         cwdTarget,
-        cwd: cwdTarget === 'planning-root' ? '/planning' : '/launch',
+        cwd: cwdTarget === 'planning-root' ? PLANNING_CWD : LAUNCH_CWD,
         rootGeneration: cwdTarget === 'planning-root' ? 'test-planning-generation' : null,
       }),
   })
@@ -281,7 +286,7 @@ describe('createPtyWebSocketHandler', () => {
   it('resolves launch and planning cwd targets before PTY creation', async () => {
     const session = createMockPtySession({
       cwdTarget: 'planning-root',
-      cwd: '/planning',
+      cwd: PLANNING_CWD,
       rootGeneration: 'planning-generation',
     })
     const ptyManager = createManagerWithSession()
@@ -291,7 +296,7 @@ describe('createPtyWebSocketHandler', () => {
       resolvedTargets.push(cwdTarget)
       return task({
         cwdTarget,
-        cwd: cwdTarget === 'planning-root' ? '/planning' : '/launch',
+        cwd: cwdTarget === 'planning-root' ? PLANNING_CWD : LAUNCH_CWD,
         rootGeneration: cwdTarget === 'planning-root' ? 'planning-generation' : null,
       })
     }
@@ -310,7 +315,7 @@ describe('createPtyWebSocketHandler', () => {
 
     await vi.waitFor(() => {
       expect(create).toHaveBeenCalledWith(
-        expect.objectContaining({ cwdTarget: 'planning-root', cwd: '/planning' })
+        expect.objectContaining({ cwdTarget: 'planning-root', cwd: PLANNING_CWD })
       )
     })
     expect(resolvedTargets).toEqual(['planning-root'])
@@ -318,7 +323,7 @@ describe('createPtyWebSocketHandler', () => {
       type: 'created',
       requestId: 'term-planning',
       cwdTarget: 'planning-root',
-      initialCwd: '/planning',
+      initialCwd: PLANNING_CWD,
       rootGeneration: 'planning-generation',
     })
   })
@@ -487,7 +492,7 @@ describe('createPtyWebSocketHandler', () => {
     expect(outputMessages).toContainEqual({
       type: 'cwd',
       sessionId: session.id,
-      cwd: '/tmp/project',
+      cwd: process.platform === 'win32' ? '\\\\host\\tmp\\project' : '/tmp/project',
     })
     expect(outputMessages).toContainEqual({
       type: 'prompt-state',

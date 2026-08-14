@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-07-19 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove same-repository roots collapse to Code scope.
  * 2. Prove only distinct, available planning repositories are advertised.
  * 3. Preserve backend-issued binding tokens through repository identity resolution.
+ * 4. Keep mocked physical repository identities native on Windows and POSIX.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  */
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -36,21 +38,27 @@ function createIdentityRunner(
 
 describe('Git repository scopes', () => {
   it('collapses nested launch and planning roots inside one Git worktree', async () => {
+    const repositoryRoot = resolve('/repo')
+    const launchRoot = resolve('/repo/apps/ui')
+    const planningRoot = resolve('/repo/planning')
     const runGit = createIdentityRunner({
-      '/repo/apps/ui': { topLevel: '/repo', commonDir: '/repo/.git' },
-      '/repo/planning': { topLevel: '/repo', commonDir: '/repo/.git' },
+      [launchRoot]: { topLevel: repositoryRoot, commonDir: resolve('/repo/.git') },
+      [planningRoot]: { topLevel: repositoryRoot, commonDir: resolve('/repo/.git') },
     })
 
     const scopes = await resolveGitRepositoryScopes({
-      launchProjectDir: '/repo/apps/ui',
+      launchProjectDir: launchRoot,
       codeBindingToken: 'code-token',
-      planningRootDir: '/repo/planning',
+      planningRootDir: planningRoot,
       planningBindingToken: 'planning-token',
       runGit,
       canonicalizePath: preserveSyntheticPath,
     })
 
-    expect(scopes.code.repository).toEqual({ topLevel: '/repo', commonDir: '/repo/.git' })
+    expect(scopes.code.repository).toEqual({
+      topLevel: repositoryRoot,
+      commonDir: resolve('/repo/.git'),
+    })
     expect(scopes.code.bindingToken).toBe('code-token')
     expect(scopes.planning).toBeNull()
     expect(() => selectGitRepositoryScope(scopes, 'planning')).toThrow(
@@ -59,15 +67,20 @@ describe('Git repository scopes', () => {
   })
 
   it('exposes planning only for a distinct canonical repository identity', async () => {
+    const codeRoot = resolve('/code')
+    const planningRoot = resolve('/planning/specs')
     const runGit = createIdentityRunner({
-      '/code': { topLevel: '/code', commonDir: '/code/.git' },
-      '/planning/specs': { topLevel: '/planning', commonDir: '/planning/.git' },
+      [codeRoot]: { topLevel: codeRoot, commonDir: resolve('/code/.git') },
+      [planningRoot]: {
+        topLevel: resolve('/planning'),
+        commonDir: resolve('/planning/.git'),
+      },
     })
 
     const scopes = await resolveGitRepositoryScopes({
-      launchProjectDir: '/code',
+      launchProjectDir: codeRoot,
       codeBindingToken: 'code-token',
-      planningRootDir: '/planning/specs',
+      planningRootDir: planningRoot,
       planningBindingToken: 'planning-token',
       runGit,
       canonicalizePath: preserveSyntheticPath,
@@ -77,27 +90,29 @@ describe('Git repository scopes', () => {
     expect(scopes.planning).toMatchObject({
       scope: 'planning',
       bindingToken: 'planning-token',
-      rootPath: '/planning/specs',
-      repository: { topLevel: '/planning', commonDir: '/planning/.git' },
+      rootPath: planningRoot,
+      repository: { topLevel: resolve('/planning'), commonDir: resolve('/planning/.git') },
     })
   })
 
   it('does not advertise a planning root that is not a Git repository', async () => {
+    const codeRoot = resolve('/code')
+    const planningRoot = resolve('/planning')
     const runGit = createIdentityRunner({
-      '/code': { topLevel: '/code', commonDir: '/code/.git' },
-      '/planning': null,
+      [codeRoot]: { topLevel: codeRoot, commonDir: resolve('/code/.git') },
+      [planningRoot]: null,
     })
 
     const scopes = await resolveGitRepositoryScopes({
-      launchProjectDir: '/code',
+      launchProjectDir: codeRoot,
       codeBindingToken: 'code-token',
-      planningRootDir: '/planning',
+      planningRootDir: planningRoot,
       planningBindingToken: 'planning-token',
       runGit,
       canonicalizePath: preserveSyntheticPath,
     })
 
-    expect(scopes.code.repository?.topLevel).toBe('/code')
+    expect(scopes.code.repository?.topLevel).toBe(codeRoot)
     expect(scopes.planning).toBeNull()
   })
 

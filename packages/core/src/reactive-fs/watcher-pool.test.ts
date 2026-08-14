@@ -1,12 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-07 Asia/Shanghai):
  * 1. Verify path subscriptions share only equivalent callback and missing-path matching contracts.
  * 2. Verify multiple observation roots, including missing logical roots sharing an existing ancestor,
  *    coexist and use reference-counted leases.
  * 3. Verify runtime status reports the complete dynamic root set.
+ * 4. Verify full teardown retires the process-level ProjectWatcher cache.
+ * 5. Let newly acquired native watcher roots settle before filesystem mutation.
  *
  * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
  * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { realpathSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
@@ -18,7 +21,9 @@ import {
   createTempFile,
   waitFor,
   waitForDebounce,
+  waitForWatcherSettlement,
 } from '../__tests__/test-utils.js'
+import { getProjectWatcher } from './project-watcher.js'
 import {
   acquireWatcher,
   acquireWatcherRoot,
@@ -71,6 +76,7 @@ describe('WatcherPool', () => {
           recursive: true,
           debounceMs: 50,
         })
+        await waitForWatcherSettlement()
 
         expect(
           getWatcherRuntimeStatus()
@@ -91,7 +97,7 @@ describe('WatcherPool', () => {
       }
     })
 
-    it('keeps a shared physical watcher alive while missing logical roots release independently', async () => {
+    it('keeps a shared physical watcher alive while missing logical roots settle and release independently', async () => {
       const firstMissingRoot = join(tempDir, 'missing-root-a')
       const secondMissingRoot = join(tempDir, 'missing-root-b')
       const releaseFirst = await acquireWatcherRoot(firstMissingRoot)
@@ -100,10 +106,13 @@ describe('WatcherPool', () => {
       const releasePath = acquireWatcher(secondMissingRoot, onChange, {
         recursive: true,
         debounceMs: 50,
+        watchAncestorsWhileMissing: true,
       })
 
       try {
         await mkdir(secondMissingRoot, { recursive: true })
+        // Let the native recursive watcher settle the new logical root before testing descendant delivery.
+        await waitForWatcherSettlement()
         await writeFile(join(secondMissingRoot, 'first.txt'), 'first', 'utf8')
         await waitFor(() => onChange.mock.calls.length > 0, { timeout: 2000, interval: 50 })
 
@@ -415,6 +424,14 @@ describe('WatcherPool', () => {
       await closeAllWatchers()
 
       expect(getActiveWatcherCount()).toBe(0)
+    })
+
+    it('retires cached ProjectWatcher instances', async () => {
+      const initial = getProjectWatcher(tempDir)
+
+      await closeAllWatchers()
+
+      expect(getProjectWatcher(tempDir)).not.toBe(initial)
     })
 
     it('should clear pending debounce timers', async () => {

@@ -1,23 +1,25 @@
 /**
- * Orthogonal intents (created 2026-07-17 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove project Schema mutations remain inside the selected Planning root.
  * 2. Prove physical symlink confinement and immediate reactive settlement across Schema writes.
  * 3. Prove typed Schema init/fork commands do not require the public generic CLI boundary.
+ * 4. Use junction-based directory escape evidence and settled cleanup on Windows.
  *
  * Original request (2026-07-16): "Schema/Template mutations must reject symlink escape and settle reactive projections before success."
  */
 import type { CliResult, SchemaResolution, TemplatesMap } from '@openspecui/core'
 import { reactiveExists, reactiveReadFile } from '@openspecui/core/reactive-fs'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SchemaMutationService, type SchemaMutationKernel } from './schema-mutation-service.js'
+import { removeServerTestDirectories } from './server-test-cleanup.js'
 
 const tempDirs: string[] = []
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+  await removeServerTestDirectories(tempDirs.splice(0))
 })
 
 function successfulCliResult(): CliResult {
@@ -123,7 +125,11 @@ describe('SchemaMutationService', () => {
     await expect(readFile(templatePath, 'utf8')).resolves.toBe('# Updated template\n')
     await expect(reactiveExists(join(schemaRoot, 'generated', 'nested'))).resolves.toBe(true)
 
-    await symlink(externalRoot, join(schemaRoot, 'escape'))
+    await symlink(
+      externalRoot,
+      join(schemaRoot, 'escape'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
     await expect(
       service.mutate({
         action: 'write-file',

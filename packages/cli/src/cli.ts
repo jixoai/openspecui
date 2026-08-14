@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Parse one production yargs command plan and dispatch serve, daemon, export, or meta execution.
  * 2. Keep each foreground serve process as the sole owner of its project Server and shutdown.
  * 3. Bootstrap the detached App daemon and consume only its explicit managed-directory restoration handoff.
  * 4. Wire the real serve-mode Radio and global serve-preference ports for execution.
+ * 5. Settle internal worktree process children through their owned IPC close protocol.
  *
  * Original request (2026-07-15): "新增一个 --auth 或者 --password。"
  * Delivery correction (2026-07-24): one resolved credential must reach Server and Project Web.
@@ -37,6 +38,7 @@ import { buildStartupBanner } from './startup-banner.js'
 import {
   consumeWorktreeProcessAccessGateCredential,
   consumeWorktreeProcessWebAssetsDir,
+  isWorktreeProcessCloseMessage,
 } from './worktree-server-worker.js'
 
 const entryPath = fileURLToPath(import.meta.url)
@@ -101,11 +103,24 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     if (closing) return
     closing = true
+    process.off('SIGINT', onShutdownSignal)
+    process.off('SIGTERM', onShutdownSignal)
+    process.off('message', onParentMessage)
     await result.lease?.close()
     await result.server.close()
+    if (process.connected) {
+      process.disconnect()
+    }
   }
-  process.once('SIGINT', () => void shutdown())
-  process.once('SIGTERM', () => void shutdown())
+  const onShutdownSignal = () => void shutdown()
+  const onParentMessage = (message: unknown) => {
+    if (isWorktreeProcessCloseMessage(message)) {
+      void shutdown()
+    }
+  }
+  process.once('SIGINT', onShutdownSignal)
+  process.once('SIGTERM', onShutdownSignal)
+  process.on('message', onParentMessage)
 }
 
 main().catch((error: unknown) => {

@@ -3,7 +3,9 @@
  * 1. Execute the pinned OpenSpec 1.7 CLI workflow contracts from `references/openspec`.
  * 2. Prove skipped dependency identity without physical spec files.
  * 3. Prove Apply and Archive operation inputs remain distinct from artifact rules.
+ * 4. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
  */
 import { execFile } from 'node:child_process'
@@ -50,7 +52,7 @@ function runCli(
     execFile(
       process.execPath,
       [OPENSPEC_17_BIN, ...args],
-      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000 },
+      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000, windowsHide: true },
       (error, stdout, stderr) => {
         complete({
           exitCode: typeof error?.code === 'number' ? error.code : error ? 1 : 0,

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Prove the loopback App server owns immutable assets, SPA fallback, and bounded paths.
  * 2. Prove Workspace control follows invalidation Push then typed replacement Pull.
  * 3. Prove browser actions carry only encoded opaque Workspace ids to daemon authority.
@@ -7,6 +7,7 @@
  * 5. Prove the daemon-owned directory catalog is pulled and favorite writes are exact-origin invalidations.
  *
  * Original request (2026-07-29): "daemon 使用随 CLI 发布的本地 App 外壳。"
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import {
   AppDaemonOpenWorkspaceResponseSchema,
@@ -24,7 +25,7 @@ import {
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { request } from 'node:http'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, parse } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DaemonWorkspaceSnapshotSchema } from './daemon-protocol.js'
 import { startLocalAppServer, type LocalAppServer } from './local-app-server.js'
@@ -125,6 +126,18 @@ describe('local App server', () => {
     const rejected = await fetch(server.url, { method: 'POST' })
     expect(rejected.status).toBe(405)
   })
+
+  it.skipIf(process.platform !== 'win32')(
+    'rejects drive-qualified static paths outside the App asset root',
+    async () => {
+      const server = await startFixture()
+      const assetsRoot = parse(tempDirs.at(-1)!).root.toUpperCase()
+      const outsideDrive = assetsRoot.startsWith('C:') ? 'D:' : 'C:'
+      const outsidePath = `${outsideDrive}\\openspecui-outside.txt`
+
+      expect(await requestRawStatus(server.url, `/${encodeURIComponent(outsidePath)}`)).toBe(404)
+    }
+  )
 
   it('publishes invalidation notices before clients pull the replacement snapshot', async () => {
     const server = await startFixture()

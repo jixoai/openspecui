@@ -4,7 +4,9 @@
  * 2. Execute translation engines in isolated worker-thread or process hosts.
  * 3. Enforce cancellation and process memory limits while preserving batch evidence.
  * 4. Route worker-thread payloads by an explicit translation protocol kind.
+ * 5. Hide the process-host bootstrap console window (`windowsHide`) under a console-less Windows daemon.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-24): "Production worker kinds must not claim each other's payloads."
  */
 import {
@@ -475,6 +477,7 @@ function createManagedLocalTranslationProcess(input: {
       [PROCESS_ENTRY_URL_ENV]: input.entryUrl,
     },
     stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+    windowsHide: true,
   })
 }
 

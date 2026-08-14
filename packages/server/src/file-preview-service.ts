@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-07-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Prepare source-bound preview sessions for supported entity files.
- * 2. Serve preview documents and bundled assets with confined path resolution.
+ * 2. Serve preview documents and bundled assets with platform-neutral confined path resolution.
  * 3. Retire every preview session when its owning Planning root is replaced.
  *
  * Original request (2026-07-16): "A -> B 后必须清退 A 的 preview。"
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import {
   inferFileMime,
@@ -14,7 +15,7 @@ import {
 } from '@openspecui/core'
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { basename, extname, resolve } from 'node:path'
+import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { resolveEntityEntryPath } from './entity-file-paths.js'
 
 /** Prepared source-bound preview route and content metadata. */
@@ -68,6 +69,14 @@ function toHash(input: string): string {
 
 function stripLeadingSlash(path: string): string {
   return path.replace(/^\/+/, '')
+}
+
+function isPathInsideRoot(rootPath: string, candidatePath: string): boolean {
+  const relativePath = relative(rootPath, candidatePath)
+  return (
+    relativePath === '' ||
+    (relativePath !== '..' && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath))
+  )
 }
 
 function inferPreviewAssetContentType(path: string): string {
@@ -193,7 +202,7 @@ export class FilePreviewService {
     const normalized = stripLeadingSlash(requestPath)
     if (session.previewKind === 'html') {
       const absolutePath = resolve(session.directoryPath, normalized)
-      if (!absolutePath.startsWith(session.directoryPath + '/')) {
+      if (!isPathInsideRoot(session.directoryPath, absolutePath)) {
         return null
       }
       if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
@@ -208,7 +217,7 @@ export class FilePreviewService {
     if (normalized.startsWith('resource/')) {
       const resourcePath = normalized.slice('resource/'.length)
       const absolutePath = resolve(session.directoryPath, resourcePath)
-      if (!absolutePath.startsWith(session.directoryPath + '/')) {
+      if (!isPathInsideRoot(session.directoryPath, absolutePath)) {
         return null
       }
       if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
@@ -225,7 +234,7 @@ export class FilePreviewService {
       return null
     }
     const absolutePath = resolve(this.previewAssetsDir, assetName)
-    if (!absolutePath.startsWith(resolve(this.previewAssetsDir) + '/')) {
+    if (!isPathInsideRoot(this.previewAssetsDir, absolutePath)) {
       return null
     }
     if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {

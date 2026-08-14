@@ -1,11 +1,15 @@
 #!/usr/bin/env bun
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
  * 1. Generate and deliver a protected changeset version PR.
  * 2. Enter, continue, or exit an explicit Changesets prerelease channel.
  * 3. Wait for the exact merged-head release workflow before reporting completion.
+ * 4. Execute release subprocesses through the shell-independent command owner.
+ * 5. Hide subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-28): "我想先发布一个beta版本"
+ * Original request (2026-08-04): "这个项目之前都是在macOS上做到开发，现在我们在Windows，所以开始一系列的适配。"
  */
 
 import { spawnSync } from 'node:child_process'
@@ -23,6 +27,7 @@ import {
   waitForWorkflowRunToAppear,
   watchWorkflowRun,
 } from './lib/changeversion/release-workflow'
+import { resolveCommandInvocation } from './lib/command-invocation.mjs'
 
 const MAIN_BRANCH = 'main'
 const REMOTE = 'origin'
@@ -54,14 +59,16 @@ type CaptureRunResult = {
 }
 
 function commandFor(bin: 'pnpm' | 'git' | 'gh'): string {
-  if (process.platform === 'win32' && bin === 'pnpm') return 'pnpm.cmd'
   return bin
 }
 
 function runCaptureResult(command: string, args: string[]): CaptureRunResult {
-  const result = spawnSync(command, args, {
+  const invocation = resolveCommandInvocation(command, args)
+  const result = spawnSync(invocation.command, invocation.args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+    windowsHide: true,
   })
   return {
     status: result.status ?? 1,
@@ -80,9 +87,12 @@ function runCapture(command: string, args: string[]): string {
 }
 
 function runInherit(command: string, args: string[], timeoutMs?: number): InheritRunResult {
-  const result = spawnSync(command, args, {
+  const invocation = resolveCommandInvocation(command, args)
+  const result = spawnSync(invocation.command, invocation.args, {
     stdio: 'inherit',
     timeout: timeoutMs,
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+    windowsHide: true,
   })
   const timedOut =
     result.error?.name === 'Error' && (result.error as NodeJS.ErrnoException).code === 'ETIMEDOUT'

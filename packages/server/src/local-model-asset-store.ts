@@ -1,9 +1,19 @@
+/**
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
+ * 1. Persist normalized local-model lifecycle state through complete JSON replacements.
+ * 2. Survive transient Windows target locks without exposing partial metadata.
+ * 3. Retire reactive caches only after the replacement commits.
+ *
+ * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
+ */
 import {
   clearCache,
   LocalModelAssetStateSchema,
+  replaceFileAtomically,
   type LocalModelAssetState,
 } from '@openspecui/core'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 const LocalModelAssetIndexSchema = LocalModelAssetStateSchema.array()
@@ -40,9 +50,13 @@ export class LocalModelAssetStore {
     )
     const serialized = JSON.stringify(normalized, null, 2)
     await mkdir(dirname(this.options.indexPath), { recursive: true })
-    const tempPath = `${this.options.indexPath}.${process.pid}.${Date.now()}.tmp`
-    await writeFile(tempPath, `${serialized}\n`, 'utf8')
-    await rename(tempPath, this.options.indexPath)
+    const tempPath = `${this.options.indexPath}.${process.pid}.${randomUUID()}.tmp`
+    try {
+      await writeFile(tempPath, `${serialized}\n`, 'utf8')
+      await replaceFileAtomically(tempPath, this.options.indexPath)
+    } finally {
+      await rm(tempPath, { force: true }).catch(() => undefined)
+    }
     clearCache()
   }
 

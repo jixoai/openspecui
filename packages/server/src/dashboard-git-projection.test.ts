@@ -2,7 +2,9 @@
  * Orthogonal intents (created 2026-07-25 Asia/Shanghai):
  * 1. Prove the Server-owned Dashboard Git refresh stamp settles an already-cached reactive input.
  * 2. Preserve real Git metadata directory resolution, including the physical/reactive writer boundary.
+ * 3. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-24): "可以归档旧change了，然后我们继续新的change 的开发推进"
  * Derived requirement (2026-07-25): P4.3 requires a cached reactive stamp to be current before refresh returns.
  */
@@ -36,6 +38,7 @@ async function runGit(cwd: string, args: string[]): Promise<string> {
     cwd,
     maxBuffer: 1024 * 1024,
     encoding: 'utf8',
+    windowsHide: true,
   })
   return stdout.trim()
 }

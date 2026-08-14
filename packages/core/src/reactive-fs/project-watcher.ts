@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
- * 1. Own one physical project watcher and dispatch normalized events to path subscriptions.
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
+ * 1. Own one physical project watcher and dispatch native-path events to path subscriptions.
  * 2. Recover watcher residency after dropped events, errors, missing roots, or root replacement.
  * 3. Let explicitly opted-in missing paths settle from one coalesced ancestor creation event.
  * 4. Expose deterministic runtime status and teardown for the shared watcher pool.
  *
  * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
  * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import type { AsyncSubscription, Event } from '@parcel/watcher'
 import { existsSync, lstatSync } from 'node:fs'
@@ -380,7 +381,7 @@ export class ProjectWatcher {
     if (sub.watchChildren) {
       // 监听目录内容：事件路径是订阅目录的子路径
       // 例如：订阅 /foo，事件 /foo/bar/baz.txt 匹配
-      return eventPath.startsWith(sub.path + '/') || eventPath === sub.path
+      return eventPath === sub.path || isStrictAncestorPath(sub.path, eventPath)
     } else {
       // 监听路径本身或其直接子项
       // 例如：订阅 /foo/bar.txt，事件 /foo/bar.txt 匹配

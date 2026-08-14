@@ -1,17 +1,20 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Prove immutable daemon mode and version diagnostics through the production controller and IPC.
- * 2. Prove mode-unspecified activation and stop affect only the existing daemon host.
+ * 2. Prove mode-unspecified activation and stop affect only the existing daemon host on native platform IPC.
+ *
+ * Windows correction (2026-08-04): controller fixtures use named pipes instead of Unix socket paths.
  *
  * Original request (2026-07-29): "start 参数变化时提醒用户把 start 改成 restart。"
  * Original request (2026-07-31): "通过 OPENSPEC_SPAWN_MODE=process|worker 来进行区分两种模式。"
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDaemonController } from './daemon-controller.js'
-import type { DaemonPaths } from './daemon-paths.js'
+import { resolveDaemonPaths, type DaemonPaths } from './daemon-paths.js'
 import type { OpenSpecSpawnMode } from './daemon-protocol.js'
 import type { DaemonPresentationHost, RunningDaemonServer } from './daemon-server.js'
 import { startDaemonServer } from './daemon-server.js'
@@ -27,13 +30,11 @@ afterEach(async () => {
 async function createFixture(version = '6.1.0', openSpecSpawnMode: OpenSpecSpawnMode = 'worker') {
   const homeDir = await mkdtemp(join(tmpdir(), 'openspecui-controller-'))
   tempDirs.push(homeDir)
-  const paths: DaemonPaths = {
-    homeDir,
-    runDir: join(homeDir, 'run'),
-    logsDir: join(homeDir, 'logs'),
-    endpoint: join(homeDir, 'run', 'daemon.sock'),
-    logFile: join(homeDir, 'logs', 'daemon.log'),
-  }
+  const paths: DaemonPaths = resolveDaemonPaths({
+    platform: process.platform,
+    userHome: homeDir,
+    openspecuiHome: homeDir,
+  })
   const host: DaemonPresentationHost = {
     appUrl: 'http://127.0.0.1:14000',
     capabilities: { browser: true, nativeWindow: true },
@@ -49,7 +50,7 @@ async function createFixture(version = '6.1.0', openSpecSpawnMode: OpenSpecSpawn
     hostMode: 'native',
     openSpecSpawnMode,
     host,
-    platform: 'darwin',
+    platform: process.platform,
   })
   servers.push(server)
   return { paths, host, server }
@@ -62,7 +63,7 @@ describe('daemon controller', () => {
       version: '6.1.0',
       entryPath: '/unused/cli.mjs',
       paths: fixture.paths,
-      platform: 'darwin',
+      platform: process.platform,
     })
 
     await expect(controller.start('web')).rejects.toThrow(
@@ -77,7 +78,7 @@ describe('daemon controller', () => {
       version: '6.1.0',
       entryPath: '/unused/cli.mjs',
       paths: fixture.paths,
-      platform: 'darwin',
+      platform: process.platform,
     })
 
     await expect(controller.start(undefined)).resolves.toMatchObject({ hostMode: 'native' })
@@ -90,7 +91,7 @@ describe('daemon controller', () => {
       version: '6.1.0',
       entryPath: '/unused/cli.mjs',
       paths: fixture.paths,
-      platform: 'darwin',
+      platform: process.platform,
     })
 
     await expect(controller.start(undefined)).rejects.toThrow(
@@ -105,7 +106,7 @@ describe('daemon controller', () => {
       version: '6.1.0',
       entryPath: '/unused/cli.mjs',
       paths: fixture.paths,
-      platform: 'darwin',
+      platform: process.platform,
     })
 
     await expect(controller.start(undefined)).rejects.toThrow(

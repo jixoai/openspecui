@@ -1,22 +1,26 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Spawn non-shell child processes without converting synchronous failures into thrown control flow.
  * 2. Buffer stdout/stderr and preserve exit, timeout, and spawn-error evidence.
- * 3. Retire cancelled buffered children through bounded SIGTERM-to-SIGKILL escalation.
- * 4. Resolve commands cross-platform via cross-spawn so Windows npm-global extension-less shims
- *    (`openspec` without `.cmd`) don't fail with ENOENT under `shell:false`.
- * 5. Provide eager JSON resolution + observer-explicit phase timing so OTel never labels result
- *    delivery as child-process exit.
+ * 3. Retire cancelled buffered child-process trees through bounded SIGTERM-to-SIGKILL escalation.
+ * 4. Resolve Windows executables and npm-style Node shims onto native argv boundaries without cmd.exe.
+ * 5. Provide eager JSON resolution + observer-explicit phase timing while treating observed stderr
+ *    as exit-owned evidence that must settle through the real child close.
+ * 6. Hide child console windows by default (`windowsHide`) so a console-less Windows daemon never
+ *    flashes a cmd window per executed command; an explicit caller opt-out remains authoritative.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-29): "继续打磨 app 模式，我们需要将它适配对接 opentray。"
- * Hotfix (2026-07-30, issue #209): Windows `spawn({shell:false})` cannot execute the npm-global
- *   extension-less shim returned first by `where openspec`. `cross-spawn` resolves PATHEXT
- *   (`openspec.cmd`) while keeping `shell:false`, so the security model in cli-executor.ts is
- *   unchanged.
+ * Review correction (2026-08-09): Windows npm-style `.cmd` launchers must resolve to a native
+ *   executable plus argv; `cross-spawn` can route them through `cmd.exe` and reinterpret user input.
  * Original request (2026-07-31): "这些命令的执行，时间绝对不是七八秒那么久...请看一下代码，看能不能让trace更精确"
+ * Original request (2026-08-06): "continue"
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
-import type { ChildProcess, SpawnOptionsWithoutStdio } from 'child_process'
-import crossSpawn from 'cross-spawn'
+import type { ChildProcess, SpawnOptionsWithoutStdio } from 'node:child_process'
+import { spawn } from 'node:child_process'
+import { terminateChildProcessTree } from './child-process-tree.js'
+import { resolveCommandInvocation } from './command-invocation.js'
 
 export interface SpawnErrorInfo {
   code?: string
@@ -80,7 +84,8 @@ export interface BufferedSpawnResult {
   phases?: SpawnPhases
 }
 
-type SafeSpawnResult =
+/** Shell-independent child-process startup result, including synchronous spawn failures. */
+export type SafeSpawnResult =
   | {
       ok: true
       child: ChildProcess
@@ -109,15 +114,24 @@ export function formatSpawnError(err: unknown): SpawnErrorInfo {
   }
 }
 
+/** Spawn without a shell after resolving one caller-environment native argv boundary. */
 export function spawnSafe(
   command: string,
   args: readonly string[],
   options: SpawnOptionsWithoutStdio
 ): SafeSpawnResult {
   try {
+    const invocation = resolveCommandInvocation(command, args, {
+      cwd: typeof options.cwd === 'string' ? options.cwd : undefined,
+      env: options.env,
+    })
     return {
       ok: true,
-      child: crossSpawn(command, [...args], options),
+      child: spawn(invocation.command, invocation.args, {
+        ...options,
+        shell: false,
+        windowsHide: options.windowsHide ?? true,
+      }),
     }
   } catch (err) {
     return {
@@ -127,15 +141,7 @@ export function spawnSafe(
   }
 }
 
-function killChild(child: ChildProcess, signal: NodeJS.Signals = 'SIGTERM'): void {
-  try {
-    child.kill(signal)
-  } catch {
-    // Ignore kill failures when the process already exited or was never started.
-  }
-}
-
-const EAGER_JSON_EXIT_GRACE_MS = 25
+export const EAGER_JSON_EXIT_GRACE_MS = 100
 const BUFFERED_FORCE_KILL_DELAY_MS = 1_000
 
 export function runBufferedCommand(options: {
@@ -206,12 +212,18 @@ export function runBufferedCommand(options: {
     let timedOut = false
     let settled = false
     let eagerJsonTimer: NodeJS.Timeout | null = null
+    let eagerJsonImmediate: NodeJS.Immediate | null = null
     let forceKillTimer: NodeJS.Timeout | null = null
 
-    const clearEagerJsonTimer = () => {
-      if (!eagerJsonTimer) return
-      clearTimeout(eagerJsonTimer)
-      eagerJsonTimer = null
+    const clearEagerJsonResolution = () => {
+      if (eagerJsonTimer) {
+        clearTimeout(eagerJsonTimer)
+        eagerJsonTimer = null
+      }
+      if (eagerJsonImmediate) {
+        clearImmediate(eagerJsonImmediate)
+        eagerJsonImmediate = null
+      }
     }
 
     const clearForceKillTimer = () => {
@@ -225,11 +237,13 @@ export function runBufferedCommand(options: {
         phases.terminationRequestedAt = performance.now()
         observe('termination-requested', { reason })
       }
-      killChild(child)
+      void terminateChildProcessTree(child).catch(() => undefined)
       if (forceKillTimer) return
       forceKillTimer = setTimeout(() => {
         forceKillTimer = null
-        if (!phases.exitAt && !phases.closeAt) killChild(child, 'SIGKILL')
+        if (!phases.exitAt && !phases.closeAt) {
+          void terminateChildProcessTree(child, 'SIGKILL').catch(() => undefined)
+        }
       }, BUFFERED_FORCE_KILL_DELAY_MS)
     }
 
@@ -257,7 +271,7 @@ export function runBufferedCommand(options: {
       if (settled) return
       settled = true
       clearTimer()
-      clearEagerJsonTimer()
+      clearEagerJsonResolution()
       if (reason !== 'eager-json') clearForceKillTimer()
       phases.resultResolvedAt = performance.now()
       phases.resultReason = reason
@@ -288,10 +302,14 @@ export function runBufferedCommand(options: {
           observe('json-complete-observed')
           eagerJsonTimer = setTimeout(() => {
             eagerJsonTimer = null
-            if (settled || phases.exitAt) return
-            phases.eagerResolved = true
-            requestTermination('eager-json')
-            finish('eager-json', { stdout, stderr, exitCode: 0, timedOut })
+            if (settled || phases.exitAt || child.exitCode !== null || stderr.length > 0) return
+            eagerJsonImmediate = setImmediate(() => {
+              eagerJsonImmediate = null
+              if (settled || phases.exitAt || child.exitCode !== null || stderr.length > 0) return
+              phases.eagerResolved = true
+              requestTermination('eager-json')
+              finish('eager-json', { stdout, stderr, exitCode: 0, timedOut })
+            })
           }, EAGER_JSON_EXIT_GRACE_MS)
         } catch {
           // Incomplete JSON — wait for more data.
@@ -308,7 +326,7 @@ export function runBufferedCommand(options: {
     })
 
     child.on('exit', (exitCode, signal) => {
-      clearEagerJsonTimer()
+      clearEagerJsonResolution()
       clearForceKillTimer()
       if (!phases.exitAt) {
         phases.exitAt = performance.now()

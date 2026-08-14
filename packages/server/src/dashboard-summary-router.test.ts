@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove the public Dashboard Summary v2 Router serializes a real Server-owned wake-up.
  * 2. Prove the public typed pull correlates retained/current state without exposing Planning-root paths.
  * 3. Keep the fixture fully typed through createServer, createContext, and the tRPC caller.
  * 4. Prove a typed retained Pull reuses the current reactive Root snapshot instead of rerunning CLI resolution.
+ * 5. Settle shared watcher owners before removing Windows Router fixtures.
  *
  * Original request (2026-07-23): "在已有content的时候，服务端推送变更，然后客户端收到推送通知，于是开始加载更新数据。"
  * Original request (2026-07-27): "Dashboard页面每次页面刷新的时候，它仍然要加载很多？"
@@ -17,12 +18,13 @@ import {
   type CliCommandResult,
   type DashboardSummaryInvalidation,
 } from '@openspecui/core'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 import { appRouter } from './router.js'
+import { removeServerTestDirectories } from './server-test-cleanup.js'
 import { createServer } from './server.js'
 
 function commandResult<T>(data: T, schema: ZodType<T>): CliCommandResult<T> {
@@ -107,7 +109,7 @@ async function createSummaryRouterFixture() {
       await server.observationEnvironment.dispose()
       server.projectRecoveryService.dispose()
       server.translationCacheService.close()
-      await rm(projectDir, { recursive: true, force: true })
+      await removeServerTestDirectories([projectDir])
     },
   }
 }

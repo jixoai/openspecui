@@ -1,15 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
  * 1. Verify successful CLI Store truth acquires, retains, replaces, and removes root leases.
  * 2. Verify failed root observation cannot retain a stale registration lease.
- * 3. Verify service teardown releases every Store root and Doctor dependency observation.
- * 4. Verify Spec-content and Doctor physical facts publish separate per-Store generations.
+ * 3. Verify service teardown releases every Store root and dependency before fixture cleanup.
+ * 4. Verify Spec-content and Doctor facts publish separate generations after watcher settlement.
  * 5. Verify Git working-tree facts legitimately produce Doctor-context invalidation.
  *
  * Original request (2026-07-15): "Registered Store roots are added/removed from observation as registry truth changes."
+ * Original request (2026-08-04): "这个项目之前都是在macOS上做到开发，现在我们在Windows，所以开始一系列的适配。"
  */
 import {
-  closeAllWatchers,
   getWatcherRuntimeStatus,
   ReactiveObservationEnvironment,
   RuntimeInvalidationIndex,
@@ -17,10 +17,14 @@ import {
 } from '@openspecui/core'
 import type { StoreListEntry } from '@openspecui/core/store-types'
 import { realpathSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  removeServerTestDirectories,
+  waitForServerWatcherSettlement,
+} from './server-test-cleanup.js'
 import type { StoreDoctorDependencyObservationFactory } from './store-doctor-dependency-observer.js'
 import { StoreObservationService } from './store-observation-service.js'
 
@@ -39,8 +43,7 @@ function createDoctorDependencyFactory(): StoreDoctorDependencyObservationFactor
 const tempDirs: string[] = []
 
 afterEach(async () => {
-  await closeAllWatchers()
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await removeServerTestDirectories(tempDirs.splice(0))
 })
 
 describe('StoreObservationService', () => {
@@ -65,6 +68,7 @@ describe('StoreObservationService', () => {
 
     try {
       await service.reconcile([store('team', root)])
+      await waitForServerWatcherSettlement()
       changes.length = 0
       const contextGeneration = invalidation.current('context')
       await writeFile(
@@ -112,6 +116,7 @@ describe('StoreObservationService', () => {
 
     try {
       await service.reconcile([store('team', root)])
+      await waitForServerWatcherSettlement()
       const contextGeneration = invalidation.current('context')
       await writeFile(join(root, 'working.md'), '# tracked dirty fact\n', 'utf8')
       await vi.waitFor(() =>

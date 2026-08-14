@@ -1,3 +1,9 @@
+/**
+ * Orthogonal intents (created 2026-08-14 Asia/Shanghai):
+ * 1. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
+ *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
+ */
 import type { WatcherRuntimeStatus } from '@openspecui/core'
 import { execFile } from 'node:child_process'
 import { realpathSync } from 'node:fs'
@@ -22,6 +28,7 @@ async function runGit(cwd: string, args: string[]): Promise<string> {
     cwd,
     maxBuffer: 1024 * 1024,
     encoding: 'utf8',
+    windowsHide: true,
   })
   return stdout.trim()
 }

@@ -1,16 +1,17 @@
 /**
- * Orthogonal intents (created 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove project Schema metadata changes rerun the typed Planning CLI Config Work through real watcher events.
  * 2. Prove newly declared Schema templates rerun the typed Planning CLI Template Work through real watcher events.
  * 3. Prove an added data-home Schema wakes failed selector Work through the real data-home observer.
- * 4. Keep the observed files as invalidation evidence while pinned OpenSpec CLI 1.6 remains the projection truth.
+ * 4. Keep CLI truth authoritative and settle watcher owners before Windows fixture cleanup.
+ * 5. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-26): "真正基于文件、甚至是文件内容结构的变更去拉取更新。"
  * Owner architecture clarification (2026-07-26): "最终计算结果本质是来自于 openspec.CLI 所提供的内容。"
  */
 import {
   CliExecutor,
-  closeAllWatchers,
   ConfigManager,
   OpenSpecCliContractExecutor,
   OpenSpecDataHomeObserver,
@@ -23,7 +24,7 @@ import {
   type RootContext,
 } from '@openspecui/core'
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -33,6 +34,7 @@ import {
   PlanningCliProjectionService,
 } from './planning-cli-projection-service.js'
 import { createServerProjectionWorkRuntime } from './projection-work/runtime.js'
+import { removeServerTestDirectories } from './server-test-cleanup.js'
 
 const CLI_BIN = resolve(import.meta.dirname, '../node_modules/openspec-cli-16/bin/openspec.js')
 const CONFIG_SELECTOR = { kind: 'opsx-config-bundle' } satisfies PlanningCliProjectionSelector
@@ -60,7 +62,7 @@ function runCli(args: readonly string[], cwd: string, env: NodeJS.ProcessEnv): P
     execFile(
       process.execPath,
       [CLI_BIN, ...args],
-      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000 },
+      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000, windowsHide: true },
       (error, stdout, stderr) => {
         const exitCode = typeof error?.code === 'number' ? error.code : error ? 1 : 0
         complete({ success: exitCode === 0, stdout, stderr, exitCode })
@@ -270,8 +272,7 @@ describe('Planning CLI Schema observation', () => {
         await observationEnvironment.dispose()
       }
     } finally {
-      await closeAllWatchers()
-      await rm(base, { recursive: true, force: true })
+      await removeServerTestDirectories([base])
     }
   }, 60_000)
 
@@ -397,8 +398,7 @@ describe('Planning CLI Schema observation', () => {
         await observationEnvironment.dispose()
       }
     } finally {
-      await closeAllWatchers()
-      await rm(base, { recursive: true, force: true })
+      await removeServerTestDirectories([base])
     }
   }, 60_000)
 })

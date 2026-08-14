@@ -1,20 +1,23 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Cross a real guarded Server and the App mutation-ledger WebSocket transport.
  * 2. Prove locator credentials admit only their matching transport.
  * 3. Prove real lifecycle data commits through the framework-neutral owner.
  * 4. Keep reconnect handshakes on the retired locator after its HTTP listener has released the port.
+ * 5. Bound Windows lifecycle and cleanup with a deterministic external CLI fixture.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  * Full-gate correction (2026-07-31): wait for the closed listener's port before asserting same-locator reconnect behavior.
  * Full-gate correction (2026-08-03): allow bounded mutation settlement under full App-suite concurrency.
+ * Original request (2026-08-06): "Windows compatibility and adaptation, including the core and peripheral scripts."
  */
-import type { AccessGateCredential } from '@openspecui/core'
+import { ConfigManager, type AccessGateCredential } from '@openspecui/core'
 import { isPortAvailable, startServer, type RunningServer } from '@openspecui/server'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { removeAppTestDirectories } from '../test-directory-cleanup'
 import { mutateBackendStore } from './backend-client'
 import { bindLaunchCredential, clearLaunchCredential } from './launch-credential'
 import {
@@ -41,11 +44,28 @@ const tempDirs: string[] = []
 const credentialLocators = new Set<string>()
 const PROJECTION_WAIT_TIMEOUT_MS = 20_000
 
+async function configureDeterministicStoreCli(projectDir: string): Promise<void> {
+  const runnerPath = join(projectDir, 'store-mutation-runner.cjs')
+  await writeFile(
+    runnerPath,
+    [
+      'const args = process.argv.slice(2)',
+      "if (args.includes('--version')) { process.stdout.write('1.7.0'); process.exit(0) }",
+      "if (args[0] !== 'store' || args[1] !== 'register') process.exit(2)",
+      "setTimeout(() => { process.stderr.write('deterministic fixture failure\\n'); process.exit(1) }, 25)",
+    ].join('\n'),
+    'utf8'
+  )
+  await new ConfigManager(projectDir).writeConfig({
+    cli: { command: process.execPath, args: [runnerPath] },
+  })
+}
+
 afterEach(async () => {
   for (const apiBaseUrl of credentialLocators) clearLaunchCredential(apiBaseUrl)
   credentialLocators.clear()
   await Promise.all(runningServers.splice(0).map((server) => server.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await removeAppTestDirectories(tempDirs.splice(0))
 })
 
 async function waitForProjection(
@@ -92,6 +112,7 @@ describe('App mutation observation tRPC transport', () => {
   it('uses only the matching locator credential for snapshot and lifecycle observation', async () => {
     const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-app-p3b-'))
     tempDirs.push(projectDir)
+    await configureDeterministicStoreCli(projectDir)
     const server = await startServer({
       projectDir,
       port: 36_500,
@@ -175,15 +196,19 @@ describe('App mutation observation tRPC transport', () => {
     matching.dispose()
     clearLaunchCredential(server.url)
     expect(observedStatuses.slice(0, 2)).toEqual(['accepted', 'running'])
-    expect(
-      terminal.records.find(({ requestId }) => requestId === 'guarded-request')?.status
-    ).toMatch(/^(succeeded|failed|indeterminate)$/)
+    expect(terminal.records.find(({ requestId }) => requestId === 'guarded-request')?.status).toBe(
+      'failed'
+    )
   }, 30_000)
 
   it('isolates simultaneous guarded locator credentials across reconnect handshakes', async () => {
     const projectDirA = await mkdtemp(join(tmpdir(), 'openspecui-app-p3b-a-'))
     const projectDirB = await mkdtemp(join(tmpdir(), 'openspecui-app-p3b-b-'))
     tempDirs.push(projectDirA, projectDirB)
+    await Promise.all([
+      configureDeterministicStoreCli(projectDirA),
+      configureDeterministicStoreCli(projectDirB),
+    ])
     const serverA = await startServer({
       projectDir: projectDirA,
       port: 36_600,

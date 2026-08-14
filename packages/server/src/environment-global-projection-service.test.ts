@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Prove the CLI-resolved Environment Global config path remains a create/change/remove dependency.
  * 2. Prove Environment Global refresh failure retains the prior snapshot as display-only.
  * 3. Prove Environment Global lifecycle Push carries no config or failure business payload.
- * 4. Prove dynamic CLI path replacement retires the old physical dependency.
+ * 4. Prove dynamic CLI path replacement retires the old dependency across platform watcher event counts.
  * 5. Keep Environment and Root refresh alive only after dependency-driven config-file settlement.
  *
  * Original request (2026-07-26): "将这些变更信息收集起来作为触发器，更新底层幂等计算的缓存结果。"
+ * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
  */
 import {
   clearCache,
@@ -237,6 +238,7 @@ describe('EnvironmentGlobalProjectionService', () => {
           workGeneration: 2,
         })
       })
+      const reboundGeneration = fixture.service.readFile().workGeneration
       const callsAfterReplacement = fixture.execute.mock.calls.length
 
       await writeFile(firstPath, '{"profile":"retired"}\n', 'utf8')
@@ -246,11 +248,12 @@ describe('EnvironmentGlobalProjectionService', () => {
       const replacementContent = '{"profile":"core"}\n'
       await writeFile(secondPath, replacementContent, 'utf8')
       await vi.waitFor(() => {
-        expect(fixture.service.readFile()).toMatchObject({
+        const projection = fixture.service.readFile()
+        expect(projection).toMatchObject({
           state: 'ready',
           data: { file: { path: secondPath, content: replacementContent } },
-          workGeneration: 3,
         })
+        expect(projection.workGeneration).toBeGreaterThan(reboundGeneration)
       })
     } finally {
       subscription.unsubscribe()

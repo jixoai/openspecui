@@ -1,16 +1,30 @@
 #!/usr/bin/env node
+/**
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
+ * 1. Execute the CI-selected fast-gate subset without widening package scope.
+ * 2. Invoke Node directly and pnpm through a Windows-safe executable or quoted command-shim boundary.
+ * 3. Hide subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
+ *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
+ * Original request (2026-08-04): "Make equivalent package scripts work on Windows."
+ */
 import { spawnSync } from 'node:child_process'
 import process from 'node:process'
+import { resolvePnpmInvocation } from './lib/pnpm-invocation.mjs'
 
-function commandFor(bin) {
-  return process.platform === 'win32' ? `${bin}.cmd` : bin
-}
-
-function run(command, args) {
-  const result = spawnSync(command, args, { stdio: 'inherit' })
+function run(command, args, options = {}) {
+  const result = spawnSync(command, args, { stdio: 'inherit', windowsHide: true, ...options })
+  if (result.error) throw result.error
   if ((result.status ?? 1) !== 0) {
     process.exit(result.status ?? 1)
   }
+}
+
+function runPnpm(args) {
+  const invocation = resolvePnpmInvocation(args)
+  run(invocation.command, invocation.args, {
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+  })
 }
 
 function withFilters(packages, args) {
@@ -33,49 +47,39 @@ if (scope.fast.mode === 'skip') {
 
 if (scope.fast.mode === 'reference-only') {
   if (scope.fast.runReferenceCheck) {
-    run(commandFor('node'), ['scripts/check-openspec-reference.mjs'])
+    run(process.execPath, ['scripts/check-openspec-reference.mjs'])
   }
   process.exit(0)
 }
 
 if (scope.fast.mode === 'full') {
   if (scope.fast.runReferenceCheck) {
-    run(commandFor('node'), ['scripts/check-openspec-reference.mjs'])
+    run(process.execPath, ['scripts/check-openspec-reference.mjs'])
   }
-  run(commandFor('pnpm'), ['format:check'])
-  run(commandFor('pnpm'), ['lint:ci'])
-  run(commandFor('pnpm'), ['typecheck'])
-  run(commandFor('pnpm'), ['test:ci'])
+  runPnpm(['format:check'])
+  runPnpm(['lint:ci'])
+  runPnpm(['typecheck'])
+  runPnpm(['test:ci'])
   process.exit(0)
 }
 
 if (scope.fast.runReferenceCheck) {
-  run(commandFor('node'), ['scripts/check-openspec-reference.mjs'])
+  run(process.execPath, ['scripts/check-openspec-reference.mjs'])
 }
 if (scope.fast.runFormatCheck) {
-  run(commandFor('pnpm'), ['format:check'])
+  runPnpm(['format:check'])
 }
 if (scope.fast.lintTargets.length > 0) {
-  run(commandFor('pnpm'), [
-    'exec',
-    'oxlint',
-    ...scope.fast.lintTargets,
-    '--ignore-path',
-    '.gitignore',
-  ])
+  runPnpm(['exec', 'oxlint', ...scope.fast.lintTargets, '--ignore-path', '.gitignore'])
 }
 if (scope.fast.typecheckPackages.length > 0) {
-  run(
-    commandFor('pnpm'),
-    withFilters(scope.fast.typecheckPackages, ['--parallel', 'run', 'typecheck'])
-  )
+  runPnpm(withFilters(scope.fast.typecheckPackages, ['--parallel', 'run', 'typecheck']))
 }
 if (scope.fast.runRootTests) {
-  run(commandFor('pnpm'), ['test:root'])
+  runPnpm(['test:root'])
 }
 if (scope.fast.testPackages.length > 0) {
-  run(
-    commandFor('pnpm'),
+  runPnpm(
     withFilters(scope.fast.testPackages, [
       '--workspace-concurrency=1',
       '--if-present',

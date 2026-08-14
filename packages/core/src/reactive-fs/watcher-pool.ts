@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-07 Asia/Shanghai):
  * 1. Own a reference-counted dynamic set of physical watcher roots, including missing logical roots
  *    through their nearest existing ancestor.
  * 2. Bind shared path subscriptions to the deepest active containing root.
  * 3. Rebind pending subscriptions when roots appear, disappear, or recover.
  * 4. Expose aggregate and per-root runtime status for server diagnostics.
- * 5. Keep missing-path ancestor settlement explicit in subscription identity and release all leases deterministically.
+ * 5. Keep missing-path ancestor settlement explicit in subscription identity and retire every
+ *    physical subscription plus cached ProjectWatcher during full teardown.
  *
  * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
  * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
@@ -14,6 +15,7 @@ import { existsSync } from 'node:fs'
 import { dirname, isAbsolute, relative } from 'node:path'
 import { resolveRealPathThroughExistingAncestor } from './path-realpath.js'
 import {
+  closeAllProjectWatchers,
   getProjectWatcher,
   type ProjectWatcher,
   type ProjectWatcherRuntimeStatus,
@@ -350,6 +352,7 @@ export async function closeAllWatchers(): Promise<void> {
   ])
   closingWatcherRoots.clear()
   closingPhysicalWatchers.clear()
+  await closeAllProjectWatchers()
   emitWatcherRuntimeStatus()
 }
 

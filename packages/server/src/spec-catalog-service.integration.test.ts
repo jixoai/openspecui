@@ -3,7 +3,9 @@
  * 1. Execute pinned OpenSpec 1.6 Doctor, Reference list, and referenced show contracts.
  * 2. Carry real CLI evidence through the production Spec Catalog and detail projection.
  * 3. Prove exact Store provenance survives the complete Reference path.
+ * 4. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-16): "真实 Doctor/list/show 必须穿过 production Catalog/detail。"
  */
 import { OpenSpecCliContractExecutor, resolveRootContext, type CliResult } from '@openspecui/core'
@@ -35,7 +37,7 @@ function runCli(args: readonly string[], cwd: string, env: NodeJS.ProcessEnv): P
     execFile(
       process.execPath,
       [CLI_BIN, ...args],
-      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000 },
+      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000, windowsHide: true },
       (error, stdout, stderr) => {
         const exitCode = typeof error?.code === 'number' ? error.code : error ? 1 : 0
         complete({ success: exitCode === 0, stdout, stderr, exitCode })

@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-07-23 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Project current Server metadata from the reactive system subscription.
  * 2. Derive Live authority from the current WebSocket lifecycle and system emission.
  * 3. Preserve reconnect countdown and explicit manual recovery behavior.
+ * 4. Derive the project label from POSIX, drive, or UNC directory paths.
  *
  * Owner-reported defect (2026-07-22): Killing the backend leaves the bottom status bar green and Live.
  */
@@ -22,6 +23,13 @@ export interface ServerStatus {
   wsState: 'idle' | 'connecting' | 'pending'
   /** 重连倒计时（秒），仅在 disconnected 时有值 */
   reconnectCountdown: number | null
+}
+
+function directoryName(projectDir: string): string {
+  const normalized = projectDir.replace(/[\\/]+$/, '')
+  if (!normalized) return projectDir
+  const segments = normalized.split(/[\\/]+/)
+  return segments[segments.length - 1] || normalized
 }
 
 /**
@@ -122,7 +130,7 @@ export function useServerStatus(): ServerStatus {
           }
 
           const projectDir = data.projectDir
-          const dirName = projectDir.split('/').pop() || projectDir
+          const dirName = directoryName(projectDir)
           const connected = wsStateRef.current === 'pending'
 
           setStatus((prev) => ({

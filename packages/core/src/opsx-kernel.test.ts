@@ -4,7 +4,10 @@
  * 2. Prove non-canonical Change ids are rejected before projection streams start.
  * 3. Prove demand-driven Status does not require Apply/artifact warmup and retains CLI evidence.
  * 4. Prove direct Projection Work readers preserve process evidence and skipped non-physical identity.
+ * 5. Keep the real-watcher reactive wait budget ahead of shared CI runners: glob reactivity
+ *    intermittently needs more than 20 s there while finishing in a few seconds locally.
  *
+ * Original request (2026-08-14): shared ubuntu runners timed the glob reactivity waits out ~1 in 3 runs.
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  * Full-gate correction (2026-07-31): prove warmup independence by immediate rejection if touched, not a loaded-suite timing race.
@@ -23,8 +26,8 @@ import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
 describe('OpsxKernel artifact status reactivity', () => {
-  const REACTIVE_WAIT_OPTIONS = { timeout: 20000 }
-  const REACTIVE_TEST_TIMEOUT_MS = 25000
+  const REACTIVE_WAIT_OPTIONS = { timeout: 45000 }
+  const REACTIVE_TEST_TIMEOUT_MS = 50000
   let tempDir: string
   let kernel: OpsxKernel | null = null
   let runtimeInvalidation: RuntimeInvalidationIndex

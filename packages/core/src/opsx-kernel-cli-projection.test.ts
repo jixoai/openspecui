@@ -1,17 +1,20 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove OPSX Change enumeration comes from the executable typed OpenSpec CLI contract.
  * 2. Prove physical Change directories remain invalidation evidence rather than projected business truth.
  * 3. Preserve the exact Store-selected CLI payload and process evidence in the retained projection.
  * 4. Prove aggregate CLI projections submit entity work lazily instead of monopolizing admission.
+ * 5. Preserve cross-platform schema-template paths in executable CLI fixtures.
+ * Original request (2026-08-05): "Continue the Windows adaptation and fix equivalent failures together."
  *
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
  * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
  */
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanupTempDir } from './__tests__/test-utils.js'
 import { CliExecutor } from './cli-executor.js'
 import { ConfigManager } from './config.js'
 import { OpsxKernel } from './opsx-kernel.js'
@@ -20,7 +23,7 @@ import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 const tempDirs: string[] = []
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+  await Promise.all(tempDirs.splice(0).map(cleanupTempDir))
 })
 
 describe('OpsxKernel CLI Change-list projection', () => {
@@ -138,7 +141,7 @@ if (args[0] === 'schema' && args[1] === 'which' && args.includes('--json')) {
 if (args[0] === 'templates' && args.includes('--json')) {
   console.log(JSON.stringify({
     proposal: {
-      path: schemaDir + '/templates/proposal.md',
+      path: ${JSON.stringify(join(schemaDir, 'templates', 'proposal.md'))},
       source: 'project',
     },
   }))

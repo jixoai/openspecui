@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-07-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Define the typed worker/process bootstrap contract for a worktree Server.
  * 2. Carry and runtime-validate inherited Access Gate and Web asset inputs without putting them in argv.
  * 3. Consume process-only bootstrap transfers before descendant processes can inherit them.
  * 4. Route worker-thread payloads by an explicit protocol kind before full validation.
+ * 5. Define the internal graceful-close message shared by process parent and child.
  *
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
  * Delivery correction (2026-07-26): child Servers inherit the parent runtime's resolved Web asset root.
@@ -15,6 +16,15 @@ export const WORKTREE_ACCESS_GATE_CREDENTIAL_ENV =
   'OPENSPECUI_INTERNAL_WORKTREE_ACCESS_GATE_CREDENTIAL'
 export const WORKTREE_WEB_ASSETS_DIR_ENV = 'OPENSPECUI_INTERNAL_WORKTREE_WEB_ASSETS_DIR'
 export const WORKTREE_SERVER_WORKER_KIND = 'worktree-server'
+export const WORKTREE_PROCESS_CLOSE_MESSAGE_TYPE = 'worktree-server:close'
+
+export interface WorktreeProcessCloseMessage {
+  type: typeof WORKTREE_PROCESS_CLOSE_MESSAGE_TYPE
+}
+
+export const WORKTREE_PROCESS_CLOSE_MESSAGE: WorktreeProcessCloseMessage = {
+  type: WORKTREE_PROCESS_CLOSE_MESSAGE_TYPE,
+}
 
 export interface WorktreeServerStartOptions {
   projectDir: string
@@ -55,6 +65,16 @@ export function isWorktreeServerWorkerKind(value: unknown): boolean {
     typeof value === 'object' &&
     value !== null &&
     Reflect.get(value, 'kind') === WORKTREE_SERVER_WORKER_KIND
+  )
+}
+
+export function isWorktreeProcessCloseMessage(
+  value: unknown
+): value is WorktreeProcessCloseMessage {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Reflect.get(value, 'type') === WORKTREE_PROCESS_CLOSE_MESSAGE_TYPE
   )
 }
 

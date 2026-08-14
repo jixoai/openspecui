@@ -1,9 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
  * 1. Prove the public Router reads and writes recursive owned Spec identity through real services.
  * 2. Prove public mutation rejects encoded traversal before physical filesystem effects.
+ * 3. Settle shared watcher owners before removing Windows nested-Spec fixtures.
  *
  * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
+ * Original request (2026-08-06): "Windows compatibility and adaptation, including the core and peripheral scripts."
  */
 import {
   CliContextSchema,
@@ -11,12 +13,17 @@ import {
   parseCliCommandResult,
   type CliCommandResult,
 } from '@openspecui/core'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 import { appRouter } from './router.js'
+import {
+  disposeServerTestFixture,
+  removeServerTestDirectories,
+  SERVER_FIXTURE_TEST_TIMEOUT_MS,
+} from './server-test-cleanup.js'
 import { createServer } from './server.js'
 
 function commandResult<T>(data: T, schema: ZodType<T>): CliCommandResult<T> {
@@ -93,20 +100,13 @@ The platform SHALL preserve recursive Spec identity.
     specPath,
     async dispose() {
       vi.restoreAllMocks()
-      await server.storeObservationFallback.dispose()
-      await server.planningRootServices.dispose()
-      await server.storeObservation.dispose()
-      await server.dataHomeObserver.dispose()
-      server.projectInvalidation.dispose()
-      await server.observationEnvironment.dispose()
-      server.projectRecoveryService.dispose()
-      server.translationCacheService.close()
-      await rm(root, { recursive: true, force: true })
+      await disposeServerTestFixture(server)
+      await removeServerTestDirectories([root])
     },
   }
 }
 
-describe('public nested Spec Router', () => {
+describe('public nested Spec Router', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS }, () => {
   it('reads and writes the complete recursive owned identity', async () => {
     const fixture = await createNestedSpecRouterFixture()
     try {

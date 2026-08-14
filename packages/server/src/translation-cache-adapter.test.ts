@@ -1,3 +1,11 @@
+/**
+ * Orthogonal intents (created 2026-08-14 Asia/Shanghai):
+ * 1. Prove the SQLite translation cache stores validated payloads and migrates legacy tables.
+ * 2. Own a bounded real-sqlite test budget: hosted runners can exceed the 5 s default while
+ *    the native database does its work (2.2 s locally), so both tests carry 20 s bounds.
+ *
+ * Original request (2026-08-14): first hosted-runner Windows lane run timed these sqlite fixtures out.
+ */
 import Database from 'better-sqlite3'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -45,7 +53,7 @@ describe('SqliteTranslationCacheAdapter', () => {
     })
 
     adapter.close()
-  })
+  }, 20_000)
 
   it('migrates existing cache tables without target node storage', async () => {
     const databasePath = join(tempDir, 'legacy-cache.sqlite')
@@ -92,7 +100,7 @@ describe('SqliteTranslationCacheAdapter', () => {
     })
 
     adapter.close()
-  })
+  }, 20_000)
 })
 
 function createAdapter(databasePath: string): SqliteTranslationCacheAdapter {

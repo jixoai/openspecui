@@ -1,5 +1,14 @@
+/**
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
+ * 1. Prove local-model lifecycle events cross the real tRPC WebSocket transport.
+ * 2. Preserve sequential progress, retry, pause, resume, and delete evidence.
+ * 3. Settle Server and shared watcher owners before removing Windows fixtures.
+ *
+ * Original request (2026-08-04): "Adapt macOS-first development and runtime paths to Windows."
+ * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
+ */
 import { createTRPCClient, createWSClient, httpBatchLink, wsLink } from '@trpc/client'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -83,6 +92,7 @@ vi.mock('@huggingface/hub', () => hubMock)
 vi.mock('@huggingface/transformers', () => transformersMock)
 
 import { findAvailablePort } from './port-utils.js'
+import { removeServerTestDirectories } from './server-test-cleanup.js'
 import { startServer, type AppRouter, type RunningServer } from './server.js'
 
 const runningServers: RunningServer[] = []
@@ -122,7 +132,7 @@ beforeEach(() => {
 afterEach(async () => {
   await Promise.all(wsClients.splice(0).map((client) => client.close()))
   await Promise.all(runningServers.splice(0).map((server) => server.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await removeServerTestDirectories(tempDirs.splice(0))
   vi.unstubAllGlobals()
   vi.clearAllMocks()
 })

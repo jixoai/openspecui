@@ -6,7 +6,10 @@
  * 4. Preserve reactive config reads and serialized config writes.
  * 5. Resolve Windows `where` candidates by PATHEXT so the executable shim is preferred over the
  *    extension-less script (issue #209 hotfix).
+ * 6. Hide runner-probe subprocess console windows (`windowsHide`) so a console-less Windows daemon
+ *    never flashes a cmd window while resolving or sniffing the CLI runner.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  * Independent review correction (2026-07-20): Global CLI installation must retire cached and
  * in-flight runner authority.
@@ -294,6 +297,7 @@ async function resolveShellExecutablePath(
         env,
         encoding: 'utf8',
         timeout: 5_000,
+        windowsHide: true,
       })
       const resolved = pickWindowsExecutablePath(stdout.split(/\r?\n/), env.PATHEXT)
       return resolved
@@ -562,6 +566,7 @@ export async function sniffGlobalCli(): Promise<CliSniffResult> {
       env,
       timeout: 10000,
       encoding: 'utf8',
+      windowsHide: true,
     }).catch((err) => ({ error: err })),
     fetchLatestVersion(),
   ])

@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (created 2026-07-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove the real tRPC WebSocket adapter enforces Access Gate admission before router execution.
  * 2. Prove immutable browser shell delivery is public while HTTP data and PTY remain guarded.
  * 3. Prove Server-issued environment identity is stable and reused by Store mutation ownership.
+ * 4. Settle shared watcher owners before removing Windows transport fixtures.
  *
  * Original request (2026-07-24): "apply openspec-change: close-openspec-cli16-delivery-gaps"
  */
@@ -14,12 +15,13 @@ import {
 } from '@openspecui/core'
 import { createTRPCClient, httpBatchLink } from '@trpc/client'
 import type { TRPCConnectionParamsMessage, TRPCRequestMessage } from '@trpc/server/rpc'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import { findAvailablePort } from './port-utils.js'
+import { removeServerTestDirectories } from './server-test-cleanup.js'
 import { startServer, type AppRouter, type RunningServer } from './server.js'
 
 const runningServers: RunningServer[] = []
@@ -30,7 +32,7 @@ let nextPreferredPort = 35_100
 afterEach(async () => {
   for (const socket of sockets.splice(0)) socket.terminate()
   await Promise.all(runningServers.splice(0).map((server) => server.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await removeServerTestDirectories(tempDirs.splice(0))
   vi.unstubAllEnvs()
 })
 

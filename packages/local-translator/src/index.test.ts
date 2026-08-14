@@ -1,4 +1,16 @@
+/**
+ * Orthogonal intents (created 2026-08-06 Asia/Shanghai):
+ * 1. Verify the local Transformers adapter's loading, local-only, and download-plan contracts.
+ * 2. Keep cache-path assertions platform-native while preserving the local model-directory contract.
+ *
+ * Original request (2026-08-06): "continue"
+ */
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const TEST_CACHE_DIR = join(tmpdir(), 'openspecui-nmt-cache')
+const TEST_LOCAL_MODEL_PATH = join(TEST_CACHE_DIR, 'models', 'Xenova', 'custom-model')
 
 const transformersMock = vi.hoisted(() => ({
   env: {
@@ -179,7 +191,7 @@ describe('local translator package', () => {
     const { createLocalTranslatorFactory } = await import('./index.js')
     await createLocalTranslatorFactory({
       defaultModel: 'Xenova/default-model',
-      cacheDir: '/tmp/openspecui-nmt-cache',
+      cacheDir: TEST_CACHE_DIR,
     }).create({
       sourceLanguage: 'en',
       targetLanguage: 'de',
@@ -193,9 +205,9 @@ describe('local translator package', () => {
       expect.objectContaining({ dtype: 'int8' })
     )
     expect(transformersMock.env).toMatchObject({
-      cacheDir: '/tmp/openspecui-nmt-cache',
+      cacheDir: TEST_CACHE_DIR,
       allowLocalModels: true,
-      localModelPath: '/tmp/openspecui-nmt-cache/models',
+      localModelPath: join(TEST_CACHE_DIR, 'models'),
     })
   })
 
@@ -207,7 +219,7 @@ describe('local translator package', () => {
     const { createLocalTranslatorFactory } = await import('./index.js')
     await createLocalTranslatorFactory({
       defaultModel: 'Xenova/default-model',
-      cacheDir: '/tmp/openspecui-nmt-cache',
+      cacheDir: TEST_CACHE_DIR,
       localOnly: true,
     }).create({
       sourceLanguage: 'en',
@@ -218,7 +230,7 @@ describe('local translator package', () => {
 
     expect(transformersMock.pipeline).toHaveBeenCalledWith(
       'translation',
-      '/tmp/openspecui-nmt-cache/models/Xenova/custom-model',
+      TEST_LOCAL_MODEL_PATH,
       expect.objectContaining({
         config: undefined,
         dtype: 'q4',
@@ -237,7 +249,7 @@ describe('local translator package', () => {
     const { createLocalTranslatorFactory } = await import('./index.js')
     await createLocalTranslatorFactory({
       defaultModel: 'Xenova/default-model',
-      cacheDir: '/tmp/openspecui-nmt-cache',
+      cacheDir: TEST_CACHE_DIR,
       localOnly: true,
     }).create({
       sourceLanguage: 'en',
@@ -249,7 +261,7 @@ describe('local translator package', () => {
 
     expect(transformersMock.pipeline).toHaveBeenCalledWith(
       'translation',
-      '/tmp/openspecui-nmt-cache/models/Xenova/custom-model',
+      TEST_LOCAL_MODEL_PATH,
       expect.objectContaining({
         config: { model_type: 'marian' },
         dtype: 'q4',

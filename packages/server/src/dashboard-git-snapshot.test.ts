@@ -1,14 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
  * 1. Prove Dashboard Git computes full activity only for the current worktree and summary-only data elsewhere.
  * 2. Prove each live snapshot carries the backend-issued Code binding provenance.
  * 3. Prove detached and unavailable worktrees never start hidden detail commands.
  * 4. Prove the current activity window is five rows with conditional Uncommitted inclusion.
+ * 5. Keep mocked physical Git worktree paths native on Windows and POSIX.
  *
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 binds Dashboard snapshots to their Code token.
  * Original request (2026-07-31): "Code Git Snapshot 的 Other Worktrees 默认隐藏 (detached)。然后commitList这里默认显示5个就好"
  */
+import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildDashboardGitSnapshot,
@@ -17,11 +19,11 @@ import {
 
 describe('dashboard git snapshot helpers', () => {
   it('builds five current-worktree activity rows and summary-only other worktrees', async () => {
-    const projectDir = '/repo/main'
-    const featureDir = '/repo/feature-a'
+    const projectDir = resolve('/repo/main')
+    const featureDir = resolve('/repo/feature-a')
     const readPathTimestampMs = vi.fn(async (absolutePath: string) => {
-      if (absolutePath.endsWith('/spec.md')) return 1_710_100_000_000
-      if (absolutePath.endsWith('/tasks.md')) return 1_710_200_000_000
+      if (absolutePath.endsWith('spec.md')) return 1_710_100_000_000
+      if (absolutePath.endsWith('tasks.md')) return 1_710_200_000_000
       return null
     })
 
@@ -148,7 +150,7 @@ describe('dashboard git snapshot helpers', () => {
   })
 
   it('shows five commits and no Uncommitted row when the current worktree is clean', async () => {
-    const projectDir = '/repo/main'
+    const projectDir = resolve('/repo/main')
     const runGit = vi.fn(async (cwd: string, args: string[]) => {
       const command = args.join(' ')
       if (
@@ -193,9 +195,9 @@ describe('dashboard git snapshot helpers', () => {
   })
 
   it('skips Git detail commands for detached and unavailable worktrees', async () => {
-    const projectDir = '/repo/main'
-    const detachedDir = '/repo/detached'
-    const unavailableDir = '/repo/unavailable'
+    const projectDir = resolve('/repo/main')
+    const detachedDir = resolve('/repo/detached')
+    const unavailableDir = resolve('/repo/unavailable')
     const commands: Array<{ cwd: string; command: string }> = []
     const runGit = vi.fn(async (cwd: string, args: string[]) => {
       const command = args.join(' ')
@@ -245,7 +247,7 @@ describe('dashboard git snapshot helpers', () => {
   })
 
   it('omits empty Uncommitted and returns the five newest current commits', async () => {
-    const projectDir = '/repo/main'
+    const projectDir = resolve('/repo/main')
     const runGit = vi.fn(async (cwd: string, args: string[]) => {
       const command = args.join(' ')
       if (
@@ -290,50 +292,49 @@ describe('dashboard git snapshot helpers', () => {
   })
 
   it('removes detached worktrees with a forced git worktree remove command', async () => {
+    const projectDir = resolve('/repo/main')
+    const targetPath = resolve('/tmp/detached')
     const runGit = vi.fn(async (_cwd: string, args: string[]) => {
       const cmd = args.join(' ')
       if (cmd === 'worktree list --porcelain') {
         return {
           ok: true,
           stdout: [
-            'worktree /repo/main',
+            `worktree ${projectDir}`,
             'branch refs/heads/main',
             '',
-            'worktree /tmp/detached',
+            `worktree ${targetPath}`,
             'detached',
             '',
           ].join('\n'),
         }
       }
-      if (cmd === 'worktree remove --force /tmp/detached') {
+      if (cmd === `worktree remove --force ${targetPath}`) {
         return { ok: true, stdout: '' }
       }
       return { ok: false, stdout: '' }
     })
 
     await removeDetachedDashboardGitWorktree({
-      projectDir: '/repo/main',
-      targetPath: '/tmp/detached',
+      projectDir,
+      targetPath,
       runGit,
     })
 
-    expect(runGit).toHaveBeenCalledWith('/repo/main', ['worktree', 'list', '--porcelain'])
-    expect(runGit).toHaveBeenCalledWith('/repo/main', [
-      'worktree',
-      'remove',
-      '--force',
-      '/tmp/detached',
-    ])
+    expect(runGit).toHaveBeenCalledWith(projectDir, ['worktree', 'list', '--porcelain'])
+    expect(runGit).toHaveBeenCalledWith(projectDir, ['worktree', 'remove', '--force', targetPath])
   })
 
   it('rejects non-detached or current worktrees for dashboard removal', async () => {
+    const projectDir = resolve('/repo/main')
+    const featureDir = resolve('/repo/feature')
     const nonDetachedRunGit = vi.fn(async () => ({
       ok: true,
       stdout: [
-        'worktree /repo/main',
+        `worktree ${projectDir}`,
         'branch refs/heads/main',
         '',
-        'worktree /repo/feature',
+        `worktree ${featureDir}`,
         'branch refs/heads/feature',
         '',
       ].join('\n'),
@@ -341,16 +342,16 @@ describe('dashboard git snapshot helpers', () => {
 
     await expect(
       removeDetachedDashboardGitWorktree({
-        projectDir: '/repo/main',
-        targetPath: '/repo/main',
+        projectDir,
+        targetPath: projectDir,
         runGit: nonDetachedRunGit,
       })
     ).rejects.toThrow(/Cannot remove the current worktree/)
 
     await expect(
       removeDetachedDashboardGitWorktree({
-        projectDir: '/repo/main',
-        targetPath: '/repo/feature',
+        projectDir,
+        targetPath: featureDir,
         runGit: nonDetachedRunGit,
       })
     ).rejects.toThrow(/Only detached worktrees can be removed/)

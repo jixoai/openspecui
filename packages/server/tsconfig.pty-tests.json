@@ -5,6 +5,7 @@
   },
   "include": [
     "src/pty-input-writer.test.ts",
+    "src/pty-command-invocation.test.ts",
     "src/pty-output-transport.test.ts",
     "src/pty-websocket.test.ts",
     "src/pty-cwd-contract.test.ts",

@@ -1,3 +1,12 @@
+/**
+ * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
+ * 1. Render the Pixi virtual trackpad and its gesture feedback.
+ * 2. Translate pointer, touch, long-press, drag, scroll, and edge gestures into panel events.
+ * 3. Keep trackpad layout, resize, accent, and theme projection synchronized.
+ * 4. Retire late Pixi initialization after disconnect so detached render loops cannot survive.
+ *
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows, then handle similar portability failures."
+ */
 import { LitElement, css, html } from 'lit'
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
 import { onThemeChange, resolvePixiTheme, type PixiTheme } from './pixi-theme.js'
@@ -83,6 +92,7 @@ export class VirtualTrackpadTab extends LitElement {
   private _resizeObserver: ResizeObserver | null = null
   private _theme: PixiTheme = resolvePixiTheme(this)
   private _unsubTheme: (() => void) | null = null
+  private _connectionGeneration = 0
 
   // Gesture state
   private _touchStart: { x: number; y: number; time: number } | null = null
@@ -105,6 +115,7 @@ export class VirtualTrackpadTab extends LitElement {
 
   async connectedCallback() {
     super.connectedCallback()
+    const connectionGeneration = ++this._connectionGeneration
     this._theme = resolvePixiTheme(this)
     this._syncAccentRgb()
     this._unsubTheme = onThemeChange((theme) => {
@@ -113,10 +124,11 @@ export class VirtualTrackpadTab extends LitElement {
       this._drawSurface()
     }, this)
     await this.updateComplete
-    await this._initPixi()
+    await this._initPixi(connectionGeneration)
   }
 
   disconnectedCallback() {
+    this._connectionGeneration += 1
     super.disconnectedCallback()
     if (this._longPressTimer) clearTimeout(this._longPressTimer)
     this._stopEdgeSlide()
@@ -138,7 +150,7 @@ export class VirtualTrackpadTab extends LitElement {
     this._accentRgb = `${r},${g},${b}`
   }
 
-  private async _initPixi() {
+  private async _initPixi(connectionGeneration: number) {
     const host = this.shadowRoot?.querySelector('.pixi-host') as HTMLElement
     if (!host) return
 
@@ -152,6 +164,11 @@ export class VirtualTrackpadTab extends LitElement {
       resolution: window.devicePixelRatio || 1,
       autoDensity: false,
     })
+
+    if (!this.isConnected || connectionGeneration !== this._connectionGeneration) {
+      app.destroy()
+      return
+    }
 
     host.appendChild(app.canvas as HTMLCanvasElement)
     this._app = app

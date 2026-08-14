@@ -4,7 +4,9 @@
  * 2. Prove stale Planning intent conflicts before refresh, removal, or handoff side effects.
  * 3. Prove Launch-owned Code Git remains available when Planning resolution fails.
  * 4. Prove one scope projection observes Code identity exactly once before Planning comparison.
+ * 5. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  */
@@ -110,7 +112,7 @@ function requirePlanning(
 
 async function initRepository(path: string): Promise<void> {
   await mkdir(join(path, 'openspec'), { recursive: true })
-  await runCommand('git', ['init', '--quiet'], { cwd: path })
+  await runCommand('git', ['init', '--quiet'], { cwd: path, windowsHide: true })
 }
 
 async function createFixture(): Promise<GitBindingFixture> {

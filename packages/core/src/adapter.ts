@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
  * 1. Read and mutate one CLI-selected planning root through reactive filesystem APIs.
- * 2. Project recursive Specs, Changes, Archives, and schema-neutral entity files.
+ * 2. Project recursive Specs, Changes, Archives, and schema-neutral entity files with canonical protocol paths.
  * 3. Keep tracked workflow tasks distinct from document checklist analytics.
  * 4. Preserve filesystem provenance and mutation boundaries for server consumers.
  * 5. Expose Launch Project local-initialization evidence independently from Planning-root readiness.
@@ -9,6 +9,7 @@
  * Original request (2026-07-15): "Split formal tracked progress, document checklist statistics, and Apply instruction progress into non-interchangeable facts."
  * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  * Review correction (2026-08-02): a same-named ordinary file is not initialized project structure.
+ * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -21,6 +22,7 @@ import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-prev
 import {
   buildOpsxEntityDetail,
   getOpsxEntityRootRelativePath,
+  normalizeOpsxEntityPath,
   parseOpsxEntityMetadata,
   type OpsxEntityDetail,
   type OpsxEntityReadOptions,
@@ -367,7 +369,7 @@ export class OpenSpecAdapter {
       const statInfo = await reactiveStat(fullPath)
       if (!statInfo) continue
 
-      const relativePath = fullPath.slice(root.length + 1)
+      const relativePath = normalizeOpsxEntityPath(fullPath.slice(root.length + 1))
 
       if (statInfo.isDirectory) {
         files.push({ path: relativePath, type: 'directory' })
