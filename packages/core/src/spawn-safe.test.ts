@@ -5,7 +5,10 @@
  *    from direct-child settlement.
  * 3. Preserve immediate, delayed, and pending-I/O non-zero exits plus stderr before eager JSON
  *    retirement.
+ * 4. Poll the retirement assertion briefly: one-shot WMI table reads race just-terminated
+ *    process refresh on slow hosted runners.
  *
+ * Original request (2026-08-14): a hosted-runner lane run saw four recorded PIDs survive one table read.
  * Original request (2026-07-31): "这些命令的执行，时间绝对不是七八秒那么久...请看一下代码，看能不能让trace更精确"
  * Original request (2026-08-06): "continue"
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
@@ -107,12 +110,21 @@ describe('runBufferedCommand phase evidence', () => {
       if (!readyRows) return
       const trackedPids = resolveWindowsProcessTreePids(rootPid, readyRows)
       expect(trackedPids.length).toBeGreaterThan(1)
-      const remainingRows = await readWindowsProcessTable()
-      expect(
-        trackedPids.filter((pid) => remainingRows.some((row) => row.ProcessId === pid))
-      ).toEqual([])
+      // A single immediate table read races WMI refresh of just-terminated processes on slow
+      // hosted runners; poll briefly so the retirement assertion observes settled truth.
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        const remainingRows = await readWindowsProcessTable()
+        if (!trackedPids.some((pid) => remainingRows.some((row) => row.ProcessId === pid))) {
+          return
+        }
+        await new Promise((resolveWait) => setTimeout(resolveWait, 250))
+      }
+      const finalRows = await readWindowsProcessTable()
+      expect(trackedPids.filter((pid) => finalRows.some((row) => row.ProcessId === pid))).toEqual(
+        []
+      )
     },
-    20_000
+    30_000
   )
 
   it('does not report eager JSON delivery as the child process exit', async () => {
