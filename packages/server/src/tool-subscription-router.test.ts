@@ -40,7 +40,10 @@ import { createServer } from './server.js'
 // Core reactive-fs retries missing paths every 1,000ms; bound this fixture to four fallback cycles.
 const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
 const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS = REACTIVE_MISSING_PATH_FALLBACK_MS * 4
-const PINNED_OPENSPEC_BIN = resolve(import.meta.dirname, '../../../references/openspec/bin/openspec.js')
+const PINNED_OPENSPEC_BIN = resolve(
+  import.meta.dirname,
+  '../../../references/openspec/bin/openspec.js'
+)
 
 function commandResult<T>(data: T, schema: ZodType<T>): CliCommandResult<T> {
   return parseCliCommandResult(
