@@ -2,6 +2,10 @@
  * Orthogonal intents (created 2026-08-08 Asia/Shanghai):
  * 1. Prove Bun task shutdown refuses a mismatched PID identity and retires a real pnpm tree.
  * 2. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
+ * 3. Keep resolution/termination invariants environment-tolerant: hosted runners may provide pnpm
+ *    only as an npm-style `.cmd` (whose node.exe mapping is a real boundary) and the vitest
+ *    `process.execPath` may coincide with that node.exe, so the guards are `.cmd`-rejection,
+ *    bun.exe-rejection, and npm_execpath non-injection rather than path inequality.
  *
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
@@ -41,14 +45,19 @@ async function waitForProcessesToExit(pids: readonly number[]): Promise<number[]
 }
 
 describe.runIf(process.platform === 'win32')('Bun process supervisor', () => {
-  it('keeps pnpm on a native executable instead of applying the Node npm_execpath shortcut', () => {
+  it('keeps pnpm on a real executable boundary instead of a shell or bun shortcut', () => {
     const previousNpmExecPath = process.env.npm_execpath
     process.env.npm_execpath = 'C:\\fixture\\pnpm.cjs'
     try {
       const invocation = resolveBunTaskInvocation('pnpm', ['--version'])
-      expect(invocation.command.toLowerCase()).not.toBe(process.execPath.toLowerCase())
-      expect(invocation.command.toLowerCase()).toMatch(/(?:pnpm|corepack)\.exe$/)
+      const command = invocation.command.toLowerCase()
+      expect(command.endsWith('.cmd')).toBe(false)
+      expect(command).not.toMatch(/\\bun\.exe$/)
       expect(invocation.args).not.toContain(process.env.npm_execpath)
+      if (/(?:pnpm|corepack)\.exe$/.test(command)) return
+      // A `.cmd`-only pnpm installation legitimately maps to a real node.exe carrying pnpm's entry.
+      expect(command.endsWith('\\node.exe')).toBe(true)
+      expect(invocation.args[0]?.toLowerCase()).toMatch(/pnpm/)
     } finally {
       if (previousNpmExecPath === undefined) delete process.env.npm_execpath
       else process.env.npm_execpath = previousNpmExecPath
@@ -86,9 +95,11 @@ describe.runIf(process.platform === 'win32')('Bun process supervisor', () => {
       const trackedPids = await waitForProcessTree(rootPid)
       expect(trackedPids.length).toBeGreaterThan(1)
 
-      await expect(terminateBunWindowsProcessTree(rootPid, process.execPath)).rejects.toThrow(
-        'Refusing to terminate PID'
-      )
+      // A deliberately unrelated executable must always be refused while the root is alive,
+      // independent of whether the host's node.exe coincides with the resolved pnpm boundary.
+      await expect(
+        terminateBunWindowsProcessTree(rootPid, 'C:\\openspecui-identity-probe-not-the-root.exe')
+      ).rejects.toThrow('Refusing to terminate PID')
       await expect(readWindowsProcessTable()).resolves.toEqual(
         expect.arrayContaining([expect.objectContaining({ ProcessId: rootPid })])
       )

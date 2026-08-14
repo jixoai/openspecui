@@ -3,12 +3,14 @@
  * 1. Prove standard Windows package-manager and Node CLI shims preserve argv without cmd.exe text assembly.
  * 2. Prove a Bun-hosted resolver selects a real Node executable in a `.cmd`-only installation.
  * 3. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
+ * 4. Compare Bun-owned node boundaries through canonical paths because hosted runners mix 8.3
+ *    short forms (RUNNER~1) with long forms in TEMP-derived fixture roots.
  *
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-04): "Make equivalent package scripts work on Windows."
  */
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
@@ -31,6 +33,14 @@ function where(command) {
     .stdout.split(/\r?\n/)
     .map((candidate) => candidate.trim())
     .filter(Boolean)
+}
+
+function canonicalWindowsPath(value) {
+  try {
+    return realpathSync.native(value).toLowerCase()
+  } catch {
+    return value.toLowerCase()
+  }
 }
 
 describe.runIf(process.platform === 'win32')('Windows package-manager command shims', () => {
@@ -144,13 +154,16 @@ describe.runIf(process.platform === 'win32')('Windows package-manager command sh
 
       expect(bunResult.status, bunResult.stderr).toBe(0)
       const evidence = JSON.parse(bunResult.stdout)
-      expect(evidence.invocation.command.toLowerCase()).toBe(nodeExecutable.toLowerCase())
-      expect(evidence.invocation.command.toLowerCase()).not.toBe(bunExecutable.toLowerCase())
+      expect(canonicalWindowsPath(evidence.invocation.command)).toBe(
+        canonicalWindowsPath(nodeExecutable)
+      )
+      expect(canonicalWindowsPath(evidence.invocation.command)).not.toBe(
+        canonicalWindowsPath(bunExecutable)
+      )
       expect(evidence.exitCode, evidence.stderr).toBe(0)
-      expect(JSON.parse(evidence.stdout)).toEqual({
-        execPath: nodeExecutable,
-        args: SPECIAL_ARGUMENTS,
-      })
+      const observed = JSON.parse(evidence.stdout)
+      expect(canonicalWindowsPath(observed.execPath)).toBe(canonicalWindowsPath(nodeExecutable))
+      expect(observed.args).toEqual(SPECIAL_ARGUMENTS)
     } finally {
       rmSync(fixtureRoot, { force: true, recursive: true })
     }
