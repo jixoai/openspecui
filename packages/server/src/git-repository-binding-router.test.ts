@@ -4,7 +4,9 @@
  * 2. Prove the conflict happens before the rebound repository receives a refresh stamp.
  * 3. Preserve Dashboard Git-region refresh while Code Git remains Planning-failure independent.
  * 4. Dispose every Server owner and expose projection failures before removing Windows Git fixtures.
+ * 5. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-19): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 rejects stale Git repository bindings.
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
@@ -86,7 +88,7 @@ function commandFailure<T>(schema: ZodType<T>): CliCommandResult<T> {
 
 async function initRepository(path: string): Promise<void> {
   await mkdir(join(path, 'openspec'), { recursive: true })
-  await runCommand('git', ['init', '--quiet'], { cwd: path })
+  await runCommand('git', ['init', '--quiet'], { cwd: path, windowsHide: true })
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -330,7 +332,7 @@ describe(
         if (!bindingA) throw new Error('Expected Root A Planning repository binding.')
         fixture.selectRoot(rootB)
         const rootBGitDir = (
-          await runCommand('git', ['rev-parse', '--git-dir'], { cwd: rootB })
+          await runCommand('git', ['rev-parse', '--git-dir'], { cwd: rootB, windowsHide: true })
         ).stdout.trim()
         const rootBStamp = resolve(rootB, rootBGitDir, 'openspecui-dashboard-git-refresh.stamp')
 
@@ -468,6 +470,7 @@ describe(
         const codeGitDir = (
           await runCommand('git', ['rev-parse', '--git-dir'], {
             cwd: fixture.codeRoot,
+            windowsHide: true,
           })
         ).stdout.trim()
         const codeStamp = resolve(

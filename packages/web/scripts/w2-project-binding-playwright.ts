@@ -4,7 +4,9 @@
  * 2. Pin the OpenSpec 1.7 executable, Store registry scope, and disposable roots.
  * 3. Assert desktop/mobile layout and browser error hygiene with bounded process-tree cleanup.
  * 4. Resolve repository, temporary, and isolated home paths through native Windows APIs.
+ * 5. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-19): "只需要做好单位页面验收以及多标签页面的单元测试。"
  * Derived requirement (2026-07-20): W2 B2.5 needs one bounded Playwright fixture; manual
  * multi-tab acceptance remains owner-owned. This command is intentionally excluded from the
@@ -90,6 +92,7 @@ async function runPinnedCli(
       env,
       timeout: ACTION_TIMEOUT_MS,
       maxBuffer: 4 * 1024 * 1024,
+      windowsHide: true,
     })
     return { exitCode: 0, stdout: result.stdout, stderr: result.stderr }
   } catch (error) {
@@ -113,6 +116,7 @@ async function assertPinnedCli(env: NodeJS.ProcessEnv): Promise<void> {
   const { stdout } = await execFileAsync('git', ['-C', PINNED_OPENSPEC_ROOT, 'rev-parse', 'HEAD'], {
     cwd: REPO_ROOT,
     env,
+    windowsHide: true,
   })
   if (stdout.trim() !== PINNED_OPENSPEC_COMMIT) {
     throw new Error(`Pinned OpenSpec SHA mismatch: ${stdout.trim()}`)
@@ -167,6 +171,7 @@ function spawnChild(
     env,
     detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   })
   const output: string[] = []
   child.stdout?.on('data', (chunk: Buffer) => output.push(chunk.toString()))

@@ -4,7 +4,9 @@
  * 2. Select worker-thread or process bootstrap without exposing private runtime inputs through argv or URLs.
  * 3. Propagate one parent Access Gate and resolved Web asset root through child launch and readiness.
  * 4. Preserve nested handoff delegation and deterministic worker/process-tree teardown through explicit ownership.
+ * 5. Hide worktree Server process console windows (`windowsHide`) under a console-less Windows daemon.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
  * Delivery correction (2026-07-26): nested worktree Servers reuse the parent runtime's Web assets.
  * Owner correction (2026-07-29): daemon start is not a project Server command; child processes use serve.
@@ -348,6 +350,7 @@ class ProcessWorktreeServerRuntime implements WorktreeServerRuntime {
       env: plan.env,
       stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
       detached: process.platform !== 'win32',
+      windowsHide: true,
     })
   }
 

@@ -5,7 +5,9 @@
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
  * 4. Prove stale Git binding intent conflicts before rebound repository side effects.
  * 5. Prove Root, Store, Planning CLI, and Environment Global Projection Work routes through their real Server owners.
+ * 6. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-17): "Every public application mutation remains inside its Server-owned root and lifetime."
  * Original request (2026-07-17): "Rejected Validate and Update handles converge to one public terminal error."
  * Original request (2026-07-18): "Environment Global profile/drift must use one reactive CLI-owned projection."
@@ -427,6 +429,7 @@ async function runGit(cwd: string, args: string[]): Promise<string> {
     cwd,
     maxBuffer: 1024 * 1024,
     encoding: 'utf8',
+    windowsHide: true,
   })
   return stdout.trim()
 }

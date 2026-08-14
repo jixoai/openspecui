@@ -5,7 +5,9 @@
  * 2. Build the ignored CLI distribution consumed by pinned integration fixtures.
  * 3. Reject submodule drift before any fixture can execute a different upstream revision.
  * 4. Invoke pnpm through a Windows-safe executable or quoted command-shim boundary.
+ * 5. Hide subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-20): "Clean CI must build the pinned references/openspec CLI before
  * the Fast Gate and pinned integration fixtures use bin/openspec.js."
  * Original request (2026-08-03): release OpenSpecUI 7.0.0 against the pinned OpenSpec CLI 1.7 source.
@@ -26,6 +28,7 @@ function run(command, args, options = {}) {
   execFileSync(command, args, {
     cwd: REPOSITORY_ROOT,
     stdio: 'inherit',
+    windowsHide: true,
     ...options,
   })
 }
@@ -35,6 +38,7 @@ function capture(command, args, cwd = REPOSITORY_ROOT) {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   }).trim()
 }
 

@@ -5,7 +5,9 @@
  * 2. Recover missing Changesets tags independently from registry publication.
  * 3. Emit an objective workflow release/no-op decision.
  * 4. Execute registry, VCS, and package-manager subprocesses through one command owner.
+ * 5. Hide subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-28): "我想先发布一个beta版本"
  * Original request (2026-08-04): "这个项目之前都是在macOS上做到开发，现在我们在Windows，所以开始一系列的适配。"
  */
@@ -38,6 +40,7 @@ function runCapture(command: string, args: string[], cwd: string): CaptureResult
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+    windowsHide: true,
   })
   return {
     status: result.status ?? 1,
@@ -52,6 +55,7 @@ function runInherit(command: string, args: string[], cwd: string): void {
     cwd,
     stdio: 'inherit',
     windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+    windowsHide: true,
   })
   if ((result.status ?? 1) !== 0) {
     throw new Error(`${command} ${args.join(' ')} failed with code ${result.status ?? 1}`)

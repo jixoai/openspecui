@@ -3,7 +3,9 @@
  * 1. Materialize publication-safe package directories.
  * 2. Normalize workspace dependencies and repository metadata.
  * 3. Keep release-script typechecking exact across Node filesystem overloads.
+ * 4. Hide Git subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-28): "我想先发布一个beta版本"
  */
 
@@ -166,6 +168,7 @@ export function resolveRepositoryUrl(
     cwd: rootDir,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   })
   if ((result.status ?? 1) !== 0) {
     return null

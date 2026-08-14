@@ -2,7 +2,9 @@
  * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Prove standard Windows package-manager and Node CLI shims preserve argv without cmd.exe text assembly.
  * 2. Prove a Bun-hosted resolver selects a real Node executable in a `.cmd`-only installation.
+ * 3. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-04): "Make equivalent package scripts work on Windows."
  */
 import { spawnSync } from 'node:child_process'
@@ -25,7 +27,7 @@ const SPECIAL_ARGUMENTS = [
 ]
 
 function where(command) {
-  return spawnSync('where.exe', [command], { encoding: 'utf8' })
+  return spawnSync('where.exe', [command], { encoding: 'utf8', windowsHide: true })
     .stdout.split(/\r?\n/)
     .map((candidate) => candidate.trim())
     .filter(Boolean)
@@ -47,7 +49,10 @@ describe.runIf(process.platform === 'win32')('Windows package-manager command sh
       const invocation = resolveWindowsCommandInvocation('openspec', SPECIAL_ARGUMENTS, [
         commandShim,
       ])
-      const result = spawnSync(invocation.command, invocation.args, { encoding: 'utf8' })
+      const result = spawnSync(invocation.command, invocation.args, {
+        encoding: 'utf8',
+        windowsHide: true,
+      })
 
       expect(result.status, result.stderr).toBe(0)
       expect(JSON.parse(result.stdout)).toEqual(SPECIAL_ARGUMENTS)
@@ -69,7 +74,10 @@ describe.runIf(process.platform === 'win32')('Windows package-manager command sh
       writeFileSync(entry, 'process.stdout.write(JSON.stringify(process.argv.slice(2)))\n')
 
       const invocation = resolveWindowsCommandInvocation('npm', SPECIAL_ARGUMENTS, [commandShim])
-      const result = spawnSync(invocation.command, invocation.args, { encoding: 'utf8' })
+      const result = spawnSync(invocation.command, invocation.args, {
+        encoding: 'utf8',
+        windowsHide: true,
+      })
 
       expect(result.status, result.stderr).toBe(0)
       expect(JSON.parse(result.stdout)).toEqual(SPECIAL_ARGUMENTS)
@@ -131,6 +139,7 @@ describe.runIf(process.platform === 'win32')('Windows package-manager command sh
       const bunResult = spawnSync(bunExecutable, ['-e', source], {
         encoding: 'utf8',
         env: childEnv,
+        windowsHide: true,
       })
 
       expect(bunResult.status, bunResult.stderr).toBe(0)

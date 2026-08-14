@@ -6,7 +6,9 @@
  * 3. Emit machine-readable JSON via --json so users can paste objective evidence into bug reports.
  * 4. Resolve Windows command shims without shell argv loss and retire timed-out probe trees safely.
  * 5. Let stdout/stderr flush before publishing the diagnostic exit status.
+ * 6. Hide probe subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-30, issue #209): "看一下 issues209，分析一下可能的问题，以及我们应该提供什么分析工具或者分析脚本"
  * Owner decision (2026-07-30): ship a zero-dependency diagnostic script first; CLI integration is deferred
  *   until it proves useful in real environments.
@@ -65,6 +67,7 @@ async function resolveShellCandidates(command, workdir, probeEnv) {
         env: probeEnv,
         encoding: 'utf8',
         timeout: SHELL_RESOLVE_TIMEOUT_MS,
+        windowsHide: true,
       })
       return stdout
         .split(/\r?\n/)
@@ -154,7 +157,7 @@ async function terminateProbeTree(child, expectedExecutablePath) {
   const { stdout: processJson } = await execFileAsyncP(
     'powershell.exe',
     ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', query],
-    { encoding: 'utf8', timeout: SHELL_RESOLVE_TIMEOUT_MS }
+    { encoding: 'utf8', timeout: SHELL_RESOLVE_TIMEOUT_MS, windowsHide: true }
   )
   if (!processJson.trim()) return
   const record = JSON.parse(processJson)
@@ -171,6 +174,7 @@ async function terminateProbeTree(child, expectedExecutablePath) {
   await execFileAsyncP('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
     encoding: 'utf8',
     timeout: SHELL_RESOLVE_TIMEOUT_MS,
+    windowsHide: true,
   })
 }
 
@@ -198,6 +202,7 @@ function probeOne(commandParts, workdir, probeEnv) {
         cwd: workdir,
         shell: false,
         env: probeEnv,
+        windowsHide: true,
       })
     } catch (err) {
       finish({
@@ -281,6 +286,7 @@ async function detectWindowsNpmGlobalBin() {
     const { stdout } = await execFileAsyncP(invocation.command, invocation.args, {
       encoding: 'utf8',
       timeout: SHELL_RESOLVE_TIMEOUT_MS,
+      windowsHide: true,
     })
     const prefix = stdout.trim()
     if (!prefix) return undefined

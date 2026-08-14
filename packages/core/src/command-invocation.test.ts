@@ -2,7 +2,9 @@
  * Orthogonal intents (created 2026-08-09 Asia/Shanghai):
  * 1. Prove Windows command resolution consumes the caller's PATH and prefers native executable boundaries.
  * 2. Prove shell-sensitive pnpm uses Corepack or a cmd-only Node entry while opaque shims are rejected.
+ * 3. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { spawnSync } from 'node:child_process'
@@ -88,7 +90,11 @@ describe.runIf(process.platform === 'win32')('Windows command invocation', () =>
         PATH: [root, dirname(process.execPath)].join(delimiter),
       }
       const invocation = resolveWindowsCommandInvocation('pnpm', args, { cwd: root, env })
-      const result = spawnSync(invocation.command, invocation.args, { encoding: 'utf8', env })
+      const result = spawnSync(invocation.command, invocation.args, {
+        encoding: 'utf8',
+        env,
+        windowsHide: true,
+      })
 
       expect(invocation.args[0]).toBe(entry)
       expect(result.status, result.stderr).toBe(0)

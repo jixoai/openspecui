@@ -3,7 +3,9 @@
  * 1. Prove CLI startServer carries its resolved Web asset root through the real Git worktree handoff.
  * 2. Keep the upstream-owner fixture inside the checked Server transport-test lane.
  * 3. Settle shared watcher owners before removing Windows Git fixtures.
+ * 4. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-25): "格式问题？md文件有什么格式问题，直接快速处理掉，然后继续工作"
  * Review correction (2026-07-26): downstream Manager fixtures cannot prove the startServer owner transition.
  */
@@ -31,7 +33,7 @@ afterEach(async () => {
 })
 
 async function runGit(cwd: string, args: string[]): Promise<void> {
-  await runCommand('git', args, { cwd })
+  await runCommand('git', args, { cwd, windowsHide: true })
 }
 
 async function createProductChainFixture(): Promise<{

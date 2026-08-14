@@ -2,7 +2,9 @@
  * Orthogonal intents (created 2026-08-01 Asia/Shanghai):
  * 1. Execute the pinned OpenSpec 1.7 CLI against a recursive owned Spec identity.
  * 2. Prove list and show preserve every identity segment and requirement content.
+ * 3. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  */
 import { execFile } from 'node:child_process'
@@ -44,7 +46,7 @@ function runCli(
     execFile(
       process.execPath,
       [OPENSPEC_17_BIN, ...args],
-      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000 },
+      { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000, windowsHide: true },
       (error, stdout, stderr) => {
         complete({
           exitCode: typeof error?.code === 'number' ? error.code : error ? 1 : 0,

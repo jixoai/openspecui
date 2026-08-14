@@ -4,7 +4,10 @@
  * 2. Preserve Reference-aware export and publication-redaction policy.
  * 3. Package and launch the static site with the locally resolved Web distribution.
  * 4. Execute local, production, and preview tooling through an argv-safe subprocess owner.
+ * 5. Hide snapshot Git subprocess console windows (`windowsHide`) so export evidence gathering
+ *    never flashes a cmd window under a console-less Windows parent.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  */
 import {
@@ -175,6 +178,7 @@ async function readDefaultBranch(projectDir: string): Promise<string> {
         cwd: projectDir,
         encoding: 'utf8',
         maxBuffer: 1024 * 1024,
+        windowsHide: true,
       }
     )
     const branch = stdout.trim()
@@ -188,6 +192,7 @@ async function readDefaultBranch(projectDir: string): Promise<string> {
       cwd: projectDir,
       encoding: 'utf8',
       maxBuffer: 1024 * 1024,
+      windowsHide: true,
     })
     const branch = stdout.trim()
     if (branch.length > 0 && branch !== 'HEAD') return branch
@@ -284,6 +289,7 @@ async function readSnapshotGit(projectDir: string): Promise<ExportSnapshot['git'
       cwd: projectDir,
       encoding: 'utf8',
       maxBuffer: 1024 * 1024,
+      windowsHide: true,
     })
     const latestSeconds = Number(latestTsRaw.trim())
     const latestCommitTs =
@@ -298,6 +304,7 @@ async function readSnapshotGit(projectDir: string): Promise<ExportSnapshot['git'
           cwd: projectDir,
           encoding: 'utf8',
           maxBuffer: 1024 * 1024,
+          windowsHide: true,
         }
       )
       repositoryUrl = normalizeRepositoryUrl(remoteRaw)
@@ -312,6 +319,7 @@ async function readSnapshotGit(projectDir: string): Promise<ExportSnapshot['git'
         cwd: projectDir,
         encoding: 'utf8',
         maxBuffer: 8 * 1024 * 1024,
+        windowsHide: true,
       }
     )
 

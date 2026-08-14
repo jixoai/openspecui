@@ -3,7 +3,9 @@
  * 1. Prove source-mode conditional exports select TypeScript while published default resolves dist.
  * 2. Prove source startup and CLI Web asset projection are shell-independent across Windows and POSIX.
  * 3. Prove CLI source runtime dependencies remain workspace-only development dependencies.
+ * 4. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  * Windows correction (2026-08-04): use a directory junction when symlink privileges are unavailable.
  */
@@ -97,7 +99,7 @@ async function resolveFixturePackage(
       '--eval',
       `console.log(import.meta.resolve(${JSON.stringify(specifier)}))`,
     ],
-    { cwd: appDir }
+    { cwd: appDir, windowsHide: true }
   )
 
   return stdout.trim()

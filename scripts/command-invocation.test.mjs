@@ -3,7 +3,9 @@
  * 1. Execute native Windows tools and command shims through the generic subprocess resolver.
  * 2. Prevent release scripts from restoring platform-specific command-name rewrites.
  * 3. Keep the Bun release runtime on the shared argv-safe invocation owner.
+ * 4. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-04): "这个项目之前都是在macOS上做到开发，现在我们在Windows，所以开始一系列的适配。"
  */
 import { spawnSync } from 'node:child_process'
@@ -17,6 +19,7 @@ describe('shell-independent command invocation', () => {
     const result = spawnSync(invocation.command, invocation.args, {
       encoding: 'utf8',
       windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+      windowsHide: true,
     })
 
     expect(

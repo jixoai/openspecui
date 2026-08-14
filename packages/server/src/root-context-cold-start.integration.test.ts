@@ -4,7 +4,9 @@
  * 2. Exercise lifecycle-only WebSocket Push followed by typed HTTP Root Projection Pull.
  * 3. Preserve pinned CLI runner start/exit timing for timeout classification.
  * 4. Use file URLs and settled watcher cleanup for Windows CLI fixtures.
+ * 5. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-19): "设计并（必要时）实现一个 type-safe、可 checked 的
  * cold-start/rootContext HTTP+WS fixture test，隔离 pinned OpenSpec CLI。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 needs bounded startup/readiness evidence.
@@ -101,6 +103,7 @@ async function runPinnedCli(
     env,
     maxBuffer: 4 * 1024 * 1024,
     timeout: 30_000,
+    windowsHide: true,
   })
 }
 
@@ -275,7 +278,7 @@ describe('pinned OpenSpec 1.7 Root Context cold start', () => {
       const { stdout: pinnedCommit } = await execFileAsync(
         'git',
         ['-C', PINNED_OPENSPEC_ROOT, 'rev-parse', 'HEAD'],
-        { encoding: 'utf8' }
+        { encoding: 'utf8', windowsHide: true }
       )
       expect(pinnedCommit.trim()).toBe(PINNED_OPENSPEC_COMMIT)
       expect(CLI_BIN).toBe(resolve(PINNED_OPENSPEC_ROOT, 'bin/openspec.js'))

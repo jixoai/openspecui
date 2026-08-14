@@ -2,7 +2,9 @@
  * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
  * 1. Prove the plain-Node Windows diagnostic resolves an npm-style CLI shim and retires its timed-out tree.
  * 2. Distinguish a complete diagnostic report from an early child-process failure before JSON parsing.
+ * 3. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { spawnSync } from 'node:child_process'
@@ -33,7 +35,7 @@ describe.runIf(process.platform === 'win32')('CLI runner diagnostic portability'
         [
           "const { spawn } = require('node:child_process')",
           "const { appendFileSync } = require('node:fs')",
-          "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1_000)'])",
+          "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1_000)'], { windowsHide: true })",
           'appendFileSync(process.env.OPENSPECUI_DIAGNOSTIC_PID_FILE, `${process.pid}\\n${child.pid}\\n`)',
           'setInterval(() => {}, 1_000)',
         ].join(';')
@@ -49,6 +51,7 @@ describe.runIf(process.platform === 'win32')('CLI runner diagnostic portability'
       const whereResult = spawnSync('where.exe', ['openspec'], {
         encoding: 'utf8',
         env: diagnosticEnv,
+        windowsHide: true,
       })
       expect(whereResult.stdout, whereResult.stderr).toContain(shim)
       const result = spawnSync(process.execPath, [DIAGNOSTIC_SCRIPT, '--no-network', '--json'], {
@@ -56,6 +59,7 @@ describe.runIf(process.platform === 'win32')('CLI runner diagnostic portability'
         encoding: 'utf8',
         env: diagnosticEnv,
         timeout: 30_000,
+        windowsHide: true,
       })
 
       const processEvidence = JSON.stringify(

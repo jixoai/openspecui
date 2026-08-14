@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-08-14 Asia/Shanghai):
+ * 1. Read the release workspace plan and files from explicit Git evidence.
+ * 2. Hide Git subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
+ *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
+ */
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -16,6 +23,7 @@ function runGit(cwd: string, args: string[]): string {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   })
   if (result.status !== 0) {
     throw new Error(result.stderr.trim() || result.stdout.trim() || `git ${args.join(' ')} failed`)
@@ -28,6 +36,7 @@ function tryReadGitFile(cwd: string, commit: string, filePath: string): string |
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   })
   if (result.status !== 0) return null
   return result.stdout

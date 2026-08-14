@@ -6,7 +6,10 @@
  * 4. Resolve Windows executables and npm-style Node shims onto native argv boundaries without cmd.exe.
  * 5. Provide eager JSON resolution + observer-explicit phase timing while treating observed stderr
  *    as exit-owned evidence that must settle through the real child close.
+ * 6. Hide child console windows by default (`windowsHide`) so a console-less Windows daemon never
+ *    flashes a cmd window per executed command; an explicit caller opt-out remains authoritative.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-29): "继续打磨 app 模式，我们需要将它适配对接 opentray。"
  * Review correction (2026-08-09): Windows npm-style `.cmd` launchers must resolve to a native
  *   executable plus argv; `cross-spawn` can route them through `cmd.exe` and reinterpret user input.
@@ -124,7 +127,11 @@ export function spawnSafe(
     })
     return {
       ok: true,
-      child: spawn(invocation.command, invocation.args, { ...options, shell: false }),
+      child: spawn(invocation.command, invocation.args, {
+        ...options,
+        shell: false,
+        windowsHide: options.windowsHide ?? true,
+      }),
     }
   } catch (err) {
     return {

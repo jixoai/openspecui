@@ -2,7 +2,9 @@
  * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
  * 1. Read and classify GitHub PR mergeability for release automation.
  * 2. Execute GitHub CLI through the shared shell-independent command owner.
+ * 3. Hide subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-28): "Publish a beta version first."
  * Original request (2026-08-04): "The project was developed on macOS and now needs Windows adaptation."
  */
@@ -37,6 +39,7 @@ function runCaptureResult(args: string[]): CaptureRunResult {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+    windowsHide: true,
   })
   return {
     status: result.status ?? 1,

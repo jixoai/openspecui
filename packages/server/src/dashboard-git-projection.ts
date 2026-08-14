@@ -4,7 +4,10 @@
  * 2. Preserve backend-issued Code binding provenance and observable Git task lifecycle.
  * 3. Trigger explicit Git snapshot invalidation through a reactive stamp without broad Dashboard reloads.
  * 4. Propagate Projection Work cancellation into the Git subprocess tree.
+ * 5. Hide Git identity-probe subprocess console windows (`windowsHide`) under the console-less
+ *    Windows daemon.
  *
+ * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Derived requirement (2026-07-25): P4.3 settles a cached refresh stamp before Dashboard Git refresh returns.
  * Original request (2026-07-31): "Code Git Snapshot，它非常慢，有时候甚至要十几秒"
@@ -96,6 +99,7 @@ async function resolveGitMetadataDir(projectDir: string): Promise<string | null>
       cwd: projectDir,
       maxBuffer: 1024 * 1024,
       encoding: 'utf8',
+      windowsHide: true,
     })
     const gitDirRaw = stdout.trim()
     if (!gitDirRaw) return null
