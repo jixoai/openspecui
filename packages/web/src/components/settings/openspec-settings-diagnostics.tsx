@@ -20,6 +20,7 @@ import { VTLink } from '@/lib/view-transitions/navigation'
 import type { EnvironmentGlobalConfig, RootContext, RootContextState } from '@openspecui/core'
 import {
   classifyOpenSpecCliVersion,
+  OPENSPEC_CLI_ACCEPTED_RANGE,
   OPENSPEC_CLI_TARGET_SERIES,
 } from '@openspecui/core/openspec-compat'
 import { AlertCircle, ExternalLink } from 'lucide-react'
@@ -50,11 +51,13 @@ function CompatibilityStatus({ context }: { context: RootContext | null }) {
   const visibleLabel =
     visibleStatus === 'current'
       ? `Current ${OPENSPEC_CLI_TARGET_SERIES} line`
-      : visibleStatus === 'unavailable'
-        ? 'CLI unavailable'
-        : visibleStatus === 'unknown'
-          ? 'Version unparseable'
-          : 'Unsupported CLI line'
+      : visibleStatus === 'supported'
+        ? `Supported within ${OPENSPEC_CLI_ACCEPTED_RANGE}`
+        : visibleStatus === 'unavailable'
+          ? 'CLI unavailable'
+          : visibleStatus === 'unknown'
+            ? 'Version unparseable'
+            : 'Unsupported CLI line'
 
   return (
     <InformationBadge
@@ -64,7 +67,7 @@ function CompatibilityStatus({ context }: { context: RootContext | null }) {
           ? compatibility.message
           : availability.error || 'OpenSpec CLI is explicitly unavailable.'
       }
-      tone={visibleStatus === 'current' ? 'subtle' : 'muted'}
+      tone={visibleStatus === 'current' || visibleStatus === 'supported' ? 'subtle' : 'muted'}
     >
       {visibleLabel}
     </InformationBadge>
