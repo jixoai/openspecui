@@ -840,8 +840,11 @@ export {
   PINNED_AGENT_GENERATOR_VERSION,
   TOOL_WORKFLOW_TO_SKILL_DIR,
   createToolInitStateProjection,
+  getExternalAgentSkillsObservationRoots,
   getExternalCodexCommandObservationRoot,
   getToolInitStates,
+  resolveGlobalSkillsInventoryDir,
+  resolveToolSkillsScope,
   type ToolInitCleanupState,
   type ToolInitDelivery,
   type ToolInitIssue,
@@ -850,6 +853,7 @@ export {
   type ToolInitReadiness,
   type ToolInitState,
   type ToolInitStatus,
+  type ToolSkillsScope,
   type ToolWorkflowId,
 } from './tool-init-state.js'
 

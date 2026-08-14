@@ -11,6 +11,7 @@
  * cold-start/rootContext HTTP+WS fixture test，隔离 pinned OpenSpec CLI。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 needs bounded startup/readiness evidence.
  * Original request (2026-08-01): OpenSpecUI 7 requires the pinned OpenSpec 1.7 CLI line.
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。" — the pin moved to v1.9.0.
  */
 import {
   ConfigManager,
@@ -34,7 +35,7 @@ import type { AppRouter, RunningServer } from './server.js'
 import { startServer } from './server.js'
 
 const execFileAsync = promisify(execFile)
-const PINNED_OPENSPEC_COMMIT = '4e16790d90d8f54d4773ad9a5e71a57cd9f1e86b'
+const PINNED_OPENSPEC_COMMIT = '2826b8889e5223a9a8095d4428b60b56597e1020'
 const PINNED_OPENSPEC_ROOT = resolve(import.meta.dirname, '../../../references/openspec')
 const CLI_BIN = resolve(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
 
@@ -163,7 +164,7 @@ function rootStateReady(state: RootContextResolvedState): RootContextResolvedSta
   return state
 }
 
-describe('pinned OpenSpec 1.7 Root Context cold start', () => {
+describe('pinned OpenSpec 1.9 Root Context cold start', () => {
   afterEach(async () => {
     for (const client of wsClients.splice(0)) client.close()
     await Promise.all(runningServers.splice(0).map((server) => server.close()))
@@ -259,12 +260,12 @@ describe('pinned OpenSpec 1.7 Root Context cold start', () => {
       expect(httpState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.7.0' },
+        cli: { available: true, version: '1.9.0' },
       })
       expect(wsState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.7.0' },
+        cli: { available: true, version: '1.9.0' },
       })
       expect(wsStates).toContain('ready')
       expect(wsNotices.every((notice) => !Object.hasOwn(Object(notice), 'data'))).toBe(true)

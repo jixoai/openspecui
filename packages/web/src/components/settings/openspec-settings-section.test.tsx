@@ -76,6 +76,10 @@ function state(
     status: issues[0] ?? readiness,
     readiness,
     issues,
+    skillsScope:
+      readiness === 'unavailable' ? { kind: 'none' } : { kind: 'project', skillsDir: `.${toolId}` },
+    legacySkillRoots: [],
+    requiresIdeRestart: false,
     hasAnyArtifacts: readiness === 'partial' || readiness === 'initialized',
     expectedSkillCount: WORKFLOWS.length,
     presentExpectedSkillCount: readiness === 'initialized' ? WORKFLOWS.length : 0,

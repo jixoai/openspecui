@@ -100,7 +100,7 @@ async function createFixture() {
   })
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.7.0',
+    version: '1.9.0',
   })
   disposals.push(async () => {
     vi.restoreAllMocks()
@@ -132,7 +132,7 @@ describe('agentIntegrationsRouter', () => {
       .createCaller(fixture.server.createContext())
       .agentIntegrations.get()
 
-    expect(projection.registry).toHaveLength(35)
+    expect(projection.registry).toHaveLength(38)
     expect(projection.policy).toEqual({
       profile: 'core',
       delivery: 'both',
@@ -141,6 +141,12 @@ describe('agentIntegrationsRouter', () => {
     expect(projection.registry.find((tool) => tool.value === 'codex')).toMatchObject({
       capability: 'skills-invocable',
       command: null,
+      skillsDir: '.agents',
+      legacySkillsDirs: ['.codex'],
+    })
+    expect(projection.registry.find((tool) => tool.value === 'agents')).toMatchObject({
+      available: true,
+      capability: 'skills-invocable',
     })
   })
 
@@ -306,7 +312,7 @@ describe('agentIntegrationsRouter', () => {
     await expect(terminal.promise).resolves.toEqual({ reason: 'cancelled', exitCode: null })
   })
 
-  it.each(['agents', 'not-a-real-agent'])(
+  it.each(['not-a-real-agent'])(
     'rejects unavailable Agent Init id %s before CLI execution',
     async (toolId) => {
       const fixture = await createFixture()
@@ -316,7 +322,7 @@ describe('agentIntegrationsRouter', () => {
         appRouter
           .createCaller(fixture.server.createContext())
           .agentIntegrations.initStream({ tools: [toolId] })
-      ).rejects.toThrow('Agent tool must be an available OpenSpec 1.7 registry id.')
+      ).rejects.toThrow('Agent tool must be an available OpenSpec 1.9 registry id.')
       expect(initStream).not.toHaveBeenCalled()
     }
   )

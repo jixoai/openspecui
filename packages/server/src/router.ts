@@ -2323,7 +2323,7 @@ const agentIntegrationToolIdSchema = z
   .min(1)
   .refine(
     (toolId) => getAvailableTools().some((tool) => tool.value === toolId),
-    'Agent tool must be an available OpenSpec 1.7 registry id.'
+    'Agent tool must be an available OpenSpec 1.9 registry id.'
   )
 
 export const agentIntegrationsRouter = router({

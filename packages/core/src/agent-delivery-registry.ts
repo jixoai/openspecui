@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-08-01 Asia/Shanghai):
- * 1. Preserve the complete pinned OpenSpec 1.7 Agent delivery registry in one typed physical owner.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Preserve the complete pinned OpenSpec 1.9 Agent delivery registry in one typed physical owner.
  * 2. Co-locate capability, command artifact, invocation, alias, setup, cleanup, and migration metadata.
- * 3. Provide deterministic path-template helpers without reading runtime filesystem state.
+ * 3. Model current/legacy project roots, user-global skill roots, detection paths, and IDE restart facts.
+ * 4. Provide deterministic path-template helpers without reading runtime filesystem state.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 
 export type AgentCommandSurfaceCapability = 'adapter-backed' | 'skills-invocable' | 'none'
@@ -59,9 +61,16 @@ export interface AIToolOption {
   value: string
   available: boolean
   successLabel?: string
+  /** Current project-local skills root; null when delivery targets the user-global root only. */
   skillsDir: string | null
+  /** Former project roots read for detection and migrated after replacement. */
+  legacySkillsDirs?: readonly string[]
+  /** User-global skills root resolved against the home directory (e.g. `.minimax`). */
+  globalSkillsDir?: string | null
   detectionPaths?: readonly string[]
   setupNote?: string
+  /** True when the tool loads generated files through an IDE/editor process that must restart. */
+  requiresIdeRestart?: boolean
   capability: AgentCommandSurfaceCapability
   command: AgentCommandArtifact | null
   aliases?: readonly string[]
@@ -136,7 +145,7 @@ const projectCleanup = (...patterns: string[]): AgentProjectCleanup => ({
   patterns,
 })
 
-/** Complete OpenSpec 1.7 Agent delivery registry in official order. */
+/** Complete OpenSpec 1.9 Agent delivery registry in official order. */
 export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
   {
     name: 'Amazon Q Developer',
@@ -144,6 +153,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'Amazon Q Developer',
     skillsDir: '.amazonq',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command('.amazonq/prompts/opsx-{workflow}.md', yamlMarkdown('description'), {
       invocationPrefix: '@',
@@ -156,6 +166,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'Antigravity',
     skillsDir: '.agent',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command('.agent/workflows/opsx-{workflow}.md', yamlMarkdown('description')),
     cleanup: projectCleanup('.agent/workflows/openspec-*.md'),
@@ -204,9 +215,21 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'Cline',
     skillsDir: '.cline',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command('.clinerules/workflows/opsx-{workflow}.md', headingMarkdown),
     cleanup: projectCleanup('.clinerules/workflows/openspec-*.md'),
+  },
+  {
+    name: 'Command Code',
+    value: 'command-code',
+    available: true,
+    successLabel: 'Command Code',
+    skillsDir: '.commandcode',
+    capability: 'adapter-backed',
+    // Command Code executes the trimmed markdown body and substitutes arguments
+    // where the body carries an argument placeholder (see the upstream adapter).
+    command: command('.commandcode/commands/opsx-{workflow}.md', plainMarkdown),
   },
   {
     name: 'CodeArts',
@@ -222,7 +245,9 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     value: 'codex',
     available: true,
     successLabel: 'Codex',
-    skillsDir: '.codex',
+    skillsDir: '.agents',
+    legacySkillsDirs: ['.codex'],
+    detectionPaths: ['.agents/skills', '.codex/skills'],
     capability: 'skills-invocable',
     command: null,
     cleanup: {
@@ -231,6 +256,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
       managedFiles: CODEX_MANAGED_PROMPTS,
       replacementLabel: 'Codex skills',
     },
+    migrations: [{ from: '.codex', to: '.agents', needsConsent: false }],
   },
   {
     name: 'Devin Desktop (formerly Windsurf)',
@@ -239,6 +265,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Devin Desktop',
     skillsDir: '.devin',
     detectionPaths: ['.devin', '.windsurf'],
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command(
       '.devin/workflows/opsx-{workflow}.md',
@@ -276,6 +303,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'Continue (VS Code / JetBrains / Cli)',
     skillsDir: '.continue',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command(
       '.continue/prompts/opsx-{workflow}.prompt',
@@ -289,6 +317,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'CoStrict',
     skillsDir: '.cospec',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command(
       '.cospec/openspec/commands/opsx-{workflow}.md',
@@ -315,6 +344,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'Cursor',
     skillsDir: '.cursor',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command(
       '.cursor/commands/opsx-{workflow}.md',
@@ -360,6 +390,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
       '.github/skills',
       '.github/.mcp.json',
     ],
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command('.github/prompts/opsx-{workflow}.prompt.md', yamlMarkdown('description')),
     cleanup: projectCleanup('.github/prompts/openspec-*.prompt.md'),
@@ -395,6 +426,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'Junie',
     skillsDir: '.junie',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command('.junie/commands/opsx-{workflow}.md', yamlMarkdown('description')),
     cleanup: projectCleanup('.junie/commands/opsx-*.md', '.junie/commands/openspec-*.md'),
@@ -405,6 +437,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'Kilo Code',
     skillsDir: '.kilocode',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command('.kilocode/workflows/opsx-{workflow}.md', plainMarkdown),
     cleanup: projectCleanup('.kilocode/workflows/openspec-*.md'),
@@ -426,6 +459,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'Kiro',
     skillsDir: '.kiro',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command('.kiro/prompts/opsx-{workflow}.prompt.md', yamlMarkdown('description')),
     cleanup: projectCleanup('.kiro/prompts/openspec-*.prompt.md'),
@@ -436,12 +470,23 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'Lingma',
     skillsDir: '.lingma',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command(
       '.lingma/commands/opsx/{workflow}.md',
       yamlMarkdown('name', 'description', 'category', 'tags')
     ),
     cleanup: projectCleanup('.lingma/commands/openspec'),
+  },
+  {
+    name: 'MiniMax Code',
+    value: 'minimax-code',
+    available: true,
+    successLabel: 'MiniMax Code',
+    skillsDir: null,
+    globalSkillsDir: '.minimax',
+    capability: 'skills-invocable',
+    command: null,
   },
   {
     name: 'Mistral Vibe',
@@ -488,6 +533,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'Qoder',
     skillsDir: '.qoder',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command(
       '.qoder/commands/opsx/{workflow}.md',
@@ -506,11 +552,22 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     cleanup: projectCleanup('.qwen/commands/opsx-*.toml', '.qwen/commands/openspec-*.toml'),
   },
   {
+    name: 'Rovo Dev CLI',
+    value: 'rovodev',
+    available: true,
+    successLabel: 'Rovo Dev CLI',
+    skillsDir: '.rovodev',
+    detectionPaths: ['.rovodev/skills', '.rovodev'],
+    capability: 'skills-invocable',
+    command: null,
+  },
+  {
     name: 'Zoo Code',
     value: 'roocode',
     available: true,
     successLabel: 'Zoo Code',
     skillsDir: '.roo',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command('.roo/commands/opsx-{workflow}.md', headingMarkdown),
     cleanup: projectCleanup('.roo/commands/openspec-*.md'),
@@ -521,6 +578,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     available: true,
     successLabel: 'Trae',
     skillsDir: '.trae',
+    requiresIdeRestart: true,
     capability: 'adapter-backed',
     command: command('.trae/commands/opsx-{workflow}.md', yamlMarkdown('name', 'description')),
   },
@@ -537,12 +595,16 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     ),
   },
   {
-    name: 'AGENTS.md (works with Amp, VS Code, …)',
+    // Vendor-neutral target for assistants that read the shared `.agents` root.
+    // Detection keys off `.agents/skills` rather than the bare root because
+    // frameworks use `.agents/` for more than skills.
+    name: 'Shared .agents skills',
     value: 'agents',
-    available: false,
-    successLabel: 'your AGENTS.md-compatible assistant',
-    skillsDir: null,
-    capability: 'none',
+    available: true,
+    successLabel: 'shared .agents skills',
+    skillsDir: '.agents',
+    detectionPaths: ['.agents/skills'],
+    capability: 'skills-invocable',
     command: null,
   },
 ]

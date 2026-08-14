@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (created 2026-08-01 Asia/Shanghai):
- * 1. Combine the complete OpenSpec 1.7 Agent registry with authoritative Environment delivery policy.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Combine the complete OpenSpec 1.9 Agent registry with authoritative Environment delivery policy.
  * 2. Expose fresh one-shot physical projections through Core `getToolInitStates`.
  * 3. Retain reactive physical projections through Core `createToolInitStateProjection`.
  * 4. Rebind retained work when Environment policy changes and retire all work on dispose.
+ * 5. Observe user-global skill roots (MiniMax Code) beside the project root and Codex prompt root.
  *
  * Original request (2026-08-01): "新增 Agent delivery projection service 及 checked tests。"
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 
 import {
@@ -13,6 +15,7 @@ import {
   PINNED_AGENT_GENERATOR_VERSION,
   ReactiveContext,
   createToolInitStateProjection,
+  getExternalAgentSkillsObservationRoots,
   getExternalCodexCommandObservationRoot,
   getToolInitStates,
   loadOpenSpecAgentCommandContents,
@@ -127,6 +130,13 @@ function cloneRegistry(): ToolConfig[] {
     ...(tool.detectionPaths ? { detectionPaths: [...tool.detectionPaths] } : {}),
     ...(tool.setupNote !== undefined ? { setupNote: tool.setupNote } : {}),
     ...(tool.aliases ? { aliases: [...tool.aliases] } : {}),
+    ...(tool.legacySkillsDirs ? { legacySkillsDirs: [...tool.legacySkillsDirs] } : {}),
+    ...(tool.globalSkillsDir !== undefined && tool.globalSkillsDir !== null
+      ? { globalSkillsDir: tool.globalSkillsDir }
+      : {}),
+    ...(tool.requiresIdeRestart !== undefined
+      ? { requiresIdeRestart: tool.requiresIdeRestart }
+      : {}),
     ...(tool.cleanup ? { cleanup: cloneCleanup(tool.cleanup) } : {}),
     ...(tool.migrations
       ? { migrations: tool.migrations.map((migration) => ({ ...migration })) }
@@ -420,6 +430,9 @@ export class AgentDeliveryProjectionService {
             getExternalCodexCommandObservationRoot()
           )
         )
+        for (const globalSkillsRoot of getExternalAgentSkillsObservationRoots()) {
+          releases.push(await this.options.observationEnvironment.acquireRoot(globalSkillsRoot))
+        }
         if (this.disposed) {
           await Promise.all(releases.map((release) => release()))
           return

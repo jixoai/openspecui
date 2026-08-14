@@ -96,16 +96,20 @@ function createProjection(): AgentIntegrationsProjection {
         name: 'Codex',
         value: 'codex',
         available: true,
-        skillsDir: '.codex',
+        skillsDir: '.agents',
+        legacySkillsDirs: ['.codex'],
+        detectionPaths: ['.agents/skills', '.codex/skills'],
         capability: 'skills-invocable',
         command: null,
+        requiresIdeRestart: true,
       },
       {
-        name: 'Agents',
+        name: 'Shared .agents skills',
         value: 'agents',
-        available: false,
-        skillsDir: null,
-        capability: 'none',
+        available: true,
+        skillsDir: '.agents',
+        detectionPaths: ['.agents/skills'],
+        capability: 'skills-invocable',
         command: null,
       },
     ],
@@ -122,6 +126,9 @@ function createProjection(): AgentIntegrationsProjection {
         readiness: 'partial',
         issues: ['cleanup-needed'],
         hasAnyArtifacts: true,
+        skillsScope: { kind: 'project', skillsDir: '.agents' },
+        legacySkillRoots: ['.codex'],
+        requiresIdeRestart: true,
         expectedSkillCount: 3,
         presentExpectedSkillCount: 2,
         detectedSkillCount: 2,
@@ -146,11 +153,14 @@ function createProjection(): AgentIntegrationsProjection {
       },
       {
         toolId: 'agents',
-        toolName: 'Agents',
-        status: 'unavailable',
-        readiness: 'unavailable',
+        toolName: 'Shared .agents skills',
+        status: 'uninitialized',
+        readiness: 'uninitialized',
         issues: [],
         hasAnyArtifacts: false,
+        skillsScope: { kind: 'project', skillsDir: '.agents' },
+        legacySkillRoots: [],
+        requiresIdeRestart: false,
         expectedSkillCount: 0,
         presentExpectedSkillCount: 0,
         detectedSkillCount: 0,
@@ -211,7 +221,7 @@ describe('ConfigAgents', () => {
 
     expect(screen.getByRole('heading', { name: 'Agent Integrations' })).toBeVisible()
     expect(screen.getByText('Codex')).toBeVisible()
-    expect(screen.getByText('Agents', { selector: 'p' })).toBeVisible()
+    expect(screen.getByText('Shared .agents skills', { selector: 'p' })).toBeVisible()
     expect(screen.getByText('Cleanup needed')).toBeVisible()
     const codexRow = screen.getByText('Codex').closest('li')
     if (!codexRow) throw new Error('Codex inventory row is unavailable.')

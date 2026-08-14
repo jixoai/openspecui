@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
- * 1. Project the unified OpenSpec 1.7 Agent registry into exact skill and command artifact state.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Project the unified OpenSpec 1.9 Agent registry into exact skill and command artifact state.
  * 2. Report partial, stale-version, cleanup-needed, migration-required, and unavailable states from physical evidence.
- * 3. Preserve bounded reactive directory observation and fresh one-shot cache invalidation.
- * 4. Expose Codex managed-global-prompt observation without treating those prompts as current commands.
+ * 3. Observe user-global skill roots (e.g. MiniMax Code) without ever cleaning or migrating them here.
+ * 4. Preserve bounded reactive directory observation and fresh one-shot cache invalidation.
+ * 5. Expose Codex managed-global-prompt observation without treating those prompts as current commands.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 
 import { homedir } from 'node:os'
@@ -41,7 +43,39 @@ export type ToolInitReadiness = 'unavailable' | 'uninitialized' | 'partial' | 'i
 export type ToolInitIssue = 'stale-version' | 'cleanup-needed' | 'migration-required'
 
 /** Pinned source version used when a runtime CLI version is not supplied by the Server owner. */
-export const PINNED_AGENT_GENERATOR_VERSION = '1.7.0'
+export const PINNED_AGENT_GENERATOR_VERSION = '1.9.0'
+
+/** Physical delivery scope of one tool's skills inventory. */
+export type ToolSkillsScope =
+  | { kind: 'project'; skillsDir: string }
+  | { kind: 'user-global'; globalSkillsDir: string }
+  | { kind: 'none' }
+
+/** Resolve the physical skills inventory scope for one registry entry. */
+export function resolveToolSkillsScope(tool: ToolConfig): ToolSkillsScope {
+  if (tool.globalSkillsDir) return { kind: 'user-global', globalSkillsDir: tool.globalSkillsDir }
+  if (tool.skillsDir) return { kind: 'project', skillsDir: tool.skillsDir }
+  return { kind: 'none' }
+}
+
+/** Resolve the home directory the same way the official CLI resolves user-global roots. */
+function resolveAgentHome(): string {
+  return process.env.USERPROFILE || process.env.HOME || homedir()
+}
+
+/** Resolve the absolute user-global skills inventory directory for a global root (e.g. `.minimax`). */
+export function resolveGlobalSkillsInventoryDir(globalSkillsDir: string): string {
+  return resolve(resolveAgentHome(), globalSkillsDir, 'skills')
+}
+
+/** External user-global skills inventory roots observed by the Agent delivery projection. */
+export function getExternalAgentSkillsObservationRoots(): string[] {
+  return AI_TOOLS.flatMap((tool) => {
+    if (!tool.globalSkillsDir) return []
+    const root = resolveGlobalSkillsInventoryDir(tool.globalSkillsDir)
+    return root === getExternalCodexCommandObservationRoot() ? [] : [root]
+  })
+}
 
 export interface ToolInitCleanupState {
   required: boolean
@@ -81,6 +115,12 @@ export interface ToolInitState {
   installedSkillWorkflows: ToolWorkflowId[]
   installedCommandWorkflows: ToolWorkflowId[]
   generatedByVersion: string | null
+  /** Physical delivery scope of this tool's skills; global roots are observed, never mutated here. */
+  skillsScope: ToolSkillsScope
+  /** Former project roots still carrying OpenSpec-managed skills (Codex `.codex`). */
+  legacySkillRoots: string[]
+  /** Declared upstream: the tool needs an IDE/editor restart to load regenerated artifacts. */
+  requiresIdeRestart: boolean
   cleanup?: ToolInitCleanupState
   migration?: ToolInitMigrationState
 }
@@ -149,21 +189,22 @@ function resolveCommandArtifact(
   }
 }
 
+function getSkillArtifactsFromInventory(
+  inventoryRoot: string,
+  workflows: readonly ToolWorkflowId[] = ALL_TOOL_WORKFLOWS
+): ArtifactEntry[] {
+  return workflows.map((workflow) => ({
+    workflow,
+    path: resolve(inventoryRoot, TOOL_WORKFLOW_TO_SKILL_DIR[workflow], 'SKILL.md'),
+  }))
+}
+
 function getSkillArtifacts(
   projectDir: string,
   skillsDir: string,
   workflows: readonly ToolWorkflowId[] = ALL_TOOL_WORKFLOWS
 ): ArtifactEntry[] {
-  return workflows.map((workflow) => ({
-    workflow,
-    path: resolve(
-      projectDir,
-      skillsDir,
-      'skills',
-      TOOL_WORKFLOW_TO_SKILL_DIR[workflow],
-      'SKILL.md'
-    ),
-  }))
+  return getSkillArtifactsFromInventory(resolve(projectDir, skillsDir, 'skills'), workflows)
 }
 
 function getCommandArtifacts(
@@ -181,9 +222,12 @@ function invalidateToolInitCaches(projectDir: string): void {
   const cacheRoots = new Set<string>([
     resolve(projectDir),
     getExternalCodexCommandObservationRoot(),
+    ...getExternalAgentSkillsObservationRoots(),
   ])
   for (const tool of AI_TOOLS) {
     if (tool.skillsDir) cacheRoots.add(resolve(projectDir, tool.skillsDir))
+    for (const legacyRoot of tool.legacySkillsDirs ?? [])
+      cacheRoots.add(resolve(projectDir, legacyRoot))
     for (const migration of tool.migrations ?? [])
       cacheRoots.add(resolve(projectDir, migration.from))
     for (const commandArtifact of getCommandArtifacts(projectDir, tool)) {
@@ -199,19 +243,10 @@ async function readArtifactDirectory(dir: string): Promise<ReadonlySet<string>> 
   return new Set(await reactiveReadDir(dir, { includeHidden: true }))
 }
 
-async function getExistingSkillPaths(
-  projectDir: string,
-  skillsDir: string,
-  entries: readonly ArtifactEntry[],
-  projectRootEntries: ReadonlySet<string>
+async function getExistingInventorySkillPaths(
+  inventoryRoot: string,
+  entries: readonly ArtifactEntry[]
 ): Promise<Set<string>> {
-  const toolRoot = resolve(projectDir, skillsDir)
-  if (!projectRootEntries.has(basename(toolRoot))) return new Set()
-
-  const toolRootEntries = await readArtifactDirectory(toolRoot)
-  if (!toolRootEntries.has('skills')) return new Set()
-
-  const inventoryRoot = resolve(toolRoot, 'skills')
   const rootEntries = await readArtifactDirectory(inventoryRoot)
   const presentEntries = entries.filter((entry) => rootEntries.has(basename(dirname(entry.path))))
   const directoryEntries = await Promise.all(
@@ -225,6 +260,21 @@ async function getExistingSkillPaths(
       .filter(({ entry, files }) => files.has(basename(entry.path)))
       .map(({ entry }) => entry.path)
   )
+}
+
+async function getExistingSkillPaths(
+  projectDir: string,
+  skillsDir: string,
+  entries: readonly ArtifactEntry[],
+  projectRootEntries: ReadonlySet<string>
+): Promise<Set<string>> {
+  const toolRoot = resolve(projectDir, skillsDir)
+  if (!projectRootEntries.has(basename(toolRoot))) return new Set()
+
+  const toolRootEntries = await readArtifactDirectory(toolRoot)
+  if (!toolRootEntries.has('skills')) return new Set()
+
+  return getExistingInventorySkillPaths(resolve(toolRoot, 'skills'), entries)
 }
 
 async function getExistingCommandPaths(entries: readonly ArtifactEntry[]): Promise<Set<string>> {
@@ -460,7 +510,7 @@ async function collectCleanup(
           : 'project-artifacts',
     paths,
     workflows,
-    replacementLabel: globalCleanup?.replacementLabel ?? 'OpenSpec 1.7 Agent delivery',
+    replacementLabel: globalCleanup?.replacementLabel ?? 'OpenSpec 1.9 Agent delivery',
   }
 }
 
@@ -522,7 +572,8 @@ async function projectToolInitStates(
 
   return Promise.all(
     AI_TOOLS.map(async (tool) => {
-      if (!tool.available || !tool.skillsDir) {
+      const skillsScope = resolveToolSkillsScope(tool)
+      if (!tool.available || skillsScope.kind === 'none') {
         return {
           toolId: tool.value,
           toolName: tool.name,
@@ -544,6 +595,9 @@ async function projectToolInitStates(
           installedSkillWorkflows: [],
           installedCommandWorkflows: [],
           generatedByVersion: null,
+          skillsScope,
+          legacySkillRoots: [],
+          requiresIdeRestart: tool.requiresIdeRestart === true,
         } satisfies ToolInitState
       }
 
@@ -551,14 +605,22 @@ async function projectToolInitStates(
         options.delivery !== 'commands' || tool.capability === 'skills-invocable'
       const shouldGenerateCommands =
         options.delivery !== 'skills' && tool.capability === 'adapter-backed'
-      const skillArtifacts = getSkillArtifacts(projectDir, tool.skillsDir)
-      const commandArtifacts = getCommandArtifacts(projectDir, tool)
-      const existingSkillPaths = await getExistingSkillPaths(
-        projectDir,
-        tool.skillsDir,
-        skillArtifacts,
-        projectRootEntries
-      )
+      const inventoryRoot =
+        skillsScope.kind === 'user-global'
+          ? resolveGlobalSkillsInventoryDir(skillsScope.globalSkillsDir)
+          : resolve(projectDir, skillsScope.skillsDir, 'skills')
+      const skillArtifacts = getSkillArtifactsFromInventory(inventoryRoot)
+      const commandArtifacts =
+        skillsScope.kind === 'user-global' ? [] : getCommandArtifacts(projectDir, tool)
+      const existingSkillPaths =
+        skillsScope.kind === 'user-global'
+          ? await getExistingInventorySkillPaths(inventoryRoot, skillArtifacts)
+          : await getExistingSkillPaths(
+              projectDir,
+              (skillsScope as { kind: 'project'; skillsDir: string }).skillsDir,
+              skillArtifacts,
+              projectRootEntries
+            )
       const existingCommandPaths = await getExistingCommandPaths(commandArtifacts)
 
       const expectedSkillArtifacts = shouldGenerateSkills
@@ -670,6 +732,9 @@ async function projectToolInitStates(
         installedSkillWorkflows,
         installedCommandWorkflows,
         generatedByVersion,
+        skillsScope,
+        legacySkillRoots: [...(tool.legacySkillsDirs ?? [])],
+        requiresIdeRestart: tool.requiresIdeRestart === true,
         cleanup,
         migration,
       } satisfies ToolInitState

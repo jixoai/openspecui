@@ -61,7 +61,7 @@ async function writeArtifact(filePath: string, content = '# external fixture\n')
 
 async function writeGeneratedSkill(filePath: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.7.0"\n---\n', 'utf8')
+  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.9.0"\n---\n', 'utf8')
 }
 
 async function prepareCachedRunnerReplacement(
@@ -150,7 +150,7 @@ async function createRouterFixture(
   const releaseLaunchObservation = await server.observationEnvironment.acquireRoot(launchRoot)
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.7.0',
+    version: '1.9.0',
   })
   const environment = {
     kind: 'environment-global',
@@ -433,7 +433,7 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
       expect(findToolState(initialized, 'claude')).toMatchObject({
         status: 'initialized',
         readiness: 'initialized',
-        generatedByVersion: '1.7.0',
+        generatedByVersion: '1.9.0',
         issues: [],
       })
 
@@ -457,7 +457,7 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
     }
   }, 30_000)
 
-  it('observes allowlisted global Codex prompts as cleanup while keeping skills launch-local', async () => {
+  it('observes allowlisted global Codex prompts as cleanup at the shared .agents root', async () => {
     const fixture = await createRouterFixture({
       createCodexPrompts: false,
       delivery: 'both',
@@ -468,14 +468,14 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
     let subscription: { unsubscribe(): void } | null = null
     const planningSkill = join(
       fixture.planningRoot,
-      '.codex',
+      '.agents',
       'skills',
       'openspec-update-change',
       'SKILL.md'
     )
     const launchSkill = join(
       fixture.launchRoot,
-      '.codex',
+      '.agents',
       'skills',
       'openspec-update-change',
       'SKILL.md'

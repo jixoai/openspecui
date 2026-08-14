@@ -29,7 +29,7 @@ import type { ProjectionWorkSubscription } from './projection-work/index.js'
 
 const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
 const cliExecutor = {
-  checkAvailability: async () => ({ available: true, version: '1.7.0' }),
+  checkAvailability: async () => ({ available: true, version: '1.9.0' }),
 }
 const cliCommandAuthority = {
   getCliCommand: async () => ['not-an-importable-openspec-runner'],
@@ -144,7 +144,7 @@ async function writeGeneratedSkill(
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.7.0\n---\n`,
+    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.9.0\n---\n`,
     'utf8'
   )
   return path
@@ -206,10 +206,31 @@ describe('AgentDeliveryProjectionService', () => {
         delivery: 'skills',
         workflows: ['update'],
       })
-      expect(current.registry).toHaveLength(35)
+      expect(current.registry).toHaveLength(38)
       expect(current.registry.find((tool) => tool.value === 'agents')).toMatchObject({
-        available: false,
-        capability: 'none',
+        available: true,
+        skillsDir: '.agents',
+        capability: 'skills-invocable',
+      })
+      expect(current.registry.find((tool) => tool.value === 'codex')).toMatchObject({
+        skillsDir: '.agents',
+        legacySkillsDirs: ['.codex'],
+        migrations: [{ from: '.codex', to: '.agents', needsConsent: false }],
+      })
+      expect(current.registry.find((tool) => tool.value === 'minimax-code')).toMatchObject({
+        skillsDir: null,
+        globalSkillsDir: '.minimax',
+      })
+      expect(current.registry.find((tool) => tool.value === 'command-code')).toMatchObject({
+        skillsDir: '.commandcode',
+        command: { pathTemplate: '.commandcode/commands/opsx-{workflow}.md' },
+      })
+      expect(current.registry.find((tool) => tool.value === 'rovodev')).toMatchObject({
+        skillsDir: '.rovodev',
+        detectionPaths: ['.rovodev/skills', '.rovodev'],
+      })
+      expect(current.registry.find((tool) => tool.value === 'cursor')).toMatchObject({
+        requiresIdeRestart: true,
       })
       expect(current.registry.find((tool) => tool.value === 'devin')).toMatchObject({
         aliases: ['windsurf'],
@@ -217,7 +238,7 @@ describe('AgentDeliveryProjectionService', () => {
       })
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.7.0',
+        generatedByVersion: '1.9.0',
         installedSkillWorkflows: ['update'],
       })
 
