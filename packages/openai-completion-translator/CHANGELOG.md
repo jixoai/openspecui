@@ -1,5 +1,14 @@
 # @openspecui/openai-completion-translator
 
+## 7.0.2
+
+### Patch Changes
+
+- Updated dependencies [0c79923]
+- Updated dependencies [48b6983]
+- Updated dependencies [f09e062]
+  - @openspecui/core@7.0.2
+
 ## 7.0.1
 
 ### Patch Changes
