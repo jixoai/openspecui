@@ -3129,6 +3129,32 @@ apply:
       expect(invalidation.current('context')).toBe(0)
     })
 
+    it('runs OpenSpec 1.9 archived validation through the typed validate contract', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        planningRoot: {
+          path: '/stores/shared',
+          source: 'store',
+          store_id: 'shared',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'shared',
+      }
+      const caller = appRouter.createCaller(context)
+
+      await caller.cli.validate({ kind: 'archived' })
+
+      const validate = context.cliExecutor.contracts.validate as unknown as ReturnType<typeof vi.fn>
+      expect(validate).toHaveBeenCalledWith({
+        target: { kind: 'archived' },
+        strict: undefined,
+        store: 'shared',
+      })
+    })
+
     it('derives streaming validate Store selection from Root Context', async () => {
       const context = createMockContext()
       const planning = await resolveMockPlanningRoot(context)

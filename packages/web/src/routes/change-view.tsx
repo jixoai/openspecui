@@ -14,6 +14,7 @@
  * Owner correction (2026-08-03): move Actions inline with the title, unify subtitle badges, and localize unavailable Tooltips.
  */
 import { ApplyProgressNotice } from '@/components/apply-progress-notice'
+import { ArchivedValidationEvidence } from '@/components/archived-validation-evidence'
 import {
   ChangeContextSummary,
   ChangeReferenceFailureNotice,
@@ -110,7 +111,10 @@ export function ChangeView() {
               label: 'Evidence',
               icon: <FileSearch className="h-4 w-4" />,
               content: (
-                <ChangeEvidencePanel status={status} referenceEvidence={referenceEvidence} />
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <ChangeEvidencePanel status={status} referenceEvidence={referenceEvidence} />
+                  <ArchivedValidationEvidence />
+                </div>
               ),
             },
           ]

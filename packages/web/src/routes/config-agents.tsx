@@ -103,6 +103,7 @@ function WorkflowInventoryLine({
 function AgentEvidence({ tool, state }: { tool: ToolConfig; state: ToolInitState }) {
   const deliverySummary = [
     tool.skillsDir ? `Skills: ${tool.skillsDir}` : null,
+    tool.globalSkillsDir ? `Global skills: ~/${tool.globalSkillsDir}/skills` : null,
     tool.command ? `Commands: ${tool.command.pathTemplate}` : null,
   ].filter((value): value is string => value !== null)
 
@@ -121,6 +122,18 @@ function AgentEvidence({ tool, state }: { tool: ToolConfig; state: ToolInitState
               {line}
             </p>
           ))}
+          {tool.legacySkillsDirs?.length ? (
+            <p className="break-all font-mono">
+              <span className="text-muted-foreground font-sans">Legacy skills:</span>{' '}
+              {tool.legacySkillsDirs.join(', ')}
+            </p>
+          ) : null}
+          {state.requiresIdeRestart ? (
+            <p>
+              <span className="text-muted-foreground">IDE restart:</span> required to load
+              regenerated artifacts
+            </p>
+          ) : null}
           {tool.command ? (
             <p>
               <span className="text-muted-foreground">Invocation:</span>{' '}
@@ -140,6 +153,14 @@ function AgentEvidence({ tool, state }: { tool: ToolConfig; state: ToolInitState
           {tool.setupNote ? <p>{tool.setupNote}</p> : null}
         </div>
         <div className="min-w-0 space-y-1">
+          <p>
+            <span className="text-muted-foreground">Skills scope:</span>{' '}
+            {state.skillsScope.kind === 'user-global'
+              ? `user-global ~/${state.skillsScope.globalSkillsDir}/skills`
+              : state.skillsScope.kind === 'project'
+                ? `project ${state.skillsScope.skillsDir}/skills`
+                : 'none'}
+          </p>
           <p>
             Skills {state.presentExpectedSkillCount}/{state.expectedSkillCount} · Commands{' '}
             {state.presentExpectedCommandCount}/{state.expectedCommandCount}

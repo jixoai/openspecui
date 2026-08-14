@@ -2206,6 +2206,9 @@ export const cliRouter = router({
           scope: z.enum(['all', 'changes', 'specs']),
           strict: z.boolean().optional(),
         }),
+        z.object({
+          kind: z.literal('archived'),
+        }),
       ])
     )
     .mutation(async ({ ctx, input }) => {
@@ -2214,8 +2217,10 @@ export const cliRouter = router({
           target:
             input.kind === 'item'
               ? { kind: 'item', id: input.id, type: input.type }
-              : { kind: 'scope', scope: input.scope },
-          strict: input.strict,
+              : input.kind === 'scope'
+                ? { kind: 'scope', scope: input.scope }
+                : { kind: 'archived' },
+          strict: input.kind === 'archived' ? undefined : input.strict,
           ...getRootContextCliSelector(rootContext),
         })
       )
