@@ -321,33 +321,33 @@ const CliValidationTotalsSchema = z
   })
   .passthrough()
 
-/** Typed strict or non-strict Validate result, including upstream failure diagnostics. */
-export const CliValidateSchema = z.union([
-  z
-    .object({
-      items: z.array(
-        z
-          .object({
-            id: z.string(),
-            type: z.enum(['change', 'spec']),
-            valid: z.boolean(),
-            issues: z.array(CliValidationIssueSchema),
-            durationMs: z.number(),
-          })
-          .passthrough()
-      ),
-      summary: z
+/** Typed ordinary Validate report, also used by 1.9 `validate --archived --json`. */
+export const CliValidateReportSchema = z
+  .object({
+    items: z.array(
+      z
         .object({
-          totals: CliValidationTotalsSchema,
-          byType: z.record(CliValidationTotalsSchema),
+          id: z.string(),
+          type: z.enum(['change', 'spec']),
+          valid: z.boolean(),
+          issues: z.array(CliValidationIssueSchema),
+          durationMs: z.number(),
         })
-        .passthrough(),
-      version: z.string(),
-      root: CliRootSchema,
-    })
-    .passthrough(),
-  CliDiagnosticFailureSchema,
-])
+        .passthrough()
+    ),
+    summary: z
+      .object({
+        totals: CliValidationTotalsSchema,
+        byType: z.record(CliValidationTotalsSchema),
+      })
+      .passthrough(),
+    version: z.string(),
+    root: CliRootSchema,
+  })
+  .passthrough()
+
+/** Typed strict, non-strict, or archived Validate result, including failure diagnostics. */
+export const CliValidateSchema = z.union([CliValidateReportSchema, CliDiagnosticFailureSchema])
 
 const CliArchiveTotalsSchema = z
   .object({
@@ -396,4 +396,5 @@ export type CliApplyInstructionsSuccess = z.infer<typeof CliApplyInstructionsSuc
 export type CliArchiveInstructions = z.infer<typeof CliArchiveInstructionsSchema>
 export type CliArchiveInstructionsSuccess = z.infer<typeof CliArchiveInstructionsSuccessSchema>
 export type CliValidate = z.infer<typeof CliValidateSchema>
+export type CliValidateReport = z.infer<typeof CliValidateReportSchema>
 export type CliArchive = z.infer<typeof CliArchiveSchema>
