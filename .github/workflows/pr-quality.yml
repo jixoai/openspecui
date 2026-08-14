@@ -216,6 +216,28 @@ jobs:
         shell: pwsh
         run: pnpm typecheck
 
+      # The offline smoke resolves package.json ranges (e.g. the optional node-pty peer), but a
+      # cold frozen-lockfile install never writes range metadata to the pnpm mirror. Install the
+      # packed tarball once online so the shared store and mirror match a real developer machine;
+      # the smoke itself then proves the offline install path against that warmed cache.
+      - name: Warm pnpm cache for the offline smoke
+        if: >-
+          !startsWith(github.head_ref, 'chore/release/changeversion-') &&
+          needs.ci-scope.outputs.fast_mode != 'skip'
+        shell: pwsh
+        run: |
+          $warm = Join-Path $env:TEMP ("openspecui-warm-" + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $warm | Out-Null
+          pnpm --filter openspecui pack --pack-destination $warm 2>$null | Out-Null
+          $tgz = (Get-ChildItem $warm -Filter *.tgz | Select-Object -First 1).FullName
+          if (-not $tgz) { Write-Error "pack produced no tarball in $warm"; exit 1 }
+          Push-Location $warm
+          pnpm init | Out-Null
+          pnpm add --ignore-workspace $tgz
+          if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Error "warm install failed"; exit 1 }
+          Pop-Location
+          Remove-Item -Recurse -Force $warm
+
       - name: Build and smoke installed Windows CLI
         if: >-
           !startsWith(github.head_ref, 'chore/release/changeversion-') &&
