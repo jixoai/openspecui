@@ -451,7 +451,8 @@ function buildChangeStatus(
   return {
     changeName: change.id,
     schemaName,
-    isComplete: artifacts.length > 0 && artifacts.every((artifact) => artifact.status === 'done'),
+    isPlanningComplete:
+      artifacts.length > 0 && artifacts.every((artifact) => artifact.status === 'done'),
     applyRequires: schemaDetail.applyRequires ?? [],
     artifacts,
     provenance: { kind: 'static' },

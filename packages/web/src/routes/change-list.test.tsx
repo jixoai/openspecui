@@ -322,7 +322,7 @@ describe('ChangeList', () => {
         {
           changeName: 'main-error-change',
           schemaName: 'spec-driven',
-          isComplete: false,
+          isPlanningComplete: false,
           applyRequires: ['tasks'],
           artifacts: [
             { id: 'proposal', status: 'done' },
@@ -405,7 +405,7 @@ describe('ChangeList', () => {
         {
           changeName: 'chat-channel-token-admin',
           schemaName: 'spec-driven',
-          isComplete: true,
+          isPlanningComplete: true,
           applyRequires: ['tasks'],
           artifacts: [
             { id: 'proposal', status: 'done' },
@@ -441,7 +441,7 @@ describe('ChangeList', () => {
         {
           changeName: 'no-tracked-tasks',
           schemaName: 'custom',
-          isComplete: true,
+          isPlanningComplete: true,
           applyRequires: [],
           artifacts: [{ id: 'plan', status: 'done', requires: [] }],
         },
@@ -474,7 +474,7 @@ describe('ChangeList', () => {
         {
           changeName: 'completed-change',
           schemaName: 'spec-driven',
-          isComplete: true,
+          isPlanningComplete: true,
           applyRequires: ['tasks'],
           artifacts: [{ id: 'tasks', status: 'done', requires: [] }],
         },

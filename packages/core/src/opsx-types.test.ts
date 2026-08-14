@@ -87,6 +87,35 @@ describe('ApplyInstructionsSchema', () => {
     expect(parsed.references).toEqual(referenceIndex)
   })
 
+  it('keeps CLI Apply progress authoritative when the actionable task list is shorter', () => {
+    // OpenSpec 1.8/1.9 count indented and blank-description checkboxes in
+    // progress while `tasks` hides blank-description entries. The projection
+    // must preserve the CLI denominator, never recompute it from tasks.length.
+    const parsed = ApplyInstructionsSchema.parse({
+      ...baseApplyInstructions,
+      contextFiles: {},
+      progress: { total: 3, complete: 1, remaining: 2 },
+      tasks: [
+        { id: '1', description: 'Plan the migration', done: true },
+        {
+          id: '2',
+          description: 'Nested sub-task counted by progress',
+          done: false,
+        },
+      ],
+    })
+
+    expect(parsed.tasks).toHaveLength(2)
+    expect(parsed.applyInstructionProgress).toMatchObject({
+      source: 'openspec-instructions-apply',
+      total: 3,
+      complete: 1,
+      remaining: 2,
+      state: 'ready',
+    })
+    expect(parsed.applyInstructionProgress.total).not.toBe(parsed.tasks.length)
+  })
+
   it('normalizes legacy contextFiles strings to arrays', () => {
     const parsed = ApplyInstructionsSchema.parse({
       ...baseApplyInstructions,

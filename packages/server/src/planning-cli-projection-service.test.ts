@@ -55,7 +55,7 @@ function createStatus(changeName: string): ChangeStatus {
   return {
     changeName,
     schemaName: 'spec-driven',
-    isComplete: false,
+    isPlanningComplete: false,
     applyRequires: [],
     artifacts: [],
     provenance: { kind: 'static' },

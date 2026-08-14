@@ -20,7 +20,7 @@ function status(): ChangeStatus {
   return {
     changeName: 'add-auth',
     schemaName: 'spec-driven',
-    isComplete: false,
+    isPlanningComplete: false,
     applyRequires: ['tasks'],
     artifacts: [{ id: 'tasks', outputPath: 'tasks.md', status: 'ready', requires: [] }],
     provenance: {

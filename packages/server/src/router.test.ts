@@ -3622,7 +3622,7 @@ apply:
       const status: ChangeStatus = {
         changeName: 'add-caching',
         schemaName: 'spec-driven',
-        isComplete: false,
+        isPlanningComplete: false,
         applyRequires: [],
         artifacts: [],
         provenance: {

@@ -684,7 +684,7 @@ export function Dashboard() {
                   )
             const phase = classifyChangeWorkflowPhase({
               hasStatus: Boolean(status),
-              isComplete: status?.isComplete ?? false,
+              isPlanningComplete: status?.isPlanningComplete ?? false,
               trackedTaskPhase: progress.phase,
               trackedArtifactStatus,
             })

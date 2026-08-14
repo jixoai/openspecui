@@ -96,7 +96,8 @@ export type ArtifactStatus = z.infer<typeof ArtifactStatusSchema>
 export const ChangeStatusSchema = z.object({
   changeName: z.string(),
   schemaName: z.string(),
-  isComplete: z.boolean(),
+  /** Planning-artifact completion fact from the CLI; never an implementation-task authority. */
+  isPlanningComplete: z.boolean(),
   applyRequires: z.array(z.string()),
   artifacts: z.array(ArtifactStatusSchema),
   provenance: z.discriminatedUnion('kind', [

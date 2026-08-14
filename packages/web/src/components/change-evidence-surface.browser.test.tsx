@@ -75,7 +75,7 @@ function changeStatus(): ChangeStatus {
   return {
     changeName: longTitle,
     schemaName: 'opsx-collab-pr-loop',
-    isComplete: false,
+    isPlanningComplete: false,
     applyRequires: ['implementation'],
     artifacts: [
       { id: 'implementation', outputPath: 'loop/implementation.md', status: 'ready', requires: [] },

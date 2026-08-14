@@ -127,7 +127,7 @@ describe('static-data-provider opsx adapters', () => {
     expect(list[0]).toMatchObject({
       changeName: 'add-2fa',
       schemaName: 'spec-driven',
-      isComplete: true,
+      isPlanningComplete: true,
     })
     expect(list[0]?.artifacts.map((artifact) => artifact.status)).toEqual([
       'done',
@@ -164,7 +164,7 @@ describe('static-data-provider opsx adapters', () => {
     expect(status).toMatchObject({
       changeName: 'add-2fa',
       schemaName: 'unknown',
-      isComplete: false,
+      isPlanningComplete: false,
       artifacts: [],
     })
   })

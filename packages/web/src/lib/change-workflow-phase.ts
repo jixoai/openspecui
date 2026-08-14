@@ -10,7 +10,7 @@ import type { TrackedTaskPhase } from '@openspecui/core'
 
 export interface ChangeWorkflowPhaseInput {
   hasStatus: boolean
-  isComplete: boolean
+  isPlanningComplete: boolean
   trackedTaskPhase: TrackedTaskPhase
   trackedArtifactStatus: 'done' | 'skipped' | 'ready' | 'blocked' | null
 }
@@ -28,7 +28,7 @@ export function classifyChangeWorkflowPhase(params: ChangeWorkflowPhaseInput): C
     }
   }
 
-  if (params.isComplete && params.trackedTaskPhase === 'complete') {
+  if (params.isPlanningComplete && params.trackedTaskPhase === 'complete') {
     return {
       label: 'Workflow Complete',
       toneClass: 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300',

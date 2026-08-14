@@ -50,7 +50,7 @@ const rootActionFailureCases: Array<Extract<RootActionState, { status: 'blocked'
 const retainedChangeStatus = {
   changeName: 'Extract Terminal View Webcomponent',
   schemaName: 'opsx-collab-pr-loop',
-  isComplete: false,
+  isPlanningComplete: false,
   applyRequires: [],
   artifacts: [
     { id: 'implementation', outputPath: 'implementation.md', status: 'ready', requires: [] },
@@ -341,7 +341,7 @@ describe('ChangeView', () => {
       data: {
         changeName: 'Extract Terminal View Webcomponent',
         schemaName: 'opsx-collab-pr-loop',
-        isComplete: false,
+        isPlanningComplete: false,
         applyRequires: [],
         artifacts: [
           { id: 'intake', outputPath: 'intake.md', status: 'done', requires: [] },
@@ -392,7 +392,7 @@ describe('ChangeView', () => {
       data: {
         changeName: 'Extract Terminal View Webcomponent',
         schemaName: 'opsx-collab-pr-loop',
-        isComplete: false,
+        isPlanningComplete: false,
         applyRequires: [],
         artifacts: [
           { id: 'implementation', outputPath: 'implementation.md', status: 'ready', requires: [] },
@@ -462,7 +462,7 @@ describe('ChangeView', () => {
       data: {
         changeName: 'Extract Terminal View Webcomponent',
         schemaName: 'opsx-collab-pr-loop',
-        isComplete: false,
+        isPlanningComplete: false,
         applyRequires: [],
         artifacts: [],
         provenance: { kind: 'static' },
@@ -493,7 +493,7 @@ describe('ChangeView', () => {
       data: {
         changeName: 'Extract Terminal View Webcomponent',
         schemaName: 'opsx-collab-pr-loop',
-        isComplete: true,
+        isPlanningComplete: true,
         applyRequires: [],
         artifacts: [
           { id: 'implementation', outputPath: 'implementation.md', status: 'done', requires: [] },

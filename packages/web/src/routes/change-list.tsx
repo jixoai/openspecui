@@ -168,7 +168,7 @@ export function ChangeList() {
               const totalArtifacts = status?.artifacts.length ?? 0
               const phase = classifyChangeWorkflowPhase({
                 hasStatus: Boolean(status),
-                isComplete: status?.isComplete ?? false,
+                isPlanningComplete: status?.isPlanningComplete ?? false,
                 trackedTaskPhase: change.trackedTaskProgress.phase,
                 trackedArtifactStatus: inferTrackedArtifactStatus(
                   status?.artifacts.map((artifact) => artifact.status) ?? []

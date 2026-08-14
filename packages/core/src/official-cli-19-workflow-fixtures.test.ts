@@ -148,5 +148,71 @@ describe('pinned OpenSpec 1.8/1.9 workflow fixtures', () => {
       ])
       expect(JSON.stringify(archive.operationGuidance)).not.toContain('Artifact-only rule')
     }, 60_000)
+
+    it(`keeps Apply progress authoritative over the actionable task list on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(
+        `cli-${version.replace(/\./g, '')}-apply-progress`
+      )
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      await expectPinnedVersion(version, project, env)
+
+      const initialized = await runPinnedOpenspec(
+        version,
+        ['init', project, '--tools=none'],
+        project,
+        env
+      )
+      expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
+
+      const created = await runPinnedOpenspec(
+        version,
+        ['new', 'change', 'mixed-tasks'],
+        project,
+        env
+      )
+      expect(created.exitCode, created.stdout + '\n' + created.stderr).toBe(0)
+
+      const changeDir = join(project, 'openspec', 'changes', 'mixed-tasks')
+      await writeFile(
+        join(changeDir, 'proposal.md'),
+        '# Proposal\n\nExercise indented and blank-description checkbox counting.\n'
+      )
+      await writeFile(
+        join(changeDir, 'tasks.md'),
+        [
+          '# Tasks',
+          '',
+          '- [x] Plan the migration',
+          '  - [ ] Nested sub-task counted by progress',
+          '- [ ]',
+          '',
+        ].join('\n')
+      )
+
+      const apply = parsePinnedSuccessJson(
+        await runPinnedOpenspec(
+          version,
+          ['instructions', 'apply', '--change', 'mixed-tasks', '--json'],
+          project,
+          env
+        ),
+        (payload) => CliApplyInstructionsSuccessSchema.parse(payload)
+      )
+
+      // The upstream parser counts every checkbox line, including indented
+      // sub-tasks and blank-description lines; the actionable tasks list hides
+      // blank-description entries. progress is the denominator, tasks.length
+      // is only the actionable presentation.
+      expect(apply.progress).toEqual({ total: 3, complete: 1, remaining: 2 })
+      expect(apply.tasks).toEqual([
+        { id: '1', description: 'Plan the migration', done: true },
+        { id: '2', description: 'Nested sub-task counted by progress', done: false },
+      ])
+      expect(apply.tasks.length).toBe(2)
+      expect(apply.state).toBe('ready')
+    }, 60_000)
   }
 })

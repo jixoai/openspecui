@@ -24,7 +24,7 @@ vi.mock('@/components/tooltip', () => ({
 const status: ChangeStatus = {
   changeName: 'Add search',
   schemaName: 'spec-driven',
-  isComplete: false,
+  isPlanningComplete: false,
   applyRequires: [],
   artifacts: [],
   provenance: { kind: 'static' },
@@ -147,7 +147,7 @@ describe('ChangeCommandBar', () => {
   it('locks every action behind the shared Root Context gate', () => {
     render(
       <ChangeCommandBar
-        status={{ ...status, isComplete: true }}
+        status={{ ...status, isPlanningComplete: true }}
         actionDisabled
         actionDisabledReason="Root selection failed."
         onComposeAction={vi.fn()}

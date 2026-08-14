@@ -1046,7 +1046,7 @@ export class OpsxKernel {
     const status = ChangeStatusSchema.parse({
       changeName: data.changeName,
       schemaName: data.schemaName,
-      isComplete: data.isComplete,
+      isPlanningComplete: data.isPlanningComplete,
       applyRequires: data.applyRequires,
       artifacts: data.artifacts,
       provenance: {
