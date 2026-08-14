@@ -120,6 +120,12 @@ describe('Export Functions', () => {
 
       expect(snapshot.opsx).toBeDefined()
       expect(snapshot.opsx?.schemas).toBeInstanceOf(Array)
+      // This fixture runs without an available CLI runner, so the schemas
+      // observation is captured as a failure instead of a silent empty catalog.
+      expect(snapshot.opsx?.schemasCapture).toEqual({
+        ok: false,
+        error: expect.stringContaining('OpenSpec CLI'),
+      })
       expect(snapshot.opsx?.schemaDetails).toBeDefined()
       expect(snapshot.opsx?.templates).toBeDefined()
     })

@@ -430,6 +430,7 @@ export async function generateSnapshot(
     // OPSX config snapshot
     let configYaml: string | undefined
     let schemas: SchemaInfo[] = []
+    let schemasCapture: { ok: true } | { ok: false; error: string } = { ok: true }
     const schemaDetails: Record<string, SchemaDetail> = {}
     const schemaDiagnostics: Record<string, OpsxEntityDiagnostic[]> = {}
     const schemaYamls: Record<string, string> = {}
@@ -460,9 +461,21 @@ export async function generateSnapshot(
       const schemasResult = await cliExecutor.schemas()
       if (schemasResult.success) {
         schemas = parseCliJson(schemasResult.stdout, SchemaInfoSchema.array(), 'openspec schemas')
+      } else {
+        // A CLI failure (including the OpenSpec 1.9 selected-Root envelope) is captured as a
+        // failed observation so the static projection never reads it as an empty catalog.
+        schemasCapture = {
+          ok: false,
+          error:
+            schemasResult.stderr.trim() || 'openspec schemas failed to resolve the selected Root.',
+        }
       }
-    } catch {
+    } catch (error) {
       schemas = []
+      schemasCapture = {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
     }
 
     for (const schema of schemas) {
@@ -690,6 +703,7 @@ export async function generateSnapshot(
       opsx: {
         configYaml,
         schemas,
+        schemasCapture,
         schemaDetails,
         schemaYamls,
         schemaResolutions,

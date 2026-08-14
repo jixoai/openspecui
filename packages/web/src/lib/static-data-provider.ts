@@ -1105,6 +1105,13 @@ export async function getOpsxConfigBundle(): Promise<{
   schemaResolutions: Record<string, SchemaResolution | null>
 }> {
   const snapshot = await loadSnapshot()
+  const capture = snapshot?.opsx?.schemasCapture
+  if (capture && capture.ok === false) {
+    // A failed schemas observation (for example the OpenSpec 1.9 selected-Root
+    // envelope) stays a captured CLI failure; the static projection never reads
+    // it as an empty successful catalog.
+    throw new Error(capture.error)
+  }
   return {
     schemas: snapshot?.opsx?.schemas ?? [],
     schemaDetails: snapshot?.opsx?.schemaDetails ?? {},

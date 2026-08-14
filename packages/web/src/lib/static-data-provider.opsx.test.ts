@@ -322,4 +322,19 @@ describe('static-data-provider opsx adapters', () => {
     expect(template?.displayPath).toBe('project:openspec/schemas/spec-driven/templates/proposal.md')
     expect(templates?.proposal?.content).toBe('# Proposal template')
   })
+
+  it('keeps a captured schemas failure as CLI failure evidence, not an empty catalog', async () => {
+    const snapshot = createSnapshot()
+    if (!snapshot.opsx) throw new Error('Static opsx fixture is missing.')
+    snapshot.opsx.schemasCapture = {
+      ok: false,
+      error: 'No openspec root found for schemas.',
+    }
+    staticState.snapshot = snapshot
+
+    const provider = await import('./static-data-provider')
+    await expect(provider.getOpsxConfigBundle()).rejects.toThrow(
+      'No openspec root found for schemas.'
+    )
+  })
 })

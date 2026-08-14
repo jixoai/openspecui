@@ -1,14 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
- * 1. Expose the unified OpenSpec 1.7 Agent delivery registry through the established Tool APIs.
- * 2. Detect configured project-local Agent roots reactively without duplicating registry metadata.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Expose the unified OpenSpec 1.9 Agent delivery registry through the established Tool APIs.
+ * 2. Detect configured project-local and user-global Agent roots reactively without duplicating registry metadata.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 
 import { join, resolve } from 'node:path'
 import { AI_TOOLS, resolveAgentToolId, type ToolConfig } from './agent-delivery-registry.js'
 import { ReactiveState, acquireWatcher, reactiveExists, reactiveStat } from './reactive-fs/index.js'
+import { resolveGlobalSkillsInventoryDir } from './tool-init-state.js'
 
 export {
   AGENT_DELIVERY_REGISTRY,
@@ -56,10 +58,19 @@ export function getAllTools(): ToolConfig[] {
   return AI_TOOLS
 }
 
-/** Detect project-local Agent roots using the official OpenSpec detection paths. */
+/** Detect configured Agents using the official OpenSpec project and user-global detection rules. */
 export async function getDetectedProjectTools(projectDir: string): Promise<ToolConfig[]> {
   const results = await Promise.all(
     AI_TOOLS.map(async (tool) => {
+      if (tool.globalSkillsDir) {
+        // User-global targets are detected through generated skill files in the
+        // global inventory, matching the official availability rule.
+        const inventoryRoot = resolveGlobalSkillsInventoryDir(tool.globalSkillsDir)
+        const detected = await Promise.all(
+          SKILL_NAMES.map((skillName) => reactiveExists(join(inventoryRoot, skillName, 'SKILL.md')))
+        )
+        return detected.some(Boolean) ? tool : null
+      }
       if (!tool.skillsDir) return null
       if (tool.detectionPaths?.length) {
         const detected = await Promise.all(
@@ -89,6 +100,7 @@ const stateCache = new Map<string, ReactiveState<string[]>>()
 const releaseCache = new Map<string, () => void>()
 
 function getSkillsDir(projectDir: string, tool: ToolConfig): string | null {
+  if (tool.globalSkillsDir) return resolveGlobalSkillsInventoryDir(tool.globalSkillsDir)
   return tool.skillsDir ? join(projectDir, tool.skillsDir, 'skills') : null
 }
 
@@ -106,7 +118,7 @@ async function getSkillCount(projectDir: string, tool: ToolConfig): Promise<numb
 async function scanConfiguredTools(projectDir: string): Promise<string[]> {
   const results = await Promise.all(
     AI_TOOLS.map(async (tool) => {
-      if (!tool.skillsDir) return null
+      if (!tool.skillsDir && !tool.globalSkillsDir) return null
       return (await getSkillCount(projectDir, tool)) > 0 ? tool.value : null
     })
   )

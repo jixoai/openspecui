@@ -170,6 +170,12 @@ export interface ExportSnapshot {
   opsx?: {
     configYaml?: string
     schemas: SchemaInfo[]
+    /**
+     * Captured schemas-observation outcome. `failed` records the CLI failure (for example
+     * the OpenSpec 1.9 selected-Root envelope) so static consumers never read the failure
+     * as an empty successful catalog.
+     */
+    schemasCapture?: { ok: true } | { ok: false; error: string }
     schemaDetails: Record<string, SchemaDetail>
     schemaYamls?: Record<string, string>
     schemaResolutions: Record<string, SchemaResolution>
