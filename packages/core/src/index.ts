@@ -896,6 +896,7 @@ export {
   type ExportRootProvenance,
   type ExportRootSource,
   type ExportSnapshot,
+  type StaticSchemasCaptureFailure,
 } from './export-types.js'
 export {
   type GitEntriesPage,

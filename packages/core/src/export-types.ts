@@ -6,6 +6,8 @@
  *
  * Original request (2026-08-01): adapt OpenSpecUI 7 to the OpenSpec 1.7 Root and Store protocol.
  */
+import type { CliJsonValue } from './cli-contracts/command-result.js'
+import type { CliDiagnostic } from './cli-contracts/common.js'
 import type { OpenSpecUIConfig } from './config.js'
 import type { OpsxEntityDetail } from './opsx-entity.js'
 import type { SchemaDetail, SchemaInfo, SchemaResolution, TemplatesMap } from './opsx-types.js'
@@ -47,6 +49,25 @@ export type ExportReferencePolicy =
 /**
  * Complete snapshot of an OpenSpec project for static export
  */
+/** Typed captured failure of the static schemas observation. */
+export interface StaticSchemasCaptureFailure {
+  ok: false
+  /** CLI command whose observation failed. */
+  command: 'openspec schemas'
+  /** Selected Root selector forwarded for the observation, when captured. */
+  selector: { store?: string } | null
+  /** Whether the failing payload still carried a resolved Root. */
+  rootAvailable: boolean
+  /** Upstream diagnostics from the failing payload's status array. */
+  diagnostics: readonly CliDiagnostic[]
+  stdout: string
+  stderr: string
+  exitCode: number | null
+  /** Raw parsed JSON payload of the failing observation, when parseable. */
+  payload: CliJsonValue | null
+  contractError?: string
+}
+
 export interface ExportSnapshot {
   /** Snapshot metadata */
   meta: {
@@ -171,11 +192,11 @@ export interface ExportSnapshot {
     configYaml?: string
     schemas: SchemaInfo[]
     /**
-     * Captured schemas-observation outcome. `failed` records the CLI failure (for example
-     * the OpenSpec 1.9 selected-Root envelope) so static consumers never read the failure
-     * as an empty successful catalog.
+     * Captured schemas-observation outcome. A failed observation keeps the complete typed
+     * CLI evidence (for example the OpenSpec 1.9 selected-Root envelope) so static
+     * consumers never read the failure as an empty successful catalog.
      */
-    schemasCapture?: { ok: true } | { ok: false; error: string }
+    schemasCapture?: { ok: true } | StaticSchemasCaptureFailure
     schemaDetails: Record<string, SchemaDetail>
     schemaYamls?: Record<string, string>
     schemaResolutions: Record<string, SchemaResolution>

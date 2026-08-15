@@ -330,18 +330,44 @@ describe('static-data-provider opsx adapters', () => {
     expect(templates?.proposal?.content).toBe('# Proposal template')
   })
 
-  it('keeps a captured schemas failure as CLI failure evidence, not an empty catalog', async () => {
+  it('keeps a captured schemas failure as typed CLI evidence, not an empty catalog', async () => {
     const snapshot = createSnapshot()
     if (!snapshot.opsx) throw new Error('Static opsx fixture is missing.')
     snapshot.opsx.schemasCapture = {
       ok: false,
-      error: 'No openspec root found for schemas.',
+      command: 'openspec schemas',
+      selector: { store: 'ghost' },
+      rootAvailable: false,
+      diagnostics: [
+        {
+          severity: 'error',
+          code: 'unknown_store',
+          message: "Unknown store 'ghost'.",
+        },
+      ],
+      stdout: '',
+      stderr: '',
+      exitCode: 1,
+      payload: { schemas: [], root: null, status: [] },
+      contractError: undefined,
     }
     staticState.snapshot = snapshot
 
     const provider = await import('./static-data-provider')
-    await expect(provider.getOpsxConfigBundle()).rejects.toThrow(
-      'No openspec root found for schemas.'
-    )
+    const bundleError = await provider.getOpsxConfigBundle().catch((error) => error)
+    expect(bundleError).toBeInstanceOf(provider.StaticSchemasCaptureError)
+    expect(bundleError.message).toContain("Unknown store 'ghost'.")
+    expect(bundleError.capture).toMatchObject({
+      ok: false,
+      command: 'openspec schemas',
+      selector: { store: 'ghost' },
+      rootAvailable: false,
+      exitCode: 1,
+      diagnostics: [{ code: 'unknown_store' }],
+    })
+    // The list-only accessor propagates the same typed failure instead of `[]`.
+    const listError = await provider.getOpsxSchemas().catch((error) => error)
+    expect(listError).toBeInstanceOf(provider.StaticSchemasCaptureError)
+    expect(listError.capture).toBe(bundleError.capture)
   })
 })

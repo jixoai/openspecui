@@ -121,11 +121,19 @@ describe('Export Functions', () => {
       expect(snapshot.opsx).toBeDefined()
       expect(snapshot.opsx?.schemas).toBeInstanceOf(Array)
       // This fixture runs without an available CLI runner, so the schemas
-      // observation is captured as a failure instead of a silent empty catalog.
-      expect(snapshot.opsx?.schemasCapture).toEqual({
-        ok: false,
-        error: expect.stringContaining('OpenSpec CLI'),
-      })
+      // observation is captured as a typed failure instead of a silent empty catalog.
+      const capture = snapshot.opsx?.schemasCapture
+      if (capture?.ok !== false) throw new Error('Expected a typed schemas capture failure.')
+      expect(capture.command).toBe('openspec schemas')
+      expect(capture.selector).toBeNull()
+      expect(capture.rootAvailable).toBe(false)
+      expect(capture.diagnostics).toEqual([])
+      expect(capture.stdout).toBe('')
+      expect(capture.exitCode).toBeNull()
+      expect(capture.payload).toBeNull()
+      expect(capture.contractError).toBeUndefined()
+      // The runner failure surfaces through the captured stderr evidence.
+      expect(capture.stderr).toEqual(expect.stringContaining('OpenSpec CLI'))
       expect(snapshot.opsx?.schemaDetails).toBeDefined()
       expect(snapshot.opsx?.templates).toBeDefined()
     })

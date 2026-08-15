@@ -11,6 +11,7 @@
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  */
 import {
+  CliDiagnosticFailureSchema,
   CliExecutor,
   ConfigManager,
   DEFAULT_CONFIG,
@@ -20,6 +21,7 @@ import {
   SchemaResolutionSchema,
   TemplatesSchema,
   toOpsxDisplayPath,
+  type CliJsonValue,
   type ExportSnapshot,
   type OpsxEntityDiagnostic,
   type SchemaDetail,
@@ -430,7 +432,11 @@ export async function generateSnapshot(
     // OPSX config snapshot
     let configYaml: string | undefined
     let schemas: SchemaInfo[] = []
-    let schemasCapture: { ok: true } | { ok: false; error: string } = { ok: true }
+    let schemasCapture: ExportSnapshot['opsx'] extends infer Opsx
+      ? Opsx extends { schemasCapture?: infer Capture }
+        ? NonNullable<Capture>
+        : never
+      : never = { ok: true }
     const schemaDetails: Record<string, SchemaDetail> = {}
     const schemaDiagnostics: Record<string, OpsxEntityDiagnostic[]> = {}
     const schemaYamls: Record<string, string> = {}
@@ -457,25 +463,49 @@ export async function generateSnapshot(
       configYaml = undefined
     }
 
+    const captureSchemasFailure = (
+      result: { stdout: string; stderr: string; exitCode: number | null },
+      contractError?: string
+    ): void => {
+      // A CLI failure (including the OpenSpec 1.9 selected-Root envelope) is captured as a
+      // typed failed observation so the static projection never reads it as an empty catalog.
+      let payload: unknown = null
+      try {
+        payload = JSON.parse(result.stdout)
+      } catch {
+        payload = null
+      }
+      const envelope = CliDiagnosticFailureSchema.safeParse(payload)
+      schemasCapture = {
+        ok: false,
+        command: 'openspec schemas',
+        selector: null,
+        rootAvailable:
+          typeof payload === 'object' && payload !== null && 'root' in payload
+            ? (payload as { root: unknown }).root !== null
+            : false,
+        diagnostics: envelope.success ? envelope.data.status : [],
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+        payload: (payload as CliJsonValue | null) ?? null,
+        ...(contractError !== undefined ? { contractError } : {}),
+      }
+    }
+
     try {
       const schemasResult = await cliExecutor.schemas()
       if (schemasResult.success) {
         schemas = parseCliJson(schemasResult.stdout, SchemaInfoSchema.array(), 'openspec schemas')
       } else {
-        // A CLI failure (including the OpenSpec 1.9 selected-Root envelope) is captured as a
-        // failed observation so the static projection never reads it as an empty catalog.
-        schemasCapture = {
-          ok: false,
-          error:
-            schemasResult.stderr.trim() || 'openspec schemas failed to resolve the selected Root.',
-        }
+        captureSchemasFailure(schemasResult)
       }
     } catch (error) {
       schemas = []
-      schemasCapture = {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      }
+      captureSchemasFailure(
+        { stdout: '', stderr: '', exitCode: null },
+        error instanceof Error ? error.message : String(error)
+      )
     }
 
     for (const schema of schemas) {

@@ -32,6 +32,7 @@ import type {
   SchemaInfo,
   SchemaResolution,
   Spec,
+  StaticSchemasCaptureFailure,
   TemplatesMap,
 } from '@openspecui/core'
 import {
@@ -1092,9 +1093,33 @@ export async function getOpsxProjectConfig(): Promise<string | null> {
   return snapshot?.opsx?.configYaml ?? null
 }
 
+/** Typed static projection error raised when the export captured a schemas-observation failure. */
+export class StaticSchemasCaptureError extends Error {
+  constructor(readonly capture: StaticSchemasCaptureFailure) {
+    super(
+      capture.diagnostics.length > 0
+        ? capture.diagnostics.map((diagnostic) => diagnostic.message).join('\n')
+        : capture.stderr.trim() || 'The static schemas observation failed.'
+    )
+    this.name = 'StaticSchemasCaptureError'
+  }
+}
+
+/** Reject list and bundle reads when the export captured a schemas-observation failure. */
+function assertSchemasCaptureCaptured(snapshot: ExportSnapshot | null): void {
+  const capture = snapshot?.opsx?.schemasCapture
+  if (capture && capture.ok === false) {
+    // A failed schemas observation (for example the OpenSpec 1.9 selected-Root envelope)
+    // stays a typed captured CLI failure; the static projection never reads it as an
+    // empty successful catalog through any accessor.
+    throw new StaticSchemasCaptureError(capture)
+  }
+}
+
 /** Return all Schema summaries captured in the static snapshot. */
 export async function getOpsxSchemas(): Promise<SchemaInfo[]> {
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   return snapshot?.opsx?.schemas ?? []
 }
 
@@ -1105,13 +1130,7 @@ export async function getOpsxConfigBundle(): Promise<{
   schemaResolutions: Record<string, SchemaResolution | null>
 }> {
   const snapshot = await loadSnapshot()
-  const capture = snapshot?.opsx?.schemasCapture
-  if (capture && capture.ok === false) {
-    // A failed schemas observation (for example the OpenSpec 1.9 selected-Root
-    // envelope) stays a captured CLI failure; the static projection never reads
-    // it as an empty successful catalog.
-    throw new Error(capture.error)
-  }
+  assertSchemasCaptureCaptured(snapshot)
   return {
     schemas: snapshot?.opsx?.schemas ?? [],
     schemaDetails: snapshot?.opsx?.schemaDetails ?? {},
