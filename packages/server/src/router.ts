@@ -34,8 +34,8 @@
  * Original request (2026-08-02): initialize a missing Launch Project through one explicit `--tools=none` Alert.
  * Review correction (2026-08-02): Init cancellation and success wait for objective process and projection settlement.
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。" * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
-*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import type {
   ChangeFile,
   ChangeProjectionBatch,

@@ -1,11 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Verify static export produces the expected OpenSpec project snapshot.
  * 2. Verify export combines local planning artifacts with CLI-backed schema projection.
  * 3. Cover Reference-aware export materialization and publication behavior.
  * 4. Preserve recursive Spec identity and source content through owned export.
  *
- * Prove typed schemas-capture outcomes in exported snapshots.
+ * 5. Prove typed schemas-capture outcomes in exported snapshots.
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
 

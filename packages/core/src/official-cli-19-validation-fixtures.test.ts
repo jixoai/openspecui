@@ -1,9 +1,8 @@
 /**
  * Orthogonal intents (created 2026-08-15 Asia/Shanghai):
- * 1. Prove the schemas success array and the 1.9 selected-Root failure envelope on real executables.
- * 2. Prove OpenSpec 1.9 archived-task validation reports incomplete archived work, including
- *    indented and blank-description checkboxes, through the ordinary Validate envelope.
- * 3. Pin the 1.8 boundary: the schemas root selector and validate --archived do not exist there.
+ * 1. Prove the pinned 1.8/1.9 executables decode schemas success and selected-Root failure envelopes.
+ * 2. Lock the 1.8 boundary: no schemas root selector and no archived validation option.
+ * 3. Report archived task failures through the ordinary 1.9 Validate envelope.
  *
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */

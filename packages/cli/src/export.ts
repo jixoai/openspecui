@@ -1,17 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
- * 1. Build a static OpenSpec project snapshot from its resolved planning artifacts.
- * 2. Preserve Reference-aware export and publication-redaction policy.
- * 3. Package and launch the static site with the locally resolved Web distribution.
- * 4. Execute local, production, and preview tooling through an argv-safe subprocess owner.
- * 5. Hide snapshot Git subprocess console windows (`windowsHide`) so export evidence gathering
- *    never flashes a cmd window under a console-less Windows parent.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Gather one coherent, publication-redacted OpenSpec project snapshot.
+ * 2. Keep spec/change/archive parsing shared with the live adapters so export matches runtime truth.
+ * 3. Preserve project/config/dashboard policy facts and tracked task summaries as static facts.
+ * 4. Capture the schemas observation as typed success/failure evidence with complete CLI process facts.
+ * 5. Hide snapshot Git subprocess console windows (`windowsHide`) so export evidence gathering never
+ *    flashes a cmd window under a console-less Windows parent.
  *
- * Capture the schemas observation as typed success/failure evidence.
- * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
- * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
-
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-07-15): "打包CLI发布前，对快照进行脱敏处理。"
+ * Original request (2026-08-04): "Make pnpm openspecui export and equivalent package scripts work on Windows."
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import {
   CliDiagnosticFailureSchema,
   CliExecutor,

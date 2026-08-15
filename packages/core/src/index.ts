@@ -1,25 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Expose the public Core package contract through one stable barrel.
  * 2. Keep filesystem, CLI, Root Context, workflow/operation inputs, live, and static types source-distinct.
- * 3. Publish browser-safe subpath contracts, including Dashboard Summary v2 and the external Codex command
- *    observation root, without forcing browser runtimes through this root.
- * 4. Export the typed Git repository binding and Dashboard provenance contracts.
- * 5. Export the generic CLI-backed projection lifecycle and argv-safe subprocess/invocation/tree owners while preserving browser-safe subpaths.
+ * 3. Publish browser-safe subpath contracts, including Dashboard Summary v2 and the external Codex
+ *    command observation root, without forcing browser runtimes through this root.
+ * 4. Export the typed Git repository binding and Dashboard provenance contracts, the generic CLI-backed
+ *    projection lifecycle, and argv-safe subprocess/invocation/tree owners.
+ * 5. Re-export the v9 admission, capability, registry-selection, and typed static-failure boundaries.
  *
- * Re-export the v9 admission, capability, and registry-selection boundaries.
  * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
  * Original request (2026-07-17): "Root-scoped stream startup returns an owned handle, not a void cancel function."
- * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
- * Derived requirement (2026-07-19): "Static Git remains unavailable and must not fabricate live binding provenance."
- * Derived requirement (2026-07-19): "Project Binding writes return typed launch and transition evidence."
- * Derived requirement (2026-07-20): "Environment-global Codex command observation shares Core path truth."
- * Original request (2026-07-26): "界面上仍然可以读到缓存，但它也能知道这个缓存现在正在被更新中。"
- * Original request (2026-08-01): preserve typed OpenSpec 1.7 Archive Instructions publicly.
- * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
- * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
-
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 /**
  * @openspecui/core
  *

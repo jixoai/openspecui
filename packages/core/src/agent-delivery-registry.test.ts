@@ -4,6 +4,7 @@
  * 2. Prove capability, command format/invocation, alias, detection, setup, cleanup, migration,
  *    global skill roots, legacy roots, and IDE restart facts stay co-located.
  * 3. Provide explicit mutation-resistance evidence for every load-bearing registry dimension.
+ * 4. Prove version-selected inventories admit only stable 1.8.x/1.9.x lines.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Review correction (2026-08-02): checked mutation fixtures must not bypass fabricated-state nullability.

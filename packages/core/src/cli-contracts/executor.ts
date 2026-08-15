@@ -1,11 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Build root-aware read and workflow command argv.
  * 2. Build Store inspection and mutation argv through the official CLI surface.
  * 3. Build strict validate/archive argv without implicit recovery behavior.
  * 4. Parse every invocation, including Archive Instructions, through its command-specific evidence schema.
  *
- * Forward the selected Root selector only where the admitted CLI declares it.
+ * 5. Forward the selected Root selector only where the admitted CLI declares it.
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/

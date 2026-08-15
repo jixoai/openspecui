@@ -1,18 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Maintain reactive CLI-backed projections and their direct typed Projection Work readers.
  * 2. Share and release per-entity streams through one planning-root kernel lifecycle.
  * 3. Keep OpenSpec configuration ownership outside the workflow cache while tracking both YAML filename variants.
  * 4. Preserve typed Status and Artifact/Apply/Archive Instructions provenance with the resolved root selector.
- * 5. Keep Change enumeration business truth in the typed CLI result while files only invalidate it.
+ * 5. Resolve per-command CLI capabilities once per lifetime and gate version-only selectors behind admission.
  *
- * Resolve per-command capabilities once and gate version-only selectors.
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
- * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
- * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
-
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import {

@@ -1,11 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove one-shot Agent delivery uses authoritative Environment policy and the complete Core registry.
  * 2. Prove retained Agent delivery re-emits from physical file changes and Environment policy replacement.
  * 3. Prove explicit refresh and dispose own deterministic replacement and retirement boundaries.
  * 4. Prove version-selected inventories including unavailable-CLI sessions.
  *
- * Prove version-selected inventories including unavailable-CLI sessions.
+ * 5. Prove version-selected inventories including unavailable-CLI sessions.
  * Original request (2026-08-01): "新增 Agent delivery projection service 及 checked tests。"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
