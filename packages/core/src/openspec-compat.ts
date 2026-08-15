@@ -30,17 +30,24 @@ export interface OpenSpecCliCapabilities {
   archivedValidation: boolean
 }
 
-/** Derive command capabilities from one parsed CLI version; unknown versions have none. */
+/**
+ * Derive command capabilities from one parsed CLI version.
+ *
+ * Only an admitted version — stable inside the accepted range — can select version-specific
+ * capabilities. Unsupported forms (prereleases, >=1.10, below-range) and unparseable output
+ * keep their mismatch evidence and expose no capability, so a page-level version bypass can
+ * never manufacture a 1.9 command surface for a CLI the release line does not admit.
+ */
 export function deriveOpenSpecCliCapabilities(
   version: OpenSpecCliVersion | null
 ): OpenSpecCliCapabilities {
-  if (!version) {
+  if (!isAdmittedVersion(version)) {
     return { schemasRootSelector: false, archivedValidation: false }
   }
-  const atLeast19 = version.major > 1 || (version.major === 1 && version.minor >= 9)
+  const onTargetSeries = isSeries(version, OPENSPEC_CLI_TARGET_SERIES)
   return {
-    schemasRootSelector: atLeast19,
-    archivedValidation: atLeast19,
+    schemasRootSelector: onTargetSeries,
+    archivedValidation: onTargetSeries,
   }
 }
 
@@ -104,6 +111,12 @@ function isSeries(version: OpenSpecCliVersion, series: string): boolean {
 
 function isStable(version: OpenSpecCliVersion): boolean {
   return version.prerelease === null
+}
+
+/** True only for stable versions inside the accepted range (current or supported non-current). */
+function isAdmittedVersion(version: OpenSpecCliVersion | null): version is OpenSpecCliVersion {
+  if (!version || !isStable(version)) return false
+  return isSeries(version, OPENSPEC_CLI_TARGET_SERIES) || isSupportedNonCurrentSeries(version)
 }
 
 function isSupportedNonCurrentSeries(version: OpenSpecCliVersion): boolean {

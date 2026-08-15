@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   classifyOpenSpecCliVersion,
+  deriveOpenSpecCliCapabilities,
   OPENSPEC_CLI_ACCEPTED_RANGE,
   OPENSPEC_CLI_RECOMMENDED_RANGE,
   OPENSPECUI_TARGET_MAJOR,
@@ -139,6 +140,40 @@ describe('openspec CLI compatibility law', () => {
       status: 'unknown',
       supported: false,
       blocksCoreInteractions: true,
+    })
+  })
+})
+
+describe('deriveOpenSpecCliCapabilities admission boundary', () => {
+  it('grants 1.9 capabilities only to admitted stable versions', () => {
+    expect(deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.9.0'))).toEqual({
+      schemasRootSelector: true,
+      archivedValidation: true,
+    })
+    expect(deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.8.5'))).toEqual({
+      schemasRootSelector: false,
+      archivedValidation: false,
+    })
+  })
+
+  it('grants no capabilities to bypassed unsupported or unparseable versions', () => {
+    for (const raw of [
+      '1.9.0-rc.1',
+      '1.9.0-beta.2',
+      '1.10.0',
+      '2.0.0',
+      '1.7.9',
+      'garbage',
+      undefined,
+    ]) {
+      expect(deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion(raw))).toEqual({
+        schemasRootSelector: false,
+        archivedValidation: false,
+      })
+    }
+    expect(deriveOpenSpecCliCapabilities(null)).toEqual({
+      schemasRootSelector: false,
+      archivedValidation: false,
     })
   })
 })

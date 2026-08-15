@@ -91,17 +91,17 @@ function agentCliSeriesOrder(series: AgentCliSeries): number {
 }
 
 /**
- * Select the official Agent delivery inventory for one admitted CLI line.
+ * Select the official Agent delivery inventory for one CLI version string.
  *
- * The fixed registry is the newest supported line's superset. Selection removes tools the
- * running line never shipped and drops restart facts the running line does not declare, so a
- * 1.8 session lists exactly its own official targets instead of a 1.9 projection.
+ * Only a stable, admitted version — current (1.9.x) or supported non-current (1.8.x) — selects
+ * an inventory. Unsupported forms (prereleases, >=1.10, below-range) and unparseable output
+ * select none: a page-level version bypass must not manufacture a 1.9 inventory for a CLI the
+ * release line refuses to admit.
  */
 export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConfig[] {
   const series = parseOpenSpecCliSeries(cliVersion)
   if (series === null) {
-    // Unknown or unparseable: keep the newest supported inventory rather than an empty one.
-    return AGENT_DELIVERY_REGISTRY.map((tool) => ({ ...tool }))
+    return []
   }
   const running = agentCliSeriesOrder(series)
   return AGENT_DELIVERY_REGISTRY.filter((tool) => {
@@ -121,14 +121,20 @@ export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConf
   })
 }
 
-/** Parse a CLI version string into a supported Agent inventory line, or null when unsupported. */
+/**
+ * Parse a CLI version string into an admitted Agent inventory line.
+ *
+ * Returns '1.9' only for stable 1.9.x, '1.8' only for stable 1.8.x, and null for every
+ * non-admitted form: prereleases, >=1.10, below-range, or unparseable output.
+ */
 export function parseOpenSpecCliSeries(cliVersion: string | null): AgentCliSeries | null {
   if (!cliVersion) return null
-  const match = /^(\d+)\.(\d+)/.exec(cliVersion.trim())
-  if (!match) return null
-  const minor = Number(`${match[1]}.${match[2]}`)
-  if (minor >= 1.9) return '1.9'
-  if (minor >= 1.8) return '1.8'
+  const match = /^(\d+)\.(\d+)(?:\.(\d+))?(-\S+)?$/.exec(cliVersion.trim())
+  if (!match || match[4]) return null
+  const major = Number(match[1])
+  const minor = Number(match[2])
+  if (major === 1 && minor === 9) return '1.9'
+  if (major === 1 && minor === 8) return '1.8'
   return null
 }
 

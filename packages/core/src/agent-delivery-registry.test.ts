@@ -489,10 +489,15 @@ describe('OpenSpec 1.9 Agent delivery registry', () => {
     expect(registryEntry(selected, 'amazon-q')?.requiresIdeRestart).toBe(true)
   })
 
-  it('keeps the newest supported inventory for unknown or missing versions', () => {
-    expect(selectAgentDeliveryRegistry(null)).toHaveLength(AI_TOOLS.length)
-    expect(selectAgentDeliveryRegistry('garbage')).toHaveLength(AI_TOOLS.length)
-    expect(selectAgentDeliveryRegistry('1.7.0')).toHaveLength(AI_TOOLS.length)
+  it('selects no inventory for non-admitted or unparseable versions', () => {
+    // A page-level version bypass must not manufacture a 1.9 inventory: prereleases, the
+    // next series, below-range lines, and unparseable output all select zero tools.
+    expect(selectAgentDeliveryRegistry('1.9.0-rc.1')).toEqual([])
+    expect(selectAgentDeliveryRegistry('1.10.0')).toEqual([])
+    expect(selectAgentDeliveryRegistry('2.0.0')).toEqual([])
+    expect(selectAgentDeliveryRegistry('1.7.0')).toEqual([])
+    expect(selectAgentDeliveryRegistry('garbage')).toEqual([])
+    expect(selectAgentDeliveryRegistry(null)).toEqual([])
   })
 
   it('declares IDE restart requirements exactly where the official registry does', () => {

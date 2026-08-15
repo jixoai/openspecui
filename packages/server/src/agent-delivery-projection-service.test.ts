@@ -261,6 +261,36 @@ describe('AgentDeliveryProjectionService', () => {
       'Agent delivery projection service is disposed.'
     )
   })
+  it('selects no inventory when the CLI runner is unavailable', async () => {
+    clearCache()
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-nocli-'))
+    const environment = new EnvironmentAuthorityFixture(
+      environmentProjection({ delivery: 'skills', workflows: ['update'] })
+    )
+    const observationEnvironment = new ReactiveObservationEnvironment()
+    const service = new AgentDeliveryProjectionService({
+      projectDir,
+      environmentGlobalProjectionService: environment,
+      observationEnvironment,
+      cliExecutor: {
+        ...cliExecutor,
+        checkAvailability: async () => ({ available: false }),
+      },
+      cliCommandAuthority,
+    })
+
+    try {
+      const current = await service.getCurrent()
+      // No live CLI means no admitted inventory: the pinned 1.9.0 generator version must not
+      // fabricate one.
+      expect(current.registry).toEqual([])
+      expect(current.states).toEqual([])
+    } finally {
+      await service.dispose()
+      await rm(projectDir, { recursive: true, force: true })
+    }
+  })
+
   it('selects the official 1.8 inventory when the admitted CLI is 1.8', async () => {
     clearCache()
     const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-18-'))

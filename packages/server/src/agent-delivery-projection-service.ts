@@ -11,7 +11,6 @@
  */
 
 import {
-  PINNED_AGENT_GENERATOR_VERSION,
   ReactiveContext,
   createToolInitStateProjection,
   getExternalAgentSkillsObservationRoots,
@@ -169,7 +168,8 @@ function policyFingerprint(policy: AgentDeliveryPolicy): string {
 }
 
 interface AgentGeneratorEvidence {
-  version: string
+  /** Detected CLI version; null when the runner is unavailable or versionless (no inventory). */
+  version: string | null
   commandContents: AgentCommandContentResult | null
 }
 
@@ -179,10 +179,11 @@ async function resolveGeneratorEvidence(
   workflows: readonly string[]
 ): Promise<AgentGeneratorEvidence> {
   const availability = await cliExecutor.checkAvailability()
-  const version =
-    availability.available && availability.version
-      ? availability.version
-      : PINNED_AGENT_GENERATOR_VERSION
+  // Version identity for inventory selection comes only from a live, available CLI. An
+  // unavailable or versionless runner selects no inventory at all — fabricating the pinned
+  // 1.9.0 here would hand a non-admitted session the full 1.9 registry. The pinned constant
+  // stays in use only where Core compares on-disk generated-by evidence.
+  const version = availability.available && availability.version ? availability.version : null
   const commandContents = availability.available
     ? await loadOpenSpecAgentCommandContents(await cliCommandAuthority.getCliCommand(), workflows)
     : null
@@ -299,7 +300,7 @@ class RetainedAgentDeliveryProjection implements AgentDeliveryProjectionSubscrip
     generatorEvidence: AgentGeneratorEvidence,
     force: boolean
   ): void {
-    const fingerprint = `${policyFingerprint(policy)}:${generatorEvidence.version}`
+    const fingerprint = `${policyFingerprint(policy)}:${generatorEvidence.version ?? 'no-cli'}`
     if (!force && this.physicalController && fingerprint === this.currentPolicyFingerprint) return
 
     this.stopPhysicalProjection()
@@ -310,7 +311,7 @@ class RetainedAgentDeliveryProjection implements AgentDeliveryProjectionSubscrip
     const context = new ReactiveContext()
     const projectToolInitStates = createToolInitStateProjection(this.options.projectDir, {
       ...policy,
-      generatorVersion: generatorEvidence.version,
+      generatorVersion: generatorEvidence.version ?? undefined,
       commandContents: generatorEvidence.commandContents?.catalog ?? null,
       unavailableCommandTools: generatorEvidence.commandContents?.unavailableTools ?? null,
       registry: selectAgentDeliveryRegistry(generatorEvidence.version),
@@ -373,7 +374,7 @@ export class AgentDeliveryProjectionService {
     )
     const states = await getToolInitStates(this.options.projectDir, {
       ...policy,
-      generatorVersion: generatorEvidence.version,
+      generatorVersion: generatorEvidence.version ?? undefined,
       commandContents: generatorEvidence.commandContents?.catalog ?? null,
       unavailableCommandTools: generatorEvidence.commandContents?.unavailableTools ?? null,
       registry: selectAgentDeliveryRegistry(generatorEvidence.version),
