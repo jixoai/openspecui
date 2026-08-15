@@ -33,6 +33,11 @@ import {
 } from './cli-projection.js'
 import { requireCanonicalOpenSpecEntityId, requireOpenSpecEntityRelativePath } from './entity-id.js'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
+import {
+  deriveOpenSpecCliCapabilities,
+  parseOpenSpecCliVersion,
+  type OpenSpecCliCapabilities,
+} from './openspec-compat.js'
 import { toOpsxDisplayPath } from './opsx-display-path.js'
 import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
 import {
@@ -327,6 +332,7 @@ export class OpsxKernel {
   private readonly cliExecutor: CliExecutor
   private readonly runtimeInvalidation: RuntimeInvalidationReader
   private readonly rootSelector: CliRootSelector
+  private cliCapabilitiesPromise: Promise<OpenSpecCliCapabilities> | null = null
   private readonly controller = new AbortController()
   private warmupPromise: Promise<void> | null = null
   private readonly _streamReady = new Map<string, Promise<void>>()
@@ -982,6 +988,25 @@ export class OpsxKernel {
   // Fetchers (migrated from router.ts)
   // =========================================================================
 
+  /**
+   * Resolve the admitted CLI's per-command capabilities once per Kernel lifetime.
+   *
+   * The detected version decides whether version-specific selectors and options are forwarded.
+   * A failed availability probe yields no capabilities, so no version-only flag is ever sent
+   * to an unverifiable CLI.
+   */
+  private resolveCliCapabilities(): Promise<OpenSpecCliCapabilities> {
+    this.cliCapabilitiesPromise ??= this.cliExecutor
+      .checkAvailability()
+      .then((availability) =>
+        deriveOpenSpecCliCapabilities(
+          availability.available ? parseOpenSpecCliVersion(availability.version) : null
+        )
+      )
+      .catch(() => deriveOpenSpecCliCapabilities(null))
+    return this.cliCapabilitiesPromise
+  }
+
   private async fetchSchemas(): Promise<SchemaInfo[]> {
     return (await this.fetchSchemasProjection()).value
   }
@@ -992,7 +1017,13 @@ export class OpsxKernel {
   }> {
     this.runtimeInvalidation.track('schemas')
     await touchOpsxProjectDeps(this.projectDir)
-    const result = await this.cliExecutor.contracts.schemas()
+    // Forward the selected Root's Store selector only where the admitted CLI declares it:
+    // OpenSpec 1.9 resolves schemas through the selected Root; 1.8 rejects `--store`.
+    const capabilities = await this.resolveCliCapabilities()
+    const schemasSelector: CliRootSelector = capabilities.schemasRootSelector
+      ? { ...this.rootSelector }
+      : {}
+    const result = await this.cliExecutor.contracts.schemas(schemasSelector)
     // OpenSpec 1.9 selected-Root failures emit `{ schemas: [], root: null, status }`
     // with a failing exit code. Preserve that envelope as typed CLI failure
     // evidence instead of letting it pass as an empty successful catalog.

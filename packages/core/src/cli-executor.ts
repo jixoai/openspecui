@@ -437,11 +437,18 @@ export class CliExecutor {
       }
     }
 
+    // Eager-JSON resolution terminates the process after complete JSON output instead of
+    // waiting for its natural exit, so the real exit code was never observed. Report the
+    // code as unknown rather than fabricating 0: an object-shaped failure envelope (for
+    // example the OpenSpec 1.9 selected-Root schemas failure) must not carry false exit
+    // evidence. Transport success still holds because a complete JSON document arrived.
+    const eagerResolved = result.phases?.resultReason === 'eager-json'
+
     return {
-      success: result.exitCode === 0,
+      success: result.exitCode === 0 || (eagerResolved && result.exitCode === null),
       stdout: result.stdout,
       stderr: result.stderr,
-      exitCode: result.exitCode,
+      exitCode: eagerResolved ? null : result.exitCode,
       phases: result.phases,
       spawnMode,
     }
@@ -644,10 +651,12 @@ export class CliExecutor {
   }
 
   /**
-   * 执行 openspec schemas --json
+   * 执行 openspec schemas --json（可选转发所选 Root 的 Store 选择器）
    */
-  async schemas(): Promise<CliResult> {
-    return this.execute(['schemas', '--json'])
+  async schemas(selector: { store?: string } = {}): Promise<CliResult> {
+    const args = ['schemas', '--json']
+    if (selector.store !== undefined) args.push('--store', selector.store)
+    return this.execute(args)
   }
 
   /**

@@ -140,9 +140,9 @@ export class OpenSpecCliContractExecutor {
     )
   }
 
-  /** List workflow schemas through the CLI JSON contract. */
-  async schemas(): Promise<CliCommandResult<CliSchemas>> {
-    return this.execute(['schemas', '--json'], CliSchemasSchema)
+  /** List workflow schemas through the CLI JSON contract with the selected Root's Store selector. */
+  async schemas(selector: CliRootSelector = {}): Promise<CliCommandResult<CliSchemas>> {
+    return this.execute(this.withRoot(['schemas', '--json'], selector), CliSchemasSchema)
   }
 
   /** Resolve one workflow schema through the CLI JSON contract. */

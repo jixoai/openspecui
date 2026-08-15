@@ -3,6 +3,7 @@
  * 1. Encode the shipped OpenSpecUI release line's OpenSpec CLI compatibility law.
  * 2. Classify current, supported non-current, unsupported, and unknown CLI versions.
  * 3. Express the accepted range and the recommended line as separate public facts.
+ * 4. Derive per-command capabilities from the detected admitted CLI version.
  *
  * Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
@@ -20,6 +21,28 @@ export const OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION = '1.10.0'
 export const OPENSPEC_CLI_ACCEPTED_RANGE = '>=1.8.0 <1.10.0'
 export const OPENSPEC_CLI_RECOMMENDED_RANGE = '>=1.9.0 <1.10.0'
 export const OPENSPEC_CLI_REFERENCE_TAG_PATTERN = 'v1.9.*'
+
+/** Per-command capabilities derived from one admitted OpenSpec CLI version. */
+export interface OpenSpecCliCapabilities {
+  /** `openspec schemas --json --store <id>` exists (OpenSpec 1.9+; 1.8 rejects the selector). */
+  schemasRootSelector: boolean
+  /** `openspec validate --archived --json` exists (OpenSpec 1.9+; 1.8 rejects the option). */
+  archivedValidation: boolean
+}
+
+/** Derive command capabilities from one parsed CLI version; unknown versions have none. */
+export function deriveOpenSpecCliCapabilities(
+  version: OpenSpecCliVersion | null
+): OpenSpecCliCapabilities {
+  if (!version) {
+    return { schemasRootSelector: false, archivedValidation: false }
+  }
+  const atLeast19 = version.major > 1 || (version.major === 1 && version.minor >= 9)
+  return {
+    schemasRootSelector: atLeast19,
+    archivedValidation: atLeast19,
+  }
+}
 
 export interface OpenSpecCliVersion {
   major: number
