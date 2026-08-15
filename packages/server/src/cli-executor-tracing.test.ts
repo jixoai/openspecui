@@ -193,7 +193,9 @@ describe('CLI executor tracing lifecycle', () => {
       '--json',
     ])
 
-    expect(result).toMatchObject({ success: true, exitCode: 0 })
+    // Eager-JSON resolution settles before the terminated child's natural exit, so the
+    // honest result reports the exit code as unknown instead of a fabricated 0.
+    expect(result).toMatchObject({ success: true, exitCode: null })
     await waitForProcessExit(readFixtureProcessId(result.stdout))
     await waitForExportedSpanEvents(() => exportedSpans, 'cli.process -e', [
       'cli.process.exit.observed',
@@ -243,6 +245,7 @@ describe('CLI executor tracing lifecycle', () => {
     )
 
     const result = await executor.execute(['doctor', '--json'])
+    // The Worker fixture exits naturally with code 0, so its exit code is observed truthfully.
     expect(result).toMatchObject({ success: true, exitCode: 0 })
     expect(JSON.parse(result.stdout)).toEqual({ command: 'doctor', isMainThread: false })
 
@@ -293,6 +296,7 @@ describe('CLI executor tracing lifecycle', () => {
     )
 
     const result = await executor.execute(['doctor', '--json'])
+    // This runner exits naturally with code 0, so its exit code is observed truthfully.
     expect(result).toMatchObject({ success: true, exitCode: 0 })
     expect(JSON.parse(result.stdout)).toEqual({ command: 'doctor' })
     await new Promise((resolve) => setTimeout(resolve, 150))
