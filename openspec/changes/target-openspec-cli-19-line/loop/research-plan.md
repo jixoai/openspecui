@@ -171,6 +171,25 @@ owner boundary:
   manual browser/App walkthrough, PR approval, merge, release, archive
 ```
 
-Implementation agents must record the exact commands and outputs in `loop/implementation.md` and update only the
-relevant checkpoint when its evidence exists. Browser tests, Storybook tests, and agent-run Playwright are
-preparation evidence only; they must not mark the Owner final acceptance checkpoint complete.
+## Implementation review correction (2026-08-15 Asia/Shanghai)
+
+The candidate implementation revealed that the original slices were too broad to prove their cross-boundary
+obligations. In particular, a typed payload unit test did not establish selected-Root execution, a supported version
+did not imply every later command was available, a static error string did not preserve CLI evidence, and a 1.9
+registry could not stand for the 1.8 registry. The original table remains research history only.
+
+`loop/recovery-plan.md` now supersedes the execution order for the reopened work:
+
+```text
+R0 standards ownership -> R1 selected-Root schemas -> R2 archived capability
+                     -> R3 static failure truth -> R4 versioned Agent inventory
+                     -> R5 recovery-branch distribution review
+```
+
+Each recovery gate has one primary production owner, a true red case, a green case, focused verification, and a
+hard stop condition. The next Agent must branch from local `main` before production edits, start at R0, and record
+the exact command and outcome in `loop/implementation.md` before checking its matching checkpoint. A focused
+failure blocks later gates and broad CI is not a substitute.
+
+Browser tests, Storybook tests, and agent-run Playwright are preparation evidence only; they must not mark the Owner
+final acceptance checkpoint complete. PR approval, merge, release, and archive remain Owner decisions.

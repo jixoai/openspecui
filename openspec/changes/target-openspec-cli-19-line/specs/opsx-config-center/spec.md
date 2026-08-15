@@ -11,10 +11,11 @@ Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
 
 ### Requirement: OpenSpecUI 9 Agent Delivery Inventory
 
-`/config/agents` SHALL project the official supported OpenSpec 1.8/1.9 Agent inventory with physical delivery
-metadata. It SHALL model current/legacy project roots, user-global skill roots, detection paths, command paths,
-delivery capability, generated version, migration/cleanup evidence, and IDE restart requirements where the CLI
-declares them.
+`/config/agents` SHALL select the official Agent inventory and command capabilities from the admitted running
+OpenSpec CLI version, not from one fixed 1.9 registry. It SHALL project supported 1.8/1.9 physical delivery
+metadata: current/legacy project roots, user-global skill roots, detection paths, command paths, delivery
+capability, generated version, migration/cleanup evidence, and IDE restart requirements where that CLI declares
+them. A tool absent from one supported CLI line SHALL be unavailable for that line, not falsely stale or present.
 
 #### Scenario: Project and global roots remain distinct
 
@@ -32,12 +33,24 @@ declares them.
 - **AND** SHALL NOT report `.codex` as the current expected root
 - **AND** SHALL NOT delete or move the files without an explicit official CLI operation
 
-#### Scenario: New official targets are complete
+#### Scenario: Select the version-specific official inventory
 
+- **GIVEN** the admitted OpenSpec CLI is stable 1.8.x
+- **WHEN** the Agent inventory is listed
+- **THEN** it SHALL contain only that CLI line's official targets and adapters
+- **AND** Command Code SHALL be unavailable rather than reported as stale, missing, or generated
+- **GIVEN** the admitted OpenSpec CLI is stable 1.9.x
 - **WHEN** the Agent inventory is listed
 - **THEN** Command Code, MiniMax Code, Rovo Dev CLI, Shared `.agents` skills, and existing official targets SHALL
-  retain their individual capability and path metadata
+  retain their individual 1.9 capability and path metadata
 - **AND** an IDE restart requirement SHALL remain visible where declared upstream
+
+#### Scenario: One missing adapter does not invalidate unrelated command evidence
+
+- **GIVEN** a supported CLI line has no command adapter for one registry entry
+- **WHEN** OpenSpecUI loads generated command evidence
+- **THEN** that entry SHALL be unavailable with version-scoped evidence
+- **AND** command evidence for every independently supported adapter SHALL remain available
 
 ### Requirement: Config Retains Sole Agent Mutation Authority
 
