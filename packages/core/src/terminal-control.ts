@@ -8,7 +8,12 @@
  * Original request (2026-08-14): first ubuntu CI run of this branch failed the PTY cwd contract.
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
-import { fileURLToPath } from 'node:url'
+// `node:url` is Node-only, and Vite's browser-external stub throws on property
+// access at module-evaluation time. Import the namespace and resolve
+// `fileURLToPath` lazily inside the parser so this browser-safe module can be
+// loaded by Project Web (notifications.ts re-exports TerminalControlParser as a
+// value) without a Node API being touched during import.
+import * as nodeUrl from 'node:url'
 import type {
   NotificationAction,
   NotificationPublishInput,
@@ -85,6 +90,8 @@ function parseProgressValue(value: string | undefined): number | null {
 function parseFileUriPath(value: string): string | null {
   const trimmed = value.trim()
   if (!trimmed) return null
+  // Resolved lazily: browsers never call this Node API, they only import the module.
+  const { fileURLToPath } = nodeUrl
   try {
     const url = new URL(trimmed)
     if (url.protocol !== 'file:') return null
