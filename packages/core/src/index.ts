@@ -679,6 +679,7 @@ export {
   CliStoreListSchema,
   CliStoreMutationSchema,
   CliStoreSchema,
+  CliValidateReportSchema,
   CliValidateSchema,
   CliWorkflowStatusSchema,
   OpenSpecCliContractExecutor,

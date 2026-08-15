@@ -4,6 +4,7 @@
  * 2. Preserve item issues, totals, root, and exit/failure evidence without repair actions.
  * 3. Identify the evidence as unavailable in static snapshots instead of fabricating it.
  * 4. Derive the capability from the detected admitted CLI and hide the action on 1.8.
+ * 5. Validate report payloads with the Core contract schema, never shallow shape guards.
  *
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
@@ -11,7 +12,7 @@ import { EvidenceDisclosure } from '@/components/information-disclosure'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useRootActionState } from '@/lib/use-root-action-state'
-import type { CliCommandResult, CliValidate } from '@openspecui/core'
+import { CliValidateReportSchema, type CliCommandResult, type CliValidate } from '@openspecui/core'
 import {
   deriveOpenSpecCliCapabilities,
   parseOpenSpecCliVersion,
@@ -21,14 +22,16 @@ import { useState } from 'react'
 
 type ArchivedValidationReport = Extract<CliValidate, { items: unknown }>
 
-function isValidationReport(value: unknown): value is ArchivedValidationReport {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    'items' in value &&
-    'summary' in value
-  )
+/**
+ * Parse a report payload at the evidence boundary with the Core contract schema.
+ *
+ * A shallow `{ items, summary, root }` shape check would accept malformed nested totals and
+ * item structures and then crash while rendering them; `safeParse` keeps every rendered
+ * field contract-true without assertion casts.
+ */
+function parseValidationReport(value: unknown): ArchivedValidationReport | null {
+  const parsed = CliValidateReportSchema.safeParse(value)
+  return parsed.success ? (parsed.data as ArchivedValidationReport) : null
 }
 
 function IssueList({ issues }: { issues: ArchivedValidationReport['items'][number]['issues'] }) {
@@ -136,7 +139,8 @@ export function ArchivedValidationEvidence() {
   // A typed report is valid evidence even when the CLI exits non-zero: archived-task
   // failures are report content, not a transport or contract failure. Only a missing
   // report shape (transport error, contract drift) renders as failure evidence.
-  if (error || !report || !isValidationReport(report.data)) {
+  const validationReport = report ? parseValidationReport(report.data) : null
+  if (error || !validationReport) {
     return (
       <EvidenceDisclosure title="Archived validation" summary="CLI failure evidence">
         <div className="space-y-2">
@@ -155,7 +159,7 @@ export function ArchivedValidationEvidence() {
     )
   }
 
-  const validation = report.data
+  const validation = validationReport
   const failed = validation.summary.totals.failed
   return (
     <EvidenceDisclosure
@@ -167,7 +171,7 @@ export function ArchivedValidationEvidence() {
           <dt className="text-muted-foreground">Root</dt>
           <dd className="min-w-0 break-all font-mono">{validation.root.path}</dd>
           <dt className="text-muted-foreground">Exit</dt>
-          <dd>{report.exitCode ?? 'unknown'}</dd>
+          <dd>{report?.exitCode ?? 'unknown'}</dd>
           <dt className="text-muted-foreground">Totals</dt>
           <dd>
             {validation.summary.totals.passed} passed · {failed} failed ·{' '}

@@ -154,6 +154,29 @@ describe('ArchivedValidationEvidence', () => {
     expect(validateMock).not.toHaveBeenCalled()
   })
 
+  it('renders CLI failure evidence for a malformed report payload instead of crashing', async () => {
+    // Shallow items/summary/root keys pass a shape guard but the nested contract is invalid;
+    // the evidence boundary must reject the whole report rather than render broken totals.
+    validateMock.mockResolvedValue(
+      archivedReport({
+        data: {
+          items: [],
+          summary: { totals: { items: 'not-a-number' }, byType: {} },
+          version: 7,
+          root: '/bare-string-root',
+        },
+      })
+    )
+
+    render(<ArchivedValidationEvidence />)
+    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
+
+    await waitFor(() => expect(validateMock).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByText('CLI failure evidence')).toBeVisible())
+    expect(screen.queryByText(/passed ·/)).toBeNull()
+  })
+
   it('offers no command on a detected OpenSpec 1.8 session', () => {
     rootActionStateMock.state = {
       ...rootActionStateMock.state,
