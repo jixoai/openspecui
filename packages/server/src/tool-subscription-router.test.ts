@@ -325,7 +325,7 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
         await fixture.server.configManager.getCliCommand(),
         ['update']
       )
-      const officialUpdateContent = commandContents?.claude?.update
+      const officialUpdateContent = commandContents?.catalog?.claude?.update
       if (!officialUpdateContent) {
         throw new Error('Runtime OpenSpec CLI did not provide the Claude/update command fixture.')
       }
