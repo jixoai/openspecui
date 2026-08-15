@@ -201,6 +201,55 @@ R0-R5 gates are closed with recorded evidence. Remaining work is Owner-only: bro
 1.8.x and 1.9.x projects, then independent PR review, merge, release, and archive decisions. No PR, push,
 merge, publish, release, or archive action has been taken.
 
+## Browser walkthrough record (2026-08-15 Asia/Shanghai)
+
+Performed by the implementation Agent with ego-browser at the Owner's explicit instruction (“你自己用
+ego-browser 进行走查”), against real fixture projects initialized by the pinned executables
+(`/tmp/v9r-walk/proj19` with openspec-cli-19 1.9.0, `/tmp/v9r-walk/proj18` with openspec-cli-18 1.8.0),
+served by `packages/server/src/standalone.ts` + the web dev server.
+
+### Observed evidence
+
+1.9.0 session — Settings → OpenSpec Diagnostics: “Current 1.9 line”, “CLI 1.9.0”, Root current, Launch
+planning selected. `/config/agents`: “38 official entries”; Command Code card present with capability
+`adapter-backed`, skills `.commandcode`, commands path, `/opsx-{workflow}` invocation, 0/11 counts;
+Amazon Q shows “IDE restart: required to load regenerated artifacts”; MiniMax shows “Global skills:
+~/.minimax/skills” and “Skills scope: user-global”; Codex shows “Skills: .agents” plus “Legacy skills:
+.codex”. `/config/schemas`: spec-driven package schema with 4 artifacts. Change Evidence → Archived
+validation: run produced the typed report “0 passed · 1 failed”, Root `/private/tmp/v9r-walk/proj19`,
+“Exit unknown” (the honest eager-resolution exit evidence), totals “0 passed · 1 failed · 1 archived
+changes”, per-change failure `2026-08-15-legacy-cleanup ERROR · tasks.md · 1 incomplete task (1/2
+completed)`, and a Rerun control with no repair/archive action.
+
+1.8.0 session — Settings → OpenSpec Diagnostics: “Supported within >=1.8.0 <1.10.0”, “CLI 1.8.0”,
+admitted without a mismatch dialog. `/config/agents`: “37 official entries”; Command Code absent
+(name and id); Amazon Q carries no IDE-restart line; MiniMax global root and Codex roots unchanged.
+Change Evidence → Archived validation: “Unavailable on this CLI line — Archived-task validation
+requires the OpenSpec 1.9 line (detected 1.8.0). This session's CLI does not declare the capability,
+so no command is offered.”; no run control exists in the DOM.
+
+### Defects found and fixed during the walkthrough
+
+- Project Web could not boot in a browser at all: `terminal-control.ts` accessed `node:url`'s
+  `fileURLToPath` at module-evaluation time and `notifications.ts` re-exports `TerminalControlParser`
+  as a value, so Vite's browser-external stub threw during import and React never mounted. Fixed by
+  resolving the Node API lazily inside `parseFileUriPath` (commit `5a4d5801`). The chain predates the
+  recovery branch (empty diff at `79c41a02`) and was invisible to the jsdom suites that mock the module
+  boundary.
+- The version-selected inventory covered the registry but not the per-tool physical states: a real
+  1.8.0 session still rendered 1.9-only IDE-restart facts on tool cards (registry 37 while states
+  stayed 38). Fixed by threading the selected registry through `ToolInitProjectionOptions` at both
+  projection call sites and extending the 1.8 projection test to assert state-level exclusion (commit
+  `cc8900b7`). Operational note: the standalone server consumes Core through the built `dist`, so the
+  walkthrough initially observed stale behavior until `packages/core` was rebuilt — distribution
+  verification must always follow a source fix.
+
+### Boundary after the walkthrough
+
+The walkthrough was agent-executed at the Owner's instruction; it is recorded as evidence, not as the
+Owner's own acceptance. Checkpoint 4.1 is marked accordingly. PR review, merge, release, and archive
+(4.2) remain Owner-only, and no such action has been taken.
+
 ## Loopback triggers
 
 - The official 1.8 or 1.9 executable contradicts a command, payload, selector, or Agent-inventory assumption in a

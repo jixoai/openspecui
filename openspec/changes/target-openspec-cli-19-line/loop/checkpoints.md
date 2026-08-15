@@ -60,5 +60,8 @@ These items are retained characterization evidence. They neither substitute for 
 
 ## 4. Owner gates
 
-- [ ] 4.1 Owner performs the final browser/App walkthrough for 1.8.x and 1.9.x projects after R5 passes.
+- [x] 4.1 Browser/App walkthrough for 1.8.x and 1.9.x projects — performed 2026-08-15 by the
+      implementation Agent with ego-browser at the Owner's explicit instruction; observed evidence and the
+      two walkthrough-discovered fixes are recorded in `loop/implementation.md`. Recorded as evidence, not
+      as the Owner's own acceptance; the Owner may re-walk at will.
 - [ ] 4.2 Owner independently reviews the PR and authorizes merge, release, and Change archive.
