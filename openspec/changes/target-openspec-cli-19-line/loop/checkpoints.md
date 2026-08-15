@@ -72,12 +72,20 @@ These items are retained characterization evidence. They neither substitute for 
 items. Every item must record its exact red/green command and focused review in `loop/implementation.md` before it
 is checked.
 
-- [ ] R6.1 Bypass/unsupported versions do not select admitted capabilities or a versioned Agent registry.
-- [ ] R6.2 Retained Agent physical projections preserve the selected registry after reactive replacement.
-- [ ] R6.3 Explicit Agent Init tools are validated against `projection.registry` before the CLI stream starts.
-- [ ] R6.4 Every static Schema accessor propagates the same typed captured failure.
-- [ ] R6.5 Change List stops presenting tracked data as implementation progress; Detail always presents CLI Apply.
-- [ ] R6.6 Archived validation renders reports only after `CliValidateReportSchema.safeParse` succeeds.
-- [ ] R6.7 The complete v9 TypeScript/TSX inventory has current truthful intent headers or documented exceptions.
-- [ ] R6.8 Archived-validation Router fixtures use a typed `CliExecutor` spy without double assertions.
-- [ ] R6.9 R6 source, build, packed CLI, isolated install, and independent review agree.
+- [x] R6.1 Bypass/unsupported versions do not select admitted capabilities or a versioned Agent registry.
+- [x] R6.2 Retained Agent physical projections preserve the selected registry after reactive replacement.
+- [x] R6.3 Explicit Agent Init tools are validated against `projection.registry` before the CLI stream starts.
+- [x] R6.4 Every static Schema accessor propagates the same typed captured failure.
+- [x] R6.5 Change List stops presenting tracked data as implementation progress; Detail always presents CLI Apply.
+- [x] R6.6 Archived validation renders reports only after `CliValidateReportSchema.safeParse` succeeds.
+- [x] R6.7 The complete v9 TypeScript/TSX inventory has current truthful intent headers or documented exceptions.
+- [x] R6.8 Archived-validation Router fixtures use a typed `CliExecutor` spy without double assertions.
+- [x] R6.9 R6 source, build, packed CLI, isolated install, and independent review agree.
+
+### R6 closure record (2026-08-15 Asia/Shanghai)
+
+All nine gates closed on `fix/v9-cli-18-19-recovery` (planning `0a4bbb95`; production `045f204b`,
+`621abf7e`, `22880f8a`, `28fe06e7`, `7601a497`, `16149f97`, `de1ef34f`, `887382fb`, `c1655acb`).
+Exact red/green evidence, code decisions, and the reproduced baselines are in
+`loop/implementation.md`. The R6.9 asset inspection caught one additional surface (dashboard
+active cards) repeating the R6.5 violation; it was fixed under R6.9 before the final pack.

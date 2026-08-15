@@ -266,17 +266,17 @@ Working tree clean; branch `fix/v9-cli-18-19-recovery` at `a2942782`.
 The preceding R0-R5 and walkthrough records are true historical evidence. They do not close the independent review
 findings below. No R6 production edit or focused verification has occurred in this planning pass.
 
-| Gate | Review finding | Required evidence before a checkbox may close |
-| --- | --- | --- |
-| R6.1 | Bypass/unsupported version can receive 1.9-specific capability or registry | bypassed 1.9 prerelease/1.10/no-version has neither inventory nor 1.9 capability |
-| R6.2 | retained physical Agent projection drops the selected registry | replacement 1.8 emission stays 1.8-only |
-| R6.3 | direct Agent Init validates against complete static registry and may spawn unavailable 1.8 tool | 1.8 Command Code is typed rejection with no spawn; `'all'` remains literal |
-| R6.4 | static capture failure protects only list/bundle accessors | all Schema accessors throw the same typed captured failure |
-| R6.5 | tracked document data is rendered as task progress; normal Apply count disappears | list has no implementation count; detail always shows Apply count |
-| R6.6 | archived report uses shallow guard/assertion | Core schema `safeParse` controls report rendering |
-| R6.7 | v9-touched TypeScript files lack current intent headers | audited inventory and truthful headers/splits recorded |
-| R6.8 | Router test uses double assertions at validation fixture boundary | typed spy fixture proves 1.8 no-spawn and 1.9 call |
-| R6.9 | package proof predates all above repairs | new build/pack/isolated-install plus independent review |
+| Gate | Review finding                                                                                  | Required evidence before a checkbox may close                                    |
+| ---- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| R6.1 | Bypass/unsupported version can receive 1.9-specific capability or registry                      | bypassed 1.9 prerelease/1.10/no-version has neither inventory nor 1.9 capability |
+| R6.2 | retained physical Agent projection drops the selected registry                                  | replacement 1.8 emission stays 1.8-only                                          |
+| R6.3 | direct Agent Init validates against complete static registry and may spawn unavailable 1.8 tool | 1.8 Command Code is typed rejection with no spawn; `'all'` remains literal       |
+| R6.4 | static capture failure protects only list/bundle accessors                                      | all Schema accessors throw the same typed captured failure                       |
+| R6.5 | tracked document data is rendered as task progress; normal Apply count disappears               | list has no implementation count; detail always shows Apply count                |
+| R6.6 | archived report uses shallow guard/assertion                                                    | Core schema `safeParse` controls report rendering                                |
+| R6.7 | v9-touched TypeScript files lack current intent headers                                         | audited inventory and truthful headers/splits recorded                           |
+| R6.8 | Router test uses double assertions at validation fixture boundary                               | typed spy fixture proves 1.8 no-spawn and 1.9 call                               |
+| R6.9 | package proof predates all above repairs                                                        | new build/pack/isolated-install plus independent review                          |
 
 For R6, use `loop/recovery-plan.md` as execution authority. Append one entry per green gate using this format:
 
@@ -291,6 +291,160 @@ Focused review result:
 Files changed:
 Residual risk or stop-condition check:
 ```
+
+## R6 repair evidence record (2026-08-15 Asia/Shanghai)
+
+Planning correction committed first as `0a4bbb95`. Gates executed linearly on
+`fix/v9-cli-18-19-recovery`.
+
+```text
+Gate: R6.1
+Feature branch and commit: 045f204b
+Primary production owner: openspec-compat.ts; agent-delivery-registry.ts; agent-delivery-projection-service.ts
+True red case and command: npx tsx probe — 1.9.0-rc.1/1.10.0/2.0.0 derived archivedValidation and
+  schemasRootSelector true with a 38-entry registry; unavailable runners fabricated the pinned 1.9.0.
+Code decision: isAdmittedVersion (stable, current or supported non-current) is the sole capability
+  input; parseOpenSpecCliSeries returns a series only for stable 1.8.x/1.9.x so every other form
+  selects zero inventory; the projection resolves inventory identity only from a live available CLI.
+Green case and command: compat+registry focused suites (25 passed) — bypassed forms keep mismatch
+  evidence with no capability and no inventory; projection suite (5 passed) incl. new
+  unavailable-CLI empty-inventory test; core 56 / server 113 focused tests green.
+Focused review result: pass.
+Files changed: openspec-compat.ts(+test), agent-delivery-registry.ts(+test),
+  agent-delivery-projection-service.ts(+test).
+Residual risk or stop-condition check: PINNED_AGENT_GENERATOR_VERSION remains only for on-disk
+  generated-by comparison (stale-version detection), never inventory selection.
+
+Gate: R6.2
+Feature branch and commit: 621abf7e
+Primary production owner: tool-init-state.ts
+True red case and command: createToolInitStateProjection rebuilt options without registry — a
+  replacement emission fell back to full AI_TOOLS (inspection; new test failed pre-change).
+Code decision: retained options clone the selected registry with the same immutability policy as
+  delivery/workflows/commandContents.
+Green case and command: vitest src/tool-init-state.test.ts (20 passed) incl. new retained-emission
+  regression (initial and replacement emissions both 37-tool, no command-code, no restart facts
+  across a filesystem mutation); projection service 5 passed.
+Focused review result: pass.
+Files changed: tool-init-state.ts(+test).
+Residual risk or stop-condition check: none; no process-global registry, no in-place mutation.
+
+Gate: R6.3
+Feature branch and commit: 22880f8a
+Primary production owner: router.ts (agentIntegrations.initStream)
+True red case and command: input schema validated against the static full registry and never
+  rechecked the projection — direct 1.8 RPC with ['command-code'] reached cliExecutor.initStream.
+Code decision: after getCurrent(), explicit tools are checked against projection.registry; typed
+  PRECONDITION_FAILED before any spawn; 'all' stays the literal official CLI request.
+Green case and command: vitest src/router.test.ts -t initStream (3 passed: 1.8 command-code
+  rejected with initStream spy never called; explicit 1.8 claude streams; 1.9 'all' unchanged);
+  full router suite 106 passed.
+Focused review result: pass.
+Files changed: router.ts, router.test.ts.
+Residual risk or stop-condition check: browser-only disablement not used; validation is against
+  the projection, not getAvailableTools().
+
+Gate: R6.4
+Feature branch and commit: 28fe06e7
+Primary production owner: static-data-provider.ts
+True red case and command: only list/bundle asserted the capture; detail/resolution/templates/
+  files/yaml/template-content returned stale or null data for a failed capture.
+Code decision: assertSchemasCaptureCaptured(snapshot) before every Schema-related accessor read;
+  identical StaticSchemasCaptureError object, no accessor-specific fallbacks.
+Green case and command: vitest --project unit static-data-provider.opsx.test.ts (9 passed) — all
+  eight accessors reject with the same typed capture; web routes suite 295 passed.
+Focused review result: pass.
+Files changed: static-data-provider.ts(+test).
+Residual risk or stop-condition check: none; no accessor returns null/[]/empty text for a failure.
+
+Gate: R6.5
+Feature branch and commit: 7601a497 (dashboard extension c1655acb under R6.9)
+Primary production owner: change-list.tsx; apply-progress-notice.tsx
+True red case and command: list rendered trackedTaskProgress as n/m, a percent bar, and
+  'n% task completion' without Apply Instructions; the notice returned null when sources agreed.
+Code decision: list shows only planning phase + CLI artifact facts (no counts/percent/completion);
+  notice always renders the source-attributed Apply count when Apply Instructions exist, tracked
+  only as clearly secondary divergence evidence.
+Green case and command: change-list + apply-progress-notice + change-view suites (29 passed) — a
+  tracked-only list claims no implementation progress; an agreeing detail still shows the CLI count.
+Focused review result: pass.
+Files changed: change-list.tsx(+test), apply-progress-notice.tsx(+test).
+Residual risk or stop-condition check: R6.9's asset inspection caught the same violation on
+  dashboard active cards; fixed in c1655acb with the same objective-facts rule (20 dashboard
+  tests, full web 1134 green).
+
+Gate: R6.6
+Feature branch and commit: 16149f97
+Primary production owner: archived-validation-evidence.tsx
+True red case and command: isValidationReport shallow-checked items/summary presence and the RPC
+  result was cast — { items: [], summary: { totals: { items: 'not-a-number' } }, root: '/bare' }
+  passed the guard and would crash rendering nested totals.
+Code decision: Core CliValidateReportSchema exported and safeParse is the single evidence boundary;
+  parse failure renders typed CLI failure evidence; assertion casts removed.
+Green case and command: archived-validation-evidence.test.tsx (6 passed) incl. new malformed-
+  payload failure-evidence case that asserts no report surface renders.
+Focused review result: pass.
+Files changed: archived-validation-evidence.tsx(+test), core index.ts.
+Residual risk or stop-condition check: no shallow guard, no `as ArchivedValidationReport`, no
+  fabricated fallback report remains.
+
+Gate: R6.7
+Feature branch and commit: de1ef34f
+Primary production owner: 42 TypeScript files changed since 79c41a02
+True red case and command: header audit over `git diff --name-only 79c41a02..HEAD` found 27 files
+  with intents headers but no 2026-08-15 timestamp/request despite carrying v9 behavior.
+Code decision: each file received a truthful v9 intent (real behavior named per owner) and the v9
+  original request; files at the five-intent limit got merged truthful wording (router.ts intent 5,
+  router.test.ts intent 5) instead of a sixth entry; final audit reports zero violations across
+  all 42 files (no missing intents, no missing v9 date, no >5 intents).
+Green case and command: pnpm run format:check (batch passed); full typecheck (all packages Done);
+  header-touched suites green (core 36, server 106).
+Focused review result: pass.
+Files changed: 27 files (list preserved in the commit).
+Residual risk or stop-condition check: dashboard.tsx entered the diff after the audit (R6.9 fix)
+  and received the same standard in c1655acb.
+
+Gate: R6.8
+Feature branch and commit: 887382fb
+Primary production owner: router.test.ts
+True red case and command: three archived-validation assertions used
+  `unknown as ReturnType<typeof vi.fn>` to reach contracts.validate.
+Code decision: validateContractSpy exposes the typed mock from the shared Router test context; all
+  three call sites use it; production types untouched.
+Green case and command: vitest src/router.test.ts -t "archived validation" (2 passed) then the full
+  suite (106 passed); server typecheck clean.
+Focused review result: pass.
+Files changed: router.test.ts.
+Residual risk or stop-condition check: no any/unknown-as/@ts-nocheck introduced; the pre-existing
+  unrelated casts elsewhere in the file are out of R6 scope and unchanged.
+
+Gate: R6.9
+Feature branch and commit: c1655acb (+ builds/installs this session)
+Primary production owner: source/distribution agreement
+True red case and command: R5 tarball proof predated R6 source edits.
+Code decision: full gates re-run — format:check, lint (0/0), typecheck (all Done),
+  openspec:check-reference (OK v1.9.0), test:ci (core 646 passed + the macOS path-realpath baseline,
+  reproduced unchanged at the R6 parent via git stash; server 635 passed + the sqlite baseline, also
+  reproduced unchanged; web 1134, app 384, cli 163 green; one new failure found and fixed during
+  the gate: agent-integrations-router fixture needed its admitted registry). Clean rebuild
+  (build:deps/build:packages/build:cli), npm pack, isolated install: openspecui --version 8.0.0,
+  export --help ok, installed dist carries admission-gated capabilities, registry selection, the
+  retained-registry clone, and all prior law markers; the web asset carries 'Apply task progress'
+  and zero '% task completion' copies (the first pack exposed the dashboard violation, fixed in
+  c1655acb and re-verified on a clean bundle).
+Focused review result: pass; no unclassified failures — both remaining failures are the documented
+  baselines reproduced identically at the parent.
+Files changed: dashboard.tsx, agent-integrations-router.test.ts.
+Residual risk or stop-condition check: test:ci halts at the core baseline before downstream
+  packages; each downstream suite was run explicitly and is green apart from the reproduced server
+  baseline.
+```
+
+### Boundary after R6
+
+R6.1-R6.9 are closed with recorded evidence. Automated browser/component evidence remains
+preparation; the Owner alone decides the final walkthrough, PR review, merge, release, and archive.
+No PR, push, merge, publish, release, or archive action has been taken.
 
 ## Loopback triggers
 
