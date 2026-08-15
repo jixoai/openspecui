@@ -10,6 +10,7 @@
 import type { z } from 'zod'
 import type { CliResult } from '../cli-executor.js'
 import { parseCliCommandResult, type CliCommandResult } from './command-result.js'
+import { CliSchemasSchema, type CliSchemas } from './schema-resolution.js'
 import {
   CliContextSchema,
   CliDoctorSchema,
@@ -30,7 +31,6 @@ import {
   CliArchiveSchema,
   CliArtifactInstructionsSchema,
   CliChangeListSchema,
-  CliSchemasSchema,
   CliSchemaWhichSchema,
   CliShowSpecSchema,
   CliSpecListSchema,
@@ -42,7 +42,6 @@ import {
   type CliArchiveInstructions,
   type CliArtifactInstructions,
   type CliChangeList,
-  type CliSchemas,
   type CliSchemaWhich,
   type CliShowSpec,
   type CliSpecList,

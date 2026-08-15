@@ -19,12 +19,11 @@ import {
   CliArtifactInstructionsSuccessSchema,
   CliChangeListSchema,
   CliRootSchema,
-  CliSchemasSuccessSchema,
   CliWorkflowStatusSuccessSchema,
-  isCliSchemasFailure,
   type CliCommandResult,
   type CliRootSelector,
 } from './cli-contracts/index.js'
+import { CliSchemasSuccessSchema, isCliSchemasFailure } from './cli-contracts/schema-resolution.js'
 import type { CliExecutor } from './cli-executor.js'
 import { mapCliProjectionSeries } from './cli-projection-sequence.js'
 import {

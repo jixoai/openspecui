@@ -9,14 +9,16 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  CliApplyInstructionsSuccessSchema,
-  CliArchiveSchema,
   CliSchemasFailureSchema,
   CliSchemasSchema,
   CliSchemasSuccessSchema,
+  isCliSchemasFailure,
+} from './schema-resolution.js'
+import {
+  CliApplyInstructionsSuccessSchema,
+  CliArchiveSchema,
   CliValidateSchema,
   CliWorkflowStatusSuccessSchema,
-  isCliSchemasFailure,
 } from './workflow.js'
 
 const root = { path: '/repo', source: 'nearest' as const }

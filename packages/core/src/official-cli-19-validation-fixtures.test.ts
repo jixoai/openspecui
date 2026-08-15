@@ -24,10 +24,9 @@ import {
 import {
   CliSchemasFailureSchema,
   CliSchemasSuccessSchema,
-  CliValidateReportSchema,
   isCliSchemasFailure,
-  type CliValidateReport,
-} from './cli-contracts/workflow.js'
+} from './cli-contracts/schema-resolution.js'
+import { CliValidateReportSchema, type CliValidateReport } from './cli-contracts/workflow.js'
 
 function outputOf(result: { stdout: string; stderr: string }): string {
   return result.stdout + '\n' + result.stderr

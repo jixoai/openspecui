@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-08-15 Asia/Shanghai):
+ * 1. Prove static Change status, artifact, and template projections keep captured snapshot facts.
+ * 2. Prove a captured Schema-resolution failure propagates as CLI evidence instead of an empty catalog.
+ *
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import {
   createDocumentChecklistSummary,
   createTrackedTaskProgress,

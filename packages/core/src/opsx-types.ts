@@ -17,11 +17,11 @@ import {
   CliReferenceIndexEntrySchema,
   CliRootSchema,
 } from './cli-contracts/common.js'
+import { CliSchemaInfoSchema } from './cli-contracts/schema-resolution.js'
 import {
   CliActionContextSchema,
   CliArtifactPathSchema,
   CliPlanningHomeSchema,
-  CliSchemaInfoSchema,
   CliSchemaResolutionSchema,
   CliSchemaShadowSchema,
   CliTemplateEntrySchema,
