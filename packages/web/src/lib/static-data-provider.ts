@@ -1141,18 +1141,20 @@ export async function getOpsxConfigBundle(): Promise<{
 
 /** Return one exported Schema detail by name. */
 export async function getOpsxSchemaDetail(name?: string): Promise<SchemaDetail | null> {
-  if (!name) return null
+  // The captured failure is terminal before any optional-identity handling: an absent name
+  // can never turn a failed static Schema observation into a normal null result.
   const snapshot = await loadSnapshot()
   assertSchemasCaptureCaptured(snapshot)
+  if (!name) return null
   const details = snapshot?.opsx?.schemaDetails
   return details?.[name] ?? null
 }
 
 /** Return one exported Schema resolution with display paths projected for static presentation. */
 export async function getOpsxSchemaResolution(name?: string): Promise<SchemaResolution | null> {
-  if (!name) return null
   const snapshot = await loadSnapshot()
   assertSchemasCaptureCaptured(snapshot)
+  if (!name) return null
   const resolutions = snapshot?.opsx?.schemaResolutions
   const resolution = resolutions?.[name]
   if (!resolution) return null
@@ -1267,9 +1269,9 @@ export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | 
 
 /** Return the exported YAML document for one Schema. */
 export async function getOpsxSchemaYaml(name?: string): Promise<string | null> {
-  if (!name) return null
   const snapshot = await loadSnapshot()
   assertSchemasCaptureCaptured(snapshot)
+  if (!name) return null
   return snapshot?.opsx?.schemaYamls?.[name] ?? null
 }
 
@@ -1283,7 +1285,12 @@ export async function getOpsxTemplateContent(
   displayPath?: string
   source: 'project' | 'user' | 'package'
 } | null> {
-  if (!schema || !artifactId) return null
+  // Loading the contents accessor asserts the captured failure first, so an absent identity
+  // can only produce null after the capture boundary has passed.
+  if (!schema || !artifactId) {
+    await getOpsxTemplateContents(schema)
+    return null
+  }
   const all = await getOpsxTemplateContents(schema)
   if (!all) return null
   return all[artifactId] ?? null

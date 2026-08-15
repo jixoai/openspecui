@@ -386,4 +386,43 @@ describe('static-data-provider opsx adapters', () => {
       )
     }
   })
+
+  it('keeps the captured failure terminal for accessors called without an identity', async () => {
+    const snapshot = createSnapshot()
+    if (!snapshot.opsx) throw new Error('Static opsx fixture is missing.')
+    snapshot.opsx.schemasCapture = {
+      ok: false,
+      command: 'openspec schemas',
+      selector: null,
+      rootAvailable: false,
+      diagnostics: [
+        { severity: 'error', code: 'no_registered_stores', message: 'No openspec root found.' },
+      ],
+      stdout: '',
+      stderr: '',
+      exitCode: 1,
+      payload: null,
+    }
+    staticState.snapshot = snapshot
+
+    const provider = await import('./static-data-provider')
+    // Undefined/omitted identities must not short-circuit into a normal null result before
+    // the capture boundary: the failed observation stays terminal for every read shape.
+    const undefinedCalls: Array<[string, () => Promise<unknown>]> = [
+      ['detail(undefined)', () => provider.getOpsxSchemaDetail(undefined)],
+      ['resolution(undefined)', () => provider.getOpsxSchemaResolution(undefined)],
+      ['yaml(undefined)', () => provider.getOpsxSchemaYaml(undefined)],
+      ['templates(undefined)', () => provider.getOpsxTemplates(undefined)],
+      ['files(undefined)', () => provider.getOpsxSchemaFiles(undefined)],
+      ['templateContents(undefined)', () => provider.getOpsxTemplateContents(undefined)],
+      [
+        'templateContent(undefined, undefined)',
+        () => provider.getOpsxTemplateContent(undefined, undefined),
+      ],
+    ]
+    for (const [label, run] of undefinedCalls) {
+      const error = await run().catch((cause) => cause)
+      expect(error, label).toBeInstanceOf(provider.StaticSchemasCaptureError)
+    }
+  })
 })
