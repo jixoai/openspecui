@@ -365,9 +365,25 @@ describe('static-data-provider opsx adapters', () => {
       exitCode: 1,
       diagnostics: [{ code: 'unknown_store' }],
     })
-    // The list-only accessor propagates the same typed failure instead of `[]`.
-    const listError = await provider.getOpsxSchemas().catch((error) => error)
-    expect(listError).toBeInstanceOf(provider.StaticSchemasCaptureError)
-    expect(listError.capture).toBe(bundleError.capture)
+    // Every Schema-related accessor propagates the same typed failure: no static read path
+    // can return stale detail, resolution, template, file, YAML, or template content as
+    // successful data for a failed capture.
+    const accessors: Array<[string, () => Promise<unknown>]> = [
+      ['list', () => provider.getOpsxSchemas()],
+      ['detail', () => provider.getOpsxSchemaDetail('spec-driven')],
+      ['resolution', () => provider.getOpsxSchemaResolution('spec-driven')],
+      ['templates', () => provider.getOpsxTemplates('spec-driven')],
+      ['files', () => provider.getOpsxSchemaFiles('spec-driven')],
+      ['yaml', () => provider.getOpsxSchemaYaml('spec-driven')],
+      ['templateContent', () => provider.getOpsxTemplateContent('spec-driven', 'proposal')],
+      ['templateContents', () => provider.getOpsxTemplateContents('spec-driven')],
+    ]
+    for (const [label, run] of accessors) {
+      const error = await run().catch((cause) => cause)
+      expect(error, label).toBeInstanceOf(provider.StaticSchemasCaptureError)
+      expect((error as InstanceType<typeof provider.StaticSchemasCaptureError>).capture).toBe(
+        bundleError.capture
+      )
+    }
   })
 })

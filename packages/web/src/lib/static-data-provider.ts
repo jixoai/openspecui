@@ -1142,6 +1142,7 @@ export async function getOpsxConfigBundle(): Promise<{
 export async function getOpsxSchemaDetail(name?: string): Promise<SchemaDetail | null> {
   if (!name) return null
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   const details = snapshot?.opsx?.schemaDetails
   return details?.[name] ?? null
 }
@@ -1150,6 +1151,7 @@ export async function getOpsxSchemaDetail(name?: string): Promise<SchemaDetail |
 export async function getOpsxSchemaResolution(name?: string): Promise<SchemaResolution | null> {
   if (!name) return null
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   const resolutions = snapshot?.opsx?.schemaResolutions
   const resolution = resolutions?.[name]
   if (!resolution) return null
@@ -1175,6 +1177,7 @@ export async function getOpsxSchemaResolution(name?: string): Promise<SchemaReso
 /** Return exported templates for the requested Schema, or the snapshot default Schema. */
 export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | null> {
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   if (!snapshot?.opsx?.templates) return null
   if (!schema) {
     const first = Object.keys(snapshot.opsx.templates)[0]
@@ -1214,6 +1217,7 @@ export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | 
 /** Reconstruct the exported file tree for one Schema without enabling mutations. */
 export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | null> {
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   if (!snapshot?.opsx) return null
 
   let schemaName = name
@@ -1264,6 +1268,7 @@ export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | 
 export async function getOpsxSchemaYaml(name?: string): Promise<string | null> {
   if (!name) return null
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   return snapshot?.opsx?.schemaYamls?.[name] ?? null
 }
 
@@ -1294,6 +1299,7 @@ export async function getOpsxTemplateContents(schema?: string): Promise<Record<
   }
 > | null> {
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   if (!snapshot?.opsx) return null
 
   const targetSchema =
