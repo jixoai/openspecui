@@ -3,13 +3,19 @@
  * 1. Present OpenSpec 1.9 `validate --archived --json` as typed CLI evidence.
  * 2. Preserve item issues, totals, root, and exit/failure evidence without repair actions.
  * 3. Identify the evidence as unavailable in static snapshots instead of fabricating it.
+ * 4. Derive the capability from the detected admitted CLI and hide the action on 1.8.
  *
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { EvidenceDisclosure } from '@/components/information-disclosure'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
+import { useRootActionState } from '@/lib/use-root-action-state'
 import type { CliCommandResult, CliValidate } from '@openspecui/core'
+import {
+  deriveOpenSpecCliCapabilities,
+  parseOpenSpecCliVersion,
+} from '@openspecui/core/openspec-compat'
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
@@ -64,12 +70,33 @@ export function ArchivedValidationEvidence() {
   const [report, setReport] = useState<CliCommandResult<CliValidate> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const rootAction = useRootActionState()
+  const cli = rootAction.context?.cli
+  // `validate --archived` exists only on OpenSpec 1.9+. A supported 1.8 session must see
+  // the capability as unavailable here, never a button that spawns a failing command.
+  const capabilities = deriveOpenSpecCliCapabilities(
+    cli?.available ? parseOpenSpecCliVersion(cli.version) : null
+  )
 
   if (isStaticMode()) {
     return (
       <EvidenceDisclosure title="Archived validation" summary="Unavailable in static snapshot">
         <p className="text-muted-foreground">
           Archived-task validation is live CLI evidence and is not captured in this static snapshot.
+        </p>
+      </EvidenceDisclosure>
+    )
+  }
+
+  // Only a detected, admitted CLI decides availability; while CLI evidence is still
+  // pending the run UI stays and the Server's typed capability check remains the guard.
+  if (cli?.available === true && !capabilities.archivedValidation) {
+    const detected = cli.version ? ` (detected ${cli.version.trim()})` : ''
+    return (
+      <EvidenceDisclosure title="Archived validation" summary="Unavailable on this CLI line">
+        <p className="text-muted-foreground">
+          Archived-task validation requires the OpenSpec 1.9 line{detected}. This session&apos;s CLI
+          does not declare the capability, so no command is offered.
         </p>
       </EvidenceDisclosure>
     )

@@ -146,6 +146,10 @@ import {
   NotificationPublishInputSchema,
   type NotificationRecord,
 } from '@openspecui/core/notifications'
+import {
+  deriveOpenSpecCliCapabilities,
+  parseOpenSpecCliVersion,
+} from '@openspecui/core/openspec-compat'
 import { CustomSoundIdSchema } from '@openspecui/core/sounds'
 import {
   parseProjectSearchHits,
@@ -2212,8 +2216,24 @@ export const cliRouter = router({
       ])
     )
     .mutation(async ({ ctx, input }) => {
-      return runPlanningRoot(ctx, ({ rootContext }) =>
-        ctx.cliExecutor.contracts.validate({
+      return runPlanningRoot(ctx, ({ rootContext }) => {
+        // `validate --archived` exists only on OpenSpec 1.9+. A supported 1.8 session must
+        // learn the capability is unavailable before any process is spawned, never by
+        // watching the CLI reject an unknown option.
+        if (input.kind === 'archived') {
+          const cli = rootContext.cli
+          const capabilities = deriveOpenSpecCliCapabilities(
+            cli.available ? parseOpenSpecCliVersion(cli.version) : null
+          )
+          if (!capabilities.archivedValidation) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message:
+                'Archived task validation requires the detected OpenSpec CLI to declare the 1.9 archived-validation capability.',
+            })
+          }
+        }
+        return ctx.cliExecutor.contracts.validate({
           target:
             input.kind === 'item'
               ? { kind: 'item', id: input.id, type: input.type }
@@ -2223,7 +2243,7 @@ export const cliRouter = router({
           strict: input.kind === 'archived' ? undefined : input.strict,
           ...getRootContextCliSelector(rootContext),
         })
-      )
+      })
     }),
 
   /** 流式执行 validate（实时输出） */

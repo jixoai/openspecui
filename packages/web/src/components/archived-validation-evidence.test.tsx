@@ -27,6 +27,24 @@ vi.mock('@/lib/static-mode', () => ({
   isStaticMode: vi.fn(() => false),
 }))
 
+const rootActionStateMock = vi.hoisted(() => ({
+  state: {
+    status: 'ready',
+    disabled: false,
+    title: '',
+    message: '',
+    evidence: [],
+    context: {
+      cli: { available: true, version: '1.9.0' },
+    },
+    observedAt: 1,
+  },
+}))
+
+vi.mock('@/lib/use-root-action-state', () => ({
+  useRootActionState: () => rootActionStateMock.state,
+}))
+
 function archivedReport(overrides: Record<string, unknown> = {}) {
   return {
     success: false,
@@ -74,6 +92,17 @@ describe('ArchivedValidationEvidence', () => {
   afterEach(() => {
     cleanup()
     validateMock.mockReset()
+    rootActionStateMock.state = {
+      status: 'ready',
+      disabled: false,
+      title: '',
+      message: '',
+      evidence: [],
+      context: {
+        cli: { available: true, version: '1.9.0' },
+      },
+      observedAt: 1,
+    }
   })
 
   it('offers on-demand archived validation without any repair action', async () => {
@@ -122,6 +151,23 @@ describe('ArchivedValidationEvidence', () => {
     expect(screen.getByText('Unavailable in static snapshot')).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
     expect(screen.getByText(/not captured in this static snapshot/)).toBeVisible()
+    expect(validateMock).not.toHaveBeenCalled()
+  })
+
+  it('offers no command on a detected OpenSpec 1.8 session', () => {
+    rootActionStateMock.state = {
+      ...rootActionStateMock.state,
+      context: { cli: { available: true, version: '1.8.0' } },
+    }
+    render(<ArchivedValidationEvidence />)
+
+    expect(screen.getByText('Unavailable on this CLI line')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
+    expect(screen.getByText(/requires the OpenSpec 1.9 line/)).toBeVisible()
+    expect(screen.getByText(/detected 1\.8\.0/)).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: 'Validate archived tasks' })
+    ).not.toBeInTheDocument()
     expect(validateMock).not.toHaveBeenCalled()
   })
 

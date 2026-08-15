@@ -3142,6 +3142,7 @@ apply:
           status: [],
         },
         storeId: 'shared',
+        cli: { available: true, version: '1.9.0' },
       }
       const caller = appRouter.createCaller(context)
 
@@ -3153,6 +3154,24 @@ apply:
         strict: undefined,
         store: 'shared',
       })
+    })
+
+    it('rejects archived validation on a supported 1.8 session before any CLI execution', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        cli: { available: true, version: '1.8.0' },
+      }
+      const caller = appRouter.createCaller(context)
+      const validate = context.cliExecutor.contracts.validate as unknown as ReturnType<typeof vi.fn>
+
+      await expect(caller.cli.validate({ kind: 'archived' })).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: expect.stringContaining('archived-validation capability'),
+      })
+      // The 1.9-only option never reaches the CLI process.
+      expect(validate).not.toHaveBeenCalled()
     })
 
     it('derives streaming validate Store selection from Root Context', async () => {
