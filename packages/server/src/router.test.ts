@@ -33,6 +33,7 @@ import {
   OpenSpecAdapter,
   reactiveReadFile,
   RuntimeInvalidationIndex,
+  selectAgentDeliveryRegistry,
   type CliCommandResult,
   type CliContext,
   type CliDoctor,
@@ -1030,6 +1031,68 @@ const createCaller = (
     ...createMockContext(adapter, options),
   })
 }
+
+describe('agentIntegrations.initStream', () => {
+  it('rejects a 1.9-only tool on a 1.8 projection without spawning the CLI', async () => {
+    const context = createMockContext()
+    const planning = await resolveMockPlanningRoot(context)
+    planning.rootContext = {
+      ...planning.rootContext,
+      cli: { available: true, version: '1.8.0' },
+    }
+    const registry18 = selectAgentDeliveryRegistry('1.8.0')
+    ;(
+      context.agentDeliveryProjectionService.getCurrent as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      registry: registry18,
+      policy: { profile: 'core', delivery: 'skills', workflows: [] },
+      states: [],
+    })
+    const caller = appRouter.createCaller(context)
+    const initStreamSpy = context.cliExecutor.initStream
+
+    // Subscriptions resolve lazily; the typed precondition failure surfaces on the stream.
+    const stream = await caller.agentIntegrations.initStream({ tools: ['command-code'] })
+    const failure = await new Promise<Error>((resolve) => {
+      stream.subscribe({ error: resolve, next: () => resolve(new Error('unexpected event')) })
+    })
+    expect(failure.message).toContain('unavailable on the admitted OpenSpec CLI line')
+    // The 1.9-only tool must never reach a child process.
+    expect(initStreamSpy).not.toHaveBeenCalled()
+  })
+
+  it('streams explicit tools the admitted 1.8 registry offers', async () => {
+    const context = createMockContext()
+    const registry18 = selectAgentDeliveryRegistry('1.8.0')
+    ;(
+      context.agentDeliveryProjectionService.getCurrent as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      registry: registry18,
+      policy: { profile: 'core', delivery: 'skills', workflows: [] },
+      states: [],
+    })
+    const caller = appRouter.createCaller(context)
+
+    const stream = await caller.agentIntegrations.initStream({ tools: ['claude'] })
+    expect(stream).toBeDefined()
+  })
+
+  it('streams the literal all request unchanged on a 1.9 projection', async () => {
+    const context = createMockContext()
+    const registry19 = selectAgentDeliveryRegistry('1.9.0')
+    ;(
+      context.agentDeliveryProjectionService.getCurrent as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      registry: registry19,
+      policy: { profile: 'core', delivery: 'skills', workflows: [] },
+      states: [],
+    })
+    const caller = appRouter.createCaller(context)
+
+    const stream = await caller.agentIntegrations.initStream({ tools: 'all' })
+    expect(stream).toBeDefined()
+  })
+})
 
 describe('appRouter', () => {
   describe('root context', () => {

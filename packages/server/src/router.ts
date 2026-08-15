@@ -2395,12 +2395,28 @@ export const agentIntegrationsRouter = router({
     .subscription(({ ctx, input }) => {
       return createCliStreamObservable(async (onEvent) => {
         const projection = await ctx.agentDeliveryProjectionService.getCurrent()
+        if (Array.isArray(input.tools)) {
+          // The input schema only knows the static newest registry; the admitted CLI line's
+          // own projection is the execution authority. Reject every explicit tool the
+          // selected registry does not offer before any child process can spawn — a direct
+          // 1.8 RPC naming a 1.9-only target (Command Code) fails here, not at the CLI.
+          const offered = new Set(projection.registry.map((tool) => tool.value))
+          const unavailable = input.tools.filter((toolId) => !offered.has(toolId))
+          if (unavailable.length > 0) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: `Agent tool(s) unavailable on the admitted OpenSpec CLI line: ${unavailable.join(', ')}.`,
+            })
+          }
+        }
         return streamOpenSpecCliMutation(
           ctx,
           ['init'],
           (mutationEvent) =>
             ctx.cliExecutor.initStream(
               {
+                // 'all' stays the literal official CLI request; the selected registry already
+                // reflects the admitted line, so no client-side filtering rewrites it.
                 tools: input.tools,
                 profile: projection.policy.profile,
                 force: input.force,
