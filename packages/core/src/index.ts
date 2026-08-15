@@ -18,7 +18,7 @@
  * Original request (2026-08-01): preserve typed OpenSpec 1.7 Archive Instructions publicly.
  * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 /**
  * @openspecui/core

@@ -21,7 +21,7 @@
  * Original request (2026-07-31): "Code Git Snapshot 的 Other Worktrees 默认隐藏 (detached)。然后commitList这里默认显示5个就好"
  * Original request (2026-07-31): "检查目前的这个 Code Git Snapshot，它非常慢，有时候甚至要十几秒"
  * Owner correction (2026-07-31): Hidden documents pause the timer; visibility resumes the remaining delay or refreshes once when the absolute deadline elapsed.
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import { Badge } from '@/components/badge'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'

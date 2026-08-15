@@ -8,7 +8,7 @@
  * Keep the parser importable in browsers by resolving node:url lazily.
  * Original request (2026-08-14): first ubuntu CI run of this branch failed the PTY cwd contract.
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 // `node:url` is Node-only, and Vite's browser-external stub throws on property
 // access at module-evaluation time. Import the namespace and resolve

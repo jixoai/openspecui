@@ -11,7 +11,7 @@
  * Derived requirement (2026-07-20): global CLI installation settlement refreshes Root Context availability.
  * Original request (2026-08-01): Codex is skills-only and allowlisted global prompts are cleanup evidence.
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import {
   clearCache,

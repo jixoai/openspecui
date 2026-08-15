@@ -5,7 +5,7 @@
  * 3. Carry the command-surface unavailability field in fixtures.
  *
  * Original request (2026-08-01): consume the Server-owned Agent projection without browser policy inputs.
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

@@ -8,7 +8,7 @@
  *
  * Original request (2026-08-01): Settings only shows Agent status and navigates management to `/config/agents`.
  * Owner acceptance boundary (2026-07-20): final end-to-end browser walkthroughs remain owner-owned.
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import type { AgentIntegrationsProjection } from '@/lib/use-agent-integrations'
 import type { EnvironmentGlobalConfig, ToolInitState, ToolWorkflowId } from '@openspecui/core'

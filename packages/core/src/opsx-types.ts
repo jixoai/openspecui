@@ -10,7 +10,7 @@
  * Original request (2026-07-15): "Preserve CLI-provided paths, action context, References, and diagnostics end to end."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import { z } from 'zod'
 import type { CliJsonValue } from './cli-contracts/command-result.js'

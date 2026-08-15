@@ -8,7 +8,7 @@
  *
  * Original request (2026-08-01): `/config/agents` is the only structured Agent mutation surface.
  * Review correction (2026-08-02): replacement projection fixtures must prove their target row exists.
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import type { AgentIntegrationsProjection } from '@/lib/use-agent-integrations'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'

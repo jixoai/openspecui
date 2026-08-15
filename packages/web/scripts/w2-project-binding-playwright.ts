@@ -13,7 +13,7 @@
  * default browser lane and does not exercise App iframe or WebSocket error-propagation policy.
  * Original request (2026-08-03): release OpenSpecUI 7.0.0 against the pinned OpenSpec CLI 1.7 source.
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'

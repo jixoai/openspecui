@@ -21,7 +21,7 @@
  * Original request (2026-08-01): Active Root Raw YAML must reject stale revisions and refresh dependent owners.
  * Review correction (2026-08-02): generic CLI Init/Update transports must not bypass Agent ownership.
  * Review correction (2026-08-02): Init cancellation and success require process and projection settlement.
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import {
   acquireWatcherRoot,

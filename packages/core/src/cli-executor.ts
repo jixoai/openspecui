@@ -22,7 +22,7 @@
  * Original request (2026-08-02): initialize the Launch Project with `openspec init <path> --tools=none`.
  * Review correction (2026-08-02): streamed command evidence must preserve argv boundaries.
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import { context, trace, type Attributes, type Span } from '@opentelemetry/api'
 import { type ChildProcess } from 'child_process'

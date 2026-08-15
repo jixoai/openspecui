@@ -6,7 +6,7 @@
  *
  * Type the static schemas capture failure with complete CLI evidence.
  * Original request (2026-08-01): adapt OpenSpecUI 7 to the OpenSpec 1.7 Root and Store protocol.
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import type { CliJsonValue } from './cli-contracts/command-result.js'
 import type { CliDiagnostic } from './cli-contracts/common.js'

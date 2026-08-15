@@ -7,7 +7,7 @@
  *
  * Prove version-selected inventories including unavailable-CLI sessions.
  * Original request (2026-08-01): "新增 Agent delivery projection service 及 checked tests。"
- 
+
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 
 import {
