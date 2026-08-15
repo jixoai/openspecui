@@ -6,11 +6,13 @@
  * 4. Preserve typed Status and Artifact/Apply/Archive Instructions provenance with the resolved root selector.
  * 5. Keep Change enumeration business truth in the typed CLI result while files only invalidate it.
  *
+ * Resolve per-command capabilities once and gate version-only selectors.
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
- */
+ 
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import {

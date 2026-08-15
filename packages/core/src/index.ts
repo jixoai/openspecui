@@ -7,6 +7,7 @@
  * 4. Export the typed Git repository binding and Dashboard provenance contracts.
  * 5. Export the generic CLI-backed projection lifecycle and argv-safe subprocess/invocation/tree owners while preserving browser-safe subpaths.
  *
+ * Re-export the v9 admission, capability, and registry-selection boundaries.
  * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
  * Original request (2026-07-17): "Root-scoped stream startup returns an owned handle, not a void cancel function."
  * Original request (2026-07-18): "Profile/Drift must refresh with external environment config changes."
@@ -17,7 +18,8 @@
  * Original request (2026-08-01): preserve typed OpenSpec 1.7 Archive Instructions publicly.
  * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
- */
+ 
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 /**
  * @openspecui/core
  *

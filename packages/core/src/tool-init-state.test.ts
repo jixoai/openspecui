@@ -9,7 +9,8 @@
  * Repeated fixed point (2026-07-26): clean CI runs 30163937799 and 30165778790 missed the same Launch update creation emission.
  * Repeated fixed point (2026-07-28): PR Quality run 30296656775 missed Launch Codex skill creation below an initially absent tool root.
  * Review correction (2026-08-02): Agent delivery fixtures remain in an explicit checked TypeScript lane.
- */
+ 
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'

@@ -4,13 +4,15 @@
  * 2. Prove fixed global CLI installation retires runner authority and invalidates Root Context before public terminal settlement.
  * 3. Prove commands-only subscriptions distinguish arbitrary content from exact runtime CLI output.
  * 4. Dispose every Server owner and tolerate independent Windows watcher invalidations.
+ * 5. Consume the isolated command-content result shape.
  *
  * Original request (2026-07-20): "Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics."
  * Derived requirement (2026-07-20): physically owned tool projections re-emit after external artifact creation and removal.
  * Derived requirement (2026-07-20): global CLI installation settlement refreshes Root Context availability.
  * Original request (2026-08-01): Codex is skills-only and allowlisted global prompts are cleanup evidence.
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
- */
+ 
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import {
   clearCache,
   CliContextSchema,

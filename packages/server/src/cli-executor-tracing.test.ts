@@ -7,9 +7,11 @@
  * 4. Prove Worker execution exports mode, module, lifecycle, and concurrency evidence without a child PID.
  * 5. Bind eager-process trace export to observed child retirement instead of a fixed platform timer.
  *
+ * Characterize honest unknown exit codes for eager-resolved commands.
  * Original request (2026-07-31): "终端大量报错，比如: Cannot execute the operation on ended Span"
  * Original request (2026-07-31): "我发现otel里面没有追踪这个信息。"
- */
+ 
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import { CliExecutor, ConfigManager } from '@openspecui/core'
 import { diag, DiagLogLevel, trace } from '@opentelemetry/api'
 import { NodeSDK } from '@opentelemetry/sdk-node'

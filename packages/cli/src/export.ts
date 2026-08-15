@@ -7,9 +7,11 @@
  * 5. Hide snapshot Git subprocess console windows (`windowsHide`) so export evidence gathering
  *    never flashes a cmd window under a console-less Windows parent.
  *
+ * Capture the schemas observation as typed success/failure evidence.
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
- */
+ 
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import {
   CliDiagnosticFailureSchema,
   CliExecutor,

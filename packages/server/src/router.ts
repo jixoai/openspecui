@@ -4,12 +4,13 @@
  * 2. Register CLI, Root Context, Agent delivery, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
- * 5. Compose the public tRPC application router and shared procedure schemas.
+ * 5. Compose the public router and enforce v9 admission-gated CLI capabilities.
  *
  * Compromise: tRPC router inference currently requires one composition module; splitting its
  * established 2,600-line registration surface is outside the OpenSpec 1.6 contract slice.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-07-17): "Do not return a mutable Planning-root service capability that can outlive its admitted operation."
  * Original request (2026-07-18): "Remove duplicated profile/drift parsing and preserve the pinned Core workflow contract."
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
@@ -32,7 +33,9 @@
  * Review correction (2026-08-02): remove generic Agent Init/Update mutations that bypass the Agent owner.
  * Original request (2026-08-02): initialize a missing Launch Project through one explicit `--tools=none` Alert.
  * Review correction (2026-08-02): Init cancellation and success wait for objective process and projection settlement.
- */
+ 
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。" * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+*/
 import type {
   ChangeFile,
   ChangeProjectionBatch,

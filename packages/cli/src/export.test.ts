@@ -5,9 +5,11 @@
  * 3. Cover Reference-aware export materialization and publication behavior.
  * 4. Preserve recursive Spec identity and source content through owned export.
  *
+ * Prove typed schemas-capture outcomes in exported snapshots.
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
- */
+ 
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

@@ -4,11 +4,13 @@
  * 2. Own Agent selection plus cancellable Init, Update, and Repair command execution with global pending locks.
  * 3. Promote loading and failed authority directly without publishing this surface to static mode.
  * 4. Participate in shared Config navigation and publish existing Agent lifecycle facts to the Guide.
+ * 5. Render version-scoped command-surface unavailability evidence.
  *
  * Original request (2026-08-01): move Agent delivery into a Config secondary page and keep Settings read-only.
  * Review correction (2026-08-02): replacement inventory Push must not discard an unsaved Agent policy draft.
  * Owner visual direction (2026-08-02): use compact box-radius geometry for semantic status and issue labels.
- */
+ 
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import {
   AgentIntegrationsCommandDialog,
   type AgentCommandKind,
