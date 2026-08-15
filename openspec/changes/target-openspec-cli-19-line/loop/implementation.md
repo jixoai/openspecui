@@ -446,6 +446,34 @@ R6.1-R6.9 are closed with recorded evidence. Automated browser/component evidenc
 preparation; the Owner alone decides the final walkthrough, PR review, merge, release, and archive.
 No PR, push, merge, publish, release, or archive action has been taken.
 
+## Independent-review correction after R6 closure (2026-08-15 Asia/Shanghai)
+
+This record supersedes the R6 closure claim above without deleting its historical Agent evidence. The independent
+review compared `79c41a02...b5c64f7f`; it found that R6.1-R6.5 and R6.8 have matching focused behavior evidence,
+but R6.6, R6.7, R6.9, and the Owner-gate expression do not satisfy their stated stop conditions.
+
+| Gate | Independent evidence | Required recovery |
+| --- | --- | --- |
+| R6.6 | `archived-validation-evidence.tsx:34` casts successful `safeParse` data; line 114 casts the tRPC result. | R7.1 removes both assertion boundaries while retaining typed report and transport diagnostics. |
+| R6.7 | `git diff --name-only 79c41a02...b5c64f7f -- 'packages/**/*.ts' 'packages/**/*.tsx'` returns 44 paths, not the recorded 42. `agent-integrations-router.test.ts` was changed by R6.9 but retains a 2026-08-06 header. | R7.2 records the complete dynamic inventory and repairs headers. |
+| R6.9 | `git diff --check 79c41a02...b5c64f7f` reports 28 trailing-whitespace violations in v9 header edits. | R7.2 clears diff hygiene; R7.3 reruns all source/distribution evidence after the correction. |
+| 4.1 | An implementation Agent's browser observation is preparation evidence, not an Owner walkthrough. | Keep checkpoint 4.1 unchecked and blocked until R7.3's fresh review succeeds. |
+
+Commands run by this independent review:
+
+```text
+PASS  openspec validate target-openspec-cli-19-line --strict
+PASS  focused Core compatibility/registry/state suites (45 tests)
+PASS  focused Web static/progress/archived-validation suites (51 tests)
+PASS  focused Server Agent projection/router and archived-validation suites (16 tests)
+FAIL  git diff --check 79c41a02...b5c64f7f (28 trailing-whitespace violations)
+```
+
+`pnpm run format:check` without `FORMAT_CHECK_BASE_SHA` is not attributable to the v9 diff because it includes the
+user-owned untracked `pb.html`. R7.2/R7.3 therefore use the scoped base-SHA command. No production source, package
+output, user project, PR, merge, release, or archive was changed by this review. The R7 authority is
+`loop/recovery-plan.md`; checkpoints remain open until fresh evidence is appended here.
+
 ## Loopback triggers
 
 - The official 1.8 or 1.9 executable contradicts a command, payload, selector, or Agent-inventory assumption in a

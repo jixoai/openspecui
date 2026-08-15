@@ -388,3 +388,113 @@ Owner:         source/distribution agreement, not a feature owner.
   `packages/cli` and an isolated temporary-directory install/start inspection.
 - **Stop condition:** any R6 focused failure, source/dist disagreement, or unclassified full-gate failure returns to
   its owner gate. R6.9 does not authorize Owner acceptance, PR, merge, release, or archive.
+
+## Independent-review correction after the claimed R6 closure
+
+The R6 implementation record is retained as historical Agent evidence. It does not establish closure: an
+independent review of `79c41a02...b5c64f7f` found two residual assertion casts at the R6.6 evidence boundary, an
+incomplete R6.7 inventory, and 28 trailing-whitespace violations. Therefore R6.6, R6.7, and R6.9 are reopened and
+must be repaired in the following order.
+
+```text
+R7.1 typed archived-validation boundary
+  -> R7.2 complete dynamic source inventory + diff hygiene
+    -> R7.3 fresh focused/source/distribution evidence + independent review
+      -> Owner-only browser/App walkthrough and delivery decision
+```
+
+### R7.1 - Remove assertion casts from the archived-validation evidence boundary
+
+```text
+Primary production owner: packages/web/src/components/archived-validation-evidence.tsx
+Evidence owner:           packages/web/src/components/archived-validation-evidence.test.tsx
+```
+
+- **Red case:** `parseValidationReport()` uses `CliValidateReportSchema.safeParse`, but then casts
+  `parsed.data` to `ArchivedValidationReport`; the RPC result is separately cast to
+  `CliCommandResult<CliValidate>`. Both casts remain at the exact external-evidence boundary.
+- **Required change:** use the schema's inferred report type directly after successful `safeParse`, and preserve the
+  actual typed tRPC mutation result through local state without an assertion. If the client result is not statically
+  available, establish a runtime-checked transport result before state assignment; do not move either cast into a
+  helper or weaken the state to `any`.
+- **Green case:** valid nonzero-exit reports still render item/root/total facts; malformed `data` still renders
+  `CLI failure evidence`; neither `as ArchivedValidationReport` nor `as CliCommandResult<CliValidate>` exists in
+  the component or a replacement boundary.
+- **Focused verification:**
+  `pnpm --filter @openspecui/web exec vitest run --project unit src/components/archived-validation-evidence.test.tsx`
+  followed by the Web package typecheck.
+- **Stop condition:** any assertion cast, shallow report guard, fabricated fallback, or loss of transport/contract
+  diagnostics returns this gate to the projection-contract delta Spec.
+
+### R7.2 - Complete the dynamic v9 TypeScript/TSX audit and restore diff hygiene
+
+```text
+Primary production owner: every TypeScript/TSX path changed since reviewed parent 79c41a02
+Evidence record:          loop/implementation.md (exact final inventory and audit result)
+```
+
+- **Red case:** the current inventory command returns 44 paths while the R6 record says 42;
+  `packages/server/src/agent-integrations-router.test.ts` was changed by R6.9 but retains its
+  `2026-08-06` header and pre-v9 original request. `git diff --check 79c41a02...HEAD` reports 28
+  trailing-whitespace violations in header-edited TypeScript/TSX files.
+- **Required change:** start from the exact command below, record all paths in the implementation evidence, and
+  update every applicable top-of-file header with a truthful current v9 intent, timestamp, and original request.
+  Preserve the five-intent maximum: physically split a sixth real owner rather than hiding it in prose. Remove every
+  change-introduced whitespace violation. Re-run the inventory after every R7 source change; it is dynamic, so a
+  newly touched TypeScript/TSX file joins the audit rather than becoming an undocumented exception.
+
+  ```sh
+  git diff --name-only 79c41a02...HEAD -- 'packages/**/*.ts' 'packages/**/*.tsx' | sort
+  git diff --check 79c41a02...HEAD
+  FORMAT_CHECK_BASE_SHA=79c41a02 pnpm run format:check
+  ```
+
+- **Green case:** the final recorded inventory is complete, every member has either a current truthful header or a
+  review-approved non-applicability explanation, `git diff --check 79c41a02...HEAD` exits zero, and the scoped
+  formatter command exits zero. The untracked user-owned `pb.html` must not be used to judge this changed-file gate.
+- **Stop condition:** an inventory count is asserted without its actual path list, an R7-touched owner lacks a
+  header, a header exceeds five independent intents, or any diff-hygiene failure remains.
+
+### R7.3 - Re-establish all post-R6 evidence and obtain a fresh independent review
+
+```text
+Prerequisite: R7.1 and R7.2 have exact green evidence and focused review records.
+Owner:         source/distribution agreement and independent-review boundary, not a feature owner.
+```
+
+- **Red case:** the R6.9 build/pack/isolated-install record predates the R7 source corrections and its claimed clean
+  gate is false; it cannot prove the corrected evidence boundary or audit state.
+- **Required change:** after R7.1-R7.2, rerun every R6 focused suite affected by the change, then rerun the scoped
+  formatter, lint, typecheck, reference check, CI, clean build, pack, and isolated-install inspection. A non-green
+  CI result may be classified as a baseline only after the exact failure is reproduced unchanged at `79c41a02`.
+  Request a fresh independent whole-change review only after source and installed distribution evidence agree.
+- **Required verification:**
+
+  ```sh
+  pnpm --filter @openspecui/core exec vitest run src/openspec-compat.test.ts src/agent-delivery-registry.test.ts src/tool-init-state.test.ts
+  pnpm --filter @openspecui/server exec vitest run src/agent-delivery-projection-service.test.ts src/agent-integrations-router.test.ts src/router.test.ts -t "Agent integration|archived validation"
+  pnpm --filter @openspecui/web exec vitest run --project unit src/lib/static-data-provider.opsx.test.ts src/routes/change-list.test.tsx src/components/apply-progress-notice.test.tsx src/routes/change-view.test.tsx src/components/archived-validation-evidence.test.tsx
+  FORMAT_CHECK_BASE_SHA=79c41a02 pnpm run format:check
+  pnpm run lint
+  pnpm run typecheck
+  pnpm run openspec:check-reference
+  pnpm test:ci
+  pnpm run build:deps && pnpm run build:packages && pnpm run build:cli
+  git diff --check 79c41a02...HEAD
+  openspec validate target-openspec-cli-19-line --strict
+  openspec instructions apply --change target-openspec-cli-19-line --json
+  ```
+
+  Then pack `packages/cli`, install the tarball into an isolated temporary directory, and inspect the installed CLI
+  version, command help, admission/registry markers, and rebuilt Web asset facts. Record the exact commands and
+  results before requesting the independent review.
+- **Green case:** all focused R7/R6 evidence, source gates, packed output, isolated install, and independent review
+  agree. There are no unclassified failures and no reuse of pre-R7 build/pack/review evidence.
+- **Stop condition:** a failed focused suite, source/dist mismatch, incomplete baseline reproduction, failed
+  independent review, or later source edit reopens the responsible owner gate and invalidates R7.3 evidence.
+
+## Boundary after R7
+
+R7.3 prepares but does not perform acceptance. Only after its independent review is accepted may the Owner personally
+perform checkpoint 4.1. Agents may run component/browser preparation evidence, but cannot check 4.1 or 4.2, open a
+PR, merge, publish, release, or archive the Change.
