@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove public Router owner boundaries and dedicated Planning-root stream settlement.
  * 2. Prove strict Archive identity, generation, validation, diagnostics, and Store selection publicly.
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
@@ -22,7 +22,8 @@
  * Review correction (2026-08-02): generic CLI Init/Update transports must not bypass Agent ownership.
  * Review correction (2026-08-02): Init cancellation and success require process and projection settlement.
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import {
   acquireWatcherRoot,
   CliExecutor,

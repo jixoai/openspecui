@@ -6,7 +6,8 @@
  * 3. Expose the focused Schema-resolution contract module.
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 export * from './command-result.js'
 export * from './common.js'
 export * from './executor.js'

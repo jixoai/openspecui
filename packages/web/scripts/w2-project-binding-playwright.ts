@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Execute one deterministic same-origin Project Binding A-to-B acceptance flow.
  * 2. Pin the OpenSpec 1.7 executable, Store registry scope, and disposable roots.
  * 3. Assert desktop/mobile layout and browser error hygiene with bounded process-tree cleanup.
@@ -14,7 +14,8 @@
  * Original request (2026-08-03): release OpenSpecUI 7.0.0 against the pinned OpenSpec CLI 1.7 source.
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Attribute Apply instruction counts to the upstream Apply command.
  * 2. Preserve tracked artifact counts beside divergent Apply evidence.
  * 3. Keep divergence direct while compressing its two objective source counts.
@@ -8,7 +8,8 @@
  * Original request (2026-07-15): "与 tracked glob 进度分歧时各自归因展示。"
  * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import { InformationBadge } from '@/components/information-disclosure'
 import type { ApplyInstructionProgress } from '@openspecui/core'
 import { AlertTriangle } from 'lucide-react'

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX Status/Instructions, Dashboard, readonly refresh, and archive procedures.
  * 2. Register CLI, Root Context, Agent delivery, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.

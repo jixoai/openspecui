@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove public Agent subscriptions consume Environment-owned policy and launch-local artifacts.
  * 2. Prove fixed global CLI installation retires runner authority and invalidates Root Context before public terminal settlement.
  * 3. Prove commands-only subscriptions distinguish arbitrary content from exact runtime CLI output.
@@ -12,7 +12,8 @@
  * Original request (2026-08-01): Codex is skills-only and allowlisted global prompts are cleanup evidence.
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import {
   clearCache,
   CliContextSchema,

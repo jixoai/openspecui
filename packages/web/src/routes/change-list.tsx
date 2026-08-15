@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. List only active Changes from the current writable Planning root.
  * 2. Derive workflow state and terminal evidence from CLI Status and formal tracked-task progress.
  * 3. Preserve ChangeList row continuity and stale display together with collision-safe detail navigation.
@@ -13,7 +13,8 @@
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import { Badge } from '@/components/badge'
 import {
   ChangeListSkeleton,

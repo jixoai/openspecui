@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove Apply/tracked divergence remains direct and source-attributed.
  * 2. Prove compact source counts retain keyboard-reachable explanations.
  * 3. Prove the Apply count stays visible when sources agree.
@@ -7,7 +7,8 @@
  * Original request (2026-07-15): "与 tracked glob 进度分歧时各自归因展示。"
  * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import type { ApplyInstructionProgress } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'

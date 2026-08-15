@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Preserve Tool initialization projection semantics across delivery modes and physical scopes.
  * 2. Bound Tool artifact observation fanout at directory-inventory scale across recomputes.
  * 3. Project OpenSpec 1.9 capability, generated-version, migration, cleanup, global-root, and unavailable states.
@@ -10,7 +10,8 @@
  * Repeated fixed point (2026-07-28): PR Quality run 30296656775 missed Launch Codex skill creation below an initially absent tool root.
  * Review correction (2026-08-02): Agent delivery fixtures remain in an explicit checked TypeScript lane.
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'

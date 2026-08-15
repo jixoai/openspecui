@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove Changes render a primary row before admitting the lower-priority aggregate Status projection.
  * 2. Prove no-tasks and incomplete tasks cannot become workflow-complete.
  * 3. Prove typed OpenSpec 1.7 Status and completed tracked tasks converge on workflow completion.
@@ -12,7 +12,8 @@
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-08-01): OpenSpecUI 7 uses exact artifact dependency fixtures.
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

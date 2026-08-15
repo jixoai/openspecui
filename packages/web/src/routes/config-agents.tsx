@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Own the live Agent policy draft and present current registry, readiness, drift, cleanup, and migration evidence.
  * 2. Own Agent selection plus cancellable Init, Update, and Repair command execution with global pending locks.
  * 3. Promote loading and failed authority directly without publishing this surface to static mode.
@@ -10,7 +10,8 @@
  * Review correction (2026-08-02): replacement inventory Push must not discard an unsaved Agent policy draft.
  * Owner visual direction (2026-08-02): use compact box-radius geometry for semantic status and issue labels.
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import {
   AgentIntegrationsCommandDialog,
   type AgentCommandKind,

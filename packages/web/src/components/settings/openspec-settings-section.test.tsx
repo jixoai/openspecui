@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Verify Settings renders Agent policy and physical state as a read-only summary.
  * 2. Verify shared live replacement and stale-error projections remain readable.
  * 3. Verify Agent mutations and terminal ownership no longer exist in Settings.
@@ -9,7 +9,8 @@
  * Original request (2026-08-01): Settings only shows Agent status and navigates management to `/config/agents`.
  * Owner acceptance boundary (2026-07-20): final end-to-end browser walkthroughs remain owner-owned.
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import type { AgentIntegrationsProjection } from '@/lib/use-agent-integrations'
 import type { EnvironmentGlobalConfig, ToolInitState, ToolWorkflowId } from '@openspecui/core'
 import { cleanup, render, screen } from '@testing-library/react'

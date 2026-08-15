@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove Config Agents renders Environment policy plus complete physical Agent status.
  * 2. Prove structured policy mutation stays inside the Agent Router owner.
  * 3. Prove Agent selection prepares the dedicated Init Terminal transport.
@@ -9,7 +9,8 @@
  * Original request (2026-08-01): `/config/agents` is the only structured Agent mutation surface.
  * Review correction (2026-08-02): replacement projection fixtures must prove their target row exists.
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import type { AgentIntegrationsProjection } from '@/lib/use-agent-integrations'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Project one immutable export snapshot through the live provider-shaped API.
  * 2. Preserve compound Spec identity and published snapshot policy/provenance without invented CLI evidence.
  * 3. Reconstruct Dashboard, Kanban, exact workflow dependencies, schema, template, and entity reads offline.
@@ -13,7 +13,8 @@
  * Owner correction (2026-07-29): static project config does not publish daemon-owned App location.
  * Original request (2026-08-01): static Status must preserve OpenSpec 1.7 artifact requires.
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 
 import type {
   ArchiveMeta,
