@@ -19,6 +19,18 @@ export type CliJsonValue =
   | CliJsonValue[]
   | { [key: string]: CliJsonValue }
 
+/** Runtime transport envelope for one CLI command result. */
+export const CliCommandTransportSchema = z.object({
+  success: z.boolean(),
+  stdout: z.string(),
+  stderr: z.string(),
+  exitCode: z.number().int().nullable(),
+  data: z.unknown().nullable(),
+  payload: z.unknown().nullable(),
+  diagnostics: z.array(CliDiagnosticSchema),
+  contractError: z.string().optional(),
+})
+
 /** Complete process, raw payload, typed data, and diagnostic evidence for one CLI command. */
 export interface CliCommandResult<T> extends CliResult {
   data: T | null

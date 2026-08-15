@@ -1,3 +1,4 @@
+import { parseOpenSpecCliVersion } from './openspec-compat.js'
 /**
  * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Preserve the complete pinned OpenSpec 1.9 Agent delivery registry in one typed physical owner.
@@ -124,17 +125,16 @@ export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConf
 /**
  * Parse a CLI version string into an admitted Agent inventory line.
  *
- * Returns '1.9' only for stable 1.9.x, '1.8' only for stable 1.8.x, and null for every
- * non-admitted form: prereleases, >=1.10, below-range, or unparseable output.
+ * Delegates to the single compat version parser so the same stdout that classifies a session
+ * also selects its inventory — two parsers must never disagree at this boundary. Returns
+ * '1.9' only for stable 1.9.x, '1.8' only for stable 1.8.x, and null for every non-admitted
+ * form: prereleases, >=1.10, below-range, or unparseable output.
  */
 export function parseOpenSpecCliSeries(cliVersion: string | null): AgentCliSeries | null {
-  if (!cliVersion) return null
-  const match = /^(\d+)\.(\d+)(?:\.(\d+))?(-\S+)?$/.exec(cliVersion.trim())
-  if (!match || match[4]) return null
-  const major = Number(match[1])
-  const minor = Number(match[2])
-  if (major === 1 && minor === 9) return '1.9'
-  if (major === 1 && minor === 8) return '1.8'
+  const version = parseOpenSpecCliVersion(cliVersion ?? undefined)
+  if (!version || version.prerelease !== null) return null
+  if (version.major === 1 && version.minor === 9) return '1.9'
+  if (version.major === 1 && version.minor === 8) return '1.8'
   return null
 }
 

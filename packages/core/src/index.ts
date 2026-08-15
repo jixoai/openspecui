@@ -656,6 +656,7 @@ export {
   CliArchiveSchema,
   CliArtifactInstructionsSchema,
   CliChangeListSchema,
+  CliCommandTransportSchema,
   CliContextSchema,
   CliDiagnosticFailureSchema,
   CliDiagnosticSchema,

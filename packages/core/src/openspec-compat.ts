@@ -139,7 +139,7 @@ export function classifyOpenSpecCliVersion(
       supported: false,
       recommended: false,
       blocksCoreInteractions: true,
-      message: 'Unable to parse OpenSpec CLI version.',
+      message: `Unable to parse OpenSpec CLI version. Accepted: ${OPENSPEC_CLI_ACCEPTED_RANGE} (recommended ${OPENSPEC_CLI_RECOMMENDED_RANGE}).`,
     }
   }
 

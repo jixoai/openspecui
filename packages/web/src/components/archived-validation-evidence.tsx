@@ -13,9 +13,9 @@ import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useRootActionState } from '@/lib/use-root-action-state'
 import {
+  CliCommandTransportSchema,
   CliValidateReportSchema,
   type CliCommandResult,
-  type CliValidate,
   type CliValidateReport,
 } from '@openspecui/core'
 import {
@@ -76,7 +76,7 @@ function RunButton({ pending, label, onRun }: { pending: boolean; label: string;
 
 /** On-demand, read-only archived-task validation evidence for the Change Evidence tab. */
 export function ArchivedValidationEvidence() {
-  const [report, setReport] = useState<CliCommandResult<CliValidate> | null>(null)
+  const [report, setReport] = useState<CliCommandResult<unknown> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const rootAction = useRootActionState()
@@ -117,19 +117,14 @@ export function ArchivedValidationEvidence() {
     setReport(null)
     try {
       const result = await trpcClient.cli.validate.mutate({ kind: 'archived' })
-      // Runtime-check the transport result at the boundary: the renderer consumes a
-      // contract-shaped CliCommandResult (success flag, stdout/stderr/exitCode, diagnostics),
-      // and any other shape becomes typed failure evidence instead of a cast assumption.
-      if (
-        typeof result === 'object' &&
-        result !== null &&
-        'success' in result &&
-        'stdout' in result &&
-        'stderr' in result &&
-        'exitCode' in result &&
-        'diagnostics' in result
-      ) {
-        setReport(result)
+      // Validate the transport envelope with the same contract schema family as the report
+      // payload — no shallow key-presence guard at this evidence boundary. An unrecognized
+      // shape becomes typed failure evidence instead of a cast assumption.
+      const transport = CliCommandTransportSchema.safeParse(result)
+      if (transport.success) {
+        // The envelope is contract-validated; `data` stays raw here and is parsed with
+        // CliValidateReportSchema at the render boundary, so no cast is needed for state.
+        setReport({ ...transport.data, data: transport.data.data ?? null, payload: null })
       } else {
         setError('The archived validation transport returned an unrecognized result shape.')
       }

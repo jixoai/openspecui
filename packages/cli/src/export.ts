@@ -30,6 +30,10 @@ import {
   type SchemaResolution,
   type TemplatesMap,
 } from '@openspecui/core'
+import {
+  deriveOpenSpecCliCapabilities,
+  parseOpenSpecCliVersion,
+} from '@openspecui/core/openspec-compat'
 import { parseOpsxSchemaDetail } from '@openspecui/core/opsx-schema-detail'
 import { createHookRuntime, DocumentService } from '@openspecui/server'
 import { execFile } from 'node:child_process'
@@ -463,7 +467,17 @@ export async function generateSnapshot(
     } catch {
       configYaml = undefined
     }
+    // Resolve the project's selected Root Store from the same official config the CLI itself
+    // reads, so the exported schemas observation forwards the identical selector the live
+    // Kernel would forward (`--store` on OpenSpec 1.9).
+    const selectedStore =
+      typeof configYaml === 'string'
+        ? (/^\s*store:\s*([^#\n]+)$/m.exec(configYaml)?.[1]?.trim() ?? null)
+        : null
+    const schemasSelector: { store?: string } =
+      selectedStore && selectedStore !== 'null' ? { store: selectedStore } : {}
 
+    let forwardedSelector: { store?: string } | null = null
     const captureSchemasFailure = (
       result: { stdout: string; stderr: string; exitCode: number | null },
       contractError?: string
@@ -480,7 +494,7 @@ export async function generateSnapshot(
       schemasCapture = {
         ok: false,
         command: 'openspec schemas',
-        selector: null,
+        selector: forwardedSelector,
         rootAvailable:
           typeof payload === 'object' && payload !== null && 'root' in payload
             ? (payload as { root: unknown }).root !== null
@@ -495,7 +509,17 @@ export async function generateSnapshot(
     }
 
     try {
-      const schemasResult = await cliExecutor.schemas()
+      // Forward the selected Root selector only where the detected CLI declares it: OpenSpec
+      // 1.9 resolves schemas through the selected Root; 1.8 rejects `--store`.
+      const availability = await cliExecutor.checkAvailability()
+      const detectedVersion = availability.available ? (availability.version ?? null) : null
+      const capabilities = deriveOpenSpecCliCapabilities(
+        parseOpenSpecCliVersion(detectedVersion ?? undefined)
+      )
+      forwardedSelector = capabilities.schemasRootSelector ? schemasSelector : null
+      const schemasResult = await cliExecutor.schemas(
+        capabilities.schemasRootSelector ? schemasSelector : {}
+      )
       if (schemasResult.success) {
         schemas = parseCliJson(schemasResult.stdout, SchemaInfoSchema.array(), 'openspec schemas')
       } else {

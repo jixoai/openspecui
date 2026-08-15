@@ -41,7 +41,15 @@ import {
   type BufferedSpawnResult,
 } from './spawn-safe.js'
 
-/** CLI 执行结果 */
+/**
+ * CLI 执行结果。
+ *
+ * `success` 是传输事实：收到了完整的观察结果（进程以观测到的代码退出，或通过
+ * eager-JSON 获得了完整的 JSON 文档）。它不是对进程退出状态的断言 —— 对于提前
+ * 解析的命令，`exitCode` 诚实地保持为 `null`，调用者必须将其视为未知。当载荷
+ * 本身包含 CLI 失败时（例如 OpenSpec 1.9 的 selected-Root envelope），契约层
+ * 会单独携带该失败。
+ */
 export interface CliResult {
   success: boolean
   stdout: string
