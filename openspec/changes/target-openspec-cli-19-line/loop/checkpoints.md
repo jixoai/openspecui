@@ -65,3 +65,19 @@ These items are retained characterization evidence. They neither substitute for 
       two walkthrough-discovered fixes are recorded in `loop/implementation.md`. Recorded as evidence, not
       as the Owner's own acceptance; the Owner may re-walk at will.
 - [ ] 4.2 Owner independently reviews the PR and authorizes merge, release, and Change archive.
+
+## 5. Post-R5 independent review repair
+
+`[ ]` means no R6 green evidence has been accepted. R0-R5 historical evidence is not a substitute for these
+items. Every item must record its exact red/green command and focused review in `loop/implementation.md` before it
+is checked.
+
+- [ ] R6.1 Bypass/unsupported versions do not select admitted capabilities or a versioned Agent registry.
+- [ ] R6.2 Retained Agent physical projections preserve the selected registry after reactive replacement.
+- [ ] R6.3 Explicit Agent Init tools are validated against `projection.registry` before the CLI stream starts.
+- [ ] R6.4 Every static Schema accessor propagates the same typed captured failure.
+- [ ] R6.5 Change List stops presenting tracked data as implementation progress; Detail always presents CLI Apply.
+- [ ] R6.6 Archived validation renders reports only after `CliValidateReportSchema.safeParse` succeeds.
+- [ ] R6.7 The complete v9 TypeScript/TSX inventory has current truthful intent headers or documented exceptions.
+- [ ] R6.8 Archived-validation Router fixtures use a typed `CliExecutor` spy without double assertions.
+- [ ] R6.9 R6 source, build, packed CLI, isolated install, and independent review agree.

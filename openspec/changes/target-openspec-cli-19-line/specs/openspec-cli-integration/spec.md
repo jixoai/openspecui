@@ -71,6 +71,14 @@ payloads, downstream errors, or product support claim.
 - **THEN** browser storage, Workspace state, project configuration, Server state, and exported snapshots SHALL NOT
   contain it
 
+#### Scenario: Bypass does not admit a version-specific capability or inventory
+
+- **GIVEN** an unsupported, prerelease, or unparseable CLI has a page-local version bypass
+- **WHEN** OpenSpecUI derives CLI capabilities or an Agent delivery inventory
+- **THEN** it SHALL retain the incompatible classification
+- **AND** it SHALL NOT select 1.8 or 1.9 version-specific capability facts or a fallback 1.9 inventory
+- **AND** downstream execution SHALL fail through its typed availability boundary rather than a simulated supported CLI
+
 ### Requirement: OPSX Command Mapping
 
 OpenSpecUI SHALL map workflow actions, schema resolution, and project setup to official OpenSpec 1.8/1.9 commands

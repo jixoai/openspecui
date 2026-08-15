@@ -52,6 +52,20 @@ them. A tool absent from one supported CLI line SHALL be unavailable for that li
 - **THEN** that entry SHALL be unavailable with version-scoped evidence
 - **AND** command evidence for every independently supported adapter SHALL remain available
 
+#### Scenario: Retained physical state keeps the selected inventory
+
+- **GIVEN** an admitted 1.8 Agent projection observes a filesystem or Environment replacement
+- **WHEN** its retained physical states recompute
+- **THEN** the replacement SHALL use the same 1.8-selected registry as the initial projection
+- **AND** SHALL NOT reintroduce Command Code or 1.9-only restart metadata from a process-global registry
+
+#### Scenario: Direct Init uses the projected registry
+
+- **GIVEN** an admitted 1.8 Agent projection excludes Command Code
+- **WHEN** a caller directly requests Init with Command Code in an explicit `tools` array
+- **THEN** the Router SHALL reject the tool before a CLI process starts
+- **AND** SHALL preserve the CLI-owned literal `tools: 'all'` without rewriting it from the projected inventory
+
 ### Requirement: Config Retains Sole Agent Mutation Authority
 
 Agent policy and delivery mutations SHALL remain owned by `/config/agents`. Other pages MAY link to this owner or

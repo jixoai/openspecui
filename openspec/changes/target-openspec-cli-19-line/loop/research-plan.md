@@ -193,3 +193,53 @@ failure blocks later gates and broad CI is not a substitute.
 
 Browser tests, Storybook tests, and agent-run Playwright are preparation evidence only; they must not mark the Owner
 final acceptance checkpoint complete. PR approval, merge, release, and archive remain Owner decisions.
+
+## Post-R5 independent review correction (2026-08-15 Asia/Shanghai)
+
+The R0-R5 recovery record remains historical evidence for the defects it actually closed. A later whole-change
+review found six new product-contract defects plus two repository-standard violations. Therefore R5 distribution
+evidence cannot be reused as evidence for the following work.
+
+```text
+page-local bypass --x--> admitted capability / versioned registry
+retained registry ---x--> selected registry after reactive replacement
+RPC Init ------------x--> selected registry before CLI spawn
+static capture ------x--> list / bundle / detail / resolution / templates / files
+tracked checklist ---x--> implementation-progress presentation
+shape guard ---------x--> trusted archived-validation report
+```
+
+### Corrected decisions
+
+1. **Bypass is not admission.** `Skip version check` may keep the current page interactive, but an unsupported,
+   unknown, or prerelease CLI receives no version-specific capability and no 1.8/1.9 Agent inventory. It must not
+   be silently treated as 1.9 by an `>=1.9` comparison or a fallback registry.
+2. **The selected registry is one boundary.** The live Server projection, retained Core physical-state projection,
+   and direct `agentIntegrations.initStream` all consume the same version-selected registry. A literal
+   `tools: 'all'` remains CLI-owned and is not rewritten by OpenSpecUI.
+3. **A captured static Schema failure is terminal for every Schema accessor.** `list`, `bundle`, `detail`,
+   `resolution`, `templates`, `files`, YAML, and template-content paths must raise the same typed captured failure
+   instead of manufacturing `null`, `[]`, or a partial successful catalog.
+4. **CLI Apply is the only user-facing implementation-progress authority.** The Change Detail displays the Apply
+   count whenever Apply Instructions are available. The Change List may show planning/workflow phase but must not
+   label `trackedTaskProgress` as task completion while Apply Instructions have not been loaded.
+5. **External payloads are parsed at the component boundary.** Archived validation uses the Core
+   `CliValidateReportSchema.safeParse`; an invalid data payload is CLI failure evidence, never a report reached via
+   shallow structural guards or assertions.
+
+### R6 dependency order
+
+```text
+R6.1 admission boundary
+  -> R6.2 retained registry
+  -> R6.3 direct Init registry
+  -> R6.4 static accessor closure
+  -> R6.5 Apply-progress presentation
+  -> R6.6 archived-report parsing
+  -> R6.7 headers and R6.8 typed Router fixture
+  -> R6.9 source/build/pack/isolated-install review
+```
+
+The detailed red/green cases, focused commands, and stop conditions are authoritative in
+`loop/recovery-plan.md`. A failure at any R6 gate returns to this section and the affected delta Spec before later
+gates or distribution work begin.

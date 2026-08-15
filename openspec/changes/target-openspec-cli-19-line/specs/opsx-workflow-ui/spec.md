@@ -43,6 +43,21 @@ checklists SHALL remain separate projections and SHALL NOT redefine the CLI prog
 - **THEN** the progress total and completion SHALL preserve the CLI result
 - **AND** local checklist analytics SHALL not overwrite it
 
+#### Scenario: List does not relabel tracked analytics as implementation progress
+
+- **GIVEN** Change List has Status and locally tracked task data but has not loaded Apply Instructions
+- **WHEN** it renders a Change row
+- **THEN** it MAY show planning/artifact workflow phase
+- **AND** it SHALL NOT label tracked totals, a tracked percentage, or a tracked completion state as implementation
+  task progress
+
+#### Scenario: Detail always shows available Apply progress
+
+- **GIVEN** Change Detail has Apply Instructions with a progress payload
+- **WHEN** tracked analytics agree with the CLI Apply count
+- **THEN** it SHALL display the source-attributed CLI Apply progress
+- **AND** tracked analytics SHALL remain absent or clearly secondary unless divergence requires comparison
+
 ### Requirement: v9 Workflow Fixtures Are Executable
 
 OpenSpecUI SHALL prove each accepted workflow contract against pinned OpenSpec 1.8.0 and 1.9.0 executables. A

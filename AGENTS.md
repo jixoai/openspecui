@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-08-10 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
 1. Bootstrap repository agents through CLAUDE.md.
 2. Enforce protected-branch, PR, CI, and release delivery policy.
 3. Protect static/SSG behavior and shared live/static projections.
@@ -114,6 +114,9 @@ Original request (2026-08-15): "openspec 已经升级到1.9 ，我们目前的�
 Architecture decision (2026-08-15): OpenSpecUI 9 supports OpenSpec CLI `>=1.8.0 <1.10.0`; stable 1.9.x is current/recommended and stable 1.8.x is supported non-current. CLI `<1.8.0`, prereleases, and `>=1.10.0` are blocked by default. This v9 line skips a separate v8 release, but does not skip any 1.8 protocol obligation.
 Architecture decision (2026-08-15): `isPlanningComplete` states only planning-artifact completion. Apply `progress` remains implementation task truth even when actionable task entries omit blank descriptions or parse indented checkbox lines. `schemas --json` is a success-array or selected-Root-failure sum type; failure is never an empty successful Config catalog.
 Architecture decision (2026-08-15): Agent delivery is a CLI-owned physical-artifact protocol. The v9 registry must project current/legacy project roots, user-global skill roots, command paths, migration/cleanup, and restart evidence; OpenSpecUI never hand-writes or deletes Agent artifacts. Archive retirement and `validate --archived` remain typed CLI evidence, never UI-side archive logic.
+Architecture decision (2026-08-15): A current-page version bypass is not an admitted CLI capability boundary. Unsupported, unknown, and prerelease CLI versions select neither version-specific command capability nor Agent registry; retained Agent physical state and direct Agent Init share the admitted version-selected registry, while literal `tools: 'all'` remains CLI-owned.
+Architecture decision (2026-08-15): A captured static Schema failure is one typed boundary for every Schema accessor, including list, bundle, detail, resolution, templates, files, YAML, and template-content reads; no accessor may fabricate success with `null`, empty content, or `[]`. User-facing implementation progress comes only from CLI Apply Instructions; local tracked data is analytics and may appear only as secondary divergence evidence.
+Architecture decision (2026-08-15): Archived-validation payloads are parsed at the Web evidence boundary with the shared Core schema. A shallow guard or type assertion does not establish a report. Every v9-touched TypeScript/TSX owner must carry a current truthful intent header; source/build/pack evidence must be re-run after a correction and cannot be reused for later review findings.
 Owner version-bypass decision (2026-08-01): "仅当前页面会话有效"
 Owner default-Store decision (2026-08-01): "同意" — `defaultStore` is a first-class Config → Environment Global control.
 Owner tool-migration decision (2026-08-01): "同意 并且我觉得这一点很重要，现在的 Agent 适配已经不像之前那样简单了。"

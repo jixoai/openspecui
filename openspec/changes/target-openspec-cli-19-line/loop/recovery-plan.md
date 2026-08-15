@@ -193,3 +193,198 @@ Owner:         package/distribution evidence, not a production feature owner.
 Passing R5 prepares independent review only. It does not authorize browser/App acceptance, PR approval, merge,
 publish, release, archive, or mutation of user projects. The Owner alone performs the final 1.8.x and 1.9.x browser
 and App walkthrough, then independently decides PR, merge, release, and archive.
+
+## Post-R5 review recovery gates
+
+The R0-R5 entries above are historical closure records. The independent whole-change review performed after the
+post-walkthrough package re-verification found the following unimplemented obligations. They execute linearly; each
+gate remains unchecked until its exact green evidence and focused review are recorded in `loop/implementation.md`.
+
+```text
+R6.1 -> R6.2 -> R6.3 -> R6.4 -> R6.5 -> R6.6 -> (R6.7 + R6.8) -> R6.9
+```
+
+### R6.1 - Keep version bypass outside the admitted capability boundary
+
+```text
+Primary production owner: packages/core/src/openspec-compat.ts
+Dependent owners:         packages/core/src/agent-delivery-registry.ts
+                           packages/server/src/agent-delivery-projection-service.ts
+Evidence owners:          packages/core/src/openspec-compat.test.ts
+                           packages/core/src/agent-delivery-registry.test.ts
+                           packages/server/src/agent-delivery-projection-service.test.ts
+```
+
+- **Red case:** a current-page bypass is active for `1.9.0-rc.1`, `1.10.0`, or an unparseable version. The current
+  code derives 1.9 capabilities for `>=1.9` and/or selects the complete 1.9 registry as a fallback.
+- **Required change:** make a stable supported compatibility classification the sole input that can select
+  version-specific capabilities or an Agent registry. Unsupported, unknown, and prerelease versions must retain
+  their mismatch evidence and expose no admitted registry/capability; UI bypass must not alter this fact.
+- **Green case:** stable 1.8 receives only 1.8 inventory/capabilities; stable 1.9 receives only 1.9 facts; each
+  bypassed unsupported form has no `archivedValidation`, no `schemasRootSelector`, and no 1.9 inventory.
+- **Focused verification:**
+  `pnpm --filter @openspecui/core exec vitest run src/openspec-compat.test.ts src/agent-delivery-registry.test.ts`
+  and
+  `pnpm --filter @openspecui/server exec vitest run src/agent-delivery-projection-service.test.ts`.
+- **Stop condition:** any API that accepts a raw version string and infers an inventory for a non-admitted CLI, or a
+  bypass persisted outside the mounted page, returns this gate to the CLI-admission delta Spec.
+
+### R6.2 - Preserve the selected registry across retained physical projections
+
+```text
+Primary production owner: packages/core/src/tool-init-state.ts
+Evidence owners:          packages/core/src/tool-init-state.test.ts
+                           packages/server/src/agent-delivery-projection-service.test.ts
+```
+
+- **Red case:** a one-shot 1.8 projection receives a 37-tool selected registry, but a retained projection rebuilds
+  options without `registry` and reverts to the global `AI_TOOLS` inventory on the next reactive observation.
+- **Required change:** clone and retain the selected registry in `createToolInitStateProjection`, with the same
+  immutability policy as delivery, workflows, command contents, and unavailable-command facts.
+- **Green case:** initial and replacement emissions from a retained 1.8 projection remain 37-tool projections;
+  Command Code and 1.9-only restart facts never reappear after filesystem or policy refresh.
+- **Focused verification:**
+  `pnpm --filter @openspecui/core exec vitest run src/tool-init-state.test.ts`
+  and
+  `pnpm --filter @openspecui/server exec vitest run src/agent-delivery-projection-service.test.ts`.
+- **Stop condition:** a replacement relies on a process-global registry or mutates the captured registry in place.
+
+### R6.3 - Reject unavailable explicit Agent tools before Init can spawn
+
+```text
+Primary production owner: packages/server/src/router.ts (agentIntegrations.initStream)
+Evidence owner:           packages/server/src/router.test.ts
+```
+
+- **Red case:** a direct RPC call in an admitted 1.8 session supplies `['command-code']`. The static full registry
+  input schema accepts it, `initStream` starts, and the CLI receives a tool the selected 1.8 registry never offers.
+- **Required change:** after loading the current Agent projection and before creating `cliExecutor.initStream`, check
+  every explicit tool against `projection.registry`. Reject unavailable entries with typed precondition evidence and
+  prove the runner was never called. Preserve `tools: 'all'` as the literal official CLI request.
+- **Green case:** explicit 1.8 Command Code is rejected without spawn; explicit 1.8 supported tools and 1.9 Command
+  Code stream normally; `'all'` reaches the CLI unchanged.
+- **Focused verification:**
+  `pnpm --filter @openspecui/server exec vitest run src/router.test.ts -t "Agent integration"`.
+- **Stop condition:** a browser-only disablement, validation against `getAvailableTools()` rather than the projection,
+  or a rejected request that starts a child process fails this gate.
+
+### R6.4 - Propagate captured static Schema failure through every accessor
+
+```text
+Primary production owner: packages/web/src/lib/static-data-provider.ts
+Evidence owner:           packages/web/src/lib/static-data-provider.opsx.test.ts
+```
+
+- **Red case:** `getOpsxSchemas()` and `getOpsxConfigBundle()` throw `StaticSchemasCaptureError`, while direct
+  `getOpsxSchemaDetail`, `getOpsxSchemaResolution`, `getOpsxTemplates`, `getOpsxSchemaFiles`, `getOpsxSchemaYaml`,
+  and template-content reads return values from the same failed static capture.
+- **Required change:** load the snapshot and assert the one captured failure boundary before every Schema-related
+  static accessor; do not create accessor-specific fallback semantics.
+- **Green case:** each accessor above throws the same captured error object/type for one failed snapshot; callers
+  cannot obtain list, detail, resolution, template, file, YAML, or template content as successful data.
+- **Focused verification:**
+  `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/static-data-provider.opsx.test.ts`.
+- **Stop condition:** any accessor returns `null`, `[]`, empty text, or partial data for the failed capture.
+
+### R6.5 - Restore CLI Apply as the visible task-progress authority
+
+```text
+Primary production owner: packages/web/src/routes/change-list.tsx
+Dependent owner:          packages/web/src/components/apply-progress-notice.tsx
+Evidence owners:          packages/web/src/routes/change-list.test.tsx
+                           packages/web/src/components/apply-progress-notice.test.tsx
+                           packages/web/src/routes/change-view.test.tsx
+```
+
+- **Red case:** Change List renders `trackedTaskProgress` as `n/m`, percent, and `task completion` although the list
+  has no Apply Instructions. Change Detail hides ordinary Apply progress when tracked and Apply happen to agree.
+- **Required change:** remove task-count/percent/completion claims from Change List; retain only objective planning
+  and artifact phase. Render Apply progress in Change Detail whenever Apply Instructions are present, with tracked
+  data only as a clearly secondary divergence comparison.
+- **Green case:** a list with tracked data but no Apply data never claims implementation completion; a detail with
+  matching Apply/tracked counts still shows the source-attributed Apply count; divergence adds comparison, not the
+  only visibility path.
+- **Focused verification:**
+  `pnpm --filter @openspecui/web exec vitest run --project unit src/routes/change-list.test.tsx src/components/apply-progress-notice.test.tsx src/routes/change-view.test.tsx`.
+- **Stop condition:** local tracked totals again become user-facing implementation progress, or Apply display depends
+  on divergence.
+
+### R6.6 - Parse archived validation at the evidence boundary
+
+```text
+Primary production owner: packages/web/src/components/archived-validation-evidence.tsx
+Evidence owner:           packages/web/src/components/archived-validation-evidence.test.tsx
+```
+
+- **Red case:** a malformed `report.data` that contains shallow `items`, `summary`, and `root` fields passes the
+  local type guard and is asserted into `ArchivedValidationReport`, allowing invalid nested totals/items to render.
+- **Required change:** import the Core `CliValidateReportSchema` and use `safeParse` for report data. A parse failure
+  renders typed CLI failure evidence and retains transport/contract diagnostics without assertion casts.
+- **Green case:** valid nonzero-exit reports still render their archived failure facts; malformed report payloads
+  show `CLI failure evidence` and never render a pass/fail report surface.
+- **Focused verification:**
+  `pnpm --filter @openspecui/web exec vitest run --project unit src/components/archived-validation-evidence.test.tsx`.
+- **Stop condition:** a shallow shape guard, `as ArchivedValidationReport`, or a fabricated fallback report remains.
+
+### R6.7 - Bring every v9-touched TypeScript file to the repository intent-header standard
+
+```text
+Primary production owner: all TypeScript/TSX files changed after reviewed parent 79c41a02
+Evidence record:          loop/implementation.md (file inventory and audit result)
+```
+
+- **Red case:** the reviewed v9 diff contains 37 changed TypeScript/TSX files and at least 41 missing/stale intent
+  headers in the broader review inventory; several retain only pre-v9 dates/original requests despite carrying v9
+  behavior.
+- **Required change:** audit every changed source/test/script file against the reviewed parent, including the 37
+  currently enumerated by `git diff --name-only 79c41a02..HEAD -- 'packages/**/*.ts' 'packages/**/*.tsx'`. Each
+  eligible file must have a truthful top-level `Orthogonal intents` header with the v9 timestamp and original
+  request. Split files that exceed five actual intents; do not cosmetically inflate a comment to hide a sixth.
+- **Green case:** the implementation record lists the audited paths/count and each target file either has an updated
+  truthful header or a documented, review-approved non-applicability reason. No changed v9 owner silently retains a
+  stale scope claim.
+- **Focused verification:** inspect the saved inventory plus each file header, then run
+  `pnpm run format:check` and the affected package typechecks.
+- **Stop condition:** a production or test owner remains undocumented, a header exceeds five intentions, or a file
+  needs a split not covered by its owner gate.
+
+### R6.8 - Remove assertion-cast Router fixture boundaries
+
+```text
+Primary production owner: packages/server/src/router.test.ts
+Evidence owner:           packages/server/src/router.test.ts
+```
+
+- **Red case:** archived-validation tests use `unknown as ReturnType<typeof vi.fn>` to reach
+  `context.cliExecutor.contracts.validate`, weakening the `CliExecutor` fixture contract at the exact capability
+  boundary under review.
+- **Required change:** expose a typed mock/spy from the shared Router test context or a narrowly typed fixture helper;
+  remove both double assertions without weakening production types.
+- **Green case:** the 1.8 no-spawn and 1.9 validation assertions compile from the typed fixture and retain their
+  behavioral coverage.
+- **Focused verification:**
+  `pnpm --filter @openspecui/server exec vitest run src/router.test.ts -t "archived validation"`
+  followed by the Server typecheck.
+- **Stop condition:** `any`, `unknown as`, `@ts-nocheck`, or a mock detached from the production Router context is
+  introduced to make the test compile.
+
+### R6.9 - Re-establish distribution evidence after all R6 repair gates
+
+```text
+Prerequisite: R6.1-R6.8 green evidence recorded and focused review passed.
+Owner:         source/distribution agreement, not a feature owner.
+```
+
+- **Red case:** R5/post-walkthrough tarball proof predates R6 source edits and therefore cannot prove the repaired
+  admission boundary, retained registry, static accessor closure, UI progress, or payload parsing.
+- **Required change:** run the full source gates, rebuild all affected outputs, pack the real CLI, isolated-install
+  it, and inspect installed code/assets for the R6 laws. Run an independent whole-change code review only after the
+  package result agrees with source.
+- **Green case:** focused R6 evidence, build output, packed tarball, and isolated install agree; no new failures are
+  hidden under a known baseline; the review finds no remaining R6 blocker.
+- **Required verification:**
+  `pnpm run format:check`, `pnpm run lint`, `pnpm run typecheck`, `pnpm run openspec:check-reference`,
+  `pnpm test:ci`, `pnpm run build:deps && pnpm run build:packages && pnpm run build:cli`, then `npm pack` in
+  `packages/cli` and an isolated temporary-directory install/start inspection.
+- **Stop condition:** any R6 focused failure, source/dist disagreement, or unclassified full-gate failure returns to
+  its owner gate. R6.9 does not authorize Owner acceptance, PR, merge, release, or archive.

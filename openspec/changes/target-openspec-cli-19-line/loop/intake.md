@@ -20,6 +20,10 @@ Original request (2026-08-15): "openspec 已经升级到1.9 ，我们目前的�
 >
 > 完成后，我就会自己开始开发
 
+> Agent 开发已经完成，开始全面 review。
+
+> 还是那个流程：更新 openspec change +handoff 文件。
+
 ## Objective Scope
 
 Prepare OpenSpecUI 9 as one adaptation line for OpenSpec CLI 1.8.x and 1.9.x. Record source-backed protocol
@@ -39,6 +43,7 @@ OpenSpec CLI 1.9.x ----/
 - Do not support CLI `<1.8.0`, prereleases, or `>=1.10.0`.
 - Do not repair unrelated active/archive validation failures.
 - Do not open a PR, release, archive this Change, merge, or claim final browser acceptance.
+- Do not implement the post-review R6 correction work in this planning pass.
 
 ## Acceptance Boundary
 
@@ -50,3 +55,5 @@ The planning delivery is complete only when:
   and order relative to dependent work;
 - the Change passes targeted OpenSpec 1.9 strict validation and a diff hygiene check; and
 - an independent `gpt-5.6-sol` review has been incorporated without implementing production code.
+- the post-R5 independent review has been translated into ordered R6 repair gates and a fresh-context handoff;
+  R6 source work remains explicitly unchecked.

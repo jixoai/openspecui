@@ -56,6 +56,13 @@ real facts overlap.
 - **THEN** that path SHALL propagate the typed captured failure
 - **AND** SHALL NOT return a successful empty Schema array, synthesize fallback details, or grant mutation authority
 
+#### Scenario: Every static Schema accessor propagates one captured failure
+
+- **GIVEN** a static snapshot contains a failed Schema capture
+- **WHEN** list, bundle, detail, resolution, template, file, YAML, or template-content access is requested
+- **THEN** every accessor SHALL propagate the same typed captured failure boundary
+- **AND** SHALL NOT return `null`, empty text, `[]`, or partial Schema data as a successful result
+
 ## ADDED Requirements
 
 ### Requirement: CLI Resolution Failure Retains Its Source

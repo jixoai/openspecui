@@ -12,9 +12,9 @@ Original request (2026-08-15): "这里面很大的问题也是因为你作为架
 ## Current state
 
 ```text
-Change artifacts      corrected and planning-valid
-Recovery branch       fix/v9-cli-18-19-recovery; gates R0-R5 closed with recorded evidence
-Candidate source     local main at 79c41a02 was review-rejected and fully superseded
+Change artifacts      corrected and planning-valid; post-R5 R6 correction pending
+Recovery branch       fix/v9-cli-18-19-recovery; historical R0-R5 gates closed with recorded evidence
+Candidate source     R6.1-R6.8 remain review-rejected and unimplemented
 Release/PR/archive    not authorized
 Owner browser/App     pending and Owner-only
 ```
@@ -261,6 +261,37 @@ terminal-control, registry selection reaching tool states) plus every prior v9 l
 the archived-validation unavailable copy. The website docs suite was also run explicitly: 15 passed.
 Working tree clean; branch `fix/v9-cli-18-19-recovery` at `a2942782`.
 
+## Post-R5 independent review correction (2026-08-15 Asia/Shanghai)
+
+The preceding R0-R5 and walkthrough records are true historical evidence. They do not close the independent review
+findings below. No R6 production edit or focused verification has occurred in this planning pass.
+
+| Gate | Review finding | Required evidence before a checkbox may close |
+| --- | --- | --- |
+| R6.1 | Bypass/unsupported version can receive 1.9-specific capability or registry | bypassed 1.9 prerelease/1.10/no-version has neither inventory nor 1.9 capability |
+| R6.2 | retained physical Agent projection drops the selected registry | replacement 1.8 emission stays 1.8-only |
+| R6.3 | direct Agent Init validates against complete static registry and may spawn unavailable 1.8 tool | 1.8 Command Code is typed rejection with no spawn; `'all'` remains literal |
+| R6.4 | static capture failure protects only list/bundle accessors | all Schema accessors throw the same typed captured failure |
+| R6.5 | tracked document data is rendered as task progress; normal Apply count disappears | list has no implementation count; detail always shows Apply count |
+| R6.6 | archived report uses shallow guard/assertion | Core schema `safeParse` controls report rendering |
+| R6.7 | v9-touched TypeScript files lack current intent headers | audited inventory and truthful headers/splits recorded |
+| R6.8 | Router test uses double assertions at validation fixture boundary | typed spy fixture proves 1.8 no-spawn and 1.9 call |
+| R6.9 | package proof predates all above repairs | new build/pack/isolated-install plus independent review |
+
+For R6, use `loop/recovery-plan.md` as execution authority. Append one entry per green gate using this format:
+
+```text
+Gate:
+Feature branch and commit:
+Primary production owner:
+True red case and command:
+Code decision:
+Green case and command:
+Focused review result:
+Files changed:
+Residual risk or stop-condition check:
+```
+
 ## Loopback triggers
 
 - The official 1.8 or 1.9 executable contradicts a command, payload, selector, or Agent-inventory assumption in a
@@ -268,6 +299,8 @@ Working tree clean; branch `fix/v9-cli-18-19-recovery` at `a2942782`.
 - A fix requires a second production owner not named in the relevant recovery gate.
 - A static capture cannot carry the complete typed command evidence without widening the public projection contract.
 - A focused gate fails, a new global-root mutation is introduced, or source/distribution output diverges.
+- Any R6 focused gate fails, an affected delta Spec does not state the repair law, or R6 source/build/pack evidence
+  disagrees.
 - The request broadens support beyond stable `>=1.8.0 <1.10.0` or asks for PR, merge, publish, release, archive, or
   Owner acceptance.
 
