@@ -34,12 +34,21 @@ Original request (2026-08-15): "这里面很大的问题也是因为你作为架
 the gate. A checkbox may move to `[x]` only after its exact green case and focused command are recorded in
 `loop/implementation.md` and a focused review passes.
 
-- [ ] R0 Repair `workflow.ts` ownership split and static-provider test header.
-- [ ] R1 Route 1.9 `schemas --json --store` through the actual selected-Root Kernel path and preserve its failure.
-- [ ] R2 Make archived validation a 1.9-only capability before Server or Web execution.
-- [ ] R3 Preserve typed static Schema failure evidence through list-only and detail access paths.
-- [ ] R4 Select Agent registry and command evidence from the running 1.8/1.9 CLI line.
-- [ ] R5 Rebuild, pack, isolated-install, and independently review the recovery branch distribution.
+- [x] R0 Repair `workflow.ts` ownership split and static-provider test header.
+- [x] R1 Route 1.9 `schemas --json --store` through the actual selected-Root Kernel path and preserve its failure.
+- [x] R2 Make archived validation a 1.9-only capability before Server or Web execution.
+- [x] R3 Preserve typed static Schema failure evidence through list-only and detail access paths.
+- [x] R4 Select Agent registry and command evidence from the running 1.8/1.9 CLI line.
+- [x] R5 Rebuild, pack, isolated-install, and independently review the recovery branch distribution.
+
+### Recovery closure record (2026-08-15 Asia/Shanghai)
+
+All six gates closed on `fix/v9-cli-18-19-recovery` (planning commit `cc2c51a5`, production commits `3ad590eb`,
+`c8f39156`, `79f47100`, `020e612c`, `e2d379f6`, `81237fa5`, `38a28c46`). Exact red/green commands, code decisions,
+focused results, and baseline reproductions are recorded in `loop/implementation.md`. The two macOS baseline
+failures (core `reactive-fs/path-realpath`, server `translation-cache-adapter` sqlite) were reproduced unchanged at
+the branch parent `79c41a02` and stay baseline-only. Independent `code-review` of the recovery branch remains
+available to the Owner and is not acceptance.
 
 ## 3. Existing candidate evidence
 
