@@ -715,6 +715,7 @@ export {
   type CliStoreSetupOptions,
   type CliValidate,
   type CliValidateJsonOptions,
+  type CliValidateReport,
   type CliValidateTarget,
   type CliWorkflowOptions,
   type CliWorkflowStatus,

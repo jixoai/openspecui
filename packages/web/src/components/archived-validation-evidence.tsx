@@ -12,7 +12,12 @@ import { EvidenceDisclosure } from '@/components/information-disclosure'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useRootActionState } from '@/lib/use-root-action-state'
-import { CliValidateReportSchema, type CliCommandResult, type CliValidate } from '@openspecui/core'
+import {
+  CliValidateReportSchema,
+  type CliCommandResult,
+  type CliValidate,
+  type CliValidateReport,
+} from '@openspecui/core'
 import {
   deriveOpenSpecCliCapabilities,
   parseOpenSpecCliVersion,
@@ -20,18 +25,19 @@ import {
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
-type ArchivedValidationReport = Extract<CliValidate, { items: unknown }>
+type ArchivedValidationReport = CliValidateReport
 
 /**
  * Parse a report payload at the evidence boundary with the Core contract schema.
  *
  * A shallow `{ items, summary, root }` shape check would accept malformed nested totals and
  * item structures and then crash while rendering them; `safeParse` keeps every rendered
- * field contract-true without assertion casts.
+ * field contract-true. The schema's inferred report type is used directly after a successful
+ * parse — no assertion cast sits at this external-evidence boundary.
  */
 function parseValidationReport(value: unknown): ArchivedValidationReport | null {
   const parsed = CliValidateReportSchema.safeParse(value)
-  return parsed.success ? (parsed.data as ArchivedValidationReport) : null
+  return parsed.success ? parsed.data : null
 }
 
 function IssueList({ issues }: { issues: ArchivedValidationReport['items'][number]['issues'] }) {
@@ -111,7 +117,22 @@ export function ArchivedValidationEvidence() {
     setReport(null)
     try {
       const result = await trpcClient.cli.validate.mutate({ kind: 'archived' })
-      setReport(result as CliCommandResult<CliValidate>)
+      // Runtime-check the transport result at the boundary: the renderer consumes a
+      // contract-shaped CliCommandResult (success flag, stdout/stderr/exitCode, diagnostics),
+      // and any other shape becomes typed failure evidence instead of a cast assumption.
+      if (
+        typeof result === 'object' &&
+        result !== null &&
+        'success' in result &&
+        'stdout' in result &&
+        'stderr' in result &&
+        'exitCode' in result &&
+        'diagnostics' in result
+      ) {
+        setReport(result)
+      } else {
+        setError('The archived validation transport returned an unrecognized result shape.')
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
