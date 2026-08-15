@@ -11,7 +11,6 @@
  */
 
 import {
-  AI_TOOLS,
   PINNED_AGENT_GENERATOR_VERSION,
   ReactiveContext,
   createToolInitStateProjection,
@@ -20,9 +19,10 @@ import {
   getToolInitStates,
   loadOpenSpecAgentCommandContents,
   normalizeAgentDeliveryPolicy,
+  selectAgentDeliveryRegistry,
   type AgentCommandArtifact,
-  type AgentCommandContentCatalog,
   type AgentCommandContentFormat,
+  type AgentCommandContentResult,
   type AgentDeliveryCleanup,
   type AgentDeliveryPolicy,
   type CliExecutor,
@@ -118,8 +118,8 @@ function cloneCleanup(cleanup: AgentDeliveryCleanup | undefined): AgentDeliveryC
   }
 }
 
-function cloneRegistry(): ToolConfig[] {
-  return AI_TOOLS.map((tool) => ({
+function cloneRegistry(registry: readonly ToolConfig[]): ToolConfig[] {
+  return registry.map((tool) => ({
     name: tool.name,
     value: tool.value,
     available: tool.available,
@@ -170,7 +170,7 @@ function policyFingerprint(policy: AgentDeliveryPolicy): string {
 
 interface AgentGeneratorEvidence {
   version: string
-  commandContents: AgentCommandContentCatalog | null
+  commandContents: AgentCommandContentResult | null
 }
 
 async function resolveGeneratorEvidence(
@@ -191,10 +191,13 @@ async function resolveGeneratorEvidence(
 
 function createProjection(
   policy: AgentDeliveryPolicy,
-  states: readonly ToolInitState[]
+  states: readonly ToolInitState[],
+  generatorEvidence: AgentGeneratorEvidence
 ): AgentDeliveryProjection {
   return {
-    registry: cloneRegistry(),
+    // The official inventory belongs to the admitted running CLI line, not to one fixed
+    // registry: a supported 1.8 session lists exactly its own official targets.
+    registry: cloneRegistry(selectAgentDeliveryRegistry(generatorEvidence.version)),
     policy: {
       profile: policy.profile,
       delivery: policy.delivery,
@@ -308,7 +311,8 @@ class RetainedAgentDeliveryProjection implements AgentDeliveryProjectionSubscrip
     const projectToolInitStates = createToolInitStateProjection(this.options.projectDir, {
       ...policy,
       generatorVersion: generatorEvidence.version,
-      commandContents: generatorEvidence.commandContents,
+      commandContents: generatorEvidence.commandContents?.catalog ?? null,
+      unavailableCommandTools: generatorEvidence.commandContents?.unavailableTools ?? null,
     })
 
     void (async () => {
@@ -321,7 +325,10 @@ class RetainedAgentDeliveryProjection implements AgentDeliveryProjectionSubscrip
           ) {
             return
           }
-          this.listener({ type: 'snapshot', projection: createProjection(policy, states) })
+          this.listener({
+            type: 'snapshot',
+            projection: createProjection(policy, states, generatorEvidence),
+          })
         }
       } catch (cause: unknown) {
         if (this.disposed || controller.signal.aborted || generation !== this.physicalGeneration) {
@@ -366,10 +373,11 @@ export class AgentDeliveryProjectionService {
     const states = await getToolInitStates(this.options.projectDir, {
       ...policy,
       generatorVersion: generatorEvidence.version,
-      commandContents: generatorEvidence.commandContents,
+      commandContents: generatorEvidence.commandContents?.catalog ?? null,
+      unavailableCommandTools: generatorEvidence.commandContents?.unavailableTools ?? null,
     })
     this.assertActive()
-    return createProjection(policy, states)
+    return createProjection(policy, states, generatorEvidence)
   }
 
   /** Retain Environment policy and physical Agent artifact observation until unsubscribed. */

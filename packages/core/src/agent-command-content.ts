@@ -3,6 +3,7 @@
  * 1. Resolve the running OpenSpec CLI's private command-generation boundary without bundling copied prompts.
  * 2. Produce exact per-Agent, per-workflow command contents for physical fingerprint comparison.
  * 3. Fail closed when the configured runner has no importable OpenSpec module or compatible generator contract.
+ * 4. Isolate per-tool adapter absence as version-scoped unavailability, keeping unrelated evidence.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  */
@@ -17,6 +18,19 @@ import { OPSX_ALL_WORKFLOWS, type OpsxWorkflowId } from './opsx-workflows.js'
 export type AgentCommandContentCatalog = Readonly<
   Record<string, Readonly<Partial<Record<OpsxWorkflowId, string>>>>
 >
+
+/**
+ * Command-generation evidence for one CLI runner.
+ *
+ * `unavailableTools` isolates tools whose command adapter this CLI line never shipped (for
+ * example Command Code on OpenSpec 1.8): the tool is unavailable with a version-scoped
+ * reason while every independently supported adapter's evidence stays available. The whole
+ * result is null only when the runner has no importable generator boundary at all.
+ */
+export interface AgentCommandContentResult {
+  catalog: AgentCommandContentCatalog
+  unavailableTools: Readonly<Record<string, string>>
+}
 
 interface RuntimeCommandContent {
   id: OpsxWorkflowId
@@ -80,7 +94,7 @@ function isRuntimeGeneratedCommand(value: unknown): value is RuntimeGeneratedCom
 export async function loadOpenSpecAgentCommandContents(
   cliCommand: readonly string[],
   workflows: readonly string[]
-): Promise<AgentCommandContentCatalog | null> {
+): Promise<AgentCommandContentResult | null> {
   try {
     const invocation = await resolveOpenSpecWorkerInvocation(cliCommand)
     const cliModuleDir = dirname(invocation.modulePath)
@@ -101,10 +115,20 @@ export async function loadOpenSpecAgentCommandContents(
     }
 
     const catalog: Record<string, Partial<Record<OpsxWorkflowId, string>>> = {}
+    const unavailableTools: Record<string, string> = {}
     for (const tool of AGENT_DELIVERY_REGISTRY) {
       if (!tool.command) continue
       const adapter = commandGenerationModule.CommandAdapterRegistry.get(tool.value)
-      if (!adapter) return null
+      if (!adapter) {
+        // This CLI line never shipped the tool's command adapter. Isolate the tool as
+        // version-scoped unavailable evidence instead of erasing every other adapter's
+        // generated command evidence.
+        unavailableTools[tool.value] =
+          tool.minCliSeries !== undefined
+            ? `Command adapter first ships with OpenSpec CLI ${tool.minCliSeries}; this runner does not declare it.`
+            : 'This OpenSpec CLI runner does not register the command adapter.'
+        continue
+      }
       const generatedCommands = commandGenerationModule.generateCommands(commandContents, adapter)
       if (
         !Array.isArray(generatedCommands) ||
@@ -117,7 +141,7 @@ export async function loadOpenSpecAgentCommandContents(
         commandContents.map((content, index) => [content.id, generatedCommands[index]?.fileContent])
       )
     }
-    return catalog
+    return { catalog, unavailableTools }
   } catch {
     return null
   }

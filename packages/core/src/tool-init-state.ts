@@ -121,6 +121,8 @@ export interface ToolInitState {
   legacySkillRoots: string[]
   /** Declared upstream: the tool needs an IDE/editor restart to load regenerated artifacts. */
   requiresIdeRestart: boolean
+  /** Version-scoped reason when this CLI line never shipped the tool's command adapter. */
+  commandSurfaceUnavailableReason: string | null
   cleanup?: ToolInitCleanupState
   migration?: ToolInitMigrationState
 }
@@ -144,6 +146,8 @@ export interface ToolInitProjectionOptions {
   workflows: readonly string[]
   generatorVersion?: string
   commandContents?: AgentCommandContentCatalog | null
+  /** Tools whose command adapter this CLI line never shipped, with version-scoped reasons. */
+  unavailableCommandTools?: Readonly<Record<string, string>> | null
 }
 
 const ALL_TOOL_WORKFLOWS = [...OPSX_ALL_WORKFLOWS]
@@ -581,6 +585,7 @@ async function projectToolInitStates(
           readiness: 'unavailable',
           issues: [],
           hasAnyArtifacts: false,
+          commandSurfaceUnavailableReason: null,
           expectedSkillCount: 0,
           presentExpectedSkillCount: 0,
           detectedSkillCount: 0,
@@ -735,6 +740,7 @@ async function projectToolInitStates(
         skillsScope,
         legacySkillRoots: [...(tool.legacySkillsDirs ?? [])],
         requiresIdeRestart: tool.requiresIdeRestart === true,
+        commandSurfaceUnavailableReason: options.unavailableCommandTools?.[tool.value] ?? null,
         cleanup,
         migration,
       } satisfies ToolInitState
@@ -761,6 +767,7 @@ export function createToolInitStateProjection(
     workflows: [...options.workflows],
     generatorVersion: options.generatorVersion,
     commandContents: options.commandContents,
+    unavailableCommandTools: options.unavailableCommandTools ?? null,
   } satisfies ToolInitProjectionOptions
   return () => projectToolInitStates(projectDir, projectionOptions)
 }

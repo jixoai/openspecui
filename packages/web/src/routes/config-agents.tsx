@@ -128,6 +128,12 @@ function AgentEvidence({ tool, state }: { tool: ToolConfig; state: ToolInitState
               {tool.legacySkillsDirs.join(', ')}
             </p>
           ) : null}
+          {state.commandSurfaceUnavailableReason ? (
+            <p className="text-muted-foreground" data-testid="command-surface-unavailable">
+              <span className="text-muted-foreground">Command surface:</span>{' '}
+              {state.commandSurfaceUnavailableReason}
+            </p>
+          ) : null}
           {state.requiresIdeRestart ? (
             <p>
               <span className="text-muted-foreground">IDE restart:</span> required to load

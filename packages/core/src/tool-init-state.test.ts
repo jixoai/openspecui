@@ -69,7 +69,7 @@ describe('getToolInitStates', () => {
       ['explore']
     )
     if (!loaded) throw new Error('Pinned OpenSpec 1.9 command generator is unavailable.')
-    officialCommandContents = loaded
+    officialCommandContents = loaded.catalog
   })
 
   beforeEach(async () => {

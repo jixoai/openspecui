@@ -4,6 +4,7 @@
  * 2. Co-locate capability, command artifact, invocation, alias, setup, cleanup, and migration metadata.
  * 3. Model current/legacy project roots, user-global skill roots, detection paths, and IDE restart facts.
  * 4. Provide deterministic path-template helpers without reading runtime filesystem state.
+ * 5. Select the official inventory per admitted CLI line (1.8 lacks Command Code and restart facts).
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
@@ -71,11 +72,64 @@ export interface AIToolOption {
   setupNote?: string
   /** True when the tool loads generated files through an IDE/editor process that must restart. */
   requiresIdeRestart?: boolean
+  /** First official CLI line declaring `requiresIdeRestart`; earlier lines carry no restart fact. */
+  requiresIdeRestartSince?: AgentCliSeries
+  /** First official CLI line shipping this tool; earlier lines never list it. */
+  minCliSeries?: AgentCliSeries
   capability: AgentCommandSurfaceCapability
   command: AgentCommandArtifact | null
   aliases?: readonly string[]
   cleanup?: AgentDeliveryCleanup
   migrations?: readonly AgentDeliveryMigration[]
+}
+
+/** Official OpenSpec CLI lines with distinct Agent inventories. */
+export type AgentCliSeries = '1.8' | '1.9'
+
+function agentCliSeriesOrder(series: AgentCliSeries): number {
+  return series === '1.9' ? 19 : 18
+}
+
+/**
+ * Select the official Agent delivery inventory for one admitted CLI line.
+ *
+ * The fixed registry is the newest supported line's superset. Selection removes tools the
+ * running line never shipped and drops restart facts the running line does not declare, so a
+ * 1.8 session lists exactly its own official targets instead of a 1.9 projection.
+ */
+export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConfig[] {
+  const series = parseOpenSpecCliSeries(cliVersion)
+  if (series === null) {
+    // Unknown or unparseable: keep the newest supported inventory rather than an empty one.
+    return AGENT_DELIVERY_REGISTRY.map((tool) => ({ ...tool }))
+  }
+  const running = agentCliSeriesOrder(series)
+  return AGENT_DELIVERY_REGISTRY.filter((tool) => {
+    if (tool.minCliSeries && agentCliSeriesOrder(tool.minCliSeries) > running) return false
+    return true
+  }).map((tool) => {
+    if (
+      tool.requiresIdeRestart !== undefined &&
+      tool.requiresIdeRestartSince &&
+      agentCliSeriesOrder(tool.requiresIdeRestartSince) > running
+    ) {
+      const { ...rest } = tool
+      delete rest.requiresIdeRestart
+      return rest
+    }
+    return { ...tool }
+  })
+}
+
+/** Parse a CLI version string into a supported Agent inventory line, or null when unsupported. */
+export function parseOpenSpecCliSeries(cliVersion: string | null): AgentCliSeries | null {
+  if (!cliVersion) return null
+  const match = /^(\d+)\.(\d+)/.exec(cliVersion.trim())
+  if (!match) return null
+  const minor = Number(`${match[1]}.${match[2]}`)
+  if (minor >= 1.9) return '1.9'
+  if (minor >= 1.8) return '1.8'
+  return null
 }
 
 export interface ToolConfig extends AIToolOption {}
@@ -154,6 +208,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Amazon Q Developer',
     skillsDir: '.amazonq',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command('.amazonq/prompts/opsx-{workflow}.md', yamlMarkdown('description'), {
       invocationPrefix: '@',
@@ -167,6 +222,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Antigravity',
     skillsDir: '.agent',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command('.agent/workflows/opsx-{workflow}.md', yamlMarkdown('description')),
     cleanup: projectCleanup('.agent/workflows/openspec-*.md'),
@@ -216,6 +272,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Cline',
     skillsDir: '.cline',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command('.clinerules/workflows/opsx-{workflow}.md', headingMarkdown),
     cleanup: projectCleanup('.clinerules/workflows/openspec-*.md'),
@@ -223,6 +280,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
   {
     name: 'Command Code',
     value: 'command-code',
+    minCliSeries: '1.9',
     available: true,
     successLabel: 'Command Code',
     skillsDir: '.commandcode',
@@ -266,6 +324,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     skillsDir: '.devin',
     detectionPaths: ['.devin', '.windsurf'],
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command(
       '.devin/workflows/opsx-{workflow}.md',
@@ -304,6 +363,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Continue (VS Code / JetBrains / Cli)',
     skillsDir: '.continue',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command(
       '.continue/prompts/opsx-{workflow}.prompt',
@@ -318,6 +378,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'CoStrict',
     skillsDir: '.cospec',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command(
       '.cospec/openspec/commands/opsx-{workflow}.md',
@@ -345,6 +406,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Cursor',
     skillsDir: '.cursor',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command(
       '.cursor/commands/opsx-{workflow}.md',
@@ -391,6 +453,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
       '.github/.mcp.json',
     ],
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command('.github/prompts/opsx-{workflow}.prompt.md', yamlMarkdown('description')),
     cleanup: projectCleanup('.github/prompts/openspec-*.prompt.md'),
@@ -427,6 +490,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Junie',
     skillsDir: '.junie',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command('.junie/commands/opsx-{workflow}.md', yamlMarkdown('description')),
     cleanup: projectCleanup('.junie/commands/opsx-*.md', '.junie/commands/openspec-*.md'),
@@ -438,6 +502,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Kilo Code',
     skillsDir: '.kilocode',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command('.kilocode/workflows/opsx-{workflow}.md', plainMarkdown),
     cleanup: projectCleanup('.kilocode/workflows/openspec-*.md'),
@@ -460,6 +525,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Kiro',
     skillsDir: '.kiro',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command('.kiro/prompts/opsx-{workflow}.prompt.md', yamlMarkdown('description')),
     cleanup: projectCleanup('.kiro/prompts/openspec-*.prompt.md'),
@@ -471,6 +537,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Lingma',
     skillsDir: '.lingma',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command(
       '.lingma/commands/opsx/{workflow}.md',
@@ -534,6 +601,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Qoder',
     skillsDir: '.qoder',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command(
       '.qoder/commands/opsx/{workflow}.md',
@@ -568,6 +636,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Zoo Code',
     skillsDir: '.roo',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command('.roo/commands/opsx-{workflow}.md', headingMarkdown),
     cleanup: projectCleanup('.roo/commands/openspec-*.md'),
@@ -579,6 +648,7 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     successLabel: 'Trae',
     skillsDir: '.trae',
     requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command('.trae/commands/opsx-{workflow}.md', yamlMarkdown('name', 'description')),
   },

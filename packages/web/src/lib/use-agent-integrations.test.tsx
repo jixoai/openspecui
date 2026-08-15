@@ -71,6 +71,7 @@ function createProjection(profile: 'core' | 'custom'): AgentIntegrationsProjecti
         skillsScope: { kind: 'project', skillsDir: '.agents' },
         legacySkillRoots: ['.codex'],
         requiresIdeRestart: false,
+        commandSurfaceUnavailableReason: null,
         expectedSkillCount: 1,
         presentExpectedSkillCount: 1,
         detectedSkillCount: 1,

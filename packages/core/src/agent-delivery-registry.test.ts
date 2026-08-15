@@ -11,6 +11,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { selectAgentDeliveryRegistry } from './agent-delivery-registry.js'
 import { AI_TOOLS, type ToolConfig } from './tool-config.js'
 
 type ExpectedTool = readonly [
@@ -463,6 +464,35 @@ describe('OpenSpec 1.9 Agent delivery registry', () => {
 
   it('does not expose retired Windsurf as a current registry entry', () => {
     expect(registryEntry(AI_TOOLS, 'windsurf')).toBeUndefined()
+  })
+
+  it('selects the 1.8 official inventory without Command Code or restart facts', () => {
+    const selected = selectAgentDeliveryRegistry('1.8.0')
+
+    const ids = selected.map((tool) => tool.value)
+    expect(ids).not.toContain('command-code')
+    expect(ids).toHaveLength(AI_TOOLS.length - 1)
+    // 1.8 declares no IDE restart metadata; no tool may carry a 1.9-only restart fact.
+    expect(selected.every((tool) => tool.requiresIdeRestart === undefined)).toBe(true)
+    // Shared targets and Codex current/legacy roots stay exactly as 1.8 ships them.
+    expect(ids).toContain('agents')
+    expect(registryEntry(selected, 'codex')?.skillsDir).toBe('.agents')
+  })
+
+  it('selects the full 1.9 inventory with Command Code and restart facts', () => {
+    const selected = selectAgentDeliveryRegistry('1.9.1')
+
+    expect(selected.map((tool) => tool.value)).toEqual(AI_TOOLS.map((tool) => tool.value))
+    expect(registryEntry(selected, 'command-code')?.command?.pathTemplate).toBe(
+      '.commandcode/commands/opsx-{workflow}.md'
+    )
+    expect(registryEntry(selected, 'amazon-q')?.requiresIdeRestart).toBe(true)
+  })
+
+  it('keeps the newest supported inventory for unknown or missing versions', () => {
+    expect(selectAgentDeliveryRegistry(null)).toHaveLength(AI_TOOLS.length)
+    expect(selectAgentDeliveryRegistry('garbage')).toHaveLength(AI_TOOLS.length)
+    expect(selectAgentDeliveryRegistry('1.7.0')).toHaveLength(AI_TOOLS.length)
   })
 
   it('declares IDE restart requirements exactly where the official registry does', () => {

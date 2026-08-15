@@ -833,7 +833,9 @@ export {
 export {
   loadOpenSpecAgentCommandContents,
   type AgentCommandContentCatalog,
+  type AgentCommandContentResult,
 } from './agent-command-content.js'
+export { selectAgentDeliveryRegistry } from './agent-delivery-registry.js'
 
 // Tool initialization state detection
 export {
