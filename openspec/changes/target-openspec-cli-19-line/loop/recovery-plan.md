@@ -499,3 +499,146 @@ Owner:         source/distribution agreement and independent-review boundary, no
 R7.3 prepares but does not perform acceptance. Only after its independent review is accepted may the Owner personally
 perform checkpoint 4.1. Agents may run component/browser preparation evidence, but cannot check 4.1 or 4.2, open a
 PR, merge, publish, release, or archive the Change.
+
+## Independent-review correction after the claimed R7 closure
+
+The R7 record is historical Agent evidence, not an accepted closure. The next review of
+`79c41a02...2b3146e3` found runtime bypasses, lost evidence, an untyped config boundary, an incomplete 45-path
+header audit, and four unclassified Server timeouts. R7.1-R7.3 are reopened and R8 executes linearly:
+
+```text
+R8.1 static accessor terminality
+  -> R8.2 archived payload preservation
+    -> R8.3 typed static-export selector
+      -> R8.4 complete 45-path header proof
+        -> R8.5 source/distribution re-verification + independent review
+          -> Owner-only browser/App walkthrough
+```
+
+### R8.1 - Make the captured Schema failure terminal before optional identity handling
+
+```text
+Primary production owner: packages/web/src/lib/static-data-provider.ts
+Evidence owner:           packages/web/src/lib/static-data-provider.opsx.test.ts
+```
+
+- **Red case:** `getOpsxSchemaDetail`, `getOpsxSchemaResolution`, `getOpsxSchemaYaml`, and
+  `getOpsxTemplateContent` return `null` before `assertSchemasCaptureCaptured()` when their optional identity is
+  absent. A failed capture therefore becomes a normal null result instead of the one typed
+  `StaticSchemasCaptureError` boundary.
+- **Required change:** load the snapshot and assert the captured failure before any optional-identity/default-schema
+  branch in every Schema accessor: list, bundle, detail, resolution, templates, files, YAML, template content, and
+  template contents. Keep ordinary absent-identity behavior only after a successful capture or an omitted snapshot.
+- **Green case:** one failed capture throws the same `StaticSchemasCaptureError` for every accessor, including calls
+  with `undefined` names/ids; no accessor returns `null`, `[]`, empty text, or partial data for that failed capture.
+- **Focused verification:** extend `static-data-provider.opsx.test.ts` with undefined-identity cases, then run
+  `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/static-data-provider.opsx.test.ts`.
+- **Stop condition:** any optional argument can bypass the capture assertion or a test accepts a successful fallback
+  from a failed static Schema observation.
+
+### R8.2 - Preserve archived-validation payload and contract diagnostics
+
+```text
+Primary production owner: packages/web/src/components/archived-validation-evidence.tsx
+Evidence owner:           packages/web/src/components/archived-validation-evidence.test.tsx
+```
+
+- **Red case:** the transport envelope is validated, then state assignment sets `payload: null` even when the CLI
+  supplied a payload. A malformed report also loses the `CliValidateReportSchema.safeParse` diagnostic and displays
+  only a generic failure.
+- **Required change:** retain the validated payload and all transport fields in state; report the typed schema error
+  alongside the existing stderr/contract diagnostics. Do not reintroduce assertion casts, shallow guards, or an
+  untyped fallback.
+- **Green case:** valid non-zero reports render their items and retain payload/diagnostics; malformed payloads render
+  `CLI failure evidence` with the schema path/message; no report surface is rendered as valid.
+- **Focused verification:** add payload-retention and malformed-schema-diagnostic assertions, then run
+  `pnpm --filter @openspecui/web exec vitest run --project unit src/components/archived-validation-evidence.test.tsx`.
+- **Stop condition:** payload is nulled, schema diagnostics disappear, or the transport boundary is weakened.
+
+### R8.3 - Read the static-export Store selector through the typed config owner
+
+```text
+Primary production owner: packages/cli/src/export.ts
+Evidence owner:           packages/cli/src/export.test.ts
+                  packages/core/src/planning-config.ts (existing typed config owner)
+```
+
+- **Red case:** `generateSnapshot()` extracts `store` from `openspec/config.yaml` with a line regex. Valid YAML such
+  as `store: "shared" # selected root` forwards the quotes or truncates a legal scalar, so the exported selector is
+  not the selector understood by the official CLI/config owner.
+- **Required change:** use the existing typed YAML/config parser and its declared/invalid/absent Store state. Forward
+  a selector only for an admitted 1.9 CLI and a valid declared Store; preserve the exact selector in the capture and
+  keep 1.8/no-store behavior unchanged. Do not add a second ad hoc YAML parser in the CLI package.
+- **Green case:** quoted, commented, invalid, absent, and plain Store values each produce the expected selector or
+  explicit no-selector evidence; a 1.8 executor never receives `--store`; a 1.9 executor receives the parsed Store id.
+- **Focused verification:** add export tests for quoted/commented/invalid config and run
+  `pnpm --filter @openspecui/cli exec vitest run src/export.test.ts`.
+- **Stop condition:** regex/string slicing remains the source of selector truth, invalid YAML is treated as a Store id,
+  or the exporter diverges from `planning-config.ts` semantics.
+
+### R8.4 - Reconcile the complete 45-path header inventory
+
+```text
+Primary production owner: every TypeScript/TSX path changed since reviewed parent 79c41a02
+Evidence record:          loop/implementation.md (full sorted path list and per-file audit result)
+```
+
+- **Red case:** the current inventory command returns 45 paths, while the R7 record only records 44. The import at
+  line 1 of `packages/core/src/agent-delivery-registry.ts` precedes its intent header; duplicate/non-orthogonal
+  intents remain in `agent-command-content.ts` and `agent-delivery-projection-service.test.ts`.
+- **Required change:** move every import below the top-level intent header, rewrite duplicate or merged entries into
+  truthful orthogonal intents, preserve the five-intent limit, and record the exact sorted 45-path inventory. Re-run
+  the command after every R8 source edit so newly touched files cannot escape the audit.
+- **Green case:** every final path has a top-level truthful header and current v9 request/date (or an explicitly
+  reviewed exception), no duplicate numbering or merged sentence remains, and `git diff --check` plus scoped format
+  check pass.
+- **Focused verification:** inspect all 45 headers, run
+  `git diff --name-only 79c41a02...HEAD -- 'packages/**/*.ts' 'packages/**/*.tsx' | sort`,
+  `git diff --check 79c41a02...HEAD`, and
+  `FORMAT_CHECK_BASE_SHA=79c41a02 pnpm run format:check`.
+- **Stop condition:** inventory count/path list mismatch, any header before the header, stale v9 owner, duplicate
+  intent, or unclassified whitespace violation.
+
+### R8.5 - Re-establish source/distribution evidence and resolve Server timeouts
+
+```text
+Prerequisite: R8.1-R8.4 have exact green evidence and focused review records.
+Owner:         source/distribution agreement and independent-review boundary.
+```
+
+- **Red case:** the R7 record claims Server 120/120 and no unclassified failures. An earlier current-branch run
+  recorded 116 passed and four 5-second timeouts; the fresh current run records 118 passed and two 5-second
+  timeouts, and the same two cases still time out when rerun alone. The R7 package proof also predates R8 source
+  edits, so the timeout cases remain unclassified.
+- **Required change:** reproduce each timeout at the current revision and at `79c41a02` without widening test
+  timeouts; classify only an identical baseline or fix the owning lifecycle/fixture boundary. Then rerun all R8/R7
+  focused tests, source gates, clean builds, CLI pack, isolated install, and a fresh independent review.
+- **Required verification:**
+
+  ```sh
+  pnpm --filter @openspecui/core exec vitest run src/openspec-compat.test.ts src/agent-delivery-registry.test.ts src/tool-init-state.test.ts src/official-cli-19-validation-fixtures.test.ts src/opsx-kernel-schemas-root.fixtures.test.ts
+  pnpm --filter @openspecui/server exec vitest run src/agent-delivery-projection-service.test.ts src/agent-integrations-router.test.ts src/router.test.ts
+  pnpm --filter @openspecui/web exec vitest run --project unit src/lib/static-data-provider.opsx.test.ts src/components/archived-validation-evidence.test.tsx src/routes/change-list.test.tsx src/components/apply-progress-notice.test.tsx src/routes/change-view.test.tsx
+  pnpm --filter @openspecui/cli exec vitest run src/export.test.ts
+  FORMAT_CHECK_BASE_SHA=79c41a02 pnpm run format:check
+  pnpm run lint
+  pnpm run typecheck
+  pnpm run openspec:check-reference
+  pnpm test:ci
+  pnpm run build:deps && pnpm run build:packages && pnpm run build:cli
+  git diff --check 79c41a02...HEAD
+  openspec validate target-openspec-cli-19-line --strict
+  openspec instructions apply --change target-openspec-cli-19-line --json
+  ```
+
+  Pack `packages/cli`, install it in an isolated temporary directory, and inspect CLI help/version plus the rebuilt
+  Web asset and selector/evidence markers. Record every result after the last source edit.
+- **Green case:** all focused tests, the timeout classification, source gates, package evidence, isolated install,
+  and a fresh independent review agree with the delta Specs. No failure is hidden as a baseline without reproduction.
+- **Stop condition:** any timeout remains unclassified, any source/dist mismatch appears, or any later source edit
+  occurs after the independent review.
+
+## Boundary after R8
+
+R8.5 only prepares Owner acceptance. The Owner alone performs checkpoint 4.1, then decides PR review, merge, release,
+and archive through checkpoint 4.2. Agents must not run browser acceptance as a substitute or check either Owner gate.

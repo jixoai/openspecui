@@ -63,7 +63,7 @@ These items are retained characterization evidence. They neither substitute for 
 - [ ] 4.1 Owner personally completes the browser/App walkthrough for 1.8.x and 1.9.x projects. The
       2026-08-15 implementation-Agent observation remains historical preparation evidence in
       `loop/implementation.md`; it is not Owner acceptance and cannot check this item. This gate is blocked
-      until R7.1-R7.3 are independently accepted.
+      until R8.5's independent review is accepted.
 - [ ] 4.2 Owner independently reviews the PR and authorizes merge, release, and Change archive.
 
 ## 5. Post-R5 independent review repair
@@ -100,15 +100,40 @@ All R7 items are blocked until their exact red/green evidence is appended to `lo
 finish with a fresh independent review; no earlier review, build, pack, or browser observation can be reused after
 an R7 source edit.
 
-- [x] R7.1 Remove both archived-validation assertion casts while retaining typed report and transport diagnostics.
-- [x] R7.2 Complete the dynamic v9 TypeScript/TSX header inventory and clear every change-introduced whitespace
-      violation.
-- [x] R7.3 Re-run focused/source/distribution gates and a fresh independent whole-change review after R7.1-R7.2.
+- [ ] R7.1 Remove both archived-validation assertion casts while retaining the complete typed report and transport
+      diagnostics, including payload.
+- [ ] R7.2 Complete the dynamic v9 TypeScript/TSX header inventory and clear every change-introduced whitespace
+      violation, including owners newly touched by R7.3.
+- [ ] R7.3 Re-run focused/source/distribution gates and a fresh independent whole-change review after R7.1-R7.2.
+
+### Superseded R7 correction record (2026-08-15 Asia/Shanghai)
+
+R7 was recorded as closed by commits through `2b3146e3`, but the next independent review found that its stop
+conditions were still false: static Schema accessors return before the capture assertion when their optional identity
+is absent, archived validation explicitly replaces the verified payload with `null`, static export parses YAML with a
+regex, the final source inventory has 45 paths rather than the recorded 44, and three touched headers remain
+structurally invalid. The full Server file run also produced four 5-second timeout failures. Strict Change
+validation and diff hygiene pass, but neither proves these runtime and evidence claims.
+
+## 7. Post-R7 independent-review repair
+
+The following gates execute in order. R7.1-R7.3 are reopened until R8.1-R8.5 have fresh evidence and a new
+independent review. Checkpoint 4.1 remains Owner-only and cannot be checked by this repair loop.
+
+- [ ] R8.1 Static Schema failure is terminal before every accessor's optional-identity return.
+- [ ] R8.2 Archived validation retains the verified transport payload and contract diagnostics.
+- [ ] R8.3 Static export reads the selected Store through the typed YAML/config owner and forwards only the admitted
+      1.9 selector.
+- [ ] R8.4 The final 45-path inventory has top-level truthful headers with no duplicate, merged, or non-orthogonal
+      intents.
+- [ ] R8.5 Focused, full-source, distribution, and independent-review evidence has no unclassified failure.
 
 ### Independent-review correction record (2026-08-15 Asia/Shanghai)
 
-Current evidence is `git diff 79c41a02...b5c64f7f`: `archived-validation-evidence.tsx` contains the two
-prohibited assertion casts; the inventory contains 44 changed TypeScript/TSX files while the R6 record claims 42
-and leaves `agent-integrations-router.test.ts` on its August 6 header; and
-`git diff --check 79c41a02...b5c64f7f` reports 28 trailing-whitespace violations. The strict Change validation
-passes, but it validates artifact structure rather than these source claims.
+Confirmed current findings are recorded in `loop/implementation.md`: R8.1 has four no-argument Schema accessor
+bypasses;
+R8.2 drops `payload` at `archived-validation-evidence.tsx:127`; R8.3 uses a line regex at `packages/cli/src/export.ts:473`
+despite the existing YAML parser/config owner; R8.4 has a line-1 import before the intent header in
+`packages/core/src/agent-delivery-registry.ts`, duplicate intent entries in two touched owners, and a 45-path
+inventory not captured by the R7 record; R8.5 currently reproduces two Server test timeouts (an earlier run recorded
+four). These are blockers, not Owner acceptance evidence.

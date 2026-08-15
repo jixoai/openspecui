@@ -552,6 +552,37 @@ Checkpoint 4.1 (Owner-personal walkthrough) and 4.2 (PR/merge/release/archive) r
 No PR, push, merge, publish, release, or archive action has been taken. User-owned untracked files (`deno.lock`,
 `pb.html`, `packages/app/public/native-icons/**`) were preserved unstaged throughout.
 
+## Independent-review correction after R7 closure (2026-08-15 Asia/Shanghai)
+
+The R7 closure record above is superseded. A fresh two-axis review against `79c41a02...2b3146e3`, followed by
+current focused execution, found the following blockers:
+
+| Gate | Current evidence | Required recovery |
+| --- | --- | --- |
+| R8.1 | `static-data-provider.ts:1143`, `:1152`, `:1269`, and `:1286` return on missing optional identity before `assertSchemasCaptureCaptured`; failed static captures can be bypassed with `undefined`. | Move the capture assertion before every optional-identity/default branch and add undefined-identity tests. |
+| R8.2 | `archived-validation-evidence.tsx:127` assigns `payload: null` after transport validation; malformed report parsing loses the schema diagnostic. | Preserve payload and render the schema contract diagnostic with transport evidence. |
+| R8.3 | `packages/cli/src/export.ts:473` parses YAML `store` using a line regex despite the existing typed YAML/config owner. | Reuse the typed config parser and test quoted/commented/invalid values. |
+| R8.4 | The final inventory command returns 45 paths, not 44. `agent-delivery-registry.ts:1` imports before its header; `agent-command-content.ts` and `agent-delivery-projection-service.test.ts` contain duplicate intent entries. | Reconcile all 45 headers and capture the complete final path list. |
+| R8.5 | Earlier current-branch run: 116 passed, 4 timeouts. Fresh complete run: 118 passed, 2 failed by 5-second timeout; isolated rerun reproduces both. | Reproduce at current and reviewed parent without timeout inflation; classify or repair before distribution review. |
+
+Current verification summary:
+
+```text
+PASS  openspec validate target-openspec-cli-19-line --strict
+PASS  FORMAT_CHECK_BASE_SHA=79c41a02 pnpm run format:check (56 files)
+PASS  pnpm run lint
+PASS  pnpm run typecheck
+PASS  pnpm run openspec:check-reference
+PASS  focused Core suites (53 tests)
+PASS  focused Web suites (44 tests)
+FAIL  complete Server Agent/router file run (118 passed, 2 timeouts)
+FAIL  isolated Server timeout rerun (2 passed, 2 timeouts)
+PASS  git diff --check 79c41a02...HEAD
+```
+
+No Owner browser/App walkthrough, PR, merge, release, or archive is authorized. R8 is now the execution authority;
+its evidence must be appended after the final source edit and before any Owner gate is considered.
+
 ## Loopback triggers
 
 - The official 1.8 or 1.9 executable contradicts a command, payload, selector, or Agent-inventory assumption in a
