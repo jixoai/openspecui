@@ -11,38 +11,52 @@ import { InformationBadge } from '@/components/information-disclosure'
 import type { ApplyInstructionProgress } from '@openspecui/core'
 import { AlertTriangle } from 'lucide-react'
 
-/** Render source-attributed Apply progress and any tracked-progress divergence. */
+/**
+ * Render source-attributed Apply progress whenever Apply Instructions exist, with tracked
+ * data only as a secondary comparison when it diverges. Agreement is not a reason to hide
+ * the CLI's own count: the Apply instruction result is the only visible implementation
+ * progress authority.
+ */
 export function ApplyProgressNotice({
   applyInstructionProgress,
 }: {
   applyInstructionProgress: ApplyInstructionProgress
 }) {
   const divergence = applyInstructionProgress.divergence
-  if (!divergence) return null
 
   return (
     <div
       role="status"
-      aria-label="Task progress source divergence"
-      className="flex min-w-0 items-start gap-2 border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+      aria-label={
+        divergence ? 'Task progress source divergence' : 'Apply instruction task progress'
+      }
+      className={
+        divergence
+          ? 'flex min-w-0 items-start gap-2 border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100'
+          : 'border-border bg-muted/30 flex min-w-0 items-start gap-2 px-3 py-2 text-xs'
+      }
     >
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      {divergence ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> : null}
       <div className="min-w-0 space-y-2">
-        <div className="font-medium">Upstream task progress divergence</div>
-        <p>{divergence.message}</p>
+        <div className="font-medium">
+          {divergence ? 'Upstream task progress divergence' : 'Apply task progress'}
+        </div>
+        {divergence ? <p>{divergence.message}</p> : null}
         <div className="flex flex-wrap gap-1.5">
           <InformationBadge
-            ariaLabel={`Apply instructions progress ${divergence.apply.complete} of ${divergence.apply.total}`}
+            ariaLabel={`Apply instructions progress ${applyInstructionProgress.complete} of ${applyInstructionProgress.total}`}
             tooltip="Progress reported by openspec instructions apply."
           >
-            Apply {divergence.apply.complete}/{divergence.apply.total}
+            Apply {applyInstructionProgress.complete}/{applyInstructionProgress.total}
           </InformationBadge>
-          <InformationBadge
-            ariaLabel={`Tracked artifact glob progress ${divergence.tracked.completed} of ${divergence.tracked.total}`}
-            tooltip="Progress computed from the workflow's tracked task artifact glob."
-          >
-            Tracked {divergence.tracked.completed}/{divergence.tracked.total}
-          </InformationBadge>
+          {divergence ? (
+            <InformationBadge
+              ariaLabel={`Tracked artifact glob progress ${divergence.tracked.completed} of ${divergence.tracked.total}`}
+              tooltip="Progress computed from the workflow's tracked task artifact glob."
+            >
+              Tracked {divergence.tracked.completed}/{divergence.tracked.total}
+            </InformationBadge>
+          ) : null}
         </div>
       </div>
     </div>

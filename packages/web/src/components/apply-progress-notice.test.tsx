@@ -7,16 +7,18 @@
  * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
  */
 import type { ApplyInstructionProgress } from '@openspecui/core'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 import { ApplyProgressNotice } from './apply-progress-notice'
 
 function progress(divergent: boolean): ApplyInstructionProgress {
   return {
     source: 'openspec-instructions-apply',
-    total: 0,
-    complete: 0,
-    remaining: 0,
+    // The non-divergent case carries agreeing counts (apply 2/3 == tracked 2/3): the CLI's
+    // own Apply count must stay visible even without divergence to compare against.
+    total: divergent ? 0 : 3,
+    complete: divergent ? 0 : 2,
+    remaining: divergent ? 0 : 1,
     state: 'all_done',
     divergence: divergent
       ? {
@@ -30,6 +32,10 @@ function progress(divergent: boolean): ApplyInstructionProgress {
 }
 
 describe('ApplyProgressNotice', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
   it('keeps divergence direct and attributes both compact sources', async () => {
     render(<ApplyProgressNotice applyInstructionProgress={progress(true)} />)
 
@@ -46,8 +52,24 @@ describe('ApplyProgressNotice', () => {
     ).toBeTruthy()
   })
 
-  it('stays absent when both sources agree', () => {
-    const { container } = render(<ApplyProgressNotice applyInstructionProgress={progress(false)} />)
-    expect(container).toBeEmptyDOMElement()
+  it('shows the source-attributed Apply count when both sources agree', () => {
+    render(<ApplyProgressNotice applyInstructionProgress={progress(false)} />)
+
+    // Agreement is not a reason to hide the CLI's own count: Apply progress stays visible
+    // with no divergence comparison attached.
+    expect(screen.getByText('Apply task progress')).toBeVisible()
+    expect(screen.getByRole('status', { name: 'Apply instruction task progress' })).toBeVisible()
+    expect(screen.getAllByText('Apply 2/3').length).toBeGreaterThan(0)
+    const applyBadge = screen
+      .getAllByText('Apply 2/3')
+      .find(
+        (el) =>
+          el.closest('[role="note"], [aria-label]')?.getAttribute('aria-label') ===
+          'Apply instructions progress 2 of 3'
+      )
+    expect(applyBadge).toBeTruthy()
+    expect(screen.queryByText('Upstream task progress divergence')).toBeNull()
+    expect(screen.queryByText('different')).toBeNull()
+    expect(screen.queryByRole('status', { name: 'Task progress source divergence' })).toBeNull()
   })
 })

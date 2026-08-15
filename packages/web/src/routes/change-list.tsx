@@ -174,13 +174,6 @@ export function ChangeList() {
                   status?.artifacts.map((artifact) => artifact.status) ?? []
                 ),
               })
-              const taskPercent =
-                change.trackedTaskProgress.total > 0
-                  ? Math.round(
-                      (change.trackedTaskProgress.completed / change.trackedTaskProgress.total) *
-                        100
-                    )
-                  : 0
               const sharedDescriptor = { family: 'changes', entityId: change.id } as const
               return (
                 <VTLink
@@ -229,27 +222,18 @@ export function ChangeList() {
                         >
                           {phase.label}
                         </Badge>
-                        <div className="font-medium">
-                          {change.trackedTaskProgress.completed}/{change.trackedTaskProgress.total}
-                        </div>
-                        <div className="text-muted-foreground text-xs">tasks</div>
                       </div>
                       <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
                     </div>
                   </div>
 
-                  <div className="bg-muted h-1.5 rounded-full">
-                    <div
-                      className="bg-primary h-full rounded-full transition-all"
-                      style={{ width: `${taskPercent}%` }}
-                    />
-                  </div>
-
                   <div className="text-muted-foreground mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <span>
-                      {change.trackedTaskProgress.phase === 'no-tasks'
-                        ? 'No tracked tasks'
-                        : `${taskPercent}% task completion`}
+                      {status?.isPlanningComplete === true
+                        ? 'Planning complete'
+                        : phase.label === 'In Execution'
+                          ? 'Planning in progress'
+                          : 'Planning status pending CLI status'}
                     </span>
                     {!statusError && status ? (
                       <span className="truncate">

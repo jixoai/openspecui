@@ -132,11 +132,14 @@ describe('ChangeList', () => {
     const { container } = render(<ChangeList />)
 
     expect(screen.getByText('chat-channel-token-admin')).toBeTruthy()
-    expect(screen.getByText('0/9')).toBeTruthy()
-    expect(screen.getByText('0% task completion')).toBeTruthy()
+    // The list never claims implementation completion: no task counts, no percent bar, no
+    // completion copy derived from tracked data without Apply Instructions.
+    expect(screen.queryByText('0/9')).toBeNull()
+    expect(screen.queryByText('0% task completion')).toBeNull()
+    expect(container.querySelector('[style="width: 0%;"]')).toBeNull()
+    expect(screen.getByText('Planning status pending CLI status')).toBeTruthy()
     expect(container.querySelector('.rt-skeleton-line')).not.toBeNull()
     expect(screen.queryByText('Loading workflow status…')).toBeNull()
-    expect(container.querySelector('[style="width: 0%;"]')).toBeTruthy()
   })
 
   it('admits aggregate workflow Status only after the first Change row is renderable', () => {
@@ -251,8 +254,8 @@ describe('ChangeList', () => {
     render(<ChangeList />)
 
     expect(screen.getByText('status-error-change')).toBeTruthy()
-    expect(screen.getByText('1/4')).toBeTruthy()
-    expect(screen.getByText('25% task completion')).toBeTruthy()
+    expect(screen.queryByText('1/4')).toBeNull()
+    expect(screen.queryByText('25% task completion')).toBeNull()
     expect(screen.getByRole('alert').textContent).toContain('status failed')
     expect(screen.getByText('Workflow status unavailable')).toBeTruthy()
     expect(screen.queryByText('Loading workflow status…')).toBeNull()
@@ -338,9 +341,10 @@ describe('ChangeList', () => {
 
     expect(screen.getByRole('alert').textContent).toContain('changes failed')
     expect(screen.getByText('Main Error Change')).toBeTruthy()
-    expect(screen.getByText('2/4')).toBeTruthy()
-    expect(screen.getByText('50% task completion')).toBeTruthy()
-    expect(container.querySelector('[style="width: 50%;"]')).toBeTruthy()
+    // Tracked counts no longer surface as implementation progress.
+    expect(screen.queryByText('2/4')).toBeNull()
+    expect(screen.queryByText('50% task completion')).toBeNull()
+    expect(container.querySelector('[style="width: 50%;"]')).toBeNull()
     expect(container.querySelector('a[href="/changes/main-error-change"]')).toBeTruthy()
     expect(screen.getByText('1/2 artifacts · spec-driven')).toBeTruthy()
     expect(screen.queryByText('Loading changes...')).toBeNull()
@@ -450,9 +454,10 @@ describe('ChangeList', () => {
 
     render(<ChangeList />)
 
-    expect(screen.getByText('0/0')).toBeTruthy()
+    // No-tasks stays an objective planning fact without task-count surfaces.
+    expect(screen.queryByText('0/0')).toBeNull()
     expect(screen.getByText('No Tracked Tasks')).toBeTruthy()
-    expect(screen.getByText('No tracked tasks')).toBeTruthy()
+    expect(screen.queryByText('No tracked tasks')).toBeNull()
     expect(screen.queryByText('0% task completion')).toBeNull()
     expect(screen.queryByText('Workflow Complete')).toBeNull()
   })
@@ -484,8 +489,9 @@ describe('ChangeList', () => {
     render(<ChangeList />)
 
     expect(screen.getByText('Workflow Complete')).toBeTruthy()
-    expect(screen.getByText('2/2')).toBeTruthy()
-    expect(screen.getByText('100% task completion')).toBeTruthy()
+    // Completion copy stays objective: no tracked count or percent claims.
+    expect(screen.queryByText('2/2')).toBeNull()
+    expect(screen.queryByText('100% task completion')).toBeNull()
     expect(screen.queryByText(/archive-ready|ready to archive/i)).toBeNull()
   })
 })
