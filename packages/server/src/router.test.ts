@@ -457,6 +457,13 @@ afterEach(async () => {
   }
 })
 
+/** Typed spy handle for the archived-validation capability boundary under review. */
+function validateContractSpy(
+  context: ReturnType<typeof createMockContext>
+): ReturnType<typeof vi.fn> {
+  return context.cliExecutor.contracts.validate as ReturnType<typeof vi.fn>
+}
+
 const createMockContext = (
   adapter = createMockAdapter(),
   options: {
@@ -3180,7 +3187,7 @@ apply:
         strict: true,
       })
 
-      const validate = context.cliExecutor.contracts.validate as unknown as ReturnType<typeof vi.fn>
+      const validate = validateContractSpy(context)
       expect(validate).toHaveBeenCalledWith({
         target: { kind: 'item', id: 'add-search', type: 'change' },
         strict: true,
@@ -3210,7 +3217,7 @@ apply:
 
       await caller.cli.validate({ kind: 'archived' })
 
-      const validate = context.cliExecutor.contracts.validate as unknown as ReturnType<typeof vi.fn>
+      const validate = validateContractSpy(context)
       expect(validate).toHaveBeenCalledWith({
         target: { kind: 'archived' },
         strict: undefined,
@@ -3226,7 +3233,7 @@ apply:
         cli: { available: true, version: '1.8.0' },
       }
       const caller = appRouter.createCaller(context)
-      const validate = context.cliExecutor.contracts.validate as unknown as ReturnType<typeof vi.fn>
+      const validate = validateContractSpy(context)
 
       await expect(caller.cli.validate({ kind: 'archived' })).rejects.toMatchObject({
         code: 'PRECONDITION_FAILED',
