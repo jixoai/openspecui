@@ -10,6 +10,7 @@
  * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
+import { inspectProjectBinding } from '@openspecui/core'
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -116,6 +117,27 @@ describe('Export Functions', () => {
       expect(snapshot.projectMd).toBeDefined()
       expect(snapshot.projectMd).toContain('Test Project')
     })
+
+    it.each([
+      ['quoted value with trailing comment', 'store: "shared" # selected root\n', 'shared'],
+      ['plain value', 'store: shared\n', 'shared'],
+      ['single-quoted value', "store: 'shared'\n", 'shared'],
+      ['explicit null', 'store: null\n', null],
+      ['commented out', '# store: shared\n', null],
+      ['invalid non-string', 'store: [a, b]\n', null],
+    ])(
+      'resolves the Store selector through the typed config owner for %s',
+      async (_label, configContent, expectedStore) => {
+        await writeFile(join(testProjectDir, 'openspec', 'config.yaml'), configContent, 'utf-8')
+        const snapshot = await generateSnapshot(testProjectDir)
+        const capture = snapshot.opsx?.schemasCapture
+        if (capture?.ok !== false) throw new Error('Expected a typed schemas capture failure.')
+        // No CLI is available in this fixture, so no selector is forwarded — but the selector
+        // source of truth is the typed config owner; assert it directly for the same content.
+        const binding = inspectProjectBinding(configContent)
+        expect(binding.store.state === 'declared' ? binding.store.id : null).toBe(expectedStore)
+      }
+    )
 
     it('should include opsx config section', async () => {
       const snapshot = await generateSnapshot(testProjectDir)

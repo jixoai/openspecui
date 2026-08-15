@@ -16,6 +16,7 @@ import {
   CliExecutor,
   ConfigManager,
   DEFAULT_CONFIG,
+  inspectProjectBinding,
   OpenSpecAdapter,
   redactSnapshotForPublication,
   SchemaInfoSchema,
@@ -467,15 +468,12 @@ export async function generateSnapshot(
     } catch {
       configYaml = undefined
     }
-    // Resolve the project's selected Root Store from the same official config the CLI itself
-    // reads, so the exported schemas observation forwards the identical selector the live
-    // Kernel would forward (`--store` on OpenSpec 1.9).
-    const selectedStore =
-      typeof configYaml === 'string'
-        ? (/^\s*store:\s*([^#\n]+)$/m.exec(configYaml)?.[1]?.trim() ?? null)
-        : null
-    const schemasSelector: { store?: string } =
-      selectedStore && selectedStore !== 'null' ? { store: selectedStore } : {}
+    // Resolve the selected Root Store through the typed config owner shared with the live
+    // planning-config surface, so quoted, commented, and invalid YAML semantics match the
+    // official CLI exactly — no ad hoc regex parsing in the exporter.
+    const binding = inspectProjectBinding(typeof configYaml === 'string' ? configYaml : null)
+    const selectedStore = binding.store.state === 'declared' ? binding.store.id : null
+    const schemasSelector: { store?: string } = selectedStore ? { store: selectedStore } : {}
 
     let forwardedSelector: { store?: string } | null = null
     const captureSchemasFailure = (
