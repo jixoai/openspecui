@@ -474,6 +474,84 @@ user-owned untracked `pb.html`. R7.2/R7.3 therefore use the scoped base-SHA comm
 output, user project, PR, merge, release, or archive was changed by this review. The R7 authority is
 `loop/recovery-plan.md`; checkpoints remain open until fresh evidence is appended here.
 
+## R7 repair evidence record (2026-08-15 Asia/Shanghai)
+
+Planning correction committed first as `fff3729d`. Gates executed linearly; each production commit below carries its
+own detailed message.
+
+```text
+Gate: R7.1
+Feature branch and commit: 0d44b37e
+Primary production owner: archived-validation-evidence.tsx (+ core index export)
+True red case and command: parseValidationReport safeParse'd but cast parsed.data into a local alias; the RPC
+  result was cast wholesale to CliCommandResult<CliValidate> (grep: both casts present pre-change).
+Code decision: the parse returns the schema-inferred CliValidateReport (newly exported from Core) directly; the
+  transport result is runtime-validated before state assignment — an unrecognized shape becomes typed failure
+  evidence with transport/contract diagnostics retained.
+Green case and command: pnpm --filter @openspecui/web exec vitest run --project unit
+  src/components/archived-validation-evidence.test.tsx (6 passed); web typecheck clean.
+Focused review result: pass; no assertion cast remains at the boundary.
+
+Gate: R7.2
+Feature branch and commit: 820ac99e (whitespace) + e17429b3 (audit)
+Primary production owner: every TS/TSX path changed since 79c41a02
+True red case and command: git diff --name-only 79c41a02...HEAD returned 44 paths vs the recorded 42;
+  agent-integrations-router.test.ts retained its 2026-08-06 header; git diff --check reported 28 trailing-
+  whitespace violations.
+Code decision: every changed file stripped of trailing whitespace; the stale header updated to the v9 intent
+  with the current timestamp; the scoped formatter covers the md artifacts touched by the planning correction.
+Green case and command: git diff --check 79c41a02...HEAD exits 0; FORMAT_CHECK_BASE_SHA=79c41a02 pnpm run
+  format:check passes (55 then 56 files).
+Focused review result: pass at the time — but the fresh independent review then exposed deeper header corruption
+  this audit missed (duplicate intent numbering, mid-sentence merges, a malformed router.ts request line);
+  repaired under R7.3 and recorded there. Honesty requires keeping this note rather than a clean claim.
+
+Gate: R7.3
+Feature branch and commit: 41e3f109 (header repairs) + 92b2b8b9 (spec findings) + 6e3859da (new-owner header)
+Primary production owner: source/distribution agreement and the independent-review boundary
+True red case and command: the R6.9 build/pack record predated R7 source edits; its "clean gate" was false.
+Code decision and evidence:
+  1. A fresh independent whole-change review (parallel Standards + Spec sub-agents over 79c41a02...HEAD) ran
+     first. Beyond confirming R7.1/R7.2 it exposed: corrupted intent headers the audits missed (duplicate
+     numbering in agent-delivery-registry.test, official-cli-19-validation-fixtures, terminal-control;
+     truncated merges in export.ts, opsx-kernel.ts, opsx-types.ts, cli-executor.ts, core index,
+     cli-executor-tracing.test; a malformed duplicated request line in router.ts), unparseable-version
+     evidence omitting the accepted/recommended ranges, two version parsers able to disagree between
+     admission and inventory, the static export never forwarding the selected Root selector, and a shallow
+     transport key-presence guard contradicting the component's own no-shallow-guard intent.
+  2. All repaired: headers rewritten as truthful five-intent statements (41e3f109); unknown-version evidence
+     names both ranges; parseOpenSpecCliSeries delegates to parseOpenSpecCliVersion so one parser feeds both
+     boundaries; the export resolves the project's selected Store from the official config and forwards it
+     only on a 1.9-capable CLI, recording the forwarded selector in the capture; the transport envelope
+     validates via the new CliCommandTransportSchema (92b2b8b9) with the newly touched owner's header added
+     (6e3859da). The eager-success finding was resolved by precisely documenting the CliResult transport-
+     success contract rather than a global semantic flip (requireCommandData gates on transport success;
+     flipping would break the parsed-envelope success path) — a recorded decision, not a silent drop.
+  3. Full re-verification: focused Core 45 / Server 120 / Web 44 passed; scoped format check passes (56
+     files); lint 0/0; typecheck all Done; reference OK v1.9.0; git diff --check exits 0; full suites — core
+     646 passed plus the single documented macOS path-realpath baseline (reproduced unchanged at 79c41a02 in a
+     dedicated worktree; the previously recorded "server sqlite baseline" is withdrawn — it was an artifact of
+     a worktree install corrupting the shared better-sqlite3 native build; after rebuild the server suite is
+     fully green at 638 passed), web 1134, app 384, cli 163.
+  4. Fresh clean rebuild (deps/packages/cli), npm pack, isolated install: openspecui --version 8.0.0,
+     export --help ok; the installed dist carries the unified parser, capability derivation, registry
+     selection, and the retained-registry clone; the shipped web asset carries the Apply-progress surface
+     with zero task-completion copy, StaticSchemasCaptureError, and the range-naming unknown-version message.
+Green case and command: every command in the recovery-plan R7.3 block executed; no unclassified failures.
+Focused review result: the review's findings were repaired and re-verified; the review output itself is the
+  gate's independent evidence, preserved in the session record.
+Residual risk or stop-condition check: the one remaining CI failure is the documented macOS baseline
+  reproduced at the reviewed parent; test:ci halts there before downstream packages, which were each run
+  explicitly and are green.
+```
+
+### Boundary after R7
+
+R7.1-R7.3 are closed with fresh evidence, including a repair round the independent review itself triggered.
+Checkpoint 4.1 (Owner-personal walkthrough) and 4.2 (PR/merge/release/archive) remain Owner-only and unchecked.
+No PR, push, merge, publish, release, or archive action has been taken. User-owned untracked files (`deno.lock`,
+`pb.html`, `packages/app/public/native-icons/**`) were preserved unstaged throughout.
+
 ## Loopback triggers
 
 - The official 1.8 or 1.9 executable contradicts a command, payload, selector, or Agent-inventory assumption in a

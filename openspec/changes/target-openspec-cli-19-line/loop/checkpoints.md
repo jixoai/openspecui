@@ -78,11 +78,11 @@ may move to `[x]` only after its exact red/green command and focused review are 
 - [x] R6.3 Explicit Agent Init tools are validated against `projection.registry` before the CLI stream starts.
 - [x] R6.4 Every static Schema accessor propagates the same typed captured failure.
 - [x] R6.5 Change List stops presenting tracked data as implementation progress; Detail always presents CLI Apply.
-- [ ] R6.6 Archived validation renders reports only after `CliValidateReportSchema.safeParse` succeeds, without
+- [x] R6.6 Archived validation renders reports only after `CliValidateReportSchema.safeParse` succeeds, without
       an assertion-cast boundary.
-- [ ] R6.7 The complete v9 TypeScript/TSX inventory has current truthful intent headers or documented exceptions.
+- [x] R6.7 The complete v9 TypeScript/TSX inventory has current truthful intent headers or documented exceptions.
 - [x] R6.8 Archived-validation Router fixtures use a typed `CliExecutor` spy without double assertions.
-- [ ] R6.9 R6 source, build, packed CLI, isolated install, diff hygiene, and independent review agree.
+- [x] R6.9 R6 source, build, packed CLI, isolated install, diff hygiene, and independent review agree.
 
 ### Superseded R6 closure record (2026-08-15 Asia/Shanghai)
 
@@ -100,10 +100,10 @@ All R7 items are blocked until their exact red/green evidence is appended to `lo
 finish with a fresh independent review; no earlier review, build, pack, or browser observation can be reused after
 an R7 source edit.
 
-- [ ] R7.1 Remove both archived-validation assertion casts while retaining typed report and transport diagnostics.
-- [ ] R7.2 Complete the dynamic v9 TypeScript/TSX header inventory and clear every change-introduced whitespace
+- [x] R7.1 Remove both archived-validation assertion casts while retaining typed report and transport diagnostics.
+- [x] R7.2 Complete the dynamic v9 TypeScript/TSX header inventory and clear every change-introduced whitespace
       violation.
-- [ ] R7.3 Re-run focused/source/distribution gates and a fresh independent whole-change review after R7.1-R7.2.
+- [x] R7.3 Re-run focused/source/distribution gates and a fresh independent whole-change review after R7.1-R7.2.
 
 ### Independent-review correction record (2026-08-15 Asia/Shanghai)
 
