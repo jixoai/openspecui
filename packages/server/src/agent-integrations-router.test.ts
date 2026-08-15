@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove the public Agent Router exposes complete projection without client-authored policy inputs.
  * 2. Prove structured policy mutation preserves environment-global extension fields and refreshes authority.
  * 3. Prove Agent Init streams use Server-owned profile policy and propagate cancellation to the CLI handle.
@@ -8,11 +8,12 @@
  *
  * Original request (2026-08-01): move Agent policy, inventory, Init/Update/repair, cancel, and Terminal evidence to Config.
  * Original request (2026-08-06): "Windows compatibility and adaptation, including the core and peripheral scripts."
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 
 import {
-  selectAgentDeliveryRegistry,
   clearCache,
+  selectAgentDeliveryRegistry,
   type CliStreamHandle,
   type CliStreamSettlement,
   type EnvironmentGlobalProjectionData,

@@ -452,12 +452,12 @@ This record supersedes the R6 closure claim above without deleting its historica
 review compared `79c41a02...b5c64f7f`; it found that R6.1-R6.5 and R6.8 have matching focused behavior evidence,
 but R6.6, R6.7, R6.9, and the Owner-gate expression do not satisfy their stated stop conditions.
 
-| Gate | Independent evidence | Required recovery |
-| --- | --- | --- |
-| R6.6 | `archived-validation-evidence.tsx:34` casts successful `safeParse` data; line 114 casts the tRPC result. | R7.1 removes both assertion boundaries while retaining typed report and transport diagnostics. |
-| R6.7 | `git diff --name-only 79c41a02...b5c64f7f -- 'packages/**/*.ts' 'packages/**/*.tsx'` returns 44 paths, not the recorded 42. `agent-integrations-router.test.ts` was changed by R6.9 but retains a 2026-08-06 header. | R7.2 records the complete dynamic inventory and repairs headers. |
-| R6.9 | `git diff --check 79c41a02...b5c64f7f` reports 28 trailing-whitespace violations in v9 header edits. | R7.2 clears diff hygiene; R7.3 reruns all source/distribution evidence after the correction. |
-| 4.1 | An implementation Agent's browser observation is preparation evidence, not an Owner walkthrough. | Keep checkpoint 4.1 unchecked and blocked until R7.3's fresh review succeeds. |
+| Gate | Independent evidence                                                                                                                                                                                                 | Required recovery                                                                              |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| R6.6 | `archived-validation-evidence.tsx:34` casts successful `safeParse` data; line 114 casts the tRPC result.                                                                                                             | R7.1 removes both assertion boundaries while retaining typed report and transport diagnostics. |
+| R6.7 | `git diff --name-only 79c41a02...b5c64f7f -- 'packages/**/*.ts' 'packages/**/*.tsx'` returns 44 paths, not the recorded 42. `agent-integrations-router.test.ts` was changed by R6.9 but retains a 2026-08-06 header. | R7.2 records the complete dynamic inventory and repairs headers.                               |
+| R6.9 | `git diff --check 79c41a02...b5c64f7f` reports 28 trailing-whitespace violations in v9 header edits.                                                                                                                 | R7.2 clears diff hygiene; R7.3 reruns all source/distribution evidence after the correction.   |
+| 4.1  | An implementation Agent's browser observation is preparation evidence, not an Owner walkthrough.                                                                                                                     | Keep checkpoint 4.1 unchecked and blocked until R7.3's fresh review succeeds.                  |
 
 Commands run by this independent review:
 

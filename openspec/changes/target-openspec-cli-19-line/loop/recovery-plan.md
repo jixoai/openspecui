@@ -488,6 +488,7 @@ Owner:         source/distribution agreement and independent-review boundary, no
   Then pack `packages/cli`, install the tarball into an isolated temporary directory, and inspect the installed CLI
   version, command help, admission/registry markers, and rebuilt Web asset facts. Record the exact commands and
   results before requesting the independent review.
+
 - **Green case:** all focused R7/R6 evidence, source gates, packed output, isolated install, and independent review
   agree. There are no unclassified failures and no reuse of pre-R7 build/pack/review evidence.
 - **Stop condition:** a failed focused suite, source/dist mismatch, incomplete baseline reproduction, failed
