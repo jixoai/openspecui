@@ -250,6 +250,17 @@ The walkthrough was agent-executed at the Owner's instruction; it is recorded as
 Owner's own acceptance. Checkpoint 4.1 is marked accordingly. PR review, merge, release, and archive
 (4.2) remain Owner-only, and no such action has been taken.
 
+### Post-walkthrough distribution re-verification (2026-08-15 Asia/Shanghai)
+
+The two walkthrough fixes changed source after the R5 pack, so distribution was re-verified:
+`pnpm run build:cli` green; `npm pack` → `openspecui-8.0.0.tgz`; isolated temporary-directory install
+starts (`--version` 8.0.0, `export --help` ok) and carries the fix markers (lazy `node:url` resolution in
+terminal-control, registry selection reaching tool states) plus every prior v9 law marker
+(`isPlanningComplete`, `CliSchemasFailure`, capability derivation, `schemasRootSelector`, `minCliSeries`,
+`unavailableTools`); the shipped web asset carries the admission range, `StaticSchemasCaptureError`, and
+the archived-validation unavailable copy. The website docs suite was also run explicitly: 15 passed.
+Working tree clean; branch `fix/v9-cli-18-19-recovery` at `a2942782`.
+
 ## Loopback triggers
 
 - The official 1.8 or 1.9 executable contradicts a command, payload, selector, or Agent-inventory assumption in a
