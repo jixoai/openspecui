@@ -769,12 +769,16 @@ export function createToolInitStateProjection(
   projectDir: string,
   options: ToolInitProjectionOptions
 ): () => Promise<ToolInitState[]> {
+  // Retain every version-scoped fact for the projection's whole lifetime so a replacement
+  // emission can never fall back to the global newest inventory: the admitted CLI line that
+  // selected this registry stays authoritative across reactive re-observation.
   const projectionOptions = {
     delivery: options.delivery,
     workflows: [...options.workflows],
     generatorVersion: options.generatorVersion,
     commandContents: options.commandContents,
     unavailableCommandTools: options.unavailableCommandTools ?? null,
+    registry: options.registry ? options.registry.map((tool) => ({ ...tool })) : undefined,
   } satisfies ToolInitProjectionOptions
   return () => projectToolInitStates(projectDir, projectionOptions)
 }

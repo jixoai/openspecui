@@ -18,6 +18,7 @@ import {
   loadOpenSpecAgentCommandContents,
   type AgentCommandContentCatalog,
 } from './agent-command-content.js'
+import { selectAgentDeliveryRegistry } from './agent-delivery-registry.js'
 import {
   clearCache,
   getCacheSize,
@@ -448,6 +449,53 @@ describe('getToolInitStates', () => {
     })
 
     expect(after.find((entry) => entry.toolId === 'claude')?.status).toBe('initialized')
+  })
+
+  it('retains the selected registry across replacement emissions', async () => {
+    const registry18 = selectAgentDeliveryRegistry('1.8.0')
+    expect(registry18).toHaveLength(37)
+    const environment = new ReactiveObservationEnvironment()
+    const releaseRoot = await environment.acquireRoot(tempDir)
+    const context = new ReactiveContext()
+    const projection = context.stream(
+      createToolInitStateProjection(tempDir, {
+        delivery: 'skills',
+        workflows: ['update'],
+        registry: registry18,
+      })
+    )
+
+    try {
+      const initial = await projection.next()
+      expect(initial.done).toBe(false)
+      expect(initial.value).toHaveLength(37)
+      expect(initial.value.some((entry: ToolInitState) => entry.toolId === 'command-code')).toBe(
+        false
+      )
+      expect(
+        initial.value.every((entry: ToolInitState) => entry.requiresIdeRestart === false)
+      ).toBe(true)
+
+      // A filesystem mutation forces a replacement emission through the rebuilt options; the
+      // 1.8 selection must survive it rather than reverting to the global newest inventory.
+      const mutatedArtifact = join(tempDir, '.claude', 'skills', 'openspec-update', 'SKILL.md')
+      await mkdir(dirname(mutatedArtifact), { recursive: true })
+      await writeFile(mutatedArtifact, 'probe', 'utf8')
+      await settleReactivePathMutation(mutatedArtifact)
+      const replacement = await projection.next()
+      expect(replacement.done).toBe(false)
+      expect(replacement.value).toHaveLength(37)
+      expect(
+        replacement.value.some((entry: ToolInitState) => entry.toolId === 'command-code')
+      ).toBe(false)
+      expect(
+        replacement.value.every((entry: ToolInitState) => entry.requiresIdeRestart === false)
+      ).toBe(true)
+    } finally {
+      await projection.return(undefined)
+      await releaseRoot()
+      await environment.dispose()
+    }
   })
 
   it('bounds empty-installation observation fanout by physical inventory across recomputes', async () => {
