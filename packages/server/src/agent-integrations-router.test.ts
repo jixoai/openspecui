@@ -11,6 +11,7 @@
  */
 
 import {
+  selectAgentDeliveryRegistry,
   clearCache,
   type CliStreamHandle,
   type CliStreamSettlement,
@@ -240,7 +241,9 @@ describe('agentIntegrationsRouter', () => {
     const handle = { settled: terminal.promise, cancel } satisfies CliStreamHandle
     const initStream = vi.spyOn(fixture.server.cliExecutor, 'initStream').mockReturnValue(handle)
     vi.spyOn(fixture.server.agentDeliveryProjectionService, 'getCurrent').mockResolvedValue({
-      registry: [],
+      // The admitted 1.9 fixture must offer the requested tool: explicit Init tools are
+      // validated against the projection registry before any CLI spawn.
+      registry: selectAgentDeliveryRegistry('1.9.0'),
       policy: { profile: 'custom', delivery: 'commands', workflows: ['verify'] },
       states: [],
     })

@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Render independent Dashboard projections inside stable region-owned Pending geometry.
  * 2. Keep Dashboard-owned readonly Code Git refresh bound to rendered provenance and separate from Planning-root mutation authority.
  * 3. Curate Code Git activity while preserving binding-token detail handoff provenance.
- * 4. Retain stable regional snapshots beside their own loading, updating, and error evidence.
- * 5. Pause auto-refresh while hidden while preserving one absolute next-refresh deadline.
+ * 4. Show only objective planning and artifact facts, never tracked task completion.
+ * 5. Retain stable regional snapshots beside their own loading, updating, and error evidence.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff and action provenance.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
@@ -20,7 +21,8 @@
  * Original request (2026-07-31): "Code Git Snapshot 的 Other Worktrees 默认隐藏 (detached)。然后commitList这里默认显示5个就好"
  * Original request (2026-07-31): "检查目前的这个 Code Git Snapshot，它非常慢，有时候甚至要十几秒"
  * Owner correction (2026-07-31): Hidden documents pause the timer; visibility resumes the remaining delay or refreshes once when the absolute deadline elapsed.
- */
+ 
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/
 import { Badge } from '@/components/badge'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'
 import { DashboardGitRefreshControl } from '@/components/dashboard/git-refresh-control'
@@ -665,9 +667,8 @@ export function Dashboard() {
         {summaryPending ? <ChangeListSkeleton count={3} /> : null}
         {!summaryPending &&
           activeChanges.map((change) => {
-            const progress = change.trackedTaskProgress
-            const taskPercent =
-              progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
+            // Planning phase and CLI artifact facts only: tracked task counts are local data,
+            // not implementation progress, and never claim completion here.
             const status = activeStatuses.find((item) => item.changeName === change.id)
             const doneArtifacts =
               status?.artifacts.filter((artifact) => artifact.status === 'done').length ?? 0
@@ -685,7 +686,7 @@ export function Dashboard() {
             const phase = classifyChangeWorkflowPhase({
               hasStatus: Boolean(status),
               isPlanningComplete: status?.isPlanningComplete ?? false,
-              trackedTaskPhase: progress.phase,
+              trackedTaskPhase: change.trackedTaskProgress.phase,
               trackedArtifactStatus,
             })
 
@@ -735,20 +736,14 @@ export function Dashboard() {
                     >
                       {phase.label}
                     </Badge>
-                    <div className="font-medium">
-                      {progress.completed}/{progress.total}
-                    </div>
-                    <div className="text-muted-foreground text-xs">tasks</div>
                   </div>
                 </div>
-                <div className="bg-muted h-1.5 rounded-full">
-                  <div
-                    className="bg-primary h-full rounded-full transition-all"
-                    style={{ width: `${taskPercent}%` }}
-                  />
-                </div>
                 <div className="text-muted-foreground mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs">
-                  <span className="shrink-0">{taskPercent}% task completion</span>
+                  <span className="shrink-0">
+                    {status?.isPlanningComplete === true
+                      ? 'Planning complete'
+                      : 'Planning status pending CLI status'}
+                  </span>
                   {status ? (
                     <span className="min-w-0 truncate text-right">
                       {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
