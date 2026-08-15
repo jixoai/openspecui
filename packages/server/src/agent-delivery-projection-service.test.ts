@@ -295,6 +295,10 @@ describe('AgentDeliveryProjectionService', () => {
       expect(current.registry.find((tool) => tool.value === 'minimax-code')).toMatchObject({
         globalSkillsDir: '.minimax',
       })
+      // The per-tool physical states follow the same version-selected inventory: no 1.9
+      // restart facts and no unshipped target states on a 1.8 session.
+      expect(current.states.map((state) => state.toolId)).not.toContain('command-code')
+      expect(current.states.every((state) => state.requiresIdeRestart === false)).toBe(true)
     } finally {
       await service.dispose()
       await rm(projectDir, { recursive: true, force: true })

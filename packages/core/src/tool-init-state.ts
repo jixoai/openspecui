@@ -148,6 +148,12 @@ export interface ToolInitProjectionOptions {
   commandContents?: AgentCommandContentCatalog | null
   /** Tools whose command adapter this CLI line never shipped, with version-scoped reasons. */
   unavailableCommandTools?: Readonly<Record<string, string>> | null
+  /**
+   * Official inventory for the admitted CLI line. Defaults to the newest supported registry;
+   * the Agent delivery projection passes the version-selected list so a 1.8 session reports
+   * only its own tools' states (no 1.9 restart facts, no unshipped targets).
+   */
+  registry?: readonly ToolConfig[]
 }
 
 const ALL_TOOL_WORKFLOWS = [...OPSX_ALL_WORKFLOWS]
@@ -574,8 +580,9 @@ async function projectToolInitStates(
   const desiredWorkflowSet = new Set(desiredWorkflows)
   const projectRootEntries = await readArtifactDirectory(projectDir)
 
+  const officialRegistry = options.registry ?? AI_TOOLS
   return Promise.all(
-    AI_TOOLS.map(async (tool) => {
+    officialRegistry.map(async (tool) => {
       const skillsScope = resolveToolSkillsScope(tool)
       if (!tool.available || skillsScope.kind === 'none') {
         return {

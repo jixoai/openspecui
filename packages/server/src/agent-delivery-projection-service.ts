@@ -313,6 +313,7 @@ class RetainedAgentDeliveryProjection implements AgentDeliveryProjectionSubscrip
       generatorVersion: generatorEvidence.version,
       commandContents: generatorEvidence.commandContents?.catalog ?? null,
       unavailableCommandTools: generatorEvidence.commandContents?.unavailableTools ?? null,
+      registry: selectAgentDeliveryRegistry(generatorEvidence.version),
     })
 
     void (async () => {
@@ -375,6 +376,7 @@ export class AgentDeliveryProjectionService {
       generatorVersion: generatorEvidence.version,
       commandContents: generatorEvidence.commandContents?.catalog ?? null,
       unavailableCommandTools: generatorEvidence.commandContents?.unavailableTools ?? null,
+      registry: selectAgentDeliveryRegistry(generatorEvidence.version),
     })
     this.assertActive()
     return createProjection(policy, states, generatorEvidence)
