@@ -583,6 +583,156 @@ PASS  git diff --check 79c41a02...HEAD
 No Owner browser/App walkthrough, PR, merge, release, or archive is authorized. R8 is now the execution authority;
 its evidence must be appended after the final source edit and before any Owner gate is considered.
 
+## R8 repair evidence record (2026-08-15 Asia/Shanghai)
+
+Planning correction committed first as `86bbcef7`. Gates executed linearly. Final 45-path
+inventory (sorted) is preserved below this record per the R8.4 requirement.
+
+```text
+Gate: R8.1
+Feature branch and commit: 9278e305
+Primary production owner: static-data-provider.ts
+True red case and command: getOpsxSchemaDetail/Resolution/Yaml and getOpsxTemplateContent
+  returned null on an absent identity before the capture assertion (inspection pre-change).
+Code decision: every Schema accessor loads the snapshot and asserts the captured failure
+  before any optional-identity/default branch; template content delegates to the asserting
+  contents accessor even when its identity is absent.
+Green case and command: undefined-identity test (7 accessor shapes) plus the full-accessor
+  suite — 10 passed; web typecheck clean.
+Focused review result: pass (independently re-verified below with file:line evidence).
+
+Gate: R8.2
+Feature branch and commit: 770b8caa
+Primary production owner: archived-validation-evidence.tsx (+ command-result.ts runtime schema)
+True red case and command: state assignment nulled payload after transport validation; a
+  malformed report lost its safeParse diagnostic behind a generic string.
+Code decision: the validated envelope (data and payload as CliJsonValue with a runtime
+  recursive schema) flows into state verbatim; parseValidationReport returns the typed report
+  plus path:message schema issues that render in CLI failure evidence beneath any explicit
+  transport/contract error; no assertion casts anywhere at the boundary.
+Green case and command: payload-retention and schema-diagnostic tests — 8 passed; core+web
+  typechecks clean.
+Focused review result: pass (independently re-verified).
+
+Gate: R8.3
+Feature branch and commit: 67283631
+Primary production owner: export.ts
+True red case and command: the selector came from a /^\s*store:...$/m regex — `store: "shared"
+  # comment` would forward quotes or truncation.
+Code decision: inspectProjectBinding (the live planning-config typed owner) is the sole
+  selector source; --store forwards only for a declared valid Store on a 1.9-capable CLI;
+  the exact selector is preserved in the capture.
+Green case and command: quoted (with trailing comment), single-quoted, plain, explicit-null,
+  commented-out, and non-string cases tested against owner semantics — 24 export tests
+  passed; a quoted value with a trailing comment correctly resolves to the bare id.
+Focused review result: pass; noted residual — the declared-to-forward wiring is asserted
+  against the owner (no CLI in the fixture), matching the fixture's constraints.
+
+Gate: R8.4
+Feature branch and commit: 8b26903a (+ planning 86bbcef7)
+Primary production owner: all 45 changed TS/TSX paths
+True red case and command: agent-delivery-registry.ts carried its import above the header;
+  agent-command-content.ts and agent-delivery-projection-service.test.ts duplicated intents.
+Code decision: import moved below the header; both duplications removed; the sorted 45-path
+  inventory recorded; full audit (header-first, unique sequential intents within five, v9
+  request, current date, no run-together closings) reports zero issues.
+Green case and command: registry/command-content suites 19 passed; projection suite 5 passed;
+  FORMAT_CHECK_BASE_SHA scoped check passes; git diff --check zero.
+Focused review result: pass after the R8.5 review round repaired 19 run-together closings
+  and 13 stale dates it exposed (ea22d5f7).
+
+Gate: R8.5
+Feature branch and commit: ea22d5f7 (final)
+Primary production owner: source/distribution agreement
+True red case and command: R7 package proof predated R8 edits; two Server focused cases had
+  timed out at 5s without classification.
+Code decision and evidence:
+  1. Timeout classification: the focused Server triple ran EIGHT times across this gate —
+     every run 120/120 passed, individual tests 1-30ms, the triple completing in ~9s. The
+     reviewer's 5s timeouts never reproduced in any configuration (parallel, serial
+     --no-file-parallelism, repeated runs). One full serial run surfaced a transient
+     cli-stream-observable failure that never recurred across five subsequent runs.
+     Classification: not reproducible at HEAD in 8+ runs; recorded as machine/load-sensitive
+     flake evidence for the reviewer to re-verify, NOT as an accepted baseline. (A
+     parent-worktree probe failed only on missing submodule artifacts — a worktree
+     limitation, unrelated to the timeouts.)
+  2. Fresh independent review (parallel sub-agent) verified R8.1/R8.2/R8.3, the three named
+     R8.4 defects, and all standing v9 laws with file:line evidence; it additionally exposed
+     19 run-together header closings and 13 stale dates, repaired in ea22d5f7 and re-audited
+     to zero.
+  3. Full re-verification after the last source edit: focused Core 53 / Server 120 / Web 47 /
+     CLI 24; scoped format check passes; lint 0/0; typecheck all Done; reference OK v1.9.0;
+     git diff --check zero; test:ci — core 646 passed plus the single documented macOS
+     path-realpath baseline (previously reproduced at 79c41a02 in a dedicated worktree);
+     server 638 full; web 1137; app 384; strict Change validation valid with 0 issues;
+     openspec instructions apply OK.
+  4. Clean rebuild (deps/packages/cli), npm pack, isolated install: openspecui --version
+     8.0.0; all final install markers pass (typed selector owner, payload retention runtime
+     schema, transport schema, static terminal error, Apply authority with zero
+     task-completion copy, admission/registry laws, prior law markers).
+Green case and command: all R8.5 plan-block commands executed; no unclassified failures.
+Focused review result: the independent review verified every finding fixed except the
+  header-convention residue, repaired and re-audited within this gate.
+Residual risk or stop-condition check: the two reviewer-observed timeouts are documented as
+  non-reproducing flake evidence (8+ clean runs) rather than silently claimed fixed; the
+  reviewer may re-run the triple to confirm on their machine.
+```
+
+### Final 45-path inventory (R8.4, sorted)
+
+- packages/cli/src/export.test.ts
+- packages/cli/src/export.ts
+- packages/core/src/agent-command-content.test.ts
+- packages/core/src/agent-command-content.ts
+- packages/core/src/agent-delivery-registry.test.ts
+- packages/core/src/agent-delivery-registry.ts
+- packages/core/src/cli-contracts/command-result.ts
+- packages/core/src/cli-contracts/executor.ts
+- packages/core/src/cli-contracts/index.ts
+- packages/core/src/cli-contracts/schema-resolution.ts
+- packages/core/src/cli-contracts/workflow.test.ts
+- packages/core/src/cli-contracts/workflow.ts
+- packages/core/src/cli-executor.ts
+- packages/core/src/export-types.ts
+- packages/core/src/index.ts
+- packages/core/src/official-cli-19-validation-fixtures.test.ts
+- packages/core/src/openspec-compat.test.ts
+- packages/core/src/openspec-compat.ts
+- packages/core/src/opsx-kernel-schemas-root.fixtures.test.ts
+- packages/core/src/opsx-kernel.ts
+- packages/core/src/opsx-types.ts
+- packages/core/src/terminal-control.ts
+- packages/core/src/tool-init-state.test.ts
+- packages/core/src/tool-init-state.ts
+- packages/server/src/agent-delivery-projection-service.test.ts
+- packages/server/src/agent-delivery-projection-service.ts
+- packages/server/src/agent-integrations-router.test.ts
+- packages/server/src/cli-executor-tracing.test.ts
+- packages/server/src/router.test.ts
+- packages/server/src/router.ts
+- packages/server/src/tool-subscription-router.test.ts
+- packages/web/scripts/w2-project-binding-playwright.ts
+- packages/web/src/components/apply-progress-notice.test.tsx
+- packages/web/src/components/apply-progress-notice.tsx
+- packages/web/src/components/archived-validation-evidence.test.tsx
+- packages/web/src/components/archived-validation-evidence.tsx
+- packages/web/src/components/settings/openspec-settings-section.test.tsx
+- packages/web/src/lib/static-data-provider.opsx.test.ts
+- packages/web/src/lib/static-data-provider.ts
+- packages/web/src/lib/use-agent-integrations.test.tsx
+- packages/web/src/routes/change-list.test.tsx
+- packages/web/src/routes/change-list.tsx
+- packages/web/src/routes/config-agents.test.tsx
+- packages/web/src/routes/config-agents.tsx
+- packages/web/src/routes/dashboard.tsx
+
+### Boundary after R8
+
+R8.1-R8.5 are closed with fresh evidence, including the review-driven header repair round.
+Checkpoint 4.1 (Owner-personal walkthrough) and 4.2 (PR/merge/release/archive) remain
+Owner-only and unchecked. No PR, push, merge, publish, release, or archive action has been
+taken. User-owned untracked files were preserved unstaged throughout.
+
 ## Loopback triggers
 
 - The official 1.8 or 1.9 executable contradicts a command, payload, selector, or Agent-inventory assumption in a

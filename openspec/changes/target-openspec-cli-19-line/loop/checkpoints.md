@@ -100,11 +100,11 @@ All R7 items are blocked until their exact red/green evidence is appended to `lo
 finish with a fresh independent review; no earlier review, build, pack, or browser observation can be reused after
 an R7 source edit.
 
-- [ ] R7.1 Remove both archived-validation assertion casts while retaining the complete typed report and transport
+- [x] R7.1 Remove both archived-validation assertion casts while retaining the complete typed report and transport
       diagnostics, including payload.
-- [ ] R7.2 Complete the dynamic v9 TypeScript/TSX header inventory and clear every change-introduced whitespace
+- [x] R7.2 Complete the dynamic v9 TypeScript/TSX header inventory and clear every change-introduced whitespace
       violation, including owners newly touched by R7.3.
-- [ ] R7.3 Re-run focused/source/distribution gates and a fresh independent whole-change review after R7.1-R7.2.
+- [x] R7.3 Re-run focused/source/distribution gates and a fresh independent whole-change review after R7.1-R7.2.
 
 ### Superseded R7 correction record (2026-08-15 Asia/Shanghai)
 
@@ -120,13 +120,13 @@ validation and diff hygiene pass, but neither proves these runtime and evidence 
 The following gates execute in order. R7.1-R7.3 are reopened until R8.1-R8.5 have fresh evidence and a new
 independent review. Checkpoint 4.1 remains Owner-only and cannot be checked by this repair loop.
 
-- [ ] R8.1 Static Schema failure is terminal before every accessor's optional-identity return.
-- [ ] R8.2 Archived validation retains the verified transport payload and contract diagnostics.
-- [ ] R8.3 Static export reads the selected Store through the typed YAML/config owner and forwards only the admitted
+- [x] R8.1 Static Schema failure is terminal before every accessor's optional-identity return.
+- [x] R8.2 Archived validation retains the verified transport payload and contract diagnostics.
+- [x] R8.3 Static export reads the selected Store through the typed YAML/config owner and forwards only the admitted
       1.9 selector.
-- [ ] R8.4 The final 45-path inventory has top-level truthful headers with no duplicate, merged, or non-orthogonal
+- [x] R8.4 The final 45-path inventory has top-level truthful headers with no duplicate, merged, or non-orthogonal
       intents.
-- [ ] R8.5 Focused, full-source, distribution, and independent-review evidence has no unclassified failure.
+- [x] R8.5 Focused, full-source, distribution, and independent-review evidence has no unclassified failure.
 
 ### Independent-review correction record (2026-08-15 Asia/Shanghai)
 
