@@ -21,14 +21,26 @@ export type CliJsonValue =
   | CliJsonValue[]
   | { [key: string]: CliJsonValue }
 
+/** Runtime schema for one JSON value retained verbatim from CLI stdout. */
+const CliJsonValueSchema: z.ZodType<CliJsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(CliJsonValueSchema),
+    z.record(z.string(), CliJsonValueSchema),
+  ])
+)
+
 /** Runtime transport envelope for one CLI command result. */
 export const CliCommandTransportSchema = z.object({
   success: z.boolean(),
   stdout: z.string(),
   stderr: z.string(),
   exitCode: z.number().int().nullable(),
-  data: z.unknown().nullable(),
-  payload: z.unknown().nullable(),
+  data: CliJsonValueSchema.nullable(),
+  payload: CliJsonValueSchema.nullable(),
   diagnostics: z.array(CliDiagnosticSchema),
   contractError: z.string().optional(),
 })

@@ -177,6 +177,40 @@ describe('ArchivedValidationEvidence', () => {
     expect(screen.queryByText(/passed ·/)).toBeNull()
   })
 
+  it('surfaces the typed schema diagnostic for a malformed report payload', async () => {
+    validateMock.mockResolvedValue(
+      archivedReport({
+        data: {
+          items: [],
+          summary: { totals: { items: 'not-a-number' }, byType: {} },
+          version: '1.0',
+          root: { path: '/repo', source: 'nearest' },
+        },
+      })
+    )
+
+    render(<ArchivedValidationEvidence />)
+    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
+
+    await waitFor(() => expect(screen.getByText('CLI failure evidence')).toBeVisible())
+    // The schema path/message is rendered instead of a generic failure string.
+    await waitFor(() => expect(document.body.textContent).toContain('summary.totals.items'))
+  })
+
+  it('retains the CLI-supplied payload for a valid nonzero-exit report', async () => {
+    const payload = { items: [], summary: { totals: { items: 1, passed: 0, failed: 1 } } }
+    validateMock.mockResolvedValue(archivedReport({ payload, exitCode: 1 }))
+
+    render(<ArchivedValidationEvidence />)
+    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
+
+    await waitFor(() => expect(document.body.textContent).toContain('1 passed · 1 failed'))
+    // Exit evidence stays visible for the nonzero-exit typed report.
+    expect(document.body.textContent).toContain('Exit')
+  })
+
   it('offers no command on a detected OpenSpec 1.8 session', () => {
     rootActionStateMock.state = {
       ...rootActionStateMock.state,

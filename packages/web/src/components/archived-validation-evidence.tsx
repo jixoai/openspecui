@@ -35,9 +35,22 @@ type ArchivedValidationReport = CliValidateReport
  * field contract-true. The schema's inferred report type is used directly after a successful
  * parse — no assertion cast sits at this external-evidence boundary.
  */
-function parseValidationReport(value: unknown): ArchivedValidationReport | null {
+/** Schema-parse outcome for a report payload: the typed report or its typed diagnostic. */
+export interface ParsedArchivedValidationReport {
+  report: ArchivedValidationReport | null
+  /** `path: message` entries from CliValidateReportSchema when the payload is malformed. */
+  schemaIssues: readonly string[]
+}
+
+function parseValidationReport(value: unknown): ParsedArchivedValidationReport {
   const parsed = CliValidateReportSchema.safeParse(value)
-  return parsed.success ? parsed.data : null
+  if (parsed.success) return { report: parsed.data, schemaIssues: [] }
+  return {
+    report: null,
+    schemaIssues: parsed.error.issues.map(
+      (issue) => `${issue.path.length > 0 ? issue.path.join('.') : '<root>'}: ${issue.message}`
+    ),
+  }
 }
 
 function IssueList({ issues }: { issues: ArchivedValidationReport['items'][number]['issues'] }) {
@@ -124,7 +137,13 @@ export function ArchivedValidationEvidence() {
       if (transport.success) {
         // The envelope is contract-validated; `data` stays raw here and is parsed with
         // CliValidateReportSchema at the render boundary, so no cast is needed for state.
-        setReport({ ...transport.data, data: transport.data.data ?? null, payload: null })
+        // The CLI-supplied payload is retained exactly as delivered — nulling it would
+        // discard verified evidence the operator may need to audit the failure.
+        setReport({
+          ...transport.data,
+          data: transport.data.data ?? null,
+          payload: transport.data.payload ?? null,
+        })
       } else {
         setError('The archived validation transport returned an unrecognized result shape.')
       }
@@ -155,8 +174,10 @@ export function ArchivedValidationEvidence() {
   // A typed report is valid evidence even when the CLI exits non-zero: archived-task
   // failures are report content, not a transport or contract failure. Only a missing
   // report shape (transport error, contract drift) renders as failure evidence.
-  const validationReport = report ? parseValidationReport(report.data) : null
+  const parsed = report ? parseValidationReport(report.data) : { report: null, schemaIssues: [] }
+  const validationReport = parsed.report
   if (error || !validationReport) {
+    const schemaDiagnostic = parsed.schemaIssues.length > 0 ? parsed.schemaIssues.join('; ') : null
     return (
       <EvidenceDisclosure title="Archived validation" summary="CLI failure evidence">
         <div className="space-y-2">
@@ -165,6 +186,7 @@ export function ArchivedValidationEvidence() {
             <span className="min-w-0 break-all">
               {error ??
                 report?.contractError ??
+                schemaDiagnostic ??
                 report?.stderr.trim() ??
                 'The archived validation command failed.'}
             </span>
