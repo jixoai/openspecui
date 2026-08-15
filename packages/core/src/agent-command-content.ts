@@ -5,7 +5,6 @@
  * 3. Fail closed when the configured runner has no importable OpenSpec module or compatible generator contract.
  * 4. Isolate per-tool adapter absence as version-scoped unavailability, keeping unrelated evidence.
  *
- * 5. Isolate per-tool adapter absence as version-scoped unavailability evidence.
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/

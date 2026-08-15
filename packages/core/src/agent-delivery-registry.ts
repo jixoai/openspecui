@@ -1,4 +1,3 @@
-import { parseOpenSpecCliVersion } from './openspec-compat.js'
 /**
  * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Preserve the complete pinned OpenSpec 1.9 Agent delivery registry in one typed physical owner.
@@ -10,6 +9,7 @@ import { parseOpenSpecCliVersion } from './openspec-compat.js'
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
+import { parseOpenSpecCliVersion } from './openspec-compat.js'
 
 export type AgentCommandSurfaceCapability = 'adapter-backed' | 'skills-invocable' | 'none'
 export type AgentCommandFormat = 'markdown' | 'toml'

@@ -5,7 +5,6 @@
  * 3. Prove explicit refresh and dispose own deterministic replacement and retirement boundaries.
  * 4. Prove version-selected inventories including unavailable-CLI sessions.
  *
- * 5. Prove version-selected inventories including unavailable-CLI sessions.
  * Original request (2026-08-01): "新增 Agent delivery projection service 及 checked tests。"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"*/

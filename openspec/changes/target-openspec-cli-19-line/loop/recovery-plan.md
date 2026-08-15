@@ -633,6 +633,7 @@ Owner:         source/distribution agreement and independent-review boundary.
 
   Pack `packages/cli`, install it in an isolated temporary directory, and inspect CLI help/version plus the rebuilt
   Web asset and selector/evidence markers. Record every result after the last source edit.
+
 - **Green case:** all focused tests, the timeout classification, source gates, package evidence, isolated install,
   and a fresh independent review agree with the delta Specs. No failure is hidden as a baseline without reproduction.
 - **Stop condition:** any timeout remains unclassified, any source/dist mismatch appears, or any later source edit

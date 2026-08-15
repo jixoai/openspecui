@@ -557,13 +557,13 @@ No PR, push, merge, publish, release, or archive action has been taken. User-own
 The R7 closure record above is superseded. A fresh two-axis review against `79c41a02...2b3146e3`, followed by
 current focused execution, found the following blockers:
 
-| Gate | Current evidence | Required recovery |
-| --- | --- | --- |
-| R8.1 | `static-data-provider.ts:1143`, `:1152`, `:1269`, and `:1286` return on missing optional identity before `assertSchemasCaptureCaptured`; failed static captures can be bypassed with `undefined`. | Move the capture assertion before every optional-identity/default branch and add undefined-identity tests. |
-| R8.2 | `archived-validation-evidence.tsx:127` assigns `payload: null` after transport validation; malformed report parsing loses the schema diagnostic. | Preserve payload and render the schema contract diagnostic with transport evidence. |
-| R8.3 | `packages/cli/src/export.ts:473` parses YAML `store` using a line regex despite the existing typed YAML/config owner. | Reuse the typed config parser and test quoted/commented/invalid values. |
-| R8.4 | The final inventory command returns 45 paths, not 44. `agent-delivery-registry.ts:1` imports before its header; `agent-command-content.ts` and `agent-delivery-projection-service.test.ts` contain duplicate intent entries. | Reconcile all 45 headers and capture the complete final path list. |
-| R8.5 | Earlier current-branch run: 116 passed, 4 timeouts. Fresh complete run: 118 passed, 2 failed by 5-second timeout; isolated rerun reproduces both. | Reproduce at current and reviewed parent without timeout inflation; classify or repair before distribution review. |
+| Gate | Current evidence                                                                                                                                                                                                             | Required recovery                                                                                                  |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| R8.1 | `static-data-provider.ts:1143`, `:1152`, `:1269`, and `:1286` return on missing optional identity before `assertSchemasCaptureCaptured`; failed static captures can be bypassed with `undefined`.                            | Move the capture assertion before every optional-identity/default branch and add undefined-identity tests.         |
+| R8.2 | `archived-validation-evidence.tsx:127` assigns `payload: null` after transport validation; malformed report parsing loses the schema diagnostic.                                                                             | Preserve payload and render the schema contract diagnostic with transport evidence.                                |
+| R8.3 | `packages/cli/src/export.ts:473` parses YAML `store` using a line regex despite the existing typed YAML/config owner.                                                                                                        | Reuse the typed config parser and test quoted/commented/invalid values.                                            |
+| R8.4 | The final inventory command returns 45 paths, not 44. `agent-delivery-registry.ts:1` imports before its header; `agent-command-content.ts` and `agent-delivery-projection-service.test.ts` contain duplicate intent entries. | Reconcile all 45 headers and capture the complete final path list.                                                 |
+| R8.5 | Earlier current-branch run: 116 passed, 4 timeouts. Fresh complete run: 118 passed, 2 failed by 5-second timeout; isolated rerun reproduces both.                                                                            | Reproduce at current and reviewed parent without timeout inflation; classify or repair before distribution review. |
 
 Current verification summary:
 
