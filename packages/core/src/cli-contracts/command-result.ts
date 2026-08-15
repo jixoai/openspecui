@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-07-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Preserve every process-level fact from an OpenSpec CLI invocation.
  * 2. Validate command payloads without discarding the raw JSON document.
  * 3. Surface contract drift separately from CLI command failure.
+ * 4. Provide the runtime transport-envelope schema for browser evidence boundaries.
  *
  * Original request (2026-07-15): "对新增字段保持可扩展，对必需语义严格验证。"
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { z } from 'zod'
 import type { CliResult } from '../cli-executor.js'
