@@ -427,7 +427,12 @@ describe('ChangeView', () => {
 
     render(<ChangeView />)
 
-    expect(screen.getByRole('note', { name: 'Apply instructions progress 0 of 0' })).toBeTruthy()
+    // Under divergence the Apply count appears twice by design: once as the subtitle
+    // badge (the progress authority) and once inside the direct divergence notice.
+    expect(screen.getAllByRole('note', { name: 'Apply instructions progress 0 of 0' }).length).toBe(
+      2
+    )
+    expect(screen.getByText('Upstream task progress divergence')).toBeVisible()
     expect(screen.getByRole('note', { name: 'Tracked artifact glob progress 1 of 3' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Apply inputs' })).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()

@@ -131,7 +131,7 @@ export function ChangeView() {
     Boolean(error) ||
     rootAction.status !== 'ready' ||
     hasReferenceFailures ||
-    Boolean(applyInstructions?.applyInstructionProgress)
+    Boolean(applyInstructions?.applyInstructionProgress.divergence)
 
   return (
     <OpsxEntityDetailView
@@ -143,7 +143,11 @@ export function ChangeView() {
       title={status?.changeName}
       subtitle={
         status ? (
-          <ChangeContextSummary status={status} referenceEvidence={referenceEvidence} />
+          <ChangeContextSummary
+            status={status}
+            referenceEvidence={referenceEvidence}
+            applyInstructionProgress={applyInstructions?.applyInstructionProgress ?? null}
+          />
         ) : undefined
       }
       headerActions={

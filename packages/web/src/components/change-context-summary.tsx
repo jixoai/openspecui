@@ -1,14 +1,21 @@
 /**
- * Orthogonal intents (created 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Project compact Schema, artifact progress, Root, Store, and Reference subtitle badges.
- * 2. Preserve current, retained, unavailable, and static authority distinctions.
- * 3. Keep Reference failures directly visible without owning subscriptions or mutations.
+ * 2. Carry the Apply instruction count as one subtitle badge — the progress authority.
+ * 3. Preserve current, retained, unavailable, and static authority distinctions.
+ * 4. Keep Reference failures directly visible without owning subscriptions or mutations.
  *
  * Original request (2026-08-03): keep only necessary Change evidence in the default decision plane.
  * Owner correction (2026-08-03): unify Change scan Tooltips in the subtitle and keep failures below the Header.
+ * Original request (2026-08-15): Owner walkthrough: merge Apply progress into the subtitle badge row.
  */
+import { ApplyProgressBadge } from '@/components/apply-progress-notice'
 import { InformationBadge } from '@/components/information-disclosure'
-import type { ChangeStatus, CliReferenceIndexEntry } from '@openspecui/core'
+import type {
+  ApplyInstructionProgress,
+  ChangeStatus,
+  CliReferenceIndexEntry,
+} from '@openspecui/core'
 import { AlertCircle } from 'lucide-react'
 
 /** Reference facts already resolved by the Change route for pure presentation. */
@@ -55,9 +62,12 @@ function referenceErrorLabels(references: readonly CliReferenceIndexEntry[]): st
 export function ChangeContextSummary({
   status,
   referenceEvidence,
+  applyInstructionProgress,
 }: {
   status: ChangeStatus
   referenceEvidence: ChangeReferenceEvidence
+  /** Apply instruction progress; the CLI's own count is the implementation progress authority. */
+  applyInstructionProgress?: ApplyInstructionProgress | null
 }) {
   const provenance = status.provenance
   const references = referenceEvidence.state === 'unavailable' ? null : referenceEvidence.references
@@ -83,6 +93,9 @@ export function ChangeContextSummary({
       >
         {doneCount}/{totalCount} artifacts
       </InformationBadge>
+      {applyInstructionProgress ? (
+        <ApplyProgressBadge applyInstructionProgress={applyInstructionProgress} />
+      ) : null}
       {provenance.kind === 'static' ? (
         <InformationBadge
           ariaLabel="Static Change context has no live backend provenance"

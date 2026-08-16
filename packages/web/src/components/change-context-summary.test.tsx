@@ -1,13 +1,19 @@
 /**
- * Orthogonal intents (created 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove Schema, artifact progress, Root, and References share the subtitle badge vocabulary.
  * 2. Prove unavailable and retained Reference authority are not collapsed into zero.
  * 3. Keep direct Reference failures visible outside verbose evidence.
+ * 4. Prove the Apply instruction count joins the subtitle row as its progress authority.
  *
  * Original request (2026-08-03): keep the Change Detail default surface compact while preserving necessary facts.
  * Owner correction (2026-08-03): unify Schema, progress, Root, and Reference Tooltips in the subtitle.
+ * Original request (2026-08-15): Owner walkthrough: merge Apply progress into the subtitle badge row.
  */
-import type { ChangeStatus, CliReferenceIndexEntry } from '@openspecui/core'
+import type {
+  ApplyInstructionProgress,
+  ChangeStatus,
+  CliReferenceIndexEntry,
+} from '@openspecui/core'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -128,5 +134,47 @@ describe('ChangeContextSummary', () => {
 
     expect(screen.getByText('Static snapshot')).toBeTruthy()
     expect(screen.getByText('References unavailable')).toBeTruthy()
+  })
+
+  it('carries the Apply instruction count inside the subtitle badge row', () => {
+    const referenceEvidence: ChangeReferenceEvidence = {
+      state: 'unavailable',
+      reason: 'root-context',
+    }
+    const applyInstructionProgress: ApplyInstructionProgress = {
+      source: 'openspec-instructions-apply',
+      total: 102,
+      complete: 95,
+      remaining: 7,
+      state: 'ready',
+      divergence: null,
+    }
+
+    render(
+      <ChangeContextSummary
+        status={status()}
+        referenceEvidence={referenceEvidence}
+        applyInstructionProgress={applyInstructionProgress}
+      />
+    )
+
+    const applyBadge = screen.getByRole('note', { name: 'Apply instructions progress 95 of 102' })
+    expect(applyBadge).toHaveTextContent('Apply 95/102')
+    // The badge shares one row with the other subtitle facts, not a separate block.
+    const row = applyBadge.closest('[data-change-context-summary]')
+    expect(row).toBeTruthy()
+    expect(row).toHaveTextContent('Schema: spec-driven')
+    expect(row).toHaveTextContent('0/1 artifacts')
+  })
+
+  it('omits the Apply badge entirely when no Apply instruction evidence exists', () => {
+    const referenceEvidence: ChangeReferenceEvidence = {
+      state: 'unavailable',
+      reason: 'root-context',
+    }
+
+    render(<ChangeContextSummary status={status()} referenceEvidence={referenceEvidence} />)
+
+    expect(screen.queryByRole('note', { name: /Apply instructions progress/ })).toBeNull()
   })
 })
