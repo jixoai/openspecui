@@ -14,6 +14,7 @@
 import {
   CliDiagnosticFailureSchema,
   CliExecutor,
+  CliJsonValueSchema,
   ConfigManager,
   DEFAULT_CONFIG,
   inspectProjectBinding,
@@ -117,6 +118,23 @@ function parseCliJson<T>(
     throw new Error(`${label} returned unexpected JSON: ${result.error.message}`)
   }
   return result.data
+}
+
+function parseCliJsonValue(stdout: string): CliJsonValue | null {
+  let raw: unknown
+  try {
+    raw = JSON.parse(stdout)
+  } catch {
+    return null
+  }
+  const parsed = CliJsonValueSchema.safeParse(raw)
+  return parsed.success ? parsed.data : null
+}
+
+function hasCliResolvedRoot(payload: CliJsonValue | null): boolean {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return false
+  const root = payload.root
+  return root !== null && root !== undefined
 }
 
 function isAbsoluteFsPath(path: string): boolean {
@@ -482,26 +500,18 @@ export async function generateSnapshot(
     ): void => {
       // A CLI failure (including the OpenSpec 1.9 selected-Root envelope) is captured as a
       // typed failed observation so the static projection never reads it as an empty catalog.
-      let payload: unknown = null
-      try {
-        payload = JSON.parse(result.stdout)
-      } catch {
-        payload = null
-      }
+      const payload = parseCliJsonValue(result.stdout)
       const envelope = CliDiagnosticFailureSchema.safeParse(payload)
       schemasCapture = {
         ok: false,
         command: 'openspec schemas',
         selector: forwardedSelector,
-        rootAvailable:
-          typeof payload === 'object' && payload !== null && 'root' in payload
-            ? (payload as { root: unknown }).root !== null
-            : false,
+        rootAvailable: hasCliResolvedRoot(payload),
         diagnostics: envelope.success ? envelope.data.status : [],
         stdout: result.stdout,
         stderr: result.stderr,
         exitCode: result.exitCode,
-        payload: (payload as CliJsonValue | null) ?? null,
+        payload,
         ...(contractError !== undefined ? { contractError } : {}),
       }
     }
