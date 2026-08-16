@@ -682,6 +682,13 @@ const changeProjectionDataSchema = z.object({
       }),
       createdAt: z.number(),
       updatedAt: z.number(),
+      cliTaskSummary: z
+        .object({
+          completedTasks: z.number().int().nonnegative(),
+          totalTasks: z.number().int().nonnegative(),
+          status: z.enum(['no-tasks', 'complete', 'in-progress']),
+        })
+        .nullable(),
     })
   ),
   errors: z.array(changeProjectionRowErrorSchema),

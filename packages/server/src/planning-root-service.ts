@@ -311,16 +311,6 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
           ),
       },
     })
-    const changesProjectionService = new ChangesProjectionService({
-      workOwner: this.changesProjectionWorkOwner,
-      root: {
-        path: projectDir,
-        source: planningRoot.source,
-        storeSelector: rootCliSelector.store ?? null,
-        generation: gitBindingToken,
-      },
-      adapter,
-    })
     const planningCliProjectionService = new PlanningCliProjectionService({
       rootContext: rootContextValue,
       gitBindingToken,
@@ -330,6 +320,32 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       invalidation: this.options.runtimeInvalidation,
       storeObservation: this.options.storeObservation,
       workOwner: this.planningCliProjectionWorkOwner,
+    })
+    const changesProjectionService = new ChangesProjectionService({
+      workOwner: this.changesProjectionWorkOwner,
+      root: {
+        path: projectDir,
+        source: planningRoot.source,
+        storeSelector: rootCliSelector.store ?? null,
+        generation: gitBindingToken,
+      },
+      // The CLI list projection is the task-count authority for list rows; it is read once
+      // per projection load and a missing CLI list leaves rows null, never backfilled.
+      adapter: {
+        listChanges: () => adapter.listChanges(),
+        readChangeMeta: (id: string) => adapter.readChangeMeta(id),
+        readCliChangeListEntries: async () => {
+          try {
+            const data = await planningCliProjectionService.getCurrent({
+              kind: 'opsx-change-list',
+            })
+            if (data.kind !== 'opsx-change-list') return new Map()
+            return new Map(data.entries.map((entry) => [entry.name, entry]))
+          } catch {
+            return new Map()
+          }
+        },
+      },
     })
     const filePreviewService = new FilePreviewService(projectDir, this.options.previewAssetsDir)
     const schemaMutationService = new SchemaMutationService({

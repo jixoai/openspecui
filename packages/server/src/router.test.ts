@@ -2833,6 +2833,7 @@ apply:
         documentChecklistSummary: documentChecklistSummary(),
         createdAt: 1,
         updatedAt: 1,
+        cliTaskSummary: null,
       }
       const batchIdentity = {
         projectionKind: 'changes-rows',
