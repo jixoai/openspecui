@@ -23,7 +23,7 @@
  * Owner correction (2026-07-31): Hidden documents pause the timer; visibility resumes the remaining delay or refreshes once when the absolute deadline elapsed.
 
  */
-import { Badge } from '@/components/badge'
+import { ChangeRow, ChangeRowChevron } from '@/components/change-row'
 import { DashboardContextSummary } from '@/components/dashboard/context-summary'
 import { DashboardGitRefreshControl } from '@/components/dashboard/git-refresh-control'
 import { DashboardMetricCard } from '@/components/dashboard/metric-card'
@@ -712,46 +712,28 @@ export function Dashboard() {
                 )}
                 className="hover:bg-muted/50 block min-w-0 px-4 py-3"
               >
-                <div className="mb-2 flex min-w-0 flex-wrap items-start justify-between gap-3 sm:flex-nowrap sm:items-center">
-                  <div className="min-w-0 flex-1">
-                    <div
-                      {...getSharedElementBinding(
-                        { family: 'changes', entityId: change.id },
-                        'title'
-                      )}
-                      className="truncate font-medium"
-                    >
-                      {change.name}
-                    </div>
-                    <div className="text-muted-foreground truncate text-xs">
-                      {change.updatedAt > 0 && <>{formatRelativeTime(change.updatedAt)} · </>}
-                      {change.id}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right text-sm">
-                    <Badge
-                      tone="custom"
-                      size="sm"
-                      shape="box"
-                      className={`border ${phase.toneClass}`}
-                    >
-                      {phase.label}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="text-muted-foreground mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs">
-                  <span className="shrink-0">
-                    {status?.isPlanningComplete === true
-                      ? 'Planning complete'
-                      : 'Planning status pending CLI status'}
-                  </span>
-                  {status ? (
-                    <span className="min-w-0 truncate text-right">
-                      {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
-                    </span>
-                  ) : (
-                    <span>Artifacts status unavailable</span>
-                  )}
+                <div className="flex min-w-0 items-center gap-3">
+                  <ChangeRow
+                    changeId={change.id}
+                    name={change.name}
+                    phase={phase}
+                    updatedAt={change.updatedAt}
+                    formatTime={formatRelativeTime}
+                    className="min-w-0 flex-1"
+                    subtitle={
+                      status ? (
+                        <span title="Task counts reported by the OpenSpec CLI for this Change.">
+                          {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
+                          {change.cliTaskSummary
+                            ? ` · Tasks ${change.cliTaskSummary.completedTasks}/${change.cliTaskSummary.totalTasks}`
+                            : ''}
+                        </span>
+                      ) : (
+                        'Artifacts status unavailable'
+                      )
+                    }
+                  />
+                  <ChangeRowChevron />
                 </div>
               </VTLink>
             )
