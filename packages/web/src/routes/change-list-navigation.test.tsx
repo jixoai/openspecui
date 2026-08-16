@@ -50,6 +50,7 @@ function createChange(id: string, name: string): ChangeMeta {
       completed: 0,
       remaining: 0,
     },
+    cliTaskSummary: null,
   }
 }
 

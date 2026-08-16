@@ -34,7 +34,6 @@
  * Original request (2026-08-02): initialize a missing Launch Project through one explicit `--tools=none` Alert.
  * Review correction (2026-08-02): Init cancellation and success wait for objective process and projection settlement.
 
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import type {
   ChangeFile,
@@ -116,7 +115,9 @@ import {
   type ApplyInstructions,
   type ArchiveInstructions,
   type ArtifactInstructions,
+  type ChangeMeta,
   type ChangeStatus,
+  type CliChangeListEntry,
   type CliProjectionNotice,
   type EnvUri,
   type PlanningCliProjectionSelector,
@@ -1672,13 +1673,49 @@ export const specRouter = router({
 /**
  * Change router - change proposal operations
  */
+/**
+ * Join the CLI-owned Change-list task facts onto adapter ChangeMeta rows. The CLI entry is
+ * the task-count authority (`openspec list` reports the same checkbox semantics as Apply);
+ * rows the CLI did not list keep a null summary rather than a UI-side recomputation.
+ */
+async function listChangesWithCliTaskSummary(
+  ctx: Context,
+  adapter: OpenSpecAdapter
+): Promise<ChangeMeta[]> {
+  const [rows, cliList] = await Promise.all([
+    adapter.listChangesWithMeta(),
+    runPlanningRootRead(ctx, ({ planningCliProjectionService }) =>
+      planningCliProjectionService.getCurrent({ kind: 'opsx-change-list' })
+    ).then(
+      (data): Map<string, CliChangeListEntry> =>
+        data.kind === 'opsx-change-list'
+          ? new Map(data.entries.map((entry) => [entry.name, entry]))
+          : new Map(),
+      () => new Map<string, CliChangeListEntry>()
+    ),
+  ])
+  return rows.map((row) => {
+    const entry = cliList.get(row.id)
+    return entry
+      ? {
+          ...row,
+          cliTaskSummary: {
+            completedTasks: entry.completedTasks,
+            totalTasks: entry.totalTasks,
+            status: entry.status,
+          },
+        }
+      : row
+  })
+}
+
 export const changeRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
     return runPlanningRootRead(ctx, ({ adapter }) => adapter.listChanges())
   }),
 
   listWithMeta: publicProcedure.query(async ({ ctx }) => {
-    return runPlanningRootRead(ctx, ({ adapter }) => adapter.listChangesWithMeta())
+    return runPlanningRootRead(ctx, ({ adapter }) => listChangesWithCliTaskSummary(ctx, adapter))
   }),
 
   listArchived: publicProcedure.query(async ({ ctx }) => {
@@ -1735,7 +1772,9 @@ export const changeRouter = router({
 
   // Reactive subscriptions
   subscribe: publicProcedure.subscription(({ ctx }) => {
-    return createPlanningRootSubscription(ctx, ({ adapter }) => adapter.listChangesWithMeta())
+    return createPlanningRootSubscription(ctx, ({ adapter }) =>
+      listChangesWithCliTaskSummary(ctx, adapter)
+    )
   }),
 
   /** Stream bounded Change rows before the complete inventory settles. */

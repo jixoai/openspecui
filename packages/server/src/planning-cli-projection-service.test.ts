@@ -256,7 +256,19 @@ describe('PlanningCliProjectionService', () => {
     })
     const fixture = createFixture(
       async () => createStatus('unexpected'),
-      async () => ({ value: ['cli-owned'], evidence })
+      async () => ({
+        value: ['cli-owned'],
+        entries: [
+          {
+            name: 'cli-owned',
+            completedTasks: 31,
+            totalTasks: 33,
+            lastModified: '2026-08-15T00:00:00.000Z',
+            status: 'in-progress' as const,
+          },
+        ],
+        evidence,
+      })
     )
     const selector = { kind: 'opsx-change-list' } satisfies PlanningCliProjectionSelector
     const notices: CliProjectionNotice[] = []
@@ -266,7 +278,20 @@ describe('PlanningCliProjectionService', () => {
       await vi.waitFor(() => {
         expect(fixture.service.read(selector)).toMatchObject({
           state: 'ready',
-          data: { kind: 'opsx-change-list', value: ['cli-owned'], evidence },
+          data: {
+            kind: 'opsx-change-list',
+            value: ['cli-owned'],
+            entries: [
+              {
+                name: 'cli-owned',
+                completedTasks: 31,
+                totalTasks: 33,
+                lastModified: '2026-08-15T00:00:00.000Z',
+                status: 'in-progress',
+              },
+            ],
+            evidence,
+          },
         })
       })
       expect(notices.length).toBeGreaterThan(0)

@@ -240,6 +240,15 @@ export function ChangeList() {
                     {!statusError && status ? (
                       <span className="truncate">
                         {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
+                        {change.cliTaskSummary ? (
+                          <>
+                            {' · '}
+                            <span title="Task counts reported by the OpenSpec CLI for this Change.">
+                              Tasks {change.cliTaskSummary.completedTasks}/
+                              {change.cliTaskSummary.totalTasks}
+                            </span>
+                          </>
+                        ) : null}
                       </span>
                     ) : !statusError && statuses === undefined && isStatusLoading ? (
                       <RealtimeSkeletonLine className="w-28" />

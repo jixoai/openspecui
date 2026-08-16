@@ -81,6 +81,7 @@ function changeRow(id: string): ChangeMeta {
     documentChecklistSummary: createDocumentChecklistSummary([]),
     createdAt: 1,
     updatedAt: 1,
+    cliTaskSummary: null,
   }
 }
 

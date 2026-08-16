@@ -70,6 +70,15 @@ export const PlanningCliProjectionDataSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('opsx-change-list'),
     value: z.array(z.string()),
+    entries: z.array(
+      z.object({
+        name: z.string(),
+        completedTasks: z.number(),
+        totalTasks: z.number(),
+        lastModified: z.string(),
+        status: z.enum(['no-tasks', 'complete', 'in-progress']),
+      })
+    ),
     evidence: CliProjectionCommandEvidenceSchema,
   }),
   z.object({

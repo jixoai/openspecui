@@ -343,6 +343,9 @@ export const CliArchiveSchema = z
   })
   .passthrough()
 
+/** One CLI-reported Change row: task counts and phase straight from `openspec list`. */
+export type CliChangeListEntry = z.infer<typeof CliChangeListEntrySchema>
+
 export type CliChangeList = z.infer<typeof CliChangeListSchema>
 export type CliSpecList = z.infer<typeof CliSpecListSchema>
 export type CliSchemaResolution = z.infer<typeof CliSchemaResolutionSchema>

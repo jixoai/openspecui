@@ -684,6 +684,7 @@ export {
   type CliArchiveInstructions,
   type CliArtifactInstructions,
   type CliChangeList,
+  type CliChangeListEntry,
   type CliCommandResult,
   type CliContext,
   type CliDiagnostic,

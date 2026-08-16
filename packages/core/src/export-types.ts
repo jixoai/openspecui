@@ -165,6 +165,12 @@ export interface ExportSnapshot {
     whatChanges: string
     /** Formal workflow task truth from the tracked artifact glob. */
     trackedTaskProgress: TrackedTaskProgress
+    /** Task counts as reported by `openspec list`, when the export observed them. */
+    cliTaskSummary?: {
+      completedTasks: number
+      totalTasks: number
+      status: 'no-tasks' | 'complete' | 'in-progress'
+    } | null
     /** Secondary schema-document checkbox analytics. */
     documentChecklistSummary: DocumentChecklistSummary
     deltas: Array<{

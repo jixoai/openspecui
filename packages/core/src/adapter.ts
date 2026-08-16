@@ -57,6 +57,16 @@ export interface ChangeMeta {
   documentChecklistSummary: DocumentChecklistSummary
   createdAt: number
   updatedAt: number
+  /**
+   * Task counts and phase as reported by `openspec list` for this row, when the CLI
+   * projection has been observed. Null when no CLI list evidence exists yet — the CLI is
+   * the task-count authority and UI-side file arithmetic must not backfill it.
+   */
+  cliTaskSummary: {
+    completedTasks: number
+    totalTasks: number
+    status: 'no-tasks' | 'complete' | 'in-progress'
+  } | null
 }
 
 /** Archived change metadata with time info */
@@ -204,6 +214,8 @@ export class OpenSpecAdapter {
       documentChecklistSummary: taskProjection.documentChecklistSummary,
       createdAt: timeInfo?.createdAt ?? 0,
       updatedAt: timeInfo?.updatedAt ?? 0,
+      // CLI list evidence is joined at the router boundary; the adapter itself has none.
+      cliTaskSummary: null,
     }
   }
 

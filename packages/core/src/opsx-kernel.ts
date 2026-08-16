@@ -19,6 +19,7 @@ import {
   CliChangeListSchema,
   CliRootSchema,
   CliWorkflowStatusSuccessSchema,
+  type CliChangeListEntry,
   type CliCommandResult,
   type CliRootSelector,
 } from './cli-contracts/index.js'
@@ -1050,6 +1051,7 @@ export class OpsxKernel {
 
   private async fetchChangeListProjection(): Promise<{
     value: string[]
+    entries: CliChangeListEntry[]
     evidence: CliProjectionCommandEvidence
   }> {
     // The directory inventory is an invalidation dependency only. OpenSpec CLI owns the list value.
@@ -1058,6 +1060,7 @@ export class OpsxKernel {
     const data = requireCommandData('openspec list', result, CliChangeListSchema)
     return {
       value: data.changes.map(({ name }) => name),
+      entries: data.changes,
       evidence: toCliProjectionCommandEvidence(result),
     }
   }
@@ -1338,9 +1341,14 @@ export class OpsxKernel {
     return this.fetchStatus(changeId, schema)
   }
 
-  /** Execute CLI-owned Change enumeration with file dependencies owned by the caller's Work generation. */
+  /**
+   * Execute CLI-owned Change enumeration with file dependencies owned by the caller's Work
+   * generation. `entries` carries the CLI's own per-Change task counts and phase so list
+   * surfaces can show CLI-reported progress without UI-side file arithmetic.
+   */
   readChangeListProjection(): Promise<{
     value: string[]
+    entries: CliChangeListEntry[]
     evidence: CliProjectionCommandEvidence
   }> {
     return this.fetchChangeListProjection()

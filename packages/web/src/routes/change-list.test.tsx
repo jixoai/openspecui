@@ -434,6 +434,84 @@ describe('ChangeList', () => {
     expect(screen.getByText('4/4 artifacts · spec-driven')).toBeTruthy()
   })
 
+  it('shows CLI-reported task counts without claiming a completion percentage', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'target-openspec-cli-19-line',
+          name: 'target-openspec-cli-19-line',
+          trackedTaskProgress: { total: 33, completed: 31, phase: 'in-progress' },
+          documentChecklistSummary: { groups: [], total: 0, completed: 0, remaining: 0 },
+          createdAt: Date.now() - 60_000,
+          updatedAt: Date.now() - 60_000,
+          cliTaskSummary: { completedTasks: 31, totalTasks: 33, status: 'in-progress' },
+        },
+      ],
+      isLoading: false,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          changeName: 'target-openspec-cli-19-line',
+          schemaName: 'opsx-collab-pr-loop',
+          isPlanningComplete: true,
+          applyRequires: [],
+          artifacts: [
+            { id: 'intake', status: 'done' },
+            { id: 'research-plan', status: 'done' },
+            { id: 'implementation', status: 'done' },
+            { id: 'checkpoints', status: 'done' },
+          ],
+        },
+      ],
+    })
+
+    render(<ChangeList />)
+
+    // The count is the CLI's own `openspec list` fact — authoritative, not reconstructed.
+    expect(screen.getByText(/Tasks 31\/33/)).toBeTruthy()
+    expect(
+      screen.getByTitle('Task counts reported by the OpenSpec CLI for this Change.')
+    ).toBeTruthy()
+    // No completion percentage is claimed at list level.
+    expect(screen.queryByText(/% task completion/)).toBeNull()
+    expect(screen.queryByText(/% complete/)).toBeNull()
+  })
+
+  it('omits task counts entirely when no CLI list evidence exists', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'no-cli-evidence',
+          name: 'no-cli-evidence',
+          trackedTaskProgress: { total: 9, completed: 4, phase: 'in-progress' },
+          documentChecklistSummary: { groups: [], total: 0, completed: 0, remaining: 0 },
+          createdAt: Date.now() - 60_000,
+          updatedAt: Date.now() - 60_000,
+          cliTaskSummary: null,
+        },
+      ],
+      isLoading: false,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          changeName: 'no-cli-evidence',
+          schemaName: 'spec-driven',
+          isPlanningComplete: false,
+          applyRequires: ['tasks'],
+          artifacts: [{ id: 'proposal', status: 'done' }],
+        },
+      ],
+    })
+
+    render(<ChangeList />)
+
+    expect(screen.queryByText(/Tasks /)).toBeNull()
+    // UI-side tracked arithmetic never backfills the missing CLI count.
+    expect(screen.queryByText('4/9')).toBeNull()
+  })
+
   it('labels planning-incomplete changes with open tracked tasks as In Execution', () => {
     useChangesSubscriptionMock.mockReturnValue({
       data: [

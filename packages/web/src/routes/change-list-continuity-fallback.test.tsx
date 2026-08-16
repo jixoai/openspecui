@@ -27,6 +27,7 @@ function createChange(id: string, name: string): ChangeMeta {
       source: { kind: 'none', artifactId: null, outputPath: null, filePaths: [] },
     },
     documentChecklistSummary: { groups: [], total: 0, completed: 0, remaining: 0 },
+    cliTaskSummary: null,
   }
 }
 

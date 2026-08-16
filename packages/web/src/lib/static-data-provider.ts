@@ -879,6 +879,8 @@ export async function getChanges(): Promise<ChangeMeta[]> {
     documentChecklistSummary: change.documentChecklistSummary,
     createdAt: change.createdAt,
     updatedAt: change.updatedAt,
+    // Static snapshots carry CLI list task facts when the export observed them.
+    cliTaskSummary: change.cliTaskSummary ?? null,
   }))
 }
 
