@@ -8,9 +8,11 @@
  * Original request (2026-08-03): keep only necessary Change evidence in the default decision plane.
  * Owner correction (2026-08-03): unify Change scan Tooltips in the subtitle and keep failures below the Header.
  * Original request (2026-08-15): Owner walkthrough: merge Apply progress into the subtitle badge row.
+ * Original request (2026-08-15): 刷新/解析中的 lifecycle 锁收敛为副标题行内的 shiny 徽章 + Tooltip。
  */
 import { ApplyProgressBadge } from '@/components/apply-progress-notice'
 import { InformationBadge } from '@/components/information-disclosure'
+import { ShinyStatusBadge } from '@/components/realtime'
 import type {
   ApplyInstructionProgress,
   ChangeStatus,
@@ -58,16 +60,28 @@ function referenceErrorLabels(references: readonly CliReferenceIndexEntry[]): st
   })
 }
 
+/** One normal-lifecycle lock rendered as a shiny badge; the complete reason lives in its Tooltip. */
+export interface LifecycleBadgeFact {
+  label: string
+  message: string
+}
+
 /** Compact source-attributed facts that share the Change Header subtitle. */
 export function ChangeContextSummary({
   status,
   referenceEvidence,
   applyInstructionProgress,
+  statusRefreshing = null,
+  rootChecking = null,
 }: {
   status: ChangeStatus
   referenceEvidence: ChangeReferenceEvidence
   /** Apply instruction progress; the CLI's own count is the implementation progress authority. */
   applyInstructionProgress?: ApplyInstructionProgress | null
+  /** Non-current Change Status authority; actions stay read-only while refreshing. */
+  statusRefreshing?: LifecycleBadgeFact | null
+  /** Root Context still resolving/refreshing; root-dependent actions stay locked. */
+  rootChecking?: LifecycleBadgeFact | null
 }) {
   const provenance = status.provenance
   const references = referenceEvidence.state === 'unavailable' ? null : referenceEvidence.references
@@ -144,6 +158,12 @@ export function ChangeContextSummary({
           References unavailable
         </InformationBadge>
       )}
+      {rootChecking ? (
+        <ShinyStatusBadge label={rootChecking.label} message={rootChecking.message} />
+      ) : null}
+      {statusRefreshing ? (
+        <ShinyStatusBadge label={statusRefreshing.label} message={statusRefreshing.message} />
+      ) : null}
     </div>
   )
 }

@@ -6,6 +6,7 @@
  *
  * Original request (2026-07-23): "不用显示文字，可以用光影来替代，将它做成一种视觉语言，其实包括加载中等状态也是。"
  * Original request (2026-07-28): "即将发生变更的区域应该发生一种类似 skeleton 的效果…让用户知道这部分区域的数据已经是旧的。"
+ * Original request (2026-08-15): 刷新/解析中的块级 Alert 改为 Animated Shiny Text + Tooltip，不再占据界面空间。
  *
  * Compromise: these styles only extend existing theme tokens + native transitions. No global overlay,
  * persistent status label, fake percentage/ETA, hand-written scroll ledger, or hand-written JS animation loop.
@@ -97,6 +98,30 @@
   }
 }
 
+/* ---- Shiny text: normal-lifecycle text whose meaning lives in a Tooltip ---- */
+/* The shimmer marks the text as live/transient; hover or keyboard focus reveals the full message. */
+.rt-shiny-text {
+  background: linear-gradient(
+    90deg,
+    var(--muted-foreground) 40%,
+    color-mix(in oklab, var(--primary) 85%, var(--foreground)) 50%,
+    var(--muted-foreground) 60%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: rt-shiny-text-sweep 2.5s linear infinite;
+}
+@keyframes rt-shiny-text-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
 /* Changed-item settling cue: a brief luminance wash on a newly-committed item. */
 .rt-settle {
   animation: rt-settle 0.5s ease-out 1;
@@ -152,11 +177,17 @@
 @media (prefers-reduced-motion: reduce) {
   .rt-skeleton::after,
   .rt-revalidate-cue::after,
+  .rt-shiny-text,
   .rt-settle,
   .rt-progress-indeterminate::after,
   .rt-progress-fill {
     animation: none;
     transition: none;
+  }
+  /* A static readable label replaces the shimmer so the lifecycle state stays perceivable. */
+  .rt-shiny-text {
+    background: none;
+    color: var(--muted-foreground);
   }
   /* A static luminance band replaces the shimmer so the loading state stays perceivable. */
   .rt-skeleton {

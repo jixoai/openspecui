@@ -16,7 +16,7 @@ import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/component
 import { WorkflowEvidenceDisclosure } from '@/components/opsx/workflow-evidence-disclosure'
 import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
 import { AsyncAction } from '@/components/realtime'
-import { RootActionNotice } from '@/components/root-action-notice'
+import { RootActionNotice, RootCheckingBadge } from '@/components/root-action-notice'
 import { TerminalDispatchActions } from '@/components/terminal/terminal-dispatch-actions'
 import { navController } from '@/lib/nav-controller'
 import {
@@ -159,15 +159,18 @@ export function OpsxProposeRoute() {
           <Sparkles className="text-primary h-4 w-4" />
           <h2 className="font-nav text-base tracking-[0.04em]">Quick Propose</h2>
         </div>
-        <button
-          type="button"
-          onClick={() => navController.activatePop('/opsx-new')}
-          className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs"
-          title="Open advanced /opsx:new form"
-        >
-          Advanced
-          <ArrowRight className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <RootCheckingBadge state={rootAction} />
+          <button
+            type="button"
+            onClick={() => navController.activatePop('/opsx-new')}
+            className="border-border hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs"
+            title="Open advanced /opsx:new form"
+          >
+            Advanced
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 p-4">

@@ -31,7 +31,7 @@ import {
 } from '@/components/file-explorer'
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { DetailPanelSkeleton } from '@/components/realtime'
-import { RootActionNotice } from '@/components/root-action-notice'
+import { RootActionNotice, RootCheckingBadge } from '@/components/root-action-notice'
 import { useViewportConstrainedHeight } from '@/components/scroll-spy'
 import { Select, type SelectOption } from '@/components/select'
 import { isStaticMode } from '@/lib/static-mode'
@@ -777,6 +777,7 @@ export function ConfigSchemaWorkspace({
             ]}
           />
           <div className="flex items-center gap-2">
+            <RootCheckingBadge state={rootAction} />
             <button
               type="button"
               onClick={handleAddSchema}

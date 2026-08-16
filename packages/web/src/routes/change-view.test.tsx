@@ -297,7 +297,10 @@ describe('ChangeView', () => {
         true
       )
       if (rootAction.status === 'checking') {
-        expect(screen.getByRole('status')).toHaveTextContent(rootAction.message)
+        const statuses = screen.getAllByRole('status')
+        expect(statuses.some((status) => status.textContent?.includes(rootAction.message))).toBe(
+          true
+        )
       } else {
         expect(
           alerts.some((alert) => alert.textContent?.includes(rootAction.evidence.join('\n')))

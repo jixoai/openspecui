@@ -12,7 +12,7 @@
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
 import { AsyncAction } from '@/components/realtime'
-import { RootActionNotice } from '@/components/root-action-notice'
+import { RootActionNotice, RootCheckingBadge } from '@/components/root-action-notice'
 import { navController } from '@/lib/nav-controller'
 import { CHANGE_NAME_PATTERN, buildNewChangeArgs, quoteShellToken } from '@/lib/opsx-new-command'
 import { isWorkflowTargetCurrent, prepareWorkflowInvocation } from '@/lib/opsx-workflow-invocation'
@@ -187,9 +187,12 @@ export function OpsxNewRoute() {
         void submit()
       }}
     >
-      <div className="border-border flex items-center gap-2 border-b px-4 py-3">
-        <Sparkles className="text-primary h-4 w-4" />
-        <h2 className="font-nav text-base tracking-[0.04em]">Create OPSX Change</h2>
+      <div className="border-border flex items-center justify-between gap-2 border-b px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="text-primary h-4 w-4" />
+          <h2 className="font-nav text-base tracking-[0.04em]">Create OPSX Change</h2>
+        </div>
+        <RootCheckingBadge state={rootAction} />
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4">

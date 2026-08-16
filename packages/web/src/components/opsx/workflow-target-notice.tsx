@@ -6,6 +6,7 @@
  *
  * Original request (2026-07-20): "New/Propose/Compose/Verify must show the returned target before dispatch."
  * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip while OPSX stays primary.
+ * Original request (2026-08-15): stale 目标收敛为同排琥珀色徽章 + Tooltip，不再展开两行 Alert。
  */
 import { InformationBadge } from '@/components/information-disclosure'
 import type { WorkflowInvocationTargetV2 } from '@openspecui/core'
@@ -102,16 +103,17 @@ export function WorkflowTargetNotice({
         >
           References {referenceDiagnostics.references}
         </InformationBadge>
+        {stale ? (
+          <InformationBadge
+            ariaLabel="Planning target is stale; dispatch is locked."
+            tooltip="The prepared planning target is stale. Re-prepare the workflow before dispatch."
+            tone="custom"
+            className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+          >
+            Stale target
+          </InformationBadge>
+        ) : null}
       </div>
-      {stale ? (
-        <div
-          className="mt-2 flex items-start gap-2 text-amber-700 dark:text-amber-300"
-          role="alert"
-        >
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-          <span>Planning target is stale; dispatch is locked.</span>
-        </div>
-      ) : null}
       {referenceErrors.length > 0 ? (
         <div className="text-destructive mt-2 flex items-start gap-2" role="alert">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
