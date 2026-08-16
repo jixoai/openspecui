@@ -230,13 +230,6 @@ export function ChangeList() {
                   </div>
 
                   <div className="text-muted-foreground mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span>
-                      {status?.isPlanningComplete === true
-                        ? 'Planning complete — ready to apply or review'
-                        : phase.label === 'In Execution'
-                          ? 'Planning in progress'
-                          : 'Planning status pending CLI status'}
-                    </span>
                     {!statusError && status ? (
                       <span className="truncate">
                         {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}

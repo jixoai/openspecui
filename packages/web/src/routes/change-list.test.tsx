@@ -139,7 +139,7 @@ describe('ChangeList', () => {
     expect(screen.queryByText('0/9')).toBeNull()
     expect(screen.queryByText('0% task completion')).toBeNull()
     expect(container.querySelector('[style="width: 0%;"]')).toBeNull()
-    expect(screen.getByText('Planning status pending CLI status')).toBeTruthy()
+    expect(screen.getByText('Unknown')).toBeTruthy()
     expect(container.querySelector('.rt-skeleton-line')).not.toBeNull()
     expect(screen.queryByText('Loading workflow status…')).toBeNull()
   })
@@ -544,7 +544,8 @@ describe('ChangeList', () => {
     render(<ChangeList />)
 
     expect(screen.getByText('In Execution')).toBeTruthy()
-    expect(screen.getByText('Planning in progress')).toBeTruthy()
+    // The phase badge is the single planning authority; no duplicated echo line remains.
+    expect(screen.queryByText('Planning in progress')).toBeNull()
     expect(screen.queryByText('Planning Complete')).toBeNull()
   })
 
