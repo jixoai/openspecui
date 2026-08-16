@@ -116,9 +116,9 @@ describe('WorkflowTargetNotice', () => {
   it('keeps stale dispatch authority directly visible', () => {
     render(<WorkflowTargetNotice target={target()} stale />)
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Planning target is stale; dispatch is locked.'
-    )
+    expect(
+      screen.getByRole('note', { name: 'Planning target is stale; dispatch is locked.' })
+    ).toHaveTextContent('Stale target')
   })
 
   it('renders no target in static mode', () => {

@@ -381,9 +381,10 @@ describe('static-data-provider opsx adapters', () => {
     for (const [label, run] of accessors) {
       const error = await run().catch((cause) => cause)
       expect(error, label).toBeInstanceOf(provider.StaticSchemasCaptureError)
-      expect((error as InstanceType<typeof provider.StaticSchemasCaptureError>).capture).toBe(
-        bundleError.capture
-      )
+      if (!(error instanceof provider.StaticSchemasCaptureError)) {
+        throw new Error(`${label} did not preserve StaticSchemasCaptureError.`)
+      }
+      expect(error.capture).toBe(bundleError.capture)
     }
   })
 
