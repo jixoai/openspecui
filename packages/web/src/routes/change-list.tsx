@@ -175,6 +175,7 @@ export function ChangeList() {
                 trackedArtifactStatus: inferTrackedArtifactStatus(
                   status?.artifacts.map((artifact) => artifact.status) ?? []
                 ),
+                cliCompletedTasks: change.cliTaskSummary?.completedTasks ?? null,
               })
               const sharedDescriptor = { family: 'changes', entityId: change.id } as const
               return (
@@ -208,14 +209,13 @@ export function ChangeList() {
                         >
                           {change.name}
                         </div>
-                        <div className="text-muted-foreground truncate text-sm">
-                          {change.id}
-                          {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
-                        </div>
+                        {change.id !== change.name ? (
+                          <div className="text-muted-foreground truncate text-sm">{change.id}</div>
+                        ) : null}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="flex flex-col items-end gap-1 text-right text-sm">
+                      <div className="text-muted-foreground flex flex-col items-end gap-1 text-right">
                         <Badge
                           tone="custom"
                           size="sm"
@@ -224,6 +224,9 @@ export function ChangeList() {
                         >
                           {phase.label}
                         </Badge>
+                        {change.updatedAt > 0 ? (
+                          <span className="text-xs">{formatRelativeTime(change.updatedAt)}</span>
+                        ) : null}
                       </div>
                       <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
                     </div>

@@ -280,6 +280,7 @@ const createMockAdapter = () => ({
       documentChecklistSummary: documentChecklistSummary(),
       createdAt: 1,
       updatedAt: 30,
+      cliTaskSummary: null,
     },
   ]),
   listArchivedChanges: vi.fn().mockResolvedValue(['old-change']),

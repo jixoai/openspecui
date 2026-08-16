@@ -24,6 +24,7 @@ import {
   getRootContextCliSelector,
   OpenSpecAdapter,
   OpsxKernel,
+  type CliChangeListEntry,
   type CliStreamHandle,
   type ConfigManager,
   type ObservationRootOwner,
@@ -191,6 +192,21 @@ export interface PlanningRootServiceManagerOptions {
 }
 
 /** Serialized deep owner for one replaceable Planning-root service record. */
+/** Read CLI Change-list task facts once per call; failures degrade to an empty index. */
+function readCliChangeListEntriesFor(
+  service: PlanningCliProjectionService
+): () => Promise<Map<string, CliChangeListEntry>> {
+  return async () => {
+    try {
+      const data = await service.getCurrent({ kind: 'opsx-change-list' })
+      if (data.kind !== 'opsx-change-list') return new Map()
+      return new Map(data.entries.map((entry) => [entry.name, entry]))
+    } catch {
+      return new Map()
+    }
+  }
+}
+
 export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   private activeRecord: PlanningRootServiceRecord | null = null
   private currentRootContextSnapshot: CurrentRootContextSnapshot | null = null
@@ -297,7 +313,11 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       },
       codeGitBindingToken: this.options.codeBinding.bindingToken,
       loaders: {
-        loadSummary: () => loadDashboardSummary({ adapter }),
+        loadSummary: () =>
+          loadDashboardSummary({
+            adapter,
+            readCliChangeListEntries: readCliChangeListEntriesFor(planningCliProjectionService),
+          }),
         loadTrends: () =>
           loadDashboardTrends({ adapter, configManager: this.options.configManager }),
         loadGit: (signal) =>

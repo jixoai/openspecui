@@ -121,6 +121,12 @@ export interface DashboardSummaryProjection {
     id: string
     name: string
     trackedTaskProgress: TrackedTaskProgress
+    /** Task counts as reported by `openspec list`; null when no CLI list evidence exists. */
+    cliTaskSummary: {
+      completedTasks: number
+      totalTasks: number
+      status: 'no-tasks' | 'complete' | 'in-progress'
+    } | null
     updatedAt: number
   }>
   trackedTaskPhaseCounts: Record<TrackedTaskPhase, number>
@@ -273,6 +279,13 @@ export const DashboardSummaryProjectionSchema = z.object({
       id: z.string(),
       name: z.string(),
       trackedTaskProgress: TrackedTaskProgressSchema,
+      cliTaskSummary: z
+        .object({
+          completedTasks: z.number(),
+          totalTasks: z.number(),
+          status: z.enum(['no-tasks', 'complete', 'in-progress']),
+        })
+        .nullable(),
       updatedAt: z.number(),
     })
   ),

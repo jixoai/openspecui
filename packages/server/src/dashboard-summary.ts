@@ -10,6 +10,7 @@
  */
 import type {
   ArchiveMeta,
+  CliChangeListEntry,
   DashboardSummaryProjection,
   OpenSpecAdapter,
   SpecMeta,
@@ -31,23 +32,40 @@ export interface DashboardPlanningFacts {
 /** Dependencies for reading stable Dashboard planning facts. */
 export interface DashboardSummaryLoaderContext {
   adapter: OpenSpecAdapter
+  /**
+   * CLI-reported Change-list task facts when the planning CLI projection is observable.
+   * Optional: without it rows carry a null cliTaskSummary, never a UI-side recomputation.
+   */
+  readCliChangeListEntries?: () => Promise<Map<string, CliChangeListEntry>>
 }
 
 /** Read the objective files behind Dashboard Summary without invoking Git or workflow commands. */
 export async function loadDashboardPlanningFacts(
   ctx: DashboardSummaryLoaderContext
 ): Promise<DashboardPlanningFacts> {
-  const [specMetas, changeMetas, archiveMetas] = await Promise.all([
+  const [specMetas, changeMetas, archiveMetas, cliEntries] = await Promise.all([
     ctx.adapter.listSpecsWithMeta(),
     ctx.adapter.listChangesWithMeta(),
     ctx.adapter.listArchivedChangesWithMeta(),
+    ctx.readCliChangeListEntries?.().catch(() => new Map<string, CliChangeListEntry>()) ??
+      Promise.resolve(new Map<string, CliChangeListEntry>()),
   ])
-  const allActiveChanges = changeMetas.map((changeMeta) => ({
-    id: changeMeta.id,
-    name: changeMeta.name ?? changeMeta.id,
-    trackedTaskProgress: changeMeta.trackedTaskProgress,
-    updatedAt: changeMeta.updatedAt,
-  }))
+  const allActiveChanges = changeMetas.map((changeMeta) => {
+    const entry = cliEntries.get(changeMeta.id)
+    return {
+      id: changeMeta.id,
+      name: changeMeta.name ?? changeMeta.id,
+      trackedTaskProgress: changeMeta.trackedTaskProgress,
+      cliTaskSummary: entry
+        ? {
+            completedTasks: entry.completedTasks,
+            totalTasks: entry.totalTasks,
+            status: entry.status,
+          }
+        : changeMeta.cliTaskSummary,
+      updatedAt: changeMeta.updatedAt,
+    }
+  })
   const allSpecifications = (
     await Promise.all(
       specMetas.map(async (meta) => {

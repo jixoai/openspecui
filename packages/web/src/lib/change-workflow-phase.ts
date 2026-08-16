@@ -17,6 +17,11 @@ export interface ChangeWorkflowPhaseInput {
   isPlanningComplete: boolean
   trackedTaskPhase: TrackedTaskPhase
   trackedArtifactStatus: 'done' | 'skipped' | 'ready' | 'blocked' | null
+  /**
+   * CLI-reported completed task count (`openspec list` / Apply instructions). Zero means
+   * nothing has been applied yet — the Change is still at the planning gate.
+   */
+  cliCompletedTasks?: number | null
 }
 
 export interface ChangeWorkflowPhase {
@@ -53,13 +58,18 @@ export function classifyChangeWorkflowPhase(params: ChangeWorkflowPhaseInput): C
     }
   }
 
-  // Planning is finished but tracked checkboxes are not all checked. For spec-driven
-  // schemas those checkboxes ARE the execution, so this was historically labeled
-  // "In Execution". But loop-family schemas track owner gates (walkthrough, PR, archive)
-  // in checkboxes that close only at archive time — labeling every planning-complete
-  // loop Change as executing is false. The CLI's own planning fact is the authority:
-  // planning done means the Change is ready to apply/review, and "In Execution" is
-  // reserved for Changes whose planning is still open.
+  // Once any task has been applied the Change is executing — that is the dominant
+  // signal, whether planning artifacts are still open (spec-driven) or long done
+  // (loop-family schemas whose checkboxes are owner gates). "Planning Complete" is
+  // reserved for the planning gate: nothing applied yet (0 tasks done).
+  const applied = params.cliCompletedTasks ?? null
+  if (applied !== null && applied > 0) {
+    return {
+      label: 'Applying',
+      toneClass: 'border-primary/40 text-primary',
+    }
+  }
+
   if (params.isPlanningComplete) {
     return {
       label: 'Planning Complete',

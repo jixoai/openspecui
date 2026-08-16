@@ -704,6 +704,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     id: change.id,
     name: change.name,
     trackedTaskProgress: change.trackedTaskProgress,
+    cliTaskSummary: change.cliTaskSummary ?? null,
     updatedAt: change.updatedAt,
   }))
   const activeChanges = selectRecentDashboardItems(allActiveChanges)
