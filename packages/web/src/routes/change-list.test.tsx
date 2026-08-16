@@ -425,9 +425,49 @@ describe('ChangeList', () => {
 
     render(<ChangeList />)
 
-    expect(screen.getByText('In Execution')).toBeTruthy()
+    // Artifact-complete with tracked tasks still open must never read as complete — but
+    // with planning finished it is ready to apply/review, not "In Execution" (loop-family
+    // schemas track owner gates in those checkboxes, which close only at archive time).
+    expect(screen.getByText('Planning Complete')).toBeTruthy()
+    expect(screen.queryByText('In Execution')).toBeNull()
     expect(screen.queryByText('Workflow Complete')).toBeNull()
     expect(screen.getByText('4/4 artifacts · spec-driven')).toBeTruthy()
+  })
+
+  it('labels planning-incomplete changes with open tracked tasks as In Execution', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'spec-driven-change',
+          name: 'spec-driven-change',
+          trackedTaskProgress: { total: 9, completed: 2, phase: 'in-progress' },
+          updatedAt: Date.now() - 60_000,
+        },
+      ],
+      isLoading: false,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          changeName: 'spec-driven-change',
+          schemaName: 'spec-driven',
+          isPlanningComplete: false,
+          applyRequires: ['tasks'],
+          artifacts: [
+            { id: 'proposal', status: 'done' },
+            { id: 'design', status: 'done' },
+            { id: 'specs', status: 'ready' },
+            { id: 'tasks', status: 'ready' },
+          ],
+        },
+      ],
+    })
+
+    render(<ChangeList />)
+
+    expect(screen.getByText('In Execution')).toBeTruthy()
+    expect(screen.getByText('Planning in progress')).toBeTruthy()
+    expect(screen.queryByText('Planning Complete')).toBeNull()
   })
 
   it('keeps 0/0 no-tasks distinct from complete', () => {
