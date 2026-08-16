@@ -203,6 +203,11 @@ export function ChangeList() {
                       phase={phase}
                       updatedAt={change.updatedAt}
                       formatTime={formatRelativeTime}
+                      progressRatio={
+                        change.cliTaskSummary && change.cliTaskSummary.totalTasks > 0
+                          ? change.cliTaskSummary.completedTasks / change.cliTaskSummary.totalTasks
+                          : null
+                      }
                       className="min-w-0 flex-1"
                       titleProps={{ ...(change.id !== change.name ? {} : null) }}
                       subtitle={
