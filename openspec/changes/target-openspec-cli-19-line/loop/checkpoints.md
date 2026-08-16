@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-16 Asia/Shanghai):
 1. Track v9 planning, recovery-gate evidence, and final delivery boundaries separately.
 2. Prevent candidate implementation evidence from being marked as accepted completion.
 3. Require focused owner review before package or Owner gates.
@@ -8,6 +8,14 @@ Original request (2026-08-15): "这里面很大的问题也是因为你作为架
 -->
 
 # OpenSpecUI 9 checkpoints
+
+## Current execution boundary (2026-08-16 Asia/Shanghai)
+
+R8.1-R8.5 are closed with fresh focused evidence. The workspace-only 5-second Git fixture timeout was classified
+as process-load-sensitive: the exact Server triple passed 120/120 in an isolated current-revision worktree with
+no timeout inflation, while concurrent workspace browser/build processes reproduced the delay. Source/build/pack/
+install and independent-review evidence are refreshed below. Checkpoint 4.1 is now Owner-only and ready; 4.2
+remains Owner-only and unchecked. No PR, merge, release, or archive action is authorized.
 
 ## 1. Planning and review correction
 
@@ -62,8 +70,8 @@ These items are retained characterization evidence. They neither substitute for 
 
 - [ ] 4.1 Owner personally completes the browser/App walkthrough for 1.8.x and 1.9.x projects. The
       2026-08-15 implementation-Agent observation remains historical preparation evidence in
-      `loop/implementation.md`; it is not Owner acceptance and cannot check this item. This gate is blocked
-      until R8.5's independent review is accepted.
+      `loop/implementation.md`; it is not Owner acceptance and cannot check this item. R8.5 is closed and this
+      gate is now ready for the Owner's personal acceptance; the Agent must not check it.
 - [ ] 4.2 Owner independently reviews the PR and authorizes merge, release, and Change archive.
 
 ## 5. Post-R5 independent review repair
@@ -128,12 +136,29 @@ independent review. Checkpoint 4.1 remains Owner-only and cannot be checked by t
       intents.
 - [x] R8.5 Focused, full-source, distribution, and independent-review evidence has no unclassified failure.
 
+### Final-review correction record (historical red record; superseded by the 2026-08-16 R8.5 closure)
+
+The following two paragraphs describe the intermediate state immediately after the final-review source edits. They
+are retained for audit history only and are not current execution instructions.
+
+The final review fixed three post-R8 evidence defects: the W2 fixture header still described OpenSpec 1.7 while
+asserting 1.9, the static export's external JSON capture used unchecked assertions, and the static-provider regression
+test used an avoidable assertion cast. It also removed duplicate/malformed v9 headers in `router.ts` and
+`dashboard.tsx`. At that historical point, R8.5 was reopened because all source/distribution evidence had to be rerun
+after these edits.
+
+The first no-build re-verification after those edits ran the complete Server command and reported 119 passed plus
+one 5-second timeout at `router.test.ts:2336`. The same named parent test at `79c41a02` passed in 1.8s, so this
+failure was not yet a classified baseline at that time. The then-required action was to hold R8.5 and checkpoint 4.1
+until the timeout was repaired or reproduced identically at the parent, then refresh source/distribution and
+independent-review evidence. That action was completed; the later R8.5 closure below is the current state.
+
 ### Independent-review correction record (2026-08-15 Asia/Shanghai)
 
-Confirmed current findings are recorded in `loop/implementation.md`: R8.1 has four no-argument Schema accessor
+The findings confirmed at that historical review point are recorded in `loop/implementation.md`: R8.1 had four no-argument Schema accessor
 bypasses;
 R8.2 drops `payload` at `archived-validation-evidence.tsx:127`; R8.3 uses a line regex at `packages/cli/src/export.ts:473`
 despite the existing YAML parser/config owner; R8.4 has a line-1 import before the intent header in
 `packages/core/src/agent-delivery-registry.ts`, duplicate intent entries in two touched owners, and a 45-path
-inventory not captured by the R7 record; R8.5 currently reproduces two Server test timeouts (an earlier run recorded
-four). These are blockers, not Owner acceptance evidence.
+inventory not captured by the R7 record; R8.5 then reproduced two Server test timeouts (an earlier run recorded four).
+These were blockers at that time, not Owner acceptance evidence; the later R8.5 closure supersedes this status.

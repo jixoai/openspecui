@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (created 2026-08-15 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-16 Asia/Shanghai):
 1. Convert the v9 implementation review findings into ordered, independently verifiable recovery gates.
 2. Assign one production owner, one true red case, one green case, and one stop condition to every gate.
 3. Preserve the Owner-only browser, PR, merge, release, and archive boundary.
@@ -11,8 +11,19 @@ Original request (2026-08-15): "这里面很大的问题也是因为你作为架
 
 ## Status and operating law
 
-The candidate source at `79c41a02` is review-rejected for the gates below. Existing passing focused tests are
-characterization evidence only; they do not close a gate when the reported production path is untested.
+The recovery gates below are historical context. R8.1-R8.5 are closed with final focused, source, distribution, and
+independent-review evidence recorded in `loop/implementation.md`. The main-worktree Server timeout is classified as
+process-load-sensitive after the same final source passed the complete triple in an isolated worktree. Only Owner
+gate 4.1 remains before the separate PR/release/archive decision at 4.2.
+
+```text
+R8.1-R8.5 closed -> Owner gate 4.1 browser/App walkthrough -> Owner gate 4.2 PR/release/archive decision
+```
+
+Historical red evidence: the exact Server triple in the main worktree reported 119 passed and a 5-second timeout at
+`packages/server/src/router.test.ts:2336` while competing browser/build processes were active. The final patched
+source passed the same triple `120/120` in an isolated worktree with no timeout override; no production lifecycle or
+test timeout change was made. Do not treat the main-worktree observation as a v9 behavior baseline.
 
 ```text
 feature branch -> reproduce named red case -> change one owner -> named green case
@@ -599,7 +610,11 @@ Evidence record:          loop/implementation.md (full sorted path list and per-
 - **Stop condition:** inventory count/path list mismatch, any header before the header, stale v9 owner, duplicate
   intent, or unclassified whitespace violation.
 
-### R8.5 - Re-establish source/distribution evidence and resolve Server timeouts
+### R8.5 - Re-establish source/distribution evidence and resolve Server timeouts (historical gate specification)
+
+R8.5 is closed. The red case, required change, and verification commands below are retained to explain the gate's
+original entry conditions; the 2026-08-16 closure and final re-verification in `loop/implementation.md` supersede them
+as the current execution state.
 
 ```text
 Prerequisite: R8.1-R8.4 have exact green evidence and focused review records.
@@ -619,7 +634,7 @@ Owner:         source/distribution agreement and independent-review boundary.
   pnpm --filter @openspecui/core exec vitest run src/openspec-compat.test.ts src/agent-delivery-registry.test.ts src/tool-init-state.test.ts src/official-cli-19-validation-fixtures.test.ts src/opsx-kernel-schemas-root.fixtures.test.ts
   pnpm --filter @openspecui/server exec vitest run src/agent-delivery-projection-service.test.ts src/agent-integrations-router.test.ts src/router.test.ts
   pnpm --filter @openspecui/web exec vitest run --project unit src/lib/static-data-provider.opsx.test.ts src/components/archived-validation-evidence.test.tsx src/routes/change-list.test.tsx src/components/apply-progress-notice.test.tsx src/routes/change-view.test.tsx
-  pnpm --filter @openspecui/cli exec vitest run src/export.test.ts
+  pnpm --filter openspecui exec vitest run src/export.test.ts
   FORMAT_CHECK_BASE_SHA=79c41a02 pnpm run format:check
   pnpm run lint
   pnpm run typecheck

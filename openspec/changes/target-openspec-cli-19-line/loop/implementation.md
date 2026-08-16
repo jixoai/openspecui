@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-16 Asia/Shanghai):
 1. Record only accepted v9 implementation evidence and recovery results.
 2. Separate candidate source state from focused-review completion.
 3. Preserve loopback and Owner-only acceptance boundaries for the next Agent.
@@ -12,24 +12,24 @@ Original request (2026-08-15): "这里面很大的问题也是因为你作为架
 ## Current state
 
 ```text
-Change artifacts      corrected and planning-valid; post-R5 R6 correction pending
-Recovery branch       fix/v9-cli-18-19-recovery; historical R0-R5 gates closed with recorded evidence
-Candidate source     R6.1-R6.8 remain review-rejected and unimplemented
-Release/PR/archive    not authorized
-Owner browser/App     pending and Owner-only
+Change artifacts      planning-valid; R8 closure and Owner boundary are current
+Recovery branch       fix/v9-cli-18-19-recovery @ 7b62a738 (plus current unstaged review edits)
+Accepted gates        R0-R7.3 historical closure; R8.1-R8.5 fresh focused/source closure
+Open gate             none before Owner gates; final source/distribution evidence is recorded below
+Owner gates           4.1 browser/App walkthrough and 4.2 PR/release/archive remain unchecked
 ```
 
-`loop/recovery-plan.md` is the execution authority. Do not restore the former “complete through slices 1-7” claim:
-source changes exist for parts of those slices, but the following reviewed obligations remain unaccepted.
+`loop/recovery-plan.md` remains the execution authority. R8.5 is closed: the workspace timeout is classified as
+process-load-sensitive, the final source was tested in an isolated worktree, and source/build/pack/install evidence
+was refreshed after the review edits. The implementation is ready for the Owner-only browser/App walkthrough; no
+Agent may check 4.1 or 4.2.
 
-| Reopened scope         | Why prior evidence is insufficient                                                  | Required record before closure                                               |
-| ---------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| R0 standards           | `workflow.ts` exceeds the intent limit and a changed test lacks the required header | Physical split/header plus focused Core/Web verification                     |
-| R1 schemas             | the Kernel does not forward its selected Root to `schemas()`                        | 1.9 real selected-Root failure and 1.8 no-selector evidence                  |
-| R2 archived validation | supported 1.8 sessions can invoke a 1.9-only flag                                   | pre-execution typed unavailable result and 1.9 success/failure evidence      |
-| R3 static schemas      | failure capture is lossy and list-only access returns `[]`                          | complete captured evidence and failure propagation through every static read |
-| R4 Agent delivery      | fixed 1.9 inventory causes an absent 1.8 adapter to erase the catalog               | executable-backed 1.8/1.9 inventories and isolated missing-adapter evidence  |
-| R5 distribution        | package evidence predates the required corrections                                  | recovery-branch build, pack, install, and review results                     |
+| Current gate | State   | Exact boundary                                                                                                                                                                                                   |
+| ------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R8.1-R8.4    | closed  | Focused behavior and header evidence are current at the last recorded gate; the final-review source edits are listed below.                                                                                      |
+| R8.5         | closed  | In an isolated current-revision worktree with no competing workspace workload, the exact Server triple passed 120/120 without timeout inflation; the workspace timeout was classified as process-load-sensitive. |
+| 4.1          | ready   | Owner-only browser/App walkthrough may begin after the final source/distribution and independent-review records below.                                                                                           |
+| 4.2          | blocked | Owner-only PR review, merge, release, and archive decision; no delivery action is authorized.                                                                                                                    |
 
 ## Evidence recording rule
 
@@ -641,6 +641,11 @@ Green case and command: registry/command-content suites 19 passed; projection su
 Focused review result: pass after the R8.5 review round repaired 19 run-together closings
   and 13 stale dates it exposed (ea22d5f7).
 
+### Superseded R8.5 closure record (2026-08-15)
+
+The following record is retained as historical Agent evidence only. The final-review source edits and
+the current Server timeout classification supersede its closure claim.
+
 Gate: R8.5
 Feature branch and commit: ea22d5f7 (final)
 Primary production owner: source/distribution agreement
@@ -677,6 +682,28 @@ Residual risk or stop-condition check: the two reviewer-observed timeouts are do
   non-reproducing flake evidence (8+ clean runs) rather than silently claimed fixed; the
   reviewer may re-run the triple to confirm on their machine.
 ```
+
+## Final-review correction after R8 closure (historical red record; superseded by the 2026-08-16 closure below)
+
+The following correction table and two paragraphs describe the intermediate state before the final re-verification.
+They are retained for audit history only and are not current execution instructions.
+
+The final independent review found no remaining v9 behavior defect in R8.1-R8.4, but it corrected five
+post-closure evidence/standards defects before Owner acceptance:
+
+| Owner                                                                       | Finding                                                                                        | Correction                                                                                                       | Focused evidence                                                                                                                                                           |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/web/scripts/w2-project-binding-playwright.ts`                     | The header said it pinned OpenSpec 1.7 while `assertPinnedCli()` required 1.9.0.               | The header now states the 1.9 fixture truth and preserves the 1.7 request as historical context.                 | Header audit after the edit.                                                                                                                                               |
+| `packages/cli/src/export.ts`                                                | `JSON.parse()` evidence was cast to a root-bearing object and `CliJsonValue`.                  | `CliJsonValueSchema.safeParse` now establishes the external boundary before root evidence or snapshot retention. | `pnpm --filter openspecui exec vitest run src/export.test.ts` (24 passed).                                                                                                 |
+| `packages/web/src/lib/static-data-provider.opsx.test.ts`                    | The typed-failure test used an avoidable assertion cast.                                       | Runtime `instanceof StaticSchemasCaptureError` narrows before inspecting the capture.                            | `pnpm --filter @openspecui/web exec vitest run --project unit src/lib/static-data-provider.opsx.test.ts src/components/archived-validation-evidence.test.tsx` (18 passed). |
+| `packages/server/src/router.ts` and `packages/web/src/routes/dashboard.tsx` | The v9 request was duplicated; the Dashboard header also had a run-together closing delimiter. | Duplicate lines were removed and both headers end with an independent `*/`.                                      | Final header audit and `git diff --check`.                                                                                                                                 |
+
+These source edits occurred after R8.5's earlier source/distribution run. At that intermediate point R8.5 was reopened
+until the required focused/source/distribution sequence and independent review were fresh. On this review machine, the
+exact Server triple timed out in unrelated real-Git tests while other workspace compilation/browser processes
+consumed CPU; this was recorded as an environment-sensitive re-verification result, not proof that the prior clean
+run regressed. The required no-competing-workload rerun and fresh evidence were subsequently completed and are
+recorded below; the current state is R8.5 closed and checkpoint 4.1 ready for the Owner.
 
 ### Final 45-path inventory (R8.4, sorted)
 
@@ -726,12 +753,80 @@ Residual risk or stop-condition check: the two reviewer-observed timeouts are do
 - packages/web/src/routes/config-agents.tsx
 - packages/web/src/routes/dashboard.tsx
 
-### Boundary after R8
+### Current boundary after R8
 
-R8.1-R8.5 are closed with fresh evidence, including the review-driven header repair round.
-Checkpoint 4.1 (Owner-personal walkthrough) and 4.2 (PR/merge/release/archive) remain
-Owner-only and unchecked. No PR, push, merge, publish, release, or archive action has been
-taken. User-owned untracked files were preserved unstaged throughout.
+R8.1-R8.5 are closed with fresh focused evidence. Checkpoint 4.1 (Owner-personal walkthrough) and 4.2
+(PR/merge/release/archive) remain Owner-only and unchecked. No PR, push, merge, publish, release, or
+archive action has been taken. User-owned untracked files were preserved unstaged throughout.
+
+### R8.5 verification after final-review edits (2026-08-16 Asia/Shanghai)
+
+The exact Server command was rerun without a build process:
+
+```text
+pnpm --filter @openspecui/server exec vitest run \
+  src/agent-delivery-projection-service.test.ts \
+  src/agent-integrations-router.test.ts \
+  src/router.test.ts
+```
+
+Workspace result: **119 passed, 1 failed by the 5-second test timeout** at `router.test.ts:2336` while several
+long-running workspace browser/build processes were active. The isolated current-revision worktree rerun of the
+same exact triple passed **120/120** (three files, no timeout override); the parent `79c41a02` fixture also passed
+the named test in 1.8s. Git trace showed identical command counts and sub-second Git execution, with only the
+workspace run incurring delayed child scheduling. Classification: environment/process-load-sensitive evidence,
+not a v9 behavior regression or accepted code baseline.
+
+### R8.5 closure record (2026-08-16 Asia/Shanghai)
+
+Gate: R8.5
+Feature branch and commit: `fix/v9-cli-18-19-recovery @ 7b62a738` plus the final review source edits
+Primary production owner: source/distribution agreement and independent-review boundary
+True red case and command: the workspace Server triple timed out at `router.test.ts:2336` under concurrent
+browser/build processes; no timeout was widened.
+Code decision: no production Git or test timeout change. The fixture was rerun from an isolated worktree at the
+current revision; Git trace proved the same command inventory as `79c41a02`, and the isolated triple passed 120/120.
+Green case and command: direct Vitest invocation of `src/agent-delivery-projection-service.test.ts`,
+`src/agent-integrations-router.test.ts`, and `src/router.test.ts` in the isolated current-revision worktree.
+Focused review result: R8.1-R8.4 behavior and standards findings are closed; the timeout has a recorded
+environment classification and is not hidden as a baseline.
+Residual risk or stop-condition check: final source/build/pack/install evidence and the independent review are
+recorded in the final re-verification below; only Owner gates remain.
+
+### Final source/distribution re-verification (2026-08-16 Asia/Shanghai)
+
+The final review edits were applied to a detached worktree, dependencies were installed from the local pnpm store,
+and the exact Server triple passed `120/120` with the repository's original timeout settings:
+
+```text
+pnpm --filter @openspecui/server exec vitest run \
+  src/agent-delivery-projection-service.test.ts \
+  src/agent-integrations-router.test.ts \
+  src/router.test.ts
+PASS  3 files, 120 tests
+```
+
+Current-worktree focused evidence:
+
+```text
+PASS  Core v9 suites: 53 tests
+PASS  Web v9 suites: 47 tests
+PASS  CLI export suite: 24 tests
+PASS  pnpm run lint: 0 warnings, 0 errors
+PASS  pnpm run typecheck: all workspace packages
+PASS  openspec validate target-openspec-cli-19-line --strict
+PASS  FORMAT_CHECK_BASE_SHA=79c41a02 pnpm run format:check (56 files)
+PASS  git diff --check
+PASS  pnpm run build:packages
+PASS  pnpm run build:cli
+PASS  npm pack openspecui@8.0.0
+PASS  isolated npm install of the tarball; openspecui --version => 8.0.0
+PASS  installed CLI --help, Web asset, App asset, and v9 selector/evidence markers
+```
+
+The installed tarball contains the rebuilt `web/`, `app/`, and CLI `dist/` trees. The two independent review axes
+found no remaining standards or implementation defect. The main-worktree timeout is retained as environment evidence
+only; it is not a production baseline and no test timeout was widened.
 
 ## Loopback triggers
 
