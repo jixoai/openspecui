@@ -12,13 +12,13 @@ import { EvidenceDisclosure } from '@/components/information-disclosure'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useRootActionState } from '@/lib/use-root-action-state'
+// Types may come from the barrel (erased at build); runtime schemas must come from the
+// browser-safe subpath — the Core barrel re-exports Node-bound values (reactive-fs), and a
+// value import from it drags AsyncLocalStorage into the browser bundle.
+import type { CliCommandResult, CliValidateReport } from '@openspecui/core'
 import {
   CliCommandTransportSchema,
   CliValidateReportSchema,
-  type CliCommandResult,
-  type CliValidateReport,
-} from '@openspecui/core'
-import {
   deriveOpenSpecCliCapabilities,
   parseOpenSpecCliVersion,
 } from '@openspecui/core/openspec-compat'

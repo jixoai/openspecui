@@ -4,6 +4,7 @@
  * 2. Classify current, supported non-current, unsupported, and unknown CLI versions.
  * 3. Express the accepted range and the recommended line as separate public facts.
  * 4. Derive per-command capabilities from the detected admitted CLI version.
+ * 5. Re-export the browser-safe contract schemas for renderer evidence boundaries.
  *
  * Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
@@ -12,6 +13,13 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 export const OPENSPECUI_TARGET_MAJOR = 9
+// Browser-safe contract schemas this surface re-exports for renderer evidence boundaries.
+// Both modules import only zod, so this subpath stays free of Node-only module graphs
+// (the Core barrel re-exports Node-bound values like reactive-fs and must not be imported
+// as a value from browser code).
+export { CliCommandTransportSchema } from './cli-contracts/command-result.js'
+export { CliValidateReportSchema } from './cli-contracts/workflow.js'
+
 export const OPENSPEC_CLI_TARGET_SERIES = '1.9'
 export const OPENSPEC_CLI_SUPPORTED_SERIES = ['1.8', '1.9'] as const
 export const OPENSPEC_CLI_MIN_VERSION = '1.8.0'
