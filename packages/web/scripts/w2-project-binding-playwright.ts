@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Execute one deterministic same-origin Project Binding A-to-B acceptance flow.
- * 2. Pin the OpenSpec 1.7 executable, Store registry scope, and disposable roots.
+ * 2. Pin the OpenSpec 1.9 executable, Store registry scope, and disposable roots.
  * 3. Assert desktop/mobile layout and browser error hygiene with bounded process-tree cleanup.
  * 4. Resolve repository, temporary, and isolated home paths through native Windows APIs.
  * 5. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
@@ -11,7 +11,7 @@
  * Derived requirement (2026-07-20): W2 B2.5 needs one bounded Playwright fixture; manual
  * multi-tab acceptance remains owner-owned. This command is intentionally excluded from the
  * default browser lane and does not exercise App iframe or WebSocket error-propagation policy.
- * Original request (2026-08-03): release OpenSpecUI 7.0.0 against the pinned OpenSpec CLI 1.7 source.
+ * Historical request (2026-08-03): release OpenSpecUI 7.0.0 against the then-pinned OpenSpec CLI 1.7 source.
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
