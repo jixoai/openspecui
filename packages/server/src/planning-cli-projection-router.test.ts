@@ -98,6 +98,15 @@ describe('public Planning CLI projection Router', () => {
       .spyOn(OpsxKernel.prototype, 'readChangeListProjection')
       .mockResolvedValue({
         value: ['cli-owned'],
+        entries: [
+          {
+            name: 'cli-owned',
+            completedTasks: 31,
+            totalTasks: 33,
+            lastModified: '2026-08-15T00:00:00.000Z',
+            status: 'in-progress' as const,
+          },
+        ],
         evidence: {
           success: true,
           stdout: '{"changes":[{"name":"cli-owned"}]}',
