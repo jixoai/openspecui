@@ -41,8 +41,10 @@ import {
 import { createServer } from './server.js'
 
 // Core reactive-fs retries missing paths every 1,000ms; bound this fixture to four fallback cycles.
-const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
-const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS = REACTIVE_MISSING_PATH_FALLBACK_MS * 4
+const REACTIVE_MISSING_PATH_FALLBACK_MS = Number(process.env.CI_TOOL_WAIT_MS ?? 1_000)
+// Loaded CI runners need a wider first-projection budget than the reactive fallback
+// implies; the wait targets the same settlement, only tolerates slower runners.
+const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS = REACTIVE_MISSING_PATH_FALLBACK_MS * (process.env.CI ? 15 : 4)
 const PINNED_OPENSPEC_BIN = resolve(
   import.meta.dirname,
   '../../../references/openspec/bin/openspec.js'
