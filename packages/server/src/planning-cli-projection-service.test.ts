@@ -123,6 +123,7 @@ function createFixture(
   readStatusProjection: PlanningCliProjectionServiceOptions['kernel']['readStatusProjection'],
   readChangeListProjection: PlanningCliProjectionServiceOptions['kernel']['readChangeListProjection'] = async () => ({
     value: [],
+    entries: [],
     evidence: createCommandEvidence(),
   }),
   overrides: Partial<
