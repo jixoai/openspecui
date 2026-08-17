@@ -460,10 +460,8 @@ afterEach(async () => {
 })
 
 /** Typed spy handle for the archived-validation capability boundary under review. */
-function validateContractSpy(
-  context: ReturnType<typeof createMockContext>
-): ReturnType<typeof vi.fn> {
-  return context.cliExecutor.contracts.validate as ReturnType<typeof vi.fn>
+function validateContractSpy(context: ReturnType<typeof createMockContext>) {
+  return vi.mocked(context.cliExecutor.contracts.validate)
 }
 
 const createMockContext = (
@@ -1049,9 +1047,7 @@ describe('agentIntegrations.initStream', () => {
       cli: { available: true, version: '1.8.0' },
     }
     const registry18 = selectAgentDeliveryRegistry('1.8.0')
-    ;(
-      context.agentDeliveryProjectionService.getCurrent as ReturnType<typeof vi.fn>
-    ).mockResolvedValue({
+    vi.mocked(context.agentDeliveryProjectionService.getCurrent).mockResolvedValue({
       registry: registry18,
       policy: { profile: 'core', delivery: 'skills', workflows: [] },
       states: [],
@@ -1072,9 +1068,7 @@ describe('agentIntegrations.initStream', () => {
   it('streams explicit tools the admitted 1.8 registry offers', async () => {
     const context = createMockContext()
     const registry18 = selectAgentDeliveryRegistry('1.8.0')
-    ;(
-      context.agentDeliveryProjectionService.getCurrent as ReturnType<typeof vi.fn>
-    ).mockResolvedValue({
+    vi.mocked(context.agentDeliveryProjectionService.getCurrent).mockResolvedValue({
       registry: registry18,
       policy: { profile: 'core', delivery: 'skills', workflows: [] },
       states: [],
@@ -1088,9 +1082,7 @@ describe('agentIntegrations.initStream', () => {
   it('streams the literal all request unchanged on a 1.9 projection', async () => {
     const context = createMockContext()
     const registry19 = selectAgentDeliveryRegistry('1.9.0')
-    ;(
-      context.agentDeliveryProjectionService.getCurrent as ReturnType<typeof vi.fn>
-    ).mockResolvedValue({
+    vi.mocked(context.agentDeliveryProjectionService.getCurrent).mockResolvedValue({
       registry: registry19,
       policy: { profile: 'core', delivery: 'skills', workflows: [] },
       states: [],
