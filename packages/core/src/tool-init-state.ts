@@ -624,10 +624,9 @@ async function projectToolInitStates(
       const skillArtifacts = getSkillArtifactsFromInventory(inventoryRoot)
       // A skills-only projection has no command surface to inspect. Avoid touching command
       // directories in that mode so the first retained snapshot is bounded by its real owner.
-      const commandArtifacts =
-        shouldGenerateCommands && skillsScope.kind !== 'user-global'
-          ? getCommandArtifacts(projectDir, tool)
-          : []
+      const shouldInspectCommands =
+        options.delivery !== 'skills' && skillsScope.kind !== 'user-global'
+      const commandArtifacts = shouldInspectCommands ? getCommandArtifacts(projectDir, tool) : []
       const existingSkillPaths =
         skillsScope.kind === 'user-global'
           ? await getExistingInventorySkillPaths(inventoryRoot, skillArtifacts)
@@ -637,7 +636,7 @@ async function projectToolInitStates(
               skillArtifacts,
               projectRootEntries
             )
-      const existingCommandPaths = shouldGenerateCommands
+      const existingCommandPaths = shouldInspectCommands
         ? await getExistingCommandPaths(commandArtifacts)
         : new Set<string>()
 
