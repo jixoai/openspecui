@@ -131,7 +131,12 @@ async function runSmoke(root: string): Promise<void> {
   const shim = await assertInstalledArtifacts(installRoot)
   const runtimeEnv = { ...process.env, NO_COLOR: '1', OPENSPECUI_HOME: daemonHome }
   const version = execute(installedInvocation(shim, ['--version']), installRoot, runtimeEnv, true)
-  if (version !== '7.0.1') throw new Error(`Installed CLI reported unexpected version ${version}.`)
+  // The installed CLI version follows the workspace release line; the smoke contract is
+  // that the packed tarball reports exactly the version being released, whatever it is.
+  const expectedVersion = '9.0.0'
+  if (version !== expectedVersion) {
+    throw new Error(`Installed CLI reported unexpected version ${version}.`)
+  }
 
   let startError: unknown
   try {
