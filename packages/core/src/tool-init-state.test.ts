@@ -241,8 +241,12 @@ describe('getToolInitStates', () => {
   })
 
   it('observes MiniMax Code skills at the user-global root without project-local artifacts', async () => {
+    // The production home resolution prefers USERPROFILE (Windows) over HOME; the fixture
+    // must steer both so the user-global root observes the temp dir on every platform.
     const previousHome = process.env.HOME
+    const previousUserProfile = process.env.USERPROFILE
     process.env.HOME = tempDir
+    process.env.USERPROFILE = tempDir
     try {
       await writeGeneratedSkill(
         join(tempDir, '.minimax', 'skills', 'openspec-explore', 'SKILL.md'),
@@ -271,6 +275,8 @@ describe('getToolInitStates', () => {
     } finally {
       if (previousHome === undefined) delete process.env.HOME
       else process.env.HOME = previousHome
+      if (previousUserProfile === undefined) delete process.env.USERPROFILE
+      else process.env.USERPROFILE = previousUserProfile
     }
   })
 
