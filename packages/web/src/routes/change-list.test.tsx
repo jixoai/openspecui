@@ -434,7 +434,7 @@ describe('ChangeList', () => {
     expect(screen.getByText('4/4 artifacts · spec-driven')).toBeTruthy()
   })
 
-  it('shows CLI-reported task counts without claiming a completion percentage', () => {
+  it('does not show CLI or tracked task progress at list level', () => {
     useChangesSubscriptionMock.mockReturnValue({
       data: [
         {
@@ -468,12 +468,11 @@ describe('ChangeList', () => {
 
     render(<ChangeList />)
 
-    // The count is the CLI's own `openspec list` fact — authoritative, not reconstructed.
-    expect(screen.getByText(/Tasks 31\/33/)).toBeTruthy()
+    expect(screen.queryByText(/Tasks 31\/33/)).toBeNull()
     expect(
-      screen.getByTitle('Task counts reported by the OpenSpec CLI for this Change.')
-    ).toBeTruthy()
-    // No completion percentage is claimed at list level.
+      screen.queryByTitle('Task counts reported by the OpenSpec CLI for this Change.')
+    ).toBeNull()
+    expect(screen.getByText('4/4 artifacts · opsx-collab-pr-loop')).toBeTruthy()
     expect(screen.queryByText(/% task completion/)).toBeNull()
     expect(screen.queryByText(/% complete/)).toBeNull()
   })
@@ -512,7 +511,7 @@ describe('ChangeList', () => {
     expect(screen.queryByText('4/9')).toBeNull()
   })
 
-  it('labels planning-incomplete changes with open tracked tasks as In Execution', () => {
+  it('labels planning-incomplete changes as Planning without tracked task state', () => {
     useChangesSubscriptionMock.mockReturnValue({
       data: [
         {
@@ -543,8 +542,8 @@ describe('ChangeList', () => {
 
     render(<ChangeList />)
 
-    expect(screen.getByText('In Execution')).toBeTruthy()
-    // The phase badge is the single planning authority; no duplicated echo line remains.
+    expect(screen.getByText('Planning')).toBeTruthy()
+    // The phase badge is the single planning authority; no tracked-task state is surfaced.
     expect(screen.queryByText('Planning in progress')).toBeNull()
     expect(screen.queryByText('Planning Complete')).toBeNull()
   })
@@ -575,15 +574,16 @@ describe('ChangeList', () => {
 
     render(<ChangeList />)
 
-    // No-tasks stays an objective planning fact without task-count surfaces.
+    // Local no-task analytics never become a list-level workflow label.
     expect(screen.queryByText('0/0')).toBeNull()
-    expect(screen.getByText('No Tracked Tasks')).toBeTruthy()
+    expect(screen.getByText('Planning Complete')).toBeTruthy()
+    expect(screen.queryByText('No Tracked Tasks')).toBeNull()
     expect(screen.queryByText('No tracked tasks')).toBeNull()
     expect(screen.queryByText('0% task completion')).toBeNull()
     expect(screen.queryByText('Workflow Complete')).toBeNull()
   })
 
-  it('labels a CLI-complete change complete only when tracked tasks are complete', () => {
+  it('keeps planning-complete separate from tracked task completion', () => {
     useChangesSubscriptionMock.mockReturnValue({
       data: [
         {
@@ -609,7 +609,8 @@ describe('ChangeList', () => {
 
     render(<ChangeList />)
 
-    expect(screen.getByText('Workflow Complete')).toBeTruthy()
+    expect(screen.getByText('Planning Complete')).toBeTruthy()
+    expect(screen.queryByText('Workflow Complete')).toBeNull()
     // Completion copy stays objective: no tracked count or percent claims.
     expect(screen.queryByText('2/2')).toBeNull()
     expect(screen.queryByText('100% task completion')).toBeNull()

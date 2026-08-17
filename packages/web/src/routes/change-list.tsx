@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. List only active Changes from the current writable Planning root.
- * 2. Derive workflow state and terminal evidence from CLI Status and formal tracked-task progress.
+ * 2. Derive planning/artifact state and terminal evidence from CLI Status only.
  * 3. Preserve ChangeList row continuity and stale display together with collision-safe detail navigation.
  * 4. Keep the advanced New Change command reachable from the page header.
  * 5. Defer aggregate workflow Status until a primary Change row is renderable; preserve explicit failures.
@@ -171,11 +171,9 @@ export function ChangeList() {
               const phase = classifyChangeWorkflowPhase({
                 hasStatus: Boolean(status),
                 isPlanningComplete: status?.isPlanningComplete ?? false,
-                trackedTaskPhase: change.trackedTaskProgress.phase,
                 trackedArtifactStatus: inferTrackedArtifactStatus(
                   status?.artifacts.map((artifact) => artifact.status) ?? []
                 ),
-                cliCompletedTasks: change.cliTaskSummary?.completedTasks ?? null,
               })
               const sharedDescriptor = { family: 'changes', entityId: change.id } as const
               return (
@@ -203,20 +201,12 @@ export function ChangeList() {
                       phase={phase}
                       updatedAt={change.updatedAt}
                       formatTime={formatRelativeTime}
-                      progressRatio={
-                        change.cliTaskSummary && change.cliTaskSummary.totalTasks > 0
-                          ? change.cliTaskSummary.completedTasks / change.cliTaskSummary.totalTasks
-                          : null
-                      }
                       className="min-w-0 flex-1"
                       titleProps={{ ...(change.id !== change.name ? {} : null) }}
                       subtitle={
                         !statusError && status ? (
-                          <span title="Task counts reported by the OpenSpec CLI for this Change.">
+                          <span>
                             {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
-                            {change.cliTaskSummary
-                              ? ` · Tasks ${change.cliTaskSummary.completedTasks}/${change.cliTaskSummary.totalTasks}`
-                              : ''}
                           </span>
                         ) : !statusError && statuses === undefined && isStatusLoading ? (
                           <RealtimeSkeletonLine className="w-28" />
