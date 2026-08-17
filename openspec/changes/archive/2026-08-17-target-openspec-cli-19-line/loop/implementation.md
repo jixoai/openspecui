@@ -182,7 +182,8 @@ Code decision: fixture reads .catalog and characterizes honest eager exitCode nu
 Green case and command: pnpm run typecheck (all packages Done); pnpm run lint (0 warnings/errors);
   pnpm run openspec:check-reference (OK: v1.9.0); suites — core 643 passed + 1 baseline failure, server 632
   passed + 2 baseline failures, web 1133 passed, app 384 passed, cli 163 passed, search 6 passed;
-  pnpm run build:deps && build:packages && build:cli green; npm pack → openspecui-8.0.0.tgz; isolated
+  pnpm run build:deps && build:packages && build:cli green; historical candidate npm pack → openspecui-8.0.0.tgz
+  (not v9 release evidence); isolated
   /tmp install: openspecui --version starts, dist markers verified (selectAgentDeliveryRegistry,
   deriveOpenSpecCliCapabilities, archivedValidation, schemasRootSelector, minCliSeries, unavailableTools,
   isPlanningComplete, schemasCapture+rootAvailable in cli.mjs, admission ranges and
@@ -253,8 +254,9 @@ Owner's own acceptance. Checkpoint 4.1 is marked accordingly. PR review, merge, 
 ### Post-walkthrough distribution re-verification (2026-08-15 Asia/Shanghai)
 
 The two walkthrough fixes changed source after the R5 pack, so distribution was re-verified:
-`pnpm run build:cli` green; `npm pack` → `openspecui-8.0.0.tgz`; isolated temporary-directory install
-starts (`--version` 8.0.0, `export --help` ok) and carries the fix markers (lazy `node:url` resolution in
+`pnpm run build:cli` green; historical candidate `npm pack` → `openspecui-8.0.0.tgz`; isolated
+temporary-directory install starts (`--version` 8.0.0, both candidate facts, not v9 release evidence;
+`export --help` ok) and carries the fix markers (lazy `node:url` resolution in
 terminal-control, registry selection reaching tool states) plus every prior v9 law marker
 (`isPlanningComplete`, `CliSchemasFailure`, capability derivation, `schemasRootSelector`, `minCliSeries`,
 `unavailableTools`); the shipped web asset carries the admission range, `StaticSchemasCaptureError`, and
@@ -427,7 +429,8 @@ Code decision: full gates re-run — format:check, lint (0/0), typecheck (all Do
   reproduced unchanged at the R6 parent via git stash; server 635 passed + the sqlite baseline, also
   reproduced unchanged; web 1134, app 384, cli 163 green; one new failure found and fixed during
   the gate: agent-integrations-router fixture needed its admitted registry). Clean rebuild
-  (build:deps/build:packages/build:cli), npm pack, isolated install: openspecui --version 8.0.0,
+  (build:deps/build:packages/build:cli), historical candidate npm pack, isolated install: openspecui
+  --version 8.0.0 (candidate fact, not v9 release evidence),
   export --help ok, installed dist carries admission-gated capabilities, registry selection, the
   retained-registry clone, and all prior law markers; the web asset carries 'Apply task progress'
   and zero '% task completion' copies (the first pack exposed the dashboard violation, fixed in
@@ -533,7 +536,8 @@ Code decision and evidence:
      dedicated worktree; the previously recorded "server sqlite baseline" is withdrawn — it was an artifact of
      a worktree install corrupting the shared better-sqlite3 native build; after rebuild the server suite is
      fully green at 638 passed), web 1134, app 384, cli 163.
-  4. Fresh clean rebuild (deps/packages/cli), npm pack, isolated install: openspecui --version 8.0.0,
+  4. Fresh clean rebuild (deps/packages/cli), historical candidate npm pack, isolated install: openspecui
+     --version 8.0.0 (candidate fact, not v9 release evidence),
      export --help ok; the installed dist carries the unified parser, capability derivation, registry
      selection, and the retained-registry clone; the shipped web asset carries the Apply-progress surface
      with zero task-completion copy, StaticSchemasCaptureError, and the range-naming unknown-version message.
@@ -671,8 +675,8 @@ Code decision and evidence:
      path-realpath baseline (previously reproduced at 79c41a02 in a dedicated worktree);
      server 638 full; web 1137; app 384; strict Change validation valid with 0 issues;
      openspec instructions apply OK.
-  4. Clean rebuild (deps/packages/cli), npm pack, isolated install: openspecui --version
-     8.0.0; all final install markers pass (typed selector owner, payload retention runtime
+  4. Clean rebuild (deps/packages/cli), historical candidate npm pack, isolated install: openspecui --version
+     8.0.0 (candidate fact, not v9 release evidence); all final install markers pass (typed selector owner, payload retention runtime
      schema, transport schema, static terminal error, Apply authority with zero
      task-completion copy, admission/registry laws, prior law markers).
 Green case and command: all R8.5 plan-block commands executed; no unclassified failures.
@@ -819,8 +823,8 @@ PASS  FORMAT_CHECK_BASE_SHA=79c41a02 pnpm run format:check (56 files)
 PASS  git diff --check
 PASS  pnpm run build:packages
 PASS  pnpm run build:cli
-PASS  npm pack openspecui@8.0.0
-PASS  isolated npm install of the tarball; openspecui --version => 8.0.0
+PASS  historical candidate npm pack openspecui@8.0.0 (not v9 release evidence)
+PASS  isolated npm install of the candidate tarball; openspecui --version => 8.0.0 (not v9 release evidence)
 PASS  installed CLI --help, Web asset, App asset, and v9 selector/evidence markers
 ```
 
