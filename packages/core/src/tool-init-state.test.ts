@@ -600,9 +600,18 @@ describe('getToolInitStates', () => {
         join(tempDir, '.agents', 'skills', 'openspec-update-change', 'SKILL.md'),
         '1.9.0'
       )
-      await waitForNextEmission('skill artifact creation', skillStart)
-      expect(emissions.at(-1)?.find((entry) => entry.toolId === 'codex')?.status).toBe(
-        'initialized'
+      // Slow watchers can emit intermediate projections before the skill pair settles;
+      // wait for the terminal status itself, not merely for a new emission count.
+      await vi.waitFor(
+        () =>
+          expect(
+            emissions
+              .at(-1)
+              ?.find((entry) => entry.toolId === 'codex')
+              ?.status,
+            `skill artifact creation (after ${skillStart} emissions)`
+          ).toBe('initialized'),
+        { timeout: 5_000 }
       )
     } finally {
       controller.abort()
