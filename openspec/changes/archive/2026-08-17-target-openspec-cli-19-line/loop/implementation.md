@@ -853,6 +853,26 @@ The authoritative release facts are PR #238 merge 64abcb80, tag openspecui@9.0.0
 and GitHub Release, followed by archive PR #239 merge f1609e66. These facts do not check Owner gates 4.1 or 4.2;
 the Owner still owns personal browser/App acceptance and the independent release review.
 
+## Post-release Schema evidence correction (2026-08-17 Asia/Shanghai)
+
+The final review found that the static exporter still used the raw `CliExecutor.schemas()` path, so a typed
+`contractError` produced for a failed Schema command could be lost. Commit `dc854a88` routes this observation
+through `cliExecutor.contracts.schemas()` and retains the typed payload, diagnostics, process facts, and
+`contractError`; a failed result cannot become a successful empty Schema catalog. The changeset
+`.changeset/fresh-lions-dance.md` requests the normal fixed-group patch release (future `9.0.1`).
+
+Fresh evidence after that source correction:
+
+    CLI export suite: 26/26 passed, including non-zero exit + non-JSON stdout evidence
+    Core CLI contract suites: 19/19 passed
+    pnpm run build: all workspace typechecks and Web/App/CLI builds passed
+    pnpm pack + isolated npm install: package/dist/cli.mjs and package/web/index.html present; --version => 9.0.0
+    format:check, lint:ci, openspec:check-reference (v1.9.0), changeset:check, git diff --check: PASS
+
+The full `test:ci` run still stops at the known macOS Core `reactive-fs/path-realpath` `/var` versus
+`/private/var` assertion after 70 Core tests passed; no new CLI or v9 failure was observed. Owner gates 4.1 and
+4.2 remain unchanged and are still the only acceptance boundary.
+
 ## Loopback triggers
 
 - The official 1.8 or 1.9 executable contradicts a command, payload, selector, or Agent-inventory assumption in a
