@@ -686,9 +686,7 @@ export function Dashboard() {
             const phase = classifyChangeWorkflowPhase({
               hasStatus: Boolean(status),
               isPlanningComplete: status?.isPlanningComplete ?? false,
-              trackedTaskPhase: change.trackedTaskProgress.phase,
               trackedArtifactStatus,
-              cliCompletedTasks: change.cliTaskSummary?.completedTasks ?? null,
             })
 
             return (
@@ -719,19 +717,11 @@ export function Dashboard() {
                     phase={phase}
                     updatedAt={change.updatedAt}
                     formatTime={formatRelativeTime}
-                    progressRatio={
-                      change.cliTaskSummary && change.cliTaskSummary.totalTasks > 0
-                        ? change.cliTaskSummary.completedTasks / change.cliTaskSummary.totalTasks
-                        : null
-                    }
                     className="min-w-0 flex-1"
                     subtitle={
                       status ? (
-                        <span title="Task counts reported by the OpenSpec CLI for this Change.">
+                        <span>
                           {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
-                          {change.cliTaskSummary
-                            ? ` · Tasks ${change.cliTaskSummary.completedTasks}/${change.cliTaskSummary.totalTasks}`
-                            : ''}
                         </span>
                       ) : (
                         'Artifacts status unavailable'

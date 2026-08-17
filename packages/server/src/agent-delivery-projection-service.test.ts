@@ -264,6 +264,37 @@ describe('AgentDeliveryProjectionService', () => {
       'Agent delivery projection service is disposed.'
     )
   })
+
+  it('does not load command-generation evidence for a skills-only projection', async () => {
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-skills-only-'))
+    const environment = new EnvironmentAuthorityFixture(
+      environmentProjection({ delivery: 'skills', workflows: ['update'] })
+    )
+    const observationEnvironment = new ReactiveObservationEnvironment()
+    const getCliCommand = vi.fn(async () => ['not-an-importable-openspec-runner'])
+    const service = new AgentDeliveryProjectionService({
+      projectDir,
+      environmentGlobalProjectionService: environment,
+      observationEnvironment,
+      cliExecutor,
+      cliCommandAuthority: { getCliCommand },
+    })
+
+    try {
+      const current = await service.getCurrent()
+
+      expect(current.registry).toHaveLength(38)
+      expect(findToolState(current, 'claude')?.status).toBe('uninitialized')
+      expect(getCliCommand).not.toHaveBeenCalled()
+    } finally {
+      await service.dispose()
+      await observationEnvironment.dispose()
+      clearCache()
+      await closeAllWatchers()
+      await rm(projectDir, { recursive: true, force: true })
+    }
+  })
+
   it('selects no inventory when the CLI runner is unavailable', async () => {
     clearCache()
     const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-nocli-'))

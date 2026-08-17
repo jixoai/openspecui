@@ -13,9 +13,9 @@ Original request (2026-08-15): "这里面很大的问题也是因为你作为架
 
 ```text
 Change artifacts      planning-valid; R8 closure and Owner boundary are current
-Recovery branch       fix/v9-cli-18-19-recovery @ 7b62a738 (plus current unstaged review edits)
+Recovery branch       fix/v9-final-review @ f1609e66 (plus current unstaged review edits)
 Accepted gates        R0-R7.3 historical closure; R8.1-R8.5 fresh focused/source closure
-Open gate             none before Owner gates; final source/distribution evidence is recorded below
+Open gate             none before Owner gates; final source/distribution evidence and post-release correction are recorded below
 Owner gates           4.1 browser/App walkthrough and 4.2 PR/release/archive remain unchecked
 ```
 
@@ -24,12 +24,12 @@ process-load-sensitive, the final source was tested in an isolated worktree, and
 was refreshed after the review edits. The implementation is ready for the Owner-only browser/App walkthrough; no
 Agent may check 4.1 or 4.2.
 
-| Current gate | State   | Exact boundary                                                                                                                                                                                                   |
-| ------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R8.1-R8.4    | closed  | Focused behavior and header evidence are current at the last recorded gate; the final-review source edits are listed below.                                                                                      |
-| R8.5         | closed  | In an isolated current-revision worktree with no competing workspace workload, the exact Server triple passed 120/120 without timeout inflation; the workspace timeout was classified as process-load-sensitive. |
-| 4.1          | ready   | Owner-only browser/App walkthrough may begin after the final source/distribution and independent-review records below.                                                                                           |
-| 4.2          | blocked | Owner-only PR review, merge, release, and archive decision; no delivery action is authorized.                                                                                                                    |
+| Current gate | State     | Exact boundary                                                                                                                                                                                                   |
+| ------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R8.1-R8.4    | closed    | Focused behavior and header evidence are current at the last recorded gate; the final-review source edits are listed below.                                                                                      |
+| R8.5         | closed    | In an isolated current-revision worktree with no competing workspace workload, the exact Server triple passed 120/120 without timeout inflation; the workspace timeout was classified as process-load-sensitive. |
+| 4.1          | ready     | Owner-only browser/App walkthrough may begin after the final source/distribution and independent-review records below.                                                                                           |
+| 4.2          | unchecked | Owner-only independent PR/release review. PR #238, tag/publication 9.0.0, and archive PR #239 are objective facts, not Owner acceptance.                                                                         |
 
 ## Evidence recording rule
 
@@ -182,7 +182,8 @@ Code decision: fixture reads .catalog and characterizes honest eager exitCode nu
 Green case and command: pnpm run typecheck (all packages Done); pnpm run lint (0 warnings/errors);
   pnpm run openspec:check-reference (OK: v1.9.0); suites — core 643 passed + 1 baseline failure, server 632
   passed + 2 baseline failures, web 1133 passed, app 384 passed, cli 163 passed, search 6 passed;
-  pnpm run build:deps && build:packages && build:cli green; npm pack → openspecui-8.0.0.tgz; isolated
+  pnpm run build:deps && build:packages && build:cli green; historical candidate npm pack → openspecui-8.0.0.tgz
+  (not v9 release evidence); isolated
   /tmp install: openspecui --version starts, dist markers verified (selectAgentDeliveryRegistry,
   deriveOpenSpecCliCapabilities, archivedValidation, schemasRootSelector, minCliSeries, unavailableTools,
   isPlanningComplete, schemasCapture+rootAvailable in cli.mjs, admission ranges and
@@ -253,8 +254,9 @@ Owner's own acceptance. Checkpoint 4.1 is marked accordingly. PR review, merge, 
 ### Post-walkthrough distribution re-verification (2026-08-15 Asia/Shanghai)
 
 The two walkthrough fixes changed source after the R5 pack, so distribution was re-verified:
-`pnpm run build:cli` green; `npm pack` → `openspecui-8.0.0.tgz`; isolated temporary-directory install
-starts (`--version` 8.0.0, `export --help` ok) and carries the fix markers (lazy `node:url` resolution in
+`pnpm run build:cli` green; historical candidate `npm pack` → `openspecui-8.0.0.tgz`; isolated
+temporary-directory install starts (`--version` 8.0.0, both candidate facts, not v9 release evidence;
+`export --help` ok) and carries the fix markers (lazy `node:url` resolution in
 terminal-control, registry selection reaching tool states) plus every prior v9 law marker
 (`isPlanningComplete`, `CliSchemasFailure`, capability derivation, `schemasRootSelector`, `minCliSeries`,
 `unavailableTools`); the shipped web asset carries the admission range, `StaticSchemasCaptureError`, and
@@ -427,7 +429,8 @@ Code decision: full gates re-run — format:check, lint (0/0), typecheck (all Do
   reproduced unchanged at the R6 parent via git stash; server 635 passed + the sqlite baseline, also
   reproduced unchanged; web 1134, app 384, cli 163 green; one new failure found and fixed during
   the gate: agent-integrations-router fixture needed its admitted registry). Clean rebuild
-  (build:deps/build:packages/build:cli), npm pack, isolated install: openspecui --version 8.0.0,
+  (build:deps/build:packages/build:cli), historical candidate npm pack, isolated install: openspecui
+  --version 8.0.0 (candidate fact, not v9 release evidence),
   export --help ok, installed dist carries admission-gated capabilities, registry selection, the
   retained-registry clone, and all prior law markers; the web asset carries 'Apply task progress'
   and zero '% task completion' copies (the first pack exposed the dashboard violation, fixed in
@@ -533,7 +536,8 @@ Code decision and evidence:
      dedicated worktree; the previously recorded "server sqlite baseline" is withdrawn — it was an artifact of
      a worktree install corrupting the shared better-sqlite3 native build; after rebuild the server suite is
      fully green at 638 passed), web 1134, app 384, cli 163.
-  4. Fresh clean rebuild (deps/packages/cli), npm pack, isolated install: openspecui --version 8.0.0,
+  4. Fresh clean rebuild (deps/packages/cli), historical candidate npm pack, isolated install: openspecui
+     --version 8.0.0 (candidate fact, not v9 release evidence),
      export --help ok; the installed dist carries the unified parser, capability derivation, registry
      selection, and the retained-registry clone; the shipped web asset carries the Apply-progress surface
      with zero task-completion copy, StaticSchemasCaptureError, and the range-naming unknown-version message.
@@ -671,8 +675,8 @@ Code decision and evidence:
      path-realpath baseline (previously reproduced at 79c41a02 in a dedicated worktree);
      server 638 full; web 1137; app 384; strict Change validation valid with 0 issues;
      openspec instructions apply OK.
-  4. Clean rebuild (deps/packages/cli), npm pack, isolated install: openspecui --version
-     8.0.0; all final install markers pass (typed selector owner, payload retention runtime
+  4. Clean rebuild (deps/packages/cli), historical candidate npm pack, isolated install: openspecui --version
+     8.0.0 (candidate fact, not v9 release evidence); all final install markers pass (typed selector owner, payload retention runtime
      schema, transport schema, static terminal error, Apply authority with zero
      task-completion copy, admission/registry laws, prior law markers).
 Green case and command: all R8.5 plan-block commands executed; no unclassified failures.
@@ -819,14 +823,77 @@ PASS  FORMAT_CHECK_BASE_SHA=79c41a02 pnpm run format:check (56 files)
 PASS  git diff --check
 PASS  pnpm run build:packages
 PASS  pnpm run build:cli
-PASS  npm pack openspecui@8.0.0
-PASS  isolated npm install of the tarball; openspecui --version => 8.0.0
+PASS  historical candidate npm pack openspecui@8.0.0 (not v9 release evidence)
+PASS  isolated npm install of the candidate tarball; openspecui --version => 8.0.0 (not v9 release evidence)
 PASS  installed CLI --help, Web asset, App asset, and v9 selector/evidence markers
 ```
 
 The installed tarball contains the rebuilt `web/`, `app/`, and CLI `dist/` trees. The two independent review axes
 found no remaining standards or implementation defect. The main-worktree timeout is retained as environment evidence
 only; it is not a production baseline and no test timeout was widened.
+
+## Final audit correction (2026-08-17 Asia/Shanghai)
+
+This entry corrects audit metadata without rewriting historical candidate records. Earlier R5/R6/R8 paragraphs
+contain candidate or pre-release distribution observations such as openspecui-8.0.0.tgz and an installed
+--version of 8.0.0; those observations remain historical evidence and are not the v9 release truth. The earlier
+R4 sentence that described unsupported versions as falling back to the newest inventory is also superseded by the
+final admission law: unknown, unparsable, prerelease, versions below 1.8.0, and versions at or above 1.10.0
+select neither admitted capabilities nor an Agent registry.
+
+Fresh post-release distribution verification was run from the current v9 source after the final review correction:
+
+    pnpm run build:deps && pnpm run build:packages && pnpm run build:cli  -> PASS
+    (cd packages/cli && npm pack)                                      -> openspecui-9.0.0.tgz
+    isolated npm install of openspecui-9.0.0.tgz                       -> PASS
+    installed openspecui --version                                     -> 9.0.0
+    installed openspecui --help, Web/App assets, and v9 admission/registry markers -> PASS
+
+The authoritative release facts are PR #238 merge 64abcb80, tag openspecui@9.0.0, the published npm package
+and GitHub Release, followed by archive PR #239 merge f1609e66. These facts do not check Owner gates 4.1 or 4.2;
+the Owner still owns personal browser/App acceptance and the independent release review.
+
+## Post-release Schema evidence correction (2026-08-17 Asia/Shanghai)
+
+The final review found that the static exporter still used the raw `CliExecutor.schemas()` path, so a typed
+`contractError` produced for a failed Schema command could be lost. Commit `dc854a88` routes this observation
+through `cliExecutor.contracts.schemas()` and retains the typed payload, diagnostics, process facts, and
+`contractError`; a failed result cannot become a successful empty Schema catalog. The changeset
+`.changeset/fresh-lions-dance.md` requests the normal fixed-group patch release (future `9.0.1`).
+
+Fresh evidence after that source correction:
+
+    CLI export suite: 26/26 passed, including non-zero exit + non-JSON stdout evidence
+    Core CLI contract suites: 19/19 passed
+    pnpm run build: all workspace typechecks and Web/App/CLI builds passed
+    pnpm pack + isolated npm install: package/dist/cli.mjs and package/web/index.html present; --version => 9.0.0
+    format:check, lint:ci, openspec:check-reference (v1.9.0), changeset:check, git diff --check: PASS
+
+The full `test:ci` run still stops at the known macOS Core `reactive-fs/path-realpath` `/var` versus
+`/private/var` assertion after 646 Core tests passed; no new CLI or v9 failure was observed. Owner gates 4.1 and
+4.2 remain unchanged and are still the only acceptance boundary.
+
+## Post-review retained Agent correction (2026-08-17 Asia/Shanghai)
+
+PR #240 Fast Gate exposed one real delivery-latency defect before its first retained Agent snapshot: a
+`delivery: 'skills'` policy still enumerated every command directory and attempted to import the private OpenSpec
+command generator. Neither is an input to a skills-only state, and the needless work could exhaust the focused
+five-second observation window on a loaded hosted runner. The correction keeps command contents and physical command
+paths strictly owned by `commands` and `both` delivery. Skills-only projections retain the same registry, policy,
+skill-state, migration, and cleanup facts while avoiding command-surface I/O (commit `9661a493`).
+
+Regression and source evidence on `fix/v9-final-review`:
+
+    Server agent-delivery-projection-service: 6/6 passed, including a spy that proves skills-only Pull does not call
+      the command-generator authority.
+    Core tool-init-state: 20/20 passed across skills, commands, both, migration, cleanup, and retained-registry cases.
+    CI=true Server Agent suite repeated 10 times: 10/10 passed.
+    pnpm run format:check, pnpm run lint:ci, pnpm run typecheck, git diff --check: PASS.
+
+The earlier Schema review concern is not an active defect: the static exporter already calls
+`cliExecutor.contracts.schemas()` and transfers the returned `contractError`, payload, diagnostics, stdout, stderr,
+and exit code into the failed capture. The existing export regression covers a nonzero, non-JSON Schema result.
+This correction does not check Owner gates 4.1 or 4.2; it only prepares PR #240 for a fresh automated review.
 
 ## Loopback triggers
 

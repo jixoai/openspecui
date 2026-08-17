@@ -118,7 +118,7 @@ export function ReadonlyKanban({
                         exit={{ opacity: 0, scale: 0.98 }}
                         transition={{ duration: 0.16 }}
                       >
-                        <ReadonlyKanbanRow item={item} laneId={lane.id} compact={compact} />
+                        <ReadonlyKanbanRow item={item} laneId={lane.id} />
                       </motion.div>
                     ))}
                   </AnimatePresence>
@@ -144,31 +144,15 @@ export function ReadonlyKanban({
 function ReadonlyKanbanRow({
   item,
   laneId,
-  compact,
 }: {
   item: KanbanActiveItem | KanbanArchiveItem
   laneId: KanbanLaneId
-  compact: boolean
 }) {
   const archived = laneId === 'archived'
   const sharedDescriptor = {
     family: archived ? ('archive' as const) : ('changes' as const),
     entityId: item.id,
   }
-  // CLI-reported counts are the task progress authority; the local tracked projection is
-  // a display fallback when no CLI list evidence exists for the row.
-  const cli = item.cliTaskSummary ?? null
-  const progress = cli
-    ? {
-        completed: cli.completedTasks,
-        total: cli.totalTasks,
-      }
-    : {
-        completed: item.trackedTaskProgress.completed,
-        total: item.trackedTaskProgress.total,
-      }
-  const percent = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
-
   return (
     <VTLink
       to={archived ? '/archive/$changeId' : '/changes/$changeId'}
@@ -204,21 +188,7 @@ function ReadonlyKanbanRow({
                 : item.id}
           </div>
         </div>
-        {!archived ? (
-          <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
-            {progress.completed}/{progress.total}
-          </span>
-        ) : null}
       </div>
-      {!archived && !compact ? (
-        <div className="bg-muted mt-2 h-1 rounded-full">
-          <motion.div
-            className="bg-primary h-full rounded-full"
-            initial={false}
-            animate={{ width: `${percent}%` }}
-          />
-        </div>
-      ) : null}
     </VTLink>
   )
 }

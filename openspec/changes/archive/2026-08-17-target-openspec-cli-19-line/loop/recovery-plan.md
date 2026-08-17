@@ -12,9 +12,11 @@ Original request (2026-08-15): "这里面很大的问题也是因为你作为架
 ## Status and operating law
 
 The recovery gates below are historical context. R8.1-R8.5 are closed with final focused, source, distribution, and
-independent-review evidence recorded in `loop/implementation.md`. The main-worktree Server timeout is classified as
-process-load-sensitive after the same final source passed the complete triple in an isolated worktree. Only Owner
-gate 4.1 remains before the separate PR/release/archive decision at 4.2.
+independent-review evidence recorded in the implementation record. The main-worktree Server timeout is classified as
+process-load-sensitive after the same final source passed the complete triple in an isolated worktree. Owner gate
+4.1 remains for personal browser/App acceptance; PR #238, release/tag openspecui@9.0.0, and archive PR #239 are
+already completed objective delivery facts. Owner gate 4.2 remains unchecked until the Owner records independent
+release review.
 
 ```text
 R8.1-R8.5 closed -> Owner gate 4.1 browser/App walkthrough -> Owner gate 4.2 PR/release/archive decision
