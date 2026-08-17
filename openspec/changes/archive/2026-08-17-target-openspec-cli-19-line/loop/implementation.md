@@ -870,7 +870,7 @@ Fresh evidence after that source correction:
     format:check, lint:ci, openspec:check-reference (v1.9.0), changeset:check, git diff --check: PASS
 
 The full `test:ci` run still stops at the known macOS Core `reactive-fs/path-realpath` `/var` versus
-`/private/var` assertion after 70 Core tests passed; no new CLI or v9 failure was observed. Owner gates 4.1 and
+`/private/var` assertion after 646 Core tests passed; no new CLI or v9 failure was observed. Owner gates 4.1 and
 4.2 remain unchanged and are still the only acceptance boundary.
 
 ## Loopback triggers
