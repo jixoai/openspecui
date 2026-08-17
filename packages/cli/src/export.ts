@@ -20,10 +20,10 @@ import {
   inspectProjectBinding,
   OpenSpecAdapter,
   redactSnapshotForPublication,
-  SchemaInfoSchema,
   SchemaResolutionSchema,
   TemplatesSchema,
   toOpsxDisplayPath,
+  type CliCommandResult,
   type CliJsonValue,
   type ExportSnapshot,
   type OpsxEntityDiagnostic,
@@ -495,19 +495,28 @@ export async function generateSnapshot(
 
     let forwardedSelector: { store?: string } | null = null
     const captureSchemasFailure = (
-      result: { stdout: string; stderr: string; exitCode: number | null },
-      contractError?: string
+      result: Pick<
+        CliCommandResult<unknown>,
+        'stdout' | 'stderr' | 'exitCode' | 'payload' | 'diagnostics' | 'contractError'
+      >,
+      fallbackContractError?: string
     ): void => {
       // A CLI failure (including the OpenSpec 1.9 selected-Root envelope) is captured as a
       // typed failed observation so the static projection never reads it as an empty catalog.
-      const payload = parseCliJsonValue(result.stdout)
+      const payload = result.payload ?? parseCliJsonValue(result.stdout)
       const envelope = CliDiagnosticFailureSchema.safeParse(payload)
+      const contractError = fallbackContractError ?? result.contractError
       schemasCapture = {
         ok: false,
         command: 'openspec schemas',
         selector: forwardedSelector,
         rootAvailable: hasCliResolvedRoot(payload),
-        diagnostics: envelope.success ? envelope.data.status : [],
+        diagnostics:
+          result.diagnostics.length > 0
+            ? result.diagnostics
+            : envelope.success
+              ? envelope.data.status
+              : [],
         stdout: result.stdout,
         stderr: result.stderr,
         exitCode: result.exitCode,
@@ -525,27 +534,18 @@ export async function generateSnapshot(
         parseOpenSpecCliVersion(detectedVersion ?? undefined)
       )
       forwardedSelector = capabilities.schemasRootSelector ? schemasSelector : null
-      const schemasResult = await cliExecutor.schemas(
+      const schemasResult = await cliExecutor.contracts.schemas(
         capabilities.schemasRootSelector ? schemasSelector : {}
       )
-      if (schemasResult.success) {
-        try {
-          schemas = parseCliJson(schemasResult.stdout, SchemaInfoSchema.array(), 'openspec schemas')
-        } catch (error) {
-          // Contract drift is still the same CLI observation: preserve its process and payload
-          // facts instead of replacing them with an empty synthetic result.
-          captureSchemasFailure(
-            schemasResult,
-            error instanceof Error ? error.message : String(error)
-          )
-        }
+      if (schemasResult.success && Array.isArray(schemasResult.data)) {
+        schemas = schemasResult.data
       } else {
         captureSchemasFailure(schemasResult)
       }
     } catch (error) {
       schemas = []
       captureSchemasFailure(
-        { stdout: '', stderr: '', exitCode: null },
+        { stdout: '', stderr: '', exitCode: null, payload: null, diagnostics: [] },
         error instanceof Error ? error.message : String(error)
       )
     }

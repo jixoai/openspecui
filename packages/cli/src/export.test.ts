@@ -156,8 +156,8 @@ describe('Export Functions', () => {
       expect(capture.stdout).toBe('')
       expect(capture.exitCode).toBeNull()
       expect(capture.payload).toBeNull()
-      expect(capture.contractError).toBeUndefined()
-      // The runner failure surfaces through the captured stderr evidence.
+      expect(capture.contractError).toContain('stdout is not one JSON document')
+      // The runner failure retains both captured stderr and the absent-stdout contract evidence.
       expect(capture.stderr).toEqual(expect.stringContaining('OpenSpec CLI'))
       expect(snapshot.opsx?.schemaDetails).toBeDefined()
       expect(snapshot.opsx?.templates).toBeDefined()
@@ -198,7 +198,48 @@ if (args.includes('--version')) {
       expect(capture.stderr).toContain('schema contract fixture')
       expect(capture.exitCode).toBe(0)
       expect(capture.payload).toEqual({ unexpected: true })
-      expect(capture.contractError).toContain('openspec schemas returned unexpected JSON')
+      expect(capture.contractError).toEqual(expect.any(String))
+      expect(snapshot.opsx?.schemas).toEqual([])
+    })
+
+    it('preserves a failed schemas command contract error without fabricating a catalog', async () => {
+      const fakeCli = join(testProjectDir, 'failed-schemas-openspec.mjs')
+      await writeFile(
+        fakeCli,
+        `const args = process.argv.slice(2)
+if (args.includes('--version')) {
+  process.stdout.write('1.9.0\\n')
+} else if (args[0] === 'schemas') {
+  process.stdout.write('not JSON\\n')
+  process.stderr.write('schema command failed\\n')
+  process.exitCode = 1
+} else {
+  process.exitCode = 0
+}
+`,
+        'utf-8'
+      )
+      await writeFile(
+        join(testProjectDir, 'openspec', '.openspecui.json'),
+        JSON.stringify(
+          {
+            cli: { command: process.execPath, args: [fakeCli] },
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      )
+
+      const snapshot = await generateSnapshot(testProjectDir)
+      const capture = snapshot.opsx?.schemasCapture
+      if (capture?.ok !== false) throw new Error('Expected a typed schemas capture failure.')
+      expect(capture.stdout).toBe('not JSON\n')
+      expect(capture.stderr).toContain('schema command failed')
+      expect(capture.exitCode).toBe(1)
+      expect(capture.payload).toBeNull()
+      expect(capture.diagnostics).toEqual([])
+      expect(capture.contractError).toContain('stdout is not one JSON document')
       expect(snapshot.opsx?.schemas).toEqual([])
     })
 
