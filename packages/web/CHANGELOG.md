@@ -1,5 +1,11 @@
 # @openspecui/web
 
+## 9.0.1
+
+### Patch Changes
+
+- dc854a8: Preserve typed CLI contract-error evidence when static Schema export fails.
+
 ## 9.0.0
 
 ### Major Changes
