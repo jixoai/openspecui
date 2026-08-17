@@ -873,6 +873,28 @@ The full `test:ci` run still stops at the known macOS Core `reactive-fs/path-rea
 `/private/var` assertion after 646 Core tests passed; no new CLI or v9 failure was observed. Owner gates 4.1 and
 4.2 remain unchanged and are still the only acceptance boundary.
 
+## Post-review retained Agent correction (2026-08-17 Asia/Shanghai)
+
+PR #240 Fast Gate exposed one real delivery-latency defect before its first retained Agent snapshot: a
+`delivery: 'skills'` policy still enumerated every command directory and attempted to import the private OpenSpec
+command generator. Neither is an input to a skills-only state, and the needless work could exhaust the focused
+five-second observation window on a loaded hosted runner. The correction keeps command contents and physical command
+paths strictly owned by `commands` and `both` delivery. Skills-only projections retain the same registry, policy,
+skill-state, migration, and cleanup facts while avoiding command-surface I/O (commit `9661a493`).
+
+Regression and source evidence on `fix/v9-final-review`:
+
+    Server agent-delivery-projection-service: 6/6 passed, including a spy that proves skills-only Pull does not call
+      the command-generator authority.
+    Core tool-init-state: 20/20 passed across skills, commands, both, migration, cleanup, and retained-registry cases.
+    CI=true Server Agent suite repeated 10 times: 10/10 passed.
+    pnpm run format:check, pnpm run lint:ci, pnpm run typecheck, git diff --check: PASS.
+
+The earlier Schema review concern is not an active defect: the static exporter already calls
+`cliExecutor.contracts.schemas()` and transfers the returned `contractError`, payload, diagnostics, stdout, stderr,
+and exit code into the failed capture. The existing export regression covers a nonzero, non-JSON Schema result.
+This correction does not check Owner gates 4.1 or 4.2; it only prepares PR #240 for a fresh automated review.
+
 ## Loopback triggers
 
 - The official 1.8 or 1.9 executable contradicts a command, payload, selector, or Agent-inventory assumption in a
