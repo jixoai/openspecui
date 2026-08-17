@@ -2,8 +2,11 @@
  * Orthogonal intents (created 2026-08-01 Asia/Shanghai):
  * 1. Prove Agent Integrations starts with Pull and accepts retained replacement Push snapshots.
  * 2. Prove explicit refresh replaces readable data and component disposal releases subscription ownership.
+ * 3. Carry the command-surface unavailability field in fixtures.
  *
  * Original request (2026-08-01): consume the Server-owned Agent projection without browser policy inputs.
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,7 +52,8 @@ function createProjection(profile: 'core' | 'custom'): AgentIntegrationsProjecti
         name: 'Codex',
         value: 'codex',
         available: true,
-        skillsDir: '.codex',
+        skillsDir: '.agents',
+        legacySkillsDirs: ['.codex'],
         capability: 'skills-invocable',
         command: null,
       },
@@ -67,6 +71,10 @@ function createProjection(profile: 'core' | 'custom'): AgentIntegrationsProjecti
         readiness: 'initialized',
         issues: [],
         hasAnyArtifacts: true,
+        skillsScope: { kind: 'project', skillsDir: '.agents' },
+        legacySkillRoots: ['.codex'],
+        requiresIdeRestart: false,
+        commandSurfaceUnavailableReason: null,
         expectedSkillCount: 1,
         presentExpectedSkillCount: 1,
         detectedSkillCount: 1,

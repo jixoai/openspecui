@@ -1,25 +1,27 @@
 /**
- * Orthogonal intents (created 2026-08-01 Asia/Shanghai):
- * 1. Combine the complete OpenSpec 1.7 Agent registry with authoritative Environment delivery policy.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Combine the complete OpenSpec 1.9 Agent registry with authoritative Environment delivery policy.
  * 2. Expose fresh one-shot physical projections through Core `getToolInitStates`.
  * 3. Retain reactive physical projections through Core `createToolInitStateProjection`.
  * 4. Rebind retained work when Environment policy changes and retire all work on dispose.
+ * 5. Observe user-global skill roots (MiniMax Code) beside the project root and Codex prompt root.
  *
  * Original request (2026-08-01): "新增 Agent delivery projection service 及 checked tests。"
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 
 import {
-  AI_TOOLS,
-  PINNED_AGENT_GENERATOR_VERSION,
   ReactiveContext,
   createToolInitStateProjection,
+  getExternalAgentSkillsObservationRoots,
   getExternalCodexCommandObservationRoot,
   getToolInitStates,
   loadOpenSpecAgentCommandContents,
   normalizeAgentDeliveryPolicy,
+  selectAgentDeliveryRegistry,
   type AgentCommandArtifact,
-  type AgentCommandContentCatalog,
   type AgentCommandContentFormat,
+  type AgentCommandContentResult,
   type AgentDeliveryCleanup,
   type AgentDeliveryPolicy,
   type CliExecutor,
@@ -115,8 +117,8 @@ function cloneCleanup(cleanup: AgentDeliveryCleanup | undefined): AgentDeliveryC
   }
 }
 
-function cloneRegistry(): ToolConfig[] {
-  return AI_TOOLS.map((tool) => ({
+function cloneRegistry(registry: readonly ToolConfig[]): ToolConfig[] {
+  return registry.map((tool) => ({
     name: tool.name,
     value: tool.value,
     available: tool.available,
@@ -127,6 +129,13 @@ function cloneRegistry(): ToolConfig[] {
     ...(tool.detectionPaths ? { detectionPaths: [...tool.detectionPaths] } : {}),
     ...(tool.setupNote !== undefined ? { setupNote: tool.setupNote } : {}),
     ...(tool.aliases ? { aliases: [...tool.aliases] } : {}),
+    ...(tool.legacySkillsDirs ? { legacySkillsDirs: [...tool.legacySkillsDirs] } : {}),
+    ...(tool.globalSkillsDir !== undefined && tool.globalSkillsDir !== null
+      ? { globalSkillsDir: tool.globalSkillsDir }
+      : {}),
+    ...(tool.requiresIdeRestart !== undefined
+      ? { requiresIdeRestart: tool.requiresIdeRestart }
+      : {}),
     ...(tool.cleanup ? { cleanup: cloneCleanup(tool.cleanup) } : {}),
     ...(tool.migrations
       ? { migrations: tool.migrations.map((migration) => ({ ...migration })) }
@@ -159,8 +168,9 @@ function policyFingerprint(policy: AgentDeliveryPolicy): string {
 }
 
 interface AgentGeneratorEvidence {
-  version: string
-  commandContents: AgentCommandContentCatalog | null
+  /** Detected CLI version; null when the runner is unavailable or versionless (no inventory). */
+  version: string | null
+  commandContents: AgentCommandContentResult | null
 }
 
 async function resolveGeneratorEvidence(
@@ -169,10 +179,11 @@ async function resolveGeneratorEvidence(
   workflows: readonly string[]
 ): Promise<AgentGeneratorEvidence> {
   const availability = await cliExecutor.checkAvailability()
-  const version =
-    availability.available && availability.version
-      ? availability.version
-      : PINNED_AGENT_GENERATOR_VERSION
+  // Version identity for inventory selection comes only from a live, available CLI. An
+  // unavailable or versionless runner selects no inventory at all — fabricating the pinned
+  // 1.9.0 here would hand a non-admitted session the full 1.9 registry. The pinned constant
+  // stays in use only where Core compares on-disk generated-by evidence.
+  const version = availability.available && availability.version ? availability.version : null
   const commandContents = availability.available
     ? await loadOpenSpecAgentCommandContents(await cliCommandAuthority.getCliCommand(), workflows)
     : null
@@ -181,10 +192,13 @@ async function resolveGeneratorEvidence(
 
 function createProjection(
   policy: AgentDeliveryPolicy,
-  states: readonly ToolInitState[]
+  states: readonly ToolInitState[],
+  generatorEvidence: AgentGeneratorEvidence
 ): AgentDeliveryProjection {
   return {
-    registry: cloneRegistry(),
+    // The official inventory belongs to the admitted running CLI line, not to one fixed
+    // registry: a supported 1.8 session lists exactly its own official targets.
+    registry: cloneRegistry(selectAgentDeliveryRegistry(generatorEvidence.version)),
     policy: {
       profile: policy.profile,
       delivery: policy.delivery,
@@ -286,7 +300,7 @@ class RetainedAgentDeliveryProjection implements AgentDeliveryProjectionSubscrip
     generatorEvidence: AgentGeneratorEvidence,
     force: boolean
   ): void {
-    const fingerprint = `${policyFingerprint(policy)}:${generatorEvidence.version}`
+    const fingerprint = `${policyFingerprint(policy)}:${generatorEvidence.version ?? 'no-cli'}`
     if (!force && this.physicalController && fingerprint === this.currentPolicyFingerprint) return
 
     this.stopPhysicalProjection()
@@ -297,8 +311,10 @@ class RetainedAgentDeliveryProjection implements AgentDeliveryProjectionSubscrip
     const context = new ReactiveContext()
     const projectToolInitStates = createToolInitStateProjection(this.options.projectDir, {
       ...policy,
-      generatorVersion: generatorEvidence.version,
-      commandContents: generatorEvidence.commandContents,
+      generatorVersion: generatorEvidence.version ?? undefined,
+      commandContents: generatorEvidence.commandContents?.catalog ?? null,
+      unavailableCommandTools: generatorEvidence.commandContents?.unavailableTools ?? null,
+      registry: selectAgentDeliveryRegistry(generatorEvidence.version),
     })
 
     void (async () => {
@@ -311,7 +327,10 @@ class RetainedAgentDeliveryProjection implements AgentDeliveryProjectionSubscrip
           ) {
             return
           }
-          this.listener({ type: 'snapshot', projection: createProjection(policy, states) })
+          this.listener({
+            type: 'snapshot',
+            projection: createProjection(policy, states, generatorEvidence),
+          })
         }
       } catch (cause: unknown) {
         if (this.disposed || controller.signal.aborted || generation !== this.physicalGeneration) {
@@ -355,11 +374,13 @@ export class AgentDeliveryProjectionService {
     )
     const states = await getToolInitStates(this.options.projectDir, {
       ...policy,
-      generatorVersion: generatorEvidence.version,
-      commandContents: generatorEvidence.commandContents,
+      generatorVersion: generatorEvidence.version ?? undefined,
+      commandContents: generatorEvidence.commandContents?.catalog ?? null,
+      unavailableCommandTools: generatorEvidence.commandContents?.unavailableTools ?? null,
+      registry: selectAgentDeliveryRegistry(generatorEvidence.version),
     })
     this.assertActive()
-    return createProjection(policy, states)
+    return createProjection(policy, states, generatorEvidence)
   }
 
   /** Retain Environment policy and physical Agent artifact observation until unsubscribed. */
@@ -420,6 +441,9 @@ export class AgentDeliveryProjectionService {
             getExternalCodexCommandObservationRoot()
           )
         )
+        for (const globalSkillsRoot of getExternalAgentSkillsObservationRoots()) {
+          releases.push(await this.options.observationEnvironment.acquireRoot(globalSkillsRoot))
+        }
         if (this.disposed) {
           await Promise.all(releases.map((release) => release()))
           return

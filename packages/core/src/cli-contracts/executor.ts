@@ -1,15 +1,19 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Build root-aware read and workflow command argv.
  * 2. Build Store inspection and mutation argv through the official CLI surface.
  * 3. Build strict validate/archive argv without implicit recovery behavior.
  * 4. Parse every invocation, including Archive Instructions, through its command-specific evidence schema.
  *
+ * 5. Forward the selected Root selector only where the admitted CLI declares it.
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import type { z } from 'zod'
 import type { CliResult } from '../cli-executor.js'
 import { parseCliCommandResult, type CliCommandResult } from './command-result.js'
+import { CliSchemasSchema, type CliSchemas } from './schema-resolution.js'
 import {
   CliContextSchema,
   CliDoctorSchema,
@@ -30,7 +34,6 @@ import {
   CliArchiveSchema,
   CliArtifactInstructionsSchema,
   CliChangeListSchema,
-  CliSchemasSchema,
   CliSchemaWhichSchema,
   CliShowSpecSchema,
   CliSpecListSchema,
@@ -42,7 +45,6 @@ import {
   type CliArchiveInstructions,
   type CliArtifactInstructions,
   type CliChangeList,
-  type CliSchemas,
   type CliSchemaWhich,
   type CliShowSpec,
   type CliSpecList,
@@ -91,6 +93,8 @@ export interface CliStoreRemoveOptions {
 export type CliValidateTarget =
   | { kind: 'item'; id: string; type?: 'change' | 'spec' }
   | { kind: 'scope'; scope: 'all' | 'changes' | 'specs' }
+  /** OpenSpec 1.9 archived-task validation over the resolved root's archive. */
+  | { kind: 'archived' }
 
 /** JSON Validate options, including explicit target and root selection. */
 export interface CliValidateJsonOptions extends CliRootSelector {
@@ -139,9 +143,9 @@ export class OpenSpecCliContractExecutor {
     )
   }
 
-  /** List workflow schemas through the CLI JSON contract. */
-  async schemas(): Promise<CliCommandResult<CliSchemas>> {
-    return this.execute(['schemas', '--json'], CliSchemasSchema)
+  /** List workflow schemas through the CLI JSON contract with the selected Root's Store selector. */
+  async schemas(selector: CliRootSelector = {}): Promise<CliCommandResult<CliSchemas>> {
+    return this.execute(this.withRoot(['schemas', '--json'], selector), CliSchemasSchema)
   }
 
   /** Resolve one workflow schema through the CLI JSON contract. */
@@ -271,14 +275,16 @@ export class OpenSpecCliContractExecutor {
     return this.execute(args, CliStoreCleanupSchema)
   }
 
-  /** Validate an item or scope without inferring retries or readiness. */
+  /** Validate an item, scope, or the archive without inferring retries or readiness. */
   async validate(options: CliValidateJsonOptions): Promise<CliCommandResult<CliValidate>> {
     const args = ['validate']
     if (options.target.kind === 'item') {
       args.push(options.target.id)
       if (options.target.type) args.push('--type', options.target.type)
-    } else {
+    } else if (options.target.kind === 'scope') {
       args.push(`--${options.target.scope}`)
+    } else {
+      args.push('--archived')
     }
     if (options.strict) args.push('--strict')
     args.push('--json')

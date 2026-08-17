@@ -1,11 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Define the publication-safe snapshot contract shared by CLI export and static Web projection.
  * 2. Preserve exact CLI-selected Root provenance, including OpenSpec 1.7 machine default Store fallback.
  * 3. Keep Reference publication policy explicit without leaking private runtime evidence.
  *
+ * 4. Type the static schemas capture failure with complete CLI evidence.
  * Original request (2026-08-01): adapt OpenSpecUI 7 to the OpenSpec 1.7 Root and Store protocol.
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
+import type { CliJsonValue } from './cli-contracts/command-result.js'
+import type { CliDiagnostic } from './cli-contracts/common.js'
 import type { OpenSpecUIConfig } from './config.js'
 import type { OpsxEntityDetail } from './opsx-entity.js'
 import type { SchemaDetail, SchemaInfo, SchemaResolution, TemplatesMap } from './opsx-types.js'
@@ -47,6 +52,25 @@ export type ExportReferencePolicy =
 /**
  * Complete snapshot of an OpenSpec project for static export
  */
+/** Typed captured failure of the static schemas observation. */
+export interface StaticSchemasCaptureFailure {
+  ok: false
+  /** CLI command whose observation failed. */
+  command: 'openspec schemas'
+  /** Selected Root selector forwarded for the observation, when captured. */
+  selector: { store?: string } | null
+  /** Whether the failing payload still carried a resolved Root. */
+  rootAvailable: boolean
+  /** Upstream diagnostics from the failing payload's status array. */
+  diagnostics: readonly CliDiagnostic[]
+  stdout: string
+  stderr: string
+  exitCode: number | null
+  /** Raw parsed JSON payload of the failing observation, when parseable. */
+  payload: CliJsonValue | null
+  contractError?: string
+}
+
 export interface ExportSnapshot {
   /** Snapshot metadata */
   meta: {
@@ -141,6 +165,12 @@ export interface ExportSnapshot {
     whatChanges: string
     /** Formal workflow task truth from the tracked artifact glob. */
     trackedTaskProgress: TrackedTaskProgress
+    /** Task counts as reported by `openspec list`, when the export observed them. */
+    cliTaskSummary?: {
+      completedTasks: number
+      totalTasks: number
+      status: 'no-tasks' | 'complete' | 'in-progress'
+    } | null
     /** Secondary schema-document checkbox analytics. */
     documentChecklistSummary: DocumentChecklistSummary
     deltas: Array<{
@@ -170,6 +200,12 @@ export interface ExportSnapshot {
   opsx?: {
     configYaml?: string
     schemas: SchemaInfo[]
+    /**
+     * Captured schemas-observation outcome. A failed observation keeps the complete typed
+     * CLI evidence (for example the OpenSpec 1.9 selected-Root envelope) so static
+     * consumers never read the failure as an empty successful catalog.
+     */
+    schemasCapture?: { ok: true } | StaticSchemasCaptureFailure
     schemaDetails: Record<string, SchemaDetail>
     schemaYamls?: Record<string, string>
     schemaResolutions: Record<string, SchemaResolution>

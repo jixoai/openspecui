@@ -50,6 +50,7 @@ function createChange(id: string, name: string): ChangeMeta {
       completed: 0,
       remaining: 0,
     },
+    cliTaskSummary: null,
   }
 }
 
@@ -150,7 +151,7 @@ describe('ChangeList detail navigation', () => {
   const preparedStatus: ChangeStatus = {
     changeName: 'b',
     schemaName: 'spec-driven',
-    isComplete: false,
+    isPlanningComplete: false,
     applyRequires: ['tasks'],
     artifacts: [],
     provenance: { kind: 'static' },

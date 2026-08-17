@@ -23,6 +23,7 @@
       "@openspecui/web-src/*": ["packages/web/src/*"],
       "@openspecui/server": ["packages/server/src/index.ts"],
       "@openspecui/core": ["packages/core/src/index.ts"],
+      "@openspecui/core/openspec-compat": ["packages/core/src/openspec-compat.ts"],
       "@openspecui/core/dashboard-display": ["packages/core/src/dashboard-display.ts"],
       "@openspecui/core/hosted-app": ["packages/core/src/hosted-app.ts"],
       "@openspecui/core/app-daemon-control": ["packages/core/src/app-daemon-control.ts"],

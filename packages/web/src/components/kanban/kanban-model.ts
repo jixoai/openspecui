@@ -19,6 +19,12 @@ export interface KanbanActiveItem {
   id: string
   name: string
   trackedTaskProgress: TrackedTaskProgress
+  /** CLI-reported task counts (`openspec list`); null when no CLI list evidence exists. */
+  cliTaskSummary?: {
+    completedTasks: number
+    totalTasks: number
+    status: 'no-tasks' | 'complete' | 'in-progress'
+  } | null
   updatedAt: number
 }
 

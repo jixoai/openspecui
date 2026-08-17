@@ -1,15 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX Status/Instructions, Dashboard, readonly refresh, and archive procedures.
  * 2. Register CLI, Root Context, Agent delivery, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
- * 5. Compose the public tRPC application router and shared procedure schemas.
+ * 5. Compose the public router and enforce v9 admission-gated CLI capabilities.
  *
  * Compromise: tRPC router inference currently requires one composition module; splitting its
  * established 2,600-line registration surface is outside the OpenSpec 1.6 contract slice.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-07-17): "Do not return a mutable Planning-root service capability that can outlive its admitted operation."
  * Original request (2026-07-18): "Remove duplicated profile/drift parsing and preserve the pinned Core workflow contract."
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
@@ -32,6 +33,7 @@
  * Review correction (2026-08-02): remove generic Agent Init/Update mutations that bypass the Agent owner.
  * Original request (2026-08-02): initialize a missing Launch Project through one explicit `--tools=none` Alert.
  * Review correction (2026-08-02): Init cancellation and success wait for objective process and projection settlement.
+
  */
 import type {
   ChangeFile,
@@ -113,7 +115,9 @@ import {
   type ApplyInstructions,
   type ArchiveInstructions,
   type ArtifactInstructions,
+  type ChangeMeta,
   type ChangeStatus,
+  type CliChangeListEntry,
   type CliProjectionNotice,
   type EnvUri,
   type PlanningCliProjectionSelector,
@@ -146,6 +150,10 @@ import {
   NotificationPublishInputSchema,
   type NotificationRecord,
 } from '@openspecui/core/notifications'
+import {
+  deriveOpenSpecCliCapabilities,
+  parseOpenSpecCliVersion,
+} from '@openspecui/core/openspec-compat'
 import { CustomSoundIdSchema } from '@openspecui/core/sounds'
 import {
   parseProjectSearchHits,
@@ -674,6 +682,13 @@ const changeProjectionDataSchema = z.object({
       }),
       createdAt: z.number(),
       updatedAt: z.number(),
+      cliTaskSummary: z
+        .object({
+          completedTasks: z.number().int().nonnegative(),
+          totalTasks: z.number().int().nonnegative(),
+          status: z.enum(['no-tasks', 'complete', 'in-progress']),
+        })
+        .nullable(),
     })
   ),
   errors: z.array(changeProjectionRowErrorSchema),
@@ -1665,13 +1680,49 @@ export const specRouter = router({
 /**
  * Change router - change proposal operations
  */
+/**
+ * Join the CLI-owned Change-list task facts onto adapter ChangeMeta rows. The CLI entry is
+ * the task-count authority (`openspec list` reports the same checkbox semantics as Apply);
+ * rows the CLI did not list keep a null summary rather than a UI-side recomputation.
+ */
+async function listChangesWithCliTaskSummary(
+  ctx: Context,
+  adapter: OpenSpecAdapter
+): Promise<ChangeMeta[]> {
+  const [rows, cliList] = await Promise.all([
+    adapter.listChangesWithMeta(),
+    runPlanningRootRead(ctx, ({ planningCliProjectionService }) =>
+      planningCliProjectionService.getCurrent({ kind: 'opsx-change-list' })
+    ).then(
+      (data): Map<string, CliChangeListEntry> =>
+        data.kind === 'opsx-change-list'
+          ? new Map(data.entries.map((entry) => [entry.name, entry]))
+          : new Map(),
+      () => new Map<string, CliChangeListEntry>()
+    ),
+  ])
+  return rows.map((row) => {
+    const entry = cliList.get(row.id)
+    return entry
+      ? {
+          ...row,
+          cliTaskSummary: {
+            completedTasks: entry.completedTasks,
+            totalTasks: entry.totalTasks,
+            status: entry.status,
+          },
+        }
+      : row
+  })
+}
+
 export const changeRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
     return runPlanningRootRead(ctx, ({ adapter }) => adapter.listChanges())
   }),
 
   listWithMeta: publicProcedure.query(async ({ ctx }) => {
-    return runPlanningRootRead(ctx, ({ adapter }) => adapter.listChangesWithMeta())
+    return runPlanningRootRead(ctx, ({ adapter }) => listChangesWithCliTaskSummary(ctx, adapter))
   }),
 
   listArchived: publicProcedure.query(async ({ ctx }) => {
@@ -1728,7 +1779,9 @@ export const changeRouter = router({
 
   // Reactive subscriptions
   subscribe: publicProcedure.subscription(({ ctx }) => {
-    return createPlanningRootSubscription(ctx, ({ adapter }) => adapter.listChangesWithMeta())
+    return createPlanningRootSubscription(ctx, ({ adapter }) =>
+      listChangesWithCliTaskSummary(ctx, adapter)
+    )
   }),
 
   /** Stream bounded Change rows before the complete inventory settles. */
@@ -2206,19 +2259,40 @@ export const cliRouter = router({
           scope: z.enum(['all', 'changes', 'specs']),
           strict: z.boolean().optional(),
         }),
+        z.object({
+          kind: z.literal('archived'),
+        }),
       ])
     )
     .mutation(async ({ ctx, input }) => {
-      return runPlanningRoot(ctx, ({ rootContext }) =>
-        ctx.cliExecutor.contracts.validate({
+      return runPlanningRoot(ctx, ({ rootContext }) => {
+        // `validate --archived` exists only on OpenSpec 1.9+. A supported 1.8 session must
+        // learn the capability is unavailable before any process is spawned, never by
+        // watching the CLI reject an unknown option.
+        if (input.kind === 'archived') {
+          const cli = rootContext.cli
+          const capabilities = deriveOpenSpecCliCapabilities(
+            cli.available ? parseOpenSpecCliVersion(cli.version) : null
+          )
+          if (!capabilities.archivedValidation) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message:
+                'Archived task validation requires the detected OpenSpec CLI to declare the 1.9 archived-validation capability.',
+            })
+          }
+        }
+        return ctx.cliExecutor.contracts.validate({
           target:
             input.kind === 'item'
               ? { kind: 'item', id: input.id, type: input.type }
-              : { kind: 'scope', scope: input.scope },
-          strict: input.strict,
+              : input.kind === 'scope'
+                ? { kind: 'scope', scope: input.scope }
+                : { kind: 'archived' },
+          strict: input.kind === 'archived' ? undefined : input.strict,
           ...getRootContextCliSelector(rootContext),
         })
-      )
+      })
     }),
 
   /** 流式执行 validate（实时输出） */
@@ -2323,7 +2397,7 @@ const agentIntegrationToolIdSchema = z
   .min(1)
   .refine(
     (toolId) => getAvailableTools().some((tool) => tool.value === toolId),
-    'Agent tool must be an available OpenSpec 1.7 registry id.'
+    'Agent tool must be an available OpenSpec 1.9 registry id.'
   )
 
 export const agentIntegrationsRouter = router({
@@ -2370,12 +2444,28 @@ export const agentIntegrationsRouter = router({
     .subscription(({ ctx, input }) => {
       return createCliStreamObservable(async (onEvent) => {
         const projection = await ctx.agentDeliveryProjectionService.getCurrent()
+        if (Array.isArray(input.tools)) {
+          // The input schema only knows the static newest registry; the admitted CLI line's
+          // own projection is the execution authority. Reject every explicit tool the
+          // selected registry does not offer before any child process can spawn — a direct
+          // 1.8 RPC naming a 1.9-only target (Command Code) fails here, not at the CLI.
+          const offered = new Set(projection.registry.map((tool) => tool.value))
+          const unavailable = input.tools.filter((toolId) => !offered.has(toolId))
+          if (unavailable.length > 0) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: `Agent tool(s) unavailable on the admitted OpenSpec CLI line: ${unavailable.join(', ')}.`,
+            })
+          }
+        }
         return streamOpenSpecCliMutation(
           ctx,
           ['init'],
           (mutationEvent) =>
             ctx.cliExecutor.initStream(
               {
+                // 'all' stays the literal official CLI request; the selected registry already
+                // reflects the admitted line, so no client-side filtering rewrites it.
                 tools: input.tools,
                 profile: projection.policy.profile,
                 force: input.force,

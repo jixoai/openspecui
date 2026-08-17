@@ -1,14 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
- * 1. Lock the complete pinned OpenSpec 1.7 Agent delivery registry at the public Core boundary.
- * 2. Prove capability, command format/invocation, alias, detection, setup, cleanup, and migration stay co-located.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Lock the complete pinned OpenSpec 1.9 Agent delivery registry at the public Core boundary.
+ * 2. Prove capability, command format/invocation, alias, detection, setup, cleanup, migration,
+ *    global skill roots, legacy roots, and IDE restart facts stay co-located.
  * 3. Provide explicit mutation-resistance evidence for every load-bearing registry dimension.
+ * 4. Prove version-selected inventories admit only stable 1.8.x/1.9.x lines.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Review correction (2026-08-02): checked mutation fixtures must not bypass fabricated-state nullability.
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 
 import { describe, expect, it } from 'vitest'
+import { selectAgentDeliveryRegistry } from './agent-delivery-registry.js'
 import { AI_TOOLS, type ToolConfig } from './tool-config.js'
 
 type ExpectedTool = readonly [
@@ -87,8 +91,18 @@ const OFFICIAL_REGISTRY = [
     'flat',
     '/',
   ],
+  [
+    'command-code',
+    'Command Code',
+    '.commandcode',
+    'adapter-backed',
+    '.commandcode/commands/opsx-{workflow}.md',
+    'markdown',
+    'flat',
+    '/',
+  ],
   ['codeartsagent', 'CodeArts', '.codeartsdoer', 'none', null, null, null, null],
-  ['codex', 'Codex', '.codex', 'skills-invocable', null, null, null, null],
+  ['codex', 'Codex', '.agents', 'skills-invocable', null, null, null, null],
   [
     'devin',
     'Devin Desktop (formerly Windsurf)',
@@ -232,6 +246,7 @@ const OFFICIAL_REGISTRY = [
     'namespaced',
     '/',
   ],
+  ['minimax-code', 'MiniMax Code', null, 'skills-invocable', null, null, null, null],
   ['vibe', 'Mistral Vibe', '.vibe', 'none', null, null, null, null],
   [
     'oh-my-pi',
@@ -274,6 +289,7 @@ const OFFICIAL_REGISTRY = [
     'flat',
     '/',
   ],
+  ['rovodev', 'Rovo Dev CLI', '.rovodev', 'skills-invocable', null, null, null, null],
   [
     'roocode',
     'Zoo Code',
@@ -304,7 +320,7 @@ const OFFICIAL_REGISTRY = [
     'namespaced',
     '/',
   ],
-  ['agents', 'AGENTS.md (works with Amp, VS Code, …)', null, 'none', null, null, null, null],
+  ['agents', 'Shared .agents skills', '.agents', 'skills-invocable', null, null, null, null],
 ] as const satisfies readonly ExpectedTool[]
 
 function registryEntry(registry: readonly ToolConfig[], toolId: string): ToolConfig | undefined {
@@ -332,8 +348,16 @@ function projectRegistry(registry: readonly ToolConfig[]): ExpectedTool[] {
 
 function assertPinnedRegistry(registry: readonly ToolConfig[]): void {
   expect(projectRegistry(registry)).toEqual(OFFICIAL_REGISTRY)
+  expect(registry.filter((tool) => tool.requiresIdeRestart).map((tool) => tool.value)).toEqual([
+    ...EXPECTED_RESTART_TOOLS,
+  ])
   expect(registryEntry(registry, 'agents')).toEqual(
-    expect.objectContaining({ available: false, skillsDir: null, capability: 'none' })
+    expect.objectContaining({
+      available: true,
+      skillsDir: '.agents',
+      detectionPaths: ['.agents/skills'],
+      capability: 'skills-invocable',
+    })
   )
   expect(registryEntry(registry, 'github-copilot')?.detectionPaths).toEqual([
     '.github/copilot-instructions.md',
@@ -363,6 +387,14 @@ function assertPinnedRegistry(registry: readonly ToolConfig[]): void {
       migrations: [{ from: '.windsurf', to: '.devin', needsConsent: true }],
     })
   )
+  expect(registryEntry(registry, 'codex')).toEqual(
+    expect.objectContaining({
+      skillsDir: '.agents',
+      legacySkillsDirs: ['.codex'],
+      detectionPaths: ['.agents/skills', '.codex/skills'],
+      migrations: [{ from: '.codex', to: '.agents', needsConsent: false }],
+    })
+  )
   expect(registryEntry(registry, 'codex')?.cleanup).toEqual(
     expect.objectContaining({
       kind: 'managed-global-prompts',
@@ -370,6 +402,27 @@ function assertPinnedRegistry(registry: readonly ToolConfig[]): void {
         'opsx-explore.md': ['explore'],
         'opsx-bulk-archive.md': ['bulk-archive'],
       }),
+    })
+  )
+  expect(registryEntry(registry, 'minimax-code')).toEqual(
+    expect.objectContaining({
+      available: true,
+      skillsDir: null,
+      globalSkillsDir: '.minimax',
+      capability: 'skills-invocable',
+    })
+  )
+  expect(registryEntry(registry, 'rovodev')).toEqual(
+    expect.objectContaining({
+      skillsDir: '.rovodev',
+      detectionPaths: ['.rovodev/skills', '.rovodev'],
+      capability: 'skills-invocable',
+    })
+  )
+  expect(registryEntry(registry, 'command-code')?.command).toEqual(
+    expect.objectContaining({
+      pathTemplate: '.commandcode/commands/opsx-{workflow}.md',
+      format: 'markdown',
     })
   )
 }
@@ -387,13 +440,72 @@ function contentSignature(tool: ToolConfig): string | null {
   return `${frontmatter}|${content.bodyLayout}`
 }
 
-describe('OpenSpec 1.7 Agent delivery registry', () => {
+const EXPECTED_RESTART_TOOLS = [
+  'amazon-q',
+  'antigravity',
+  'cline',
+  'devin',
+  'continue',
+  'costrict',
+  'cursor',
+  'github-copilot',
+  'junie',
+  'kilocode',
+  'kiro',
+  'lingma',
+  'qoder',
+  'roocode',
+  'trae',
+] as const
+
+describe('OpenSpec 1.9 Agent delivery registry', () => {
   it('preserves the complete pinned metadata, command format, and invocation contract', () => {
     assertPinnedRegistry(AI_TOOLS)
   })
 
   it('does not expose retired Windsurf as a current registry entry', () => {
     expect(registryEntry(AI_TOOLS, 'windsurf')).toBeUndefined()
+  })
+
+  it('selects the 1.8 official inventory without Command Code or restart facts', () => {
+    const selected = selectAgentDeliveryRegistry('1.8.0')
+
+    const ids = selected.map((tool) => tool.value)
+    expect(ids).not.toContain('command-code')
+    expect(ids).toHaveLength(AI_TOOLS.length - 1)
+    // 1.8 declares no IDE restart metadata; no tool may carry a 1.9-only restart fact.
+    expect(selected.every((tool) => tool.requiresIdeRestart === undefined)).toBe(true)
+    // Shared targets and Codex current/legacy roots stay exactly as 1.8 ships them.
+    expect(ids).toContain('agents')
+    expect(registryEntry(selected, 'codex')?.skillsDir).toBe('.agents')
+  })
+
+  it('selects the full 1.9 inventory with Command Code and restart facts', () => {
+    const selected = selectAgentDeliveryRegistry('1.9.1')
+
+    expect(selected.map((tool) => tool.value)).toEqual(AI_TOOLS.map((tool) => tool.value))
+    expect(registryEntry(selected, 'command-code')?.command?.pathTemplate).toBe(
+      '.commandcode/commands/opsx-{workflow}.md'
+    )
+    expect(registryEntry(selected, 'amazon-q')?.requiresIdeRestart).toBe(true)
+  })
+
+  it('selects no inventory for non-admitted or unparseable versions', () => {
+    // A page-level version bypass must not manufacture a 1.9 inventory: prereleases, the
+    // next series, below-range lines, and unparseable output all select zero tools.
+    expect(selectAgentDeliveryRegistry('1.9.0-rc.1')).toEqual([])
+    expect(selectAgentDeliveryRegistry('1.10.0')).toEqual([])
+    expect(selectAgentDeliveryRegistry('2.0.0')).toEqual([])
+    expect(selectAgentDeliveryRegistry('1.7.0')).toEqual([])
+    expect(selectAgentDeliveryRegistry('garbage')).toEqual([])
+    expect(selectAgentDeliveryRegistry(null)).toEqual([])
+  })
+
+  it('declares IDE restart requirements exactly where the official registry does', () => {
+    const restartTools = AI_TOOLS.filter((tool) => tool.requiresIdeRestart).map(
+      (tool) => tool.value
+    )
+    expect(restartTools).toEqual([...EXPECTED_RESTART_TOOLS])
   })
 
   it('preserves every adapter content format instead of inferring it from file extension', () => {
@@ -408,6 +520,7 @@ describe('OpenSpec 1.7 Agent delivery registry', () => {
       bob: 'yaml:description,argument-hint|direct',
       claude: 'yaml:name,description,allowed-tools,category,tags|direct',
       cline: 'none|headings',
+      'command-code': 'none|direct',
       devin: 'yaml:name,description,category,tags|direct',
       codebuddy: 'yaml:name,description,argument-hint|direct',
       continue: 'yaml:name,description,invokable|direct',
@@ -434,7 +547,7 @@ describe('OpenSpec 1.7 Agent delivery registry', () => {
   })
 
   it.each([
-    ['tool', (registry: ToolConfig[]) => registry.splice(6, 1)],
+    ['tool', (registry: ToolConfig[]) => registry.splice(7, 1)],
     [
       'capability',
       (registry: ToolConfig[]) =>
@@ -473,6 +586,21 @@ describe('OpenSpec 1.7 Agent delivery registry', () => {
         const qwen = registryEntry(registry, 'qwen')
         if (qwen?.command) qwen.command.pathTemplate = '.qwen/commands/opsx-{workflow}.toml'
       },
+    ],
+    [
+      'legacy skills root',
+      (registry: ToolConfig[]) =>
+        Object.assign(requireRegistryEntry(registry, 'codex'), { legacySkillsDirs: [] }),
+    ],
+    [
+      'global skills root',
+      (registry: ToolConfig[]) =>
+        Object.assign(requireRegistryEntry(registry, 'minimax-code'), { globalSkillsDir: null }),
+    ],
+    [
+      'IDE restart requirement',
+      (registry: ToolConfig[]) =>
+        Object.assign(requireRegistryEntry(registry, 'cursor'), { requiresIdeRestart: false }),
     ],
   ] as const)('rejects a registry mutation that removes one %s', (_label, mutate) => {
     const registry = cloneRegistry()

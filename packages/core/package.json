@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/core",
-  "version": "7.0.2",
+  "version": "9.0.0",
   "description": "Core OpenSpec adapter and parser",
   "files": [
     "dist"
@@ -251,6 +251,8 @@
     "openspec-cli-14": "npm:@fission-ai/openspec@1.4.0",
     "openspec-cli-15": "npm:@fission-ai/openspec@1.5.0",
     "openspec-cli-16": "npm:@fission-ai/openspec@1.6.0",
+    "openspec-cli-18": "npm:@fission-ai/openspec@1.8.0",
+    "openspec-cli-19": "npm:@fission-ai/openspec@1.9.0",
     "tsdown": "^0.16.6",
     "typescript": "^5.7.2",
     "vitest": "^4.1.0"

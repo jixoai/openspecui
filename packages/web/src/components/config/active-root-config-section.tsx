@@ -15,7 +15,7 @@ import { Button } from '@/components/button'
 import { useConfigGuideAnchor } from '@/components/config/config-guide'
 import { InformationBadge } from '@/components/information-disclosure'
 import { AsyncAction, ConfigFormSkeleton } from '@/components/realtime'
-import { RootActionNotice } from '@/components/root-action-notice'
+import { RootActionNotice, RootCheckingBadge } from '@/components/root-action-notice'
 import { selectActiveRootGuideSignal } from '@/lib/config-guide-signals'
 import { trpcClient } from '@/lib/trpc'
 import {
@@ -337,6 +337,7 @@ export function ActiveRootConfigSection({ isStatic }: { isStatic: boolean }) {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <RootCheckingBadge state={rootAction} />
           {(config.exists || isEditing) && (
             <div
               role="tablist"

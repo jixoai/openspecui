@@ -192,7 +192,11 @@ describe('GlobalArchiveModal', () => {
 
     expect(replaceAllMock).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Archive' })).toBeDisabled()
-    expect(screen.getByText('Loading archive inputs…')).toBeTruthy()
+    expect(
+      screen.getByRole('note', {
+        name: 'Archive inputs are loading; dispatch stays locked until they arrive.',
+      })
+    ).toBeTruthy()
   })
 
   it('retains stale Archive inputs for reading but revokes execution authority', () => {
@@ -223,7 +227,11 @@ describe('GlobalArchiveModal', () => {
     render(<GlobalArchiveModal />)
 
     expect(screen.getByText('Retained Root A context.')).toBeTruthy()
-    expect(screen.getByText('Refreshing archive inputs…')).toBeTruthy()
+    expect(
+      screen.getByRole('note', {
+        name: 'Retained archive inputs remain readable while they are refreshed.',
+      })
+    ).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Archive' })).toBeDisabled()
     expect(replaceAllMock).not.toHaveBeenCalled()
   })

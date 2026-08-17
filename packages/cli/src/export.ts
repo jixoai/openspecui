@@ -1,25 +1,30 @@
 /**
- * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
- * 1. Build a static OpenSpec project snapshot from its resolved planning artifacts.
- * 2. Preserve Reference-aware export and publication-redaction policy.
- * 3. Package and launch the static site with the locally resolved Web distribution.
- * 4. Execute local, production, and preview tooling through an argv-safe subprocess owner.
- * 5. Hide snapshot Git subprocess console windows (`windowsHide`) so export evidence gathering
- *    never flashes a cmd window under a console-less Windows parent.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Gather one coherent, publication-redacted OpenSpec project snapshot.
+ * 2. Keep spec/change/archive parsing shared with the live adapters so export matches runtime truth.
+ * 3. Preserve project/config/dashboard policy facts and tracked task summaries as static facts.
+ * 4. Capture the schemas observation as typed success/failure evidence with complete CLI process facts.
+ * 5. Hide snapshot Git subprocess console windows (`windowsHide`) so export evidence gathering never
+ *    flashes a cmd window under a console-less Windows parent.
  *
- * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
- * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ * Original request (2026-07-15): "打包CLI发布前，对快照进行脱敏处理。"
+ * Original request (2026-08-04): "Make pnpm openspecui export and equivalent package scripts work on Windows."
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import {
+  CliDiagnosticFailureSchema,
   CliExecutor,
+  CliJsonValueSchema,
   ConfigManager,
   DEFAULT_CONFIG,
+  inspectProjectBinding,
   OpenSpecAdapter,
   redactSnapshotForPublication,
   SchemaInfoSchema,
   SchemaResolutionSchema,
   TemplatesSchema,
   toOpsxDisplayPath,
+  type CliJsonValue,
   type ExportSnapshot,
   type OpsxEntityDiagnostic,
   type SchemaDetail,
@@ -27,6 +32,10 @@ import {
   type SchemaResolution,
   type TemplatesMap,
 } from '@openspecui/core'
+import {
+  deriveOpenSpecCliCapabilities,
+  parseOpenSpecCliVersion,
+} from '@openspecui/core/openspec-compat'
 import { parseOpsxSchemaDetail } from '@openspecui/core/opsx-schema-detail'
 import { createHookRuntime, DocumentService } from '@openspecui/server'
 import { execFile } from 'node:child_process'
@@ -109,6 +118,23 @@ function parseCliJson<T>(
     throw new Error(`${label} returned unexpected JSON: ${result.error.message}`)
   }
   return result.data
+}
+
+function parseCliJsonValue(stdout: string): CliJsonValue | null {
+  let raw: unknown
+  try {
+    raw = JSON.parse(stdout)
+  } catch {
+    return null
+  }
+  const parsed = CliJsonValueSchema.safeParse(raw)
+  return parsed.success ? parsed.data : null
+}
+
+function hasCliResolvedRoot(payload: CliJsonValue | null): boolean {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return false
+  const root = payload.root
+  return root !== null && root !== undefined
 }
 
 function isAbsoluteFsPath(path: string): boolean {
@@ -430,6 +456,11 @@ export async function generateSnapshot(
     // OPSX config snapshot
     let configYaml: string | undefined
     let schemas: SchemaInfo[] = []
+    let schemasCapture: ExportSnapshot['opsx'] extends infer Opsx
+      ? Opsx extends { schemasCapture?: infer Capture }
+        ? NonNullable<Capture>
+        : never
+      : never = { ok: true }
     const schemaDetails: Record<string, SchemaDetail> = {}
     const schemaDiagnostics: Record<string, OpsxEntityDiagnostic[]> = {}
     const schemaYamls: Record<string, string> = {}
@@ -455,14 +486,59 @@ export async function generateSnapshot(
     } catch {
       configYaml = undefined
     }
+    // Resolve the selected Root Store through the typed config owner shared with the live
+    // planning-config surface, so quoted, commented, and invalid YAML semantics match the
+    // official CLI exactly — no ad hoc regex parsing in the exporter.
+    const binding = inspectProjectBinding(typeof configYaml === 'string' ? configYaml : null)
+    const selectedStore = binding.store.state === 'declared' ? binding.store.id : null
+    const schemasSelector: { store?: string } = selectedStore ? { store: selectedStore } : {}
+
+    let forwardedSelector: { store?: string } | null = null
+    const captureSchemasFailure = (
+      result: { stdout: string; stderr: string; exitCode: number | null },
+      contractError?: string
+    ): void => {
+      // A CLI failure (including the OpenSpec 1.9 selected-Root envelope) is captured as a
+      // typed failed observation so the static projection never reads it as an empty catalog.
+      const payload = parseCliJsonValue(result.stdout)
+      const envelope = CliDiagnosticFailureSchema.safeParse(payload)
+      schemasCapture = {
+        ok: false,
+        command: 'openspec schemas',
+        selector: forwardedSelector,
+        rootAvailable: hasCliResolvedRoot(payload),
+        diagnostics: envelope.success ? envelope.data.status : [],
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+        payload,
+        ...(contractError !== undefined ? { contractError } : {}),
+      }
+    }
 
     try {
-      const schemasResult = await cliExecutor.schemas()
+      // Forward the selected Root selector only where the detected CLI declares it: OpenSpec
+      // 1.9 resolves schemas through the selected Root; 1.8 rejects `--store`.
+      const availability = await cliExecutor.checkAvailability()
+      const detectedVersion = availability.available ? (availability.version ?? null) : null
+      const capabilities = deriveOpenSpecCliCapabilities(
+        parseOpenSpecCliVersion(detectedVersion ?? undefined)
+      )
+      forwardedSelector = capabilities.schemasRootSelector ? schemasSelector : null
+      const schemasResult = await cliExecutor.schemas(
+        capabilities.schemasRootSelector ? schemasSelector : {}
+      )
       if (schemasResult.success) {
         schemas = parseCliJson(schemasResult.stdout, SchemaInfoSchema.array(), 'openspec schemas')
+      } else {
+        captureSchemasFailure(schemasResult)
       }
-    } catch {
+    } catch (error) {
       schemas = []
+      captureSchemasFailure(
+        { stdout: '', stderr: '', exitCode: null },
+        error instanceof Error ? error.message : String(error)
+      )
     }
 
     for (const schema of schemas) {
@@ -690,6 +766,7 @@ export async function generateSnapshot(
       opsx: {
         configYaml,
         schemas,
+        schemasCapture,
         schemaDetails,
         schemaYamls,
         schemaResolutions,

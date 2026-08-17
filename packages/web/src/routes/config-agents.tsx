@@ -1,13 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Own the live Agent policy draft and present current registry, readiness, drift, cleanup, and migration evidence.
  * 2. Own Agent selection plus cancellable Init, Update, and Repair command execution with global pending locks.
  * 3. Promote loading and failed authority directly without publishing this surface to static mode.
  * 4. Participate in shared Config navigation and publish existing Agent lifecycle facts to the Guide.
+ * 5. Render version-scoped command-surface unavailability evidence.
  *
  * Original request (2026-08-01): move Agent delivery into a Config secondary page and keep Settings read-only.
  * Review correction (2026-08-02): replacement inventory Push must not discard an unsaved Agent policy draft.
  * Owner visual direction (2026-08-02): use compact box-radius geometry for semantic status and issue labels.
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import {
   AgentIntegrationsCommandDialog,
@@ -103,6 +106,7 @@ function WorkflowInventoryLine({
 function AgentEvidence({ tool, state }: { tool: ToolConfig; state: ToolInitState }) {
   const deliverySummary = [
     tool.skillsDir ? `Skills: ${tool.skillsDir}` : null,
+    tool.globalSkillsDir ? `Global skills: ~/${tool.globalSkillsDir}/skills` : null,
     tool.command ? `Commands: ${tool.command.pathTemplate}` : null,
   ].filter((value): value is string => value !== null)
 
@@ -121,6 +125,24 @@ function AgentEvidence({ tool, state }: { tool: ToolConfig; state: ToolInitState
               {line}
             </p>
           ))}
+          {tool.legacySkillsDirs?.length ? (
+            <p className="break-all font-mono">
+              <span className="text-muted-foreground font-sans">Legacy skills:</span>{' '}
+              {tool.legacySkillsDirs.join(', ')}
+            </p>
+          ) : null}
+          {state.commandSurfaceUnavailableReason ? (
+            <p className="text-muted-foreground" data-testid="command-surface-unavailable">
+              <span className="text-muted-foreground">Command surface:</span>{' '}
+              {state.commandSurfaceUnavailableReason}
+            </p>
+          ) : null}
+          {state.requiresIdeRestart ? (
+            <p>
+              <span className="text-muted-foreground">IDE restart:</span> required to load
+              regenerated artifacts
+            </p>
+          ) : null}
           {tool.command ? (
             <p>
               <span className="text-muted-foreground">Invocation:</span>{' '}
@@ -140,6 +162,14 @@ function AgentEvidence({ tool, state }: { tool: ToolConfig; state: ToolInitState
           {tool.setupNote ? <p>{tool.setupNote}</p> : null}
         </div>
         <div className="min-w-0 space-y-1">
+          <p>
+            <span className="text-muted-foreground">Skills scope:</span>{' '}
+            {state.skillsScope.kind === 'user-global'
+              ? `user-global ~/${state.skillsScope.globalSkillsDir}/skills`
+              : state.skillsScope.kind === 'project'
+                ? `project ${state.skillsScope.skillsDir}/skills`
+                : 'none'}
+          </p>
           <p>
             Skills {state.presentExpectedSkillCount}/{state.expectedSkillCount} · Commands{' '}
             {state.presentExpectedCommandCount}/{state.expectedCommandCount}

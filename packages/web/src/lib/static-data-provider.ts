@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Project one immutable export snapshot through the live provider-shaped API.
  * 2. Preserve compound Spec identity and published snapshot policy/provenance without invented CLI evidence.
  * 3. Reconstruct Dashboard, Kanban, exact workflow dependencies, schema, template, and entity reads offline.
@@ -12,6 +12,8 @@
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
  * Owner correction (2026-07-29): static project config does not publish daemon-owned App location.
  * Original request (2026-08-01): static Status must preserve OpenSpec 1.7 artifact requires.
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 
 import type {
@@ -32,6 +34,7 @@ import type {
   SchemaInfo,
   SchemaResolution,
   Spec,
+  StaticSchemasCaptureFailure,
   TemplatesMap,
 } from '@openspecui/core'
 import {
@@ -451,7 +454,8 @@ function buildChangeStatus(
   return {
     changeName: change.id,
     schemaName,
-    isComplete: artifacts.length > 0 && artifacts.every((artifact) => artifact.status === 'done'),
+    isPlanningComplete:
+      artifacts.length > 0 && artifacts.every((artifact) => artifact.status === 'done'),
     applyRequires: schemaDetail.applyRequires ?? [],
     artifacts,
     provenance: { kind: 'static' },
@@ -700,6 +704,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     id: change.id,
     name: change.name,
     trackedTaskProgress: change.trackedTaskProgress,
+    cliTaskSummary: change.cliTaskSummary ?? null,
     updatedAt: change.updatedAt,
   }))
   const activeChanges = selectRecentDashboardItems(allActiveChanges)
@@ -875,6 +880,8 @@ export async function getChanges(): Promise<ChangeMeta[]> {
     documentChecklistSummary: change.documentChecklistSummary,
     createdAt: change.createdAt,
     updatedAt: change.updatedAt,
+    // Static snapshots carry CLI list task facts when the export observed them.
+    cliTaskSummary: change.cliTaskSummary ?? null,
   }))
 }
 
@@ -1091,9 +1098,33 @@ export async function getOpsxProjectConfig(): Promise<string | null> {
   return snapshot?.opsx?.configYaml ?? null
 }
 
+/** Typed static projection error raised when the export captured a schemas-observation failure. */
+export class StaticSchemasCaptureError extends Error {
+  constructor(readonly capture: StaticSchemasCaptureFailure) {
+    super(
+      capture.diagnostics.length > 0
+        ? capture.diagnostics.map((diagnostic) => diagnostic.message).join('\n')
+        : capture.stderr.trim() || 'The static schemas observation failed.'
+    )
+    this.name = 'StaticSchemasCaptureError'
+  }
+}
+
+/** Reject list and bundle reads when the export captured a schemas-observation failure. */
+function assertSchemasCaptureCaptured(snapshot: ExportSnapshot | null): void {
+  const capture = snapshot?.opsx?.schemasCapture
+  if (capture && capture.ok === false) {
+    // A failed schemas observation (for example the OpenSpec 1.9 selected-Root envelope)
+    // stays a typed captured CLI failure; the static projection never reads it as an
+    // empty successful catalog through any accessor.
+    throw new StaticSchemasCaptureError(capture)
+  }
+}
+
 /** Return all Schema summaries captured in the static snapshot. */
 export async function getOpsxSchemas(): Promise<SchemaInfo[]> {
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   return snapshot?.opsx?.schemas ?? []
 }
 
@@ -1104,6 +1135,7 @@ export async function getOpsxConfigBundle(): Promise<{
   schemaResolutions: Record<string, SchemaResolution | null>
 }> {
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   return {
     schemas: snapshot?.opsx?.schemas ?? [],
     schemaDetails: snapshot?.opsx?.schemaDetails ?? {},
@@ -1113,16 +1145,20 @@ export async function getOpsxConfigBundle(): Promise<{
 
 /** Return one exported Schema detail by name. */
 export async function getOpsxSchemaDetail(name?: string): Promise<SchemaDetail | null> {
-  if (!name) return null
+  // The captured failure is terminal before any optional-identity handling: an absent name
+  // can never turn a failed static Schema observation into a normal null result.
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
+  if (!name) return null
   const details = snapshot?.opsx?.schemaDetails
   return details?.[name] ?? null
 }
 
 /** Return one exported Schema resolution with display paths projected for static presentation. */
 export async function getOpsxSchemaResolution(name?: string): Promise<SchemaResolution | null> {
-  if (!name) return null
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
+  if (!name) return null
   const resolutions = snapshot?.opsx?.schemaResolutions
   const resolution = resolutions?.[name]
   if (!resolution) return null
@@ -1148,6 +1184,7 @@ export async function getOpsxSchemaResolution(name?: string): Promise<SchemaReso
 /** Return exported templates for the requested Schema, or the snapshot default Schema. */
 export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | null> {
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   if (!snapshot?.opsx?.templates) return null
   if (!schema) {
     const first = Object.keys(snapshot.opsx.templates)[0]
@@ -1187,6 +1224,7 @@ export async function getOpsxTemplates(schema?: string): Promise<TemplatesMap | 
 /** Reconstruct the exported file tree for one Schema without enabling mutations. */
 export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | null> {
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   if (!snapshot?.opsx) return null
 
   let schemaName = name
@@ -1235,8 +1273,9 @@ export async function getOpsxSchemaFiles(name?: string): Promise<ChangeFile[] | 
 
 /** Return the exported YAML document for one Schema. */
 export async function getOpsxSchemaYaml(name?: string): Promise<string | null> {
-  if (!name) return null
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
+  if (!name) return null
   return snapshot?.opsx?.schemaYamls?.[name] ?? null
 }
 
@@ -1250,7 +1289,12 @@ export async function getOpsxTemplateContent(
   displayPath?: string
   source: 'project' | 'user' | 'package'
 } | null> {
-  if (!schema || !artifactId) return null
+  // Loading the contents accessor asserts the captured failure first, so an absent identity
+  // can only produce null after the capture boundary has passed.
+  if (!schema || !artifactId) {
+    await getOpsxTemplateContents(schema)
+    return null
+  }
   const all = await getOpsxTemplateContents(schema)
   if (!all) return null
   return all[artifactId] ?? null
@@ -1267,6 +1311,7 @@ export async function getOpsxTemplateContents(schema?: string): Promise<Record<
   }
 > | null> {
   const snapshot = await loadSnapshot()
+  assertSchemasCaptureCaptured(snapshot)
   if (!snapshot?.opsx) return null
 
   const targetSchema =

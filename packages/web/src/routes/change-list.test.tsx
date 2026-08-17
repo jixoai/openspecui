@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove Changes render a primary row before admitting the lower-priority aggregate Status projection.
  * 2. Prove no-tasks and incomplete tasks cannot become workflow-complete.
  * 3. Prove typed OpenSpec 1.7 Status and completed tracked tasks converge on workflow completion.
@@ -11,6 +11,8 @@
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
  * Original request (2026-08-01): OpenSpecUI 7 uses exact artifact dependency fixtures.
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -132,11 +134,14 @@ describe('ChangeList', () => {
     const { container } = render(<ChangeList />)
 
     expect(screen.getByText('chat-channel-token-admin')).toBeTruthy()
-    expect(screen.getByText('0/9')).toBeTruthy()
-    expect(screen.getByText('0% task completion')).toBeTruthy()
+    // The list never claims implementation completion: no task counts, no percent bar, no
+    // completion copy derived from tracked data without Apply Instructions.
+    expect(screen.queryByText('0/9')).toBeNull()
+    expect(screen.queryByText('0% task completion')).toBeNull()
+    expect(container.querySelector('[style="width: 0%;"]')).toBeNull()
+    expect(screen.getByText('Unknown')).toBeTruthy()
     expect(container.querySelector('.rt-skeleton-line')).not.toBeNull()
     expect(screen.queryByText('Loading workflow status…')).toBeNull()
-    expect(container.querySelector('[style="width: 0%;"]')).toBeTruthy()
   })
 
   it('admits aggregate workflow Status only after the first Change row is renderable', () => {
@@ -251,8 +256,8 @@ describe('ChangeList', () => {
     render(<ChangeList />)
 
     expect(screen.getByText('status-error-change')).toBeTruthy()
-    expect(screen.getByText('1/4')).toBeTruthy()
-    expect(screen.getByText('25% task completion')).toBeTruthy()
+    expect(screen.queryByText('1/4')).toBeNull()
+    expect(screen.queryByText('25% task completion')).toBeNull()
     expect(screen.getByRole('alert').textContent).toContain('status failed')
     expect(screen.getByText('Workflow status unavailable')).toBeTruthy()
     expect(screen.queryByText('Loading workflow status…')).toBeNull()
@@ -322,7 +327,7 @@ describe('ChangeList', () => {
         {
           changeName: 'main-error-change',
           schemaName: 'spec-driven',
-          isComplete: false,
+          isPlanningComplete: false,
           applyRequires: ['tasks'],
           artifacts: [
             { id: 'proposal', status: 'done' },
@@ -338,9 +343,10 @@ describe('ChangeList', () => {
 
     expect(screen.getByRole('alert').textContent).toContain('changes failed')
     expect(screen.getByText('Main Error Change')).toBeTruthy()
-    expect(screen.getByText('2/4')).toBeTruthy()
-    expect(screen.getByText('50% task completion')).toBeTruthy()
-    expect(container.querySelector('[style="width: 50%;"]')).toBeTruthy()
+    // Tracked counts no longer surface as implementation progress.
+    expect(screen.queryByText('2/4')).toBeNull()
+    expect(screen.queryByText('50% task completion')).toBeNull()
+    expect(container.querySelector('[style="width: 50%;"]')).toBeNull()
     expect(container.querySelector('a[href="/changes/main-error-change"]')).toBeTruthy()
     expect(screen.getByText('1/2 artifacts · spec-driven')).toBeTruthy()
     expect(screen.queryByText('Loading changes...')).toBeNull()
@@ -405,7 +411,7 @@ describe('ChangeList', () => {
         {
           changeName: 'chat-channel-token-admin',
           schemaName: 'spec-driven',
-          isComplete: true,
+          isPlanningComplete: true,
           applyRequires: ['tasks'],
           artifacts: [
             { id: 'proposal', status: 'done' },
@@ -419,9 +425,128 @@ describe('ChangeList', () => {
 
     render(<ChangeList />)
 
-    expect(screen.getByText('In Execution')).toBeTruthy()
+    // Artifact-complete with tracked tasks still open must never read as complete — but
+    // with planning finished it is ready to apply/review, not "In Execution" (loop-family
+    // schemas track owner gates in those checkboxes, which close only at archive time).
+    expect(screen.getByText('Planning Complete')).toBeTruthy()
+    expect(screen.queryByText('In Execution')).toBeNull()
     expect(screen.queryByText('Workflow Complete')).toBeNull()
     expect(screen.getByText('4/4 artifacts · spec-driven')).toBeTruthy()
+  })
+
+  it('shows CLI-reported task counts without claiming a completion percentage', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'target-openspec-cli-19-line',
+          name: 'target-openspec-cli-19-line',
+          trackedTaskProgress: { total: 33, completed: 31, phase: 'in-progress' },
+          documentChecklistSummary: { groups: [], total: 0, completed: 0, remaining: 0 },
+          createdAt: Date.now() - 60_000,
+          updatedAt: Date.now() - 60_000,
+          cliTaskSummary: { completedTasks: 31, totalTasks: 33, status: 'in-progress' },
+        },
+      ],
+      isLoading: false,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          changeName: 'target-openspec-cli-19-line',
+          schemaName: 'opsx-collab-pr-loop',
+          isPlanningComplete: true,
+          applyRequires: [],
+          artifacts: [
+            { id: 'intake', status: 'done' },
+            { id: 'research-plan', status: 'done' },
+            { id: 'implementation', status: 'done' },
+            { id: 'checkpoints', status: 'done' },
+          ],
+        },
+      ],
+    })
+
+    render(<ChangeList />)
+
+    // The count is the CLI's own `openspec list` fact — authoritative, not reconstructed.
+    expect(screen.getByText(/Tasks 31\/33/)).toBeTruthy()
+    expect(
+      screen.getByTitle('Task counts reported by the OpenSpec CLI for this Change.')
+    ).toBeTruthy()
+    // No completion percentage is claimed at list level.
+    expect(screen.queryByText(/% task completion/)).toBeNull()
+    expect(screen.queryByText(/% complete/)).toBeNull()
+  })
+
+  it('omits task counts entirely when no CLI list evidence exists', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'no-cli-evidence',
+          name: 'no-cli-evidence',
+          trackedTaskProgress: { total: 9, completed: 4, phase: 'in-progress' },
+          documentChecklistSummary: { groups: [], total: 0, completed: 0, remaining: 0 },
+          createdAt: Date.now() - 60_000,
+          updatedAt: Date.now() - 60_000,
+          cliTaskSummary: null,
+        },
+      ],
+      isLoading: false,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          changeName: 'no-cli-evidence',
+          schemaName: 'spec-driven',
+          isPlanningComplete: false,
+          applyRequires: ['tasks'],
+          artifacts: [{ id: 'proposal', status: 'done' }],
+        },
+      ],
+    })
+
+    render(<ChangeList />)
+
+    expect(screen.queryByText(/Tasks /)).toBeNull()
+    // UI-side tracked arithmetic never backfills the missing CLI count.
+    expect(screen.queryByText('4/9')).toBeNull()
+  })
+
+  it('labels planning-incomplete changes with open tracked tasks as In Execution', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'spec-driven-change',
+          name: 'spec-driven-change',
+          trackedTaskProgress: { total: 9, completed: 2, phase: 'in-progress' },
+          updatedAt: Date.now() - 60_000,
+        },
+      ],
+      isLoading: false,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          changeName: 'spec-driven-change',
+          schemaName: 'spec-driven',
+          isPlanningComplete: false,
+          applyRequires: ['tasks'],
+          artifacts: [
+            { id: 'proposal', status: 'done' },
+            { id: 'design', status: 'done' },
+            { id: 'specs', status: 'ready' },
+            { id: 'tasks', status: 'ready' },
+          ],
+        },
+      ],
+    })
+
+    render(<ChangeList />)
+
+    expect(screen.getByText('In Execution')).toBeTruthy()
+    // The phase badge is the single planning authority; no duplicated echo line remains.
+    expect(screen.queryByText('Planning in progress')).toBeNull()
+    expect(screen.queryByText('Planning Complete')).toBeNull()
   })
 
   it('keeps 0/0 no-tasks distinct from complete', () => {
@@ -441,7 +566,7 @@ describe('ChangeList', () => {
         {
           changeName: 'no-tracked-tasks',
           schemaName: 'custom',
-          isComplete: true,
+          isPlanningComplete: true,
           applyRequires: [],
           artifacts: [{ id: 'plan', status: 'done', requires: [] }],
         },
@@ -450,9 +575,10 @@ describe('ChangeList', () => {
 
     render(<ChangeList />)
 
-    expect(screen.getByText('0/0')).toBeTruthy()
+    // No-tasks stays an objective planning fact without task-count surfaces.
+    expect(screen.queryByText('0/0')).toBeNull()
     expect(screen.getByText('No Tracked Tasks')).toBeTruthy()
-    expect(screen.getByText('No tracked tasks')).toBeTruthy()
+    expect(screen.queryByText('No tracked tasks')).toBeNull()
     expect(screen.queryByText('0% task completion')).toBeNull()
     expect(screen.queryByText('Workflow Complete')).toBeNull()
   })
@@ -474,7 +600,7 @@ describe('ChangeList', () => {
         {
           changeName: 'completed-change',
           schemaName: 'spec-driven',
-          isComplete: true,
+          isPlanningComplete: true,
           applyRequires: ['tasks'],
           artifacts: [{ id: 'tasks', status: 'done', requires: [] }],
         },
@@ -484,8 +610,9 @@ describe('ChangeList', () => {
     render(<ChangeList />)
 
     expect(screen.getByText('Workflow Complete')).toBeTruthy()
-    expect(screen.getByText('2/2')).toBeTruthy()
-    expect(screen.getByText('100% task completion')).toBeTruthy()
+    // Completion copy stays objective: no tracked count or percent claims.
+    expect(screen.queryByText('2/2')).toBeNull()
+    expect(screen.queryByText('100% task completion')).toBeNull()
     expect(screen.queryByText(/archive-ready|ready to archive/i)).toBeNull()
   })
 })

@@ -14,7 +14,7 @@ import { CliTerminal } from '@/components/cli-terminal'
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import { WorkflowEvidenceDisclosure } from '@/components/opsx/workflow-evidence-disclosure'
 import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
-import { RootActionNotice } from '@/components/root-action-notice'
+import { RootActionNotice, RootCheckingBadge } from '@/components/root-action-notice'
 import { Switch } from '@/components/switch'
 import {
   isWorkflowTargetCurrent,
@@ -141,15 +141,18 @@ export function OpsxVerifyRoute() {
           <ShieldCheck className="text-primary h-4 w-4" />
           <h2 className="font-nav text-base tracking-[0.04em]">Verify Change</h2>
         </div>
-        <label className="flex items-center gap-2 text-xs">
-          <Switch
-            checked={strict}
-            onCheckedChange={setStrict}
-            ariaLabel="Strict"
-            disabled={rootAction.disabled || status === 'running'}
-          />
-          Strict
-        </label>
+        <div className="flex items-center gap-3">
+          <RootCheckingBadge state={rootAction} />
+          <label className="flex items-center gap-2 text-xs">
+            <Switch
+              checked={strict}
+              onCheckedChange={setStrict}
+              ariaLabel="Strict"
+              disabled={rootAction.disabled || status === 'running'}
+            />
+            Strict
+          </label>
+        </div>
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">

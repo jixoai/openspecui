@@ -1,14 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
- * 1. Prove an eager JSON response can finish before its child process settles without writing to
- *    an ended response Span.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Prove an eager JSON response can finish before its child process settles without writing to an
+ *    ended response Span.
  * 2. Exercise the real OpenTelemetry SDK diagnostic boundary instead of a mocked Span facade.
  * 3. Preserve queue, cwd, runner, parent, and real child-concurrency evidence on exported Spans.
  * 4. Prove Worker execution exports mode, module, lifecycle, and concurrency evidence without a child PID.
- * 5. Bind eager-process trace export to observed child retirement instead of a fixed platform timer.
+ * 5. Characterize honest unknown exit codes for eager-resolved commands.
  *
  * Original request (2026-07-31): "终端大量报错，比如: Cannot execute the operation on ended Span"
- * Original request (2026-07-31): "我发现otel里面没有追踪这个信息。"
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { CliExecutor, ConfigManager } from '@openspecui/core'
 import { diag, DiagLogLevel, trace } from '@opentelemetry/api'
@@ -193,7 +193,9 @@ describe('CLI executor tracing lifecycle', () => {
       '--json',
     ])
 
-    expect(result).toMatchObject({ success: true, exitCode: 0 })
+    // Eager-JSON resolution settles before the terminated child's natural exit, so the
+    // honest result reports the exit code as unknown instead of a fabricated 0.
+    expect(result).toMatchObject({ success: true, exitCode: null })
     await waitForProcessExit(readFixtureProcessId(result.stdout))
     await waitForExportedSpanEvents(() => exportedSpans, 'cli.process -e', [
       'cli.process.exit.observed',
@@ -243,6 +245,7 @@ describe('CLI executor tracing lifecycle', () => {
     )
 
     const result = await executor.execute(['doctor', '--json'])
+    // The Worker fixture exits naturally with code 0, so its exit code is observed truthfully.
     expect(result).toMatchObject({ success: true, exitCode: 0 })
     expect(JSON.parse(result.stdout)).toEqual({ command: 'doctor', isMainThread: false })
 
@@ -293,6 +296,7 @@ describe('CLI executor tracing lifecycle', () => {
     )
 
     const result = await executor.execute(['doctor', '--json'])
+    // This runner exits naturally with code 0, so its exit code is observed truthfully.
     expect(result).toMatchObject({ success: true, exitCode: 0 })
     expect(JSON.parse(result.stdout)).toEqual({ command: 'doctor' })
     await new Promise((resolve) => setTimeout(resolve, 150))

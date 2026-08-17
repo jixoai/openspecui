@@ -1,0 +1,12 @@
+# App native icon variants are generated into resources/app-icon/ (committed) and
+# projected into public/native-icons/app-icon/ at build time.
+public/native-icons/app-icon/
+
+# The loose variant files below are intermediate build-public artifacts copied verbatim
+# into dist and then projected to packages/cli/app (gitignored there); only
+# resources/app-icon/ and public/native-icons/tray-icon.png are sources.
+public/native-icons/app-icon.icns
+public/native-icons/app-icon.ico
+public/native-icons/app-icon.json
+public/native-icons/app-icon.png
+public/native-icons/linux/

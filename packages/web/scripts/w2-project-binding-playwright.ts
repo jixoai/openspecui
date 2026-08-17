@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Execute one deterministic same-origin Project Binding A-to-B acceptance flow.
- * 2. Pin the OpenSpec 1.7 executable, Store registry scope, and disposable roots.
+ * 2. Pin the OpenSpec 1.9 executable, Store registry scope, and disposable roots.
  * 3. Assert desktop/mobile layout and browser error hygiene with bounded process-tree cleanup.
  * 4. Resolve repository, temporary, and isolated home paths through native Windows APIs.
  * 5. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
@@ -11,8 +11,10 @@
  * Derived requirement (2026-07-20): W2 B2.5 needs one bounded Playwright fixture; manual
  * multi-tab acceptance remains owner-owned. This command is intentionally excluded from the
  * default browser lane and does not exercise App iframe or WebSocket error-propagation policy.
- * Original request (2026-08-03): release OpenSpecUI 7.0.0 against the pinned OpenSpec CLI 1.7 source.
+ * Historical request (2026-08-03): release OpenSpecUI 7.0.0 against the then-pinned OpenSpec CLI 1.7 source.
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -30,7 +32,7 @@ const TSX_CLI = join(REPO_ROOT, 'packages/web/node_modules/tsx/dist/cli.mjs')
 const VITE_CLI = join(REPO_ROOT, 'packages/web/node_modules/vite/bin/vite.js')
 const PINNED_OPENSPEC_ROOT = join(REPO_ROOT, 'references/openspec')
 const PINNED_OPENSPEC_BIN = join(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
-const PINNED_OPENSPEC_COMMIT = '4e16790d90d8f54d4773ad9a5e71a57cd9f1e86b'
+const PINNED_OPENSPEC_COMMIT = '2826b8889e5223a9a8095d4428b60b56597e1020'
 const BACKEND_PORT = 14_236
 const WEB_PORT = 14_237
 const STARTUP_TIMEOUT_MS = 30_000
@@ -122,7 +124,7 @@ async function assertPinnedCli(env: NodeJS.ProcessEnv): Promise<void> {
     throw new Error(`Pinned OpenSpec SHA mismatch: ${stdout.trim()}`)
   }
   const version = await runPinnedCli(['--version'], REPO_ROOT, env)
-  if (version.exitCode !== 0 || version.stdout.trim() !== '1.6.0') {
+  if (version.exitCode !== 0 || version.stdout.trim() !== '1.9.0') {
     throw new Error(`Pinned OpenSpec version check failed: ${version.stdout}\n${version.stderr}`)
   }
 }

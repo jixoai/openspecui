@@ -242,6 +242,7 @@ if (args[0] === 'status' && args.includes('--json')) {
           existingOutputPaths: done ? [join(changeDir, outputPath)] : [],
         },
       },
+      isPlanningComplete: done || skipped,
       isComplete: done || skipped,
       applyRequires: [],
       nextSteps: [],

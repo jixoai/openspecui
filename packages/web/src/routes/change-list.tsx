@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-27 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. List only active Changes from the current writable Planning root.
  * 2. Derive workflow state and terminal evidence from CLI Status and formal tracked-task progress.
  * 3. Preserve ChangeList row continuity and stale display together with collision-safe detail navigation.
@@ -12,8 +12,10 @@
  *
  * Original request (2026-07-15): "One project backend has one launch project and one CLI-selected writable planning root."
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
-import { Badge } from '@/components/badge'
+import { ChangeRow, ChangeRowChevron } from '@/components/change-row'
 import {
   ChangeListSkeleton,
   RealtimeProgress,
@@ -31,7 +33,7 @@ import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
 import { useChangeListContinuity } from '@/routes/change-list-continuity'
 import type { ChangeStatus } from '@openspecui/core'
-import { AlertCircle, ChevronRight, GitBranch, Plus, Sparkles } from 'lucide-react'
+import { AlertCircle, GitBranch, Plus, Sparkles } from 'lucide-react'
 import { useRef } from 'react'
 
 function buildStatusMap(statuses: ChangeStatus[] | undefined): Map<string, ChangeStatus> {
@@ -168,19 +170,13 @@ export function ChangeList() {
               const totalArtifacts = status?.artifacts.length ?? 0
               const phase = classifyChangeWorkflowPhase({
                 hasStatus: Boolean(status),
-                isComplete: status?.isComplete ?? false,
+                isPlanningComplete: status?.isPlanningComplete ?? false,
                 trackedTaskPhase: change.trackedTaskProgress.phase,
                 trackedArtifactStatus: inferTrackedArtifactStatus(
                   status?.artifacts.map((artifact) => artifact.status) ?? []
                 ),
+                cliCompletedTasks: change.cliTaskSummary?.completedTasks ?? null,
               })
-              const taskPercent =
-                change.trackedTaskProgress.total > 0
-                  ? Math.round(
-                      (change.trackedTaskProgress.completed / change.trackedTaskProgress.total) *
-                        100
-                    )
-                  : 0
               const sharedDescriptor = { family: 'changes', entityId: change.id } as const
               return (
                 <VTLink
@@ -200,66 +196,36 @@ export function ChangeList() {
                   {...getSharedElementBinding(sharedDescriptor, 'container')}
                   className="hover:bg-muted/50 block px-4 py-3"
                 >
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <GitBranch
-                        {...getSharedElementBinding(sharedDescriptor, 'icon')}
-                        className="text-muted-foreground mt-0.5 h-5 w-5 shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <div
-                          {...getSharedElementBinding(sharedDescriptor, 'title')}
-                          className="truncate font-medium"
-                        >
-                          {change.name}
-                        </div>
-                        <div className="text-muted-foreground truncate text-sm">
-                          {change.id}
-                          {change.updatedAt > 0 && <> · {formatRelativeTime(change.updatedAt)}</>}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col items-end gap-1 text-right text-sm">
-                        <Badge
-                          tone="custom"
-                          size="sm"
-                          shape="box"
-                          className={`border ${phase.toneClass}`}
-                        >
-                          {phase.label}
-                        </Badge>
-                        <div className="font-medium">
-                          {change.trackedTaskProgress.completed}/{change.trackedTaskProgress.total}
-                        </div>
-                        <div className="text-muted-foreground text-xs">tasks</div>
-                      </div>
-                      <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
-                    </div>
-                  </div>
-
-                  <div className="bg-muted h-1.5 rounded-full">
-                    <div
-                      className="bg-primary h-full rounded-full transition-all"
-                      style={{ width: `${taskPercent}%` }}
+                  <div className="flex items-center gap-3">
+                    <ChangeRow
+                      changeId={change.id}
+                      name={change.name}
+                      phase={phase}
+                      updatedAt={change.updatedAt}
+                      formatTime={formatRelativeTime}
+                      progressRatio={
+                        change.cliTaskSummary && change.cliTaskSummary.totalTasks > 0
+                          ? change.cliTaskSummary.completedTasks / change.cliTaskSummary.totalTasks
+                          : null
+                      }
+                      className="min-w-0 flex-1"
+                      titleProps={{ ...(change.id !== change.name ? {} : null) }}
+                      subtitle={
+                        !statusError && status ? (
+                          <span title="Task counts reported by the OpenSpec CLI for this Change.">
+                            {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
+                            {change.cliTaskSummary
+                              ? ` · Tasks ${change.cliTaskSummary.completedTasks}/${change.cliTaskSummary.totalTasks}`
+                              : ''}
+                          </span>
+                        ) : !statusError && statuses === undefined && isStatusLoading ? (
+                          <RealtimeSkeletonLine className="w-28" />
+                        ) : (
+                          'Workflow status unavailable'
+                        )
+                      }
                     />
-                  </div>
-
-                  <div className="text-muted-foreground mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span>
-                      {change.trackedTaskProgress.phase === 'no-tasks'
-                        ? 'No tracked tasks'
-                        : `${taskPercent}% task completion`}
-                    </span>
-                    {!statusError && status ? (
-                      <span className="truncate">
-                        {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
-                      </span>
-                    ) : !statusError && statuses === undefined && isStatusLoading ? (
-                      <RealtimeSkeletonLine className="w-28" />
-                    ) : (
-                      <span>Workflow status unavailable</span>
-                    )}
+                    <ChangeRowChevron />
                   </div>
                 </VTLink>
               )

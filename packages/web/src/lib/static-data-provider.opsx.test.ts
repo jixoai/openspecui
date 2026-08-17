@@ -1,3 +1,10 @@
+/**
+ * Orthogonal intents (created 2026-08-15 Asia/Shanghai):
+ * 1. Prove static Change status, artifact, and template projections keep captured snapshot facts.
+ * 2. Prove a captured Schema-resolution failure propagates as CLI evidence instead of an empty catalog.
+ *
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ */
 import {
   createDocumentChecklistSummary,
   createTrackedTaskProgress,
@@ -127,7 +134,7 @@ describe('static-data-provider opsx adapters', () => {
     expect(list[0]).toMatchObject({
       changeName: 'add-2fa',
       schemaName: 'spec-driven',
-      isComplete: true,
+      isPlanningComplete: true,
     })
     expect(list[0]?.artifacts.map((artifact) => artifact.status)).toEqual([
       'done',
@@ -164,7 +171,7 @@ describe('static-data-provider opsx adapters', () => {
     expect(status).toMatchObject({
       changeName: 'add-2fa',
       schemaName: 'unknown',
-      isComplete: false,
+      isPlanningComplete: false,
       artifacts: [],
     })
   })
@@ -321,5 +328,102 @@ describe('static-data-provider opsx adapters', () => {
     expect(template?.content).toBe('# Proposal template')
     expect(template?.displayPath).toBe('project:openspec/schemas/spec-driven/templates/proposal.md')
     expect(templates?.proposal?.content).toBe('# Proposal template')
+  })
+
+  it('keeps a captured schemas failure as typed CLI evidence, not an empty catalog', async () => {
+    const snapshot = createSnapshot()
+    if (!snapshot.opsx) throw new Error('Static opsx fixture is missing.')
+    snapshot.opsx.schemasCapture = {
+      ok: false,
+      command: 'openspec schemas',
+      selector: { store: 'ghost' },
+      rootAvailable: false,
+      diagnostics: [
+        {
+          severity: 'error',
+          code: 'unknown_store',
+          message: "Unknown store 'ghost'.",
+        },
+      ],
+      stdout: '',
+      stderr: '',
+      exitCode: 1,
+      payload: { schemas: [], root: null, status: [] },
+      contractError: undefined,
+    }
+    staticState.snapshot = snapshot
+
+    const provider = await import('./static-data-provider')
+    const bundleError = await provider.getOpsxConfigBundle().catch((error) => error)
+    expect(bundleError).toBeInstanceOf(provider.StaticSchemasCaptureError)
+    expect(bundleError.message).toContain("Unknown store 'ghost'.")
+    expect(bundleError.capture).toMatchObject({
+      ok: false,
+      command: 'openspec schemas',
+      selector: { store: 'ghost' },
+      rootAvailable: false,
+      exitCode: 1,
+      diagnostics: [{ code: 'unknown_store' }],
+    })
+    // Every Schema-related accessor propagates the same typed failure: no static read path
+    // can return stale detail, resolution, template, file, YAML, or template content as
+    // successful data for a failed capture.
+    const accessors: Array<[string, () => Promise<unknown>]> = [
+      ['list', () => provider.getOpsxSchemas()],
+      ['detail', () => provider.getOpsxSchemaDetail('spec-driven')],
+      ['resolution', () => provider.getOpsxSchemaResolution('spec-driven')],
+      ['templates', () => provider.getOpsxTemplates('spec-driven')],
+      ['files', () => provider.getOpsxSchemaFiles('spec-driven')],
+      ['yaml', () => provider.getOpsxSchemaYaml('spec-driven')],
+      ['templateContent', () => provider.getOpsxTemplateContent('spec-driven', 'proposal')],
+      ['templateContents', () => provider.getOpsxTemplateContents('spec-driven')],
+    ]
+    for (const [label, run] of accessors) {
+      const error = await run().catch((cause) => cause)
+      expect(error, label).toBeInstanceOf(provider.StaticSchemasCaptureError)
+      if (!(error instanceof provider.StaticSchemasCaptureError)) {
+        throw new Error(`${label} did not preserve StaticSchemasCaptureError.`)
+      }
+      expect(error.capture).toBe(bundleError.capture)
+    }
+  })
+
+  it('keeps the captured failure terminal for accessors called without an identity', async () => {
+    const snapshot = createSnapshot()
+    if (!snapshot.opsx) throw new Error('Static opsx fixture is missing.')
+    snapshot.opsx.schemasCapture = {
+      ok: false,
+      command: 'openspec schemas',
+      selector: null,
+      rootAvailable: false,
+      diagnostics: [
+        { severity: 'error', code: 'no_registered_stores', message: 'No openspec root found.' },
+      ],
+      stdout: '',
+      stderr: '',
+      exitCode: 1,
+      payload: null,
+    }
+    staticState.snapshot = snapshot
+
+    const provider = await import('./static-data-provider')
+    // Undefined/omitted identities must not short-circuit into a normal null result before
+    // the capture boundary: the failed observation stays terminal for every read shape.
+    const undefinedCalls: Array<[string, () => Promise<unknown>]> = [
+      ['detail(undefined)', () => provider.getOpsxSchemaDetail(undefined)],
+      ['resolution(undefined)', () => provider.getOpsxSchemaResolution(undefined)],
+      ['yaml(undefined)', () => provider.getOpsxSchemaYaml(undefined)],
+      ['templates(undefined)', () => provider.getOpsxTemplates(undefined)],
+      ['files(undefined)', () => provider.getOpsxSchemaFiles(undefined)],
+      ['templateContents(undefined)', () => provider.getOpsxTemplateContents(undefined)],
+      [
+        'templateContent(undefined, undefined)',
+        () => provider.getOpsxTemplateContent(undefined, undefined),
+      ],
+    ]
+    for (const [label, run] of undefinedCalls) {
+      const error = await run().catch((cause) => cause)
+      expect(error, label).toBeInstanceOf(provider.StaticSchemasCaptureError)
+    }
   })
 })

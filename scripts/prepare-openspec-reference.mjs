@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
- * 1. Initialize the pinned OpenSpec 1.7 reference submodule for clean CI checkouts.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Initialize the pinned OpenSpec 1.9 reference submodule for clean CI checkouts.
  * 2. Build the ignored CLI distribution consumed by pinned integration fixtures.
  * 3. Reject submodule drift before any fixture can execute a different upstream revision.
  * 4. Invoke pnpm through a Windows-safe executable or quoted command-shim boundary.
@@ -12,6 +12,7 @@
  * the Fast Gate and pinned integration fixtures use bin/openspec.js."
  * Original request (2026-08-03): release OpenSpecUI 7.0.0 against the pinned OpenSpec CLI 1.7 source.
  * Windows correction (2026-08-04): Node never executes pnpm.cmd directly.
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -21,7 +22,7 @@ import { resolvePnpmInvocation } from './lib/pnpm-invocation.mjs'
 
 const REPOSITORY_ROOT = process.cwd()
 const REFERENCE_PATH = resolve(REPOSITORY_ROOT, 'references/openspec')
-const EXPECTED_COMMIT = '4e16790d90d8f54d4773ad9a5e71a57cd9f1e86b'
+const EXPECTED_COMMIT = '2826b8889e5223a9a8095d4428b60b56597e1020'
 const CLI_DIST_PATH = resolve(REFERENCE_PATH, 'dist/cli/index.js')
 
 function run(command, args, options = {}) {

@@ -50,6 +50,7 @@ function createChange(id: string, updatedAt: number): ChangeMeta {
     documentChecklistSummary: { groups: [], total: 0, completed: 0, remaining: 0 },
     createdAt: updatedAt,
     updatedAt,
+    cliTaskSummary: null,
   }
 }
 

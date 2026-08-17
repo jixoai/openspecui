@@ -1,26 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
- * 1. Execute buffered CLI work through process/Worker backends with runner recovery,
- *    observer-explicit OTel phase evidence, bounded probes, and owner-scoped disposal.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Execute buffered CLI work through process/Worker backends with runner recovery, observer-explicit
+ *    OTel phase evidence, bounded probes, and owner-scoped disposal.
  * 2. Own streaming CLI process trees through cancellation request, escalation, and confirmed settlement.
- * 3. Retain lifecycle helpers and add the fixed-path, tools-none project bootstrap stream.
- * 4. Expose the physically separated OpenSpec 1.6 typed command facade.
- * 5. Clear the Core-owned direct-child slot independently from stream settlement, and keep
- *    response-Span delivery physically separate from late child-process settlement evidence.
+ * 3. Retain lifecycle helpers, add the fixed-path tools-none project bootstrap stream, and keep the
+ *    Core-owned direct-child slot clear independently from stream settlement.
+ * 4. Expose the physically separated OpenSpec 1.6-1.9 typed command facade with response-Span delivery
+ *    separate from late child-process settlement evidence.
+ * 5. Report eager-resolved exit codes as unknown instead of fabricated zeros.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "A stream cancellation request is not child-process settlement."
- * Built-runtime correction (2026-07-30): foreground Server shutdown must retire buffered projection children and settled probe timers.
- * Tracing (2026-07-31): each CLI subprocess call is wrapped in an OpenTelemetry span so the Server
- *   `planningRoot.runOperation` breakdown can attribute latency to specific CLI invocations
- *   (doctor / context / list ...). Uses `@opentelemetry/api` only — a no-op tracer is returned when
- *   no SDK is registered, so standalone Core use incurs zero overhead.
- * Original request (2026-07-31): "这些命令的执行，时间绝对不是七八秒那么久...请看一下代码，看能不能让trace更精确"
- * Original request (2026-07-31): "终端大量报错，比如: Cannot execute the operation on ended Span"
- * Original request (2026-07-31): "在主线程，通过 OPENSPEC_SPAWN_MODE=process|worker 来进行区分两种模式。"
- * Original request (2026-08-02): initialize the Launch Project with `openspec init <path> --tools=none`.
- * Review correction (2026-08-02): streamed command evidence must preserve argv boundaries.
- * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { context, trace, type Attributes, type Span } from '@opentelemetry/api'
 import { type ChildProcess } from 'child_process'
@@ -50,7 +41,15 @@ import {
   type BufferedSpawnResult,
 } from './spawn-safe.js'
 
-/** CLI 执行结果 */
+/**
+ * CLI 执行结果。
+ *
+ * `success` 是传输事实：收到了完整的观察结果（进程以观测到的代码退出，或通过
+ * eager-JSON 获得了完整的 JSON 文档）。它不是对进程退出状态的断言 —— 对于提前
+ * 解析的命令，`exitCode` 诚实地保持为 `null`，调用者必须将其视为未知。当载荷
+ * 本身包含 CLI 失败时（例如 OpenSpec 1.9 的 selected-Root envelope），契约层
+ * 会单独携带该失败。
+ */
 export interface CliResult {
   success: boolean
   stdout: string
@@ -437,11 +436,18 @@ export class CliExecutor {
       }
     }
 
+    // Eager-JSON resolution terminates the process after complete JSON output instead of
+    // waiting for its natural exit, so the real exit code was never observed. Report the
+    // code as unknown rather than fabricating 0: an object-shaped failure envelope (for
+    // example the OpenSpec 1.9 selected-Root schemas failure) must not carry false exit
+    // evidence. Transport success still holds because a complete JSON document arrived.
+    const eagerResolved = result.phases?.resultReason === 'eager-json'
+
     return {
-      success: result.exitCode === 0,
+      success: result.exitCode === 0 || (eagerResolved && result.exitCode === null),
       stdout: result.stdout,
       stderr: result.stderr,
-      exitCode: result.exitCode,
+      exitCode: eagerResolved ? null : result.exitCode,
       phases: result.phases,
       spawnMode,
     }
@@ -644,10 +650,12 @@ export class CliExecutor {
   }
 
   /**
-   * 执行 openspec schemas --json
+   * 执行 openspec schemas --json（可选转发所选 Root 的 Store 选择器）
    */
-  async schemas(): Promise<CliResult> {
-    return this.execute(['schemas', '--json'])
+  async schemas(selector: { store?: string } = {}): Promise<CliResult> {
+    const args = ['schemas', '--json']
+    if (selector.store !== undefined) args.push('--store', selector.store)
+    return this.execute(args)
   }
 
   /**

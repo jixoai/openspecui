@@ -5,6 +5,7 @@
  *
  * Original request (2026-07-23): "一次性把现有的页面都统一整改……统一组件的封装和开发。"
  * Original request (2026-07-28): "你说的组件化封装是必要的。"
+ * Original request (2026-08-15): 刷新态块级 Alert 收敛为 ShinyStatusBadge（shiny text + Tooltip）。
  */
 import '@/styles/realtime.css'
 
@@ -48,3 +49,4 @@ export {
   RoutePendingSkeleton,
   SpecListSkeleton,
 } from './route-skeletons'
+export { AnimatedShinyText, ShinyStatusBadge, type ShinyStatusBadgeProps } from './shiny-status'

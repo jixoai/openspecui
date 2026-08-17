@@ -1,11 +1,12 @@
 <!--
-Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
 1. Document the current OpenSpec compatibility and project workflow.
 2. Document serve, App-daemon, Direct Web, and static-export commands.
 3. Document project hooks without hiding OpenSpec CLI authority.
 
 Original request (2026-07-29): "补充 openspecui --web == openspecui serve --web；README 文档需要补充这些命令的介绍。"
 Original request (2026-08-01): "v7不兼容1.6.x，明确要求必须使用 v1.7.x。"
+Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
 -->
 
 # OpenSpec UI
@@ -16,21 +17,25 @@ OpenSpecUI is a web interface for OpenSpec workflows (live mode + static export)
 
 ## Version Compatibility
 
-| OpenSpecUI        | OpenSpec CLI line                                       |
-| ----------------- | ------------------------------------------------------- |
-| `@latest` / `@^7` | `>=1.7.0 <1.8.0`                                        |
-| `@^6`             | current: `>=1.6.0 <1.7.0`; compatible: `>=1.7.0 <1.8.0` |
-| `@^5`             | current: `>=1.5.0 <1.6.0`; accepted: `>=1.4.0 <1.6.0`   |
-| `@^4`             | current: `>=1.4.0 <1.5.0`; accepted: `>=1.3.0 <1.5.0`   |
-| `@^3`             | `>=1.3.0 <1.4.0`                                        |
-| `@^2`             | `>=1.2.0 <1.3.0`                                        |
-| `@^1`             | `>=1.0.0 <1.2.0`                                        |
+| OpenSpecUI        | OpenSpec CLI line                                        |
+| ----------------- | -------------------------------------------------------- |
+| `@latest` / `@^9` | current: `>=1.9.0 <1.10.0`; supported: `>=1.8.0 <1.10.0` |
+| `@^7`             | `>=1.7.0 <1.8.0`                                         |
+| `@^6`             | current: `>=1.6.0 <1.7.0`; compatible: `>=1.7.0 <1.8.0`  |
+| `@^5`             | current: `>=1.5.0 <1.6.0`; accepted: `>=1.4.0 <1.6.0`    |
+| `@^4`             | current: `>=1.4.0 <1.5.0`; accepted: `>=1.3.0 <1.5.0`    |
+| `@^3`             | `>=1.3.0 <1.4.0`                                         |
+| `@^2`             | `>=1.2.0 <1.3.0`                                         |
+| `@^1`             | `>=1.0.0 <1.2.0`                                         |
 
-OpenSpecUI major versions ordinarily track OpenSpec CLI minor lines. OpenSpecUI 7 is adapted only to OpenSpec CLI
-1.7.x. OpenSpecUI 6.1 remains the historical 1.6.x line with its temporary 1.7 compatibility bridge.
+OpenSpecUI major versions ordinarily track OpenSpec CLI minor lines. OpenSpecUI 9 adapts OpenSpec
+CLI 1.8.x and 1.9.x in one release line: stable 1.9.x is the current, recommended line, stable 1.8.x
+is supported non-current, and OpenSpecUI deliberately skips a separate 8 release while taking on
+every 1.8 protocol obligation.
 
 Legacy docs:
 
+- 1.7: [`README-1.7.0.md`](./README-1.7.0.md)
 - 1.6: [`README-1.6.0.md`](./README-1.6.0.md)
 - 1.3: [`README-1.3.0.md`](./README-1.3.0.md)
 - 1.2: [`README-1.2.0.md`](./README-1.2.0.md)
@@ -53,10 +58,13 @@ Direct Project Web defaults to `http://localhost:3100` when that presentation is
 
 ## OpenSpec CLI Compatibility
 
-- OpenSpecUI 7 requires OpenSpec CLI `>=1.7.0 <1.8.0`.
-- OpenSpec CLI 1.6.x, older lines, and CLI `>=1.8.0` are unsupported by OpenSpecUI 7 and blocked by default.
-- If an incompatible CLI executable is available, the mismatch Dialog offers **Skip version check**. This bypass is
-  held only by the current page runtime, clears on refresh/reopen, and does not create a compatibility promise.
+- OpenSpecUI 9 accepts stable OpenSpec CLI `>=1.8.0 <1.10.0` and recommends the 1.9 line.
+- Stable 1.9.x is identified as the current line; stable 1.8.x is supported non-current.
+- OpenSpec CLI 1.7.x, older lines, CLI `>=1.10.0`, and every prerelease are unsupported by
+  OpenSpecUI 9 and blocked by default.
+- If an incompatible CLI executable is available, the mismatch Dialog offers **Skip version check**.
+  This bypass is held only by the current page runtime, clears on refresh/reopen, and does not
+  create a compatibility promise.
 
 Upgrade CLI:
 

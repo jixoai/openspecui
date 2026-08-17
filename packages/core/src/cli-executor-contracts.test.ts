@@ -122,21 +122,23 @@ describe('CliExecutor OpenSpec 1.6 contracts', () => {
     ])
   })
 
-  it('builds strict validate and archive commands without implicit retry', async () => {
+  it('builds strict validate, archived validate, and archive commands without implicit retry', async () => {
     await executor.contracts.validate({
       target: { kind: 'item', id: 'add-auth', type: 'change' },
       strict: true,
       store: 'shared',
     })
     await executor.contracts.validate({ target: { kind: 'scope', scope: 'all' } })
+    await executor.contracts.validate({ target: { kind: 'archived' }, store: 'shared' })
     await executor.contracts.archive('add-auth', { store: 'shared', skipSpecs: true })
 
     expect(execute.mock.calls.map(([args]) => args)).toEqual([
       ['validate', 'add-auth', '--type', 'change', '--strict', '--json', '--store', 'shared'],
       ['validate', '--all', '--json'],
+      ['validate', '--archived', '--json', '--store', 'shared'],
       ['archive', 'add-auth', '--json', '--yes', '--skip-specs', '--store', 'shared'],
     ])
-    expect(execute).toHaveBeenCalledTimes(3)
+    expect(execute).toHaveBeenCalledTimes(4)
   })
 
   it('adds --no-validate only for an explicit archive request', async () => {

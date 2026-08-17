@@ -1,14 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
- * 1. Define reactive Change Status and Instructions projections.
- * 2. Preserve live CLI path/action/Reference provenance versus explicit static absence.
- * 3. Attribute Apply instruction progress without replacing tracked-task truth.
- * 4. Define schema, template, skipped-dependency, and operation-input projections for OPSX surfaces.
- * 5. Publish runtime schemas for final Projection Work payloads, including transformed Apply progress.
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * 1. Publish runtime schemas for final Projection Work payloads, including transformed Apply progress.
+ * 2. Keep isPlanningComplete as the authoritative planning fact over any local tracked alias.
+ * 3. Carry CLI status evidence, diagnostics, and per-artifact requires as typed facts.
+ * 4. Preserve root-context and store projections as browser-safe contracts.
+ * 5. Keep projection notices distinct from payload data so failures never masquerade as results.
  *
- * Original request (2026-07-15): "Preserve CLI-provided paths, action context, References, and diagnostics end to end."
- * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
- * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-07-15): "为内核载荷建立强类型。"
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { z } from 'zod'
 import type { CliJsonValue } from './cli-contracts/command-result.js'
@@ -17,11 +16,11 @@ import {
   CliReferenceIndexEntrySchema,
   CliRootSchema,
 } from './cli-contracts/common.js'
+import { CliSchemaInfoSchema } from './cli-contracts/schema-resolution.js'
 import {
   CliActionContextSchema,
   CliArtifactPathSchema,
   CliPlanningHomeSchema,
-  CliSchemaInfoSchema,
   CliSchemaResolutionSchema,
   CliSchemaShadowSchema,
   CliTemplateEntrySchema,
@@ -96,7 +95,8 @@ export type ArtifactStatus = z.infer<typeof ArtifactStatusSchema>
 export const ChangeStatusSchema = z.object({
   changeName: z.string(),
   schemaName: z.string(),
-  isComplete: z.boolean(),
+  /** Planning-artifact completion fact from the CLI; never an implementation-task authority. */
+  isPlanningComplete: z.boolean(),
   applyRequires: z.array(z.string()),
   artifacts: z.array(ArtifactStatusSchema),
   provenance: z.discriminatedUnion('kind', [

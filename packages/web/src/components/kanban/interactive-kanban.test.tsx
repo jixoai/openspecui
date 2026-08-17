@@ -46,7 +46,7 @@ const activeItem = {
 const readyStatus = {
   changeName: 'change-a',
   schemaName: 'spec-driven',
-  isComplete: false,
+  isPlanningComplete: false,
   applyRequires: ['proposal'],
   artifacts: [{ id: 'proposal', outputPath: 'proposal.md', status: 'done' as const, requires: [] }],
   provenance: { kind: 'static' as const },

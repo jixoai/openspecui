@@ -12,6 +12,7 @@ import type {
   ChangeProjectionBatch,
   ChangeProjectionData,
   ChangeProjectionRowError,
+  CliChangeListEntry,
 } from '@openspecui/core'
 import { Buffer } from 'node:buffer'
 import {
@@ -23,10 +24,23 @@ import {
   type ProjectionWorkSubscription,
 } from './projection-work/index.js'
 
+/**
+ * CLI-reported task facts for the list, keyed by Change id. Sourced once from the
+ * `openspec list` projection — the CLI is the task-count authority, and UI-side file
+ * arithmetic must never backfill a missing entry.
+ */
+export type CliTaskSummaryIndex = Map<string, CliChangeListEntry>
+
 /** Minimal adapter boundary needed by the progressive list; workflow facts stay out of this projection. */
 export interface ChangeProjectionAdapter {
   listChanges(): Promise<string[]>
   readChangeMeta(id: string): Promise<ChangeMeta>
+  /**
+   * Read the CLI-owned Change-list entries when the planning CLI projection is available.
+   * Implementations return an empty index (never a rejection) when the CLI list is not
+   * observable, so the progressive list stays file-driven and rows simply carry null.
+   */
+  readCliChangeListEntries?(): Promise<CliTaskSummaryIndex>
 }
 
 /** Complete Planning-root provenance used for one active Change-list Work identity. */
@@ -156,6 +170,11 @@ export class ChangesProjectionService implements ChangesProjectionServiceContrac
       load: async (context) => {
         context.reportStage('root-ready')
         const ids = await this.options.adapter.listChanges()
+        // Join the CLI's own task counts once per load; a missing CLI list leaves every
+        // row null rather than fabricating counts from local checkbox arithmetic.
+        const cliEntries =
+          (await this.options.adapter.readCliChangeListEntries?.()) ??
+          new Map<string, CliChangeListEntry>()
         const rows: ChangeMeta[] = []
         const errors: ChangeProjectionRowError[] = []
         const total = ids.length
@@ -164,7 +183,18 @@ export class ChangesProjectionService implements ChangesProjectionServiceContrac
           if (context.signal.aborted)
             throw new DOMException('Change projection was cancelled.', 'AbortError')
           try {
-            const row = await this.options.adapter.readChangeMeta(id)
+            const meta = await this.options.adapter.readChangeMeta(id)
+            const entry = cliEntries.get(id)
+            const row: ChangeMeta = entry
+              ? {
+                  ...meta,
+                  cliTaskSummary: {
+                    completedTasks: entry.completedTasks,
+                    totalTasks: entry.totalTasks,
+                    status: entry.status,
+                  },
+                }
+              : { ...meta, cliTaskSummary: meta.cliTaskSummary ?? null }
             rows.push(row)
             context.emitBatch(
               { rows: [row], errors: [], progress: { completed: index + 1, total } },

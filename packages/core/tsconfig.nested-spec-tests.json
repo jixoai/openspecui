@@ -3,7 +3,7 @@
   "include": [
     "src/adapter.test.ts",
     "src/entity-id.test.ts",
-    "src/official-cli-17-nested-spec-fixtures.test.ts",
+    "src/official-cli-19-nested-spec-fixtures.test.ts",
     "src/spec-catalog.test.ts"
   ],
   "exclude": ["node_modules", "dist"]

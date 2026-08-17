@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Model camelCase workflow JSON independently from Store-family JSON.
- * 2. Preserve strict validate and archive outcomes, including failure payloads.
+ * 2. Preserve strict, archived, and bulk Validate plus Archive outcomes, including failure payloads.
  * 3. Preserve multiline requirement bodies from `show --json`.
- * 4. Preserve complete OpenSpec 1.7 Status and operation-Instruction contracts as CLI facts.
+ * 4. Preserve complete OpenSpec 1.8/1.9 Status and operation-Instruction contracts as CLI facts.
  * 5. Export the successful Spec-document schema for browser-safe projection validation.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { z } from 'zod'
 import {
@@ -51,19 +52,6 @@ export const CliSpecListSchema = z
     status: z.array(CliDiagnosticSchema).optional(),
   })
   .passthrough()
-
-/** One workflow schema discovered by the CLI-selected OpenSpec runtime. */
-export const CliSchemaInfoSchema = z
-  .object({
-    name: z.string(),
-    description: z.string().optional(),
-    artifacts: z.array(z.string()),
-    source: z.enum(['project', 'user', 'package']),
-  })
-  .passthrough()
-
-/** Typed result of `openspec schemas --json`. */
-export const CliSchemasSchema = z.array(CliSchemaInfoSchema)
 
 /** CLI resolution for one schema, including lower-priority shadows. */
 export const CliSchemaShadowSchema = z
@@ -174,7 +162,10 @@ export const CliWorkflowStatusSuccessSchema = z
     planningHome: CliPlanningHomeSchema,
     changeRoot: z.string(),
     artifactPaths: z.record(CliArtifactPathSchema),
-    isComplete: z.boolean(),
+    /** Required planning-artifact completion fact since OpenSpec 1.8. */
+    isPlanningComplete: z.boolean(),
+    /** Retained upstream compatibility alias, kept only as raw CLI evidence. */
+    isComplete: z.boolean().optional(),
     applyRequires: z.array(z.string()),
     nextSteps: z.array(z.string()),
     actionContext: CliActionContextSchema,
@@ -295,33 +286,33 @@ const CliValidationTotalsSchema = z
   })
   .passthrough()
 
-/** Typed strict or non-strict Validate result, including upstream failure diagnostics. */
-export const CliValidateSchema = z.union([
-  z
-    .object({
-      items: z.array(
-        z
-          .object({
-            id: z.string(),
-            type: z.enum(['change', 'spec']),
-            valid: z.boolean(),
-            issues: z.array(CliValidationIssueSchema),
-            durationMs: z.number(),
-          })
-          .passthrough()
-      ),
-      summary: z
+/** Typed ordinary Validate report, also used by 1.9 `validate --archived --json`. */
+export const CliValidateReportSchema = z
+  .object({
+    items: z.array(
+      z
         .object({
-          totals: CliValidationTotalsSchema,
-          byType: z.record(CliValidationTotalsSchema),
+          id: z.string(),
+          type: z.enum(['change', 'spec']),
+          valid: z.boolean(),
+          issues: z.array(CliValidationIssueSchema),
+          durationMs: z.number(),
         })
-        .passthrough(),
-      version: z.string(),
-      root: CliRootSchema,
-    })
-    .passthrough(),
-  CliDiagnosticFailureSchema,
-])
+        .passthrough()
+    ),
+    summary: z
+      .object({
+        totals: CliValidationTotalsSchema,
+        byType: z.record(CliValidationTotalsSchema),
+      })
+      .passthrough(),
+    version: z.string(),
+    root: CliRootSchema,
+  })
+  .passthrough()
+
+/** Typed strict, non-strict, or archived Validate result, including failure diagnostics. */
+export const CliValidateSchema = z.union([CliValidateReportSchema, CliDiagnosticFailureSchema])
 
 const CliArchiveTotalsSchema = z
   .object({
@@ -342,6 +333,8 @@ export const CliArchiveSchema = z
         path: z.string(),
         specsUpdated: z.boolean(),
         totals: CliArchiveTotalsSchema.optional(),
+        /** Upstream spec-rebuild warnings, including retirement and scenario-loss notices. */
+        warnings: z.array(z.string()).optional(),
       })
       .passthrough()
       .nullable(),
@@ -350,9 +343,11 @@ export const CliArchiveSchema = z
   })
   .passthrough()
 
+/** One CLI-reported Change row: task counts and phase straight from `openspec list`. */
+export type CliChangeListEntry = z.infer<typeof CliChangeListEntrySchema>
+
 export type CliChangeList = z.infer<typeof CliChangeListSchema>
 export type CliSpecList = z.infer<typeof CliSpecListSchema>
-export type CliSchemas = z.infer<typeof CliSchemasSchema>
 export type CliSchemaResolution = z.infer<typeof CliSchemaResolutionSchema>
 export type CliSchemaWhich = z.infer<typeof CliSchemaWhichSchema>
 export type CliTemplates = z.infer<typeof CliTemplatesSchema>
@@ -366,4 +361,5 @@ export type CliApplyInstructionsSuccess = z.infer<typeof CliApplyInstructionsSuc
 export type CliArchiveInstructions = z.infer<typeof CliArchiveInstructionsSchema>
 export type CliArchiveInstructionsSuccess = z.infer<typeof CliArchiveInstructionsSuccessSchema>
 export type CliValidate = z.infer<typeof CliValidateSchema>
+export type CliValidateReport = z.infer<typeof CliValidateReportSchema>
 export type CliArchive = z.infer<typeof CliArchiveSchema>

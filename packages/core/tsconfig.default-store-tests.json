@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "include": [
     "src/default-store-contracts.test.ts",
-    "src/official-cli-17-default-store-fixtures.test.ts",
+    "src/official-cli-19-default-store-fixtures.test.ts",
     "src/planning-config.ts",
     "src/root-context.ts"
   ],

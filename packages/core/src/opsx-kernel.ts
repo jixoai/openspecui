@@ -1,15 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Maintain reactive CLI-backed projections and their direct typed Projection Work readers.
  * 2. Share and release per-entity streams through one planning-root kernel lifecycle.
  * 3. Keep OpenSpec configuration ownership outside the workflow cache while tracking both YAML filename variants.
  * 4. Preserve typed Status and Artifact/Apply/Archive Instructions provenance with the resolved root selector.
- * 5. Keep Change enumeration business truth in the typed CLI result while files only invalidate it.
+ * 5. Resolve per-command CLI capabilities once per lifetime and gate version-only selectors behind admission.
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
- * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
- * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
@@ -19,11 +18,12 @@ import {
   CliArtifactInstructionsSuccessSchema,
   CliChangeListSchema,
   CliRootSchema,
-  CliSchemasSchema,
   CliWorkflowStatusSuccessSchema,
+  type CliChangeListEntry,
   type CliCommandResult,
   type CliRootSelector,
 } from './cli-contracts/index.js'
+import { CliSchemasSuccessSchema, isCliSchemasFailure } from './cli-contracts/schema-resolution.js'
 import type { CliExecutor } from './cli-executor.js'
 import { mapCliProjectionSeries } from './cli-projection-sequence.js'
 import {
@@ -33,6 +33,11 @@ import {
 } from './cli-projection.js'
 import { requireCanonicalOpenSpecEntityId, requireOpenSpecEntityRelativePath } from './entity-id.js'
 import { inferFileMime, inferFilePreviewKind, isTextLikeFile } from './file-preview.js'
+import {
+  deriveOpenSpecCliCapabilities,
+  parseOpenSpecCliVersion,
+  type OpenSpecCliCapabilities,
+} from './openspec-compat.js'
 import { toOpsxDisplayPath } from './opsx-display-path.js'
 import { parseOpsxSchemaDetail } from './opsx-schema-detail.js'
 import {
@@ -327,6 +332,7 @@ export class OpsxKernel {
   private readonly cliExecutor: CliExecutor
   private readonly runtimeInvalidation: RuntimeInvalidationReader
   private readonly rootSelector: CliRootSelector
+  private cliCapabilitiesPromise: Promise<OpenSpecCliCapabilities> | null = null
   private readonly controller = new AbortController()
   private warmupPromise: Promise<void> | null = null
   private readonly _streamReady = new Map<string, Promise<void>>()
@@ -982,6 +988,25 @@ export class OpsxKernel {
   // Fetchers (migrated from router.ts)
   // =========================================================================
 
+  /**
+   * Resolve the admitted CLI's per-command capabilities once per Kernel lifetime.
+   *
+   * The detected version decides whether version-specific selectors and options are forwarded.
+   * A failed availability probe yields no capabilities, so no version-only flag is ever sent
+   * to an unverifiable CLI.
+   */
+  private resolveCliCapabilities(): Promise<OpenSpecCliCapabilities> {
+    this.cliCapabilitiesPromise ??= this.cliExecutor
+      .checkAvailability()
+      .then((availability) =>
+        deriveOpenSpecCliCapabilities(
+          availability.available ? parseOpenSpecCliVersion(availability.version) : null
+        )
+      )
+      .catch(() => deriveOpenSpecCliCapabilities(null))
+    return this.cliCapabilitiesPromise
+  }
+
   private async fetchSchemas(): Promise<SchemaInfo[]> {
     return (await this.fetchSchemasProjection()).value
   }
@@ -992,9 +1017,25 @@ export class OpsxKernel {
   }> {
     this.runtimeInvalidation.track('schemas')
     await touchOpsxProjectDeps(this.projectDir)
-    const result = await this.cliExecutor.contracts.schemas()
+    // Forward the selected Root's Store selector only where the admitted CLI declares it:
+    // OpenSpec 1.9 resolves schemas through the selected Root; 1.8 rejects `--store`.
+    const capabilities = await this.resolveCliCapabilities()
+    const schemasSelector: CliRootSelector = capabilities.schemasRootSelector
+      ? { ...this.rootSelector }
+      : {}
+    const result = await this.cliExecutor.contracts.schemas(schemasSelector)
+    // OpenSpec 1.9 selected-Root failures emit `{ schemas: [], root: null, status }`
+    // with a failing exit code. Preserve that envelope as typed CLI failure
+    // evidence instead of letting it pass as an empty successful catalog.
+    if (result.data && isCliSchemasFailure(result.data)) {
+      throw new CliProjectionCommandError(
+        result.data.status.map((diagnostic) => diagnostic.message).join('\n') ||
+          'openspec schemas failed to select a Root.',
+        result
+      )
+    }
     return {
-      value: requireCommandData('openspec schemas', result, CliSchemasSchema),
+      value: requireCommandData('openspec schemas', result, CliSchemasSuccessSchema),
       evidence: toCliProjectionCommandEvidence(result),
     }
   }
@@ -1010,6 +1051,7 @@ export class OpsxKernel {
 
   private async fetchChangeListProjection(): Promise<{
     value: string[]
+    entries: CliChangeListEntry[]
     evidence: CliProjectionCommandEvidence
   }> {
     // The directory inventory is an invalidation dependency only. OpenSpec CLI owns the list value.
@@ -1018,6 +1060,7 @@ export class OpsxKernel {
     const data = requireCommandData('openspec list', result, CliChangeListSchema)
     return {
       value: data.changes.map(({ name }) => name),
+      entries: data.changes,
       evidence: toCliProjectionCommandEvidence(result),
     }
   }
@@ -1035,7 +1078,7 @@ export class OpsxKernel {
     const status = ChangeStatusSchema.parse({
       changeName: data.changeName,
       schemaName: data.schemaName,
-      isComplete: data.isComplete,
+      isPlanningComplete: data.isPlanningComplete,
       applyRequires: data.applyRequires,
       artifacts: data.artifacts,
       provenance: {
@@ -1298,9 +1341,14 @@ export class OpsxKernel {
     return this.fetchStatus(changeId, schema)
   }
 
-  /** Execute CLI-owned Change enumeration with file dependencies owned by the caller's Work generation. */
+  /**
+   * Execute CLI-owned Change enumeration with file dependencies owned by the caller's Work
+   * generation. `entries` carries the CLI's own per-Change task counts and phase so list
+   * surfaces can show CLI-reported progress without UI-side file arithmetic.
+   */
   readChangeListProjection(): Promise<{
     value: string[]
+    entries: CliChangeListEntry[]
     evidence: CliProjectionCommandEvidence
   }> {
     return this.fetchChangeListProjection()

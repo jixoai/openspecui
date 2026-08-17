@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove Config Agents renders Environment policy plus complete physical Agent status.
  * 2. Prove structured policy mutation stays inside the Agent Router owner.
  * 3. Prove Agent selection prepares the dedicated Init Terminal transport.
@@ -8,6 +8,8 @@
  *
  * Original request (2026-08-01): `/config/agents` is the only structured Agent mutation surface.
  * Review correction (2026-08-02): replacement projection fixtures must prove their target row exists.
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import type { AgentIntegrationsProjection } from '@/lib/use-agent-integrations'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -96,16 +98,29 @@ function createProjection(): AgentIntegrationsProjection {
         name: 'Codex',
         value: 'codex',
         available: true,
-        skillsDir: '.codex',
+        skillsDir: '.agents',
+        legacySkillsDirs: ['.codex'],
+        detectionPaths: ['.agents/skills', '.codex/skills'],
+        capability: 'skills-invocable',
+        command: null,
+        requiresIdeRestart: true,
+      },
+      {
+        name: 'Shared .agents skills',
+        value: 'agents',
+        available: true,
+        skillsDir: '.agents',
+        detectionPaths: ['.agents/skills'],
         capability: 'skills-invocable',
         command: null,
       },
       {
-        name: 'Agents',
-        value: 'agents',
-        available: false,
+        name: 'MiniMax Code',
+        value: 'minimax-code',
+        available: true,
         skillsDir: null,
-        capability: 'none',
+        globalSkillsDir: '.minimax',
+        capability: 'skills-invocable',
         command: null,
       },
     ],
@@ -122,6 +137,10 @@ function createProjection(): AgentIntegrationsProjection {
         readiness: 'partial',
         issues: ['cleanup-needed'],
         hasAnyArtifacts: true,
+        skillsScope: { kind: 'project', skillsDir: '.agents' },
+        legacySkillRoots: ['.codex'],
+        requiresIdeRestart: true,
+        commandSurfaceUnavailableReason: null,
         expectedSkillCount: 3,
         presentExpectedSkillCount: 2,
         detectedSkillCount: 2,
@@ -146,11 +165,15 @@ function createProjection(): AgentIntegrationsProjection {
       },
       {
         toolId: 'agents',
-        toolName: 'Agents',
-        status: 'unavailable',
-        readiness: 'unavailable',
+        toolName: 'Shared .agents skills',
+        status: 'uninitialized',
+        readiness: 'uninitialized',
         issues: [],
         hasAnyArtifacts: false,
+        skillsScope: { kind: 'project', skillsDir: '.agents' },
+        legacySkillRoots: [],
+        requiresIdeRestart: false,
+        commandSurfaceUnavailableReason: null,
         expectedSkillCount: 0,
         presentExpectedSkillCount: 0,
         detectedSkillCount: 0,
@@ -158,6 +181,32 @@ function createProjection(): AgentIntegrationsProjection {
         presentExpectedCommandCount: 0,
         detectedCommandCount: 0,
         missingSkillWorkflows: [],
+        missingCommandWorkflows: [],
+        unexpectedSkillWorkflows: [],
+        unexpectedCommandWorkflows: [],
+        legacyCommandWorkflows: [],
+        installedSkillWorkflows: [],
+        installedCommandWorkflows: [],
+        generatedByVersion: null,
+      },
+      {
+        toolId: 'minimax-code',
+        toolName: 'MiniMax Code',
+        status: 'uninitialized',
+        readiness: 'uninitialized',
+        issues: [],
+        hasAnyArtifacts: false,
+        skillsScope: { kind: 'user-global', globalSkillsDir: '.minimax' },
+        legacySkillRoots: [],
+        requiresIdeRestart: false,
+        commandSurfaceUnavailableReason: null,
+        expectedSkillCount: 3,
+        presentExpectedSkillCount: 0,
+        detectedSkillCount: 0,
+        expectedCommandCount: 0,
+        presentExpectedCommandCount: 0,
+        detectedCommandCount: 0,
+        missingSkillWorkflows: ['propose', 'apply', 'archive'],
         missingCommandWorkflows: [],
         unexpectedSkillWorkflows: [],
         unexpectedCommandWorkflows: [],
@@ -211,7 +260,7 @@ describe('ConfigAgents', () => {
 
     expect(screen.getByRole('heading', { name: 'Agent Integrations' })).toBeVisible()
     expect(screen.getByText('Codex')).toBeVisible()
-    expect(screen.getByText('Agents', { selector: 'p' })).toBeVisible()
+    expect(screen.getByText('Shared .agents skills', { selector: 'p' })).toBeVisible()
     expect(screen.getByText('Cleanup needed')).toBeVisible()
     const codexRow = screen.getByText('Codex').closest('li')
     if (!codexRow) throw new Error('Codex inventory row is unavailable.')

@@ -155,7 +155,18 @@ function ReadonlyKanbanRow({
     family: archived ? ('archive' as const) : ('changes' as const),
     entityId: item.id,
   }
-  const progress = item.trackedTaskProgress
+  // CLI-reported counts are the task progress authority; the local tracked projection is
+  // a display fallback when no CLI list evidence exists for the row.
+  const cli = item.cliTaskSummary ?? null
+  const progress = cli
+    ? {
+        completed: cli.completedTasks,
+        total: cli.totalTasks,
+      }
+    : {
+        completed: item.trackedTaskProgress.completed,
+        total: item.trackedTaskProgress.total,
+      }
   const percent = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
 
   return (

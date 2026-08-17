@@ -9,6 +9,7 @@
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  * Review correction (2026-08-01): prevent Root A guidance from authorizing an Archive mutation on Root B.
+ * Original request (2026-08-15): 加载/刷新态收敛为标题行 shiny 徽章 + Tooltip，禁用原因就地 Tooltip。
  */
 import { useArchiveModal } from '@/lib/archive-modal-context'
 import { useCliRunner } from '@/lib/use-cli-runner'
@@ -20,8 +21,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { CliTerminal } from './cli-terminal'
 import { Dialog } from './dialog'
 import { OperationInputs } from './opsx/operation-inputs'
-import { RootActionNotice } from './root-action-notice'
+import { RealtimeRevalidateCue, ShinyStatusBadge } from './realtime'
+import { RootActionNotice, RootCheckingBadge } from './root-action-notice'
 import { Switch } from './switch'
+import { Tooltip } from './tooltip'
 
 export function GlobalArchiveModal() {
   const navigateByHref = useVTHrefNavigate()
@@ -180,20 +183,34 @@ export function GlobalArchiveModal() {
         >
           Close
         </button>
-        <button
-          onClick={archiveStatus === 'error' ? handleReset : handleStartArchive}
-          disabled={
-            isRunning || rootAction.disabled || !archiveInstructions || !archiveExecutionReady
+        <Tooltip
+          content={
+            isRunning
+              ? 'Archive is running.'
+              : rootAction.status !== 'ready'
+                ? rootAction.message
+                : !archiveInstructions
+                  ? 'Archive inputs are unavailable.'
+                  : !archiveExecutionReady
+                    ? 'Archive inputs do not match the current planning root generation.'
+                    : 'Start strict validation, then archive this change.'
           }
-          className="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isRunning ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Archive className="h-4 w-4" />
-          )}
-          {archiveStatus === 'error' ? 'Reset before Archive' : 'Archive'}
-        </button>
+          <button
+            onClick={archiveStatus === 'error' ? handleReset : handleStartArchive}
+            disabled={
+              isRunning || rootAction.disabled || !archiveInstructions || !archiveExecutionReady
+            }
+            className="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isRunning ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Archive className="h-4 w-4" />
+            )}
+            {archiveStatus === 'error' ? 'Reset before Archive' : 'Archive'}
+          </button>
+        </Tooltip>
       </>
     )
 
@@ -203,13 +220,29 @@ export function GlobalArchiveModal() {
       onClose={handleClose}
       onDismissRequest={null}
       title={
-        <div className="flex items-center gap-2">
-          {archiveStatus === 'success' ? (
-            <CheckCircle className="h-5 w-5 text-green-500" />
-          ) : (
-            <Archive className="h-5 w-5 text-red-500" />
-          )}
-          <span className="font-semibold">Archive: {changeName}</span>
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            {archiveStatus === 'success' ? (
+              <CheckCircle className="h-5 w-5 text-green-500" />
+            ) : (
+              <Archive className="h-5 w-5 text-red-500" />
+            )}
+            <span className="truncate font-semibold">Archive: {changeName}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <RootCheckingBadge state={rootAction} />
+            {archiveInstructionsState.authority.state === 'waiting' ||
+            (archiveInstructionsCurrent && !archiveGenerationCurrent) ? (
+              <ShinyStatusBadge
+                label={archiveInstructions ? 'Refreshing inputs' : 'Loading inputs'}
+                message={
+                  archiveInstructions
+                    ? 'Retained archive inputs remain readable while they are refreshed.'
+                    : 'Archive inputs are loading; dispatch stays locked until they arrive.'
+                }
+              />
+            ) : null}
+          </div>
         </div>
       }
       footer={footer}
@@ -227,20 +260,21 @@ export function GlobalArchiveModal() {
           </div>
         ) : null}
 
-        {archiveInstructionsState.authority.state === 'waiting' ||
-        (archiveInstructionsCurrent && !archiveGenerationCurrent) ? (
-          <div className="bg-muted/50 text-muted-foreground rounded-md p-3 text-sm">
-            {archiveInstructions ? 'Refreshing archive inputs…' : 'Loading archive inputs…'}
-          </div>
-        ) : null}
-
         {archiveInstructions ? (
-          <OperationInputs
-            title="Archive inputs"
-            context={archiveInstructions.context}
-            operationGuidance={archiveInstructions.operationGuidance}
-            showEmpty
-          />
+          <RealtimeRevalidateCue
+            active={
+              archiveInstructionsState.authority.state === 'waiting' ||
+              (archiveInstructionsCurrent && !archiveGenerationCurrent)
+            }
+            statusLabel="refreshing archive inputs"
+          >
+            <OperationInputs
+              title="Archive inputs"
+              context={archiveInstructions.context}
+              operationGuidance={archiveInstructions.operationGuidance}
+              showEmpty
+            />
+          </RealtimeRevalidateCue>
         ) : null}
 
         <div className="bg-muted/50 rounded-lg p-3">

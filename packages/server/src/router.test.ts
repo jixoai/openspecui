@@ -1,12 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove public Router owner boundaries and dedicated Planning-root stream settlement.
  * 2. Prove strict Archive identity, generation, validation, diagnostics, and Store selection publicly.
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
  * 4. Prove stale Git binding intent conflicts before rebound repository side effects.
- * 5. Prove Root, Store, Planning CLI, and Environment Global Projection Work routes through their real Server owners.
- * 6. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
- *
+ * 5. Prove Root, Store, Planning CLI, and v9 admission-gated capability routes through real owners.
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-17): "Every public application mutation remains inside its Server-owned root and lifetime."
  * Original request (2026-07-17): "Rejected Validate and Update handles converge to one public terminal error."
@@ -23,6 +21,8 @@
  * Original request (2026-08-01): Active Root Raw YAML must reject stale revisions and refresh dependent owners.
  * Review correction (2026-08-02): generic CLI Init/Update transports must not bypass Agent ownership.
  * Review correction (2026-08-02): Init cancellation and success require process and projection settlement.
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import {
   acquireWatcherRoot,
@@ -33,6 +33,7 @@ import {
   OpenSpecAdapter,
   reactiveReadFile,
   RuntimeInvalidationIndex,
+  selectAgentDeliveryRegistry,
   type CliCommandResult,
   type CliContext,
   type CliDoctor,
@@ -279,6 +280,7 @@ const createMockAdapter = () => ({
       documentChecklistSummary: documentChecklistSummary(),
       createdAt: 1,
       updatedAt: 30,
+      cliTaskSummary: null,
     },
   ]),
   listArchivedChanges: vi.fn().mockResolvedValue(['old-change']),
@@ -456,6 +458,13 @@ afterEach(async () => {
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+/** Typed spy handle for the archived-validation capability boundary under review. */
+function validateContractSpy(
+  context: ReturnType<typeof createMockContext>
+): ReturnType<typeof vi.fn> {
+  return context.cliExecutor.contracts.validate as ReturnType<typeof vi.fn>
+}
 
 const createMockContext = (
   adapter = createMockAdapter(),
@@ -1030,6 +1039,68 @@ const createCaller = (
     ...createMockContext(adapter, options),
   })
 }
+
+describe('agentIntegrations.initStream', () => {
+  it('rejects a 1.9-only tool on a 1.8 projection without spawning the CLI', async () => {
+    const context = createMockContext()
+    const planning = await resolveMockPlanningRoot(context)
+    planning.rootContext = {
+      ...planning.rootContext,
+      cli: { available: true, version: '1.8.0' },
+    }
+    const registry18 = selectAgentDeliveryRegistry('1.8.0')
+    ;(
+      context.agentDeliveryProjectionService.getCurrent as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      registry: registry18,
+      policy: { profile: 'core', delivery: 'skills', workflows: [] },
+      states: [],
+    })
+    const caller = appRouter.createCaller(context)
+    const initStreamSpy = context.cliExecutor.initStream
+
+    // Subscriptions resolve lazily; the typed precondition failure surfaces on the stream.
+    const stream = await caller.agentIntegrations.initStream({ tools: ['command-code'] })
+    const failure = await new Promise<Error>((resolve) => {
+      stream.subscribe({ error: resolve, next: () => resolve(new Error('unexpected event')) })
+    })
+    expect(failure.message).toContain('unavailable on the admitted OpenSpec CLI line')
+    // The 1.9-only tool must never reach a child process.
+    expect(initStreamSpy).not.toHaveBeenCalled()
+  })
+
+  it('streams explicit tools the admitted 1.8 registry offers', async () => {
+    const context = createMockContext()
+    const registry18 = selectAgentDeliveryRegistry('1.8.0')
+    ;(
+      context.agentDeliveryProjectionService.getCurrent as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      registry: registry18,
+      policy: { profile: 'core', delivery: 'skills', workflows: [] },
+      states: [],
+    })
+    const caller = appRouter.createCaller(context)
+
+    const stream = await caller.agentIntegrations.initStream({ tools: ['claude'] })
+    expect(stream).toBeDefined()
+  })
+
+  it('streams the literal all request unchanged on a 1.9 projection', async () => {
+    const context = createMockContext()
+    const registry19 = selectAgentDeliveryRegistry('1.9.0')
+    ;(
+      context.agentDeliveryProjectionService.getCurrent as ReturnType<typeof vi.fn>
+    ).mockResolvedValue({
+      registry: registry19,
+      policy: { profile: 'core', delivery: 'skills', workflows: [] },
+      states: [],
+    })
+    const caller = appRouter.createCaller(context)
+
+    const stream = await caller.agentIntegrations.initStream({ tools: 'all' })
+    expect(stream).toBeDefined()
+  })
+})
 
 describe('appRouter', () => {
   describe('root context', () => {
@@ -2763,6 +2834,7 @@ apply:
         documentChecklistSummary: documentChecklistSummary(),
         createdAt: 1,
         updatedAt: 1,
+        cliTaskSummary: null,
       }
       const batchIdentity = {
         projectionKind: 'changes-rows',
@@ -3118,7 +3190,7 @@ apply:
         strict: true,
       })
 
-      const validate = context.cliExecutor.contracts.validate as unknown as ReturnType<typeof vi.fn>
+      const validate = validateContractSpy(context)
       expect(validate).toHaveBeenCalledWith({
         target: { kind: 'item', id: 'add-search', type: 'change' },
         strict: true,
@@ -3127,6 +3199,51 @@ apply:
       const invalidation = context.runtimeInvalidation as RuntimeInvalidationIndex
       expect(invalidation.current('project')).toBe(0)
       expect(invalidation.current('context')).toBe(0)
+    })
+
+    it('runs OpenSpec 1.9 archived validation through the typed validate contract', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        planningRoot: {
+          path: '/stores/shared',
+          source: 'store',
+          store_id: 'shared',
+          healthy: true,
+          status: [],
+        },
+        storeId: 'shared',
+        cli: { available: true, version: '1.9.0' },
+      }
+      const caller = appRouter.createCaller(context)
+
+      await caller.cli.validate({ kind: 'archived' })
+
+      const validate = validateContractSpy(context)
+      expect(validate).toHaveBeenCalledWith({
+        target: { kind: 'archived' },
+        strict: undefined,
+        store: 'shared',
+      })
+    })
+
+    it('rejects archived validation on a supported 1.8 session before any CLI execution', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      planning.rootContext = {
+        ...planning.rootContext,
+        cli: { available: true, version: '1.8.0' },
+      }
+      const caller = appRouter.createCaller(context)
+      const validate = validateContractSpy(context)
+
+      await expect(caller.cli.validate({ kind: 'archived' })).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: expect.stringContaining('archived-validation capability'),
+      })
+      // The 1.9-only option never reaches the CLI process.
+      expect(validate).not.toHaveBeenCalled()
     })
 
     it('derives streaming validate Store selection from Root Context', async () => {
@@ -3622,7 +3739,7 @@ apply:
       const status: ChangeStatus = {
         changeName: 'add-caching',
         schemaName: 'spec-driven',
-        isComplete: false,
+        isPlanningComplete: false,
         applyRequires: [],
         artifacts: [],
         provenance: {

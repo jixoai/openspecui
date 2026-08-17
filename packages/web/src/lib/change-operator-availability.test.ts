@@ -13,7 +13,7 @@ function status(artifactStatus: 'done' | 'skipped' | 'ready' | 'blocked'): Chang
   return {
     changeName: 'skip-specs',
     schemaName: 'spec-driven',
-    isComplete: false,
+    isPlanningComplete: false,
     applyRequires: ['specs'],
     artifacts: [
       {

@@ -67,7 +67,7 @@ function statusFixture(): CliWorkflowStatus {
         ],
       },
     },
-    isComplete: true,
+    isPlanningComplete: true,
     applyRequires: ['specs'],
     nextSteps: ['All planning artifacts are complete; review tasks before implementation.'],
     actionContext: {

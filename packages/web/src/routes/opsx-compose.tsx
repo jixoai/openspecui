@@ -15,7 +15,7 @@ import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/component
 import { WorkflowEvidenceDisclosure } from '@/components/opsx/workflow-evidence-disclosure'
 import { WorkflowTargetNotice } from '@/components/opsx/workflow-target-notice'
 import { RealtimeRevalidateCue } from '@/components/realtime'
-import { RootActionNotice } from '@/components/root-action-notice'
+import { RootActionNotice, RootCheckingBadge } from '@/components/root-action-notice'
 import { TerminalDispatchActions } from '@/components/terminal/terminal-dispatch-actions'
 import {
   resolveOpsxInvocationMode,
@@ -312,6 +312,7 @@ export function OpsxComposeRoute() {
             {composeInput ? `change: ${composeInput.changeId}` : 'missing change context'}
           </p>
         </div>
+        <RootCheckingBadge state={rootAction} />
       </div>
 
       <div className="flex max-h-full min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden p-4">

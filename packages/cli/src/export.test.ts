@@ -1,13 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Verify static export produces the expected OpenSpec project snapshot.
  * 2. Verify export combines local planning artifacts with CLI-backed schema projection.
  * 3. Cover Reference-aware export materialization and publication behavior.
  * 4. Preserve recursive Spec identity and source content through owned export.
  *
+ * 5. Prove typed schemas-capture outcomes in exported snapshots.
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
+import { inspectProjectBinding } from '@openspecui/core'
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -115,11 +119,46 @@ describe('Export Functions', () => {
       expect(snapshot.projectMd).toContain('Test Project')
     })
 
+    it.each([
+      ['quoted value with trailing comment', 'store: "shared" # selected root\n', 'shared'],
+      ['plain value', 'store: shared\n', 'shared'],
+      ['single-quoted value', "store: 'shared'\n", 'shared'],
+      ['explicit null', 'store: null\n', null],
+      ['commented out', '# store: shared\n', null],
+      ['invalid non-string', 'store: [a, b]\n', null],
+    ])(
+      'resolves the Store selector through the typed config owner for %s',
+      async (_label, configContent, expectedStore) => {
+        await writeFile(join(testProjectDir, 'openspec', 'config.yaml'), configContent, 'utf-8')
+        const snapshot = await generateSnapshot(testProjectDir)
+        const capture = snapshot.opsx?.schemasCapture
+        if (capture?.ok !== false) throw new Error('Expected a typed schemas capture failure.')
+        // No CLI is available in this fixture, so no selector is forwarded — but the selector
+        // source of truth is the typed config owner; assert it directly for the same content.
+        const binding = inspectProjectBinding(configContent)
+        expect(binding.store.state === 'declared' ? binding.store.id : null).toBe(expectedStore)
+      }
+    )
+
     it('should include opsx config section', async () => {
       const snapshot = await generateSnapshot(testProjectDir)
 
       expect(snapshot.opsx).toBeDefined()
       expect(snapshot.opsx?.schemas).toBeInstanceOf(Array)
+      // This fixture runs without an available CLI runner, so the schemas
+      // observation is captured as a typed failure instead of a silent empty catalog.
+      const capture = snapshot.opsx?.schemasCapture
+      if (capture?.ok !== false) throw new Error('Expected a typed schemas capture failure.')
+      expect(capture.command).toBe('openspec schemas')
+      expect(capture.selector).toBeNull()
+      expect(capture.rootAvailable).toBe(false)
+      expect(capture.diagnostics).toEqual([])
+      expect(capture.stdout).toBe('')
+      expect(capture.exitCode).toBeNull()
+      expect(capture.payload).toBeNull()
+      expect(capture.contractError).toBeUndefined()
+      // The runner failure surfaces through the captured stderr evidence.
+      expect(capture.stderr).toEqual(expect.stringContaining('OpenSpec CLI'))
       expect(snapshot.opsx?.schemaDetails).toBeDefined()
       expect(snapshot.opsx?.templates).toBeDefined()
     })

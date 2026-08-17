@@ -1,15 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Prove public Agent subscriptions consume Environment-owned policy and launch-local artifacts.
  * 2. Prove fixed global CLI installation retires runner authority and invalidates Root Context before public terminal settlement.
  * 3. Prove commands-only subscriptions distinguish arbitrary content from exact runtime CLI output.
  * 4. Dispose every Server owner and tolerate independent Windows watcher invalidations.
+ * 5. Consume the isolated command-content result shape.
  *
  * Original request (2026-07-20): "Settings exposes 1.6 compatibility, workflow/tool delivery, root selection, environment, and data-scope diagnostics."
  * Derived requirement (2026-07-20): physically owned tool projections re-emit after external artifact creation and removal.
  * Derived requirement (2026-07-20): global CLI installation settlement refreshes Root Context availability.
  * Original request (2026-08-01): Codex is skills-only and allowlisted global prompts are cleanup evidence.
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
+
+ * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  */
 import {
   clearCache,
@@ -38,9 +41,14 @@ import {
 import { createServer } from './server.js'
 
 // Core reactive-fs retries missing paths every 1,000ms; bound this fixture to four fallback cycles.
-const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
-const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS = REACTIVE_MISSING_PATH_FALLBACK_MS * 4
-const OPENSPEC_17_BIN = resolve(import.meta.dirname, '../../../references/openspec/bin/openspec.js')
+const REACTIVE_MISSING_PATH_FALLBACK_MS = Number(process.env.CI_TOOL_WAIT_MS ?? 1_000)
+// Loaded CI runners need a wider first-projection budget than the reactive fallback
+// implies; the wait targets the same settlement, only tolerates slower runners.
+const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS = REACTIVE_MISSING_PATH_FALLBACK_MS * (process.env.CI ? 15 : 4)
+const PINNED_OPENSPEC_BIN = resolve(
+  import.meta.dirname,
+  '../../../references/openspec/bin/openspec.js'
+)
 
 function commandResult<T>(data: T, schema: ZodType<T>): CliCommandResult<T> {
   return parseCliCommandResult(
@@ -61,7 +69,7 @@ async function writeArtifact(filePath: string, content = '# external fixture\n')
 
 async function writeGeneratedSkill(filePath: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.7.0"\n---\n', 'utf8')
+  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.9.0"\n---\n', 'utf8')
 }
 
 async function prepareCachedRunnerReplacement(
@@ -150,7 +158,7 @@ async function createRouterFixture(
   const releaseLaunchObservation = await server.observationEnvironment.acquireRoot(launchRoot)
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.7.0',
+    version: '1.9.0',
   })
   const environment = {
     kind: 'environment-global',
@@ -316,13 +324,13 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
 
     try {
       await fixture.server.configManager.writeConfig({
-        cli: { command: process.execPath, args: [OPENSPEC_17_BIN] },
+        cli: { command: process.execPath, args: [PINNED_OPENSPEC_BIN] },
       })
       const commandContents = await loadOpenSpecAgentCommandContents(
         await fixture.server.configManager.getCliCommand(),
         ['update']
       )
-      const officialUpdateContent = commandContents?.claude?.update
+      const officialUpdateContent = commandContents?.catalog?.claude?.update
       if (!officialUpdateContent) {
         throw new Error('Runtime OpenSpec CLI did not provide the Claude/update command fixture.')
       }
@@ -433,7 +441,7 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
       expect(findToolState(initialized, 'claude')).toMatchObject({
         status: 'initialized',
         readiness: 'initialized',
-        generatedByVersion: '1.7.0',
+        generatedByVersion: '1.9.0',
         issues: [],
       })
 
@@ -457,7 +465,7 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
     }
   }, 30_000)
 
-  it('observes allowlisted global Codex prompts as cleanup while keeping skills launch-local', async () => {
+  it('observes allowlisted global Codex prompts as cleanup at the shared .agents root', async () => {
     const fixture = await createRouterFixture({
       createCodexPrompts: false,
       delivery: 'both',
@@ -468,14 +476,14 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
     let subscription: { unsubscribe(): void } | null = null
     const planningSkill = join(
       fixture.planningRoot,
-      '.codex',
+      '.agents',
       'skills',
       'openspec-update-change',
       'SKILL.md'
     )
     const launchSkill = join(
       fixture.launchRoot,
-      '.codex',
+      '.agents',
       'skills',
       'openspec-update-change',
       'SKILL.md'

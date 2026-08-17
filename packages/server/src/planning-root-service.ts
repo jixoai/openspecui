@@ -24,6 +24,7 @@ import {
   getRootContextCliSelector,
   OpenSpecAdapter,
   OpsxKernel,
+  type CliChangeListEntry,
   type CliStreamHandle,
   type ConfigManager,
   type ObservationRootOwner,
@@ -191,6 +192,21 @@ export interface PlanningRootServiceManagerOptions {
 }
 
 /** Serialized deep owner for one replaceable Planning-root service record. */
+/** Read CLI Change-list task facts once per call; failures degrade to an empty index. */
+function readCliChangeListEntriesFor(
+  service: PlanningCliProjectionService
+): () => Promise<Map<string, CliChangeListEntry>> {
+  return async () => {
+    try {
+      const data = await service.getCurrent({ kind: 'opsx-change-list' })
+      if (data.kind !== 'opsx-change-list') return new Map()
+      return new Map(data.entries.map((entry) => [entry.name, entry]))
+    } catch {
+      return new Map()
+    }
+  }
+}
+
 export class PlanningRootServiceManager implements PlanningRootServiceResolver {
   private activeRecord: PlanningRootServiceRecord | null = null
   private currentRootContextSnapshot: CurrentRootContextSnapshot | null = null
@@ -297,7 +313,11 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       },
       codeGitBindingToken: this.options.codeBinding.bindingToken,
       loaders: {
-        loadSummary: () => loadDashboardSummary({ adapter }),
+        loadSummary: () =>
+          loadDashboardSummary({
+            adapter,
+            readCliChangeListEntries: readCliChangeListEntriesFor(planningCliProjectionService),
+          }),
         loadTrends: () =>
           loadDashboardTrends({ adapter, configManager: this.options.configManager }),
         loadGit: (signal) =>
@@ -311,16 +331,6 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
           ),
       },
     })
-    const changesProjectionService = new ChangesProjectionService({
-      workOwner: this.changesProjectionWorkOwner,
-      root: {
-        path: projectDir,
-        source: planningRoot.source,
-        storeSelector: rootCliSelector.store ?? null,
-        generation: gitBindingToken,
-      },
-      adapter,
-    })
     const planningCliProjectionService = new PlanningCliProjectionService({
       rootContext: rootContextValue,
       gitBindingToken,
@@ -330,6 +340,32 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
       invalidation: this.options.runtimeInvalidation,
       storeObservation: this.options.storeObservation,
       workOwner: this.planningCliProjectionWorkOwner,
+    })
+    const changesProjectionService = new ChangesProjectionService({
+      workOwner: this.changesProjectionWorkOwner,
+      root: {
+        path: projectDir,
+        source: planningRoot.source,
+        storeSelector: rootCliSelector.store ?? null,
+        generation: gitBindingToken,
+      },
+      // The CLI list projection is the task-count authority for list rows; it is read once
+      // per projection load and a missing CLI list leaves rows null, never backfilled.
+      adapter: {
+        listChanges: () => adapter.listChanges(),
+        readChangeMeta: (id: string) => adapter.readChangeMeta(id),
+        readCliChangeListEntries: async () => {
+          try {
+            const data = await planningCliProjectionService.getCurrent({
+              kind: 'opsx-change-list',
+            })
+            if (data.kind !== 'opsx-change-list') return new Map()
+            return new Map(data.entries.map((entry) => [entry.name, entry]))
+          } catch {
+            return new Map()
+          }
+        },
+      },
     })
     const filePreviewService = new FilePreviewService(projectDir, this.options.previewAssetsDir)
     const schemaMutationService = new SchemaMutationService({

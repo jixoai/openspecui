@@ -12,8 +12,10 @@
  * Original request (2026-08-01): preserve OpenSpec 1.7 Apply operation inputs end to end.
  * Original request (2026-08-03): move complete Change evidence into a dedicated tab page.
  * Owner correction (2026-08-03): move Actions inline with the title, unify subtitle badges, and localize unavailable Tooltips.
+ * Original request (2026-08-15): 刷新/解析中状态收敛为副标题行内的 shiny 徽章，不再占据 statusRegion 块。
  */
 import { ApplyProgressNotice } from '@/components/apply-progress-notice'
+import { ArchivedValidationEvidence } from '@/components/archived-validation-evidence'
 import {
   ChangeContextSummary,
   ChangeReferenceFailureNotice,
@@ -31,7 +33,7 @@ import { useChangeFilesSubscription } from '@/lib/use-subscription'
 import { vtNavController } from '@/lib/view-transitions/navigation'
 import { readSharedElementHandoffState } from '@/lib/view-transitions/shared-elements'
 import { useLocation, useParams } from '@tanstack/react-router'
-import { AlertCircle, FileSearch, GitBranch, RefreshCw } from 'lucide-react'
+import { AlertCircle, FileSearch, GitBranch } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 
 export function ChangeView() {
@@ -110,7 +112,10 @@ export function ChangeView() {
               label: 'Evidence',
               icon: <FileSearch className="h-4 w-4" />,
               content: (
-                <ChangeEvidencePanel status={status} referenceEvidence={referenceEvidence} />
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <ChangeEvidencePanel status={status} referenceEvidence={referenceEvidence} />
+                  <ArchivedValidationEvidence />
+                </div>
               ),
             },
           ]
@@ -123,11 +128,10 @@ export function ChangeView() {
       reference.status.some((diagnostic) => diagnostic.severity === 'error')
     )
   const hasDirectStatus =
-    !statusCurrent ||
     Boolean(error) ||
-    rootAction.status !== 'ready' ||
+    rootAction.status === 'blocked' ||
     hasReferenceFailures ||
-    Boolean(applyInstructions?.applyInstructionProgress)
+    Boolean(applyInstructions?.applyInstructionProgress.divergence)
 
   return (
     <OpsxEntityDetailView
@@ -139,7 +143,21 @@ export function ChangeView() {
       title={status?.changeName}
       subtitle={
         status ? (
-          <ChangeContextSummary status={status} referenceEvidence={referenceEvidence} />
+          <ChangeContextSummary
+            status={status}
+            referenceEvidence={referenceEvidence}
+            applyInstructionProgress={applyInstructions?.applyInstructionProgress ?? null}
+            statusRefreshing={
+              statusCurrent
+                ? null
+                : { label: 'Status refreshing', message: statusAuthorityMessage ?? '' }
+            }
+            rootChecking={
+              rootAction.status === 'checking'
+                ? { label: rootAction.title, message: rootAction.message }
+                : null
+            }
+          />
         ) : undefined
       }
       headerActions={
@@ -201,16 +219,6 @@ export function ChangeView() {
       statusRegion={
         status && hasDirectStatus ? (
           <div className="flex min-w-0 flex-col gap-2">
-            {!statusCurrent && !error ? (
-              <div
-                role="status"
-                aria-live="polite"
-                className="border-border bg-muted/30 text-muted-foreground flex items-center gap-2 rounded-md border px-3 py-2 text-xs"
-              >
-                <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                {statusAuthorityMessage}
-              </div>
-            ) : null}
             {error ? (
               <div
                 role="alert"

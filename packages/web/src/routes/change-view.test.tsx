@@ -50,7 +50,7 @@ const rootActionFailureCases: Array<Extract<RootActionState, { status: 'blocked'
 const retainedChangeStatus = {
   changeName: 'Extract Terminal View Webcomponent',
   schemaName: 'opsx-collab-pr-loop',
-  isComplete: false,
+  isPlanningComplete: false,
   applyRequires: [],
   artifacts: [
     { id: 'implementation', outputPath: 'implementation.md', status: 'ready', requires: [] },
@@ -297,7 +297,10 @@ describe('ChangeView', () => {
         true
       )
       if (rootAction.status === 'checking') {
-        expect(screen.getByRole('status')).toHaveTextContent(rootAction.message)
+        const statuses = screen.getAllByRole('status')
+        expect(statuses.some((status) => status.textContent?.includes(rootAction.message))).toBe(
+          true
+        )
       } else {
         expect(
           alerts.some((alert) => alert.textContent?.includes(rootAction.evidence.join('\n')))
@@ -341,7 +344,7 @@ describe('ChangeView', () => {
       data: {
         changeName: 'Extract Terminal View Webcomponent',
         schemaName: 'opsx-collab-pr-loop',
-        isComplete: false,
+        isPlanningComplete: false,
         applyRequires: [],
         artifacts: [
           { id: 'intake', outputPath: 'intake.md', status: 'done', requires: [] },
@@ -392,7 +395,7 @@ describe('ChangeView', () => {
       data: {
         changeName: 'Extract Terminal View Webcomponent',
         schemaName: 'opsx-collab-pr-loop',
-        isComplete: false,
+        isPlanningComplete: false,
         applyRequires: [],
         artifacts: [
           { id: 'implementation', outputPath: 'implementation.md', status: 'ready', requires: [] },
@@ -427,7 +430,12 @@ describe('ChangeView', () => {
 
     render(<ChangeView />)
 
-    expect(screen.getByRole('note', { name: 'Apply instructions progress 0 of 0' })).toBeTruthy()
+    // Under divergence the Apply count appears twice by design: once as the subtitle
+    // badge (the progress authority) and once inside the direct divergence notice.
+    expect(screen.getAllByRole('note', { name: 'Apply instructions progress 0 of 0' }).length).toBe(
+      2
+    )
+    expect(screen.getByText('Upstream task progress divergence')).toBeVisible()
     expect(screen.getByRole('note', { name: 'Tracked artifact glob progress 1 of 3' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Apply inputs' })).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -462,7 +470,7 @@ describe('ChangeView', () => {
       data: {
         changeName: 'Extract Terminal View Webcomponent',
         schemaName: 'opsx-collab-pr-loop',
-        isComplete: false,
+        isPlanningComplete: false,
         applyRequires: [],
         artifacts: [],
         provenance: { kind: 'static' },
@@ -493,7 +501,7 @@ describe('ChangeView', () => {
       data: {
         changeName: 'Extract Terminal View Webcomponent',
         schemaName: 'opsx-collab-pr-loop',
-        isComplete: true,
+        isPlanningComplete: true,
         applyRequires: [],
         artifacts: [
           { id: 'implementation', outputPath: 'implementation.md', status: 'done', requires: [] },

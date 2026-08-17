@@ -99,6 +99,7 @@ function createAdapterMock() {
       name: 'Add Auth',
       trackedTaskProgress: createTrackedTaskProgress([]),
       documentChecklistSummary: createDocumentChecklistSummary([]),
+      cliTaskSummary: null,
       createdAt: 1,
       updatedAt: 20,
     },

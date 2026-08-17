@@ -1,17 +1,46 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Attribute Apply instruction counts to the upstream Apply command.
- * 2. Preserve tracked artifact counts beside divergent Apply evidence.
- * 3. Keep divergence direct while compressing its two objective source counts.
+ * 2. Compress agreement to one subtitle badge; keep divergence a direct blocker.
+ * 3. Keep divergence's two objective source counts side by side with their causes.
+ * 4. Keep tooltips as the keyboard-reachable explanation for every compact count.
  *
  * Original request (2026-07-15): "与 tracked glob 进度分歧时各自归因展示。"
  * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
+ * Original request (2026-08-15): Owner walkthrough: agreement is one badge in the subtitle row,
+ *   not a two-line block; only divergence owns a notice.
  */
 import { InformationBadge } from '@/components/information-disclosure'
 import type { ApplyInstructionProgress } from '@openspecui/core'
 import { AlertTriangle } from 'lucide-react'
 
-/** Render source-attributed Apply progress and any tracked-progress divergence. */
+/**
+ * One compact, source-attributed Apply progress badge for the Change subtitle row.
+ * The Apply instruction result is the only visible implementation progress authority, so
+ * this stays rendered whenever instructions exist — agreement is not a reason to hide the
+ * CLI's own count, but it needs no separate block.
+ */
+export function ApplyProgressBadge({
+  applyInstructionProgress,
+}: {
+  applyInstructionProgress: ApplyInstructionProgress
+}) {
+  const { complete, total, remaining } = applyInstructionProgress
+  return (
+    <InformationBadge
+      ariaLabel={`Apply instructions progress ${complete} of ${total}`}
+      tooltip={`Progress reported by openspec instructions apply — ${complete} of ${total} tasks applied, ${remaining} remaining.`}
+    >
+      Apply {complete}/{total}
+    </InformationBadge>
+  )
+}
+
+/**
+ * Render the Apply/tracked divergence as one direct, source-attributed blocker. Returns
+ * null when the sources agree — the agreement case lives in the subtitle badge row via
+ * {@link ApplyProgressBadge}.
+ */
 export function ApplyProgressNotice({
   applyInstructionProgress,
 }: {
@@ -32,10 +61,10 @@ export function ApplyProgressNotice({
         <p>{divergence.message}</p>
         <div className="flex flex-wrap gap-1.5">
           <InformationBadge
-            ariaLabel={`Apply instructions progress ${divergence.apply.complete} of ${divergence.apply.total}`}
+            ariaLabel={`Apply instructions progress ${applyInstructionProgress.complete} of ${applyInstructionProgress.total}`}
             tooltip="Progress reported by openspec instructions apply."
           >
-            Apply {divergence.apply.complete}/{divergence.apply.total}
+            Apply {applyInstructionProgress.complete}/{applyInstructionProgress.total}
           </InformationBadge>
           <InformationBadge
             ariaLabel={`Tracked artifact glob progress ${divergence.tracked.completed} of ${divergence.tracked.total}`}
