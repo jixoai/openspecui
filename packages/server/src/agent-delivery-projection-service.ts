@@ -176,7 +176,8 @@ interface AgentGeneratorEvidence {
 async function resolveGeneratorEvidence(
   cliExecutor: Pick<CliExecutor, 'checkAvailability'>,
   cliCommandAuthority: { getCliCommand(): Promise<readonly string[]> },
-  workflows: readonly string[]
+  workflows: readonly string[],
+  delivery: AgentDeliveryPolicy['delivery']
 ): Promise<AgentGeneratorEvidence> {
   const availability = await cliExecutor.checkAvailability()
   // Version identity for inventory selection comes only from a live, available CLI. An
@@ -184,9 +185,10 @@ async function resolveGeneratorEvidence(
   // 1.9.0 here would hand a non-admitted session the full 1.9 registry. The pinned constant
   // stays in use only where Core compares on-disk generated-by evidence.
   const version = availability.available && availability.version ? availability.version : null
-  const commandContents = availability.available
-    ? await loadOpenSpecAgentCommandContents(await cliCommandAuthority.getCliCommand(), workflows)
-    : null
+  const commandContents =
+    availability.available && delivery !== 'skills'
+      ? await loadOpenSpecAgentCommandContents(await cliCommandAuthority.getCliCommand(), workflows)
+      : null
   return { version, commandContents }
 }
 
@@ -254,7 +256,8 @@ class RetainedAgentDeliveryProjection implements AgentDeliveryProjectionSubscrip
           return resolveGeneratorEvidence(
             this.options.cliExecutor,
             this.options.cliCommandAuthority,
-            environment.profileState.workflows
+            environment.profileState.workflows,
+            environment.profileState.delivery ?? 'skills'
           ).then((generatorEvidence) => {
             if (this.disposed || generation !== this.authorityGeneration) return
             this.startPhysicalProjection(resolvePolicy(environment), generatorEvidence, false)
@@ -278,7 +281,8 @@ class RetainedAgentDeliveryProjection implements AgentDeliveryProjectionSubscrip
       resolveGeneratorEvidence(
         this.options.cliExecutor,
         this.options.cliCommandAuthority,
-        policy.workflows
+        policy.workflows,
+        policy.delivery
       ),
     ])
       .then(([, generatorEvidence]) => {
@@ -370,7 +374,8 @@ export class AgentDeliveryProjectionService {
     const generatorEvidence = await resolveGeneratorEvidence(
       this.options.cliExecutor,
       this.options.cliCommandAuthority,
-      policy.workflows
+      policy.workflows,
+      policy.delivery
     )
     const states = await getToolInitStates(this.options.projectDir, {
       ...policy,
