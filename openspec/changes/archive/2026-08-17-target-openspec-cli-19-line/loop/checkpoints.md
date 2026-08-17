@@ -9,13 +9,20 @@ Original request (2026-08-15): "这里面很大的问题也是因为你作为架
 
 # OpenSpecUI 9 checkpoints
 
-## Current execution boundary (2026-08-16 Asia/Shanghai)
+## Current execution boundary (corrected 2026-08-17 Asia/Shanghai)
 
 R8.1-R8.5 are closed with fresh focused evidence. The workspace-only 5-second Git fixture timeout was classified
 as process-load-sensitive: the exact Server triple passed 120/120 in an isolated current-revision worktree with
-no timeout inflation, while concurrent workspace browser/build processes reproduced the delay. Source/build/pack/
-install and independent-review evidence are refreshed below. Checkpoint 4.1 is now Owner-only and ready; 4.2
-remains Owner-only and unchecked. No PR, merge, release, or archive action is authorized.
+no timeout inflation, while concurrent workspace browser/build processes reproduced the delay. The remaining
+automated-audit correction and its fresh 9.0.0 distribution evidence are appended to the implementation record.
+
+The following are objective delivery facts, not permission for another delivery action: PR #238 merged as
+64abcb80; tag openspecui@9.0.0 points to that merge; openspecui@9.0.0 is published with a non-draft,
+non-prerelease GitHub Release; and archive PR #239 merged as f1609e66.
+
+Checkpoint 4.1 remains Owner-only and ready for the personal browser/App walkthrough. Checkpoint 4.2 remains
+unchecked until the Owner explicitly records the independent PR/release review; completed delivery actions do not
+prove personal acceptance. This correction does not authorize a new PR, merge, publish, tag, release, or archive.
 
 ## 1. Planning and review correction
 
@@ -72,7 +79,9 @@ These items are retained characterization evidence. They neither substitute for 
       2026-08-15 implementation-Agent observation remains historical preparation evidence in
       `loop/implementation.md`; it is not Owner acceptance and cannot check this item. R8.5 is closed and this
       gate is now ready for the Owner's personal acceptance; the Agent must not check it.
-- [ ] 4.2 Owner independently reviews the PR and authorizes merge, release, and Change archive.
+- [ ] 4.2 Owner independently records the PR/release review. The completed PR #238, openspecui@9.0.0 tag and
+      publication, and archive PR #239 are objective delivery facts, but do not by themselves prove this personal
+      acceptance.
 
 ## 5. Post-R5 independent review repair
 

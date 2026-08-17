@@ -13,9 +13,9 @@ Original request (2026-08-15): "这里面很大的问题也是因为你作为架
 
 ```text
 Change artifacts      planning-valid; R8 closure and Owner boundary are current
-Recovery branch       fix/v9-cli-18-19-recovery @ 7b62a738 (plus current unstaged review edits)
+Recovery branch       fix/v9-final-review @ f1609e66 (plus current unstaged review edits)
 Accepted gates        R0-R7.3 historical closure; R8.1-R8.5 fresh focused/source closure
-Open gate             none before Owner gates; final source/distribution evidence is recorded below
+Open gate             none before Owner gates; final source/distribution evidence and post-release correction are recorded below
 Owner gates           4.1 browser/App walkthrough and 4.2 PR/release/archive remain unchecked
 ```
 
@@ -24,12 +24,12 @@ process-load-sensitive, the final source was tested in an isolated worktree, and
 was refreshed after the review edits. The implementation is ready for the Owner-only browser/App walkthrough; no
 Agent may check 4.1 or 4.2.
 
-| Current gate | State   | Exact boundary                                                                                                                                                                                                   |
-| ------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R8.1-R8.4    | closed  | Focused behavior and header evidence are current at the last recorded gate; the final-review source edits are listed below.                                                                                      |
-| R8.5         | closed  | In an isolated current-revision worktree with no competing workspace workload, the exact Server triple passed 120/120 without timeout inflation; the workspace timeout was classified as process-load-sensitive. |
-| 4.1          | ready   | Owner-only browser/App walkthrough may begin after the final source/distribution and independent-review records below.                                                                                           |
-| 4.2          | blocked | Owner-only PR review, merge, release, and archive decision; no delivery action is authorized.                                                                                                                    |
+| Current gate | State     | Exact boundary                                                                                                                                                                                                   |
+| ------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R8.1-R8.4    | closed    | Focused behavior and header evidence are current at the last recorded gate; the final-review source edits are listed below.                                                                                      |
+| R8.5         | closed    | In an isolated current-revision worktree with no competing workspace workload, the exact Server triple passed 120/120 without timeout inflation; the workspace timeout was classified as process-load-sensitive. |
+| 4.1          | ready     | Owner-only browser/App walkthrough may begin after the final source/distribution and independent-review records below.                                                                                           |
+| 4.2          | unchecked | Owner-only independent PR/release review. PR #238, tag/publication 9.0.0, and archive PR #239 are objective facts, not Owner acceptance.                                                                         |
 
 ## Evidence recording rule
 
@@ -827,6 +827,27 @@ PASS  installed CLI --help, Web asset, App asset, and v9 selector/evidence marke
 The installed tarball contains the rebuilt `web/`, `app/`, and CLI `dist/` trees. The two independent review axes
 found no remaining standards or implementation defect. The main-worktree timeout is retained as environment evidence
 only; it is not a production baseline and no test timeout was widened.
+
+## Final audit correction (2026-08-17 Asia/Shanghai)
+
+This entry corrects audit metadata without rewriting historical candidate records. Earlier R5/R6/R8 paragraphs
+contain candidate or pre-release distribution observations such as openspecui-8.0.0.tgz and an installed
+--version of 8.0.0; those observations remain historical evidence and are not the v9 release truth. The earlier
+R4 sentence that described unsupported versions as falling back to the newest inventory is also superseded by the
+final admission law: unknown, unparsable, prerelease, versions below 1.8.0, and versions at or above 1.10.0
+select neither admitted capabilities nor an Agent registry.
+
+Fresh post-release distribution verification was run from the current v9 source after the final review correction:
+
+    pnpm run build:deps && pnpm run build:packages && pnpm run build:cli  -> PASS
+    (cd packages/cli && npm pack)                                      -> openspecui-9.0.0.tgz
+    isolated npm install of openspecui-9.0.0.tgz                       -> PASS
+    installed openspecui --version                                     -> 9.0.0
+    installed openspecui --help, Web/App assets, and v9 admission/registry markers -> PASS
+
+The authoritative release facts are PR #238 merge 64abcb80, tag openspecui@9.0.0, the published npm package
+and GitHub Release, followed by archive PR #239 merge f1609e66. These facts do not check Owner gates 4.1 or 4.2;
+the Owner still owns personal browser/App acceptance and the independent release review.
 
 ## Loopback triggers
 
