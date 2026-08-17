@@ -86,8 +86,11 @@ describe('OpsxKernel schemas selected-Root forwarding', () => {
             code: expect.stringMatching(/^(unknown_store|no_registered_stores)$/),
           })
           // Eager-JSON resolution settles before the process's natural exit, so the live
-          // evidence honestly reports the exit code as unknown instead of a fabricated 0.
-          expect(attempt.cliEvidence.exitCode).toBeNull()
+          // evidence honestly reports the exit code as unknown (null, macOS timing) or the
+          // CLI's real failure exit (1, Linux timing) — never a fabricated 0.
+          expect(attempt.cliEvidence.exitCode === null || attempt.cliEvidence.exitCode !== 0).toBe(
+            true
+          )
           expect(schemasSpy).toHaveBeenCalledWith({ store: 'ghost' })
         } else {
           // 1.8 has no schemas root selector; forwarding `--store` would fail the command
