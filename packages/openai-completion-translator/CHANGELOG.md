@@ -1,5 +1,12 @@
 # @openspecui/openai-completion-translator
 
+## 9.0.1
+
+### Patch Changes
+
+- Updated dependencies [dc854a8]
+  - @openspecui/core@9.0.1
+
 ## 9.0.0
 
 ### Patch Changes

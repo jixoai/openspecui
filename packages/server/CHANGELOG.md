@@ -1,5 +1,18 @@
 # @openspecui/server
 
+## 9.0.1
+
+### Patch Changes
+
+- dc854a8: Preserve typed CLI contract-error evidence when static Schema export fails.
+- Updated dependencies [dc854a8]
+  - @openspecui/core@9.0.1
+  - @openspecui/search@9.0.1
+  - @openspecui/local-ct2-translator@9.0.1
+  - @openspecui/local-llama-translator@9.0.1
+  - @openspecui/local-translator@9.0.1
+  - @openspecui/openai-completion-translator@9.0.1
+
 ## 9.0.0
 
 ### Major Changes
