@@ -163,6 +163,45 @@ describe('Export Functions', () => {
       expect(snapshot.opsx?.templates).toBeDefined()
     })
 
+    it('preserves raw CLI evidence when schemas JSON violates its contract', async () => {
+      const fakeCli = join(testProjectDir, 'fake-openspec.mjs')
+      await writeFile(
+        fakeCli,
+        `const args = process.argv.slice(2)
+if (args.includes('--version')) {
+  process.stdout.write('1.9.0\\n')
+} else if (args[0] === 'schemas') {
+  process.stdout.write('{"unexpected":true}\\n')
+  process.stderr.write('schema contract fixture\\n')
+} else {
+  process.exitCode = 0
+}
+`,
+        'utf-8'
+      )
+      await writeFile(
+        join(testProjectDir, 'openspec', '.openspecui.json'),
+        JSON.stringify(
+          {
+            cli: { command: process.execPath, args: [fakeCli] },
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      )
+
+      const snapshot = await generateSnapshot(testProjectDir)
+      const capture = snapshot.opsx?.schemasCapture
+      if (capture?.ok !== false) throw new Error('Expected a typed schemas capture failure.')
+      expect(capture.stdout).toBe('{"unexpected":true}\n')
+      expect(capture.stderr).toContain('schema contract fixture')
+      expect(capture.exitCode).toBe(0)
+      expect(capture.payload).toEqual({ unexpected: true })
+      expect(capture.contractError).toContain('openspec schemas returned unexpected JSON')
+      expect(snapshot.opsx?.schemas).toEqual([])
+    })
+
     it('should parse spec files correctly', async () => {
       // Create a test spec
       const specDir = join(testProjectDir, 'openspec', 'specs', 'test-spec')

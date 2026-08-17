@@ -529,7 +529,16 @@ export async function generateSnapshot(
         capabilities.schemasRootSelector ? schemasSelector : {}
       )
       if (schemasResult.success) {
-        schemas = parseCliJson(schemasResult.stdout, SchemaInfoSchema.array(), 'openspec schemas')
+        try {
+          schemas = parseCliJson(schemasResult.stdout, SchemaInfoSchema.array(), 'openspec schemas')
+        } catch (error) {
+          // Contract drift is still the same CLI observation: preserve its process and payload
+          // facts instead of replacing them with an empty synthetic result.
+          captureSchemasFailure(
+            schemasResult,
+            error instanceof Error ? error.message : String(error)
+          )
+        }
       } else {
         captureSchemasFailure(schemasResult)
       }
