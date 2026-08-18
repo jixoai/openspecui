@@ -7,6 +7,7 @@ Original request (2026-08-19): "特别是在桌面模式下，首屏右侧有空
 -->
 <script lang="ts">
   import { reveal } from '$lib/actions/reveal'
+  import { copyTextToClipboard } from '$lib/clipboard'
   import { GITHUB_URL } from '$lib/constants'
   import type { WebsiteContent } from '$lib/i18n/schema'
   import TerminalCard from './terminal-card.svelte'
@@ -21,21 +22,7 @@ Original request (2026-08-19): "特别是在桌面模式下，首屏右侧有空
   let copyTimer: ReturnType<typeof setTimeout> | undefined
 
   async function copyQuickStart() {
-    const text = content.terminal.command
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      const area = document.createElement('textarea')
-      area.value = text
-      document.body.appendChild(area)
-      area.select()
-      try {
-        document.execCommand('copy')
-      } catch {
-        /* clipboard unavailable without permissions */
-      }
-      area.remove()
-    }
+    await copyTextToClipboard(content.terminal.command)
     copied = true
     clearTimeout(copyTimer)
     copyTimer = setTimeout(() => {

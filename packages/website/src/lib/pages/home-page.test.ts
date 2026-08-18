@@ -64,21 +64,37 @@ describe('HomePage', () => {
     expect(screen.getByRole('button', { name: 'COPY openspecui export -o ./dist' })).toBeVisible()
   })
 
+  it('run-it commands copy on click with the current dynamic value', async () => {
+    render(HomePage, { content: en })
+
+    const serve = screen.getByRole('button', { name: 'COPY npx openspecui@latest --app' })
+    await fireEvent.click(serve)
+    await waitFor(() => expect(screen.getAllByText(en.copy.done).length).toBeGreaterThanOrEqual(1))
+
+    const auth = screen.getByRole('button', { name: 'COPY openspecui --auth' })
+    await fireEvent.click(auth)
+    await waitFor(() => expect(screen.getAllByText(en.copy.done).length).toBeGreaterThanOrEqual(1))
+
+    expect(
+      screen.getByRole('button', { name: 'COPY npx openspecui@latest export -o ./dist' })
+    ).toBeVisible()
+  })
+
   it('launch controls emit explicit production CLI modes', async () => {
     render(HomePage, { content: en })
 
-    expect(screen.getByText('npx openspecui@latest --app')).toBeVisible()
-    expect(screen.getByText('npx openspecui@latest export -o ./dist')).toBeVisible()
+    expect(screen.getByText('$ npx openspecui@latest --app')).toBeVisible()
+    expect(screen.getByText('$ npx openspecui@latest export -o ./dist')).toBeVisible()
     expect(screen.getByText('$ openspecui --auth')).toBeVisible()
 
     await fireEvent.change(screen.getByLabelText('RUNNER'), { target: { value: 'pnpm' } })
 
-    expect(screen.getByText('pnpx openspecui@latest --app')).toBeVisible()
-    expect(screen.getByText('pnpx openspecui@latest export -o ./dist')).toBeVisible()
+    expect(screen.getByText('$ pnpx openspecui@latest --app')).toBeVisible()
+    expect(screen.getByText('$ pnpx openspecui@latest export -o ./dist')).toBeVisible()
 
     await fireEvent.click(screen.getByRole('button', { name: /APP MODE/ }))
 
-    expect(screen.getByText('pnpx openspecui@latest --web')).toBeVisible()
+    expect(screen.getByText('$ pnpx openspecui@latest --web')).toBeVisible()
     expect(screen.getByText(en.run.serveWebSummary)).toBeVisible()
     expect(screen.queryByText(en.run.serveAppSummary)).not.toBeInTheDocument()
   })
