@@ -34,6 +34,7 @@ describe('HomePage', () => {
 
     expect(screen.queryByText(/PWA/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/translation/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/app\.openspecui\.com/)).not.toBeInTheDocument()
   })
 
   it('settles the terminal typing story with full command and outputs', async () => {

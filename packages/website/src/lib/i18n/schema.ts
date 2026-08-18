@@ -39,7 +39,6 @@ export interface WebsiteContent {
   nav: {
     home: string
     hooks: string
-    app: string
     github: string
   }
   hero: {
@@ -96,8 +95,6 @@ export interface WebsiteContent {
     compat: string
   }
   links: {
-    appTitle: string
-    appBody: string
     openspecTitle: string
     openspecBody: string
     githubTitle: string

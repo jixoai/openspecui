@@ -26,7 +26,6 @@ export const en = {
   nav: {
     home: 'Home',
     hooks: 'Hooks',
-    app: 'Browser App',
     github: 'GitHub',
   },
   hero: {
@@ -140,8 +139,6 @@ export const en = {
     compat: 'OpenSpecUI 9 supports OpenSpec CLI 1.8.x and 1.9.x (1.9 recommended) · Node ≥ 20.19',
   },
   links: {
-    appTitle: 'app.openspecui.com',
-    appBody: 'Optional browser deployment of the App shell.',
     openspecTitle: 'openspec.dev',
     openspecBody: 'The official OpenSpec project and workflow reference.',
     githubTitle: 'GitHub',

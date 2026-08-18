@@ -5,7 +5,7 @@ Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
 Original request (2026-08-19): Broadside Log direction — the ghost word closes the single-page narrative.
 -->
 <script lang="ts">
-  import { APP_URL, GITHUB_URL, OPENSPEC_URL } from '$lib/constants'
+  import { GITHUB_URL, OPENSPEC_URL } from '$lib/constants'
   import type { WebsiteContent } from '$lib/i18n/schema'
 
   interface Props {
@@ -22,9 +22,6 @@ Original request (2026-08-19): Broadside Log direction — the ghost word closes
     class="text-muted-foreground mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-[12.5px]"
   >
     <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-      <a href={APP_URL} target="_blank" rel="noreferrer" class="hover:text-primary transition-colors">
-        {content.links.appTitle} ↗
-      </a>
       <a
         href={OPENSPEC_URL}
         target="_blank"
