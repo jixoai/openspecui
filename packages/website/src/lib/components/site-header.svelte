@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { APP_URL, GITHUB_URL } from '$lib/constants'
+  import { GITHUB_URL } from '$lib/constants'
   import type { WebsiteContent, WebsiteLanguage } from '$lib/i18n/schema'
   import type { Snippet } from 'svelte'
 
@@ -59,14 +59,6 @@
           ].join(' ')}
         >
           {content.nav.hooks}
-        </a>
-        <a
-          href={APP_URL}
-          target="_blank"
-          rel="noreferrer"
-          class="text-terminal-foreground/70 px-2.5 py-1 transition-colors hover:text-terminal-foreground"
-        >
-          {content.nav.app}
         </a>
         <a
           href={GITHUB_URL}

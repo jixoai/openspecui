@@ -26,7 +26,6 @@ export const zh = {
   nav: {
     home: '首页',
     hooks: 'Hooks',
-    app: '浏览器 App',
     github: 'GitHub',
   },
   hero: {
@@ -136,8 +135,6 @@ export const zh = {
     compat: 'OpenSpecUI 9 支持 OpenSpec CLI 1.8.x 与 1.9.x（推荐 1.9）· Node ≥ 20.19',
   },
   links: {
-    appTitle: 'app.openspecui.com',
-    appBody: 'App 外壳的可选浏览器部署。',
     openspecTitle: 'openspec.dev',
     openspecBody: 'OpenSpec 官方项目与工作流参考。',
     githubTitle: 'GitHub',
