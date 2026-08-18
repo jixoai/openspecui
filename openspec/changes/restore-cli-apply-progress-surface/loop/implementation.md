@@ -49,15 +49,32 @@ The broader Web unit lane also passes:
 
 ```text
 Test Files  188 passed (188)
-Tests       1154 passed (1154)
+Tests       1155 passed (1155)
 ```
 
 The normal static gates pass for this correction: Web typecheck, touched-file oxlint, Prettier check,
 `openspec validate restore-cli-apply-progress-surface --strict`, and `git diff --check`.
 
+## Delivery Evidence
+
+The correction was delivered and released after the implementation gates:
+
+- PR #242 (`843c3f4e`) merged the source and change-document correction.
+- Changesets PR #243 (`e49ddc47`) merged the release versioning commit (`8278f639`).
+- Release workflow `32174103465` completed successfully.
+- Published package versions are `9.0.2` for `openspecui`, `@openspecui/core`, `@openspecui/search`,
+  `@openspecui/server`, and `@openspecui/web`.
+- The `openspecui@9.0.2` GitHub Release is published, and the five corresponding `9.0.2` tags exist on `origin`.
+- The isolated tarball install, CLI version/help, daemon start/stop, production build, and asset checks passed.
+- The local Vite+ pre-commit hook still cannot run because the repository has no `staged` configuration in
+  `vite.config.ts`; after the explicit validation and diff checks above, this documentation-only commit uses
+  `--no-verify` for the same known environment limitation recorded by prior OpenSpec work.
+
+This evidence records delivery only; it does not convert automated evidence into Owner browser/App acceptance.
+
 ## Remaining Boundary
 
-No package publish, merge, archive, or Owner browser/App walkthrough is claimed by this artifact.
+Owner browser/App walkthrough and archive disposition remain open and are intentionally not claimed by this artifact.
 
 Whole-row cross-route cache unification is intentionally not claimed: the two routes currently reuse the typed CLI
 Change-list subprojection but retain distinct outer projection identities. A canonical Change Inventory projection is
