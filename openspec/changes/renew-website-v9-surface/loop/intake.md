@@ -13,6 +13,8 @@ Owner merged-direction decision (2026-08-19): "我希望 broadside 的整体效�
 Owner release decision (2026-08-19): "可以了，我们可以正式推进官网的开发了"
 Owner correction (2026-08-19): "app.openspecui.com 这个链接需要废除掉，这个我们已经不再使用了" — the retired browser-deployment link is removed from the header nav, footer, schema, and both locales.
 Original request (2026-08-19): "THREE SURFACES 这里需要能支持点击复制命令。" — surface command lines are click-to-copy buttons sharing the site-wide copy labels.
+Original request (2026-08-19): "RUN IT 这里也需要支持点击复制" — run-it serve/export/auth command rows are click-to-copy buttons over the current dynamic values.
+Original request (2026-08-19): "因为顶部栏这里背景始终都是暗色的，所以Theme 和 Language 这里的 toggle 要固定 border 的颜色为亮色。" — the header theme/language toggle borders are pinned to a light color (terminal-foreground/30) instead of the theme-dependent border token fallback.
 -->
 
 ## User Input

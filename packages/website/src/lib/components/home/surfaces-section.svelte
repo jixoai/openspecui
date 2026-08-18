@@ -8,6 +8,7 @@ Original request (2026-08-19): "THREE SURFACES 这里需要能支持点击复制
 -->
 <script lang="ts">
   import { reveal } from '$lib/actions/reveal'
+  import { copyTextToClipboard } from '$lib/clipboard'
   import type { WebsiteContent } from '$lib/i18n/schema'
 
   interface Props {
@@ -20,20 +21,7 @@ Original request (2026-08-19): "THREE SURFACES 这里需要能支持点击复制
   let copyTimer: ReturnType<typeof setTimeout> | undefined
 
   async function copySurfaceCommand(command: string) {
-    try {
-      await navigator.clipboard.writeText(command)
-    } catch {
-      const area = document.createElement('textarea')
-      area.value = command
-      document.body.appendChild(area)
-      area.select()
-      try {
-        document.execCommand('copy')
-      } catch {
-        /* clipboard unavailable without permissions */
-      }
-      area.remove()
-    }
+    await copyTextToClipboard(command)
     copiedCommand = command
     clearTimeout(copyTimer)
     copyTimer = setTimeout(() => {

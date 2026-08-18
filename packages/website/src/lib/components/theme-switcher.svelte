@@ -1,3 +1,9 @@
+<!--
+Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
+1. Render the light/dark/system theme toggle persisted through the shared website theme storage.
+
+Original request (2026-08-19): "因为顶部栏这里背景始终都是暗色的，所以Theme 和 Language 这里的 toggle 要固定 border 的颜色为亮色。"
+-->
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { WebsiteContent } from '$lib/i18n/schema'
@@ -32,7 +38,7 @@
 <div class="flex items-center gap-2">
   <span class="text-terminal-foreground/72 text-xs">{content.meta.themeLabel}</span>
   <div
-    class="border-terminal-border bg-terminal-muted inline-flex w-fit max-w-full items-center self-start overflow-hidden border shadow-none"
+    class="border-terminal-foreground/30 bg-terminal-muted inline-flex w-fit max-w-full items-center self-start overflow-hidden border shadow-none"
     role="group"
     aria-label={content.meta.themeLabel}
   >
