@@ -17,7 +17,7 @@ Original request (2026-08-18): restore `Applying`, CLI n/m, and approximate prog
 - [x] 6. Add positive, divergent-source, and missing-evidence regression coverage.
 - [x] 7. Run focused Web tests: Change List, Dashboard, ChangeRow, ReadonlyKanban.
 - [x] 8. Run Web format, lint, typecheck, and the broader Web test lane.
-- [ ] 9. Owner decides browser walkthrough, PR/merge, release, and archive disposition.
+- [ ] 9. Owner performs the final browser/App walkthrough and decides archive disposition.
 
 ## Stop Rules
 
@@ -26,4 +26,12 @@ Original request (2026-08-18): restore `Applying`, CLI n/m, and approximate prog
 - Stop if a separately admitted Status projection hides already available CLI Apply evidence behind `Unknown`.
 - Stop if an attempted Dashboard/Change List cache optimization copies between unequal projection identities instead
   of introducing a reviewed canonical inventory contract.
-- Stop before publishing or archiving until the Owner accepts the remaining gates.
+- Stop before archiving until the Owner accepts the remaining gate.
+
+## Delivery Record
+
+- PR #242 merged: `843c3f4e`.
+- Changesets release PR #243 merged: `e49ddc47` (version commit `8278f639`).
+- Release workflow `32174103465`: `success`.
+- npm and GitHub Release published at `9.0.2`; the five package tags are present on `origin`.
+- Remaining gate is Owner-only: browser/App walkthrough, then the explicit archive decision.
