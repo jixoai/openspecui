@@ -8,4 +8,8 @@ describe('websiteThemeBootstrapScript', () => {
     expect(websiteThemeBootstrapScript).toContain("root.classList.toggle('dark'")
     expect(websiteThemeBootstrapScript).toContain('root.style.colorScheme')
   })
+
+  it('marks the js runtime so scroll reveal can gate its hidden state', () => {
+    expect(websiteThemeBootstrapScript).toContain("root.classList.add('js')")
+  })
 })

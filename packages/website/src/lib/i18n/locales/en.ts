@@ -1,13 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
- * 1. Provide the canonical English product-site copy.
- * 2. Keep launch guidance aligned with the local App daemon and explicit Direct Web contract.
- * 3. Publish the OpenSpecUI 7 and OpenSpec CLI 1.7 compatibility boundary without retired PWA language.
+ * Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
+ * 1. Provide the canonical English single-page v9 narrative copy.
+ * 2. Publish the OpenSpecUI 9 / OpenSpec CLI 1.8–1.9 compatibility boundary without retired surfaces.
+ * 3. Omit the translation platform feature per the owner's pending rework decision.
  *
- * Original request (2026-07-15): "CLI 1.6 compatibility gate."
- * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
- * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
- * Original request (2026-08-03): "可以发布新版7.0.0了。记得文档也要跟新"
+ * Original request (2026-08-19): "只提供现有最新版本的信息"
+ * Owner visual decision (2026-08-19): Broadside Log direction — editorial hero + terminal typing card.
  */
 import type { WebsiteContent } from '$lib/i18n/schema'
 
@@ -18,7 +16,7 @@ export const en = {
     siteSubtitle: 'Visual frontend for OpenSpec workflows',
     homeTitle: 'OpenSpec UI - Visual frontend for OpenSpec workflows',
     homeDescription:
-      'OpenSpecUI gives OpenSpec projects a visual dashboard, workflow views, terminal tabs, and static export capabilities while staying close to the CLI.',
+      'OpenSpecUI 9 gives OpenSpec projects a reactive dashboard, an objective change workflow, a config workbench, real terminals, and static export — while staying close to the OpenSpec CLI.',
     hooksTitle: 'OpenSpecUI Hooks - Project document and workflow hooks',
     hooksDescription:
       'Learn how OpenSpecUI project hooks customize document reading and workflow execution without polluting .openspecui.json.',
@@ -32,68 +30,126 @@ export const en = {
     github: 'GitHub',
   },
   hero: {
-    title: 'Operate OpenSpec through a UI that stays close to the CLI.',
+    eyebrow: 'OPENSPECUI 9 — VISUAL PROJECTION OF OPENSPEC',
+    titleLead: 'Operate OpenSpec through a UI that stays ',
+    titleAccent: 'close to the CLI.',
     summary:
-      'OpenSpecUI gives OpenSpec projects a concrete dashboard, config surface, change workflow views, terminal tabs, and static export capabilities without hiding the underlying workflow.',
-    primaryCta: 'Open browser App',
-    secondaryCta: 'Read hooks docs',
-    sidebarEyebrow: 'Default path',
-    sidebarTitle: 'One local App daemon',
-    sidebarBody:
-      'Serve a project into the bundled same-version App shell. Native OpenTray is the default host; explicit Web mode opens the browser presentation.',
-    badges: {
-      live: 'Live mode',
-      hosted: 'App daemon',
-      static: 'Static export',
-    },
+      'OpenSpecUI 9 gives OpenSpec projects a reactive dashboard, an objective change workflow, a config workbench, real terminals, and static export — without hiding the OpenSpec CLI underneath.',
+    badges: ['NATIVE APP', 'LIVE WEB', 'STATIC EXPORT'],
+    copyCta: 'COPY',
+    copiedCta: 'COPIED',
+    githubCta: 'GITHUB ↗',
   },
-  commands: {
-    title: 'Run it',
-    summary:
-      'Prefer running without a global install so each session picks up the current release line.',
-    runnerLabel: 'Runner',
-    appToggleLabel: 'App mode',
-    appToggleSummary:
-      'Choose the local App daemon for Workspaces, or Direct Web for one explicit browser surface.',
-    appToggleEnabled: 'On',
-    appToggleDisabled: 'Off',
-    runLabel: 'Run OpenSpec UI',
-    appOnSummary:
-      'Start the project backend, ensure the local App daemon is running, and attach the project as a Workspace.',
-    appOffSummary:
-      'Start the project backend and explicitly open Direct Project Web. A running daemon also retains the Workspace.',
-    exportLabel: 'Static export',
-    exportSummary: 'Generate a deployable snapshot for docs hosting or offline review.',
-    compatibility: 'OpenSpecUI 7 requires OpenSpec CLI 1.7.x.',
+  terminal: {
+    barTitle: 'www.openspecui.com — zsh',
+    command: 'npx openspecui@latest',
+    outputs: [
+      'OpenSpec UI v9 — visual interface for spec-driven development',
+      'supports OpenSpec CLI 1.8.x / 1.9.x · node >= 20.19',
+      '→ native app · live web · static export',
+      '→ the CLI stays the source of truth, the UI stays a projection',
+    ],
   },
-  modes: {
-    title: 'Choose the right surface',
-    summary: 'The product stays objective: different surfaces for different stages of work.',
+  features: {
+    title: "WHAT'S INSIDE",
+    indexLabel: 'INDEX — 08',
     items: [
       {
-        title: 'Live mode',
-        body: 'Best for editing specs, reviewing changes, working with terminals, and watching project state reactively.',
+        id: 'opsx-workflow',
+        title: 'OPSX change workflow',
+        body: 'Board lanes project tracked task phases — no-tasks, in-progress, complete, archive — while operators run Continue, Fast-forward, Apply, Verify, and Archive over live CLI evidence.',
       },
       {
-        title: 'App daemon mode',
-        body: 'Best for keeping multiple project Workspaces in one retained OpenTray or browser App shell.',
+        id: 'dashboard',
+        title: 'Dashboard',
+        body: 'A kanban row, active changes with CLI-owned applying progress, and a curated Code Git snapshot keep current work and recent history on one screen.',
       },
       {
-        title: 'Static export',
-        body: 'Best for publishing snapshots, design review links, or read-only project inspection.',
+        id: 'config',
+        title: 'Config workbench',
+        body: 'Route-backed owners for project binding, active root, environment globals, and schemas — plus an adaptive Guide that ends at verified resolved context.',
+      },
+      {
+        id: 'agents',
+        title: 'Agent delivery',
+        body: 'A CLI-owned registry projects per-version agent delivery: commands, user-global skills, migration, and restart evidence. Init and update stay typed CLI mutations.',
+      },
+      {
+        id: 'terminal',
+        title: 'Terminals',
+        body: 'Multi-tab PTY sessions with xterm and ghostty-web renderers. Workflow prompts compose in an editor, then send straight into a live agent terminal.',
+      },
+      {
+        id: 'git',
+        title: 'Git view',
+        body: 'Commits, patches, and worktrees with explicit code-versus-planning scope — the same token-bound provenance the dashboard carries.',
+      },
+      {
+        id: 'search',
+        title: 'Search',
+        body: 'Reactive search in live mode, and a worker-backed index that keeps working inside the static export.',
+      },
+      {
+        id: 'kernel',
+        title: 'Reactive kernel',
+        body: 'A signal-based file system watches natively, tracks dependencies, and settles mutations idempotently. Push notifies; every subscribed surface pulls fresh projections.',
       },
     ],
   },
-  links: {
-    title: 'Go deeper',
+  surfaces: {
+    title: 'THREE SURFACES',
+    items: [
+      {
+        title: 'Native App',
+        body: 'A retained OpenTray window with tray, Workspaces for many projects, a task manager, and Stores — served by one user-level daemon.',
+        command: 'openspecui start',
+      },
+      {
+        title: 'Direct Web',
+        body: 'One explicit browser surface for the current project at localhost:3100. A running daemon still keeps the Workspace.',
+        command: 'openspecui --web',
+      },
+      {
+        title: 'Static export',
+        body: 'A deployable snapshot for docs hosting or offline review — worker search intact, no backend required.',
+        command: 'openspecui export -o ./dist',
+      },
+    ],
+  },
+  run: {
+    title: 'RUN IT',
     summary:
-      'Start locally, then follow the upstream workflow, browser App, and source repository.',
+      'Prefer running without a global install so each session picks up the current release line.',
+    runnerLabel: 'RUNNER',
+    appModeLabel: 'APP MODE',
+    appModeSummary:
+      'The local App daemon for Workspaces, or Direct Web for one explicit browser surface.',
+    appFlagLabel: '--app',
+    webFlagLabel: '--web',
+    appStateLabel: 'APP',
+    webStateLabel: 'WEB',
+    serveCaption: 'SERVE',
+    serveAppSummary:
+      'Start the project backend, ensure the App daemon is running, and attach the project as a Workspace.',
+    serveWebSummary: 'Start the project backend and open Direct Project Web in the system browser.',
+    exportCaption: 'STATIC EXPORT',
+    exportSummary: 'Generate a deployable snapshot for docs hosting or offline review.',
+    protectCaption: 'PROTECT IT',
+    protectSummary:
+      'Generate a 256-bit Bearer credential for the whole access gate — HTTP, tRPC, PTY, files, terminal.',
+    compat: 'OpenSpecUI 9 supports OpenSpec CLI 1.8.x and 1.9.x (1.9 recommended) · Node ≥ 20.19',
+  },
+  links: {
     appTitle: 'app.openspecui.com',
-    appBody: 'Optional browser deployment. CLI App mode uses its own bundled local shell instead.',
+    appBody: 'Optional browser deployment of the App shell.',
     openspecTitle: 'openspec.dev',
-    openspecBody: 'Official OpenSpec project site and workflow reference.',
+    openspecBody: 'The official OpenSpec project and workflow reference.',
     githubTitle: 'GitHub',
     githubBody: 'Source, issues, release history, and contribution flow.',
+  },
+  footer: {
+    ghost: 'OPENSPECUI',
+    copyright: 'OpenSpecUI',
   },
   hooks: {
     heroTitle: 'Project hooks belong beside the project, not inside persisted UI config.',
@@ -130,8 +186,5 @@ export const en = {
       example:
         "import type { OnRunWorkflowHookV2 } from 'openspecui/hooks'\n\nexport const onRunWorkflow: OnRunWorkflowHookV2 = async (ctx, run) => {\n  const result = await run()\n  if (result.kind !== 'agent-prompt') return result\n\n  return {\n    ...result,\n    text: `${result.text}\\n\\nPlanning root: ${ctx.target.planningRoot.path}\\nProject policy: include security impact in the final summary.`,\n  }\n}",
     },
-  },
-  footer: {
-    copyright: 'OpenSpecUI',
   },
 } satisfies WebsiteContent
