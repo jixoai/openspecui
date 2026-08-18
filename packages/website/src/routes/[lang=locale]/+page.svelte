@@ -17,4 +17,4 @@
   <link rel="alternate" hreflang="zh-CN" href="https://www.openspecui.com/zh/" />
 </svelte:head>
 
-<HomePage content={data.content} lang={data.lang} />
+<HomePage content={data.content} />

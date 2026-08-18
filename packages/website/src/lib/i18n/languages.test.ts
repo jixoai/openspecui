@@ -14,8 +14,8 @@ describe('website language routing', () => {
   })
 
   it('returns locale content for public pages', () => {
-    expect(getLocaleContent('en').hero.title).toContain('Operate OpenSpec')
-    expect(getLocaleContent('zh').hero.title).toContain('OpenSpec')
+    expect(getLocaleContent('en').hero.titleLead).toContain('Operate OpenSpec')
+    expect(getLocaleContent('zh').hero.titleLead).toContain('OpenSpec')
   })
 
   it('switches localized paths without changing the page tail', () => {

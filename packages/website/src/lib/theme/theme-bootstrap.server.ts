@@ -2,6 +2,7 @@ const themeBootstrapSource = String.raw`
 (() => {
   const storageKey = 'theme'
   const root = document.documentElement
+  root.classList.add('js')
   const isTheme = (value) => value === 'light' || value === 'dark' || value === 'system'
   const getStoredTheme = () => {
     try {
