@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/web",
-  "version": "9.0.1",
+  "version": "9.0.2",
   "type": "module",
   "bin": {
     "openspecui-ssg": "./dist-ssg/ssg-cli.mjs"

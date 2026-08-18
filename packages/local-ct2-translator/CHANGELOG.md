@@ -1,5 +1,12 @@
 # @openspecui/local-ct2-translator
 
+## 9.0.2
+
+### Patch Changes
+
+- Updated dependencies [a9db235]
+  - @openspecui/core@9.0.2
+
 ## 9.0.1
 
 ### Patch Changes
