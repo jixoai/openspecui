@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. List only active Changes from the current writable Planning root.
- * 2. Derive planning/artifact state and terminal evidence from CLI Status only.
+ * 2. Derive planning/artifact state from CLI Status and implementation progress from CLI task evidence.
  * 3. Preserve ChangeList row continuity and stale display together with collision-safe detail navigation.
  * 4. Keep the advanced New Change command reachable from the page header.
  * 5. Defer aggregate workflow Status until a primary Change row is renderable; preserve explicit failures.
@@ -174,7 +174,18 @@ export function ChangeList() {
                 trackedArtifactStatus: inferTrackedArtifactStatus(
                   status?.artifacts.map((artifact) => artifact.status) ?? []
                 ),
+                cliCompletedTasks: change.cliTaskSummary?.completedTasks ?? null,
               })
+              const cliTaskSummary = change.cliTaskSummary
+              const cliProgressRatio =
+                cliTaskSummary && cliTaskSummary.totalTasks > 0
+                  ? cliTaskSummary.completedTasks / cliTaskSummary.totalTasks
+                  : null
+              const cliTaskEvidence = cliTaskSummary ? (
+                <span title="Task counts reported by the OpenSpec CLI for this Change.">
+                  Tasks {cliTaskSummary.completedTasks}/{cliTaskSummary.totalTasks}
+                </span>
+              ) : null
               const sharedDescriptor = { family: 'changes', entityId: change.id } as const
               return (
                 <VTLink
@@ -201,17 +212,28 @@ export function ChangeList() {
                       phase={phase}
                       updatedAt={change.updatedAt}
                       formatTime={formatRelativeTime}
+                      progressRatio={cliProgressRatio}
                       className="min-w-0 flex-1"
                       titleProps={{ ...(change.id !== change.name ? {} : null) }}
                       subtitle={
                         !statusError && status ? (
                           <span>
-                            {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
+                            <span>
+                              {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
+                            </span>
+                            {cliTaskEvidence ? <> · {cliTaskEvidence}</> : null}
                           </span>
                         ) : !statusError && statuses === undefined && isStatusLoading ? (
-                          <RealtimeSkeletonLine className="w-28" />
+                          cliTaskEvidence ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              {cliTaskEvidence}
+                              <RealtimeSkeletonLine className="w-12" />
+                            </span>
+                          ) : (
+                            <RealtimeSkeletonLine className="w-28" />
+                          )
                         ) : (
-                          'Workflow status unavailable'
+                          (cliTaskEvidence ?? 'Workflow status unavailable')
                         )
                       }
                     />

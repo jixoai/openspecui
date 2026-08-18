@@ -1,9 +1,9 @@
 /**
  * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
  * 1. Combine CLI artifact status with the explicit planning-completion fact.
- * 2. Keep blocked and ready planning states distinct without reading local task checklists.
+ * 2. Promote CLI-reported applied tasks to the Applying phase without reading local task checklists.
  * 3. Keep skipped dependency satisfaction distinct from completion and archive readiness.
- * 4. Keep Apply implementation progress owned by Change Detail's CLI Instructions projection.
+ * 4. Keep local tracked task data out of implementation-progress authority.
  *
  * Original request (2026-08-15): Owner walkthrough: loop-schema Changes with every planning
  *   artifact done must not read as an implementation-complete state.
@@ -12,6 +12,8 @@ export interface ChangeWorkflowPhaseInput {
   hasStatus: boolean
   isPlanningComplete: boolean
   trackedArtifactStatus: 'done' | 'skipped' | 'ready' | 'blocked' | null
+  /** Completed task count reported by the CLI list/Apply projection; null means no CLI evidence. */
+  cliCompletedTasks?: number | null
 }
 
 export interface ChangeWorkflowPhase {
@@ -20,17 +22,28 @@ export interface ChangeWorkflowPhase {
 }
 
 export function classifyChangeWorkflowPhase(params: ChangeWorkflowPhaseInput): ChangeWorkflowPhase {
+  // A known blocked planning artifact remains the strongest available workflow gate. Without
+  // Status, however, it is unknown rather than inferred from absence.
+  if (params.hasStatus && params.trackedArtifactStatus === 'blocked') {
+    return {
+      label: 'Draft',
+      toneClass: 'border-amber-500/40 text-amber-700 dark:text-amber-300',
+    }
+  }
+
+  // CLI task evidence is the implementation-progress authority. Planning completion only
+  // describes the artifact gate; it must not hide work that the CLI reports as applied.
+  if (typeof params.cliCompletedTasks === 'number' && params.cliCompletedTasks > 0) {
+    return {
+      label: 'Applying',
+      toneClass: 'border-primary/40 text-primary',
+    }
+  }
+
   if (!params.hasStatus) {
     return {
       label: 'Unknown',
       toneClass: 'border-border text-muted-foreground',
-    }
-  }
-
-  if (params.trackedArtifactStatus === 'blocked') {
-    return {
-      label: 'Draft',
-      toneClass: 'border-amber-500/40 text-amber-700 dark:text-amber-300',
     }
   }
 

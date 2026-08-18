@@ -4,6 +4,7 @@
  * 2. Share one compact/full presentation while compact Pending geometry stays fixed.
  * 3. Own a 1/2/4-column container-responsive topology composed from layered lane viewports.
  * 4. Preserve list continuity through motion layout transitions and stable identities.
+ * 5. Show task counts and progress only when supplied by the CLI row projection.
  *
  * Original request (2026-07-28): add ReadonlyKanban to Dashboard and keep static mode objective.
  * Owner correction (2026-07-28): use container queries for 4x1, 2x2, and 1x4 without horizontal scrolling.
@@ -118,7 +119,7 @@ export function ReadonlyKanban({
                         exit={{ opacity: 0, scale: 0.98 }}
                         transition={{ duration: 0.16 }}
                       >
-                        <ReadonlyKanbanRow item={item} laneId={lane.id} />
+                        <ReadonlyKanbanRow item={item} laneId={lane.id} compact={compact} />
                       </motion.div>
                     ))}
                   </AnimatePresence>
@@ -144,15 +145,23 @@ export function ReadonlyKanban({
 function ReadonlyKanbanRow({
   item,
   laneId,
+  compact,
 }: {
   item: KanbanActiveItem | KanbanArchiveItem
   laneId: KanbanLaneId
+  compact: boolean
 }) {
   const archived = laneId === 'archived'
   const sharedDescriptor = {
     family: archived ? ('archive' as const) : ('changes' as const),
     entityId: item.id,
   }
+  const cli = item.cliTaskSummary
+  const cliProgress = cli ? { completed: cli.completedTasks, total: cli.totalTasks } : null
+  const cliPercent =
+    cliProgress && cliProgress.total > 0
+      ? Math.min(100, Math.max(0, (cliProgress.completed / cliProgress.total) * 100))
+      : 0
   return (
     <VTLink
       to={archived ? '/archive/$changeId' : '/changes/$changeId'}
@@ -188,7 +197,21 @@ function ReadonlyKanbanRow({
                 : item.id}
           </div>
         </div>
+        {!archived && cliProgress ? (
+          <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
+            {cliProgress.completed}/{cliProgress.total}
+          </span>
+        ) : null}
       </div>
+      {!archived && !compact && cliProgress ? (
+        <div className="bg-muted mt-2 h-1 rounded-full">
+          <motion.div
+            className="bg-primary h-full rounded-full"
+            initial={false}
+            animate={{ width: `${cliPercent}%` }}
+          />
+        </div>
+      ) : null}
     </VTLink>
   )
 }

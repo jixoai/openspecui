@@ -65,9 +65,27 @@ describe('ReadonlyKanban', () => {
     const { container } = render(
       <ReadonlyKanban
         activeItems={[
-          { id: 'no-tasks', name: 'No tasks', trackedTaskProgress: progress(0, 0), updatedAt: 1 },
-          { id: 'remaining', name: 'Remaining', trackedTaskProgress: progress(2, 0), updatedAt: 2 },
-          { id: 'complete', name: 'Complete', trackedTaskProgress: progress(1, 1), updatedAt: 3 },
+          {
+            id: 'no-tasks',
+            name: 'No tasks',
+            trackedTaskProgress: progress(0, 0),
+            cliTaskSummary: { completedTasks: 0, totalTasks: 0, status: 'no-tasks' },
+            updatedAt: 1,
+          },
+          {
+            id: 'remaining',
+            name: 'Remaining',
+            trackedTaskProgress: progress(2, 0),
+            cliTaskSummary: { completedTasks: 0, totalTasks: 2, status: 'in-progress' },
+            updatedAt: 2,
+          },
+          {
+            id: 'complete',
+            name: 'Complete',
+            trackedTaskProgress: progress(1, 1),
+            cliTaskSummary: { completedTasks: 1, totalTasks: 1, status: 'complete' },
+            updatedAt: 3,
+          },
         ]}
         archivedItems={[
           {
@@ -87,11 +105,34 @@ describe('ReadonlyKanban', () => {
     expect(screen.getByText('Tasks complete')).toBeTruthy()
     expect(screen.getByText('Archived')).toBeTruthy()
     expect(screen.getByText('Archived change')).toBeTruthy()
-    expect(screen.queryByText('0/2')).toBeNull()
-    expect(screen.queryByText('1/1')).toBeNull()
-    expect(container.querySelector('[style*="width"]')).toBeNull()
+    expect(screen.getByText('0/2')).toBeTruthy()
+    expect(screen.getByText('1/1')).toBeTruthy()
+    expect(container.querySelector('[style*="width: 0%"]')).toBeTruthy()
     expect(container.querySelector('button')).toBeNull()
     expect(container.querySelector('[draggable="true"]')).toBeNull()
+  })
+
+  it('uses CLI task counts and progress when available, never tracked fallback values', () => {
+    const { container } = render(
+      <ReadonlyKanban
+        activeItems={[
+          {
+            id: 'cli-authority',
+            name: 'CLI authority',
+            trackedTaskProgress: progress(100, 1),
+            cliTaskSummary: { completedTasks: 31, totalTasks: 33, status: 'in-progress' },
+            updatedAt: 1,
+          },
+        ]}
+        archivedItems={[]}
+        activeCounts={{ 'no-tasks': 0, 'in-progress': 1, complete: 0 }}
+        archivedCount={0}
+      />
+    )
+
+    expect(screen.getByText('31/33')).toBeTruthy()
+    expect(screen.queryByText('1/100')).toBeNull()
+    expect(container.querySelector('[style*="width: 93.93939393939394%"]')).toBeTruthy()
   })
 
   it('keeps compact Pending geometry fixed and gives every lane one layered scroll owner', () => {

@@ -5,11 +5,12 @@
  * 2. Prove packaged CLI, App, Web, and native-icon artifacts exist after installation.
  * 3. Resolve the installed npm shim to a native Node argv boundary and verify daemon start/stop.
  * 4. Remove only the transaction-owned temporary root after every terminal outcome.
+ * 5. Compare the installed CLI version with the current workspace package manifest, not a stale release literal.
  *
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  */
 import { spawnSync } from 'node:child_process'
-import { access, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 import process from 'node:process'
@@ -19,10 +20,12 @@ import {
   resolveWindowsCommandInvocation,
   type CommandInvocation,
 } from './lib/command-invocation.mjs'
+import { readPackageVersionFromJson } from './lib/release/plan'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPOSITORY_ROOT = resolve(SCRIPT_DIR, '..')
 const TEMP_PREFIX = 'openspecui-windows-installed-smoke-'
+const CLI_PACKAGE_JSON = join(REPOSITORY_ROOT, 'packages', 'cli', 'package.json')
 
 function execute(
   invocation: CommandInvocation,
@@ -69,6 +72,14 @@ async function assertBuiltArtifacts(): Promise<void> {
       join(REPOSITORY_ROOT, 'packages', 'cli', 'web', 'index.html'),
     ].map((path) => access(path))
   )
+}
+
+async function readWorkspaceCliVersion(): Promise<string> {
+  const version = readPackageVersionFromJson(await readFile(CLI_PACKAGE_JSON, 'utf8'))
+  if (!version) {
+    throw new Error(`Unable to read the CLI version from ${CLI_PACKAGE_JSON}.`)
+  }
+  return version
 }
 
 async function assertInstalledArtifacts(installRoot: string): Promise<string> {
@@ -133,7 +144,7 @@ async function runSmoke(root: string): Promise<void> {
   const version = execute(installedInvocation(shim, ['--version']), installRoot, runtimeEnv, true)
   // The installed CLI version follows the workspace release line; the smoke contract is
   // that the packed tarball reports exactly the version being released, whatever it is.
-  const expectedVersion = '9.0.0'
+  const expectedVersion = await readWorkspaceCliVersion()
   if (version !== expectedVersion) {
     throw new Error(`Installed CLI reported unexpected version ${version}.`)
   }

@@ -3,7 +3,7 @@
  * 1. Render independent Dashboard projections inside stable region-owned Pending geometry.
  * 2. Keep Dashboard-owned readonly Code Git refresh bound to rendered provenance and separate from Planning-root mutation authority.
  * 3. Curate Code Git activity while preserving binding-token detail handoff provenance.
- * 4. Show only objective planning and artifact facts, never tracked task completion.
+ * 4. Show objective planning/artifact facts plus CLI task evidence, never tracked task completion.
  * 5. Retain stable regional snapshots beside their own loading, updating, and error evidence.
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
@@ -687,7 +687,18 @@ export function Dashboard() {
               hasStatus: Boolean(status),
               isPlanningComplete: status?.isPlanningComplete ?? false,
               trackedArtifactStatus,
+              cliCompletedTasks: change.cliTaskSummary?.completedTasks ?? null,
             })
+            const cliTaskSummary = change.cliTaskSummary
+            const cliProgressRatio =
+              cliTaskSummary && cliTaskSummary.totalTasks > 0
+                ? cliTaskSummary.completedTasks / cliTaskSummary.totalTasks
+                : null
+            const cliTaskEvidence = cliTaskSummary ? (
+              <span title="Task counts reported by the OpenSpec CLI for this Change.">
+                Tasks {cliTaskSummary.completedTasks}/{cliTaskSummary.totalTasks}
+              </span>
+            ) : null
 
             return (
               <VTLink
@@ -717,14 +728,18 @@ export function Dashboard() {
                     phase={phase}
                     updatedAt={change.updatedAt}
                     formatTime={formatRelativeTime}
+                    progressRatio={cliProgressRatio}
                     className="min-w-0 flex-1"
                     subtitle={
                       status ? (
                         <span>
-                          {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
+                          <span>
+                            {doneArtifacts}/{totalArtifacts} artifacts · {status.schemaName}
+                          </span>
+                          {cliTaskEvidence ? <> · {cliTaskEvidence}</> : null}
                         </span>
                       ) : (
-                        'Artifacts status unavailable'
+                        (cliTaskEvidence ?? 'Artifacts status unavailable')
                       )
                     }
                   />
