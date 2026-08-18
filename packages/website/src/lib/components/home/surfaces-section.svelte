@@ -1,8 +1,10 @@
 <!--
 Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
 1. Render the three usage surfaces as outlined-numeral cards with their production commands.
+2. Own the surface command clipboard action with a per-command copied state.
 
 Original request (2026-08-19): "只提供现有最新版本的信息" — surfaces describe the v9 CLI surface only.
+Original request (2026-08-19): "THREE SURFACES 这里需要能支持点击复制命令。"
 -->
 <script lang="ts">
   import { reveal } from '$lib/actions/reveal'
@@ -13,6 +15,31 @@ Original request (2026-08-19): "只提供现有最新版本的信息" — surfac
   }
 
   let { content }: Props = $props()
+
+  let copiedCommand = $state<string | null>(null)
+  let copyTimer: ReturnType<typeof setTimeout> | undefined
+
+  async function copySurfaceCommand(command: string) {
+    try {
+      await navigator.clipboard.writeText(command)
+    } catch {
+      const area = document.createElement('textarea')
+      area.value = command
+      document.body.appendChild(area)
+      area.select()
+      try {
+        document.execCommand('copy')
+      } catch {
+        /* clipboard unavailable without permissions */
+      }
+      area.remove()
+    }
+    copiedCommand = command
+    clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => {
+      copiedCommand = null
+    }, 1400)
+  }
 </script>
 
 <section id="surfaces" class="mx-auto w-full max-w-[90rem] px-4 pb-16 sm:px-6 lg:px-8">
@@ -29,11 +56,21 @@ Original request (2026-08-19): "只提供现有最新版本的信息" — surfac
         <div class="surface-numeral font-nav" aria-hidden="true">{`0${index + 1}`}</div>
         <h3 class="font-nav text-[19px]">{item.title}</h3>
         <p class="text-muted-foreground mb-2 text-pretty text-[13.5px] leading-6">{item.body}</p>
-        <code
-          class="bg-terminal text-terminal-foreground mt-auto block overflow-x-auto px-3 py-2 text-sm whitespace-nowrap"
+        <button
+          type="button"
+          aria-label={`${content.copy.label} ${item.command}`}
+          onclick={() => copySurfaceCommand(item.command)}
+          class="bg-terminal text-terminal-foreground mt-auto flex w-full items-center justify-between gap-3 overflow-x-auto px-3 py-2 text-left text-sm whitespace-nowrap transition-[background-color] duration-150 hover:bg-[color-mix(in_oklab,var(--color-terminal)_86%,var(--color-terminal-foreground))]"
         >
-          $ {item.command}
-        </code>
+          <span>$ {item.command}</span>
+          <span
+            class="shrink-0 border border-current px-1.5 py-0.5 text-[10px] tracking-[0.16em]"
+            class:bg-primary={copiedCommand === item.command}
+            class:text-primary-foreground={copiedCommand === item.command}
+          >
+            {copiedCommand === item.command ? content.copy.done : content.copy.label}
+          </span>
+        </button>
       </article>
     {/each}
   </div>

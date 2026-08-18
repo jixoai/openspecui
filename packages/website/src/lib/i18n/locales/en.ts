@@ -28,6 +28,10 @@ export const en = {
     hooks: 'Hooks',
     github: 'GitHub',
   },
+  copy: {
+    label: 'COPY',
+    done: 'COPIED',
+  },
   hero: {
     eyebrow: 'OPENSPECUI 9 — VISUAL PROJECTION OF OPENSPEC',
     titleLead: 'Operate OpenSpec through a UI that stays ',
@@ -35,8 +39,6 @@ export const en = {
     summary:
       'OpenSpecUI 9 gives OpenSpec projects a reactive dashboard, an objective change workflow, a config workbench, real terminals, and static export — without hiding the OpenSpec CLI underneath.',
     badges: ['NATIVE APP', 'LIVE WEB', 'STATIC EXPORT'],
-    copyCta: 'COPY',
-    copiedCta: 'COPIED',
     githubCta: 'GITHUB ↗',
   },
   terminal: {
