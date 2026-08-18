@@ -31,7 +31,7 @@
 | Features      | 8 numbered full-width rows: OPSX change workflow, Dashboard, Config workbench, Agent delivery, Terminals, Git view, Search, Reactive kernel — sticky index rail with scroll-spy ≥1000px       |
 | Surfaces      | Three cards: Native App (`openspecui start`), Direct Web (`openspecui --web`), Static export (`openspecui export -o ./dist`)                                                                  |
 | Run it        | Inverted band: runner select (npm/pnpm/bun, persisted), App/Web flag toggle with summary swap, SERVE / STATIC EXPORT / PROTECT IT (`--auth`) command rows, compatibility footnote             |
-| Footer        | Ghost word `OPENSPECUI` + links row (app.openspecui.com / openspec.dev / GitHub) + copyright                                                                                                  |
+| Footer        | Ghost word `OPENSPECUI` + links row (openspec.dev / GitHub) + copyright; the retired `app.openspecui.com` link was removed by owner correction                                                |
 | Omitted       | Translation platform (owner expects major rework), PWA (retired), hooks page content (unchanged and still accurate)                                                                           |
 
 ## Implementation map
