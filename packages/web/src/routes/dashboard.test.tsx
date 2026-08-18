@@ -384,6 +384,74 @@ describe('Dashboard', () => {
     expect(screen.queryByRole('heading', { name: 'Specifications' })).not.toBeInTheDocument()
   })
 
+  it('renders CLI Apply progress in Dashboard Active Changes without using tracked counts', () => {
+    staticModeMock.mockReturnValue(false)
+    dashboardOverviewMock.mockReturnValue({
+      data: {
+        ...createOverviewData(),
+        activeChanges: [
+          {
+            id: 'dashboard-cli-authority',
+            name: 'Dashboard CLI authority',
+            trackedTaskProgress: { total: 100, completed: 1, phase: 'in-progress' },
+            cliTaskSummary: { completedTasks: 31, totalTasks: 33, status: 'in-progress' },
+            updatedAt: 2,
+          },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    })
+    opsxStatusListMock.mockReturnValue({
+      data: [
+        {
+          changeName: 'dashboard-cli-authority',
+          schemaName: 'spec-driven',
+          isPlanningComplete: true,
+          applyRequires: ['tasks'],
+          artifacts: [{ id: 'tasks', status: 'done' }],
+        },
+      ],
+    })
+
+    render(<Dashboard />)
+
+    expect(screen.getByText('Applying')).toBeTruthy()
+    expect(screen.getByText(/Tasks 31\/33/)).toBeTruthy()
+    expect(screen.queryByText(/Tasks 1\/100/)).toBeNull()
+    expect(
+      screen.getByText('Applying').closest('[data-ui-badge]')?.querySelector('[aria-hidden]')
+    ).toHaveStyle({ width: '93.93939393939394%' })
+  })
+
+  it('renders CLI Apply progress before aggregate artifact Status arrives', () => {
+    staticModeMock.mockReturnValue(false)
+    dashboardOverviewMock.mockReturnValue({
+      data: {
+        ...createOverviewData(),
+        activeChanges: [
+          {
+            id: 'dashboard-cli-before-status',
+            name: 'Dashboard CLI before Status',
+            trackedTaskProgress: { total: 100, completed: 1, phase: 'in-progress' },
+            cliTaskSummary: { completedTasks: 31, totalTasks: 33, status: 'in-progress' },
+            updatedAt: 2,
+          },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    })
+    opsxStatusListMock.mockReturnValue({ data: undefined, isLoading: true, error: null })
+
+    render(<Dashboard />)
+
+    expect(screen.getByText('Applying')).toBeTruthy()
+    expect(screen.getByText(/Tasks 31\/33/)).toBeTruthy()
+    expect(screen.queryByText('Unknown')).toBeNull()
+    expect(screen.queryByText(/Tasks 1\/100/)).toBeNull()
+  })
+
   it('keeps the Summary visible while independent Trends and Git regions are still loading', () => {
     const overview = createOverviewData()
     staticModeMock.mockReturnValue(false)

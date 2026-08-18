@@ -120,6 +120,7 @@ describe('ChangeList', () => {
           id: 'chat-channel-token-admin',
           name: 'chat-channel-token-admin',
           trackedTaskProgress: { total: 9, completed: 0, phase: 'in-progress' },
+          cliTaskSummary: { completedTasks: 31, totalTasks: 33, status: 'in-progress' },
           updatedAt: Date.now() - 60_000,
         },
       ],
@@ -134,12 +135,14 @@ describe('ChangeList', () => {
     const { container } = render(<ChangeList />)
 
     expect(screen.getByText('chat-channel-token-admin')).toBeTruthy()
-    // The list never claims implementation completion: no task counts, no percent bar, no
-    // completion copy derived from tracked data without Apply Instructions.
+    // Only CLI evidence may establish implementation progress while aggregate artifact Status is
+    // still loading; tracked values remain unavailable as implementation facts.
     expect(screen.queryByText('0/9')).toBeNull()
     expect(screen.queryByText('0% task completion')).toBeNull()
-    expect(container.querySelector('[style="width: 0%;"]')).toBeNull()
-    expect(screen.getByText('Unknown')).toBeTruthy()
+    expect(screen.getByText('Applying')).toBeTruthy()
+    expect(screen.getByText(/Tasks 31\/33/)).toBeTruthy()
+    expect(container.querySelector('[style="width: 93.93939393939394%;"]')).not.toBeNull()
+    expect(screen.queryByText('Unknown')).toBeNull()
     expect(container.querySelector('.rt-skeleton-line')).not.toBeNull()
     expect(screen.queryByText('Loading workflow status…')).toBeNull()
   })
@@ -434,13 +437,13 @@ describe('ChangeList', () => {
     expect(screen.getByText('4/4 artifacts · spec-driven')).toBeTruthy()
   })
 
-  it('does not show CLI or tracked task progress at list level', () => {
+  it('shows CLI Apply progress at list level without trusting tracked task arithmetic', () => {
     useChangesSubscriptionMock.mockReturnValue({
       data: [
         {
           id: 'target-openspec-cli-19-line',
           name: 'target-openspec-cli-19-line',
-          trackedTaskProgress: { total: 33, completed: 31, phase: 'in-progress' },
+          trackedTaskProgress: { total: 100, completed: 1, phase: 'in-progress' },
           documentChecklistSummary: { groups: [], total: 0, completed: 0, remaining: 0 },
           createdAt: Date.now() - 60_000,
           updatedAt: Date.now() - 60_000,
@@ -468,13 +471,16 @@ describe('ChangeList', () => {
 
     render(<ChangeList />)
 
-    expect(screen.queryByText(/Tasks 31\/33/)).toBeNull()
+    expect(screen.getByText('Applying')).toBeTruthy()
+    expect(screen.getByText(/Tasks 31\/33/)).toBeTruthy()
     expect(
-      screen.queryByTitle('Task counts reported by the OpenSpec CLI for this Change.')
-    ).toBeNull()
+      screen.getByTitle('Task counts reported by the OpenSpec CLI for this Change.')
+    ).toBeTruthy()
     expect(screen.getByText('4/4 artifacts · opsx-collab-pr-loop')).toBeTruthy()
-    expect(screen.queryByText(/% task completion/)).toBeNull()
-    expect(screen.queryByText(/% complete/)).toBeNull()
+    expect(screen.queryByText(/Tasks 1\/100/)).toBeNull()
+    expect(
+      screen.getByText('Applying').closest('[data-ui-badge]')?.querySelector('[aria-hidden]')
+    ).toHaveStyle({ width: '93.93939393939394%' })
   })
 
   it('omits task counts entirely when no CLI list evidence exists', () => {

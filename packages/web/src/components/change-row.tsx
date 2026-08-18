@@ -4,7 +4,7 @@
  * 2. Keep the phase badge vertically centered while the time anchors the rail bottom.
  * 3. Share the exact row vocabulary between the Changes list and Dashboard.
  * 4. Preserve shared-element bindings for View Transition continuity.
- * 5. Keep the phase badge a planning/artifact signal; Apply progress belongs to Change Detail.
+ * 5. Render an optional CLI Apply ratio as an ambient fill without making local tracked data authoritative.
  *
  * Original request (2026-08-15): Owner walkthrough: grid layout, subtitle facts, badge
  *   centered with time at the bottom, one atomic row component across pages.
@@ -19,6 +19,19 @@ export interface ChangeRowPhase {
   toneClass: string
 }
 
+/** Ambient fill behind a phase badge; the caller must derive this ratio from CLI evidence. */
+function PhaseBadgeProgressFill({ ratio }: { ratio: number }) {
+  if (!Number.isFinite(ratio) || ratio <= 0) return null
+  const clamped = Math.min(100, Math.max(0, ratio * 100))
+  return (
+    <span
+      aria-hidden="true"
+      className="bg-primary/50 pointer-events-none absolute inset-y-0 left-0"
+      style={{ width: `${clamped}%` }}
+    />
+  )
+}
+
 /** Shared Change-row layout: icon | title+subtitle | badge(time) | chevron. */
 export function ChangeRow({
   changeId,
@@ -29,18 +42,21 @@ export function ChangeRow({
   formatTime,
   sharedFamily = 'changes',
   className = '',
+  progressRatio = null,
   containerProps,
   titleProps,
   iconProps,
 }: {
   changeId: string
   name: string
-  /** Objective planning facts line under the title (artifacts and schema). */
+  /** Objective planning facts line under the title (artifacts, schema, and CLI task facts). */
   subtitle: ReactNode
   phase: ChangeRowPhase
   /** Epoch ms; non-positive renders no time. */
   updatedAt: number
   formatTime: (ms: number) => string
+  /** CLI-reported Apply ratio (0..1); null renders no implementation-progress fill. */
+  progressRatio?: number | null
   sharedFamily?: string
   className?: string
   containerProps?: ComponentPropsWithoutRef<'div'>
@@ -73,8 +89,14 @@ export function ChangeRow({
       </div>
       <div className="flex flex-col items-end justify-between gap-1 text-right">
         <div className="flex flex-1 items-center">
-          <Badge tone="custom" size="sm" shape="box" className={`border ${phase.toneClass}`}>
-            {phase.label}
+          <Badge
+            tone="custom"
+            size="sm"
+            shape="box"
+            className={`relative overflow-hidden border ${phase.toneClass}`}
+          >
+            <PhaseBadgeProgressFill ratio={progressRatio ?? Number.NaN} />
+            <span className="relative">{phase.label}</span>
           </Badge>
         </div>
         {updatedAt > 0 ? (
