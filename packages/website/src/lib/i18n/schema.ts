@@ -41,6 +41,11 @@ export interface WebsiteContent {
     hooks: string
     github: string
   }
+  /** Shared clipboard action labels used by the hero CTA and surface command buttons. */
+  copy: {
+    label: string
+    done: string
+  }
   hero: {
     eyebrow: string
     /** Rendered as large lead type; the accent fragment renders in the primary color. */
@@ -48,8 +53,6 @@ export interface WebsiteContent {
     titleAccent: string
     summary: string
     badges: [string, string, string]
-    copyCta: string
-    copiedCta: string
     githubCta: string
   }
   terminal: {

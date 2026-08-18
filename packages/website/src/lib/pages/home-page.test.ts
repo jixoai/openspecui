@@ -50,6 +50,20 @@ describe('HomePage', () => {
     expect(screen.getByText(en.terminal.outputs[3])).toBeVisible()
   })
 
+  it('surface commands copy on click with per-command feedback', async () => {
+    render(HomePage, { content: en })
+
+    const start = screen.getByRole('button', { name: 'COPY openspecui start' })
+    await fireEvent.click(start)
+
+    await waitFor(() => expect(screen.getByText(en.copy.done)).toBeVisible())
+    expect(screen.getAllByText(en.copy.label).length).toBeGreaterThanOrEqual(1)
+
+    // The other surface commands keep their idle labels.
+    expect(screen.getByRole('button', { name: 'COPY openspecui --web' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'COPY openspecui export -o ./dist' })).toBeVisible()
+  })
+
   it('launch controls emit explicit production CLI modes', async () => {
     render(HomePage, { content: en })
 

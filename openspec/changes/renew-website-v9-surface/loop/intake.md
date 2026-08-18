@@ -12,6 +12,7 @@ Owner IA decision (2026-08-19): "单页叙事，我觉得可以用是Scroll-Anim
 Owner merged-direction decision (2026-08-19): "我希望 broadside 的整体效果，还喜欢 BootLog 的那个终端打字的效果，把 BootLog 的这个效果卡片合并到 broadside 中，放在 WHAT'S INSIDE 前面。特别是在桌面模式下，首屏右侧有空间的话，那么我觉得可以吧这个终端打字放在首屏右侧，如果空间不够再放在下面一栏。"
 Owner release decision (2026-08-19): "可以了，我们可以正式推进官网的开发了"
 Owner correction (2026-08-19): "app.openspecui.com 这个链接需要废除掉，这个我们已经不再使用了" — the retired browser-deployment link is removed from the header nav, footer, schema, and both locales.
+Original request (2026-08-19): "THREE SURFACES 这里需要能支持点击复制命令。" — surface command lines are click-to-copy buttons sharing the site-wide copy labels.
 -->
 
 ## User Input

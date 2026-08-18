@@ -84,7 +84,7 @@ Original request (2026-08-19): "特别是在桌面模式下，首屏右侧有空
             'shadow-xs hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-md active:translate-x-px active:translate-y-px active:shadow-none',
           ].join(' ')}
         >
-          <span>{copied ? content.hero.copiedCta : content.hero.copyCta}</span>
+          <span>{copied ? content.copy.done : content.copy.label}</span>
           <span>{content.terminal.command}</span>
         </button>
         <a

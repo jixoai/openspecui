@@ -28,6 +28,10 @@ export const zh = {
     hooks: 'Hooks',
     github: 'GitHub',
   },
+  copy: {
+    label: '复制',
+    done: '已复制',
+  },
   hero: {
     eyebrow: 'OPENSPECUI 9 — OPENSPEC 的可视化投影',
     titleLead: '操作 OpenSpec，让 UI 始终',
@@ -35,8 +39,6 @@ export const zh = {
     summary:
       'OpenSpecUI 9 为 OpenSpec 项目提供响应式仪表盘、客观的变更工作流、配置工作台、真实终端与静态导出——同时不隐藏底层的 OpenSpec CLI。',
     badges: ['原生 App', '实时 Web', '静态导出'],
-    copyCta: '复制',
-    copiedCta: '已复制',
     githubCta: 'GITHUB ↗',
   },
   terminal: {
