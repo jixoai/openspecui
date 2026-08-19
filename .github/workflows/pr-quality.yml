@@ -51,6 +51,7 @@ jobs:
       run_web: ${{ steps.scope.outputs.run_web }}
       run_xterm: ${{ steps.scope.outputs.run_xterm }}
       browser_matrix: ${{ steps.scope.outputs.browser_matrix }}
+      windows_required: ${{ steps.scope.outputs.windows_required }}
     steps:
       - name: Checkout
         if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
@@ -140,12 +141,19 @@ jobs:
     name: Windows Portability Gate
     runs-on: windows-latest
     needs: [changeset-gate, ci-scope]
+    if: needs.ci-scope.outputs.windows_required != 'false'
     timeout-minutes: 45
     steps:
       - name: Skip for changeversion release PR
         if: ${{ startsWith(github.head_ref, 'chore/release/changeversion-') }}
         shell: pwsh
         run: Write-Output 'Skipping Windows Portability Gate for automated changeversion release PR.'
+
+      - name: Skip for Windows-neutral scope
+        if: ${{ needs.ci-scope.outputs.windows_required == 'false' }}
+        shell: pwsh
+        run: |
+          Write-Output 'Skipping Windows Portability Gate: docs-only or website-only PR has no Windows portability surface.'
 
       # GitHub runner TEMP is the 8.3 short form (RUNNER~1); where.exe, realpath, and libuv
       # fs-event reporting canonicalize to the long form, and mixing the two breaks path

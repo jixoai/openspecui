@@ -1,8 +1,10 @@
 /**
- * Orthogonal intents (created 2026-08-14 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
  * 1. Hide Git subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
+ * 2. Compute `windowsRequired` so docs-only and website-only PRs skip the Windows Portability Gate.
  *
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
+ * Original request (2026-08-19): "门禁路径范围化（结构性减暴露）" — docs/website-only PRs burned 16-min Windows full suites.
  */
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -33,6 +35,8 @@ const FULL_BROWSER_PATTERNS = [
   /^\.storybook\//,
 ]
 const SCRIPT_FAST_PATTERNS = [/^scripts\//, /^vitest\.root\.config\.ts$/]
+/** Private marketing site with no Windows portability surface. */
+const WINDOWS_NEUTRAL_PACKAGES = new Set(['@openspecui/website'])
 
 const IMPLICIT_PACKAGE_DEPENDENCIES = {
   '@openspecui/app': ['@openspecui/web'],
@@ -166,6 +170,7 @@ function buildFullScope({
       typecheckPackages,
     },
     reason,
+    windowsRequired: true,
   }
 }
 
@@ -312,6 +317,7 @@ export function computeCiScope({ changedFiles, rootDir, includeAllWhenUnknown = 
         typecheckPackages: [],
       },
       reason: 'Only docs/OpenSpec metadata changed; skip Fast Gate and Browser Gate execution.',
+      windowsRequired: false,
     }
   }
 
@@ -321,6 +327,11 @@ export function computeCiScope({ changedFiles, rootDir, includeAllWhenUnknown = 
   const testPackages = packages
     .filter((pkg) => affectedPackages.includes(pkg.name) && pkg.hasTestScript)
     .map((pkg) => pkg.name)
+
+  // Website-only changes have no Windows portability surface.
+  const windowsRequired = [...directPackageNames].some(
+    (name) => !WINDOWS_NEUTRAL_PACKAGES.has(name)
+  )
 
   return {
     affectedPackages,
@@ -339,6 +350,7 @@ export function computeCiScope({ changedFiles, rootDir, includeAllWhenUnknown = 
     },
     reason:
       'Route Fast Gate and Browser Gate from affected workspace packages and reverse dependencies.',
+    windowsRequired,
   }
 }
 
