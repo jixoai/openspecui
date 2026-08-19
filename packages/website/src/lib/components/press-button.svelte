@@ -12,6 +12,7 @@ Owner correction (2026-08-19): "应该组件化就组件化，哪怕是我们官
     href?: string
     onclick?: () => void
     type?: 'button' | 'submit'
+    ariaLabel?: string
     children: Snippet
   }
 
@@ -20,6 +21,7 @@ Owner correction (2026-08-19): "应该组件化就组件化，哪怕是我们官
     href,
     onclick,
     type = 'button',
+    ariaLabel,
     children,
   }: Props = $props()
 
@@ -34,7 +36,9 @@ Owner correction (2026-08-19): "应该组件化就组件化，哪怕是我们官
 </script>
 
 {#if href}
-  <a {href} target="_blank" rel="noreferrer" class={classes}>{@render children()}</a>
+  <a {href} target="_blank" rel="noreferrer" aria-label={ariaLabel} class={classes}>
+    {@render children()}
+  </a>
 {:else}
-  <button {type} {onclick} class={classes}>{@render children()}</button>
+  <button {type} {onclick} aria-label={ariaLabel} class={classes}>{@render children()}</button>
 {/if}
