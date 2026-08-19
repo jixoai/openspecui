@@ -51,6 +51,7 @@ jobs:
       run_web: ${{ steps.scope.outputs.run_web }}
       run_xterm: ${{ steps.scope.outputs.run_xterm }}
       browser_matrix: ${{ steps.scope.outputs.browser_matrix }}
+      windows_required: ${{ steps.scope.outputs.windows_required }}
     steps:
       - name: Checkout
         if: ${{ !startsWith(github.head_ref, 'chore/release/changeversion-') }}
