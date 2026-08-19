@@ -43,7 +43,7 @@ Original request (2026-08-19): "特别是在桌面模式下，首屏右侧有空
         {content.hero.eyebrow}
       </p>
       <h1
-        class="mt-4 text-[clamp(2.4rem,5vw,4.4rem)] leading-[0.99] font-bold tracking-[-0.035em] text-balance"
+        class="mt-4 text-[clamp(2.4rem,5vw,4.4rem)] leading-[1.2] font-bold tracking-[-0.02em] text-balance"
         use:reveal={{ delay: 60, rise: 14 }}
       >
         {content.hero.titleLead}<em class="text-primary not-italic">{content.hero.titleAccent}</em>

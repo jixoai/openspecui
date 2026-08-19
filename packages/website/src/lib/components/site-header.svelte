@@ -66,7 +66,7 @@
           rel="noreferrer"
           class="text-terminal-foreground/70 px-2.5 py-1 transition-colors hover:text-terminal-foreground"
         >
-          {content.nav.github}
+          {content.nav.github} ↗
         </a>
       </nav>
     </div>
