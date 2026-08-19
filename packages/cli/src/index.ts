@@ -331,6 +331,7 @@ export async function startServer(options: CLIOptions = {}): Promise<RunningServ
       createWorker: createWorktreeServerWorker,
       webAssetsDir,
       accessGateCredential: accessGate,
+      disableChildWatcher: enableWatcher === false,
     })
   }
 

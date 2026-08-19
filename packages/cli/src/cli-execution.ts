@@ -195,6 +195,7 @@ async function executeServePlan(
     open: false,
     auth: plan.auth ? true : undefined,
     password: plan.password,
+    enableWatcher: plan.noWatcher ? false : undefined,
     corsOrigins: appOrigin
       ? ['http://localhost:5173', 'http://localhost:3000', appOrigin]
       : undefined,

@@ -20,6 +20,8 @@ export interface ServeCommandPlan {
   web: boolean
   auth: boolean
   password: string | true | undefined
+  /** Skip reactive file watching (internal handoff children). */
+  noWatcher: boolean
   /** Enable backend OpenTelemetry tracing (diagnostic only). */
   otel?: boolean
   /** OTLP/HTTP Collector base URL. Absent ⇒ console exporter fallback. */
@@ -127,6 +129,10 @@ export async function parseCliCommand(
               'OTLP/HTTP Collector base URL convenience override (e.g. http://localhost:4318/v1/traces). ' +
               'Implies --otel; otherwise the SDK reads OTEL_EXPORTER_OTLP_ENDPOINT.',
             type: 'string',
+          })
+          .option('no-watcher', {
+            describe: 'Skip reactive file watching (used by internal worktree handoff children)',
+            type: 'boolean',
           }),
       (argv) => {
         plan = {
@@ -139,6 +145,7 @@ export async function parseCliCommand(
           web: argv.web === true,
           auth: argv.auth === true,
           password: argv.password,
+          noWatcher: argv['no-watcher'] === true,
           otel: argv.otel === true || !!argv['otel-endpoint'],
           otelEndpoint: argv['otel-endpoint'],
         }
