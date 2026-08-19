@@ -20,6 +20,7 @@ codedb.snapshot
 GOAL.md
 .zcode/
 .vitest-attachments/
+.agents/images/
 
 # Atomic staging directory used by the watched Web-to-CLI asset sync.
 packages/cli/.web-sync-*/
