@@ -25,7 +25,7 @@
 
   const titleClassName = $derived(
     tone === 'hero'
-      ? 'font-nav max-w-[24ch] text-balance text-[clamp(1.58rem,2.55vw,2.7rem)] tracking-tight leading-[0.96] sm:max-w-[22ch] lg:max-w-[24ch]'
+      ? 'font-nav max-w-[24ch] text-balance text-[clamp(1.58rem,2.55vw,2.7rem)] tracking-normal leading-[1.2] sm:max-w-[22ch] lg:max-w-[24ch]'
       : 'font-nav text-balance text-[1.05rem] tracking-tight leading-tight sm:text-[1.22rem]'
   )
 

@@ -18,6 +18,9 @@ Original request (2026-08-19): "因为顶部栏这里背景始终都是暗色的
 Original request (2026-08-19): "我发现移动端的窄屏模式下，这些可复制的命令行过长，导致存在溢出问题" — copyable command buttons delegate horizontal scrolling to the command text; the copy chip stays pinned and neither the button nor the page overflows.
 Owner follow-up (2026-08-19): "我这边看问题还是存在" — the internal horizontal scroll still read as clipped overflow on a phone; commands now wrap (`wrap-anywhere`) so the full text is always visible at any width.
 Owner refinement (2026-08-19): "最好把开头的 `$` 这个作为一个独立的头部，而不是 inline 到 command 里面。然后 command 的换行，不要 break-all，要基于空格去换行" — the `$` prompt is a separate shrink-0 primary-colored column; command text wraps at spaces (`wrap-break-word`).
+Original request (2026-08-19): "这个 COPY 和 COPIED 改成图标吧，这样会比较稳定" — fixed-size icon chips; state moves to the aria-label.
+Original request (2026-08-19): hero and hooks hero titles read uncomfortably — display headings move to `leading: 1.2`; home hero tracking relaxes to -0.02em and the SectionCard hero tone drops negative tracking, because tight leading and sans-style negative tracking collide on monospace ascenders/descenders.
+Original request (2026-08-19): "GitHub是一个外链，应该要加上↗。Theme 和 Language 这两个文字我建议也改成图标" — the GitHub nav link gains the external ↗ marker; theme/language switcher labels become SunMoon/Languages icons (textual names stay on the group aria-labels).
 -->
 
 ## User Input
