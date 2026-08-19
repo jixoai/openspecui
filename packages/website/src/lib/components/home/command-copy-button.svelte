@@ -31,12 +31,16 @@ Owner icon decision (2026-08-19): "这个 COPY 和 COPIED 改成图标吧，这�
 
   let copied = $state(false)
   let copyTimer: ReturnType<typeof setTimeout> | undefined
+  // svelte-ignore state_referenced_locally
+  let lastCommand = command
 
   $effect(() => {
     // A changed command invalidates stale copied feedback (e.g. serve flag/runner switches).
-    command
-    copied = false
-    clearTimeout(copyTimer)
+    if (command !== lastCommand) {
+      lastCommand = command
+      copied = false
+      clearTimeout(copyTimer)
+    }
   })
 
   async function copyCommand() {
