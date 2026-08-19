@@ -11,6 +11,8 @@ Original request (2026-08-19): "特别是在桌面模式下，首屏右侧有空
   import PressButton from '$lib/components/press-button.svelte'
   import { GITHUB_URL } from '$lib/constants'
   import type { WebsiteContent } from '$lib/i18n/schema'
+  import Check from 'lucide-svelte/icons/check'
+  import Copy from 'lucide-svelte/icons/copy'
   import TerminalCard from './terminal-card.svelte'
 
   interface Props {
@@ -61,8 +63,16 @@ Original request (2026-08-19): "特别是在桌面模式下，首屏右侧有空
         {/each}
       </div>
       <div class="mt-8 flex flex-wrap gap-3" use:reveal={{ delay: 200 }}>
-        <PressButton variant={copied ? 'copied' : 'primary'} onclick={copyQuickStart}>
-          <span>{copied ? content.copy.done : content.copy.label}</span>
+        <PressButton
+          variant={copied ? 'copied' : 'primary'}
+          onclick={copyQuickStart}
+          ariaLabel={`${copied ? content.copy.done : content.copy.label} ${content.terminal.command}`}
+        >
+          {#if copied}
+            <Check class="h-4 w-4" aria-hidden="true" />
+          {:else}
+            <Copy class="h-4 w-4" aria-hidden="true" />
+          {/if}
           <span>{content.terminal.command}</span>
         </PressButton>
         <PressButton variant="outline" href={GITHUB_URL}>{content.hero.githubCta}</PressButton>

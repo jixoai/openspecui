@@ -56,10 +56,12 @@ describe('HomePage', () => {
     const start = screen.getByRole('button', { name: 'COPY openspecui start' })
     await fireEvent.click(start)
 
-    await waitFor(() => expect(screen.getByText(en.copy.done)).toBeVisible())
-    expect(screen.getAllByText(en.copy.label).length).toBeGreaterThanOrEqual(1)
+    // The copied state moves to the icon chip and the accessible name.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'COPIED openspecui start' })).toBeVisible()
+    )
 
-    // The other surface commands keep their idle labels.
+    // The other surface commands keep their idle state.
     expect(screen.getByRole('button', { name: 'COPY openspecui --web' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'COPY openspecui export -o ./dist' })).toBeVisible()
   })
@@ -69,11 +71,17 @@ describe('HomePage', () => {
 
     const serve = screen.getByRole('button', { name: 'COPY npx openspecui@latest --app' })
     await fireEvent.click(serve)
-    await waitFor(() => expect(screen.getAllByText(en.copy.done).length).toBeGreaterThanOrEqual(1))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'COPIED npx openspecui@latest --app' })
+      ).toBeVisible()
+    )
 
     const auth = screen.getByRole('button', { name: 'COPY openspecui --auth' })
     await fireEvent.click(auth)
-    await waitFor(() => expect(screen.getAllByText(en.copy.done).length).toBeGreaterThanOrEqual(1))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'COPIED openspecui --auth' })).toBeVisible()
+    )
 
     expect(
       screen.getByRole('button', { name: 'COPY npx openspecui@latest export -o ./dist' })
