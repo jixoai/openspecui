@@ -63,9 +63,9 @@ Original request (2026-08-19): "还喜欢 BootLog 的那个终端打字的效果
   <div
     class="text-terminal-foreground/55 flex items-center gap-1.5 border-b border-[color-mix(in_oklab,var(--color-terminal-foreground)_18%,var(--color-terminal))] px-3.5 py-2 font-nav text-xs tracking-[0.1em]"
   >
-    <span class="h-2 w-2 border border-current" aria-hidden="true"></span>
-    <span class="h-2 w-2 border border-current" aria-hidden="true"></span>
-    <span class="h-2 w-2 border border-current" aria-hidden="true"></span>
+    <span class="h-2 w-2 border border-current bg-red-400" aria-hidden="true"></span>
+    <span class="h-2 w-2 border border-current bg-yellow-400" aria-hidden="true"></span>
+    <span class="h-2 w-2 border border-current bg-green-400" aria-hidden="true"></span>
     <span class="ml-2 truncate">{barTitle}</span>
   </div>
   <div class="p-4 sm:p-5">

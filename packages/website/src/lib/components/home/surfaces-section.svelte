@@ -1,14 +1,15 @@
 <!--
 Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
-1. Render the three usage surfaces as outlined-numeral cards with their production commands.
-2. Own the surface command clipboard action with a per-command copied state.
+1. Render the three usage surfaces as outlined-numeral cards with click-to-copy commands.
 
 Original request (2026-08-19): "只提供现有最新版本的信息" — surfaces describe the v9 CLI surface only.
 Original request (2026-08-19): "THREE SURFACES 这里需要能支持点击复制命令。"
+Owner componentization correction (2026-08-19): "应该组件化就组件化" — command buttons and the section heading come from shared components.
 -->
 <script lang="ts">
   import { reveal } from '$lib/actions/reveal'
-  import { copyTextToClipboard } from '$lib/clipboard'
+  import CommandCopyButton from '$lib/components/home/command-copy-button.svelte'
+  import SectionTitle from '$lib/components/home/section-title.svelte'
   import type { WebsiteContent } from '$lib/i18n/schema'
 
   interface Props {
@@ -16,25 +17,10 @@ Original request (2026-08-19): "THREE SURFACES 这里需要能支持点击复制
   }
 
   let { content }: Props = $props()
-
-  let copiedCommand = $state<string | null>(null)
-  let copyTimer: ReturnType<typeof setTimeout> | undefined
-
-  async function copySurfaceCommand(command: string) {
-    await copyTextToClipboard(command)
-    copiedCommand = command
-    clearTimeout(copyTimer)
-    copyTimer = setTimeout(() => {
-      copiedCommand = null
-    }, 1400)
-  }
 </script>
 
 <section id="surfaces" class="mx-auto w-full max-w-[90rem] px-4 pb-16 sm:px-6 lg:px-8">
-  <h2 class="font-nav flex items-baseline gap-4 text-lg uppercase tracking-[0.3em]" use:reveal>
-    {content.surfaces.title}
-    <span class="bg-border h-px flex-1" aria-hidden="true"></span>
-  </h2>
+  <SectionTitle title={content.surfaces.title} />
   <div class="mt-9 grid border border-border sm:grid-cols-1 min-[940px]:grid-cols-3">
     {#each content.surfaces.items as item, index (item.title)}
       <article
@@ -44,21 +30,12 @@ Original request (2026-08-19): "THREE SURFACES 这里需要能支持点击复制
         <div class="surface-numeral font-nav" aria-hidden="true">{`0${index + 1}`}</div>
         <h3 class="font-nav text-[19px]">{item.title}</h3>
         <p class="text-muted-foreground mb-2 text-pretty text-[13.5px] leading-6">{item.body}</p>
-        <button
-          type="button"
-          aria-label={`${content.copy.label} ${item.command}`}
-          onclick={() => copySurfaceCommand(item.command)}
-          class="bg-terminal text-terminal-foreground mt-auto flex w-full items-center justify-between gap-3 overflow-x-auto px-3 py-2 text-left text-sm whitespace-nowrap transition-[background-color] duration-150 hover:bg-[color-mix(in_oklab,var(--color-terminal)_86%,var(--color-terminal-foreground))]"
-        >
-          <span>$ {item.command}</span>
-          <span
-            class="shrink-0 border border-current px-1.5 py-0.5 text-[10px] tracking-[0.16em]"
-            class:bg-primary={copiedCommand === item.command}
-            class:text-primary-foreground={copiedCommand === item.command}
-          >
-            {copiedCommand === item.command ? content.copy.done : content.copy.label}
-          </span>
-        </button>
+        <CommandCopyButton
+          command={item.command}
+          copyLabel={content.copy.label}
+          copiedLabel={content.copy.done}
+          class="mt-auto"
+        />
       </article>
     {/each}
   </div>
