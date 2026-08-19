@@ -2,14 +2,14 @@
 Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
 1. Render the inverted run-it band: runner select, App/Web flag toggle, serve/export/auth commands.
 2. Keep the runner preference persisted and every emitted command production-accurate.
-3. Own the run-it command clipboard actions with per-command copied state.
 
 Original request (2026-08-19): "只提供现有最新版本的信息" — commands mirror the published v9 CLI surface.
 Original request (2026-08-19): "RUN IT 这里也需要支持点击复制"
+Owner componentization correction (2026-08-19): "应该组件化就组件化" — command buttons come from the shared component.
 -->
 <script lang="ts">
   import { reveal } from '$lib/actions/reveal'
-  import { copyTextToClipboard } from '$lib/clipboard'
+  import CommandCopyButton from '$lib/components/home/command-copy-button.svelte'
   import { RUNNER_STORAGE_KEY } from '$lib/constants'
   import type { RunnerId, WebsiteContent } from '$lib/i18n/schema'
   import { getRunnerCommandPrefix, isRunnerId } from '$lib/runner'
@@ -30,18 +30,8 @@ Original request (2026-08-19): "RUN IT 这里也需要支持点击复制"
   )
   const exportCommand = $derived(`${runnerCommandPrefix} openspecui@latest export -o ./dist`)
   const authCommand = 'openspecui --auth'
-
-  let copiedCommand = $state<string | null>(null)
-  let copyTimer: ReturnType<typeof setTimeout> | undefined
-
-  async function copyRunCommand(command: string) {
-    await copyTextToClipboard(command)
-    copiedCommand = command
-    clearTimeout(copyTimer)
-    copyTimer = setTimeout(() => {
-      copiedCommand = null
-    }, 1400)
-  }
+  const bandCommandShadow =
+    'shadow-[6px_6px_0_0_color-mix(in_oklab,var(--background)_26%,transparent)]'
 
   onMount(() => {
     const stored = window.localStorage.getItem(RUNNER_STORAGE_KEY)
@@ -110,63 +100,36 @@ Original request (2026-08-19): "RUN IT 这里也需要支持点击复制"
           <span class="text-primary">{'>_'}</span>
           {content.run.serveCaption}
         </p>
-        <button
-          type="button"
-          aria-label={`${content.copy.label} ${serveCommand}`}
-          onclick={() => copyRunCommand(serveCommand)}
-          class="bg-terminal text-terminal-foreground flex w-full items-center justify-between gap-3 overflow-x-auto px-3 py-2.5 text-left text-sm whitespace-nowrap shadow-[6px_6px_0_0_color-mix(in_oklab,var(--background)_26%,transparent)] transition-[background-color] duration-150 hover:bg-[color-mix(in_oklab,var(--color-terminal)_86%,var(--color-terminal-foreground))]"
+        <CommandCopyButton
+          command={serveCommand}
+          copyLabel={content.copy.label}
+          copiedLabel={content.copy.done}
+          class={bandCommandShadow}
           data-run-command
-        >
-          <span>$ {serveCommand}</span>
-          <span
-            class="shrink-0 border border-current px-1.5 py-0.5 text-[10px] tracking-[0.16em]"
-            class:bg-primary={copiedCommand === serveCommand}
-            class:text-primary-foreground={copiedCommand === serveCommand}
-          >
-            {copiedCommand === serveCommand ? content.copy.done : content.copy.label}
-          </span>
-        </button>
+        />
       </div>
       <div>
         <p class="font-nav mb-2 text-[11px] tracking-[0.2em] opacity-60">
           {content.run.exportCaption}
         </p>
-        <button
-          type="button"
-          aria-label={`${content.copy.label} ${exportCommand}`}
-          onclick={() => copyRunCommand(exportCommand)}
-          class="bg-terminal text-terminal-foreground flex w-full items-center justify-between gap-3 overflow-x-auto px-3 py-2.5 text-left text-sm whitespace-nowrap shadow-[6px_6px_0_0_color-mix(in_oklab,var(--background)_26%,transparent)] transition-[background-color] duration-150 hover:bg-[color-mix(in_oklab,var(--color-terminal)_86%,var(--color-terminal-foreground))]"
-        >
-          <span>$ {exportCommand}</span>
-          <span
-            class="shrink-0 border border-current px-1.5 py-0.5 text-[10px] tracking-[0.16em]"
-            class:bg-primary={copiedCommand === exportCommand}
-            class:text-primary-foreground={copiedCommand === exportCommand}
-          >
-            {copiedCommand === exportCommand ? content.copy.done : content.copy.label}
-          </span>
-        </button>
+        <CommandCopyButton
+          command={exportCommand}
+          copyLabel={content.copy.label}
+          copiedLabel={content.copy.done}
+          class={bandCommandShadow}
+        />
         <p class="mt-2 text-[12px] leading-5 opacity-60">{content.run.exportSummary}</p>
       </div>
       <div>
         <p class="font-nav mb-2 text-[11px] tracking-[0.2em] opacity-60">
           {content.run.protectCaption}
         </p>
-        <button
-          type="button"
-          aria-label={`${content.copy.label} ${authCommand}`}
-          onclick={() => copyRunCommand(authCommand)}
-          class="bg-terminal text-terminal-foreground flex w-full items-center justify-between gap-3 overflow-x-auto px-3 py-2.5 text-left text-sm whitespace-nowrap shadow-[6px_6px_0_0_color-mix(in_oklab,var(--background)_26%,transparent)] transition-[background-color] duration-150 hover:bg-[color-mix(in_oklab,var(--color-terminal)_86%,var(--color-terminal-foreground))]"
-        >
-          <span>$ {authCommand}</span>
-          <span
-            class="shrink-0 border border-current px-1.5 py-0.5 text-[10px] tracking-[0.16em]"
-            class:bg-primary={copiedCommand === authCommand}
-            class:text-primary-foreground={copiedCommand === authCommand}
-          >
-            {copiedCommand === authCommand ? content.copy.done : content.copy.label}
-          </span>
-        </button>
+        <CommandCopyButton
+          command={authCommand}
+          copyLabel={content.copy.label}
+          copiedLabel={content.copy.done}
+          class={bandCommandShadow}
+        />
         <p class="mt-2 text-[12px] leading-5 opacity-60">{content.run.protectSummary}</p>
       </div>
       <p class="mt-2 text-[12px] leading-5 opacity-55">{content.run.compat}</p>

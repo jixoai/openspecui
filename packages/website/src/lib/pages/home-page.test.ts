@@ -29,7 +29,7 @@ describe('HomePage', () => {
     }
     for (const item of en.surfaces.items) {
       expect(screen.getByText(item.title)).toBeVisible()
-      expect(screen.getByText(`$ ${item.command}`)).toBeVisible()
+      expect(screen.getByText(item.command)).toBeVisible()
     }
 
     expect(screen.queryByText(/PWA/i)).not.toBeInTheDocument()
@@ -83,18 +83,18 @@ describe('HomePage', () => {
   it('launch controls emit explicit production CLI modes', async () => {
     render(HomePage, { content: en })
 
-    expect(screen.getByText('$ npx openspecui@latest --app')).toBeVisible()
-    expect(screen.getByText('$ npx openspecui@latest export -o ./dist')).toBeVisible()
-    expect(screen.getByText('$ openspecui --auth')).toBeVisible()
+    expect(screen.getByText('npx openspecui@latest --app')).toBeVisible()
+    expect(screen.getByText('npx openspecui@latest export -o ./dist')).toBeVisible()
+    expect(screen.getByText('openspecui --auth')).toBeVisible()
 
     await fireEvent.change(screen.getByLabelText('RUNNER'), { target: { value: 'pnpm' } })
 
-    expect(screen.getByText('$ pnpx openspecui@latest --app')).toBeVisible()
-    expect(screen.getByText('$ pnpx openspecui@latest export -o ./dist')).toBeVisible()
+    expect(screen.getByText('pnpx openspecui@latest --app')).toBeVisible()
+    expect(screen.getByText('pnpx openspecui@latest export -o ./dist')).toBeVisible()
 
     await fireEvent.click(screen.getByRole('button', { name: /APP MODE/ }))
 
-    expect(screen.getByText('$ pnpx openspecui@latest --web')).toBeVisible()
+    expect(screen.getByText('pnpx openspecui@latest --web')).toBeVisible()
     expect(screen.getByText(en.run.serveWebSummary)).toBeVisible()
     expect(screen.queryByText(en.run.serveAppSummary)).not.toBeInTheDocument()
   })

@@ -8,6 +8,7 @@ Original request (2026-08-19): "特别是在桌面模式下，首屏右侧有空
 <script lang="ts">
   import { reveal } from '$lib/actions/reveal'
   import { copyTextToClipboard } from '$lib/clipboard'
+  import PressButton from '$lib/components/press-button.svelte'
   import { GITHUB_URL } from '$lib/constants'
   import type { WebsiteContent } from '$lib/i18n/schema'
   import TerminalCard from './terminal-card.svelte'
@@ -60,28 +61,11 @@ Original request (2026-08-19): "特别是在桌面模式下，首屏右侧有空
         {/each}
       </div>
       <div class="mt-8 flex flex-wrap gap-3" use:reveal={{ delay: 200 }}>
-        <button
-          type="button"
-          onclick={copyQuickStart}
-          class={[
-            'border-border inline-flex items-center gap-2.5 border px-3.5 py-2.5 text-sm font-medium transition-[transform,box-shadow] duration-150',
-            copied
-              ? 'bg-secondary text-secondary-foreground'
-              : 'bg-primary text-primary-foreground',
-            'shadow-xs hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-md active:translate-x-px active:translate-y-px active:shadow-none',
-          ].join(' ')}
-        >
+        <PressButton variant={copied ? 'copied' : 'primary'} onclick={copyQuickStart}>
           <span>{copied ? content.copy.done : content.copy.label}</span>
           <span>{content.terminal.command}</span>
-        </button>
-        <a
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noreferrer"
-          class="border-border bg-background hover:bg-muted inline-flex items-center border px-3.5 py-2.5 text-sm font-medium transition-[transform,box-shadow,background-color] duration-150 shadow-xs hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-md active:translate-x-px active:translate-y-px active:shadow-none"
-        >
-          {content.hero.githubCta}
-        </a>
+        </PressButton>
+        <PressButton variant="outline" href={GITHUB_URL}>{content.hero.githubCta}</PressButton>
       </div>
     </div>
     <div class="min-w-0" use:reveal={{ delay: 260, rise: 12 }}>

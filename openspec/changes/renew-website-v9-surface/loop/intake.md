@@ -16,6 +16,8 @@ Original request (2026-08-19): "THREE SURFACES 这里需要能支持点击复制
 Original request (2026-08-19): "RUN IT 这里也需要支持点击复制" — run-it serve/export/auth command rows are click-to-copy buttons over the current dynamic values.
 Original request (2026-08-19): "因为顶部栏这里背景始终都是暗色的，所以Theme 和 Language 这里的 toggle 要固定 border 的颜色为亮色。" — the header theme/language toggle borders are pinned to a light color (terminal-foreground/30) instead of the theme-dependent border token fallback.
 Original request (2026-08-19): "我发现移动端的窄屏模式下，这些可复制的命令行过长，导致存在溢出问题" — copyable command buttons delegate horizontal scrolling to the command text; the copy chip stays pinned and neither the button nor the page overflows.
+Owner follow-up (2026-08-19): "我这边看问题还是存在" — the internal horizontal scroll still read as clipped overflow on a phone; commands now wrap (`wrap-anywhere`) so the full text is always visible at any width.
+Owner refinement (2026-08-19): "最好把开头的 `$` 这个作为一个独立的头部，而不是 inline 到 command 里面。然后 command 的换行，不要 break-all，要基于空格去换行" — the `$` prompt is a separate shrink-0 primary-colored column; command text wraps at spaces (`wrap-break-word`).
 -->
 
 ## User Input

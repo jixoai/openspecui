@@ -7,6 +7,7 @@ Original request (2026-08-19): "可以用是Scroll-Animation 来实现相关的 
 -->
 <script lang="ts">
   import { reveal } from '$lib/actions/reveal'
+  import SectionTitle from '$lib/components/home/section-title.svelte'
   import type { WebsiteContent } from '$lib/i18n/schema'
 
   interface Props {
@@ -41,10 +42,7 @@ Original request (2026-08-19): "可以用是Scroll-Animation 来实现相关的 
 </script>
 
 <section id="features" class="mx-auto w-full max-w-[90rem] px-4 pb-16 pt-6 sm:px-6 lg:px-8">
-  <h2 class="font-nav flex items-baseline gap-4 text-lg uppercase tracking-[0.3em]" use:reveal>
-    {content.features.title}
-    <span class="bg-border h-px flex-1" aria-hidden="true"></span>
-  </h2>
+  <SectionTitle title={content.features.title} />
   <div class="mt-9 grid gap-10 min-[1000px]:grid-cols-[11rem_minmax(0,1fr)] min-[1000px]:gap-12">
     <nav
       class="text-muted-foreground hidden min-[1000px]:sticky min-[1000px]:top-24 min-[1000px]:flex min-[1000px]:flex-col min-[1000px]:gap-2 font-nav text-xs tracking-[0.1em]"
