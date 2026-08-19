@@ -36,6 +36,7 @@ if (process.env.GITHUB_OUTPUT) {
     `run_web=${scope.browser.runWeb}`,
     `run_xterm=${scope.browser.runXterm}`,
     `browser_matrix=${browserMatrixJson}`,
+    `windows_required=${scope.windowsRequired !== false}`,
   ]
   await import('node:fs').then(({ appendFileSync }) => {
     appendFileSync(process.env.GITHUB_OUTPUT, `${lines.join('\n')}\n`)
