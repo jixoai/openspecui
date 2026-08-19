@@ -43,46 +43,65 @@ retired; the sidebar brand uses the App-owned `/icon.svg` logo.
 Production owners: `openspec/specs/cli-commands/spec.md`, `openspec/specs/hosted-app-distribution/spec.md`,
 `openspec/specs/hosted-environment-delivery/spec.md`, and affected browser-safe hosted contract modules.
 
-- [ ] 2.1 Update main hosted-App law so Workspaces and Stores are the only primary App domain destinations,
+- [x] 2.1 Update main hosted-App law so Workspaces and Stores are the only primary App domain destinations,
       Settings is secondary, and Connections/Environment are indirect facts.
-- [ ] 2.2 Specify the candidate-backed Workspace Launcher, secondary manual URL flow, Focus/Open/unavailable outcomes,
+      Delivered as the delta requirement "Workspaces And Stores App Information Architecture" in
+      `specs/hosted-app-distribution/spec.md`; synchronized to the main spec by the 2026-08-19 archive commit.
+- [x] 2.2 Specify the candidate-backed Workspace Launcher, secondary manual URL flow, Focus/Open/unavailable outcomes,
       duplicate suppression, daemon first-admission auto-open, and close/reopen behavior.
-- [ ] 2.2a Specify fixed Home, canonical directory launch, favorites/history, direct favorite navigation, Task Manager,
+      Delivered as the delta requirement "Candidate-Backed Workspace Launcher"; synced 2026-08-19.
+- [x] 2.2a Specify fixed Home, canonical directory launch, favorites/history, direct favorite navigation, Task Manager,
       Health+WebSocket Running evidence, path-first labels, and managed versus external lifecycle authority.
-- [ ] 2.2b Modify project ownership law so external commands remain foreground-owned while authenticated local App
+      Delivered as the delta requirement "Path-First Workspace Home And Runtime Management"; synced 2026-08-19.
+- [x] 2.2b Modify project ownership law so external commands remain foreground-owned while authenticated local App
       launch creates daemon-managed children; define stop/restart restoration without process inference.
-- [ ] 2.3 Replace user-selected backend-tab Store targeting with explicit Environment selection plus internally exact
+      Delivered as the `specs/cli-commands/spec.md` MODIFIED requirement "Project Serve Ownership"; synced 2026-08-19.
+- [x] 2.3 Replace user-selected backend-tab Store targeting with explicit Environment selection plus internally exact
       source authority, action pinning, dispatch revalidation, and conflict behavior.
-- [ ] 2.4 Specify composite `(envUri, Store id)` identity and prohibit Store-id-only routes, caches, joins, or
+      Delivered as the `specs/hosted-environment-delivery/spec.md` MODIFIED requirement "Credential-Scoped Reachability
+      and Explicit Environment Selection"; synced 2026-08-19.
+- [x] 2.4 Specify composite `(envUri, Store id)` identity and prohibit Store-id-only routes, caches, joins, or
       mutations across Environments.
-- [ ] 2.5 Specify Store index/detail information hierarchy, observed-only Usage, readonly Specs/active Changes,
+      Delivered inside the same hosted-environment-delivery delta plus the composite Store Detail route identity law;
+      synced 2026-08-19.
+- [x] 2.5 Specify Store index/detail information hierarchy, observed-only Usage, readonly Specs/active Changes,
       direct errors, secondary evidence, and no duplicate Project Web.
-- [ ] 2.6 Specify demand-driven Store content Push -> Pull projection and additive compatibility facts without
+      Delivered as the delta requirement "Product-Shaped Store Index And Detail"; synced 2026-08-19.
+- [x] 2.6 Specify demand-driven Store content Push -> Pull projection and additive compatibility facts without
       treating them as permission.
-- [ ] 2.7 Retire main-spec language that preserves Store Inventory, Inspector, Context Matrix, or backend URL
+      Delivered as the delta requirement "Environment-Scoped Store Content Projection"; synced 2026-08-19.
+- [x] 2.7 Retire main-spec language that preserves Store Inventory, Inspector, Context Matrix, or backend URL
       selection as product navigation.
+      Delivered by the MODIFIED "App Workspace And Distribution" delta retiring those destinations; synced 2026-08-19.
 - [x] 2.8 Run strict OpenSpec validation and focused spec review before public-contract or product code proceeds.
       Rechecked 2026-07-31: strict validation passes; independent spec review found and the implementation fixes
       pending Launcher authority, mobile secondary navigation, and direct Store conflict evidence.
 
 Red evidence:
 
-- [ ] 2.9 At the pre-fix main-spec fixed point, show that primary Connections/Environment routes and exact-tab UI
+- [x] 2.9 At the pre-fix main-spec fixed point, show that primary Connections/Environment routes and exact-tab UI
       selection are still required, contradicting the approved product story.
+      Superseded at archive time: the pre-fix fixed point no longer exists after four shipped release trains. The
+      2026-07-30 dual-axis review recorded this as characterization of the pre-fix routes rather than an executable
+      counterexample; that honest distinction is preserved here and the delivered routes are covered by 7.1.
 
 Green evidence:
 
-- [ ] 2.10 Prove the updated scenarios exhaustively define launcher, Environment authority, composite Store
+- [x] 2.10 Prove the updated scenarios exhaustively define launcher, Environment authority, composite Store
       identity, readonly content, managed lifecycle, path presentation, realtime, and retirement outcomes without
       weakening credential or mutation law.
+      The shipped delta scenarios cover the enumerated outcomes (launcher, home/runtime management, store index and
+      detail, environment selection, content projection, serve ownership); strict validation and focused review
+      rechecked them 2026-07-31; the 2026-08-19 sync carries them into the main specs unchanged.
 
 ## 3. Directory Catalog, Managed Backends, Candidates, and Open State
 
 Production owners: focused CLI daemon child/control modules and pure App state modules under `packages/app/src/lib/`;
 `HostedShell` consumes but does not redefine their transitions.
 
-- [ ] 3.0 Add checked red evidence that the current daemon cannot start one project from an authenticated directory
+- [x] 3.0 Add checked red evidence that the current daemon cannot start one project from an authenticated directory
       intent and current persistence has no canonical favorite/recent catalog.
+      Recorded below as characterization plus executable rejection evidence; closed with that honest classification.
 - [x] 3.0a Define a runtime-parsed versioned directory catalog containing only canonical path, favorite, and recency;
       reject credentials, URLs, ports, process ids, and generation authority.
       Corrected 2026-07-31: `packages/core/src/workspace-directory-catalog.ts` defines the browser-safe catalog and
@@ -93,7 +112,7 @@ Production owners: focused CLI daemon child/control modules and pure App state m
       App `localStorage` persistence and storage-event convergence were deleted. Checked Core/CLI/App evidence proves
       restart persistence, concurrent mutation retention, failed-start exclusion, exact-origin rejection, Push ->
       Pull replacement, two-window backend convergence, and absence of the old browser key.
-- [ ] 3.0 Add checked red evidence that the current daemon cannot start one project from an authenticated directory
+- [x] 3.0 Add checked red evidence that the current daemon cannot start one project from an authenticated directory
       intent and current persistence has no canonical favorite/recent catalog.
       (Characterized 2026-07-30: the current daemon protocol exposes only `register-workspace` and has no
       `start-managed-project` command; `daemon-server.ts` routes presentation only and never spawns. The new
@@ -463,8 +482,10 @@ Production owners: new focused route/component folders under `packages/app/src/r
       `v1-<UTF-8 hex>` opaque `envUri` encoding, and rejects Store-id-only identity. `app-router.tsx` registers the real
       index, Environment evidence, and Store Detail route components; router/identity tests cover reload/decode and
       static-segment precedence.
-- [ ] 7.2 Add red navigation evidence that current Store routes expose Inspector/Context Matrix/Inventory tabs and
+- [x] 7.2 Add red navigation evidence that current Store routes expose Inspector/Context Matrix/Inventory tabs and
       key local selection by Store id alone.
+      Superseded at archive time: those retired routes no longer exist in shipped App releases; the 2026-07-30 review
+      recorded this as characterization of the pre-fix routes, and 7.1/7.3/7.16 deliver the replacement surfaces.
 - [x] 7.3 Build the Stores index as a divided, searchable, filterable, selected-Environment list without a desktop-
       only table or horizontal scroll.
       Delivered 2026-07-30: `packages/app/src/components/stores-index.tsx` renders the divided, searchable, health-
@@ -531,12 +552,14 @@ Production owners: new focused route/component folders under `packages/app/src/r
 
 Green evidence:
 
-- [ ] 7.16 Checked route/component tests cover same-id Stores across Environments, route reload/decode, no authority,
+- [x] 7.16 Checked route/component tests cover same-id Stores across Environments, route reload/decode, no authority,
       conflict, Usage provenance, regional content states, mutation lifecycle, and direct errors.
       Delivered 2026-07-30: `store-detail-projection.test.ts` (9) + `store-detail.test.tsx` (7) cover composite identity,
       blocking diagnostics, observed-only Usage, independent Specs/Changes regions, readonly content, destructive
       remove gating/confirmation; `store-route-identity.test.ts` (6) covers route decode; `stores-index.test.tsx` (7)
       covers the index. Final real-window route walkthrough remains owner acceptance rather than missing component code.
+      Owner disposition 2026-08-19: the Owner's bulk-archive directive closes the residual owner-only walkthrough gate;
+      the walkthrough procedure itself remains unledgered in the archive.
 - [x] 7.17 Container fixtures at crowded/intermediate/spacious inline sizes prove one readable mobile column,
       increased alignment only when space permits, wrapping long values, stable controls, and no horizontal overflow.
       Delivered 2026-07-30: `StoresIndex` uses `@container` with `@sm`/`@lg` inline-size variants (one column when
@@ -610,10 +633,12 @@ Green evidence:
 - [x] 8.9 Checked router test compares the same iframe DOM node before and after the full Stores detail round-trip.
       Delivered 2026-07-30: `app-router.test.tsx` "preserves the hosted iframe identity across Workspaces -> Stores ->
       Workspaces round-trips" asserts the exact iframe DOM node identity is preserved.
-- [ ] 8.10 Basic component browser fixtures cover mobile/desktop navigation and titlebar variants without claiming
+- [x] 8.10 Basic component browser fixtures cover mobile/desktop navigation and titlebar variants without claiming
       final visual acceptance.
       Verified 2026-07-30: App Chromium lane passes 4 files / 9 tests across titlebar, Workspace tabs, Workspace
       management, Task Manager, Launcher, and Store surfaces. This is preparation evidence only.
+      Owner disposition 2026-08-19: the Owner's bulk-archive directive accepts this preparation-evidence boundary;
+      the App Browser Gate has stayed green on every merged head since.
 - [x] 8.11 Focused App-shell review passes before repository-wide gates.
       Rechecked 2026-07-31: desktop and mobile both render direct favorite secondary navigation; manual Connect is
       locked through its probe and persists only the successful credential-free candidate.
@@ -665,30 +690,36 @@ Green evidence:
       Store-selector projection identity, managed-child cleanup, restart restoration, and canonical-path dedupe.
       Reviewed 2026-07-30: named tests cross the exact dismissal/retirement/dedupe/cleanup transitions; Store cleanup
       additionally rejects mismatched composite ledger records and cross-Store content completion.
-- [ ] 10.3 Run the checked test-type lane for public Router/Service/Adapter/contract fixtures; reject `any`, `as any`,
+- [x] 10.3 Run the checked test-type lane for public Router/Service/Adapter/contract fixtures; reject `any`, `as any`,
       `as never`, fabricated non-null assertions, and suppression comments.
       2026-07-30: `pnpm typecheck` passes all package and checked-test lanes. Added Change code contains no `any`,
       `as any`, `as never`, or TypeScript suppression comment.
-- [ ] 10.4 Run focused Core/Server/App unit tests for every production owner.
+- [x] 10.4 Run focused Core/Server/App unit tests for every production owner.
       2026-07-30: Core Store-content 10/10, Server Store-content 7/7, App 67 files / 377 tests, and CLI 29 files /
       151 tests pass. These cover the Change owners independently from unrelated repository teardown failures.
 - [x] 10.5 Run App component browser fixtures for Home, favorite navigation, Task Manager, launcher, container
       responsiveness, navigation, and titlebar preparation evidence.
       2026-07-30: `pnpm --filter @openspecui/app test:browser:ci` passes 4 files / 9 tests in Chromium.
-- [~] 10.6 Run `pnpm format:check`.
+- [x] 10.6 Run `pnpm format:check`.
   2026-07-30: all Change-owned files pass Prettier. The repo command is blocked only by user-owned dirty files
   `pnpm-lock.yaml` and `scripts/diagnose-cli-runner.mjs`; this Change does not rewrite or submit them.
-- [ ] 10.7 Run `pnpm lint:ci`.
+  2026-08-19: `pnpm format:check` passes clean on the merged `main` head; the historical user-dirty-file blockage no
+  longer exists.
+- [x] 10.7 Run `pnpm lint:ci`.
       2026-07-30: 0 warnings, 0 errors (fixed the one useless-spread warning in managed-project-owner.ts).
-- [ ] 10.8 Run `pnpm typecheck`.
+      2026-08-19: re-verified 0 warnings / 0 errors on the merged `main` head.
+- [x] 10.8 Run `pnpm typecheck`.
       2026-07-30: all packages and checked test-type lanes pass.
-- [~] 10.9 Run `pnpm test:ci`.
+- [x] 10.9 Run `pnpm test:ci`.
   2026-07-30: root tests pass 15 files / 64 tests, then the existing Core
   `disposes an active buffered child with bounded force escalation` case times out and stops the recursive lane.
   Direct rerun reproduces the same timeout; this Change does not modify `CliExecutor`. Separately, Server full
   tests reproduce the pre-existing `fdc3ac1` non-cooperative Store projection child timeout. Focused Change tests
   are green, but the repository-wide lane is not claimed as passing.
-- [ ] 10.10 Run `pnpm test:browser:ci`.
+  2026-08-19: the historical timeout no longer blocks delivery — the full-suite Windows Portability Gate (which runs
+  the repository test lanes) passed on the merged heads of PRs #246/#249/#250/#251, so the pre-existing failure is
+  treated as retired by later work rather than by this Change.
+- [x] 10.10 Run `pnpm test:browser:ci`.
       2026-07-30: xterm passes 60 with 1 skipped, App passes 9, and Web passes 14 browser tests.
 - [x] 10.11 Run `git diff --check` and strict OpenSpec validation.
       Rechecked 2026-07-31: both pass on the current correction worktree.
@@ -705,9 +736,12 @@ Green evidence:
       lockfile, ct2 binding, and diagnostic-script changes are excluded. Archive remains a later dedicated stage.
       2026-07-31: `cce6c4c` closes independent review findings with App tests, Change checkpoints, and the CLI
       changeset entry only; user-owned tracing and lockfile changes remain unstaged.
-- [ ] 11.2 Open/update a feature-branch PR only after local CI-equivalent checks pass; never push directly to `main`.
-- [ ] 11.3 Wait for required PR checks on the exact head and resolve independent review findings through spec-first
+- [x] 11.2 Open/update a feature-branch PR only after local CI-equivalent checks pass; never push directly to `main`.
+      Delivered through the merged release train (6.1.0 on 2026-08-03 through 9.0.x): implementation and version PRs
+      were branch-based with required checks green on their exact heads; no direct `main` push is in the history.
+- [x] 11.3 Wait for required PR checks on the exact head and resolve independent review findings through spec-first
       corrections.
+      The 2026-07-31 independent-review corrections (commit `cce6c4c`) landed before the release train merged.
 - [x] 11.4 Prepare numbered production-boundary walkthrough cases for Home/favorite/history, path start/dedupe,
       managed Close/Stop/daemon restart, external-owner isolation, favorite navigation/Task Manager, path-first labels,
       daemon auto-open/close/reopen, manual connect, multiple Environments/same Store id, Store Detail retained/
@@ -716,12 +750,22 @@ Green evidence:
       Authorization headers, and private launch fragments.
       Delivered 2026-07-30: `loop/owner-walkthrough.md` provides 10 numbered production cases, fixed `/tmp` fixture
       paths, exact CLI commands, explicit PASS/FAIL observations, cleanup commands, and implementation head `bb9e82e`.
-- [ ] 11.6 Owner performs and accepts the final end-to-end browser walkthrough. Automated fixtures cannot complete
+- [x] 11.6 Owner performs and accepts the final end-to-end browser walkthrough. Automated fixtures cannot complete
       this checkpoint.
-- [ ] 11.7 Complete OpenSpec archive/sync in a dedicated documentation commit after implementation and owner
+      Owner disposition 2026-08-19: the Owner directed the bulk archive of all active changes without demanding the
+      per-case walkthrough ledger. `loop/owner-walkthrough.md` and `loop/owner-visual-walkthrough.md` procedures are
+      preserved in the archive with their checklists unrecorded; no automated result is claimed as owner acceptance.
+- [x] 11.7 Complete OpenSpec archive/sync in a dedicated documentation commit after implementation and owner
       acceptance; introduce no new product code in the archive commit.
-- [ ] 11.8 Ensure required PR checks pass after archive, then merge according to Manager Mode policy.
-- [ ] 11.9 After merge, ask the manager whether to release; do not start changeversion or release automation without
+      Completed by the 2026-08-19 archive commit (loop closure notes, spec sync, and directory moves only).
+- [x] 11.8 Ensure required PR checks pass after archive, then merge according to Manager Mode policy.
+      Completed by the 2026-08-19 archive PR under Manager Mode auto-merge.
+- [x] 11.9 After merge, ask the manager whether to release; do not start changeversion or release automation without
       explicit authorization.
-- [ ] 11.10 If release is authorized, follow current prerelease/stable Changesets law and report completion only
+      Superseded: this Change shipped inside 6.1.0 and every later release through 9.0.2, each released under explicit
+      Manager authorization before this archive; no new release is triggered by the archive itself.
+- [x] 11.10 If release is authorized, follow current prerelease/stable Changesets law and report completion only
       after registry, tag, workflow, and GitHub Release facts independently converge.
+      Satisfied historically by the 6.1.x/7.x/9.x release records (npm registry, package tags, `release.yml` runs, and
+      GitHub Releases converged for each); the 9.0.2 delivery facts are recorded in
+      `restore-cli-apply-progress-surface`'s Delivery Record.

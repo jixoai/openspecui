@@ -249,7 +249,7 @@ The App SHALL build one persistent Browser/OpenTray Workspaces shell. The build 
 App assets only; installable-app metadata and service-worker files are retired. A normal Browser Web deployment SHALL
 remain a regular web document without an install prompt, manifest, background cache owner, or PWA update flow.
 
-#### Scenario: Build the non-installable App shell
+#### Scenario: Build the App shell
 
 - **WHEN** the App workspace is built
 - **THEN** it SHALL emit a root `index.html` and hashed App assets
@@ -262,21 +262,46 @@ remain a regular web document without an install prompt, manifest, background ca
 - **THEN** the App SHALL ignore that event
 - **AND** Workspace Home SHALL render no install command or install state
 
-### Requirement: PWA Shell Updates
+#### Scenario: Package the authoritative local shell
 
-The App SHALL NOT register, cache, update, or expose a service worker. Shell refresh is owned by the normal Browser
-document or the OpenTray native host, not by a PWA lifecycle.
+- **WHEN** the publishable CLI package is built
+- **THEN** it SHALL include the App output produced by that same source release
+- **AND** the user-level App daemon SHALL serve those assets from a loopback endpoint
+- **AND** the daemon SHALL NOT select or depend on an external App deployment
 
-#### Scenario: No background shell update owner
+#### Scenario: Deploy the App independently
 
-- **WHEN** the App mounts in Browser Web or OpenTray
-- **THEN** it SHALL not register a service worker or subscribe to service-worker lifecycle events
-- **AND** it SHALL render no apply-update action or waiting-service-worker banner
+- **WHEN** an operator deploys the App output as a static browser surface
+- **THEN** the package README SHALL document static-host cache and SPA-fallback requirements
+- **AND** that deployment MAY accept a manually supplied backend launch parameter
+- **AND** the CLI SHALL NOT expose a setting or URL-valued flag that selects that deployment
+
+#### Scenario: Open an initial standalone Workspace
+
+- **GIVEN** a standalone App deployment
+- **WHEN** the shell loads with a valid `api` query parameter
+- **THEN** it SHALL create or activate a Workspace for that backend service
+- **AND** it SHALL query backend health for embedding metadata
+- **AND** it SHALL render the Workspace without discarding the shell itself
 
 ### Requirement: OpenTray And Browser Presentation
 
 The daemon SHALL present the same bundled App shell through an exclusive native OpenTray or Browser host without
 changing project Server ownership. PWA roles, launch handlers, and PWA overlay titlebar geometry are retired.
+
+#### Scenario: Native OpenTray retains one App window
+
+- **GIVEN** native presentation is supported
+- **WHEN** the daemon starts in native mode
+- **THEN** it SHALL create one retained OpenTray WebView with `style.appMode: true`
+- **AND** only the first `show()` SHALL supply bootstrap geometry, style, and native capability
+- **AND** later activation SHALL reveal and focus the retained window
+
+#### Scenario: Web mode isolates the native extension
+
+- **WHEN** the daemon starts in Web mode or native presentation is unsupported
+- **THEN** it SHALL preserve a Browser-capable App result
+- **AND** it SHALL NOT import, initialize, or probe the native WebView extension
 
 #### Scenario: Browser host uses browser-only launch ownership
 
@@ -284,7 +309,7 @@ changing project Server ownership. PWA roles, launch handlers, and PWA overlay t
 - **THEN** cross-window launch relay SHALL use Browser ownership only
 - **AND** it SHALL not detect standalone/display-mode installation or consume a Web App Launch Handler queue
 
-#### Scenario: Exactly one native titlebar owner is active
+#### Scenario: Exactly one titlebar owner is active
 
 - **WHEN** the App runs in Browser Web, OpenTray overlay, or native frame mode
 - **THEN** exactly one Browser/OpenTray/native-frame presentation owner SHALL write titlebar inset geometry
@@ -297,7 +322,7 @@ backend processes explicitly started through its local directory-launch capabili
 `serve` processes SHALL retain their own process ownership and register current leases. Managed and external
 backends SHALL share one typed running-Workspace projection without sharing termination authority.
 
-#### Scenario: A foreground project registers with the daemon
+#### Scenario: A project registers with the daemon
 
 - **GIVEN** an external foreground `serve` process owns a ready project backend
 - **WHEN** it registers a Workspace lease with the daemon
@@ -349,3 +374,10 @@ backends SHALL share one typed running-Workspace projection without sharing term
 - **AND** it SHALL NOT expose the raw parser failure or advertise unsupported managed controls
 - **AND** one offline Workspace SHALL render one coherent recovery state rather than simultaneous offline and waiting
   claims
+
+## REMOVED Requirements
+
+### Requirement: PWA Shell Updates
+
+The PWA lifecycle (service-worker registration, shell update detection, and apply-update flow) is fully retired
+with the 6.1.0 PWA removal; the Browser document and OpenTray native host own shell refresh instead.

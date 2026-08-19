@@ -24,6 +24,21 @@ product interaction. The App SHALL observe Root Context only for currently conne
 entries, preserve typed source-labelled errors and Reference provenance, and remain an observed-only,
 non-machine-wide projection.
 
+#### Scenario: Two online connections require an explicit operation target
+
+- **GIVEN** backend A and backend B are online
+- **WHEN** B is selected for an environment-scoped Store operation
+- **THEN** the operation SHALL target B even when A appears first in connection order
+- **AND** without a selected current online backend the operation SHALL remain unavailable
+- **AND** replacing B with another tab or generation at the same locator SHALL retire the prior authority
+- **AND** a Root refresh or transport failure SHALL keep retained evidence explicitly stale until a
+  replacement Root emission commits
+- **AND** retained Root and Reference evidence SHALL preserve the observation generation, backend-issued
+  `envUri`, health source, and observation time that produced it; a pending generation SHALL NOT relabel it
+- **AND** Reference warnings SHALL remain visible upstream evidence rather than being rewritten as healthy
+- **AND** duplicate tabs for one backend/project locator SHALL remain authority-distinct while counting as
+  one connected project in environment-level grouping
+
 #### Scenario: Launch credential reaches only its intended backend
 
 - **GIVEN** an App launch URL supplies an API locator and credential fragment

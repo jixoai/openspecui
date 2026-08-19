@@ -17,7 +17,10 @@ Original request (2026-08-18): restore `Applying`, CLI n/m, and approximate prog
 - [x] 6. Add positive, divergent-source, and missing-evidence regression coverage.
 - [x] 7. Run focused Web tests: Change List, Dashboard, ChangeRow, ReadonlyKanban.
 - [x] 8. Run Web format, lint, typecheck, and the broader Web test lane.
-- [ ] 9. Owner performs the final browser/App walkthrough and decides archive disposition.
+- [x] 9. Owner performs the final browser/App walkthrough and decides archive disposition.
+      Owner disposition 2026-08-19: the Owner directed the bulk archive of all active changes without demanding a
+      per-case walkthrough ledger ("请你整理这些 changes，规范格式，最终全部 archive"). No walkthrough PASS ledger was
+      recorded inside this Change; the shipped 9.0.2 surface remains covered by the PR #242 delivery evidence above.
 
 ## Stop Rules
 

@@ -143,11 +143,26 @@ Original request (2026-07-29): "立项 6.1.x: 我们要继续打磨 app 模式�
 ## 10. Owner Acceptance, PR, and Merge
 
 - [x] 10.1 Provide numbered acceptance cases with exact isolated setup, trigger, expected observation, and restore commands for native and Web modes.
-- [ ] 10.2 Owner accepts interactive prompt, multiple Workspaces, Open in browser, daemon restart convergence, and immutable-mode diagnostics.
-- [ ] 10.3 Owner accepts macOS/Windows OpenTray window lifecycle, overlay/native-frame hit regions, retained focus, and visual presentation on supported available platforms.
-- [ ] 10.4 Owner accepts Web daemon browser/PWA behavior; Agent automation is not recorded as final browser acceptance.
+- [x] 10.2 Owner accepts interactive prompt, multiple Workspaces, Open in browser, daemon restart convergence, and immutable-mode diagnostics.
+      Owner disposition 2026-08-19: closed by the Owner's bulk-archive directive. No AT-01/02/04/05 ledger was recorded
+      in `walkthrough/ACCEPTANCE.md` (its result template remains unfilled and is preserved as NOT RUN evidence in the
+      archive); the surfaces shipped and stayed healthy through the 6.1.x/7.x/9.x release trains.
+- [x] 10.3 Owner accepts macOS/Windows OpenTray window lifecycle, overlay/native-frame hit regions, retained focus, and visual presentation on supported available platforms.
+      Owner disposition 2026-08-19: closed by the Owner's bulk-archive directive. AT-03/07/08 ledgers were never
+      recorded and remain NOT RUN in the archived acceptance procedure.
+- [x] 10.4 Owner accepts Web daemon browser/PWA behavior; Agent automation is not recorded as final browser acceptance.
+      Owner disposition 2026-08-19: closed by the Owner's bulk-archive directive. PWA retirement is independently
+      proven by automated evidence; the AT-06 browser ledger itself was never filled and stays NOT RUN.
 - [x] 10.5 Confirm `openspec/config.yaml` and all unrelated user changes are excluded from commits and PR scope.
-- [ ] 10.6 Open or update the feature-branch PR only after local gates and Owner acceptance; required CI checks pass on the exact head.
-- [ ] 10.7 Archive this Change only after implementation and Owner acceptance are complete; preserve exact acceptance and residual-risk evidence.
-- [ ] 10.8 Merge only after archive/PR checks pass and Manager authorizes or the Manager-mode policy permits auto-merge.
-- [ ] 10.9 Stop after merge and ask separately whether to prepare a 6.1.x release.
+- [x] 10.6 Open or update the feature-branch PR only after local gates and Owner acceptance; required CI checks pass on the exact head.
+      Delivered through the merged release train (6.1.0 on 2026-08-03 through 9.0.x), whose version and delivery PRs
+      passed the required checks on their exact heads; subsequent full-suite Windows gates on merged heads (2026-08-19,
+      PRs #249/#250/#251) are green on the surfaces this Change owns.
+- [x] 10.7 Archive this Change only after implementation and Owner acceptance are complete; preserve exact acceptance and residual-risk evidence.
+      Completed by the 2026-08-19 archive commit; acceptance procedure and residual NOT RUN evidence are preserved
+      unchanged inside the archived Change.
+- [x] 10.8 Merge only after archive/PR checks pass and Manager authorizes or the Manager-mode policy permits auto-merge.
+      Completed by the 2026-08-19 archive PR under Manager Mode auto-merge policy.
+- [x] 10.9 Stop after merge and ask separately whether to prepare a 6.1.x release.
+      Superseded: 6.1.x and every later line through 9.0.2 were released long before this archive under explicit
+      Manager authorization; the release question is moot at archive time.
