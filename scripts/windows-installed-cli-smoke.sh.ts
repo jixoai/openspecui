@@ -1,13 +1,15 @@
 #!/usr/bin/env bun
 /**
- * Orthogonal intents (created 2026-08-09 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
  * 1. Pack the already-built CLI and install the real tarball into an isolated Windows directory.
  * 2. Prove packaged CLI, App, Web, and native-icon artifacts exist after installation.
  * 3. Resolve the installed npm shim to a native Node argv boundary and verify daemon start/stop.
- * 4. Remove only the transaction-owned temporary root after every terminal outcome.
+ * 4. Remove only the transaction-owned temporary root after every terminal outcome, with a bounded
+ *    EBUSY/EACCES/EPERM backoff so Windows lock release cannot flake the gate.
  * 5. Compare the installed CLI version with the current workspace package manifest, not a stale release literal.
  *
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ * Original request (2026-08-19): "比如`EBUSY: resource busy or locked`" — owned-root removal hit EBUSY on hosted runners.
  */
 import { spawnSync } from 'node:child_process'
 import { access, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
@@ -26,6 +28,8 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPOSITORY_ROOT = resolve(SCRIPT_DIR, '..')
 const TEMP_PREFIX = 'openspecui-windows-installed-smoke-'
 const CLI_PACKAGE_JSON = join(REPOSITORY_ROOT, 'packages', 'cli', 'package.json')
+const LOCK_RELEASE_ATTEMPTS = 6
+const LOCK_RELEASE_BASE_DELAY_MS = 250
 
 function execute(
   invocation: CommandInvocation,
@@ -97,6 +101,11 @@ async function assertInstalledArtifacts(installRoot: string): Promise<string> {
   return shim
 }
 
+function isLockReleaseError(error: unknown): boolean {
+  const code = (error as { code?: string }).code
+  return code === 'EBUSY' || code === 'EACCES' || code === 'EPERM'
+}
+
 async function removeOwnedTempRoot(root: string): Promise<void> {
   const resolvedTemp = resolve(tmpdir())
   const resolvedRoot = resolve(root)
@@ -106,7 +115,25 @@ async function removeOwnedTempRoot(root: string): Promise<void> {
   ) {
     throw new Error(`Refusing to remove non-owned smoke root: ${resolvedRoot}`)
   }
-  await rm(resolvedRoot, { force: true, recursive: true })
+  // Bounded backoff for Windows lock release (EBUSY/EACCES/EPERM) after verified teardown.
+  for (let attempt = 1; attempt <= LOCK_RELEASE_ATTEMPTS; attempt++) {
+    try {
+      await rm(resolvedRoot, { force: true, recursive: true })
+      return
+    } catch (error) {
+      if (!isLockReleaseError(error) || attempt === LOCK_RELEASE_ATTEMPTS) {
+        const code = (error as { code?: string }).code ?? 'unknown'
+        throw new Error(
+          `Smoke-root removal failed after ${attempt} attempts (code=${code}): ${resolvedRoot}. ` +
+            `Ownership verified: root is inside TEMP with prefix ${TEMP_PREFIX}. ` +
+            `Cause: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+      await new Promise((resolveDelay) =>
+        setTimeout(resolveDelay, LOCK_RELEASE_BASE_DELAY_MS * 2 ** (attempt - 1))
+      )
+    }
+  }
 }
 
 async function runSmoke(root: string): Promise<void> {
