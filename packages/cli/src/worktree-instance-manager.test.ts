@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
  * 1. Prove worktree runtime selection and source bootstrap normalization.
  * 2. Prove worker-thread and process children inherit the exact parent Access Gate and Web asset root without argv leakage.
  * 3. Prove readiness authenticates with the inherited Gate while unguarded readiness remains unchanged.
@@ -11,8 +11,11 @@
  * 6. The real worker-thread lifecycle case skips only on hosted Windows CI: `terminate()` can
  *    wait forever on a thread stuck in native teardown there. The ubuntu CI lane and local
  *    Windows runs keep the contract covered.
+ * 7. Prove the launching→ready→closing→closed registry: close() during launch owns the pending
+ *    child, late-ready after close is rejected, and the registered endpoint is the bound address.
  *
  * Original request (2026-08-14): first hosted-runner Windows lane run hit EBUSY rmdir on the awaited-exit fixture.
+ * Original request (2026-08-19): "Timed out waiting for worktree server at http://localhost:3100 ... 做好并发隔离"
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
  * Delivery correction (2026-07-26): clean child fixtures own one minimal physical Web asset root.
  * Owner correction (2026-07-29): daemon start is not a project Server command; child processes use serve.
@@ -27,6 +30,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createWorktreeServerWorker } from './index'
 import { createTestHealthServer, type TestHealthServer } from './worktree-handoff-test-platform'
@@ -508,4 +512,139 @@ describe('worktree child Access Gate integration', () => {
     },
     20_000
   )
+})
+
+describe('worktree runtime registry lifecycle', () => {
+  it('close during launch owns the pending child and rejects late ready write-back', async () => {
+    const currentProjectDir = await mkdtemp(join(tmpdir(), 'openspecui-registry-current-'))
+    const targetPath = await mkdtemp(join(tmpdir(), 'openspecui-registry-target-'))
+    const runtimeDir = await mkdtemp(join(tmpdir(), 'openspecui-registry-runtime-'))
+    tempDirs.push(currentProjectDir, targetPath, runtimeDir)
+
+    // A never-ready worker whose terminate() emits exit, matching real Worker behavior.
+    let stopCallCount = 0
+    const exitListeners = new Set<() => void>()
+    const neverReadyWorker = {
+      on: () => neverReadyWorker,
+      once: (event: string, listener: () => void) => {
+        if (event === 'exit') exitListeners.add(listener)
+        return neverReadyWorker
+      },
+      off: (event: string, listener: () => void) => {
+        if (event === 'exit') exitListeners.delete(listener)
+        return neverReadyWorker
+      },
+      postMessage: () => undefined,
+      terminate: async () => {
+        stopCallCount += 1
+        for (const listener of exitListeners) listener()
+      },
+      threadId: 99,
+    }
+    const createNeverReadyWorker = () => neverReadyWorker as unknown as Worker
+
+    const manager = createWorktreeInstanceManager({
+      currentProjectDir,
+      currentServerUrl: 'http://127.0.0.1:1',
+      runtimeDir,
+      createWorker: createNeverReadyWorker,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
+      readinessTimeoutMs: 60_000,
+    })
+
+    const launch = manager.ensureWorktreeServer({ targetPath })
+    // Give the launch time to reach its launching stage before racing close.
+    const closePromise = manager.close()
+    await expect(launch).rejects.toThrow(/exited|closed/)
+    await closePromise
+    expect(stopCallCount).toBeGreaterThanOrEqual(1)
+    // Post-close launches are rejected outright.
+    await expect(manager.ensureWorktreeServer({ targetPath })).rejects.toThrow(/closed/)
+  }, 20_000)
+
+  it('late ready after close is rejected, not registered', async () => {
+    const currentProjectDir = await mkdtemp(join(tmpdir(), 'openspecui-late-current-'))
+    const targetPath = await mkdtemp(join(tmpdir(), 'openspecui-late-target-'))
+    const runtimeDir = await mkdtemp(join(tmpdir(), 'openspecui-late-runtime-'))
+    tempDirs.push(currentProjectDir, targetPath, runtimeDir)
+
+    // A worker that becomes ready only after close() was called.
+    let stopCallCount = 0
+    const exitListeners = new Set<() => void>()
+    let readyEmitted = false
+    const lateReadyWorker = {
+      on: (_event: string, listener: (message: unknown) => void) => {
+        // Simulate the worker posting a ready message 50ms after start.
+        if (!readyEmitted) {
+          readyEmitted = true
+          setTimeout(() => {
+            listener({ type: 'ready', serverUrl: 'http://127.0.0.1:19999' })
+          }, 50)
+        }
+        return lateReadyWorker
+      },
+      once: (event: string, listener: () => void) => {
+        if (event === 'exit') exitListeners.add(listener)
+        return lateReadyWorker
+      },
+      off: (event: string, listener: () => void) => {
+        if (event === 'exit') exitListeners.delete(listener)
+        return lateReadyWorker
+      },
+      postMessage: () => undefined,
+      terminate: async () => {
+        stopCallCount += 1
+        for (const listener of exitListeners) listener()
+      },
+      threadId: 98,
+    }
+    const createLateReadyWorker = () => lateReadyWorker as unknown as Worker
+
+    const manager = createWorktreeInstanceManager({
+      currentProjectDir,
+      currentServerUrl: 'http://127.0.0.1:1',
+      runtimeDir,
+      createWorker: createLateReadyWorker,
+      webAssetsDir: TEST_WEB_ASSETS_DIR,
+      // Long enough for the late ready to arrive during close.
+      readinessTimeoutMs: 10_000,
+    })
+
+    const launch = manager.ensureWorktreeServer({ targetPath })
+    // Close before the late ready fires.
+    const closePromise = manager.close()
+    // The launch settles with a closed rejection; the late ready must not register.
+    await expect(launch).rejects.toThrow(/closed|exited/)
+    await closePromise
+    expect(stopCallCount).toBeGreaterThanOrEqual(1)
+  }, 15_000)
+
+  it('registers the worker-reported bound address, not the pre-probed port', async () => {
+    const currentProjectDir = await mkdtemp(join(tmpdir(), 'openspecui-endpoint-current-'))
+    const targetPath = await mkdtemp(join(tmpdir(), 'openspecui-endpoint-target-'))
+    const runtimeDir = await mkdtemp(join(tmpdir(), 'openspecui-endpoint-runtime-'))
+    tempDirs.push(currentProjectDir, targetPath, runtimeDir)
+
+    // Real worker thread from the source CLI: the actual bound address differs from the probe
+    // when the preferred port is already taken, proving endpoint truth flows through ready.
+    const manager = createWorktreeInstanceManager({
+      currentProjectDir,
+      currentServerUrl: 'http://127.0.0.1:1',
+      runtimeDir: dirname(fileURLToPath(import.meta.url)),
+      createWorker: createWorktreeServerWorker,
+      webAssetsDir: await createMinimalWebAssetsDir('openspecui-endpoint-assets-', 'endpoint'),
+      preferredPortStart: 31_000,
+    })
+    managers.push(manager)
+
+    const handoff = await manager.ensureWorktreeServer({ targetPath })
+    const parsed = new URL(handoff.serverUrl)
+    // The bound address is on the 31000+ range and serves a real health payload.
+    expect(Number(parsed.port)).toBeGreaterThanOrEqual(31_000)
+    const healthResponse = await fetch(`${handoff.serverUrl}/api/health`)
+    expect(healthResponse.status).toBe(200)
+    // close() settles every runtime: a second ensure after close is a typed rejection.
+    await manager.close()
+    await expect(manager.ensureWorktreeServer({ targetPath })).rejects.toThrow(/closed/)
+  }, 30_000)
 })

@@ -31,6 +31,7 @@ export interface WorktreeServerStartOptions {
   port: number
   open: false
   webAssetsDir: string
+  enableWatcher?: boolean
   accessGateCredential?: AccessGateCredential
 }
 
@@ -39,6 +40,7 @@ export interface WorktreeServerWorkerData {
   projectDir: string
   port: number
   webAssetsDir: string
+  enableWatcher?: boolean
   accessGateCredential?: AccessGateCredential
 }
 
@@ -153,6 +155,7 @@ export function buildWorktreeServerStartOptions(
     port: data.port,
     open: false,
     webAssetsDir: data.webAssetsDir,
+    ...(data.enableWatcher === false ? { enableWatcher: false } : {}),
     ...(data.accessGateCredential ? { accessGateCredential: data.accessGateCredential } : {}),
   }
 }

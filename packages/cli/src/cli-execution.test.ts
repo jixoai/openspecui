@@ -40,6 +40,7 @@ function servePlan(overrides: Partial<ServeCommandPlan> = {}): ServeCommandPlan 
     web: false,
     auth: false,
     password: undefined,
+    noWatcher: false,
     ...overrides,
   }
 }

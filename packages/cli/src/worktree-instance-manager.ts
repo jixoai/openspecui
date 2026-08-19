@@ -1,16 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
- * 1. Own reusable worktree Server instances and their readiness lifecycle.
+ * Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
+ * 1. Own reusable worktree Server instances through a launching→ready→closing→closed registry.
  * 2. Select worker-thread or process bootstrap without exposing private runtime inputs through argv or URLs.
  * 3. Propagate one parent Access Gate and resolved Web asset root through child launch and readiness.
  * 4. Preserve nested handoff delegation and deterministic worker/process-tree teardown through explicit ownership.
  * 5. Hide worktree Server process console windows (`windowsHide`) under a console-less Windows daemon.
+ * 6. Emit structured lifecycle diagnostics so CI readiness failures name their slow stage.
  *
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
  * Delivery correction (2026-07-26): nested worktree Servers reuse the parent runtime's Web assets.
  * Owner correction (2026-07-29): daemon start is not a project Server command; child processes use serve.
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ * Original request (2026-08-19): "TRPCClientError: Timed out waiting for worktree server at http://localhost:3100 ... 封装好相关的资源使用策略，做好并发隔离"
  */
 import { findAvailablePort } from '@openspecui/server'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -64,6 +66,8 @@ interface WorktreeInstanceManagerOptions {
   preferredPortStart?: number
   webAssetsDir: string
   accessGateCredential?: AccessGateCredential | null
+  /** Skip watcher startup in handoff children (propagated through the worker contract). */
+  disableChildWatcher?: boolean
 }
 
 interface ManagedInstance {
@@ -71,6 +75,38 @@ interface ManagedInstance {
   serverUrl: string
   runtime: WorktreeServerRuntime
   lastUsedAt: number
+}
+
+/** Lifecycle stage every managed worktree runtime passes through. */
+type RuntimeStage = 'launching' | 'ready' | 'closing' | 'closed'
+
+interface TrackedRuntime {
+  projectDir: string
+  runtime: WorktreeServerRuntime
+  stage: RuntimeStage
+  readyServerUrl: string | null
+}
+
+interface LifecycleDiagnostics {
+  runtimeId: string
+  projectDir: string
+  transport: 'worker' | 'process'
+  watcher: boolean
+  candidatePort: number
+  stages: Array<{ stage: string; at: number; detail?: string }>
+  probeCount: number
+  lastProbeError: string | null
+}
+
+function formatLifecycleDiagnostics(diag: LifecycleDiagnostics): string {
+  const stages = diag.stages
+    .map((entry) => `${entry.stage}@${entry.at}ms${entry.detail ? `(${entry.detail})` : ''}`)
+    .join(' → ')
+  return [
+    `worktree-runtime ${diag.runtimeId} transport=${diag.transport} watcher=${diag.watcher} candidatePort=${diag.candidatePort}`,
+    `stages: ${stages || '(none recorded)'}`,
+    `probes=${diag.probeCount} lastProbeError=${diag.lastProbeError ?? 'none'}`,
+  ].join(' | ')
 }
 
 interface WorktreeServerRuntime {
@@ -213,6 +249,7 @@ function createNodeCliCommandPlan(options: {
   port: number
   cwd: string
   webAssetsDir: string
+  noWatcher?: boolean
   accessGateCredential?: AccessGateCredential | null
 }): WorktreeServerProcessLaunchPlan {
   const env = { ...process.env }
@@ -232,6 +269,7 @@ function createNodeCliCommandPlan(options: {
       '--port',
       String(options.port),
       '--no-open',
+      ...(options.noWatcher ? ['--no-watcher'] : []),
     ],
     cwd: options.cwd,
     env,
@@ -244,13 +282,15 @@ export function createWorktreeServerLaunchPlan(options: {
   port: number
   webAssetsDir: string
   createWorker?: WorktreeServerWorkerFactory
+  disableChildWatcher?: boolean
   accessGateCredential?: AccessGateCredential | null
-}): WorktreeServerLaunchPlan {
+}): WorktreeServerWorkerLaunchPlan | WorktreeServerProcessLaunchPlan {
   const workerData: WorktreeServerWorkerData = {
     kind: WORKTREE_SERVER_WORKER_KIND,
     projectDir: options.projectDir,
     port: options.port,
     webAssetsDir: options.webAssetsDir,
+    ...(options.disableChildWatcher ? { enableWatcher: false } : {}),
     ...(options.accessGateCredential ? { accessGateCredential: options.accessGateCredential } : {}),
   }
   const workspace = resolveLocalCliWorkspace(options.runtimeDir)
@@ -278,6 +318,7 @@ export function createWorktreeServerLaunchPlan(options: {
     port: options.port,
     cwd: options.projectDir,
     webAssetsDir: options.webAssetsDir,
+    ...(options.disableChildWatcher ? { noWatcher: true } : {}),
     accessGateCredential: options.accessGateCredential,
   })
 }
@@ -288,6 +329,7 @@ async function waitForServerReady(options: {
   runtime: WorktreeServerRuntime
   timeoutMs: number
   accessGateCredential?: AccessGateCredential | null
+  onProbe?: (lastError: string | null) => void
 }): Promise<void> {
   let exitMessage: string | null = null
   let startupError: Error | null = null
@@ -300,7 +342,7 @@ async function waitForServerReady(options: {
     startupError = error
   })
   options.runtime.onReady((serverUrl) => {
-    readyServerUrl = serverUrl
+    readyServerUrl ??= serverUrl
   })
 
   const deadline = Date.now() + options.timeoutMs
@@ -332,7 +374,7 @@ async function waitForServerReady(options: {
       if (error instanceof Error && error.message.includes('runtime is incompatible')) {
         throw error
       }
-      // Server is still starting.
+      options.onProbe?.(error instanceof Error ? error.message : String(error))
     }
 
     await delay(250)
@@ -605,6 +647,18 @@ export function createWorktreeInstanceManager(
   const currentProjectDir = resolve(options.currentProjectDir)
   const instances = new Map<string, ManagedInstance>()
   const pending = new Map<string, Promise<GitWorktreeHandoff>>()
+  /** Every runtime from creation onward, so close() owns launching children too. */
+  const trackedRuntimes = new Set<TrackedRuntime>()
+  let managerClosed = false
+  let runtimeSeq = 0
+
+  const trackRuntime = (tracked: TrackedRuntime): void => {
+    trackedRuntimes.add(tracked)
+    tracked.runtime.once('exit', () => {
+      tracked.stage = 'closed'
+      trackedRuntimes.delete(tracked)
+    })
+  }
 
   const ensureWorktreeServer = async (input: {
     targetPath: string
@@ -617,8 +671,15 @@ export function createWorktreeInstanceManager(
       }
     }
 
+    if (managerClosed) {
+      throw new Error('Worktree instance manager is closed; no new worktree servers may launch.')
+    }
+
     const existing = instances.get(targetPath)
     if (existing && (await isHealthyInstance(existing, options.accessGateCredential))) {
+      if (managerClosed) {
+        throw new Error('Worktree instance manager is closed; no new worktree servers may launch.')
+      }
       existing.lastUsedAt = Date.now()
       return {
         projectDir: existing.projectDir,
@@ -636,34 +697,106 @@ export function createWorktreeInstanceManager(
       return pendingInstance
     }
 
+    // Re-seal admission after the health-check await: close() may have raced it.
+    if (managerClosed) {
+      throw new Error('Worktree instance manager is closed; no new worktree servers may launch.')
+    }
+
     const promise = (async (): Promise<GitWorktreeHandoff> => {
-      const port = await findAvailablePort(
+      const startedAt = Date.now()
+      const runtimeId = `wt-${++runtimeSeq}`
+      const candidatePort = await findAvailablePort(
         options.preferredPortStart ?? DEFAULT_PORT_START,
         DEFAULT_PORT_ATTEMPTS
       )
       const plan = createWorktreeServerLaunchPlan({
         runtimeDir: options.runtimeDir,
         projectDir: targetPath,
-        port,
+        port: candidatePort,
         webAssetsDir: options.webAssetsDir,
         createWorker: options.createWorker,
+        disableChildWatcher: options.disableChildWatcher,
         accessGateCredential: options.accessGateCredential,
       })
+      const diag: LifecycleDiagnostics = {
+        runtimeId,
+        projectDir: targetPath,
+        transport: plan.kind,
+        watcher: !options.disableChildWatcher,
+        candidatePort,
+        stages: [{ stage: 'plan-created', at: Date.now() - startedAt, detail: plan.kind }],
+        probeCount: 0,
+        lastProbeError: null,
+      }
       const runtime = startWorktreeServerRuntime(plan)
-      const serverUrl = `http://localhost:${port}`
+      const expectedServerUrl = `http://localhost:${candidatePort}`
+      let readyServerUrl: string | null = null
+      runtime.onReady((serverUrl) => {
+        readyServerUrl ??= serverUrl
+        diag.stages.push({
+          stage: 'worker-ready',
+          at: Date.now() - startedAt,
+          detail: `actual=${serverUrl}`,
+        })
+      })
+
+      const tracked: TrackedRuntime = {
+        projectDir: targetPath,
+        runtime,
+        stage: 'launching',
+        readyServerUrl: null,
+      }
+      trackRuntime(tracked)
+
+      if (managerClosed) {
+        // close() raced the launch; own the child immediately instead of leaking it.
+        diag.stages.push({ stage: 'close-raced-launch', at: Date.now() - startedAt })
+        await runtime.stop()
+        throw new Error(
+          `Worktree instance manager closed before ${runtimeId} became ready. ${formatLifecycleDiagnostics(diag)}`
+        )
+      }
 
       try {
         await waitForServerReady({
-          serverUrl,
+          serverUrl: expectedServerUrl,
           projectDir: targetPath,
           runtime,
           timeoutMs: options.readinessTimeoutMs ?? DEFAULT_CHILD_TIMEOUT_MS,
           accessGateCredential: options.accessGateCredential,
+          onProbe: (probeError) => {
+            diag.probeCount += 1
+            diag.lastProbeError = probeError
+          },
         })
       } catch (error) {
+        diag.stages.push({
+          stage: 'readiness-failed',
+          at: Date.now() - startedAt,
+        })
         await runtime.stop()
-        throw error
+        const reason = error instanceof Error ? error.message : String(error)
+        throw new Error(`${reason} [${formatLifecycleDiagnostics(diag)}]`)
       }
+
+      if (managerClosed) {
+        // close() sealed admission while readiness was resolving; reject the late registration.
+        diag.stages.push({ stage: 'late-ready-rejected', at: Date.now() - startedAt })
+        await runtime.stop()
+        throw new Error(
+          `Worktree instance manager closed while ${runtimeId} was becoming ready; the child was stopped and not registered. [${formatLifecycleDiagnostics(diag)}]`
+        )
+      }
+
+      // The worker-reported bound address is the endpoint truth; the pre-probed port is only a hint.
+      const serverUrl = readyServerUrl ?? expectedServerUrl
+      diag.stages.push({
+        stage: 'registered',
+        at: Date.now() - startedAt,
+        detail: `endpoint=${serverUrl}`,
+      })
+      tracked.readyServerUrl = serverUrl
+      tracked.stage = 'ready'
 
       const instance: ManagedInstance = {
         projectDir: targetPath,
@@ -695,6 +828,21 @@ export function createWorktreeInstanceManager(
   }
 
   const close = async (): Promise<void> => {
+    managerClosed = true
+    // Seal admission, then wait for every in-flight launch to settle (they observe
+    // managerClosed and stop their children — their rejection is expected, not an error)
+    // before stopping ready instances.
+    const pendingLaunches = [...pending.values()].map((promise) =>
+      promise.then(
+        () => undefined,
+        () => undefined
+      )
+    )
+    const stopping = [...trackedRuntimes].map(async (tracked) => {
+      tracked.stage = 'closing'
+      await tracked.runtime.stop()
+    })
+    await Promise.all([...pendingLaunches, ...stopping])
     await Promise.all(
       [...instances.values()].map(async (instance) => {
         instances.delete(instance.projectDir)

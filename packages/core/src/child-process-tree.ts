@@ -1,9 +1,11 @@
 /**
- * Orthogonal intents (created 2026-08-08 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
  * 1. Terminate one Core-owned child-process tree without crossing a reused Windows PID boundary.
  * 2. Expose exact Windows process-table ancestry and PID-identity termination for script reuse.
+ * 3. Serialize Win32_Process snapshot reads behind one in-flight guard.
  *
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ * Original request (2026-08-19): "做好并发隔离" — concurrent WMI full-table reads starved runner settlement.
  */
 import type { ChildProcess } from 'node:child_process'
 import { execFile } from 'node:child_process'
@@ -20,6 +22,12 @@ export interface WindowsProcessRecord {
   readonly ParentProcessId: number
   readonly ProcessId: number
 }
+
+/**
+ * In-flight serialization for Win32_Process reads. Multiple tests reading the full
+ * process table concurrently delays WMI settlement past their bounded timeouts.
+ */
+let processTableReadInFlight: Promise<WindowsProcessRecord[]> | null = null
 
 function hasChildExited(child: ChildProcess): boolean {
   return child.exitCode !== null || child.signalCode !== null
@@ -41,26 +49,35 @@ function isWindowsProcessRecord(value: unknown): value is WindowsProcessRecord {
 
 /** Read the current Windows process table used for exact ancestry and root ownership checks. */
 export async function readWindowsProcessTable(): Promise<WindowsProcessRecord[]> {
-  const { stdout } = await execFileAsync(
-    'powershell.exe',
-    [
-      '-NoLogo',
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      '[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,ExecutablePath | ConvertTo-Json -Compress',
-    ],
-    {
-      encoding: 'utf8',
-      maxBuffer: WINDOWS_PROCESS_TABLE_MAX_BUFFER,
-      windowsHide: true,
-    }
-  )
-  const json = stdout.trim()
-  if (json.length === 0) return []
-  const parsed: unknown = JSON.parse(json)
-  const rows = Array.isArray(parsed) ? parsed : [parsed]
-  return rows.filter(isWindowsProcessRecord)
+  // Serialize concurrent full-table reads: parallel WMI queries starve each other's settlement.
+  if (processTableReadInFlight) return processTableReadInFlight
+  processTableReadInFlight = (async (): Promise<WindowsProcessRecord[]> => {
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
+      [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        '[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,ExecutablePath | ConvertTo-Json -Compress',
+      ],
+      {
+        encoding: 'utf8',
+        maxBuffer: WINDOWS_PROCESS_TABLE_MAX_BUFFER,
+        windowsHide: true,
+      }
+    )
+    const json = stdout.trim()
+    if (json.length === 0) return []
+    const parsed: unknown = JSON.parse(json)
+    const rows = Array.isArray(parsed) ? parsed : [parsed]
+    return rows.filter(isWindowsProcessRecord)
+  })()
+  try {
+    return await processTableReadInFlight
+  } finally {
+    processTableReadInFlight = null
+  }
 }
 
 /** Resolve one root and all descendants from one immutable Windows process-table snapshot. */
