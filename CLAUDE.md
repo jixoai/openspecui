@@ -154,3 +154,9 @@ README-0.15.0.md       # Archived (for openspec 0.15.x)
 - OpenSpec CLI has breaking changes that affect openspecui usage
 - Installation or configuration steps change significantly
 - API or command interface changes
+
+### Package README
+
+- `packages/cli/README.md` is the npm-facing README of the `openspecui` package, scoped to the
+  current release line only. Whenever a release updates the repository `README.md`, update the
+  package README in the same delivery (see the Release README law in `AGENTS.md`).
