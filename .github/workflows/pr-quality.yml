@@ -152,7 +152,8 @@ jobs:
       - name: Skip for Windows-neutral scope
         if: ${{ needs.ci-scope.outputs.windows_required == 'false' }}
         shell: pwsh
-        run: Write-Output 'Skipping Windows Portability Gate: changed files have no Windows portability surface (docs-only or website-only).'
+        run: |
+          Write-Output 'Skipping Windows Portability Gate: docs-only or website-only PR has no Windows portability surface.'
 
       # GitHub runner TEMP is the 8.3 short form (RUNNER~1); where.exe, realpath, and libuv
       # fs-event reporting canonicalize to the long form, and mixing the two breaks path
