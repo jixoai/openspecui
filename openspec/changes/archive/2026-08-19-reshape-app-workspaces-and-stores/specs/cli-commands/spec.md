@@ -1,5 +1,10 @@
 <!--
-Orthogonal intents (updated 2026-07-31 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
+0. Keep the two pre-existing scenario titles so the MODIFIED block carries every surviving main-spec scenario.
+
+Original request (2026-08-19): archive-time delta refresh — the strengthened scenarios revert to their main-spec
+titles ("Bare command is serve", "Daemon commands do not accept a project") without losing any strengthened step.
+
 1. Preserve foreground serve ownership while authorizing daemon-managed directory launch.
 2. Define managed stop/restart restoration without adopting external project processes.
 
@@ -19,7 +24,7 @@ MAY start and supervise project Servers only through its authenticated directory
 external owners SHALL remain physically distinct; no lifecycle command or App action may infer ownership from path,
 port, locator, or process discovery.
 
-#### Scenario: Bare command is foreground serve
+#### Scenario: Bare command is serve
 
 - **WHEN** the user runs `openspecui [project-dir]`
 - **THEN** the CLI SHALL execute the same plan as `openspecui serve [project-dir]`
@@ -54,7 +59,7 @@ port, locator, or process discovery.
 - **THEN** Task Manager SHALL expose no external lifecycle action
 - **AND** SHALL NOT map Workspace presentation Close or connection-candidate Remove/Delete onto backend lifecycle
 
-#### Scenario: Daemon lifecycle commands remain project-argument-free
+#### Scenario: Daemon commands do not accept a project
 
 - **WHEN** the user runs `openspecui start`, `openspecui stop`, or `openspecui restart`
 - **THEN** the command SHALL NOT accept a project argument
