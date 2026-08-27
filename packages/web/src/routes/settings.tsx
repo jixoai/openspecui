@@ -362,11 +362,13 @@ export function Settings() {
   })
 
   // The install stream installs the admitted series; never present an out-of-range registry
-  // latest as the update target (issue #258).
+  // latest as the update target (issue #258). Only a recommended (current-series) latest can be
+  // named literally — a supported-but-non-current latest (e.g. 1.8.x) would mislabel the
+  // actually-installed 1.9.x, so it also falls back to the series label.
   const pinnedInstallSpec = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
   const updateTargetVersion =
     cliSniffResult?.hasUpdate && cliSniffResult.latestVersion
-      ? classifyOpenSpecCliVersion(cliSniffResult.latestVersion).supported
+      ? classifyOpenSpecCliVersion(cliSniffResult.latestVersion).recommended
         ? cliSniffResult.latestVersion
         : `${OPENSPEC_CLI_TARGET_SERIES}.x`
       : null

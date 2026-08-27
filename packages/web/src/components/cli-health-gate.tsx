@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Gate Web compatibility from the shared Root Context CLI evidence only.
  * 2. Preserve session-only bypass and execute-path repair controls.
  * 3. Revalidate the shared Root Context Work through readonly refresh after explicit repair.
+ * 4. Recommend installing the admitted CLI series, never an out-of-range `@latest` (issue #258).
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
@@ -12,6 +13,8 @@
  * Owner correction (2026-07-31): Root observation refresh is readonly despite internal cache invalidation.
  * Original request (2026-08-01): "v7不兼容1.6.x，明确要求必须使用 v1.7.x。"
  * Owner bypass-lifetime decision (2026-08-01): "仅当前页面会话有效"
+ * Original request (2026-08-28, issue #258): "No available OpenSpec CLI runner." — the gate's
+ *   install hint must not walk the user into a version this release line then blocks.
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'
@@ -20,6 +23,7 @@ import { useConfigSubscription } from '@/lib/use-subscription'
 import {
   classifyOpenSpecCliVersion,
   OPENSPEC_CLI_ACCEPTED_RANGE,
+  OPENSPEC_CLI_TARGET_SERIES,
 } from '@openspecui/core/openspec-compat'
 import { useMutation } from '@tanstack/react-query'
 import { AlertCircle, Loader2, ShieldAlert, Terminal } from 'lucide-react'
@@ -121,7 +125,9 @@ export function CliHealthGate() {
         </div>
         <div className="text-muted-foreground text-sm">
           Install or upgrade the CLI:
-          <code className="bg-muted ml-2 rounded px-1">npm install -g @fission-ai/openspec</code>
+          <code className="bg-muted ml-2 rounded px-1">
+            npm install -g @fission-ai/openspec@{OPENSPEC_CLI_TARGET_SERIES}
+          </code>
         </div>
         <div className="flex items-center gap-2 text-sm">
           <button

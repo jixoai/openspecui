@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Lock the Web compatibility gate to the OpenSpecUI 9 / CLI 1.8 + 1.9 lines.
  * 2. Prove incompatible-version blocking and the current-page-runtime escape hatch.
  * 3. Prove shared Root Context is the gate's only CLI availability truth and refresh is readonly.
+ * 4. Prove the install hint names the admitted CLI series, never an unversioned @latest.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
@@ -10,6 +11,8 @@
  * Original request (2026-08-01): "v7不兼容1.6.x，明确要求必须使用 v1.7.x。"
  * Owner bypass-lifetime decision (2026-08-01): "仅当前页面会话有效"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28, issue #258): the gate must not direct users at a version the
+ *   admission gate then blocks.
  */
 import type { RootContext, RootContextState } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -181,6 +184,16 @@ describe('CliHealthGate', () => {
 
     expect(await screen.findByText(/OpenSpec CLI >=1.8.0 <1.10.0 Required/)).toBeInTheDocument()
     expect(screen.getByText(/Detected OpenSpec CLI 1\.10\.0/)).toBeInTheDocument()
+  })
+
+  it('recommends installing the admitted CLI series instead of an unversioned @latest', async () => {
+    setAvailability({ available: true, version: '1.10.0' })
+
+    renderGate()
+
+    expect(await screen.findByText(/OpenSpec CLI >=1.8.0 <1.10\.0 Required/)).toBeInTheDocument()
+    expect(screen.getByText(/npm install -g @fission-ai\/openspec@1\.9/)).toBeInTheDocument()
+    expect(screen.queryByText(/^npm install -g @fission-ai\/openspec$/)).not.toBeInTheDocument()
   })
 
   it('offers a skip-version-check escape hatch when the CLI is available', async () => {

@@ -177,8 +177,21 @@ describe('npm command shim entry resolution', () => {
     const root = await createTempDir()
     try {
       const command = join(root, 'tool.cmd')
+      // A UNC-shaped token must stay rejected even when a matching local file exists: without
+      // the raw-prefix check, stripping the leading separators degrades `\\server\share\evil.js`
+      // into the local relative path `server\share\evil.js`.
+      const uncLocalTarget = join(root, 'server', 'share', 'evil.js')
+      await mkdir(dirname(uncLocalTarget), { recursive: true })
+      await writeFile(uncLocalTarget, '')
       await writeFile(command, '')
-      for (const token of ['C:\\evil.js', '\\\\server\\share\\evil.js', 'a\0b.js', '%dp0%\\x.js']) {
+
+      expect(extractNodeCommandShimEntryTokens('"%dp0%\\\\server\\share\\evil.js" %*\r\n')).toEqual(
+        []
+      )
+      expect(
+        resolveNodeCommandShimEntry(command, '"%dp0%\\\\server\\share\\evil.js" %*\r\n')
+      ).toBeNull()
+      for (const token of ['C:\\evil.js', 'a\0b.js', '%dp0%\\x.js']) {
         expect(resolveNodeCommandShimEntry(command, `"%dp0%\\${token}" %*\r\n`), token).toBeNull()
       }
     } finally {

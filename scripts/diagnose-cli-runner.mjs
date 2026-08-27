@@ -7,7 +7,10 @@
  * 4. Resolve Windows command shims without shell argv loss and retire timed-out probe trees safely.
  * 5. Let stdout/stderr flush before publishing the diagnostic exit status.
  * 6. Hide probe subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
+ * 7. Probe the same pinned CLI series fallbacks as production instead of an unversioned @latest.
  *
+ * Original request (2026-08-28, issue #258): "No available OpenSpec CLI runner." — the diagnostic
+ *   must reproduce the production candidate set, including its series-pinned fallback specs.
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-30, issue #209): "看一下 issues209，分析一下可能的问题，以及我们应该提供什么分析工具或者分析脚本"
  * Owner decision (2026-07-30): ship a zero-dependency diagnostic script first; CLI integration is deferred
@@ -32,12 +35,21 @@ import {
 const CLI_PROBE_TIMEOUT_MS = Number(nodeEnv.OPENSPECUI_CLI_PROBE_TIMEOUT_MS) || 20_000
 const SHELL_RESOLVE_TIMEOUT_MS = 5_000
 
+// Mirror of packages/core OPENSPEC_CLI_TARGET_SERIES: fallback probes must resolve the series
+// the release line admits, never an unversioned @latest the compatibility gate can block.
+const OPENSPEC_CLI_TARGET_SERIES = '1.9'
+const OPENSPEC_CLI_FALLBACK_SPEC = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
+
 const PACKAGE_MANAGER_RUNNERS = [
-  { id: 'npx', source: 'npx', commandParts: ['npx', '-y', '@fission-ai/openspec'] },
-  { id: 'bunx', source: 'bunx', commandParts: ['bunx', '@fission-ai/openspec'] },
-  { id: 'deno', source: 'deno', commandParts: ['deno', 'run', '-A', 'npm:@fission-ai/openspec'] },
-  { id: 'pnpm', source: 'pnpm', commandParts: ['pnpm', 'dlx', '@fission-ai/openspec'] },
-  { id: 'yarn', source: 'yarn', commandParts: ['yarn', 'dlx', '@fission-ai/openspec'] },
+  { id: 'npx', source: 'npx', commandParts: ['npx', '-y', OPENSPEC_CLI_FALLBACK_SPEC] },
+  { id: 'bunx', source: 'bunx', commandParts: ['bunx', OPENSPEC_CLI_FALLBACK_SPEC] },
+  {
+    id: 'deno',
+    source: 'deno',
+    commandParts: ['deno', 'run', '-A', `npm:${OPENSPEC_CLI_FALLBACK_SPEC}`],
+  },
+  { id: 'pnpm', source: 'pnpm', commandParts: ['pnpm', 'dlx', OPENSPEC_CLI_FALLBACK_SPEC] },
+  { id: 'yarn', source: 'yarn', commandParts: ['yarn', 'dlx', OPENSPEC_CLI_FALLBACK_SPEC] },
 ]
 
 function isBareExecutable(command) {

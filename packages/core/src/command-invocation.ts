@@ -120,7 +120,11 @@ const NODE_COMMAND_SHIM_ENTRY_PATTERN = /%(?:~dp0|dp0%)([^"\r\n]*?\.(?:c|m)?js)/
 export function extractNodeCommandShimEntryTokens(source: string): string[] {
   const tokens: string[] = []
   for (const match of source.matchAll(NODE_COMMAND_SHIM_ENTRY_PATTERN)) {
-    const token = match[1]?.trim().replace(/^[/\\]+/, '')
+    const rawToken = match[1]?.trim() ?? ''
+    // Reject the UNC prefix before stripping leading separators: `\\server\share\x.js` must
+    // never degrade into the local relative path `server\share\x.js`.
+    if (rawToken.startsWith('\\\\') || rawToken.startsWith('//')) continue
+    const token = rawToken.replace(/^[/\\]+/, '')
     if (token) tokens.push(token)
   }
   return tokens
