@@ -122,6 +122,16 @@ describe('npm command shim entry extraction (mirror of packages/core)', () => {
         resolveNodeCommandShimEntry(toolShim, modernNpmCommandShimSource('..\\evil.js'))
       ).toBeNull()
       expect(resolveNodeCommandShimEntry(toolShim, '"%dp0%\\C:\\evil.js" %*\r\n')).toBeNull()
+      // A UNC-shaped token stays rejected even when a matching local file exists.
+      const uncLocalTarget = join(fixtureRoot, 'server', 'share', 'evil.js')
+      mkdirSync(dirname(uncLocalTarget), { recursive: true })
+      writeFileSync(uncLocalTarget, '')
+      expect(extractNodeCommandShimEntryTokens('"%dp0%\\\\server\\share\\evil.js" %*\r\n')).toEqual(
+        []
+      )
+      expect(
+        resolveNodeCommandShimEntry(toolShim, '"%dp0%\\\\server\\share\\evil.js" %*\r\n')
+      ).toBeNull()
     } finally {
       rmSync(fixtureRoot, { force: true, recursive: true })
     }
