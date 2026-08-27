@@ -20,7 +20,14 @@ function findWindowsCommandCandidates(command) {
   const result = spawnSync('where.exe', [command], { encoding: 'utf8', windowsHide: true })
   if (result.error) throw result.error
   if (result.status !== 0) {
-    throw new Error(result.stderr.trim() || `Unable to resolve ${command} from PATH.`)
+    // where.exe prints localized text ("INFO: Could not find files..."), so carry the canonical
+    // not-found code instead of matching message text.
+    throw Object.assign(
+      new Error(result.stderr.trim() || `Unable to resolve ${command} from PATH.`),
+      {
+        code: 'ENOENT',
+      }
+    )
   }
   return result.stdout
     .split(/\r?\n/)

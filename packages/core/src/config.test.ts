@@ -19,7 +19,7 @@
  */
 import { access, chmod, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import process from 'node:process'
-import { dirname, join } from 'path'
+import { delimiter, dirname, join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir, waitForDebounce } from './__tests__/test-utils.js'
 import {
@@ -1199,6 +1199,9 @@ describe('sniffGlobalCli()', () => {
           '',
         ].join('\r\n')
       )
+      // A fast-failing npx shim keeps the registry probe offline even though the real Node
+      // directory must stay on PATH for shim resolution to find node.exe.
+      await writeOfflineNpxGuard(root)
       return command
     }
 
@@ -1206,6 +1209,34 @@ describe('sniffGlobalCli()', () => {
     await writeFile(command, '#!/bin/sh\necho 1.9.0\n')
     await chmod(command, 0o755)
     return command
+  }
+
+  /** A fast-failing npx shim that shadows the real one so the registry probe stays offline. */
+  async function writeOfflineNpxGuard(root: string): Promise<void> {
+    if (process.platform !== 'win32') return
+    const npxEntry = join(root, 'npx-fail.js')
+    const npxShim = join(root, 'npx.cmd')
+    await writeFile(npxEntry, 'process.exit(1)\n')
+    await writeFile(
+      npxShim,
+      [
+        '@ECHO off',
+        'GOTO start',
+        ':find_dp0',
+        'SET dp0=%~dp0',
+        'EXIT /b',
+        ':start',
+        'SETLOCAL',
+        'CALL :find_dp0',
+        'IF EXIST "%dp0%\\node.exe" (',
+        '  SET "_prog=%dp0%\\node.exe"',
+        ') ELSE (',
+        '  SET "_prog=node"',
+        ')',
+        'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% | "%_prog%"  "%dp0%\\npx-fail.js" %*',
+        '',
+      ].join('\r\n')
+    )
   }
 
   async function writeFakeLookupShell(
@@ -1219,6 +1250,12 @@ describe('sniffGlobalCli()', () => {
     return shellPath
   }
 
+  /** A PATH that keeps shim resolution working (node.exe) while the registry probe stays offline. */
+  function offlineProbePath(root: string): string {
+    if (process.platform !== 'win32') return root
+    return [root, dirname(process.execPath)].join(delimiter)
+  }
+
   it('detects a global CLI fixture through the spawn-safe boundary', async () => {
     const root = await createTempDir()
     const previousPath = process.env.PATH
@@ -1227,8 +1264,7 @@ describe('sniffGlobalCli()', () => {
       const fixtureCliPath = await writeFixtureGlobalCli(root)
       const shellPath =
         process.platform === 'win32' ? null : await writeFakeLookupShell(root, fixtureCliPath)
-      // A stripped PATH keeps the registry probe offline so the test never touches the network.
-      process.env.PATH = root
+      process.env.PATH = offlineProbePath(root)
       if (shellPath) process.env.SHELL = shellPath
 
       const result = await sniffGlobalCli()
@@ -1248,7 +1284,8 @@ describe('sniffGlobalCli()', () => {
     const previousShell = process.env.SHELL
     try {
       const shellPath = process.platform === 'win32' ? null : await writeFakeLookupShell(root, null)
-      process.env.PATH = root
+      await writeOfflineNpxGuard(root)
+      process.env.PATH = offlineProbePath(root)
       if (shellPath) process.env.SHELL = shellPath
 
       const result = await sniffGlobalCli()
