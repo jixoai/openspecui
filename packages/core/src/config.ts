@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-07-30 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Define and persist project-scoped OpenSpecUI settings.
  * 2. Resolve, diagnose, cache, and explicitly invalidate the OpenSpec CLI runner.
  * 3. Prevent retired in-flight runner resolutions from reclaiming cache ownership.
@@ -8,7 +8,11 @@
  *    extension-less script (issue #209 hotfix).
  * 6. Hide runner-probe subprocess console windows (`windowsHide`) so a console-less Windows daemon
  *    never flashes a cmd window while resolving or sniffing the CLI runner.
+ * 7. Pin auto-fallback runners to the supported CLI series and probe the global CLI through the
+ *    spawn-safe boundary so resolved `.cmd` shims execute instead of failing EINVAL (issue #258).
  *
+ * Original request (2026-08-28, issue #258): "No available OpenSpec CLI runner." on Windows with an
+ *   in-range global npm CLI; the npx fallback resolved an out-of-range `@latest`.
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  * Independent review correction (2026-07-20): Global CLI installation must retire cached and
@@ -29,6 +33,7 @@ import {
   type DocumentTranslationConfigUpdate,
 } from './document-translation.js'
 import { NotificationSettingsSchema, type NotificationSettings } from './notifications.js'
+import { OPENSPEC_CLI_TARGET_SERIES } from './openspec-compat.js'
 import {
   sanitizePersistedSettings,
   type PersistedSanitizeRule,
@@ -103,12 +108,20 @@ export interface ResolvedCliRunner {
   attempts: readonly CliRunnerAttempt[]
 }
 
+// Auto-fallback runners must fail closed onto the series this release line admits; an
+// unversioned spec resolves @latest, which the compatibility gate can block outright.
+const OPENSPEC_CLI_FALLBACK_SPEC = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
+
 const BASE_PACKAGE_MANAGER_RUNNERS: readonly CliRunnerCandidate[] = [
-  { id: 'npx', source: 'npx', commandParts: ['npx', '-y', '@fission-ai/openspec'] },
-  { id: 'bunx', source: 'bunx', commandParts: ['bunx', '@fission-ai/openspec'] },
-  { id: 'deno', source: 'deno', commandParts: ['deno', 'run', '-A', 'npm:@fission-ai/openspec'] },
-  { id: 'pnpm', source: 'pnpm', commandParts: ['pnpm', 'dlx', '@fission-ai/openspec'] },
-  { id: 'yarn', source: 'yarn', commandParts: ['yarn', 'dlx', '@fission-ai/openspec'] },
+  { id: 'npx', source: 'npx', commandParts: ['npx', '-y', OPENSPEC_CLI_FALLBACK_SPEC] },
+  { id: 'bunx', source: 'bunx', commandParts: ['bunx', OPENSPEC_CLI_FALLBACK_SPEC] },
+  {
+    id: 'deno',
+    source: 'deno',
+    commandParts: ['deno', 'run', '-A', `npm:${OPENSPEC_CLI_FALLBACK_SPEC}`],
+  },
+  { id: 'pnpm', source: 'pnpm', commandParts: ['pnpm', 'dlx', OPENSPEC_CLI_FALLBACK_SPEC] },
+  { id: 'yarn', source: 'yarn', commandParts: ['yarn', 'dlx', OPENSPEC_CLI_FALLBACK_SPEC] },
 ]
 
 function tokenizeCliCommand(input: string): string[] {
@@ -560,31 +573,34 @@ export async function sniffGlobalCli(): Promise<CliSniffResult> {
   const resolvedCommand =
     (await resolveShellExecutablePath('openspec', process.cwd(), env)) ?? 'openspec'
 
-  // 并行获取本地版本和最新版本
+  // Probe through the spawn-safe boundary: on Windows the resolved command is an npm `.cmd`
+  // shim that modern Node refuses to execFile without a shell (EINVAL), while spawnSafe
+  // translates it onto node.exe + its JavaScript entry.
   const [localResult, latestVersion] = await Promise.all([
-    execFileAsync(resolvedCommand, ['--version'], {
+    runBufferedCommand({
+      command: resolvedCommand,
+      args: ['--version'],
+      cwd: process.cwd(),
       env,
-      timeout: 10000,
-      encoding: 'utf8',
-      windowsHide: true,
-    }).catch((err) => ({ error: err })),
+      timeoutMs: 10_000,
+    }),
     fetchLatestVersion(),
   ])
 
-  // 处理本地版本检测结果
-  if ('error' in localResult) {
-    const error =
-      localResult.error instanceof Error ? localResult.error.message : String(localResult.error)
-    // 检查是否是 "command not found" 类型的错误
-    if (
-      error.includes('not found') ||
-      error.includes('ENOENT') ||
-      error.includes('not recognized')
-    ) {
+  if (localResult.spawnError || localResult.timedOut || localResult.exitCode !== 0) {
+    const message =
+      localResult.spawnError?.message ??
+      (localResult.timedOut
+        ? 'Global CLI probe timed out.'
+        : localResult.stderr.trim() || `Exit code ${localResult.exitCode ?? 'null'}`)
+    const notFound =
+      localResult.spawnError?.code === 'ENOENT' ||
+      // "Unable to resolve ... from PATH." is the Windows where.exe resolution failure.
+      /not found|ENOENT|not recognized|unable to resolve/i.test(message)
+    if (notFound) {
       return { hasGlobal: false, latestVersion, hasUpdate: !!latestVersion }
     }
-    // 其他错误（如网络超时等）
-    return { hasGlobal: false, latestVersion, hasUpdate: !!latestVersion, error }
+    return { hasGlobal: false, latestVersion, hasUpdate: !!latestVersion, error: message }
   }
 
   const version = localResult.stdout.trim()

@@ -1,19 +1,23 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Run ordered CLI streams with stable process/loading state across dedicated Root and Agent transports.
  * 2. Preserve stdout, stderr, exit, cancellation, and multiline diagnostics verbatim.
  * 3. Route root-dependent operations through dedicated Server-owned transports.
  * 4. Derive execution and displayed command evidence from one exhaustive typed transport.
  * 5. Carry opaque prepared-root generation into Validate and Archive admission.
+ * 6. Display the supported OpenSpec CLI series for the global install stream (issue #258).
  *
  * Original request (2026-07-15): "场景丢失保护的诊断必须原样显示，不能合成重试。"
  * Original request (2026-07-17): "Remove the Web generic fallback when no production caller requires it."
  * Review correction (2026-08-01): Archive Instructions and mutation must share one Root generation.
  * Owner Agent direction (2026-08-01): Agent Init, Update, and Repair execute only through the Agent owner.
  * Review correction (2026-08-02): remove the generic Planning-root Update transport.
+ * Original request (2026-08-28, issue #258): the displayed install command must match the
+ *   Server-owned stream, which installs the admitted series instead of an out-of-range @latest.
  */
 import '@/styles/terminal-effects.css'
 import type { CliStreamEvent } from '@openspecui/core'
+import { OPENSPEC_CLI_TARGET_SERIES } from '@openspecui/core/openspec-compat'
 import { Check, Loader2, Sparkles, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { match } from 'ts-pattern'
@@ -170,7 +174,7 @@ function planCliStream(stream: CliStreamTransport): CliStreamPlan {
     })
     .with({ type: 'install-global-cli' }, () => ({
       command: 'npm',
-      args: ['install', '-g', '@fission-ai/openspec'],
+      args: ['install', '-g', `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`],
       subscribe: (handlers: CliStreamHandlers) =>
         trpcClient.cli.installGlobalCliStream.subscribe(undefined, handlers),
     }))

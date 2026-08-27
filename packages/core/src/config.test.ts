@@ -1,21 +1,25 @@
 /**
- * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Verify persisted UI configuration defaults, presence, and writes.
  * 2. Verify CLI runner selection, caching, invalidation, and parsing.
  * 3. Verify reactive configuration convergence and watcher cleanup.
  * 4. Verify terminal, notification, translation, and editor configuration contracts.
+ * 5. Verify fallback runner series pinning and the spawn-safe global CLI probe (issue #258).
  *
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
  * Independent review correction (2026-07-20): Global CLI installation must retire cached and
  * in-flight runner authority.
  * Owner correction (2026-07-29): project config no longer owns a hosted App base URL.
+ * Original request (2026-08-28, issue #258): "No available OpenSpec CLI runner." on Windows with an
+ *   in-range global npm CLI; the npx fallback resolved an out-of-range `@latest`.
  *
  * Compromise: this historical suite follows the monolithic ConfigManager surface; splitting its existing
  * domains is outside the bounded 6.13 correction.
  * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
  */
 import { access, chmod, mkdir, readFile, rm, writeFile } from 'fs/promises'
-import { join } from 'path'
+import process from 'node:process'
+import { dirname, join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir, waitForDebounce } from './__tests__/test-utils.js'
 import {
@@ -24,7 +28,9 @@ import {
   OpenSpecUIConfigSchema,
   buildCliRunnerCandidates,
   pickWindowsExecutablePath,
+  sniffGlobalCli,
 } from './config.js'
+import { OPENSPEC_CLI_TARGET_SERIES } from './openspec-compat.js'
 import * as reactiveFs from './reactive-fs/index.js'
 import { clearCache } from './reactive-fs/index.js'
 import { ReactiveContext } from './reactive-fs/reactive-context.js'
@@ -1150,4 +1156,108 @@ describe('buildCliRunnerCandidates', () => {
     const sources = candidates.map((candidate) => candidate.source)
     expect(sources).toEqual(['openspec', 'bunx', 'npx', 'deno', 'pnpm', 'yarn'])
   })
+
+  it('pins every auto-fallback runner to the supported CLI series instead of @latest', () => {
+    const pinnedSpec = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
+    const candidates = buildCliRunnerCandidates({ userAgent: null })
+    const fallbacks = candidates.filter((candidate) => candidate.id !== 'openspec')
+    expect(fallbacks.map((candidate) => candidate.commandParts)).toEqual([
+      ['npx', '-y', pinnedSpec],
+      ['bunx', pinnedSpec],
+      ['deno', 'run', '-A', `npm:${pinnedSpec}`],
+      ['pnpm', 'dlx', pinnedSpec],
+      ['yarn', 'dlx', pinnedSpec],
+    ])
+  })
+})
+
+describe('sniffGlobalCli()', () => {
+  async function writeFixtureGlobalCli(root: string): Promise<string> {
+    if (process.platform === 'win32') {
+      const command = join(root, 'openspec.cmd')
+      const entry = join(root, 'node_modules', '@fission-ai', 'openspec', 'bin', 'openspec.js')
+      await mkdir(dirname(entry), { recursive: true })
+      await writeFile(entry, "process.stdout.write('1.9.0\\n')\n")
+      await writeFile(
+        command,
+        [
+          '@ECHO off',
+          'GOTO start',
+          ':find_dp0',
+          'SET dp0=%~dp0',
+          'EXIT /b',
+          ':start',
+          'SETLOCAL',
+          'CALL :find_dp0',
+          'IF EXIST "%dp0%\\node.exe" (',
+          '  SET "_prog=%dp0%\\node.exe"',
+          ') ELSE (',
+          '  SET "_prog=node"',
+          '  SET PATHEXT=%PATHEXT:;.JS;=;%',
+          ')',
+          'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% | "%_prog%"  "%dp0%\\node_modules\\@fission-ai\\openspec\\bin\\openspec.js" %*',
+          '',
+        ].join('\r\n')
+      )
+      return command
+    }
+
+    const command = join(root, 'openspec')
+    await writeFile(command, '#!/bin/sh\necho 1.9.0\n')
+    await chmod(command, 0o755)
+    return command
+  }
+
+  async function writeFakeLookupShell(
+    root: string,
+    fixtureCliPath: string | null
+  ): Promise<string> {
+    const shellPath = join(root, 'lookup-shell.sh')
+    const body = fixtureCliPath ? `printf '%s\\n' '${fixtureCliPath}'\n  exit 0` : 'exit 1'
+    await writeFile(shellPath, `#!/bin/sh\nif [ "$1" = "-lc" ]; then\n  ${body}\nfi\nexit 1\n`)
+    await chmod(shellPath, 0o755)
+    return shellPath
+  }
+
+  it('detects a global CLI fixture through the spawn-safe boundary', async () => {
+    const root = await createTempDir()
+    const previousPath = process.env.PATH
+    const previousShell = process.env.SHELL
+    try {
+      const fixtureCliPath = await writeFixtureGlobalCli(root)
+      const shellPath =
+        process.platform === 'win32' ? null : await writeFakeLookupShell(root, fixtureCliPath)
+      // A stripped PATH keeps the registry probe offline so the test never touches the network.
+      process.env.PATH = root
+      if (shellPath) process.env.SHELL = shellPath
+
+      const result = await sniffGlobalCli()
+      expect(result.hasGlobal).toBe(true)
+      expect(result.version).toBe('1.9.0')
+      expect(result.error).toBeUndefined()
+    } finally {
+      process.env.PATH = previousPath
+      if (previousShell !== undefined) process.env.SHELL = previousShell
+      await cleanupTempDir(root)
+    }
+  }, 20_000)
+
+  it('reports a missing global CLI without surfacing an error', async () => {
+    const root = await createTempDir()
+    const previousPath = process.env.PATH
+    const previousShell = process.env.SHELL
+    try {
+      const shellPath = process.platform === 'win32' ? null : await writeFakeLookupShell(root, null)
+      process.env.PATH = root
+      if (shellPath) process.env.SHELL = shellPath
+
+      const result = await sniffGlobalCli()
+      expect(result.hasGlobal).toBe(false)
+      expect(result.error).toBeUndefined()
+    } finally {
+      process.env.PATH = previousPath
+      if (previousShell !== undefined) process.env.SHELL = previousShell
+      await cleanupTempDir(root)
+    }
+  }, 20_000)
 })

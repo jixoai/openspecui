@@ -6,9 +6,9 @@
 
 ## 2. Implementation
 
-- [ ] 2.1 Implementation started from approved plan (red extraction test captured before the fix)
-- [ ] 2.2 Progress synchronized with implementation artifact
-- [ ] 2.3 Unexpected issues loop back to intake/research-plan (none triggered)
+- [x] 2.1 Implementation started from approved plan (red extraction test captured before the fix)
+- [x] 2.2 Progress synchronized with implementation artifact
+- [x] 2.3 Unexpected issues loop back to intake/research-plan (none triggered)
 
 ## 3. PR and Release Gates
 
