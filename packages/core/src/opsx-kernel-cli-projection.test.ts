@@ -563,9 +563,12 @@ describe('OpsxKernel capability-gated batch status transport', () => {
 
   /** Compare projections across two temp projects by erasing the differing absolute roots. */
   function normalizeStatusForCompare(status: ChangeStatus, projectDir: string) {
-    return JSON.parse(
-      JSON.stringify(withoutStatusEvidence(status)).split(projectDir).join('<project>')
-    )
+    // Inside the serialized JSON, Windows separators appear in their escaped `\\` form,
+    // so the search key must come from the same JSON.stringify escaping or the split
+    // never matches and every absolute root survives the normalization.
+    const serialized = JSON.stringify(withoutStatusEvidence(status))
+    const serializedDir = JSON.stringify(projectDir).slice(1, -1)
+    return JSON.parse(serialized.split(serializedDir).join('<project>'))
   }
 
   it('loads the status list with one status --all spawn and per-change projections identical to the serial transport', async () => {
