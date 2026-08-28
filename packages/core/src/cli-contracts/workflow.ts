@@ -1,14 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Model camelCase workflow JSON independently from Store-family JSON.
  * 2. Preserve strict, archived, and bulk Validate plus Archive outcomes, including failure payloads.
  * 3. Preserve multiline requirement bodies from `show --json`.
  * 4. Preserve complete OpenSpec 1.8/1.9 Status and operation-Instruction contracts as CLI facts.
  * 5. Export the successful Spec-document schema for browser-safe projection validation.
+ * 6. Export the root-less Status payload fields and Requirement shape shared with the
+ *    OpenSpec 1.11 batch Status and show --diff contracts.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { z } from 'zod'
 import {
@@ -83,7 +86,8 @@ export const CliTemplateEntrySchema = z
 
 export const CliTemplatesSchema = z.record(CliTemplateEntrySchema)
 
-const CliSpecRequirementSchema = z
+/** One requirement body shared by Spec documents and Change deltas. */
+export const CliSpecRequirementSchema = z
   .object({
     text: z.string(),
     scenarios: z.array(z.object({ rawText: z.string() }).passthrough()),
@@ -154,8 +158,14 @@ const CliStatusArtifactSchema = z
   })
   .passthrough()
 
-/** Complete successful Status payload for one OpenSpec change. */
-export const CliWorkflowStatusSuccessSchema = z
+/**
+ * Root-less Status payload fields for one OpenSpec change.
+ *
+ * The single-change command attaches `root` itself; the OpenSpec 1.11 batch
+ * envelope (`status --all --json`) reuses exactly these fields per entry while
+ * the envelope owns the single root.
+ */
+export const CliWorkflowStatusFieldsSchema = z
   .object({
     changeName: z.string(),
     schemaName: z.string(),
@@ -170,9 +180,13 @@ export const CliWorkflowStatusSuccessSchema = z
     nextSteps: z.array(z.string()),
     actionContext: CliActionContextSchema,
     artifacts: z.array(CliStatusArtifactSchema),
-    root: CliRootSchema,
   })
   .passthrough()
+
+/** Complete successful Status payload for one OpenSpec change. */
+export const CliWorkflowStatusSuccessSchema = CliWorkflowStatusFieldsSchema.extend({
+  root: CliRootSchema,
+}).passthrough()
 
 /** Typed success or diagnostic failure result of the CLI Status JSON command. */
 export const CliWorkflowStatusSchema = z.union([
@@ -354,6 +368,7 @@ export type CliTemplates = z.infer<typeof CliTemplatesSchema>
 export type CliShowSpec = z.infer<typeof CliShowSpecSchema>
 export type CliWorkflowStatus = z.infer<typeof CliWorkflowStatusSchema>
 export type CliWorkflowStatusSuccess = z.infer<typeof CliWorkflowStatusSuccessSchema>
+export type CliWorkflowStatusFields = z.infer<typeof CliWorkflowStatusFieldsSchema>
 export type CliArtifactInstructions = z.infer<typeof CliArtifactInstructionsSchema>
 export type CliArtifactInstructionsSuccess = z.infer<typeof CliArtifactInstructionsSuccessSchema>
 export type CliApplyInstructions = z.infer<typeof CliApplyInstructionsSchema>
