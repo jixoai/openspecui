@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/core",
-  "version": "9.0.3",
+  "version": "10.0.0",
   "description": "Core OpenSpec adapter and parser",
   "files": [
     "dist"
