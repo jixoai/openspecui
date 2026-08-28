@@ -1,5 +1,13 @@
 # @openspecui/local-translator
 
+## 9.0.3
+
+### Patch Changes
+
+- Updated dependencies [12b6a0e]
+- Updated dependencies [fa7b304]
+  - @openspecui/core@9.0.3
+
 ## 9.0.2
 
 ### Patch Changes
