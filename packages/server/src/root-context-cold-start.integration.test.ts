@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Separate HTTP server readiness from pinned OpenSpec CLI root resolution.
  * 2. Exercise lifecycle-only WebSocket Push followed by typed HTTP Root Projection Pull.
  * 3. Preserve pinned CLI runner start/exit timing for timeout classification.
@@ -12,6 +12,7 @@
  * Derived requirement (2026-07-19): Checkpoint 6.11 needs bounded startup/readiness evidence.
  * Original request (2026-08-01): OpenSpecUI 7 requires the pinned OpenSpec 1.7 CLI line.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。" — the pin moved to v1.9.0.
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。" — the pin moved to v1.11.0.
  */
 import {
   ConfigManager,
@@ -35,7 +36,7 @@ import type { AppRouter, RunningServer } from './server.js'
 import { startServer } from './server.js'
 
 const execFileAsync = promisify(execFile)
-const PINNED_OPENSPEC_COMMIT = '2826b8889e5223a9a8095d4428b60b56597e1020'
+const PINNED_OPENSPEC_COMMIT = 'a0ddb60d040c61f4907436a9d91310934b1dda63'
 const PINNED_OPENSPEC_ROOT = resolve(import.meta.dirname, '../../../references/openspec')
 const CLI_BIN = resolve(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
 
@@ -164,7 +165,7 @@ function rootStateReady(state: RootContextResolvedState): RootContextResolvedSta
   return state
 }
 
-describe('pinned OpenSpec 1.9 Root Context cold start', () => {
+describe('pinned OpenSpec 1.11 Root Context cold start', () => {
   afterEach(async () => {
     for (const client of wsClients.splice(0)) client.close()
     await Promise.all(runningServers.splice(0).map((server) => server.close()))
@@ -260,12 +261,12 @@ describe('pinned OpenSpec 1.9 Root Context cold start', () => {
       expect(httpState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.9.0' },
+        cli: { available: true, version: '1.11.0' },
       })
       expect(wsState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.9.0' },
+        cli: { available: true, version: '1.11.0' },
       })
       expect(wsStates).toContain('ready')
       expect(wsNotices.every((notice) => !Object.hasOwn(Object(notice), 'data'))).toBe(true)
