@@ -46,9 +46,8 @@ test:ci green except the pre-existing macOS /private/var path-realpath environme
 (reactive-fs untouched by this Change; CI runs on Linux/Windows where it passes); test:browser:ci
 PASS (exit 0) run through a controlled herdr pane per heavy-load discipline. Integrator also fixed a
 third mirror-constant site scripts/diagnose-cli-runner.mjs caught by the root gate.
-R10 Codex code review loop       DONE (7.0/10 -> fixes -> 8.0/10 convergence round caught one un-swept
-                                 Server fixture file -> fixed + full Server suite 649/649; final
-                                 confirmation round recorded below)
+R10 Codex code review loop       DONE (7.0/10 -> 8.0/10 -> 9.5/10 final; PR-ready verdict confirmed
+                                 2026-08-28 by herdr `v11-change-reviewer`)
 R11 archive + delivery           PENDING  Owner-gated
 
 ## Code-review disposition (herdr `v11-change-reviewer`, 2026-08-28)
