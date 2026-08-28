@@ -21,49 +21,65 @@ Define how OpenSpecUI integrates with the OpenSpec CLI to execute OPSX workflows
 
 ### Requirement: CLI Discovery and Version Enforcement
 
-OpenSpecUI 9 SHALL classify stable OpenSpec CLI `>=1.8.0 <1.10.0` as supported. Stable 1.9.x SHALL be current
-and recommended; stable 1.8.x SHALL be supported non-current. OpenSpec CLI `<1.8.0`, every prerelease,
-`>=1.10.0`, and an unparseable version SHALL be incompatible and blocked by default. When an incompatible
-executable is available, the mismatch Dialog MAY expose `Skip version check`; that action SHALL bypass only the
-current Web page runtime's admission gate and SHALL NOT change the detected version, compatibility evidence, CLI
-payloads, downstream errors, or product support claim.
+OpenSpecUI 11 SHALL classify stable OpenSpec CLI `>=1.10.0 <1.12.0` as supported. Stable 1.11.x SHALL be
+current and recommended; stable 1.10.x SHALL be supported non-current. OpenSpec CLI `<1.10.0` (including
+1.8.x and 1.9.x), every prerelease, `>=1.12.0`, and an unparseable version SHALL be incompatible and blocked
+by default. When an incompatible executable is available, the mismatch Dialog MAY expose `Skip version check`;
+that action SHALL bypass only the current Web page runtime's admission gate and SHALL NOT change the detected
+version, compatibility evidence, CLI payloads, downstream errors, or product support claim.
 
-#### Scenario: Accept the supported non-current 1.8 line
+#### Scenario: Accept the supported non-current 1.10 line
 
-- **GIVEN** OpenSpecUI 9 detects a stable OpenSpec CLI 1.8.x executable
+- **GIVEN** OpenSpecUI 11 detects a stable OpenSpec CLI 1.10.x executable
 - **WHEN** admission is evaluated
 - **THEN** normal interactions SHALL be admitted
 - **AND** compatibility evidence SHALL identify the CLI as supported non-current
 
-#### Scenario: Accept the current 1.9 line
+#### Scenario: Accept the current 1.11 line
 
-- **GIVEN** OpenSpecUI 9 detects a stable OpenSpec CLI 1.9.x executable
+- **GIVEN** OpenSpecUI 11 detects a stable OpenSpec CLI 1.11.x executable
 - **WHEN** admission is evaluated
 - **THEN** normal interactions SHALL be admitted
 - **AND** compatibility evidence SHALL identify the CLI as current and recommended
 
 #### Scenario: Block unsupported version forms
 
-- **GIVEN** OpenSpecUI 9 detects CLI 1.7.x, 1.9.0-rc.1, 1.10.0, or an unparseable version
+- **GIVEN** OpenSpecUI 11 detects CLI 1.9.x, 1.11.0-rc.1, 1.12.0, or an unparseable version
 - **WHEN** admission is evaluated
 - **THEN** the mismatch Dialog SHALL block normal interactions
 - **AND** the mismatch evidence SHALL name the accepted and recommended ranges
 
+#### Scenario: Accept the supported non-current 1.8 line
+
+- **GIVEN** OpenSpecUI 11 detects a stable OpenSpec CLI 1.8.x executable that OpenSpecUI 9 admitted as its
+  supported non-current line
+- **WHEN** admission is evaluated
+- **THEN** the retired 1.8 line SHALL be blocked by default
+- **AND** the mismatch evidence SHALL name the v11 accepted range `>=1.10.0 <1.12.0` and recommended range
+  `>=1.11.0 <1.12.0`
+
+#### Scenario: Accept the current 1.9 line
+
+- **GIVEN** OpenSpecUI 11 detects a stable OpenSpec CLI 1.9.x executable that OpenSpecUI 9 admitted as its
+  current and recommended line
+- **WHEN** admission is evaluated
+- **THEN** the retired 1.9 line SHALL be blocked by default
+- **AND** the mismatch evidence SHALL name the v11 accepted and recommended ranges
+
 #### Scenario: Accept the adapted 1.7 line
 
-- **GIVEN** OpenSpecUI 9 detects a stable OpenSpec CLI 1.7.x executable that OpenSpecUI 7 admitted as its adapted
+- **GIVEN** OpenSpecUI 11 detects a stable OpenSpec CLI 1.7.x executable that OpenSpecUI 7 admitted as its adapted
   line
 - **WHEN** admission is evaluated
-- **THEN** the retired 1.7 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v9 accepted range `>=1.8.0 <1.10.0` and recommended range
-  `>=1.9.0 <1.10.0`
+- **THEN** the retired 1.7 line SHALL remain blocked by default
+- **AND** the mismatch evidence SHALL name the v11 accepted and recommended ranges
 
 #### Scenario: Block OpenSpec CLI 1.6
 
-- **GIVEN** OpenSpecUI 9 detects an available OpenSpec CLI 1.6.x executable
+- **GIVEN** OpenSpecUI 11 detects an available OpenSpec CLI 1.6.x executable
 - **WHEN** admission is evaluated
 - **THEN** the mismatch Dialog SHALL block normal interactions
-- **AND** SHALL identify the v9 accepted and recommended ranges
+- **AND** SHALL identify the v11 accepted and recommended ranges
 
 #### Scenario: Bypass only the current page runtime
 
@@ -86,8 +102,9 @@ payloads, downstream errors, or product support claim.
 - **GIVEN** an unsupported, prerelease, or unparseable CLI has a page-local version bypass
 - **WHEN** OpenSpecUI derives CLI capabilities or an Agent delivery inventory
 - **THEN** it SHALL retain the incompatible classification
-- **AND** it SHALL NOT select 1.8 or 1.9 version-specific capability facts or a fallback 1.9 inventory
-- **AND** downstream execution SHALL fail through its typed availability boundary rather than a simulated supported CLI
+- **AND** it SHALL NOT select 1.10 or 1.11 version-specific capability facts or a fallback 1.11 inventory
+- **AND** downstream execution SHALL fail through its typed availability boundary rather than a simulated
+  supported CLI
 
 ### Requirement: Safe CLI Execution
 
@@ -126,9 +143,10 @@ OpenSpecUI SHALL provide real-time CLI output to the UI terminal panel.
 
 ### Requirement: OPSX Command Mapping
 
-OpenSpecUI SHALL map workflow actions, schema resolution, and project setup to official OpenSpec 1.8/1.9 commands
-with exact selected-Root or Launch Project ownership. It SHALL derive command availability from the admitted running
-CLI version before invocation, rather than exposing a 1.9-only command to a supported 1.8 session.
+OpenSpecUI SHALL map workflow actions, schema resolution, and project setup to official OpenSpec 1.10/1.11
+commands with exact selected-Root or Launch Project ownership. It SHALL derive command availability from the
+admitted running CLI version before invocation, rather than exposing a 1.11-only command (batch status,
+requirement diff) to a supported 1.10 session.
 
 #### Scenario: Execute OPSX status
 
@@ -180,27 +198,24 @@ CLI version before invocation, rather than exposing a 1.9-only command to a supp
 
 #### Scenario: Resolve schemas through the selected 1.9 Root
 
-- **GIVEN** a stable OpenSpec CLI 1.9.x session has selected Root `store-a`
+- **GIVEN** an admitted OpenSpec CLI 1.10.x or 1.11.x session has selected Root `store-a`
 - **WHEN** Config requests its schema catalog
 - **THEN** the system SHALL execute `openspec schemas --json --store store-a`
 - **AND** preserve either its successful catalog or its selected-Root failure envelope as the selected Root's CLI fact
 
 #### Scenario: Resolve schemas without a 1.9-only selector on 1.8
 
-- **GIVEN** a stable OpenSpec CLI 1.8.x session
-- **WHEN** Config requests its schema catalog
-- **THEN** the system SHALL execute `openspec schemas --json` without `--store`
-- **AND** SHALL NOT attempt a synthetic selected-Root operation
+- **GIVEN** an admitted OpenSpec CLI session on either supported line
+- **WHEN** Config requests its schema catalog with a selected Root
+- **THEN** the system SHALL resolve through the selected-Root selector on both admitted lines
+- **AND** the retired 1.8 selector restriction SHALL NOT downgrade any admitted session to a selectorless query
 
 #### Scenario: Restrict archived validation to OpenSpec 1.9
 
-- **GIVEN** a stable OpenSpec CLI 1.9.x session
+- **GIVEN** an admitted OpenSpec CLI 1.10.x or 1.11.x session
 - **WHEN** Change Evidence requests archived validation
 - **THEN** the system SHALL execute `openspec validate --archived --json`
-- **GIVEN** a stable OpenSpec CLI 1.8.x session
-- **WHEN** Change Evidence renders archived validation
-- **THEN** it SHALL report the capability as unavailable before command execution
-- **AND** SHALL NOT invoke an unknown `--archived` option
+- **AND** the retired 1.8 unavailability branch SHALL NOT downgrade any admitted session
 
 #### Scenario: Initialize only the Launch Project
 
@@ -229,12 +244,11 @@ admitted CLI version.
 
 #### Scenario: Query schema list
 
-- **GIVEN** the Config view needs schema listings for a stable OpenSpec CLI 1.9.x selected Root
+- **GIVEN** the Config view needs schema listings for an admitted OpenSpec CLI selected Root on either
+  supported line
 - **WHEN** the UI requests schema data
 - **THEN** the system SHALL execute `openspec schemas --json` with that selected Root selector
-- **GIVEN** the Config view needs schema listings for a stable OpenSpec CLI 1.8.x session
-- **WHEN** the UI requests schema data
-- **THEN** the system SHALL execute `openspec schemas --json` without the unavailable selector
+- **AND** the retired selectorless 1.8 branch SHALL NOT be used for any admitted session
 
 #### Scenario: Query schema details
 
@@ -341,9 +355,9 @@ re-parsing OpenSpec files to invent missing facts.
 ### Requirement: Schema Resolution JSON Sum Type
 
 OpenSpecUI SHALL decode `openspec schemas --json` as either a successful schema array or a selected-Root failure
-envelope containing `schemas`, `root: null`, and diagnostic `status`. The 1.9 selected-Root call SHALL be made
-through the product's current Root selector. The failure envelope SHALL remain objective CLI evidence and SHALL NOT
-be rendered as a successful empty schema catalog.
+envelope containing `schemas`, `root: null`, and diagnostic `status`. The selected-Root call SHALL be made
+through the product's current Root selector using the admitted CLI's store-aware root semantics. The failure
+envelope SHALL remain objective CLI evidence and SHALL NOT be rendered as a successful empty schema catalog.
 
 #### Scenario: Preserve successful schema discovery
 
@@ -353,7 +367,7 @@ be rendered as a successful empty schema catalog.
 
 #### Scenario: Preserve schema resolution failure
 
-- **GIVEN** a selected 1.9 Root causes `openspec schemas --json --store <selected-store>` to return
+- **GIVEN** a selected Root causes `openspec schemas --json --store <selected-store>` to return
   `{ schemas: [], root: null, status }`
 - **WHEN** Config receives the result
 - **THEN** it SHALL preserve the diagnostic and absent Root as failure evidence
@@ -361,14 +375,14 @@ be rendered as a successful empty schema catalog.
 
 ### Requirement: Archived Validation Evidence
 
-OpenSpecUI SHALL support OpenSpec 1.9 `validate --archived --json` as a typed CLI validation result. It SHALL
-preserve archive identifiers, validation issues, totals, root, and exit/failure evidence without writing, repairing,
-or archiving project files. For an admitted OpenSpec 1.8.x session, this is a typed unavailable capability rather
-than a CLI execution failure.
+OpenSpecUI SHALL support `validate --archived --json` as a typed CLI validation result for both admitted
+OpenSpec CLI 1.10.x and 1.11.x sessions. It SHALL preserve archive identifiers, validation issues, totals,
+root, and exit/failure evidence without writing, repairing, or archiving project files. Strict-mode escalation
+of warnings, including the 1.11 Purpose-placeholder warning class, SHALL remain CLI-owned.
 
 #### Scenario: Render an archived validation failure
 
-- **GIVEN** OpenSpec 1.9 reports incomplete archived tasks through `validate --archived --json`
+- **GIVEN** the admitted OpenSpec CLI reports incomplete archived tasks through `validate --archived --json`
 - **WHEN** OpenSpecUI projects the result
 - **THEN** the validation failure SHALL remain visible with its CLI diagnostics
 - **AND** OpenSpecUI SHALL NOT mark the archive valid or perform repair automatically
@@ -384,3 +398,79 @@ requirement rejection as CLI evidence. It SHALL NOT reproduce archive merge or c
 - **WHEN** OpenSpecUI renders Archive evidence
 - **THEN** it SHALL retain the command outcome and diagnostic provenance
 - **AND** SHALL NOT represent the operation as successful or mutate the capability itself
+
+### Requirement: Batch Status Envelope Contract
+
+OpenSpecUI SHALL provide a typed `status --all --json` contract for admitted OpenSpec CLI 1.11 sessions. The
+batch envelope SHALL be decoded as a sum type whose healthy entries are the single-change status payload,
+whose failure entries are `{ changeName, status: [diagnostic] }` records preserved in place, whose empty set
+MAY carry a `message` key, and whose root-selection failure is the `{ changes: [], root: null }` null shape
+with its diagnostic `status` array preserved through the shared JSON failure contract. Healthy entries carry
+the single-change status payload fields without a per-entry root; the envelope-level `root` is the batch's
+root fact.
+Decoding SHALL NOT consult the process exit code, because a partial failure exits 1 while stdout remains one
+complete valid JSON document. OpenSpecUI SHALL NOT invoke `--all` on sessions admitted below 1.11.
+
+#### Scenario: Decode a partial-failure batch
+
+- **GIVEN** `status --all --json` exits 1 with one change-level load failure
+- **WHEN** the envelope is decoded
+- **THEN** every healthy entry SHALL parse as a single-change status payload
+- **AND** the failed change SHALL surface its diagnostics as per-change evidence
+- **AND** the transport SHALL NOT be classified as a CLI transport failure
+
+#### Scenario: Capability-gate the batch invocation
+
+- **GIVEN** an admitted OpenSpec CLI 1.10.x session
+- **WHEN** the status list is loaded
+- **THEN** OpenSpecUI SHALL use the per-change `status --change` transport
+- **AND** SHALL NOT pass `--all` to any argv
+
+### Requirement: Requirement Diff Evidence Contract
+
+OpenSpecUI SHALL provide a typed `show <change> --json --diff` contract for admitted OpenSpec CLI 1.11
+sessions. The contract SHALL accept the optional `diff` and `warning` fields on `MODIFIED` deltas only and
+SHALL preserve their exact upstream strings. OpenSpecUI SHALL NOT recompute requirement diffs locally, SHALL
+NOT relax the strict local delta schema to absorb these fields, and SHALL NOT invoke `--diff` below 1.11.
+
+#### Scenario: Carry MODIFIED-only diff fields
+
+- **GIVEN** a change contains one MODIFIED delta with a textual change
+- **WHEN** `show <change> --json --diff` is decoded
+- **THEN** that delta SHALL carry the unified `diff` body
+- **AND** ADDED, REMOVED, and RENAMED deltas SHALL remain unchanged in shape
+
+#### Scenario: Preserve upstream warnings verbatim
+
+- **GIVEN** a MODIFIED requirement header differs from the main spec only in case or spacing
+- **WHEN** the diff payload is decoded
+- **THEN** the delta SHALL carry the upstream warning text unchanged
+- **AND** the UI SHALL NOT replace it with a locally authored message
+
+### Requirement: Initialization Language Pass-Through
+
+OpenSpecUI's CLI execution layer SHALL pass an optional language option through to `openspec init` as
+`--language <value>` for admitted OpenSpec CLI 1.10+ sessions. The persisted result SHALL be surfaced as the
+existing Active Root `context` field evidence; OpenSpecUI SHALL NOT expose a language input in the Initialize
+Project Alert, whose mutation SHALL remain exactly `openspec init <launch-project> --tools=none`.
+
+#### Scenario: Pass-through without a new UI surface
+
+- **GIVEN** a caller supplies a language option to the CLI execution layer
+- **WHEN** `openspec init` runs
+- **THEN** the argv SHALL contain `--language <value>`
+- **AND** the Initialize Project Alert UI SHALL NOT gain a language input
+
+### Requirement: JSON Stream Discipline for Admitted CLIs
+
+Typed JSON invocations against admitted OpenSpec CLI 1.10/1.11 sessions SHALL keep stdout as a single JSON
+document: the first-run telemetry notice and completions tip print to stderr and are deferred on JSON runs.
+OpenSpecUI SHALL NOT relax the eager-JSON early-termination condition that requires an empty stderr, and
+SHALL NOT treat the deferred notice/tip stderr lines of non-JSON runs as command diagnostics.
+
+#### Scenario: JSON runs observe stream purity
+
+- **GIVEN** the pinned 1.10.0 and 1.11.0 executables each answer a `--json` command
+- **WHEN** stdout and stderr are captured for both
+- **THEN** each stdout SHALL parse as exactly one JSON document
+- **AND** each stderr SHALL remain free of telemetry and completions tip output
