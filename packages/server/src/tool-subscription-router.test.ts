@@ -49,8 +49,11 @@ import { createServer } from './server.js'
 const REACTIVE_MISSING_PATH_FALLBACK_MS = Number(process.env.CI_TOOL_WAIT_MS ?? 1_000)
 // Loaded CI runners need a wider first-projection budget than the reactive fallback
 // implies; the wait targets the same settlement, only tolerates slower runners.
+// The pinned 1.11 runner's heavier cold start (its module graph now loads the diff
+// package) pushed shared-runner settlement past the 15-cycle budget this file last
+// used, the same shared-runner wait-budget class c0ab7f36 and c4ed106c raised.
 const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS =
-  REACTIVE_MISSING_PATH_FALLBACK_MS * (process.env.CI ? 15 : 4)
+  REACTIVE_MISSING_PATH_FALLBACK_MS * (process.env.CI ? 25 : 4)
 const PINNED_OPENSPEC_BIN = resolve(
   import.meta.dirname,
   '../../../references/openspec/bin/openspec.js'
