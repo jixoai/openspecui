@@ -11,6 +11,7 @@
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  * Full-gate correction (2026-07-31): prove warmup independence by immediate rejection if touched, not a loaded-suite timing race.
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { mkdir, realpath, writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -26,8 +27,11 @@ import { closeAllWatchers } from './reactive-fs/watcher-pool.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
 describe('OpsxKernel artifact status reactivity', () => {
-  const REACTIVE_WAIT_OPTIONS = { timeout: 45000 }
-  const REACTIVE_TEST_TIMEOUT_MS = 50000
+  // Raised again (45s -> 75s) on 2026-08-28: shared-runner Fast Gate load grew with the
+  // pinned 1.10/1.11 fixture matrices and the real-watcher event latency in this describe
+  // outgrew the budget 7ffbc3bd set; the fake CLI keeps each refresh itself cheap.
+  const REACTIVE_WAIT_OPTIONS = { timeout: 75000 }
+  const REACTIVE_TEST_TIMEOUT_MS = 80000
   let tempDir: string
   let kernel: OpsxKernel | null = null
   let runtimeInvalidation: RuntimeInvalidationIndex
