@@ -4,8 +4,9 @@
  * 2. Register CLI, Root Context, Agent delivery, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
- * 5. Compose the public router and enforce v9 admission-gated CLI capabilities.
+ * 5. Compose the public router and enforce v11 admission-gated CLI capabilities.
  * 6. Install the supported OpenSpec CLI series through the global install stream (issue #258).
+ * 7. Serve the capability-gated CLI MODIFIED-delta diff evidence for the Change Evidence tab.
  *
  * Compromise: tRPC router inference currently requires one composition module; splitting its
  * established 2,600-line registration surface is outside the OpenSpec 1.6 contract slice.
@@ -36,6 +37,8 @@
  * Review correction (2026-08-02): remove generic Agent Init/Update mutations that bypass the Agent owner.
  * Original request (2026-08-02): initialize a missing Launch Project through one explicit `--tools=none` Alert.
  * Review correction (2026-08-02): Init cancellation and success wait for objective process and projection settlement.
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。" — the Change
+ *   Evidence tab gains the 1.11-gated `show --diff` projection without touching existing procedures.
 
  */
 import type {
@@ -171,6 +174,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { mutateActiveRootConfig, readActiveRootConfig } from './active-root-config-service.js'
 import type { AgentDeliveryProjectionService } from './agent-delivery-projection-service.js'
+import { readChangeDiffEvidence } from './change-diff-evidence-service.js'
 import { CliMutationInvalidator } from './cli-mutation-invalidator.js'
 import { createCliStreamObservable } from './cli-stream-observable.js'
 import type { Ct2ModelAssetService } from './ct2-model-asset-service.js'
@@ -1741,6 +1745,23 @@ export const changeRouter = router({
     return runPlanningRoot(ctx, ({ adapter }) => adapter.readChangeRaw(input.id))
   }),
 
+  /**
+   * CLI MODIFIED-delta diff evidence for the Change Evidence tab (live-only, OpenSpec 1.11).
+   *
+   * Separately fetched CLI evidence over `show <change> --json --diff`: the local delta parser
+   * keeps owning the delta display and this projection never recomputes a diff. Sessions
+   * without the `requirementDiff` capability (admitted 1.10.x, retired, bypassed, or
+   * unavailable CLI) receive a typed unavailable projection without spawning any process,
+   * so the read stays non-throwing evidence instead of an Evidence-tab transport failure.
+   */
+  diffEvidence: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return runPlanningRootRead(ctx, ({ rootContext }) =>
+        readChangeDiffEvidence({ cliExecutor: ctx.cliExecutor }, rootContext, input.id)
+      )
+    }),
+
   save: publicProcedure
     .input(z.object({ id: z.string(), proposal: z.string(), tasks: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
@@ -2272,9 +2293,10 @@ export const cliRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       return runPlanningRoot(ctx, ({ rootContext }) => {
-        // `validate --archived` exists only on OpenSpec 1.9+. A supported 1.8 session must
-        // learn the capability is unavailable before any process is spawned, never by
-        // watching the CLI reject an unknown option.
+        // `validate --archived` exists on OpenSpec 1.9+, so every admitted 1.10/1.11
+        // session carries the capability. A non-admitted or unobserved CLI must learn the
+        // capability is unavailable before any process is spawned, never by watching the
+        // CLI reject an unknown option.
         if (input.kind === 'archived') {
           const cli = rootContext.cli
           const capabilities = deriveOpenSpecCliCapabilities(
@@ -2284,7 +2306,7 @@ export const cliRouter = router({
             throw new TRPCError({
               code: 'PRECONDITION_FAILED',
               message:
-                'Archived task validation requires the detected OpenSpec CLI to declare the 1.9 archived-validation capability.',
+                'Archived task validation requires an admitted OpenSpec CLI line (both admitted lines declare the archived-validation capability).',
             })
           }
         }
@@ -2403,7 +2425,7 @@ const agentIntegrationToolIdSchema = z
   .min(1)
   .refine(
     (toolId) => getAvailableTools().some((tool) => tool.value === toolId),
-    'Agent tool must be an available OpenSpec 1.9 registry id.'
+    'Agent tool must be an available registry id on the admitted OpenSpec CLI line.'
   )
 
 export const agentIntegrationsRouter = router({
@@ -2453,8 +2475,8 @@ export const agentIntegrationsRouter = router({
         if (Array.isArray(input.tools)) {
           // The input schema only knows the static newest registry; the admitted CLI line's
           // own projection is the execution authority. Reject every explicit tool the
-          // selected registry does not offer before any child process can spawn — a direct
-          // 1.8 RPC naming a 1.9-only target (Command Code) fails here, not at the CLI.
+          // selected registry does not offer before any child process can spawn — an RPC
+          // naming a target the admitted line never shipped fails here, not at the CLI.
           const offered = new Set(projection.registry.map((tool) => tool.value))
           const unavailable = input.tools.filter((toolId) => !offered.has(toolId))
           if (unavailable.length > 0) {

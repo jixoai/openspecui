@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Prove public Agent subscriptions consume Environment-owned policy and launch-local artifacts.
  * 2. Prove fixed global CLI installation retires runner authority and invalidates Root Context before public terminal settlement.
  * 3. Prove commands-only subscriptions distinguish arbitrary content from exact runtime CLI output.
@@ -13,8 +13,11 @@
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ *
+ *   The pinned fallback spec and generated-by expectations follow the v11 1.11 series.
  * Original request (2026-08-28, issue #258): the global install stream installs the admitted
- *   `@1.9` series instead of an unversioned spec the admission gate can block.
+ *   versioned series instead of an unversioned spec the admission gate can block.
  */
 import {
   clearCache,
@@ -46,8 +49,11 @@ import { createServer } from './server.js'
 const REACTIVE_MISSING_PATH_FALLBACK_MS = Number(process.env.CI_TOOL_WAIT_MS ?? 1_000)
 // Loaded CI runners need a wider first-projection budget than the reactive fallback
 // implies; the wait targets the same settlement, only tolerates slower runners.
+// The pinned 1.11 runner's heavier cold start (its module graph now loads the diff
+// package) pushed shared-runner settlement past the 15-cycle budget this file last
+// used, the same shared-runner wait-budget class c0ab7f36 and c4ed106c raised.
 const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS =
-  REACTIVE_MISSING_PATH_FALLBACK_MS * (process.env.CI ? 15 : 4)
+  REACTIVE_MISSING_PATH_FALLBACK_MS * (process.env.CI ? 25 : 4)
 const PINNED_OPENSPEC_BIN = resolve(
   import.meta.dirname,
   '../../../references/openspec/bin/openspec.js'
@@ -72,7 +78,7 @@ async function writeArtifact(filePath: string, content = '# external fixture\n')
 
 async function writeGeneratedSkill(filePath: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.9.0"\n---\n', 'utf8')
+  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.11.0"\n---\n', 'utf8')
 }
 
 async function prepareCachedRunnerReplacement(
@@ -161,7 +167,7 @@ async function createRouterFixture(
   const releaseLaunchObservation = await server.observationEnvironment.acquireRoot(launchRoot)
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.9.0',
+    version: '1.11.0',
   })
   const environment = {
     kind: 'environment-global',
@@ -316,157 +322,163 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
     }
   })
 
-  it('preserves commands/update input and re-emits init state after external file changes', async () => {
-    const fixture = await createRouterFixture()
-    const emissions: ToolInitState[][] = []
-    const errors: unknown[] = []
-    let subscription: { unsubscribe(): void } | null = null
-    const planningUpdate = join(fixture.planningRoot, '.claude', 'commands', 'opsx', 'update.md')
-    const launchExplore = join(fixture.launchRoot, '.claude', 'commands', 'opsx', 'explore.md')
-    const launchUpdate = join(fixture.launchRoot, '.claude', 'commands', 'opsx', 'update.md')
+  it(
+    'preserves commands/update input and re-emits init state after external file changes',
+    async () => {
+      const fixture = await createRouterFixture()
+      const emissions: ToolInitState[][] = []
+      const errors: unknown[] = []
+      let subscription: { unsubscribe(): void } | null = null
+      const planningUpdate = join(fixture.planningRoot, '.claude', 'commands', 'opsx', 'update.md')
+      const launchExplore = join(fixture.launchRoot, '.claude', 'commands', 'opsx', 'explore.md')
+      const launchUpdate = join(fixture.launchRoot, '.claude', 'commands', 'opsx', 'update.md')
 
-    try {
-      await fixture.server.configManager.writeConfig({
-        cli: { command: process.execPath, args: [PINNED_OPENSPEC_BIN] },
-      })
-      const commandContents = await loadOpenSpecAgentCommandContents(
-        await fixture.server.configManager.getCliCommand(),
-        ['update']
-      )
-      const officialUpdateContent = commandContents?.catalog?.claude?.update
-      if (!officialUpdateContent) {
-        throw new Error('Runtime OpenSpec CLI did not provide the Claude/update command fixture.')
+      try {
+        await fixture.server.configManager.writeConfig({
+          cli: { command: process.execPath, args: [PINNED_OPENSPEC_BIN] },
+        })
+        const commandContents = await loadOpenSpecAgentCommandContents(
+          await fixture.server.configManager.getCliCommand(),
+          ['update']
+        )
+        const officialUpdateContent = commandContents?.catalog?.claude?.update
+        if (!officialUpdateContent) {
+          throw new Error('Runtime OpenSpec CLI did not provide the Claude/update command fixture.')
+        }
+        await mkdir(join(fixture.launchRoot, '.claude', 'commands', 'opsx'), { recursive: true })
+        await writeArtifact(planningUpdate)
+        const caller = appRouter.createCaller(fixture.server.createContext())
+        const observable = await caller.cli.subscribeToolInitStates()
+        subscription = observable.subscribe({
+          next: (value) => emissions.push(value),
+          error: (error) => errors.push(error),
+        })
+
+        const initial = await waitForEmission(
+          'initial commands/update projection',
+          emissions,
+          errors,
+          0,
+          (value) => {
+            const claude = findToolState(value, 'claude')
+            return claude?.status === 'uninitialized'
+          }
+        )
+        expect(findToolState(initial, 'claude')).toMatchObject({
+          status: 'uninitialized',
+          expectedSkillCount: 0,
+          expectedCommandCount: 1,
+          missingSkillWorkflows: [],
+          missingCommandWorkflows: ['update'],
+        })
+
+        const unexpectedStart = emissions.length
+        await writeArtifact(launchExplore)
+        const withUnexpected = await waitForEmission(
+          'unexpected Launch explore command creation',
+          emissions,
+          errors,
+          unexpectedStart,
+          (value) => {
+            const claude = findToolState(value, 'claude')
+            return (
+              claude?.readiness === 'partial' &&
+              claude.issues.includes('stale-version') &&
+              claude.unexpectedCommandWorkflows.includes('explore')
+            )
+          }
+        )
+        expect(findToolState(withUnexpected, 'claude')).toMatchObject({
+          status: 'stale-version',
+          readiness: 'partial',
+          issues: ['stale-version'],
+          missingCommandWorkflows: ['update'],
+          unexpectedCommandWorkflows: ['explore'],
+        })
+
+        const expectedStart = emissions.length
+        await writeArtifact(launchUpdate)
+        const withExpectedAndUnexpected = await waitForEmission(
+          'expected Launch update command creation',
+          emissions,
+          errors,
+          expectedStart,
+          (value) => {
+            const claude = findToolState(value, 'claude')
+            return (
+              claude?.readiness === 'partial' &&
+              claude.issues.includes('stale-version') &&
+              claude.missingCommandWorkflows.length === 0 &&
+              claude.unexpectedCommandWorkflows.includes('explore')
+            )
+          }
+        )
+        expect(findToolState(withExpectedAndUnexpected, 'claude')).toMatchObject({
+          status: 'stale-version',
+          readiness: 'partial',
+          presentExpectedCommandCount: 1,
+          missingCommandWorkflows: [],
+          unexpectedCommandWorkflows: ['explore'],
+        })
+
+        const staleStart = emissions.length
+        await rm(launchExplore)
+        const stale = await waitForEmission(
+          'unexpected Launch explore command removal',
+          emissions,
+          errors,
+          staleStart,
+          (value) => findToolState(value, 'claude')?.status === 'stale-version'
+        )
+        expect(findToolState(stale, 'claude')).toMatchObject({
+          status: 'stale-version',
+          readiness: 'initialized',
+          generatedByVersion: null,
+          expectedSkillCount: 0,
+          expectedCommandCount: 1,
+          presentExpectedCommandCount: 1,
+          unexpectedCommandWorkflows: [],
+        })
+
+        const initializedStart = emissions.length
+        await writeArtifact(launchUpdate, officialUpdateContent)
+        const initialized = await waitForEmission(
+          'official Launch update command replacement',
+          emissions,
+          errors,
+          initializedStart,
+          (value) => findToolState(value, 'claude')?.status === 'initialized'
+        )
+        expect(findToolState(initialized, 'claude')).toMatchObject({
+          status: 'initialized',
+          readiness: 'initialized',
+          generatedByVersion: '1.11.0',
+          issues: [],
+        })
+
+        const uninitializedStart = emissions.length
+        await rm(launchUpdate)
+        const uninitialized = await waitForEmission(
+          'expected Launch update command removal',
+          emissions,
+          errors,
+          uninitializedStart,
+          (value) => findToolState(value, 'claude')?.status === 'uninitialized'
+        )
+        expect(findToolState(uninitialized, 'claude')).toMatchObject({
+          status: 'uninitialized',
+          missingCommandWorkflows: ['update'],
+          detectedCommandCount: 0,
+        })
+      } finally {
+        subscription?.unsubscribe()
+        await fixture.dispose()
       }
-      await mkdir(join(fixture.launchRoot, '.claude', 'commands', 'opsx'), { recursive: true })
-      await writeArtifact(planningUpdate)
-      const caller = appRouter.createCaller(fixture.server.createContext())
-      const observable = await caller.cli.subscribeToolInitStates()
-      subscription = observable.subscribe({
-        next: (value) => emissions.push(value),
-        error: (error) => errors.push(error),
-      })
-
-      const initial = await waitForEmission(
-        'initial commands/update projection',
-        emissions,
-        errors,
-        0,
-        (value) => {
-          const claude = findToolState(value, 'claude')
-          return claude?.status === 'uninitialized'
-        }
-      )
-      expect(findToolState(initial, 'claude')).toMatchObject({
-        status: 'uninitialized',
-        expectedSkillCount: 0,
-        expectedCommandCount: 1,
-        missingSkillWorkflows: [],
-        missingCommandWorkflows: ['update'],
-      })
-
-      const unexpectedStart = emissions.length
-      await writeArtifact(launchExplore)
-      const withUnexpected = await waitForEmission(
-        'unexpected Launch explore command creation',
-        emissions,
-        errors,
-        unexpectedStart,
-        (value) => {
-          const claude = findToolState(value, 'claude')
-          return (
-            claude?.readiness === 'partial' &&
-            claude.issues.includes('stale-version') &&
-            claude.unexpectedCommandWorkflows.includes('explore')
-          )
-        }
-      )
-      expect(findToolState(withUnexpected, 'claude')).toMatchObject({
-        status: 'stale-version',
-        readiness: 'partial',
-        issues: ['stale-version'],
-        missingCommandWorkflows: ['update'],
-        unexpectedCommandWorkflows: ['explore'],
-      })
-
-      const expectedStart = emissions.length
-      await writeArtifact(launchUpdate)
-      const withExpectedAndUnexpected = await waitForEmission(
-        'expected Launch update command creation',
-        emissions,
-        errors,
-        expectedStart,
-        (value) => {
-          const claude = findToolState(value, 'claude')
-          return (
-            claude?.readiness === 'partial' &&
-            claude.issues.includes('stale-version') &&
-            claude.missingCommandWorkflows.length === 0 &&
-            claude.unexpectedCommandWorkflows.includes('explore')
-          )
-        }
-      )
-      expect(findToolState(withExpectedAndUnexpected, 'claude')).toMatchObject({
-        status: 'stale-version',
-        readiness: 'partial',
-        presentExpectedCommandCount: 1,
-        missingCommandWorkflows: [],
-        unexpectedCommandWorkflows: ['explore'],
-      })
-
-      const staleStart = emissions.length
-      await rm(launchExplore)
-      const stale = await waitForEmission(
-        'unexpected Launch explore command removal',
-        emissions,
-        errors,
-        staleStart,
-        (value) => findToolState(value, 'claude')?.status === 'stale-version'
-      )
-      expect(findToolState(stale, 'claude')).toMatchObject({
-        status: 'stale-version',
-        readiness: 'initialized',
-        generatedByVersion: null,
-        expectedSkillCount: 0,
-        expectedCommandCount: 1,
-        presentExpectedCommandCount: 1,
-        unexpectedCommandWorkflows: [],
-      })
-
-      const initializedStart = emissions.length
-      await writeArtifact(launchUpdate, officialUpdateContent)
-      const initialized = await waitForEmission(
-        'official Launch update command replacement',
-        emissions,
-        errors,
-        initializedStart,
-        (value) => findToolState(value, 'claude')?.status === 'initialized'
-      )
-      expect(findToolState(initialized, 'claude')).toMatchObject({
-        status: 'initialized',
-        readiness: 'initialized',
-        generatedByVersion: '1.9.0',
-        issues: [],
-      })
-
-      const uninitializedStart = emissions.length
-      await rm(launchUpdate)
-      const uninitialized = await waitForEmission(
-        'expected Launch update command removal',
-        emissions,
-        errors,
-        uninitializedStart,
-        (value) => findToolState(value, 'claude')?.status === 'uninitialized'
-      )
-      expect(findToolState(uninitialized, 'claude')).toMatchObject({
-        status: 'uninitialized',
-        missingCommandWorkflows: ['update'],
-        detectedCommandCount: 0,
-      })
-    } finally {
-      subscription?.unsubscribe()
-      await fixture.dispose()
-    }
-  }, 30_000)
+      // Four chained settlement waits share this test; the per-stage CI budget the
+      // shared-runner class raised needs the enclosing room c4ed106c prescribed.
+    },
+    PUBLIC_TOOL_SETTLEMENT_BUDGET_MS * 4 + 20_000
+  )
 
   it('observes allowlisted global Codex prompts as cleanup at the shared .agents root', async () => {
     const fixture = await createRouterFixture({
@@ -657,7 +669,7 @@ describe(
         await expect(Promise.all(runnerAtExit)).resolves.toMatchObject([{ version: 'runner-b' }])
         expect(events).toEqual([{ type: 'exit', exitCode: 0 }])
         expect(executeCommandStream).toHaveBeenCalledWith(
-          ['npm', 'install', '-g', '@fission-ai/openspec@1.9'],
+          ['npm', 'install', '-g', '@fission-ai/openspec@1.11'],
           expect.any(Function)
         )
       } finally {

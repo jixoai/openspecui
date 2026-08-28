@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Render schema-aware change artifacts and source files while retaining terminal status errors.
  * 2. Dispatch change workflows through routed compose/verify surfaces and the shared Operator launcher.
  * 3. Lock every change workflow action behind current Root Context and Status projection authority.
@@ -13,6 +13,8 @@
  * Original request (2026-08-03): move complete Change evidence into a dedicated tab page.
  * Owner correction (2026-08-03): move Actions inline with the title, unify subtitle badges, and localize unavailable Tooltips.
  * Original request (2026-08-15): 刷新/解析中状态收敛为副标题行内的 shiny 徽章，不再占据 statusRegion 块。
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。" — the Evidence
+ *   tab gains the 1.11-gated CLI MODIFIED-delta diff evidence beside the existing layers.
  */
 import { ApplyProgressNotice } from '@/components/apply-progress-notice'
 import { ArchivedValidationEvidence } from '@/components/archived-validation-evidence'
@@ -21,6 +23,7 @@ import {
   ChangeReferenceFailureNotice,
   type ChangeReferenceEvidence,
 } from '@/components/change-context-summary'
+import { ChangeDiffEvidence } from '@/components/change-diff-evidence'
 import { ChangeEvidencePanel } from '@/components/change-evidence-panel'
 import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
 import { OperationInputsDialogAction } from '@/components/opsx/operation-inputs'
@@ -114,6 +117,7 @@ export function ChangeView() {
               content: (
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                   <ChangeEvidencePanel status={status} referenceEvidence={referenceEvidence} />
+                  <ChangeDiffEvidence changeId={changeId} />
                   <ArchivedValidationEvidence />
                 </div>
               ),

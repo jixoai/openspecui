@@ -1,10 +1,13 @@
 /**
- * Orthogonal intents (created 2026-08-15 Asia/Shanghai):
- * 1. Present the typed 1.9 archived-validation report with items, issues, totals, and root.
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * 1. Present the typed admitted-line archived-validation report with items, issues, totals, and root.
  * 2. Preserve CLI failure evidence without repair or automatic archive actions.
  * 3. Identify the evidence as unavailable in static snapshots instead of fabricating it.
+ * 4. Lock the OpenSpec 1.11 Purpose-placeholder WARNING rendering: the exact upstream message
+ *    stays visible on the `overview` path without truncation or rewriting.
  *
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -35,7 +38,7 @@ const rootActionStateMock = vi.hoisted(() => ({
     message: '',
     evidence: [],
     context: {
-      cli: { available: true, version: '1.9.0' },
+      cli: { available: true, version: '1.11.0' },
     },
     observedAt: 1,
   },
@@ -99,7 +102,7 @@ describe('ArchivedValidationEvidence', () => {
       message: '',
       evidence: [],
       context: {
-        cli: { available: true, version: '1.9.0' },
+        cli: { available: true, version: '1.11.0' },
       },
       observedAt: 1,
     }
@@ -211,17 +214,17 @@ describe('ArchivedValidationEvidence', () => {
     expect(document.body.textContent).toContain('Exit')
   })
 
-  it('offers no command on a detected OpenSpec 1.8 session', () => {
+  it('offers no command on a detected retired OpenSpec CLI session', () => {
     rootActionStateMock.state = {
       ...rootActionStateMock.state,
-      context: { cli: { available: true, version: '1.8.0' } },
+      context: { cli: { available: true, version: '1.9.0' } },
     }
     render(<ArchivedValidationEvidence />)
 
     expect(screen.getByText('Unavailable on this CLI line')).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
-    expect(screen.getByText(/requires the OpenSpec 1.9 line/)).toBeVisible()
-    expect(screen.getByText(/detected 1\.8\.0/)).toBeVisible()
+    expect(screen.getByText(/requires an admitted OpenSpec CLI line/)).toBeVisible()
+    expect(screen.getByText(/detected 1\.9\.0/)).toBeVisible()
     expect(
       screen.queryByRole('button', { name: 'Validate archived tasks' })
     ).not.toBeInTheDocument()
@@ -237,5 +240,56 @@ describe('ArchivedValidationEvidence', () => {
 
     expect(await screen.findByText(/planning root unresolved/)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Rerun' })).toBeVisible()
+  })
+
+  it('renders the 1.11 Purpose-placeholder WARNING verbatim on the overview path', async () => {
+    // Exact upstream text from OpenSpec 1.11 `validation/constants.ts` PURPOSE_IS_PLACEHOLDER.
+    const purposePlaceholderWarning =
+      'Purpose section is still a placeholder rather than a Purpose anyone wrote (the sentence `openspec archive` ' +
+      'writes for a new capability, or a `TBD`/`TODO` marker left in its place). Replace it with what this ' +
+      'capability is for, editing the main spec directly: a `## Purpose` in a delta is read only when the ' +
+      'capability is created, so it cannot replace this one.'
+    validateMock.mockResolvedValue(
+      archivedReport({
+        data: {
+          items: [
+            {
+              id: 'capability-search',
+              type: 'spec',
+              valid: true,
+              issues: [
+                {
+                  level: 'WARNING',
+                  path: 'overview',
+                  line: 3,
+                  message: purposePlaceholderWarning,
+                },
+              ],
+              durationMs: 4,
+            },
+          ],
+          summary: {
+            totals: { items: 1, passed: 1, failed: 0 },
+            byType: { spec: { items: 1, passed: 1, failed: 0 } },
+          },
+          version: '1.0',
+          root: { path: '/repo', source: 'nearest' },
+        },
+      })
+    )
+
+    render(<ArchivedValidationEvidence />)
+    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
+
+    // The complete upstream message renders as one untruncated, unrewritten evidence line.
+    const line = await screen.findByText(
+      (content, element) =>
+        element?.tagName === 'LI' &&
+        content.startsWith('WARNING · overview · Purpose section is still a placeholder') &&
+        content.endsWith(purposePlaceholderWarning)
+    )
+    expect(line).toBeVisible()
+    expect(document.body.textContent).toContain(purposePlaceholderWarning)
   })
 })

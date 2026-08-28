@@ -7,7 +7,9 @@
  * 5. Keep the bounded Windows lock-release budget ahead of slow hosted runners: the production
  *    worker child's cwd release can lag its awaited exit while a fresh runner deletes the tree,
  *    and its graceful-then-forced shutdown escalation (5 s + 5 s + kill) can exceed the default
- *    10 s hook budget, so cleanup owns an explicit bounded hook timeout.
+ *    10 s hook budget, so cleanup owns an explicit bounded hook timeout. Raised 30 s -> 60 s on
+ *    2026-08-28: the same slow-hosted-runner class (a run whose import phase alone took 48 s)
+ *    pushed the guarded-child close past 30 s twice in a row; local runs stay far under it.
  * 6. The real worker-thread lifecycle case skips only on hosted Windows CI: `terminate()` can
  *    wait forever on a thread stuck in native teardown there. The ubuntu CI lane and local
  *    Windows runs keep the contract covered.
@@ -19,6 +21,7 @@
  * Original request (2026-07-24): "Propagate the exact parent Access Gate into worktree Servers."
  * Delivery correction (2026-07-26): clean child fixtures own one minimal physical Web asset root.
  * Owner correction (2026-07-29): daemon start is not a project Server command; child processes use serve.
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import {
   buildBackendHealthPayload,
@@ -77,7 +80,7 @@ afterEach(async () => {
     )
   )
   vi.unstubAllEnvs()
-}, 30_000)
+}, 60_000)
 
 async function createWorkspaceFixture(): Promise<{ repoRoot: string; runtimeDir: string }> {
   const repoRoot = await mkdtemp(join(tmpdir(), 'openspecui-worktree-manager-'))

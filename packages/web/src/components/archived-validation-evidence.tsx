@@ -1,12 +1,14 @@
 /**
- * Orthogonal intents (created 2026-08-15 Asia/Shanghai):
- * 1. Present OpenSpec 1.9 `validate --archived --json` as typed CLI evidence.
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * 1. Present OpenSpec `validate --archived --json` as typed CLI evidence.
  * 2. Preserve item issues, totals, root, and exit/failure evidence without repair actions.
  * 3. Identify the evidence as unavailable in static snapshots instead of fabricating it.
- * 4. Derive the capability from the detected admitted CLI and hide the action on 1.8.
+ * 4. Derive the capability from the detected admitted CLI; both admitted v11 lines (1.10 and
+ *    1.11) declare it, so the unavailable branch names the accepted range, not one series.
  * 5. Validate report payloads with the Core contract schema, never shallow shape guards.
  *
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { EvidenceDisclosure } from '@/components/information-disclosure'
 import { isStaticMode } from '@/lib/static-mode'
@@ -20,6 +22,7 @@ import {
   CliCommandTransportSchema,
   CliValidateReportSchema,
   deriveOpenSpecCliCapabilities,
+  OPENSPEC_CLI_ACCEPTED_RANGE,
   parseOpenSpecCliVersion,
 } from '@openspecui/core/openspec-compat'
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
@@ -94,8 +97,9 @@ export function ArchivedValidationEvidence() {
   const [pending, setPending] = useState(false)
   const rootAction = useRootActionState()
   const cli = rootAction.context?.cli
-  // `validate --archived` exists only on OpenSpec 1.9+. A supported 1.8 session must see
-  // the capability as unavailable here, never a button that spawns a failing command.
+  // `validate --archived` exists on OpenSpec 1.9+ and both admitted v11 lines (1.10 and 1.11)
+  // declare it. An available-but-out-of-range session (e.g. a bypassed 1.9 CLI) must see the
+  // capability as unavailable here, never a button that spawns a failing command.
   const capabilities = deriveOpenSpecCliCapabilities(
     cli?.available ? parseOpenSpecCliVersion(cli.version) : null
   )
@@ -117,8 +121,9 @@ export function ArchivedValidationEvidence() {
     return (
       <EvidenceDisclosure title="Archived validation" summary="Unavailable on this CLI line">
         <p className="text-muted-foreground">
-          Archived-task validation requires the OpenSpec 1.9 line{detected}. This session&apos;s CLI
-          does not declare the capability, so no command is offered.
+          Archived-task validation requires an admitted OpenSpec CLI line (
+          {OPENSPEC_CLI_ACCEPTED_RANGE}){detected}. This session&apos;s CLI does not declare the
+          capability, so no command is offered.
         </p>
       </EvidenceDisclosure>
     )
@@ -156,10 +161,7 @@ export function ArchivedValidationEvidence() {
 
   if (!report && !error) {
     return (
-      <EvidenceDisclosure
-        title="Archived validation"
-        summary="OpenSpec 1.9 archived-task validation"
-      >
+      <EvidenceDisclosure title="Archived validation" summary="OpenSpec archived-task validation">
         <div className="space-y-2">
           <p className="text-muted-foreground">
             Run the official CLI&apos;s archived-task validation and keep its typed report as

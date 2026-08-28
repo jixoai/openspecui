@@ -121,7 +121,7 @@ await ctx.cliExecutor.archiveStream(changeId, options, (event) => {
 
 ## Important Reference Files
 
-**At the start of each session, read `references/openspec-1.7.0-report.md` for the current OpenSpec protocol and OpenSpecUI adaptation boundary. Use `references/openspec-0.16.0-report.md` only as historical domain-model context.**
+**At the start of each session, read `references/openspec-1.11.0-report.md` for the current OpenSpec protocol and OpenSpecUI adaptation boundary. Use `references/openspec-1.9.0-report.md` and `references/openspec-0.16.0-report.md` only as historical domain-model context.**
 
 This file contains:
 

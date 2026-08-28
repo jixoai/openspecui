@@ -1,14 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
- * 1. Pin the official OpenSpec v1.4 through v1.9 source contracts used by OpenSpecUI.
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * 1. Pin the official OpenSpec v1.4 through v1.11 source contracts used by OpenSpecUI.
  * 2. Prevent a version-gate-only adaptation from masking missing workflow or root behavior.
- * 3. Keep validation, archive, task, and tool-delivery fixtures traceable to first-party source.
+ * 3. Keep validation, archive, task, batch status, requirement-diff, and init-language
+ *    fixtures traceable to first-party source.
  * 4. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  *
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-15): "1.4、1.5、1.6 第一方合同回归测试。"
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -82,16 +84,16 @@ describe('first-party OpenSpec 1.4-1.7 contracts', () => {
     expect(rootInspection).toContain('inspectOptionalPlanningDirectory')
   })
 
-  it('pins the reference checkout to the official v1.9.0 commit', () => {
+  it('pins the reference checkout to the official v1.11.0 commit', () => {
     const commit = execFileSync('git', ['-C', upstreamRoot, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
       windowsHide: true,
     }).trim()
 
-    expect(commit).toBe('2826b8889e5223a9a8095d4428b60b56597e1020')
+    expect(commit).toBe('a0ddb60d040c61f4907436a9d91310934b1dda63')
   })
 
-  it('locks the v1.8/v1.9 planning-completion, schemas sum type, and archived validation sources', () => {
+  it('locks the retained planning-completion, schemas sum type, and archived validation sources', () => {
     const instructionLoader = readPinned('src/core/artifact-graph/instruction-loader.ts')
     const schemas = readPinned('src/commands/workflow/schemas.ts')
     const rootSelection = readPinned('src/core/root-selection.ts')
@@ -105,5 +107,35 @@ describe('first-party OpenSpec 1.4-1.7 contracts', () => {
     )
     expect(validate).toContain('options.archived')
     expect(validate).toContain('incomplete task')
+  })
+
+  it('locks the v1.11 batch status envelope, requirement diff, init language, and placeholder warning sources', () => {
+    const status = readPinned('src/commands/workflow/status.ts')
+    const changeShow = readPinned('src/commands/change.ts')
+    const init = readPinned('src/core/init.ts')
+    const purposeConstants = readPinned('src/core/validation/constants.ts')
+
+    // Batch envelope: healthy/failure per-entry sum type and the empty-set message.
+    expect(status).toContain(
+      'type BatchStatusEntry = ChangeStatus | { changeName: string; status: StoreDiagnostic[] };'
+    )
+    expect(status).toContain("message: 'No active changes.'")
+    expect(status).toContain("asStatus(error, 'change_error')")
+
+    // Requirement diff: near-miss header warning plus the diff body attachment.
+    expect(changeShow).toContain('diffRequirementBlock')
+    expect(changeShow).toContain("Header differs from the main spec's")
+    expect(changeShow).toContain(
+      'so MODIFIED requirement "${block.name}" has nothing to diff against'
+    )
+
+    // init --language persists a fixed context block, not a new config key.
+    expect(init).toContain('`Language: ${language}`')
+    expect(init).toContain('All artifacts must be written in')
+
+    // Validate gained the Purpose-placeholder warning class inside the issue level enum.
+    expect(purposeConstants).toContain(
+      "export const PURPOSE_PLACEHOLDER_PREFIX = 'TBD - created by archiving change '"
+    )
   })
 })

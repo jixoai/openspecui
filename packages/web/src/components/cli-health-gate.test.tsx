@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
- * 1. Lock the Web compatibility gate to the OpenSpecUI 9 / CLI 1.8 + 1.9 lines.
+ * 1. Lock the Web compatibility gate to the OpenSpecUI 11 / CLI 1.10 + 1.11 lines.
  * 2. Prove incompatible-version blocking and the current-page-runtime escape hatch.
  * 3. Prove shared Root Context is the gate's only CLI availability truth and refresh is readonly.
  * 4. Prove the install hint names the admitted CLI series, never an unversioned @latest.
@@ -13,6 +13,7 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28, issue #258): the gate must not direct users at a version the
  *   admission gate then blocks.
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import type { RootContext, RootContextState } from '@openspecui/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -129,7 +130,7 @@ function renderGate() {
 
 describe('CliHealthGate', () => {
   beforeEach(() => {
-    setAvailability({ available: true, version: '1.9.0' })
+    setAvailability({ available: true, version: '1.11.0' })
     config = undefined
     rootRefreshCalls = 0
   })
@@ -138,8 +139,8 @@ describe('CliHealthGate', () => {
     cleanup()
   })
 
-  it('does not render for the current recommended OpenSpec CLI 1.9.x line', async () => {
-    setAvailability({ available: true, version: '1.9.1' })
+  it('does not render for the current recommended OpenSpec CLI 1.11.x line', async () => {
+    setAvailability({ available: true, version: '1.11.1' })
     renderGate()
 
     await waitFor(() => {
@@ -148,8 +149,8 @@ describe('CliHealthGate', () => {
     })
   })
 
-  it('does not render for supported non-current OpenSpec CLI 1.8.x', async () => {
-    setAvailability({ available: true, version: '1.8.0' })
+  it('does not render for supported non-current OpenSpec CLI 1.10.x', async () => {
+    setAvailability({ available: true, version: '1.10.0' })
     renderGate()
 
     await waitFor(() => {
@@ -158,46 +159,48 @@ describe('CliHealthGate', () => {
     })
   })
 
-  it('blocks OpenSpec CLI 1.7.x in OpenSpecUI 9', async () => {
-    setAvailability({ available: true, version: '1.7.0' })
+  it('blocks the retired OpenSpec CLI 1.9.x line in OpenSpecUI 11', async () => {
+    setAvailability({ available: true, version: '1.9.0' })
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.8.0 <1.10.0 Required/)).toBeInTheDocument()
-    expect(screen.getByText(/Detected OpenSpec CLI 1\.7\.0/)).toBeInTheDocument()
-    expect(screen.getByText(/recommends >=1\.9\.0 <1\.10\.0/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.10.0 <1.12.0 Required/)).toBeInTheDocument()
+    expect(screen.getByText(/Detected OpenSpec CLI 1\.9\.0/)).toBeInTheDocument()
+    expect(screen.getByText(/recommends >=1\.11\.0 <1\.12\.0/)).toBeInTheDocument()
   })
 
   it('blocks prerelease versions inside the accepted range', async () => {
-    setAvailability({ available: true, version: '1.9.0-rc.1' })
+    setAvailability({ available: true, version: '1.11.0-rc.1' })
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.8.0 <1.10.0 Required/)).toBeInTheDocument()
-    expect(screen.getByText(/Detected OpenSpec CLI 1\.9\.0-rc\.1/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.10.0 <1.12.0 Required/)).toBeInTheDocument()
+    expect(screen.getByText(/Detected OpenSpec CLI 1\.11\.0-rc\.1/)).toBeInTheDocument()
   })
 
-  it('blocks OpenSpec CLI 1.10.0 and newer', async () => {
-    setAvailability({ available: true, version: '1.10.0' })
+  it('blocks OpenSpec CLI 1.12.0 and newer', async () => {
+    setAvailability({ available: true, version: '1.12.0' })
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.8.0 <1.10.0 Required/)).toBeInTheDocument()
-    expect(screen.getByText(/Detected OpenSpec CLI 1\.10\.0/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.10.0 <1.12.0 Required/)).toBeInTheDocument()
+    expect(screen.getByText(/Detected OpenSpec CLI 1\.12\.0/)).toBeInTheDocument()
   })
 
   it('recommends installing the admitted CLI series instead of an unversioned @latest', async () => {
-    setAvailability({ available: true, version: '1.10.0' })
+    setAvailability({ available: true, version: '1.9.0' })
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.8.0 <1.10\.0 Required/)).toBeInTheDocument()
-    expect(screen.getByText(/npm install -g @fission-ai\/openspec@1\.9/)).toBeInTheDocument()
+    expect(
+      await screen.findByText(/OpenSpec CLI >=1\.10\.0 <1\.12\.0 Required/)
+    ).toBeInTheDocument()
+    expect(screen.getByText(/npm install -g @fission-ai\/openspec@1\.11/)).toBeInTheDocument()
     expect(screen.queryByText(/^npm install -g @fission-ai\/openspec$/)).not.toBeInTheDocument()
   })
 
   it('offers a skip-version-check escape hatch when the CLI is available', async () => {
-    setAvailability({ available: true, version: '1.10.0' })
+    setAvailability({ available: true, version: '1.12.0' })
 
     renderGate()
 
@@ -205,7 +208,7 @@ describe('CliHealthGate', () => {
   })
 
   it('clears the blocking dialog after skipping the version check for the current runtime', async () => {
-    setAvailability({ available: true, version: '1.7.0' })
+    setAvailability({ available: true, version: '1.9.0' })
 
     const firstRuntime = renderGate()
 
@@ -213,14 +216,14 @@ describe('CliHealthGate', () => {
     fireEvent.click(skip)
 
     await waitFor(() => {
-      expect(screen.queryByText(/OpenSpec CLI >=1.8.0 <1.10.0 Required/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/OpenSpec CLI >=1.10.0 <1.12.0 Required/)).not.toBeInTheDocument()
     })
 
     firstRuntime.unmount()
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.8.0 <1.10.0 Required/)).toBeInTheDocument()
-    expect(screen.getByText(/Detected OpenSpec CLI 1\.7\.0/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.10.0 <1.12.0 Required/)).toBeInTheDocument()
+    expect(screen.getByText(/Detected OpenSpec CLI 1\.9\.0/)).toBeInTheDocument()
   })
 
   it('does not offer a skip escape hatch when the CLI is unavailable', async () => {
@@ -228,7 +231,7 @@ describe('CliHealthGate', () => {
 
     renderGate()
 
-    expect(await screen.findByText(/OpenSpec CLI >=1.8.0 <1.10.0 Required/)).toBeInTheDocument()
+    expect(await screen.findByText(/OpenSpec CLI >=1.10.0 <1.12.0 Required/)).toBeInTheDocument()
     expect(screen.queryByText(/Skip version check/)).not.toBeInTheDocument()
   })
 

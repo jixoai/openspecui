@@ -1,8 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Configure Chromium component-test execution and source-safe package aliases.
+ * 2. Pre-bundle dynamically discovered runtime deps so dep optimization cannot reload a test mid-run.
  *
  * Original request (2026-08-02): "视觉相关的走查由我最后来做，你只需要完成基础的开发和单元测试（包括有些组件playwright测试）"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
@@ -34,6 +36,13 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias,
+  },
+  // Pre-bundle the runtime deps the component tree discovers dynamically; without this,
+  // Vite optimized react-dom/client mid-run on hosted CI, reloaded the page, and failed
+  // the in-flight dynamic imports (2026-08-28, the exact remedy Vite's reload warning
+  // prescribes).
+  optimizeDeps: {
+    include: ['react-dom/client'],
   },
   test: {
     name: 'browser',

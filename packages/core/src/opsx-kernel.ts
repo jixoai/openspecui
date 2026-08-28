@@ -1,14 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Maintain reactive CLI-backed projections and their direct typed Projection Work readers.
  * 2. Share and release per-entity streams through one planning-root kernel lifecycle.
  * 3. Keep OpenSpec configuration ownership outside the workflow cache while tracking both YAML filename variants.
  * 4. Preserve typed Status and Artifact/Apply/Archive Instructions provenance with the resolved root selector.
  * 5. Resolve per-command CLI capabilities once per lifetime and gate version-only selectors behind admission.
+ * 6. Serve the status-list projections through the capability-gated OpenSpec 1.11 batch transport
+ *    (one `status --all` spawn) with projections, per-change dependencies, and failure evidence
+ *    identical to the per-change serial transport; 1.10 sessions keep the serial path.
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
@@ -19,9 +23,12 @@ import {
   CliChangeListSchema,
   CliRootSchema,
   CliWorkflowStatusSuccessSchema,
+  isCliBatchStatusEntryFailure,
+  type CliBatchStatusEntry,
   type CliChangeListEntry,
   type CliCommandResult,
   type CliRootSelector,
+  type CliWorkflowStatusSuccess,
 } from './cli-contracts/index.js'
 import { CliSchemasSuccessSchema, isCliSchemasFailure } from './cli-contracts/schema-resolution.js'
 import type { CliExecutor } from './cli-executor.js'
@@ -55,6 +62,7 @@ import {
   type ArtifactInstructions,
   type ChangeStatus,
   type OpsxConfigBundle,
+  type OpsxStatusEvidence,
   type SchemaDetail,
   type SchemaInfo,
   type SchemaResolution,
@@ -322,6 +330,59 @@ function createOpsxStatusEvidence(
 ) {
   return OpsxStatusEvidenceSchema.parse(createOpsxCliEvidence(result, 'status', rootSelector))
 }
+
+/**
+ * Project one CLI Status success payload into the retained ChangeStatus shape.
+ *
+ * Shared by the per-change serial transport and the OpenSpec 1.11 batch transport so both
+ * publish byte-identical projection semantics; only the command evidence differs because
+ * it honestly records the transport that produced the payload.
+ */
+function projectWorkflowStatus(
+  data: CliWorkflowStatusSuccess,
+  evidence: OpsxStatusEvidence
+): ChangeStatus {
+  return ChangeStatusSchema.parse({
+    changeName: data.changeName,
+    schemaName: data.schemaName,
+    isPlanningComplete: data.isPlanningComplete,
+    applyRequires: data.applyRequires,
+    artifacts: data.artifacts,
+    provenance: {
+      kind: 'cli',
+      planningHome: data.planningHome,
+      changeRoot: data.changeRoot,
+      artifactPaths: data.artifactPaths,
+      nextSteps: data.nextSteps,
+      actionContext: data.actionContext,
+      root: data.root,
+      evidence,
+    },
+  })
+}
+
+/** Publish artifact relative paths and register the same reactive deps as the serial transport. */
+async function settleStatusArtifactDeps(
+  projectDir: string,
+  changeId: string,
+  status: ChangeStatus
+): Promise<void> {
+  const changeRelDir = `openspec/changes/${changeId}`
+  for (const artifact of status.artifacts) {
+    if (artifact.status !== 'skipped') {
+      artifact.relativePath = `${changeRelDir}/${artifact.outputPath}`
+      await touchArtifactOutputDeps(projectDir, changeId, artifact.outputPath)
+    }
+  }
+}
+
+/** How one requested change resolved against an OpenSpec 1.11 batch Status envelope. */
+type OpsxBatchStatusResolution =
+  | { kind: 'status'; status: ChangeStatus }
+  /** The CLI reported this change failed to load; evidence stays with that change. */
+  | { kind: 'per-change-failure' }
+  /** The envelope did not report a requested change; callers keep serial semantics for it. */
+  | { kind: 'missing' }
 
 // ---------------------------------------------------------------------------
 // OpsxKernel
@@ -1075,38 +1136,141 @@ export class OpsxKernel {
     })
     const evidence = createOpsxStatusEvidence(result, this.rootSelector)
     const data = requireCommandData('openspec status', result, CliWorkflowStatusSuccessSchema)
-    const status = ChangeStatusSchema.parse({
-      changeName: data.changeName,
-      schemaName: data.schemaName,
-      isPlanningComplete: data.isPlanningComplete,
-      applyRequires: data.applyRequires,
-      artifacts: data.artifacts,
-      provenance: {
-        kind: 'cli',
-        planningHome: data.planningHome,
-        changeRoot: data.changeRoot,
-        artifactPaths: data.artifactPaths,
-        nextSteps: data.nextSteps,
-        actionContext: data.actionContext,
-        root: data.root,
-        evidence,
-      },
-    })
-    const changeRelDir = `openspec/changes/${changeId}`
-    for (const artifact of status.artifacts) {
-      if (artifact.status !== 'skipped') {
-        artifact.relativePath = `${changeRelDir}/${artifact.outputPath}`
-        await touchArtifactOutputDeps(this.projectDir, changeId, artifact.outputPath)
-      }
-    }
+    const status = projectWorkflowStatus(data, evidence)
+    await settleStatusArtifactDeps(this.projectDir, changeId, status)
     return status
+  }
+
+  /**
+   * Capability-gated OpenSpec 1.11 batch Status transport for the status-list projections.
+   *
+   * Returns `null` when the admitted session cannot run `status --all` (OpenSpec 1.10, an
+   * unverifiable CLI, or a typed capability refusal) so callers keep the per-change serial
+   * transport. One spawn replaces the per-change spawns; healthy entries reuse the exact
+   * per-change projection (shared decoder plus shared reactive dependency touching), a
+   * per-change failure entry stays that change's own evidence, and only an unparseable
+   * envelope or the root-selection null shape rejects the aggregate. The single spawn
+   * occupies one buffered-admission slot by construction, so the serial aggregate
+   * submission constraint holds without mapCliProjectionSeries.
+   */
+  private async fetchBatchStatusListProjection(changeIds: readonly string[]): Promise<{
+    resolutions: Map<string, OpsxBatchStatusResolution>
+    evidence: CliProjectionCommandEvidence
+  } | null> {
+    const capabilities = await this.resolveCliCapabilities()
+    if (!capabilities.batchStatus) {
+      return null
+    }
+
+    await touchOpsxProjectDeps(this.projectDir)
+    for (const changeId of changeIds) {
+      await touchOpsxChangeDeps(this.projectDir, changeId)
+    }
+
+    const gated = await this.cliExecutor.contracts.workflowStatusAll({
+      ...this.rootSelector,
+      capabilities: { batchStatus: capabilities.batchStatus },
+    })
+    if (gated.kind === 'unavailable') {
+      return null
+    }
+    const result = gated.result
+    const batch = result.data
+    if (!batch) {
+      // Unparseable stdout: the existing transport/contract error path. The batch envelope
+      // decodes regardless of exit code, so exit 1 with a valid document never lands here.
+      const message =
+        result.contractError ||
+        result.stderr.trim() ||
+        result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')
+      throw new CliProjectionCommandError(
+        message || `openspec status --all failed (exit ${result.exitCode ?? 'null'})`,
+        result
+      )
+    }
+    if (batch.root === null) {
+      // Root-selection null shape: the existing root-failure path, never an empty success.
+      const diagnostics = batch.status ?? []
+      throw new CliProjectionCommandError(
+        diagnostics.map((diagnostic) => diagnostic.message).join('\n') ||
+          'openspec status --all failed to select a Root.',
+        result
+      )
+    }
+
+    const statusEvidence = createOpsxStatusEvidence(result, this.rootSelector)
+    const entries = new Map<string, CliBatchStatusEntry>()
+    for (const entry of batch.changes) {
+      entries.set(entry.changeName, entry)
+    }
+
+    const resolutions = new Map<string, OpsxBatchStatusResolution>()
+    for (const changeId of changeIds) {
+      const entry = entries.get(changeId)
+      if (!entry) {
+        resolutions.set(changeId, { kind: 'missing' })
+        continue
+      }
+      if (isCliBatchStatusEntryFailure(entry)) {
+        resolutions.set(changeId, { kind: 'per-change-failure' })
+        continue
+      }
+      const parsed = CliWorkflowStatusSuccessSchema.safeParse({ ...entry, root: batch.root })
+      if (!parsed.success) {
+        throw new CliProjectionCommandError(
+          `openspec status --all entry "${changeId}" drifted from the Status contract: ${parsed.error.issues
+            .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+            .join('; ')}`,
+          result
+        )
+      }
+      const status = projectWorkflowStatus(parsed.data, statusEvidence)
+      await settleStatusArtifactDeps(this.projectDir, changeId, status)
+      resolutions.set(changeId, { kind: 'status', status })
+    }
+    return { resolutions, evidence: toCliProjectionCommandEvidence(result) }
   }
 
   private async fetchStatusList(): Promise<ChangeStatus[]> {
     await this.ensureChangeIds()
     const changeIds = this._changeIds.get()
-    await mapCliProjectionSeries(changeIds, (id) => this.ensureStatus(id))
-    return changeIds.map((id) => this.getStatus(id))
+
+    const batch = await this.fetchBatchStatusListProjection(changeIds)
+    if (!batch) {
+      await mapCliProjectionSeries(changeIds, (id) => this.ensureStatus(id))
+      return changeIds.map((id) => this.getStatus(id))
+    }
+
+    const statuses: ChangeStatus[] = []
+    for (const changeId of changeIds) {
+      const resolution = batch.resolutions.get(changeId)
+      if (resolution?.kind === 'status') {
+        this.retainStatusState(changeId, resolution.status)
+        statuses.push(resolution.status)
+        continue
+      }
+      // Per-change failure entry or envelope gap: that change keeps its own serial per-change
+      // evidence and the aggregate must not fail for unrelated changes.
+      try {
+        await this.ensureStatus(changeId)
+        statuses.push(this.getStatus(changeId))
+      } catch {
+        // That change's failure evidence stays owned by its own status stream.
+      }
+    }
+    return statuses
+  }
+
+  /** Publish one batch-projected Status into the existing per-change status cache. */
+  private retainStatusState(changeId: string, status: ChangeStatus, schema?: string): void {
+    const canonicalChangeId = requireCanonicalOpenSpecEntityId(changeId, 'changeId')
+    const key = `${canonicalChangeId}:${schema ?? ''}`
+    let state = this._statuses.get(key)
+    if (!state) {
+      state = new ReactiveState<ChangeStatus>(null!)
+      this._statuses.set(key, state)
+    }
+    state.set(status)
   }
 
   private async fetchInstructions(
@@ -1360,12 +1524,30 @@ export class OpsxKernel {
     evidence: CliProjectionCommandEvidence
   }> {
     const changeList = await this.fetchChangeListProjection()
-    return {
-      value: await mapCliProjectionSeries(changeList.value, (changeId) =>
-        this.fetchStatus(changeId)
-      ),
-      evidence: changeList.evidence,
+    const batch = await this.fetchBatchStatusListProjection(changeList.value)
+    if (!batch) {
+      return {
+        value: await mapCliProjectionSeries(changeList.value, (changeId) =>
+          this.fetchStatus(changeId)
+        ),
+        evidence: changeList.evidence,
+      }
     }
+    const value: ChangeStatus[] = []
+    for (const changeId of changeList.value) {
+      const resolution = batch.resolutions.get(changeId)
+      if (resolution?.kind === 'status') {
+        value.push(resolution.status)
+        continue
+      }
+      if (resolution?.kind === 'per-change-failure') {
+        // The failure entry is that change's evidence, retained in the batch envelope
+        // evidence; unrelated changes are not failed.
+        continue
+      }
+      value.push(await this.fetchStatus(changeId))
+    }
+    return { value, evidence: batch.evidence }
   }
 
   /** Execute one artifact-instructions projection in the caller-owned Work generation. */

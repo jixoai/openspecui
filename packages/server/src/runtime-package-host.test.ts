@@ -7,6 +7,7 @@
  * 4. Prove the runtime npm probe executes through the shared shell-independent spawn owner.
  *
  * Original request (2026-07-31): "这个依赖好像会导致安装的时候仍然会被强制装上去，可能要改成 peerDependencies 会更好"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -172,7 +173,10 @@ describe('readRuntimeHostPackageDependencyTree', () => {
     })
 
     expect(tree).toMatchObject({ name: 'openspecui-runtime-fixture', version: '1.0.0' })
-  }, 20_000)
+    // Real npm cold start on hosted Windows runners hung past the original 20s budget in
+    // consecutive runs (2026-08-28) while an earlier run of the same code passed; the
+    // explicit per-test budget exists exactly for this hosted-runner spawn class.
+  }, 60_000)
 })
 
 describe('normalizeRuntimeHostOptionalDependencies', () => {

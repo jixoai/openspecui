@@ -1,19 +1,23 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Build root-aware read and workflow command argv.
  * 2. Build Store inspection and mutation argv through the official CLI surface.
  * 3. Build strict validate/archive argv without implicit recovery behavior.
  * 4. Parse every invocation, including Archive Instructions, through its command-specific evidence schema.
- *
+
  * 5. Forward the selected Root selector only where the admitted CLI declares it.
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import type { z } from 'zod'
 import type { CliResult } from '../cli-executor.js'
+import type { OpenSpecCliCapabilities } from '../openspec-compat.js'
+import { CliBatchStatusSchema, type CliBatchStatus } from './batch-status.js'
 import { parseCliCommandResult, type CliCommandResult } from './command-result.js'
 import { CliSchemasSchema, type CliSchemas } from './schema-resolution.js'
+import { CliShowChangeDiffSchema, type CliShowChangeDiff } from './show-diff.js'
 import {
   CliContextSchema,
   CliDoctorSchema,
@@ -63,6 +67,30 @@ export interface CliRootSelector {
 export interface CliWorkflowOptions extends CliRootSelector {
   /** Explicit workflow schema selector passed to the official CLI. */
   schema?: string
+}
+
+/**
+ * Result of a capability-gated command: either executed evidence or a typed refusal.
+ *
+ * A refusal means the admitted CLI never declares the command (`status --all` and
+ * `show --diff` are OpenSpec 1.11 only), so no argv is constructed at all. The
+ * caller resolves capabilities once per session through the existing injection
+ * pattern (see `OpsxKernel.resolveCliCapabilities`) and passes them in.
+ */
+export type CliGatedCommandResult<T> =
+  | { kind: 'executed'; result: CliCommandResult<T> }
+  | { kind: 'unavailable'; capability: 'batchStatus' | 'requirementDiff' }
+
+/** Options for the OpenSpec 1.11 batch Status command. */
+export interface CliWorkflowStatusAllOptions extends CliWorkflowOptions {
+  /** Capabilities of the admitted CLI; `batchStatus` must be true to construct argv. */
+  capabilities: Pick<OpenSpecCliCapabilities, 'batchStatus'>
+}
+
+/** Options for the OpenSpec 1.11 show-change diff command. */
+export interface CliShowChangeDiffOptions extends CliRootSelector {
+  /** Capabilities of the admitted CLI; `requirementDiff` must be true to construct argv. */
+  capabilities: Pick<OpenSpecCliCapabilities, 'requirementDiff'>
 }
 
 /** Options for creating a Store through the official CLI. */
@@ -169,6 +197,51 @@ export class OpenSpecCliContractExecutor {
       this.withWorkflowOptions(['status', '--change', changeId, '--json'], options),
       CliWorkflowStatusSchema
     )
+  }
+
+  /**
+   * Read every active change's Status evidence in one spawn (OpenSpec 1.11 only).
+   *
+   * Gated by the `batchStatus` capability because OpenSpec 1.10 rejects the
+   * `--all` flag. The batch envelope decodes from stdout regardless of exit
+   * code: per-change failures live inside the sum-type entries, and only an
+   * unparseable stdout document is a contract error.
+   */
+  async workflowStatusAll(
+    options: CliWorkflowStatusAllOptions
+  ): Promise<CliGatedCommandResult<CliBatchStatus>> {
+    if (!options.capabilities.batchStatus) {
+      return { kind: 'unavailable', capability: 'batchStatus' }
+    }
+    return {
+      kind: 'executed',
+      result: await this.execute(
+        this.withWorkflowOptions(['status', '--all', '--json'], options),
+        CliBatchStatusSchema
+      ),
+    }
+  }
+
+  /**
+   * Read one change's delta evidence with MODIFIED-only requirement diffs
+   * (OpenSpec 1.11 only). Gated by the `requirementDiff` capability because
+   * OpenSpec 1.10 rejects the `--diff` flag; the diff is CLI-owned evidence
+   * and is never recomputed locally.
+   */
+  async showChangeDiff(
+    changeId: string,
+    options: CliShowChangeDiffOptions
+  ): Promise<CliGatedCommandResult<CliShowChangeDiff>> {
+    if (!options.capabilities.requirementDiff) {
+      return { kind: 'unavailable', capability: 'requirementDiff' }
+    }
+    return {
+      kind: 'executed',
+      result: await this.execute(
+        this.withRoot(['show', changeId, '--json', '--diff'], options),
+        CliShowChangeDiffSchema
+      ),
+    }
   }
 
   /** Read complete Instructions evidence for one workflow artifact. */
