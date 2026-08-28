@@ -463,11 +463,14 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
         uninitializedStart,
         (value) => findToolState(value, 'claude')?.status === 'uninitialized'
       )
-      expect(findToolState(uninitialized, 'claude')).toMatchObject({
-        status: 'uninitialized',
-        missingCommandWorkflows: ['update'],
-        detectedCommandCount: 0,
-      })
+      expect(findToolState(uninitialized, 'claude')).toMatchObject(
+        {
+          status: 'uninitialized',
+          missingCommandWorkflows: ['update'],
+          detectedCommandCount: 0,
+        },
+        PUBLIC_TOOL_SETTLEMENT_BUDGET_MS * 4 + 20_000
+      )
     } finally {
       subscription?.unsubscribe()
       await fixture.dispose()
