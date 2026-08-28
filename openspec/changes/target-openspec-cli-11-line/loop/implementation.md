@@ -46,7 +46,10 @@ test:ci green except the pre-existing macOS /private/var path-realpath environme
 (reactive-fs untouched by this Change; CI runs on Linux/Windows where it passes); test:browser:ci
 PASS (exit 0) run through a controlled herdr pane per heavy-load discipline. Integrator also fixed a
 third mirror-constant site scripts/diagnose-cli-runner.mjs caught by the root gate.
-R10 Codex code review loop       IN PROGRESS
+R10 Codex code review loop       IN PROGRESS (round 1 interrupted by upstream 429 rate limits; the one
+                                 candidate finding — a batch-failure test timeout under concurrent load —
+                                 reproduced green locally in isolation and as a full focused set, judged
+                                 environmental; 20s timeout headroom added to that test as insurance)
 R11 archive + delivery           PENDING  Owner-gated
 ```
 
