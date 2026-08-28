@@ -16,7 +16,7 @@
  */
 import type { RootActionState } from '@/lib/use-root-action-state'
 import type { ChangeStatus } from '@openspecui/core'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createContext, type ComponentProps, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChangeView } from './change-view'
@@ -30,7 +30,7 @@ const isStaticModeMock = vi.hoisted(() => vi.fn(() => false))
 const routedTabState = vi.hoisted(() => ({ selectedTab: undefined as string | undefined }))
 
 const diffEvidenceQueryMock = vi.hoisted(() =>
-  vi.fn((..._args: unknown[]) => Promise.reject(new Error('not under test')))
+  vi.fn((..._args: unknown[]): Promise<unknown> => Promise.reject(new Error('not under test')))
 )
 
 vi.mock('@/lib/trpc', () => ({
@@ -750,13 +750,44 @@ describe('ChangeView', () => {
 
   it('does not refetch settled diff evidence across a crowded drill and back', async () => {
     routedTabState.selectedTab = 'evidence'
+    rootActionMock.mockReturnValue({
+      status: 'ready',
+      disabled: false,
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+      context: {
+        launchProject: { path: '/tmp/project' },
+        planningRoot: { path: '/tmp/project', source: 'nearest', healthy: true, status: [] },
+        storeId: null,
+        cli: { available: true, version: '1.11.0' },
+      },
+    })
     statusMock.mockReturnValue({
       data: retainedChangeStatus,
       isLoading: false,
       error: null,
     })
+    // A live 1.11 session makes the diff section fetch exactly once; the mock resolves so the
+    // section settles before the drill begins (a rejecting mock would leave it pending).
+    diffEvidenceQueryMock.mockResolvedValueOnce({
+      kind: 'executed',
+      deltas: [
+        { spec: 'billing', operation: 'MODIFIED', diff: '@@ -1 +1 @@\n-old\n+new', warning: null },
+      ],
+      provenance: {
+        command: 'show upgrade-billing --json --diff',
+        root: '/tmp/project',
+        rootSource: 'nearest',
+        exitCode: 0,
+      },
+    })
 
     render(<ChangeView />)
+
+    // Wait for the live fetch to settle — the proof is only meaningful once one call happened.
+    await waitFor(() => expect(diffEvidenceQueryMock).toHaveBeenCalledTimes(1))
 
     const workspace = screen.getByRole('region', { name: 'Change Evidence' })
     const list = workspace.querySelector<HTMLElement>('[data-evidence-pane="list"]')
@@ -769,13 +800,12 @@ describe('ChangeView', () => {
 
     // The mounted section settled its single fetch; drilling back and re-entering must not
     // spawn another one — the sections stay mounted, only visibility changes.
-    const settledCalls = diffEvidenceQueryMock.mock.calls.length
     fireEvent.click(screen.getByRole('button', { name: 'Back to evidence list' }))
     expect(list).toBeVisible()
     fireEvent.click(within(list).getByRole('button', { name: /Requirement diffs/ }))
     expect(detail).toBeVisible()
 
-    expect(diffEvidenceQueryMock.mock.calls.length).toBe(settledCalls)
+    expect(diffEvidenceQueryMock).toHaveBeenCalledTimes(1)
   })
 
   it('shows the list and the selected detail together in a spacious container', () => {

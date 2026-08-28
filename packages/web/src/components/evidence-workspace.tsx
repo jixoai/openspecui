@@ -191,8 +191,12 @@ export function EvidenceWorkspace({
       const rowId = pendingRestoreRowId.current
       pendingRestoreRowId.current = null
       if (rowId) rowRefs.current.get(rowId)?.focus()
+    } else if (drilled && spacious && document.activeElement === backRef.current) {
+      // Growing into the spacious topology unmounts the back affordance; move that focus to
+      // the selected row instead of letting it fall to body.
+      rowRefs.current.get(selectedId)?.focus()
     }
-  }, [drilled, spacious])
+  }, [drilled, spacious, selectedId])
 
   return (
     <section
