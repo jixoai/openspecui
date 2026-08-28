@@ -1,13 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Resolve standard Windows npm-style Node command shims to argv-safe JavaScript entries.
  * 2. Route pnpm arguments requiring shell-sensitive characters through a native Corepack boundary.
  * 3. Resolve the Node executable independently from a Bun host's `process.execPath`.
+ * 4. Extract modern (`%dp0%`) and legacy (`%~dp0`) shim entries under hardened containment that
+ *    admits only real files inside the shim directory or its `.bin` parent.
  *
  * Original request (2026-08-04): "Make equivalent package scripts work on Windows."
+ * Original request (2026-08-28, issue #258): "No available OpenSpec CLI runner." — mirror of the
+ *   packages/core fix so release smoke and diagnostics parse modern npm shims identically.
  */
-import { existsSync, readFileSync } from 'node:fs'
-import { basename, dirname, resolve } from 'node:path'
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
 import process from 'node:process'
 
 const PACKAGE_MANAGER_ENTRY_NAMES = {
@@ -15,23 +19,90 @@ const PACKAGE_MANAGER_ENTRY_NAMES = {
   pnpm: new Set(['pnpm.cjs', 'pnpm.js', 'pnpm.mjs']),
 }
 
+const NODE_COMMAND_SHIM_GUARD_PATTERN = /(?:node(?:\.exe)?|node_exe|npm_node_execpath|_prog)/i
+
 /**
- * @param {'npm' | 'pnpm'} command
+ * npm shim generations reference their entry relative to the shim directory through two shapes:
+ * the legacy literal `%~dp0\path\entry.js` and the modern (cmd-shim v4+, npm ≥7) variable form
+ * `SET dp0=%~dp0` … `"%dp0%\path\entry.js"`.
+ */
+const NODE_COMMAND_SHIM_ENTRY_PATTERN = /%(?:~dp0|dp0%)([^"\r\n]*?\.(?:c|m)?js)/gi
+
+/** Raw dp0-relative JavaScript entry references found in one npm-style command shim. */
+export function extractNodeCommandShimEntryTokens(source) {
+  const tokens = []
+  for (const match of source.matchAll(NODE_COMMAND_SHIM_ENTRY_PATTERN)) {
+    const rawToken = match[1]?.trim() ?? ''
+    // Reject the UNC prefix before stripping leading separators: `\\server\share\x.js` must
+    // never degrade into the local relative path `server\share\x.js`.
+    if (rawToken.startsWith('\\\\') || rawToken.startsWith('//')) continue
+    const token = rawToken.replace(/^[/\\]+/, '')
+    if (token) tokens.push(token)
+  }
+  return tokens
+}
+
+function isContainableShimEntryToken(token, normalizedToken) {
+  if (!token) return false
+  if (token.includes('\0')) return false
+  if (/^[a-zA-Z]:/.test(normalizedToken)) return false // drive-letter absolute path
+  if (token.startsWith('\\\\') || normalizedToken.startsWith('//')) return false // UNC path
+  return !token.includes('%') // unresolved cmd.exe variable reference
+}
+
+function isWithinDirectory(root, candidate) {
+  const relativePath = relative(root, candidate)
+  return relativePath !== '' && !relativePath.startsWith('..') && !isAbsolute(relativePath)
+}
+
+function resolveExistingShimEntry(commandShim, token) {
+  const normalizedToken = token.replace(/\\/g, '/')
+  if (!isContainableShimEntryToken(token, normalizedToken)) return null
+  const entry = resolve(dirname(commandShim), normalizedToken)
+  let realEntry
+  let realShimDirectory
+  try {
+    realEntry = realpathSync.native(entry)
+    realShimDirectory = dirname(realpathSync.native(commandShim))
+  } catch {
+    return null
+  }
+  let stats
+  try {
+    stats = statSync(realEntry)
+  } catch {
+    return null
+  }
+  if (!stats.isFile()) return null
+  // Standard npm layouts are the global prefix (entry inside the shim directory) and local
+  // installs (shim in node_modules/.bin: entry inside .bin's parent). Anything else fails closed.
+  const realShimParent = dirname(realShimDirectory)
+  const withinShimDirectory = isWithinDirectory(realShimDirectory, realEntry)
+  const withinDotBinParent =
+    basename(realShimDirectory).toLowerCase() === '.bin' &&
+    isWithinDirectory(realShimParent, realEntry)
+  if (!withinShimDirectory && !withinDotBinParent) return null
+  return realEntry
+}
+
+/** Resolve the JavaScript entry one standard npm-style Node command shim delegates to. */
+export function resolveNodeCommandShimEntry(commandShim, source) {
+  const tokens = extractNodeCommandShimEntryTokens(source)
+  for (let index = tokens.length - 1; index >= 0; index -= 1) {
+    const entry = resolveExistingShimEntry(commandShim, tokens[index] ?? '')
+    if (entry) return entry
+  }
+  return null
+}
+
+/**
  * @param {string} commandShim
  * @returns {string | null}
  */
 function resolveNodeJavaScriptEntry(commandShim) {
   const source = readFileSync(commandShim, 'utf8')
-  if (!/(?:node(?:\.exe)?|node_exe|npm_node_execpath|_prog)/i.test(source)) return null
-  const entries = []
-  const matches = source.matchAll(/%~dp0([^"\r\n]*?\.(?:c|m)?js)/gi)
-  for (const match of matches) {
-    const relativeEntry = match[1]?.trim().replace(/^[/\\]+/, '')
-    if (!relativeEntry) continue
-    const entry = resolve(dirname(commandShim), relativeEntry)
-    if (existsSync(entry)) entries.push(entry)
-  }
-  return entries.at(-1) ?? null
+  if (!NODE_COMMAND_SHIM_GUARD_PATTERN.test(source)) return null
+  return resolveNodeCommandShimEntry(commandShim, source)
 }
 
 /**

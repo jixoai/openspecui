@@ -20,7 +20,7 @@ OpenSpecUI 9 gives OpenSpec projects a reactive dashboard, an objective change w
 - **Node.js**: `>= 20.19.0`
 
 ```bash
-npm install -g @fission-ai/openspec@latest
+npm install -g @fission-ai/openspec@1.9
 ```
 
 ## Quick start

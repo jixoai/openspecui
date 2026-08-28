@@ -1,13 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-08-05 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Prove CLI startServer carries its resolved Web asset root through the real Git worktree handoff.
  * 2. Keep the upstream-owner fixture inside the checked Server transport-test lane.
  * 3. Settle shared watcher owners before removing Windows Git fixtures.
  * 4. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
+ * 5. Pin a deterministic fast CLI runner: OpenSpec command latency is not under test here, and
+ *    resolving the real global CLI now works on Windows (issue #258 shim fix), which unmasked
+ *    real CLI Work load inside this transport fixture's teardown.
  *
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-25): "格式问题？md文件有什么格式问题，直接快速处理掉，然后继续工作"
  * Review correction (2026-07-26): downstream Manager fixtures cannot prove the startServer owner transition.
+ * Original request (2026-08-28, issue #258 delivery): a real CLI cold start is not transport
+ *   evidence; the previously broken Windows shim accidentally hid real CLI work from this suite.
  */
 import { isHostedBackendHealthResponse } from '@openspecui/core'
 import { createTRPCClient, httpBatchLink } from '@trpc/client'
@@ -52,11 +57,35 @@ async function createProductChainFixture(): Promise<{
   await mkdir(join(projectDir, 'openspec'), { recursive: true })
   await mkdir(webAssetsDir)
   await writeFile(join(projectDir, 'openspec', 'config.yaml'), 'schema: spec-driven\n', 'utf8')
-  await writeFile(join(projectDir, 'README.md'), '# Parent worktree\n', 'utf8')
+  // Deterministic fast CLI runner: OpenSpec command latency is not under test here. Without it,
+  // resolving the real global CLI (which the issue #258 shim fix re-enabled on Windows) makes
+  // this transport fixture carry real CLI Work through its server teardown.
+  const cliRunnerPath = join(fixtureDir, 'cli-runner.mjs')
+  await writeFile(
+    cliRunnerPath,
+    [
+      "import process from 'node:process'",
+      'const args = process.argv.slice(2)',
+      "if (args.includes('--version')) {",
+      "  process.stdout.write('1.9.0\\n')",
+      '  process.exit(0)',
+      '}',
+      "process.stdout.write('{}\\n')",
+      'process.exit(0)',
+      '',
+    ].join('\n'),
+    'utf-8'
+  )
+  await writeFile(
+    join(projectDir, 'openspec', '.openspecui.json'),
+    JSON.stringify({ cli: { command: `${process.execPath} ${cliRunnerPath}` } }),
+    'utf-8'
+  )
+  await writeFile(join(projectDir, 'README.md'), '# Parent worktree\n', 'utf-8')
   await writeFile(
     join(webAssetsDir, 'index.html'),
     `<!doctype html><title>${marker}</title>\n`,
-    'utf8'
+    'utf-8'
   )
 
   await runGit(projectDir, ['init', '--quiet'])

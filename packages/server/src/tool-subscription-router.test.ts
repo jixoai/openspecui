@@ -13,6 +13,8 @@
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28, issue #258): the global install stream installs the admitted
+ *   `@1.9` series instead of an unversioned spec the admission gate can block.
  */
 import {
   clearCache,
@@ -44,7 +46,8 @@ import { createServer } from './server.js'
 const REACTIVE_MISSING_PATH_FALLBACK_MS = Number(process.env.CI_TOOL_WAIT_MS ?? 1_000)
 // Loaded CI runners need a wider first-projection budget than the reactive fallback
 // implies; the wait targets the same settlement, only tolerates slower runners.
-const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS = REACTIVE_MISSING_PATH_FALLBACK_MS * (process.env.CI ? 15 : 4)
+const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS =
+  REACTIVE_MISSING_PATH_FALLBACK_MS * (process.env.CI ? 15 : 4)
 const PINNED_OPENSPEC_BIN = resolve(
   import.meta.dirname,
   '../../../references/openspec/bin/openspec.js'
@@ -654,7 +657,7 @@ describe(
         await expect(Promise.all(runnerAtExit)).resolves.toMatchObject([{ version: 'runner-b' }])
         expect(events).toEqual([{ type: 'exit', exitCode: 0 }])
         expect(executeCommandStream).toHaveBeenCalledWith(
-          ['npm', 'install', '-g', '@fission-ai/openspec'],
+          ['npm', 'install', '-g', '@fission-ai/openspec@1.9'],
           expect.any(Function)
         )
       } finally {

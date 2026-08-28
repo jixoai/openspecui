@@ -1,14 +1,18 @@
 /**
- * Orthogonal intents (created 2026-08-09 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Resolve caller-environment Windows commands to native argv-preserving executable boundaries.
  * 2. Project standard npm-style shims and explicit Node shebang launchers onto their real Node executable.
  * 3. Prefer native executables, route shell-sensitive pnpm through Corepack, and reject opaque command shims.
+ * 4. Extract modern (`%dp0%`) and legacy (`%~dp0`) npm shim entries under hardened containment
+ *    that admits only real files inside the shim directory or its `.bin` parent.
  *
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ * Original request (2026-08-28, issue #258): "No available OpenSpec CLI runner." — npm ≥7 `cmd-shim`
+ *   references its entry through the `%dp0%` variable, which the legacy-only extractor missed.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { basename, dirname, extname, isAbsolute, resolve } from 'node:path'
+import { existsSync, readFileSync, realpathSync, statSync, type Stats } from 'node:fs'
+import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path'
 import process from 'node:process'
 
 export interface CommandInvocation {
@@ -53,7 +57,14 @@ function findWindowsCommandCandidates(
   })
   if (result.error) throw result.error
   if (result.status !== 0) {
-    throw new Error(result.stderr.trim() || `Unable to resolve ${command} from PATH.`)
+    // where.exe prints localized text ("INFO: Could not find files..."), so carry the canonical
+    // not-found code instead of matching message text.
+    throw Object.assign(
+      new Error(result.stderr.trim() || `Unable to resolve ${command} from PATH.`),
+      {
+        code: 'ENOENT',
+      }
+    )
   }
   return result.stdout
     .split(/\r?\n/)
@@ -103,22 +114,95 @@ function findNodeExecutable(commandShim: string, options: CommandInvocationOptio
   throw new Error(`Unable to resolve the Node executable required by ${commandShim}.`)
 }
 
+const NODE_COMMAND_SHIM_GUARD_PATTERN = /(?:node(?:\.exe)?|node_exe|npm_node_execpath|_prog)/i
+
+/**
+ * npm shim generations reference their entry relative to the shim directory through two shapes:
+ * the legacy literal `%~dp0\path\entry.js` and the modern (cmd-shim v4+, npm ≥7) variable form
+ * `SET dp0=%~dp0` … `"%dp0%\path\entry.js"`.
+ */
+const NODE_COMMAND_SHIM_ENTRY_PATTERN = /%(?:~dp0|dp0%)([^"\r\n]*?\.(?:c|m)?js)/gi
+
+/** Raw dp0-relative JavaScript entry references found in one npm-style command shim. */
+export function extractNodeCommandShimEntryTokens(source: string): string[] {
+  const tokens: string[] = []
+  for (const match of source.matchAll(NODE_COMMAND_SHIM_ENTRY_PATTERN)) {
+    const rawToken = match[1]?.trim() ?? ''
+    // Reject the UNC prefix before stripping leading separators: `\\server\share\x.js` must
+    // never degrade into the local relative path `server\share\x.js`.
+    if (rawToken.startsWith('\\\\') || rawToken.startsWith('//')) continue
+    const token = rawToken.replace(/^[/\\]+/, '')
+    if (token) tokens.push(token)
+  }
+  return tokens
+}
+
+function isContainableShimEntryToken(token: string, normalizedToken: string): boolean {
+  if (!token) return false
+  if (token.includes('\0')) return false
+  if (/^[a-zA-Z]:/.test(normalizedToken)) return false // drive-letter absolute path
+  if (token.startsWith('\\\\') || normalizedToken.startsWith('//')) return false // UNC path
+  return !token.includes('%') // unresolved cmd.exe variable reference
+}
+
+function isWithinDirectory(root: string, candidate: string): boolean {
+  const relativePath = relative(root, candidate)
+  return relativePath !== '' && !relativePath.startsWith('..') && !isAbsolute(relativePath)
+}
+
+function resolveExistingShimEntry(commandShim: string, token: string): string | null {
+  const normalizedToken = token.replace(/\\/g, '/')
+  if (!isContainableShimEntryToken(token, normalizedToken)) return null
+  const entry = resolve(dirname(commandShim), normalizedToken)
+  let realEntry: string
+  let realShimDirectory: string
+  try {
+    realEntry = realpathSync.native(entry)
+    realShimDirectory = dirname(realpathSync.native(commandShim))
+  } catch {
+    return null
+  }
+  let stats: Stats
+  try {
+    stats = statSync(realEntry)
+  } catch {
+    return null
+  }
+  if (!stats.isFile()) return null
+  // Standard npm layouts are the global prefix (shim beside its node_modules: entry inside the
+  // shim directory) and local installs (shim in node_modules/.bin: entry inside .bin's parent).
+  // Anything else fails closed to the explicit opaque-shim rejection.
+  const realShimParent = dirname(realShimDirectory)
+  const withinShimDirectory = isWithinDirectory(realShimDirectory, realEntry)
+  const withinDotBinParent =
+    basename(realShimDirectory).toLowerCase() === '.bin' &&
+    isWithinDirectory(realShimParent, realEntry)
+  if (!withinShimDirectory && !withinDotBinParent) return null
+  return realEntry
+}
+
+/**
+ * Resolve the JavaScript entry one standard npm-style Node command shim delegates to, or null
+ * when no dp0-relative entry survives containment validation.
+ */
+export function resolveNodeCommandShimEntry(commandShim: string, source: string): string | null {
+  const tokens = extractNodeCommandShimEntryTokens(source)
+  for (let index = tokens.length - 1; index >= 0; index -= 1) {
+    const entry = resolveExistingShimEntry(commandShim, tokens[index] ?? '')
+    if (entry) return entry
+  }
+  return null
+}
+
 function resolveNodeCommandShim(
   commandShim: string,
   args: readonly string[],
   options: CommandInvocationOptions
 ): CommandInvocation | null {
   const source = readFileSync(commandShim, 'utf8')
-  if (!/(?:node(?:\.exe)?|node_exe|npm_node_execpath|_prog)/i.test(source)) return null
+  if (!NODE_COMMAND_SHIM_GUARD_PATTERN.test(source)) return null
 
-  const entries: string[] = []
-  for (const match of source.matchAll(/%~dp0([^"\r\n]*?\.(?:c|m)?js)/gi)) {
-    const relativeEntry = match[1]?.trim().replace(/^[\\/]+/, '')
-    if (!relativeEntry) continue
-    const entry = resolve(dirname(commandShim), relativeEntry)
-    if (existsSync(entry)) entries.push(entry)
-  }
-  const entry = entries.at(-1)
+  const entry = resolveNodeCommandShimEntry(commandShim, source)
   if (!entry) return null
   return {
     command: findNodeExecutable(commandShim, options),

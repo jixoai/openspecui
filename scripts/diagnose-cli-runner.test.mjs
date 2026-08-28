@@ -1,13 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Prove the plain-Node Windows diagnostic resolves an npm-style CLI shim and retires its timed-out tree.
  * 2. Distinguish a complete diagnostic report from an early child-process failure before JSON parsing.
  * 3. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  * 4. Compare `where.exe` evidence through canonical paths because hosted runners mix 8.3 short
  *    forms (RUNNER~1) with long forms in TEMP-derived fixture roots.
+ * 5. Keep the diagnostic's fallback candidate set pinned to the Core-admitted CLI series.
  *
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ * Original request (2026-08-28, issue #258): diagnostic fallback probes must not report an
+ *   out-of-range @latest as a working runner.
  */
 import { spawnSync } from 'node:child_process'
 import {
@@ -35,6 +38,19 @@ function canonicalWindowsPath(value) {
     return value.toLowerCase()
   }
 }
+
+describe('CLI runner diagnostic candidate parity', () => {
+  it('pins every fallback probe to the Core-admitted CLI series with no bare spec', async () => {
+    const { readFile } = await import('node:fs/promises')
+    const source = await readFile(DIAGNOSTIC_SCRIPT, 'utf8')
+    const { OPENSPEC_CLI_TARGET_SERIES } = await import('../packages/core/src/openspec-compat.js')
+
+    expect(source).toContain(`const OPENSPEC_CLI_TARGET_SERIES = '${OPENSPEC_CLI_TARGET_SERIES}'`)
+    // Every commandParts reference to the package must carry the pinned series; a bare
+    // '@fission-ai/openspec' spec would probe @latest, which the gate can block.
+    expect(source).not.toMatch(/'@fission-ai\/openspec'/)
+  })
+})
 
 describe.runIf(process.platform === 'win32')('CLI runner diagnostic portability', () => {
   it('resolves openspec.cmd without cmd.exe argv parsing and retires every timed-out descendant', async () => {

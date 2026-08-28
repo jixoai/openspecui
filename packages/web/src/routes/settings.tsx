@@ -1,12 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Present backend, CLI execution, terminal, notification, and appearance settings.
  * 2. Compose OpenSpec diagnostics with the read-only Agent Integrations summary owned by Config.
  * 3. Bind network-triggered settings actions to visible loading and failure state.
  * 4. Delegate CLI installation and Init through single-source Server-owned transports.
  * 5. Preserve first-frame and dirty Terminal drafts through field-value Config synchronization.
+ * 6. Present the admitted CLI series as the install/update target instead of an out-of-range
+ *    registry latest (issue #258).
  *
  * Original request (2026-07-14): "openspec 1.6.0 已经放出，我们需要开始进行适配。"
+ * Original request (2026-08-28, issue #258): "No available OpenSpec CLI runner." — Settings must
+ *   not recommend or install a version the admission gate blocks.
  * Original request (2026-07-17): "CliStreamTransport is the single execution and display truth."
  * Owner report (2026-07-22): "几乎都在 Loading，切换个页面也等，做任何动作也在等。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下）。"
@@ -61,6 +65,10 @@ import { useServerStatus } from '@/lib/use-server-status'
 import { useConfigSubscription } from '@/lib/use-subscription'
 import type { OpenSpecUIConfig } from '@openspecui/core'
 import { NotificationSoundSchema } from '@openspecui/core/notifications'
+import {
+  classifyOpenSpecCliVersion,
+  OPENSPEC_CLI_TARGET_SERIES,
+} from '@openspecui/core/openspec-compat'
 import {
   DEFAULT_BELL_SOUND_ID,
   DEFAULT_NOTIFICATION_SOUND_ID,
@@ -353,6 +361,18 @@ export function Settings() {
     enabled: !inStaticMode,
   })
 
+  // The install stream installs the admitted series; never present an out-of-range registry
+  // latest as the update target (issue #258). Only a recommended (current-series) latest can be
+  // named literally — a supported-but-non-current latest (e.g. 1.8.x) would mislabel the
+  // actually-installed 1.9.x, so it also falls back to the series label.
+  const pinnedInstallSpec = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
+  const updateTargetVersion =
+    cliSniffResult?.hasUpdate && cliSniffResult.latestVersion
+      ? classifyOpenSpecCliVersion(cliSniffResult.latestVersion).recommended
+        ? cliSniffResult.latestVersion
+        : `${OPENSPEC_CLI_TARGET_SERIES}.x`
+      : null
+
   // CLI 可用性检查（基于配置或嗅探结果）
   // Skip in static mode
   const { data: effectiveCliCommand, refetch: refetchEffectiveCliCommand } = useQuery({
@@ -392,7 +412,7 @@ export function Settings() {
   // 计算显示的 placeholder
   const cliPlaceholder = cliSniffResult?.hasGlobal
     ? 'openspec (v' + (cliSniffResult.version || 'detected') + ')'
-    : 'npx @fission-ai/openspec'
+    : `npx ${pinnedInstallSpec}`
 
   useEffect(() => {
     if (showInstallModal) {
@@ -1169,7 +1189,7 @@ export function Settings() {
                               <ArrowUp className="h-4 w-4" />
                               Update available:{' '}
                               <code className="bg-muted rounded px-1">
-                                v{cliSniffResult.latestVersion}
+                                v{updateTargetVersion ?? cliSniffResult.latestVersion}
                               </code>
                             </span>
                           )}
@@ -1202,7 +1222,7 @@ export function Settings() {
                             {cliSniffResult?.hasUpdate ? (
                               <>
                                 <ArrowUp className="h-4 w-4" />
-                                Update to v{cliSniffResult.latestVersion}
+                                Update to v{updateTargetVersion ?? cliSniffResult.latestVersion}
                               </>
                             ) : (
                               <>
@@ -1214,7 +1234,7 @@ export function Settings() {
                           <span className="text-muted-foreground text-xs">
                             Run:{' '}
                             <code className="bg-muted rounded px-1">
-                              npm install -g @fission-ai/openspec
+                              npm install -g {pinnedInstallSpec}
                             </code>
                           </span>
                         </div>
@@ -1383,7 +1403,7 @@ export function Settings() {
                   <div className="flex items-center gap-2 text-green-600">
                     <CheckCircle className="h-4 w-4" />
                     {cliSniffResult?.hasUpdate
-                      ? `OpenSpec CLI updated to v${cliSniffResult?.latestVersion ?? ''}`
+                      ? `OpenSpec CLI updated to v${updateTargetVersion ?? ''}`
                       : 'OpenSpec CLI installed globally'}
                   </div>
                   <p className="text-muted-foreground text-xs">

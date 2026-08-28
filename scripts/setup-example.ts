@@ -8,6 +8,9 @@
  * - openspec/ directory structure
  * - Sample specs and changes
  * - .openspecui.json
+ *
+ * Original request (2026-08-28, issue #258): the example's npx runner stays pinned to the
+ * admitted CLI series instead of an unversioned @latest the compatibility gate can block.
  */
 
 import { existsSync } from 'fs'
@@ -233,9 +236,13 @@ const SAMPLE_AGENTS_MD = `# AI Agent Instructions
 - Include ticket number if applicable
 `
 
+// Mirror of packages/core OPENSPEC_CLI_TARGET_SERIES: the example runner must resolve the
+// series this release line admits, never an unversioned @latest the gate can block.
+const OPENSPEC_CLI_TARGET_SERIES = '1.9'
+
 const CONFIG = {
   cli: {
-    command: 'npx @fission-ai/openspec',
+    command: `npx @fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`,
   },
 }
 

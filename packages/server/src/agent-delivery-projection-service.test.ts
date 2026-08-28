@@ -1,13 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Prove one-shot Agent delivery uses authoritative Environment policy and the complete Core registry.
  * 2. Prove retained Agent delivery re-emits from physical file changes and Environment policy replacement.
  * 3. Prove explicit refresh and dispose own deterministic replacement and retirement boundaries.
  * 4. Prove version-selected inventories including unavailable-CLI sessions.
+ * 5. Keep the initial real-registry reactive wait ahead of shared CI runners.
  *
  * Original request (2026-08-01): "新增 Agent delivery projection service 及 checked tests。"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): shared ubuntu runners started timing the initial full-registry
+ *   snapshot out ~1 in 2 full-suite runs (same class the opsx-kernel reactive budget was raised
+ *   for on 2026-08-14); local quiet-machine runs stay green, so the wait budget is the defect.
  */
 
 import {
@@ -171,7 +175,7 @@ async function waitForProjection(
       ).toBe(true)
     },
     {
-      timeout: REACTIVE_MISSING_PATH_FALLBACK_MS * 5,
+      timeout: REACTIVE_MISSING_PATH_FALLBACK_MS * 15,
       interval: REACTIVE_MISSING_PATH_FALLBACK_MS / 5,
     }
   )
@@ -449,7 +453,7 @@ describe('AgentDeliveryProjectionService', () => {
         await rm(projectDir, { recursive: true, force: true })
       }
     },
-    REACTIVE_MISSING_PATH_FALLBACK_MS * 15
+    REACTIVE_MISSING_PATH_FALLBACK_MS * 25
   )
 
   it('fails closed when Environment cannot provide an authoritative delivery mode', async () => {
