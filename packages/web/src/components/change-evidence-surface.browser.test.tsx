@@ -1,27 +1,29 @@
 /**
- * Orthogonal intents (created 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Measure inline-end versus responsive block-end Header Action geometry in real Chromium.
  * 2. Prove long paths and raw CLI evidence remain horizontally contained at mobile, tablet, and desktop widths.
- * 3. Prove Evidence owns primary vertical scrolling after complete evidence is disclosed.
+ * 3. Prove the Evidence workspace detail pane owns primary vertical scrolling at every container
+ *    topology, with the crowded drill exchanging list and detail surfaces.
  * 4. Prove title identity receives width priority and continuous long titles wrap instead of truncating.
  * 5. Stop at component-browser preparation rather than claiming owner visual acceptance.
  *
  * Original request (2026-08-03): move unbounded Change Detail evidence out of the Header into a dedicated tab.
  * Owner correction (2026-08-03): keep Actions at title inline-end until responsive wrapping and unify subtitle badges.
  * Owner correction (2026-08-03): use `auto 1fr` to prioritize title identity and wrap long titles.
+ * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  * Owner acceptance boundary (2026-07-20): final end-to-end visual walkthrough belongs to the owner.
  */
 import {
   ChangeContextSummary,
   type ChangeReferenceEvidence,
 } from '@/components/change-context-summary'
-import { ChangeEvidencePanel } from '@/components/change-evidence-panel'
+import { EvidenceWorkspace } from '@/components/evidence-workspace'
 import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
 import { OperationInputsDialogAction } from '@/components/opsx/operation-inputs'
 import { OpsxDetailPage, OpsxDetailTabs } from '@/components/opsx/opsx-detail-layout'
 import { OpsxEntityDetailView } from '@/components/opsx/opsx-entity-detail-view'
 import type { ChangeStatus, CliReferenceIndexEntry } from '@openspecui/core'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { GitBranch } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -176,7 +178,11 @@ function ChangeEvidenceHarness() {
               id: 'evidence',
               label: 'Evidence',
               content: (
-                <ChangeEvidencePanel status={status} referenceEvidence={referenceEvidence} />
+                <EvidenceWorkspace
+                  changeId="fix-change-detail-evidence-surface"
+                  status={status}
+                  referenceEvidence={referenceEvidence}
+                />
               ),
             },
           ]}
@@ -194,8 +200,8 @@ afterEach(async () => {
   await page.viewport(1280, 720)
 })
 
-describe.each([390, 768, 1280])('Change Evidence at %ipx', (width) => {
-  it('keeps the Header bounded and complete evidence inside its tab scroll owner', async () => {
+describe.each([390, 768, 1280])('Change Evidence workspace at %ipx', (width) => {
+  it('keeps the Header bounded and evidence inside the workspace scroll owner', async () => {
     await page.viewport(width, 720)
     render(<ChangeEvidenceHarness />)
 
@@ -205,7 +211,10 @@ describe.each([390, 768, 1280])('Change Evidence at %ipx', (width) => {
     const actions = screen.getByTestId('opsx-detail-header-actions')
     const title = screen.getByRole('heading', { level: 1 }).querySelector('span')
     const statusRegion = screen.getByTestId('opsx-detail-status-region')
-    const evidence = screen.getByRole('region', { name: 'Change Evidence' })
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    const listPane = workspace.querySelector<HTMLElement>('[data-evidence-pane="list"]')
+    const detailPane = workspace.querySelector<HTMLElement>('[data-evidence-pane="detail"]')
+    if (!listPane || !detailPane) throw new Error('Expected both evidence panes')
 
     await waitFor(() => expect(host.getBoundingClientRect().width).toBe(width))
     expect(title).not.toBeNull()
@@ -237,21 +246,72 @@ describe.each([390, 768, 1280])('Change Evidence at %ipx', (width) => {
         identityHeight + actionsHeight + 13
       )
     }
-    expect(getComputedStyle(evidence).overflowY).toBe('auto')
-    expect(getComputedStyle(evidence).overflowX).toBe('hidden')
 
-    fireEvent.click(screen.getByRole('button', { name: /Artifact outputs/ }))
-    fireEvent.click(screen.getByRole('button', { name: /^References/ }))
-    fireEvent.click(screen.getByRole('button', { name: /CLI result/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Raw CLI payload/ }))
+    // The detail pane is the tab's primary reading surface and owns vertical scrolling.
+    expect(getComputedStyle(detailPane).overflowY).toBe('auto')
+    expect(getComputedStyle(detailPane).overflowX).toBe('hidden')
 
-    await waitFor(() => expect(evidence.scrollHeight).toBeGreaterThan(evidence.clientHeight))
+    const rows = within(listPane).getAllByRole('button')
+    const rowById = (id: string) => rows.find((row) => row.getAttribute('data-evidence-row') === id)
+    const summaryRow = rowById('summary-paths')
+    const cliRow = rowById('cli-result')
+    if (!summaryRow || !cliRow) throw new Error('Expected summary and CLI evidence rows')
+
+    // The ResizeObserver seam settles asynchronously after the viewport change.
+    await waitFor(() =>
+      expect(workspace.getAttribute('data-evidence-topology')).toBe(
+        width === 390 ? 'crowded' : 'spacious'
+      )
+    )
+
+    if (width === 390) {
+      // Crowded container: the list is the entry surface and rows drill into the detail.
+      expect(listPane.getBoundingClientRect().width).toBeGreaterThan(0)
+      fireEvent.click(summaryRow)
+      expect(screen.getByRole('button', { name: 'Back to evidence list' })).toBeVisible()
+      fireEvent.click(screen.getByRole('button', { name: /Artifact outputs/ }))
+      fireEvent.click(screen.getByRole('button', { name: /^References/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Back to evidence list' }))
+      // Back keeps the drilled detail mounted: re-entering shows the disclosures still open.
+      fireEvent.click(summaryRow)
+      expect(screen.getByRole('button', { name: /Artifact outputs/ })).toBeVisible()
+    } else {
+      // Spacious container: the list and the selected detail render side by side.
+      expect(listPane.getBoundingClientRect().width).toBeGreaterThan(0)
+      expect(detailPane.getBoundingClientRect().width).toBeGreaterThan(0)
+      expect(
+        listPane.getBoundingClientRect().right <= detailPane.getBoundingClientRect().left + 1
+      ).toBe(true)
+      fireEvent.click(summaryRow)
+      fireEvent.click(screen.getByRole('button', { name: /Artifact outputs/ }))
+      fireEvent.click(screen.getByRole('button', { name: /^References/ }))
+    }
+
+    // The long summary section (12 artifact outputs, 10 references, constraints) drives the
+    // detail pane's own vertical scrolling while staying horizontally contained.
+    await waitFor(() => expect(detailPane.scrollHeight).toBeGreaterThan(detailPane.clientHeight))
     expect(host.scrollWidth).toBeLessThanOrEqual(host.clientWidth)
     expect(statusRegion.scrollWidth).toBeLessThanOrEqual(statusRegion.clientWidth)
-    expect(evidence.scrollWidth).toBeLessThanOrEqual(evidence.clientWidth)
+    expect(detailPane.scrollWidth).toBeLessThanOrEqual(detailPane.clientWidth)
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth
     )
+
+    // Long raw CLI evidence stays bounded: the payload pre wraps and scrolls internally
+    // instead of widening the pane or the page.
+    fireEvent.click(cliRow)
+    fireEvent.click(screen.getByRole('button', { name: /Raw CLI payload/ }))
+    await waitFor(() => {
+      expect(detailPane.querySelector('[data-evidence-detail="cli-result"] pre')).not.toBeNull()
+    })
+    const rawPayload = detailPane.querySelector<HTMLElement>(
+      '[data-evidence-detail="cli-result"] pre'
+    )
+    if (!rawPayload) throw new Error('Expected the raw payload pre')
+    expect(rawPayload.scrollHeight).toBeGreaterThan(rawPayload.clientHeight)
+    expect(rawPayload.scrollWidth).toBeLessThanOrEqual(rawPayload.clientWidth)
+    expect(detailPane.scrollWidth).toBeLessThanOrEqual(detailPane.clientWidth)
+    expect(host.scrollWidth).toBeLessThanOrEqual(host.clientWidth)
   })
 })
 

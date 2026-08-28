@@ -5,9 +5,12 @@
  * 3. Identify the evidence as unavailable in static snapshots instead of fabricating it.
  * 4. Lock the OpenSpec 1.11 Purpose-placeholder WARNING rendering: the exact upstream message
  *    stays visible on the `overview` path without truncation or rewriting.
+ * 5. Lock the workspace row-chip facts: pass/fail derive only from the typed report, degradation
+ *    reports `unavailable`, and an unexecuted session reports no chip.
  *
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -112,7 +115,7 @@ describe('ArchivedValidationEvidence', () => {
     validateMock.mockResolvedValue(archivedReport())
     render(<ArchivedValidationEvidence />)
 
-    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
+    // The de-accordioned section presents its content directly in the detail pane.
     expect(screen.getByText(/never repairs or archives/)).toBeVisible()
     expect(screen.queryByRole('button', { name: /repair/i })).not.toBeInTheDocument()
 
@@ -139,7 +142,6 @@ describe('ArchivedValidationEvidence', () => {
     )
     render(<ArchivedValidationEvidence />)
 
-    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
 
     expect(await screen.findByText('CLI failure evidence')).toBeVisible()
@@ -152,7 +154,6 @@ describe('ArchivedValidationEvidence', () => {
     render(<ArchivedValidationEvidence />)
 
     expect(screen.getByText('Unavailable in static snapshot')).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
     expect(screen.getByText(/not captured in this static snapshot/)).toBeVisible()
     expect(validateMock).not.toHaveBeenCalled()
   })
@@ -172,7 +173,6 @@ describe('ArchivedValidationEvidence', () => {
     )
 
     render(<ArchivedValidationEvidence />)
-    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
 
     await waitFor(() => expect(validateMock).toHaveBeenCalled())
@@ -193,7 +193,6 @@ describe('ArchivedValidationEvidence', () => {
     )
 
     render(<ArchivedValidationEvidence />)
-    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
 
     await waitFor(() => expect(screen.getByText('CLI failure evidence')).toBeVisible())
@@ -206,7 +205,6 @@ describe('ArchivedValidationEvidence', () => {
     validateMock.mockResolvedValue(archivedReport({ payload, exitCode: 1 }))
 
     render(<ArchivedValidationEvidence />)
-    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
 
     await waitFor(() => expect(document.body.textContent).toContain('1 passed · 1 failed'))
@@ -222,7 +220,6 @@ describe('ArchivedValidationEvidence', () => {
     render(<ArchivedValidationEvidence />)
 
     expect(screen.getByText('Unavailable on this CLI line')).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
     expect(screen.getByText(/requires an admitted OpenSpec CLI line/)).toBeVisible()
     expect(screen.getByText(/detected 1\.9\.0/)).toBeVisible()
     expect(
@@ -235,7 +232,6 @@ describe('ArchivedValidationEvidence', () => {
     validateMock.mockRejectedValue(new Error('planning root unresolved'))
     render(<ArchivedValidationEvidence />)
 
-    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
 
     expect(await screen.findByText(/planning root unresolved/)).toBeVisible()
@@ -279,7 +275,6 @@ describe('ArchivedValidationEvidence', () => {
     )
 
     render(<ArchivedValidationEvidence />)
-    fireEvent.click(screen.getByRole('button', { name: /Archived validation/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
 
     // The complete upstream message renders as one untruncated, unrewritten evidence line.
@@ -291,5 +286,54 @@ describe('ArchivedValidationEvidence', () => {
     )
     expect(line).toBeVisible()
     expect(document.body.textContent).toContain(purposePlaceholderWarning)
+  })
+
+  it('reports pass/fail row chips only from the typed report and none before a run', async () => {
+    const onChip = vi.fn()
+    validateMock.mockResolvedValue(archivedReport())
+    render(<ArchivedValidationEvidence onChip={onChip} />)
+
+    // Before any run there is no fact to project — no fabricated chip.
+    expect(onChip).toHaveBeenLastCalledWith(null)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
+    await waitFor(() =>
+      expect(onChip).toHaveBeenLastCalledWith({ label: 'fail', tone: 'negative' })
+    )
+
+    // An all-pass report projects `pass`.
+    const passingChip = vi.fn()
+    validateMock.mockResolvedValueOnce(
+      archivedReport({
+        data: {
+          items: [],
+          summary: { totals: { items: 0, passed: 0, failed: 0 }, byType: {} },
+          version: '1.0',
+          root: { path: '/repo', source: 'nearest' },
+        },
+      })
+    )
+    cleanup()
+    render(<ArchivedValidationEvidence onChip={passingChip} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Validate archived tasks' }))
+    await waitFor(() =>
+      expect(passingChip).toHaveBeenLastCalledWith({ label: 'pass', tone: 'positive' })
+    )
+  })
+
+  it('reports an unavailable row chip on static and retired CLI sessions', () => {
+    const staticChip = vi.fn()
+    vi.mocked(isStaticMode).mockReturnValueOnce(true)
+    const { unmount } = render(<ArchivedValidationEvidence onChip={staticChip} />)
+    expect(staticChip).toHaveBeenLastCalledWith({ label: 'unavailable', tone: 'unavailable' })
+    unmount()
+
+    const retiredChip = vi.fn()
+    rootActionStateMock.state = {
+      ...rootActionStateMock.state,
+      context: { cli: { available: true, version: '1.9.0' } },
+    }
+    render(<ArchivedValidationEvidence onChip={retiredChip} />)
+    expect(retiredChip).toHaveBeenLastCalledWith({ label: 'unavailable', tone: 'unavailable' })
   })
 })

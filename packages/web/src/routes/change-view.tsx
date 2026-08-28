@@ -5,6 +5,7 @@
  * 3. Lock every change workflow action behind current Root Context and Status projection authority.
  * 4. Present Apply progress directly and expose project context/guidance through a Header Action Dialog.
  * 5. Keep compact Change facts in subtitle badges while routing complete CLI evidence through a dedicated tab.
+ * 6. Mount the container-responsive list-detail Evidence workspace as the sole Evidence tab surface.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
@@ -15,16 +16,15 @@
  * Original request (2026-08-15): 刷新/解析中状态收敛为副标题行内的 shiny 徽章，不再占据 statusRegion 块。
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。" — the Evidence
  *   tab gains the 1.11-gated CLI MODIFIED-delta diff evidence beside the existing layers.
+ * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  */
 import { ApplyProgressNotice } from '@/components/apply-progress-notice'
-import { ArchivedValidationEvidence } from '@/components/archived-validation-evidence'
 import {
   ChangeContextSummary,
   ChangeReferenceFailureNotice,
   type ChangeReferenceEvidence,
 } from '@/components/change-context-summary'
-import { ChangeDiffEvidence } from '@/components/change-diff-evidence'
-import { ChangeEvidencePanel } from '@/components/change-evidence-panel'
+import { EvidenceWorkspace } from '@/components/evidence-workspace'
 import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
 import { OperationInputsDialogAction } from '@/components/opsx/operation-inputs'
 import { OpsxEntityDetailView } from '@/components/opsx/opsx-entity-detail-view'
@@ -115,11 +115,11 @@ export function ChangeView() {
               label: 'Evidence',
               icon: <FileSearch className="h-4 w-4" />,
               content: (
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                  <ChangeEvidencePanel status={status} referenceEvidence={referenceEvidence} />
-                  <ChangeDiffEvidence changeId={changeId} />
-                  <ArchivedValidationEvidence />
-                </div>
+                <EvidenceWorkspace
+                  changeId={changeId}
+                  status={status}
+                  referenceEvidence={referenceEvidence}
+                />
               ),
             },
           ]

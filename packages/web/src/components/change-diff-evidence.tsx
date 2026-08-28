@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (created 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Present the CLI-provided MODIFIED-delta `diff`/`warning` fields as Change Detail evidence.
  * 2. Color the unified diff body by line role (+/-/@@) without recomputing anything locally.
  * 3. Render the exact upstream warning text beside its diff so a near-miss never swallows evidence.
@@ -7,10 +7,13 @@
  *    live mode: static snapshots and 1.10 sessions never issue the transport call.
  * 5. Degrade to the existing delta presentation when the fields are absent — no fabricated diff
  *    or warning may appear.
+ * 6. Mount directly inside the Evidence workspace detail pane: the Accordion shell is gone, the
+ *    section header keeps the title and summary facts, and `onChip` reports only derived facts
+ *    (CLI MODIFIED-delta count, typed unavailable, transport failure) for the workspace rows.
  *
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  */
-import { EvidenceDisclosure } from '@/components/information-disclosure'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useRootActionState } from '@/lib/use-root-action-state'
@@ -20,7 +23,17 @@ import {
 } from '@openspecui/core/openspec-compat'
 import type { ChangeDiffEvidence, ChangeDiffEvidenceDelta } from '@openspecui/server'
 import { AlertTriangle, FileDiff, Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+
+/**
+ * Row-chip fact derived only from settled evidence. `neutral` carries the CLI MODIFIED-delta
+ * count; `unavailable` names a typed degradation; `error` names a transport failure. Nothing
+ * is fabricated while the session or fetch is still pending (`null`).
+ */
+export interface ChangeDiffEvidenceChip {
+  label: string
+  tone: 'neutral' | 'unavailable' | 'error'
+}
 
 function diffLineRole(line: string): 'add' | 'remove' | 'hunk' | 'context' {
   if (line.startsWith('@@')) return 'hunk'
@@ -109,8 +122,42 @@ function DiffProvenance({
   )
 }
 
-/** CLI MODIFIED-delta diff evidence for the Change Evidence tab (live 1.11 sessions only). */
-export function ChangeDiffEvidence({ changeId }: { changeId: string }) {
+/**
+ * Structure-agnostic section frame for the Evidence workspace detail pane. The heading and
+ * summary line preserve the facts the former Accordion trigger carried; the content is
+ * presented directly — the workspace, not a disclosure, owns reveal behavior.
+ */
+function RequirementDiffsSection({
+  summary,
+  children,
+}: {
+  summary: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section
+      data-evidence-section="requirement-diffs"
+      aria-label="Requirement diffs"
+      className="min-w-0"
+    >
+      <header className="border-border/60 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b pb-2">
+        <h3 className="min-w-0 text-xs font-semibold">Requirement diffs</h3>
+        <span className="text-muted-foreground min-w-0 text-[11px]">{summary}</span>
+      </header>
+      <div className="min-w-0 pt-3">{children}</div>
+    </section>
+  )
+}
+
+/** CLI MODIFIED-delta diff evidence for the Change Evidence workspace (live 1.11 sessions only). */
+export function ChangeDiffEvidence({
+  changeId,
+  onChip,
+}: {
+  changeId: string
+  /** Receives the currently derived row-chip fact; `null` means "no fact, no chip". */
+  onChip?: (chip: ChangeDiffEvidenceChip | null) => void
+}) {
   const rootAction = useRootActionState()
   const cli = rootAction.context?.cli
   // `show --diff` exists only on OpenSpec 1.11. A detected-but-below-1.11 session (admitted 1.10
@@ -150,73 +197,92 @@ export function ChangeDiffEvidence({ changeId }: { changeId: string }) {
     }
   }, [changeId, diffCapable, staticMode])
 
+  // Row-chip fact for the workspace list — derived from the same settled states the section
+  // renders, never from a fabricated count. Undetected/pending sessions report no chip.
+  const chip = useMemo<ChangeDiffEvidenceChip | null>(() => {
+    if (staticMode) return { label: 'unavailable', tone: 'unavailable' }
+    if (!diffCapable) {
+      if (cli?.available !== true) return null
+      return { label: 'unavailable', tone: 'unavailable' }
+    }
+    if (error) return { label: 'error', tone: 'error' }
+    if (!evidence) return null
+    if (evidence.kind !== 'executed') return { label: 'unavailable', tone: 'unavailable' }
+    const modified = evidence.deltas.filter((delta) => delta.operation === 'MODIFIED').length
+    return { label: `${modified} MODIFIED`, tone: 'neutral' }
+  }, [cli?.available, diffCapable, error, evidence, staticMode])
+
+  useEffect(() => {
+    onChip?.(chip)
+  }, [chip, onChip])
+
   if (staticMode) {
     return (
-      <EvidenceDisclosure title="Requirement diffs" summary="Unavailable in static snapshot">
+      <RequirementDiffsSection summary="Unavailable in static snapshot">
         <p className="text-muted-foreground">
           Requirement diffs are live CLI evidence from `show --diff` and are not captured in this
           static snapshot. The delta content shown on this page remains the captured local
           presentation.
         </p>
-      </EvidenceDisclosure>
+      </RequirementDiffsSection>
     )
   }
 
   if (!diffCapable) {
     // Only a detected-but-below-1.11 CLI names its line. While CLI evidence is still pending
-    // (or the runner is unavailable) the disclosure stays neutral instead of claiming the
+    // (or the runner is unavailable) the section stays neutral instead of claiming the
     // session was classified.
     if (cli?.available !== true) {
       return (
-        <EvidenceDisclosure title="Requirement diffs" summary="CLI diff evidence">
+        <RequirementDiffsSection summary="CLI diff evidence">
           <p className="text-muted-foreground">
             Requirement diff evidence from `show --diff` appears here on admitted OpenSpec CLI 1.11
             sessions once the CLI is detected.
           </p>
-        </EvidenceDisclosure>
+        </RequirementDiffsSection>
       )
     }
     const detected = cli.version ? ` (detected ${cli.version.trim()})` : ''
     return (
-      <EvidenceDisclosure title="Requirement diffs" summary="Unavailable on this CLI line">
+      <RequirementDiffsSection summary="Unavailable on this CLI line">
         <p className="text-muted-foreground">
           Requirement diffs require an admitted OpenSpec CLI 1.11 session{detected}. This
           session&apos;s CLI does not declare the `show --diff` capability, so the delta
           presentation keeps using the captured local content.
         </p>
-      </EvidenceDisclosure>
+      </RequirementDiffsSection>
     )
   }
 
   if (pending && !evidence && !error) {
     return (
-      <EvidenceDisclosure title="Requirement diffs" summary="Loading CLI diff evidence">
+      <RequirementDiffsSection summary="Loading CLI diff evidence">
         <p className="text-muted-foreground flex items-center gap-2">
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
           Fetching `show --diff` evidence from the official CLI…
         </p>
-      </EvidenceDisclosure>
+      </RequirementDiffsSection>
     )
   }
 
   if (error) {
     return (
-      <EvidenceDisclosure title="Requirement diffs" summary="Transport failure">
+      <RequirementDiffsSection summary="Transport failure">
         <div className="text-destructive flex items-start gap-2 break-words" role="alert">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           <span className="min-w-0 break-all">{error}</span>
         </div>
-      </EvidenceDisclosure>
+      </RequirementDiffsSection>
     )
   }
 
   if (!evidence) {
     return (
-      <EvidenceDisclosure title="Requirement diffs" summary="CLI diff evidence">
+      <RequirementDiffsSection summary="CLI diff evidence">
         <p className="text-muted-foreground">
           Requirement diff evidence from `show --diff` appears here on 1.11 sessions.
         </p>
-      </EvidenceDisclosure>
+      </RequirementDiffsSection>
     )
   }
 
@@ -228,7 +294,7 @@ export function ChangeDiffEvidence({ changeId }: { changeId: string }) {
           ? 'The detected OpenSpec CLI does not declare the 1.11 requirement-diff capability.'
           : 'The planning root is unavailable, so requirement-diff evidence cannot be fetched.'
     return (
-      <EvidenceDisclosure title="Requirement diffs" summary="CLI evidence unavailable">
+      <RequirementDiffsSection summary="CLI evidence unavailable">
         <div className="space-y-1">
           <p className="text-muted-foreground">
             Requirement diffs are unavailable for this session. The delta presentation keeps using
@@ -238,7 +304,7 @@ export function ChangeDiffEvidence({ changeId }: { changeId: string }) {
             {detail}
           </p>
         </div>
-      </EvidenceDisclosure>
+      </RequirementDiffsSection>
     )
   }
 
@@ -249,25 +315,20 @@ export function ChangeDiffEvidence({ changeId }: { changeId: string }) {
 
   if (modifiedDeltas.length === 0) {
     return (
-      <EvidenceDisclosure
-        title="Requirement diffs"
-        summary={`${modifiedCount} MODIFIED · CLI provided no diff fields`}
-      >
-        <p className="text-muted-foreground">
-          The CLI reported {modifiedCount} MODIFIED {modifiedCount === 1 ? 'delta' : 'deltas'} with
-          no requirement-diff fields. No diff is fabricated locally.
-        </p>
-        <DiffProvenance provenance={evidence.provenance} />
-      </EvidenceDisclosure>
+      <RequirementDiffsSection summary={`${modifiedCount} MODIFIED · CLI provided no diff fields`}>
+        <div className="min-w-0 space-y-3">
+          <p className="text-muted-foreground">
+            The CLI reported {modifiedCount} MODIFIED {modifiedCount === 1 ? 'delta' : 'deltas'}{' '}
+            with no requirement-diff fields. No diff is fabricated locally.
+          </p>
+          <DiffProvenance provenance={evidence.provenance} />
+        </div>
+      </RequirementDiffsSection>
     )
   }
 
   return (
-    <EvidenceDisclosure
-      title="Requirement diffs"
-      summary={`${modifiedCount} MODIFIED · CLI show --diff`}
-      defaultOpen
-    >
+    <RequirementDiffsSection summary={`${modifiedCount} MODIFIED · CLI show --diff`}>
       <div className="min-w-0 space-y-3">
         <p className="text-muted-foreground flex items-center gap-1.5">
           <FileDiff className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -293,6 +354,6 @@ export function ChangeDiffEvidence({ changeId }: { changeId: string }) {
         })}
         <DiffProvenance provenance={evidence.provenance} />
       </div>
-    </EvidenceDisclosure>
+    </RequirementDiffsSection>
   )
 }
