@@ -16,7 +16,7 @@
  */
 import type { RootActionState } from '@/lib/use-root-action-state'
 import type { ChangeStatus } from '@openspecui/core'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createContext, type ComponentProps, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChangeView } from './change-view'
@@ -134,12 +134,17 @@ const liveCliChangeStatus = {
  * the same ResizeObserver seam the production Git list-detail layout uses: a stubbed observer
  * reports one synthetic content width per observe() call.
  */
+const evidenceResizeCallbacks: ResizeObserverCallback[] = []
+let evidenceContainerWidth = 320
+
 function stubEvidenceResizeObserver(width: number) {
+  evidenceContainerWidth = width
   class MockResizeObserver {
     private readonly callback: ResizeObserverCallback
 
     constructor(callback: ResizeObserverCallback) {
       this.callback = callback
+      evidenceResizeCallbacks.push(callback)
     }
 
     observe(target: Element) {
@@ -148,7 +153,7 @@ function stubEvidenceResizeObserver(width: number) {
         [
           {
             contentRect: {
-              width,
+              width: evidenceContainerWidth,
               height: element.clientHeight || 320,
             } as DOMRectReadOnly,
           } as ResizeObserverEntry,
@@ -162,6 +167,17 @@ function stubEvidenceResizeObserver(width: number) {
   }
 
   vi.stubGlobal('ResizeObserver', MockResizeObserver)
+}
+
+/** Simulate the workspace container growing or shrinking after the initial observation. */
+function resizeEvidenceContainerTo(width: number) {
+  evidenceContainerWidth = width
+  for (const callback of [...evidenceResizeCallbacks]) {
+    callback(
+      [{ contentRect: { width, height: 320 } as DOMRectReadOnly } as ResizeObserverEntry],
+      null as unknown as ResizeObserver
+    )
+  }
 }
 
 vi.mock('@/lib/use-opsx', () => ({
@@ -277,6 +293,7 @@ describe('ChangeView', () => {
   })
 
   beforeEach(() => {
+    evidenceResizeCallbacks.length = 0
     statusMock.mockReset()
     applyInstructionsMock.mockReset().mockReturnValue({ data: undefined })
     changeFilesMock.mockReset()
@@ -746,6 +763,36 @@ describe('ChangeView', () => {
     expect(
       document.activeElement?.closest('[data-evidence-pane]')?.getAttribute('data-evidence-pane')
     ).toBe('list')
+  })
+
+  it('moves focus off the unmounting back affordance when a drill grows spacious', async () => {
+    routedTabState.selectedTab = 'evidence'
+    stubEvidenceResizeObserver(320)
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    expect(workspace.getAttribute('data-evidence-topology')).toBe('crowded')
+
+    fireEvent.click(within(workspace).getByRole('button', { name: /Archived validation/ }))
+    const back = screen.getByRole('button', { name: 'Back to evidence list' })
+    expect(document.activeElement).toBe(back)
+
+    // Growing the container unmounts the back affordance; its captured focus must land on
+    // the selected row instead of falling to body.
+    await act(async () => {
+      resizeEvidenceContainerTo(1200)
+    })
+    expect(workspace.getAttribute('data-evidence-topology')).toBe('spacious')
+    const selectedRow = within(workspace).getByRole('button', {
+      name: /Archived validation/,
+    })
+    expect(document.activeElement).toBe(selectedRow)
   })
 
   it('does not refetch settled diff evidence across a crowded drill and back', async () => {

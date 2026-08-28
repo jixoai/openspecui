@@ -104,6 +104,10 @@ export function EvidenceWorkspace({
   const backRef = useRef<HTMLButtonElement | null>(null)
   const drilledByRowId = useRef<string | null>(null)
   const pendingRestoreRowId = useRef<string | null>(null)
+  // Captured while the back affordance still exists: once the spacious topology unmounts it,
+  // its ref is already null and document.activeElement has fallen to body, so focus ownership
+  // must be recorded by focus events rather than inspected after the fact.
+  const backHadFocus = useRef(false)
   const [diffChip, setDiffChip] = useState<ChangeDiffEvidenceChip | null>(null)
   const [validationChip, setValidationChip] = useState<ArchivedValidationEvidenceChip | null>(null)
 
@@ -191,9 +195,10 @@ export function EvidenceWorkspace({
       const rowId = pendingRestoreRowId.current
       pendingRestoreRowId.current = null
       if (rowId) rowRefs.current.get(rowId)?.focus()
-    } else if (drilled && spacious && document.activeElement === backRef.current) {
-      // Growing into the spacious topology unmounts the back affordance; move that focus to
-      // the selected row instead of letting it fall to body.
+    } else if (drilled && spacious && backHadFocus.current) {
+      // Growing into the spacious topology unmounts the back affordance; move its captured
+      // focus to the selected row instead of letting it fall to body.
+      backHadFocus.current = false
       rowRefs.current.get(selectedId)?.focus()
     }
   }, [drilled, spacious, selectedId])
@@ -262,6 +267,12 @@ export function EvidenceWorkspace({
               type="button"
               data-evidence-back=""
               aria-label="Back to evidence list"
+              onFocus={() => {
+                backHadFocus.current = true
+              }}
+              onBlur={() => {
+                backHadFocus.current = false
+              }}
               onClick={backToList}
               className="bg-background/95 border-border/60 text-muted-foreground hover:text-foreground focus-visible:ring-primary sticky top-0 z-10 flex min-h-9 w-full min-w-0 items-center gap-1.5 border-b px-3 text-xs outline-none backdrop-blur focus-visible:ring-2 focus-visible:ring-inset"
             >

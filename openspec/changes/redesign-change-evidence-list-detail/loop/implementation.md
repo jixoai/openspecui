@@ -16,20 +16,36 @@ R1 implementation               DONE   touched files: web/components/evidence-wo
                                        web/components/change-evidence-panel.{tsx,test.tsx},
                                        web/components/change-evidence-surface.browser.test.tsx,
                                        web/routes/change-view.{tsx,test.tsx}, .gitignore.
-                                       Focused commands (run in this branch):
+                                       Focused commands (run in this branch, updated through round 3):
                                        `cd packages/web && npx vitest run src/routes/change-view.test.tsx`
-                                       (20/20), the three component suites (24/24),
+                                       (21/21), `npx vitest run src/components/change-diff-evidence.test.tsx
+                                       src/components/archived-validation-evidence.test.tsx
+                                       src/components/change-evidence-panel.test.tsx` (24/24),
                                        `npx vitest run --config vitest.browser.config.ts
                                        src/components/change-evidence-surface.browser.test.tsx` (5/5),
+                                       `npx tsc --noEmit` plus the four check lanes through
                                        `pnpm --filter @openspecui/web typecheck`, `pnpm lint:ci`,
-                                       `pnpm format:check`, plus web full unit (1181/1181).
+                                       `pnpm format:check`,
+                                       `npx vitest run` (web full unit, 1181/1181).
                                        Deviation: none. Slice owner: one implementation subagent;
                                        integrator re-ran every focused suite.
-R2 Codex review                 ROUND1 DONE (6.5/10) -> fixes; ROUND2 DONE (7.0/10) -> fixes; ROUND3
-                                       PENDING
+R2 Codex review                 ROUND1 6.5/10 -> fixes; ROUND2 7.0/10 -> fixes; ROUND3 7.5/10 ->
+                                       fixes (spacious focus capture via focus events, live no-refetch
+                                       test, full command evidence; Enter/Space rejection accepted);
+                                       ROUND4 PENDING
 R3 rebuild walkthrough assets   PENDING  rebuild web bundle + copy-web + restart 3100/3101
 R4 Owner re-walkthrough        PENDING  acceptance boundary
 ```
+
+## Round-3 review disposition (herdr `evidence-reviewer`, 2026-08-28, 7.5/10)
+
+- Spacious focus migration fixed for real: the round-2 check inspected `document.activeElement`
+  after the back affordance had already unmounted (ref null, focus on body), so it never fired;
+  focus ownership is now captured by focus events on the back button and the migration targets
+  the selected row when the topology grows while drilled. Locked by a resize-transition test
+  (stubbed ResizeObserver, 320 -> 1200, asserting the selected row receives focus).
+- Command-level evidence in this file now lists every focused command verbatim.
+- Enter/Space synthesis rejection accepted by the reviewer (native button platform semantics).
 
 ## Round-2 review disposition (herdr `evidence-reviewer`, 2026-08-28, 7.0/10)
 
