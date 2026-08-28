@@ -26,8 +26,11 @@ R1 implementation               DONE   touched files: web/components/evidence-wo
                                        `npx tsc --noEmit` plus the four check lanes through
                                        `pnpm --filter @openspecui/web typecheck`, `pnpm lint:ci`,
                                        `pnpm format:check`,
-                                       `npx vitest run` (web full unit, 1181/1181).
-                                       Deviation: none. Slice owner: one implementation subagent;
+                                       `npx vitest run --project unit` (web full unit, 189 files /
+                                       1178 tests). Deviation: the first full-unit run in the
+                                       isolated verification worktree flaked on two untouched files
+                                       under machine load; both passed in isolation and the rerun was
+                                       fully green. Slice owner: one implementation subagent;
                                        integrator re-ran every focused suite.
 R2 Codex review                 ROUND1 6.5/10 -> fixes; ROUND2 7.0/10 -> fixes; ROUND3 7.5/10 ->
                                        fixes (spacious focus capture via focus events, live no-refetch
