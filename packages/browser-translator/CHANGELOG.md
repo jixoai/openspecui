@@ -1,5 +1,20 @@
 # @openspecui/browser-translator
 
+## 11.1.0
+
+### Minor Changes
+
+- 97aca09: Expose spec-scope validation on the Specifications surfaces: a shared
+  read-only evidence component at the all-specs header and the owned-spec
+  detail header, with typed transport and report schemas, contract-drift
+  and static degradation, making spec-level findings such as the 1.11
+  Purpose-placeholder warning reachable in the UI.
+
+### Patch Changes
+
+- Updated dependencies [97aca09]
+  - @openspecui/core@11.1.0
+
 ## 11.0.0
 
 ### Major Changes
