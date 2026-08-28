@@ -1,11 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Prove Board selects readonly/static and interactive/live presentation owners.
  * 2. Prove a pending active projection does not hide current archive rows.
  * 3. Prove the live route consumes shell height and contains page-level overflow.
+ * 4. Keep the archive fixture inside the trailing 30-day window regardless of wall-clock date.
  *
  * Original request (2026-07-28): implement regional Board lifecycle and static ReadonlyKanban.
  * Owner correction (2026-07-28): prevent competing horizontal scrollbars on narrow `/board`.
+ * Original request (2026-08-28, issue #258 delivery): the dated archive id `2026-07-28-archive-a`
+ *   fell out of the default 30-day Board range exactly 31 days later and started failing CI
+ *   deterministically; derive the fixture date from the current day instead.
  */
 import type { ArchiveMeta, ChangeMeta } from '@openspecui/core'
 import type { TrackedTaskProgress } from '@openspecui/core/task-progress'
@@ -26,7 +30,9 @@ const fixture = vi.hoisted(() => ({
   archives: {
     data: [
       {
-        id: '2026-07-28-archive-a',
+        // Dated ids drive the trailing 30-day range filter; derive the fixture date from the
+        // current day so the archive never ages out of the window and flips this suite red.
+        id: `${new Date().toISOString().slice(0, 10)}-archive-a`,
         name: 'Archive A',
         trackedTaskProgress: {
           tasks: [],
