@@ -1,15 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-07-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Resolve owned and referenced Spec routes through compound identity.
  * 2. Render owned Markdown through the existing document pipeline.
  * 3. Render live CLI evidence and static snapshot conditions without synthesizing CLI or route-derived Store provenance.
  * 4. Preserve collision-safe View Transition identity across source-distinct documents.
  * 5. Retain successful detail content beside terminal document subscription errors.
+ * 6. Offer owned-spec validation as header-inline-end CLI evidence; referenced specs stay read-only.
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
+ * Original request (2026-08-28): 单 spec 详情右上角提供单项校验动作。
  */
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { DetailPanelSkeleton } from '@/components/realtime'
+import { SpecValidationEvidence } from '@/components/spec-validation-evidence'
 import { resolveDocumentTranslationConfig } from '@/lib/resolve-document-translation-config'
 import {
   useConfigSubscription,
@@ -119,12 +122,14 @@ function SpecHeader({
   subtitle,
   sourceRef,
   sharedDescriptor,
+  actions,
 }: {
   identity: SpecIdentity
   title: string
   subtitle?: string
   sourceRef?: React.RefObject<HTMLDivElement | null>
   sharedDescriptor: { family: 'specs'; entityId: string }
+  actions?: React.ReactNode
 }) {
   const sourceLabel =
     subtitle ??
@@ -158,6 +163,9 @@ function SpecHeader({
         </h1>
         <p className="text-muted-foreground truncate">{sourceLabel}</p>
       </div>
+      {actions ? (
+        <div className="ml-auto flex min-w-0 flex-col items-end gap-2">{actions}</div>
+      ) : null}
     </div>
   )
 }
@@ -190,6 +198,7 @@ function OwnedSpecContent({
         title={spec.name}
         sourceRef={headerRef}
         sharedDescriptor={sharedDescriptor}
+        actions={<SpecValidationEvidence target={{ kind: 'spec', specId: identity.specId }} />}
       />
       <MarkdownViewer
         markdown={rawMarkdown}
