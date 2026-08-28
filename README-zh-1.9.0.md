@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
 1. 说明当前 OpenSpec 兼容线与项目工作流。
 2. 说明 serve、App daemon、Direct Web 与静态导出命令。
 3. 说明项目 Hooks，同时保持 OpenSpec CLI 的事实权威。
@@ -7,7 +7,6 @@ Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
 原始需求（2026-07-29）："补充 openspecui --web == openspecui serve --web；README 文档需要补充这些命令的介绍。"
 原始需求（2026-08-01）："v7不兼容1.6.x，明确要求必须使用 v1.7.x。"
 原始需求（2026-08-15）："v9的适配需要同时适配 1.8和1.9。"
-原始需求（2026-08-28）："直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
 -->
 
 # OpenSpec UI
@@ -18,26 +17,24 @@ OpenSpecUI 是 OpenSpec 工作流的 Web 界面（动态模式 + 静态导出）
 
 ## 版本兼容关系
 
-| OpenSpecUI         | OpenSpec CLI 线                                      |
-| ------------------ | ---------------------------------------------------- |
-| `@latest` / `@^11` | 当前：`>=1.11.0 <1.12.0`；已支持：`>=1.10.0 <1.12.0` |
-| `@^9`（历史）      | 当前：`>=1.9.0 <1.10.0`；已支持：`>=1.8.0 <1.10.0`   |
-| `@^7`              | `>=1.7.0 <1.8.0`                                     |
-| `@^6`              | 当前：`>=1.6.0 <1.7.0`；兼容：`>=1.7.0 <1.8.0`       |
-| `@^5`              | 当前：`>=1.5.0 <1.6.0`；接受：`>=1.4.0 <1.6.0`       |
-| `@^4`              | 当前：`>=1.4.0 <1.5.0`；接受：`>=1.3.0 <1.5.0`       |
-| `@^3`              | `>=1.3.0 <1.4.0`                                     |
-| `@^2`              | `>=1.2.0 <1.3.0`                                     |
-| `@^1`              | `>=1.0.0 <1.2.0`                                     |
+| OpenSpecUI        | OpenSpec CLI 线                                    |
+| ----------------- | -------------------------------------------------- |
+| `@latest` / `@^9` | 当前：`>=1.9.0 <1.10.0`；已支持：`>=1.8.0 <1.10.0` |
+| `@^7`             | `>=1.7.0 <1.8.0`                                   |
+| `@^6`             | 当前：`>=1.6.0 <1.7.0`；兼容：`>=1.7.0 <1.8.0`     |
+| `@^5`             | 当前：`>=1.5.0 <1.6.0`；接受：`>=1.4.0 <1.6.0`     |
+| `@^4`             | 当前：`>=1.4.0 <1.5.0`；接受：`>=1.3.0 <1.5.0`     |
+| `@^3`             | `>=1.3.0 <1.4.0`                                   |
+| `@^2`             | `>=1.2.0 <1.3.0`                                   |
+| `@^1`             | `>=1.0.0 <1.2.0`                                   |
 
-OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 11 在同一条发布线上同时适配
-OpenSpec CLI 1.10.x 与 1.11.x：稳定版 1.11.x 是当前推荐线，稳定版 1.10.x 属于已支持的非当前线；
-OpenSpecUI 刻意跳过单独的 v10 发布，同时完整承担 1.10 的协议义务。
-OpenSpecUI 9 保留为历史 1.8.x/1.9.x 产品线。
+OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 9 在同一条发布线上同时适配
+OpenSpec CLI 1.8.x 与 1.9.x：稳定版 1.9.x 是当前推荐线，稳定版 1.8.x 属于已支持的非当前线；
+OpenSpecUI 刻意跳过单独的 v8 发布，同时完整承担 1.8 的协议义务。
+OpenSpecUI 6.1 则保留为历史 1.6.x 产品线，并维持其临时的 1.7 兼容桥接。
 
 历史文档：
 
-- 1.9：[`README-zh-1.9.0.md`](./README-zh-1.9.0.md)
 - 1.7：[`README-zh-1.7.0.md`](./README-zh-1.7.0.md)
 - 1.6：[`README-zh-1.6.0.md`](./README-zh-1.6.0.md)
 - 1.3：[`README-zh-1.3.0.md`](./README-zh-1.3.0.md)
@@ -61,21 +58,15 @@ openspecui
 
 ## OpenSpec CLI 兼容性
 
-- OpenSpecUI 11 接受稳定版 OpenSpec CLI `>=1.10.0 <1.12.0`，并推荐 1.11 线。
-- 稳定版 1.11.x 会被识别为当前线；稳定版 1.10.x 属于已支持的非当前线。
-- OpenSpec CLI 1.9.x、更旧的 CLI 线、CLI `>=1.12.0` 以及所有预发布版均不受 OpenSpecUI 11 支持，并会被默认阻断。
+- OpenSpecUI 9 接受稳定版 OpenSpec CLI `>=1.8.0 <1.10.0`，并推荐 1.9 线。
+- 稳定版 1.9.x 会被识别为当前线；稳定版 1.8.x 属于已支持的非当前线。
+- OpenSpec CLI 1.7.x、更旧的 CLI 线、CLI `>=1.10.0` 以及所有预发布版均不受 OpenSpecUI 9 支持，并会被默认阻断。
 - 若不兼容的 CLI 可执行文件仍然存在，版本不匹配对话框会提供 **Skip version check**。该绕过只在当前页面运行期有效，刷新或重新打开后清除，也不构成兼容性承诺。
-
-OpenSpecUI 11 新增：1.11 会话通过 `openspec status --all` 实现一次进程加载全部变更状态
-（1.10 仍走逐个变更路径）；Change Detail 通过 `openspec show --diff` 为 MODIFIED delta 提供
-requirement diff/警告证据；两条已接受线均支持 `openspec init --language`；Agent 交付注册表扩展——
-Zed 自 CLI 1.10 起加入（仅 skills，`.agents/skills`），Antigravity 自 CLI 1.11 起把 skills 根从
-`.agent` 迁移到 `.agents`，1.10 仍以 `.agent` 为当前。
 
 升级 CLI：
 
 ```bash
-npm install -g @fission-ai/openspec@1.11
+npm install -g @fission-ai/openspec@latest
 ```
 
 ## 常见流程
