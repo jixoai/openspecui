@@ -915,3 +915,36 @@ through a dedicated routed tab without changing source or mutation authority.
 - **WHEN** compact and complete Change evidence components render
 - **THEN** they SHALL consume already-resolved Change Status and Root Context presentation facts
 - **AND** SHALL NOT create subscriptions, authorize mutations, reconstruct CLI facts, or change static snapshot contracts
+
+### Requirement: Change Evidence List-Detail Workspace
+
+The Change Detail Evidence tab SHALL present its evidence sections through a
+container-responsive list-detail workspace instead of stacked full-width accordions. The evidence
+list SHALL preserve the established layering order (summary/paths, requirement diffs, archived
+validation, CLI/raw payload), every list row SHALL be keyboard reachable, and row status chips
+SHALL derive only from available evidence facts. The detail pane SHALL render the selected
+section's content and remain the tab's primary reading surface. Sub-selection SHALL be
+presentational runtime state of the Evidence tab and SHALL NOT persist in routes or browser
+storage.
+
+#### Scenario: Spacious container shows list and detail together
+
+- **GIVEN** the Evidence tab renders in a container wide enough for two panes
+- **WHEN** an evidence row is selected
+- **THEN** the list and the selected section's detail SHALL be visible side by side
+- **AND** each pane SHALL scroll independently without page-level horizontal overflow
+
+#### Scenario: Crowded container drills from list to detail
+
+- **GIVEN** the Evidence tab renders in a crowded container
+- **WHEN** an evidence row is activated
+- **THEN** the detail SHALL replace the list as the visible surface with a back affordance
+- **AND** returning to the list SHALL NOT lose already-settled evidence state
+
+#### Scenario: Evidence semantics are unchanged by the structure
+
+- **GIVEN** any admitted session and any evidence section
+- **WHEN** the workspace renders that section
+- **THEN** its content, CLI-owned provenance, failure presentation, and typed-unavailable
+  degradation SHALL match the pre-workspace behavior
+- **AND** no evidence count or status SHALL be fabricated for list chips
