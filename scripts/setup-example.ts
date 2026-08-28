@@ -1,13 +1,10 @@
 #!/usr/bin/env tsx
 /**
- * Setup example directory for E2E testing
- *
- * Usage: pnpm example:setup [--clean]
- *
- * Creates an example project with:
- * - openspec/ directory structure
- * - Sample specs and changes
- * - .openspecui.json
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * 1. Scaffold the E2E example project (openspec/ structure, sample specs and changes,
+ *    .openspecui.json) for `pnpm example:setup [--clean]`.
+ * 2. Pin the example's npx runner to the admitted CLI series instead of an unversioned
+ *    @latest the compatibility gate can block.
  *
  * Original request (2026-08-28, issue #258): the example's npx runner stays pinned to the
  * admitted CLI series instead of an unversioned @latest the compatibility gate can block.

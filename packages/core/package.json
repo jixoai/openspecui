@@ -252,7 +252,6 @@
     "openspec-cli-15": "npm:@fission-ai/openspec@1.5.0",
     "openspec-cli-16": "npm:@fission-ai/openspec@1.6.0",
     "openspec-cli-18": "npm:@fission-ai/openspec@1.8.0",
-    "openspec-cli-19": "npm:@fission-ai/openspec@1.9.0",
     "openspec-cli-110": "npm:@fission-ai/openspec@1.10.0",
     "openspec-cli-111": "npm:@fission-ai/openspec@1.11.0",
     "tsdown": "^0.16.6",

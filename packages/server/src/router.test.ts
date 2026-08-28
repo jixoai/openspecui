@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Prove public Router owner boundaries and dedicated Planning-root stream settlement.
  * 2. Prove strict Archive identity, generation, validation, diagnostics, and Store selection publicly.
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
  * 4. Prove stale Git binding intent conflicts before rebound repository side effects.
- * 5. Prove Root, Store, Planning CLI, and v9 admission-gated capability routes through real owners.
+ * 5. Prove Root, Store, Planning CLI, and v11 admission-gated capability routes through real owners.
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-17): "Every public application mutation remains inside its Server-owned root and lifetime."
  * Original request (2026-07-17): "Rejected Validate and Update handles converge to one public terminal error."
@@ -23,7 +23,7 @@
  * Review correction (2026-08-02): Init cancellation and success require process and projection settlement.
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
-  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
 */
 import {
   acquireWatcherRoot,

@@ -3,7 +3,7 @@
  * 1. Model camelCase workflow JSON independently from Store-family JSON.
  * 2. Preserve strict, archived, and bulk Validate plus Archive outcomes, including failure payloads.
  * 3. Preserve multiline requirement bodies from `show --json`.
- * 4. Preserve complete OpenSpec 1.8/1.9 Status and operation-Instruction contracts as CLI facts.
+ * 4. Preserve complete admitted-line (1.10/1.11) Status and operation-Instruction contracts as CLI facts.
  * 5. Export the successful Spec-document schema for browser-safe projection validation.
  * 6. Export the root-less Status payload fields and Requirement shape shared with the
  *    OpenSpec 1.11 batch Status and show --diff contracts.

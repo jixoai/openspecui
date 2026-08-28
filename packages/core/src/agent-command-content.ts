@@ -38,24 +38,34 @@ function normalizeContentForEquivalence(content: string): string {
   return content.replace(/^\uFEFF/u, '').replaceAll('\r\n', '\n')
 }
 
+/**
+ * Line-anchored form of the injected passthrough line: it matches only when the
+ * passthrough text stands as a complete line (a newline before it, a newline or end
+ * of content after it), never as a prefix of a longer genuine body line.
+ */
+const STANDALONE_PROVIDED_ARGUMENTS_LINE_PATTERN = new RegExp(
+  `\\n${OPENCODE_PROVIDED_ARGUMENTS_LINE.replace(/[$*]/g, '\\$&')}(?=\\n|$)`
+)
+
 /** Remove at most one standalone injected passthrough line, wherever it sits. */
 function stripInjectedProvidedArgumentsLine(content: string): string {
-  const index = content.indexOf(`\n${OPENCODE_PROVIDED_ARGUMENTS_LINE}`)
-  if (index === -1) return content
+  const match = STANDALONE_PROVIDED_ARGUMENTS_LINE_PATTERN.exec(content)
+  if (!match) return content
   // The adapter inserts `eol + line` as one unit after the Input contract, so the
-  // removal drops both the line and the newline that preceded it.
-  return (
-    content.slice(0, index) + content.slice(index + 1 + OPENCODE_PROVIDED_ARGUMENTS_LINE.length)
-  )
+  // removal drops both the line and the newline that preceded it while the line's own
+  // trailing newline keeps the following line intact.
+  return content.slice(0, match.index) + content.slice(match.index + match[0].length)
 }
 
 /**
  * Whether an on-disk command file is content-equivalent to the expected generated command.
  *
  * Equivalence is exact string equality after BOM/CRLF normalization, plus one
- * deliberate tolerance: the OpenCode passthrough line above may appear on either
- * side, because 1.10+ adapters inject it while earlier admitted runners did not.
- * No other tool or difference is tolerated.
+ * deliberate tolerance: the OpenCode passthrough line above may appear as a
+ * standalone line on either side, because 1.10+ adapters inject it while earlier
+ * admitted runners did not. A longer body line that merely starts with the
+ * passthrough text is genuine content, never generator-owned. No other tool or
+ * difference is tolerated.
  */
 export function isEquivalentAgentCommandContent(
   toolId: string,

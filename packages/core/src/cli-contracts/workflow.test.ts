@@ -436,6 +436,64 @@ describe('OpenSpec 1.11 show --diff CLI contract', () => {
     expect(parsed.deltas[0]?.rename).toEqual({ from: 'Old name', to: 'New name' })
   })
 
+  it('rejects an ADDED delta that carries diff evidence', () => {
+    const result = CliShowChangeDiffSuccessSchema.safeParse({
+      id: 'add-auth',
+      title: 'Add authentication',
+      deltaCount: 1,
+      deltas: [
+        {
+          spec: 'auth',
+          operation: 'ADDED',
+          description: 'New requirement.',
+          requirement: {
+            text: 'The system SHALL rate limit logins.',
+            scenarios: [{ rawText: '#### Scenario: brute force' }],
+          },
+          diff: '@@ -0,0 +1,2 @@\n+New requirement.',
+        },
+      ],
+      root,
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0]?.path).toEqual(['deltas', 0, 'diff'])
+      expect(result.error.issues[0]?.message).toContain(
+        'Only MODIFIED deltas carry diff evidence; ADDED deltas never do.'
+      )
+    }
+  })
+
+  it('rejects a REMOVED delta that carries warning evidence', () => {
+    const result = CliShowChangeDiffSuccessSchema.safeParse({
+      id: 'add-auth',
+      title: 'Add authentication',
+      deltaCount: 1,
+      deltas: [
+        {
+          spec: 'auth',
+          operation: 'REMOVED',
+          description: 'Removed requirement.',
+          requirement: {
+            text: 'The system SHALL require authentication.',
+            scenarios: [{ rawText: '#### Scenario: unauthenticated request' }],
+          },
+          warning: 'No main spec exists at openspec/specs/auth/spec.md',
+        },
+      ],
+      root,
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0]?.path).toEqual(['deltas', 0, 'warning'])
+      expect(result.error.issues[0]?.message).toContain(
+        'Only MODIFIED deltas carry warning evidence; REMOVED deltas never do.'
+      )
+    }
+  })
+
   it('keeps the shared diagnostic failure union for unknown items', () => {
     const parsed = CliShowChangeDiffSchema.parse({
       status: [

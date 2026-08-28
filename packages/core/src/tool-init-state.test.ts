@@ -38,9 +38,9 @@ import {
   type ToolInitState,
 } from './tool-init-state.js'
 
-const OPENSPEC_19_BIN = resolve(
+const OPENSPEC_111_BIN = resolve(
   import.meta.dirname,
-  '../node_modules/openspec-cli-19/bin/openspec.js'
+  '../node_modules/openspec-cli-111/bin/openspec.js'
 )
 let officialCommandContents: AgentCommandContentCatalog = {}
 
@@ -68,18 +68,18 @@ async function writeOfficialCommand(
 const PROVIDED_ARGUMENTS_LINE = '**Provided arguments**: $ARGUMENTS'
 
 /**
- * Mirror the upstream OpenCode adapter injection: append the provided-arguments
- * passthrough line after the complete `**Input**` contract block when the
- * template carries no argument placeholder of its own.
+ * Mirror a disk command file written by an earlier admitted line: the official 1.11
+ * generator already appends the provided-arguments passthrough line inside the OpenCode
+ * adapter itself, so the equivalence fixture removes that standalone line to model the
+ * pre-injection body. Only the standalone line is removed; a longer body line that
+ * merely starts with the passthrough text is genuine content.
  */
-function injectProvidedArgumentsLine(content: string): string {
-  const lines = content.split('\n')
-  const inputIndex = lines.findIndex((line) => line.startsWith('**Input**'))
-  if (inputIndex === -1) throw new Error('Official opencode fixture lost its Input contract block.')
-  let insertAt = inputIndex + 1
-  while (insertAt < lines.length && lines[insertAt].trim() !== '') insertAt += 1
-  lines.splice(insertAt, 0, PROVIDED_ARGUMENTS_LINE)
-  return lines.join('\n')
+function removeProvidedArgumentsLine(content: string): string {
+  const withoutLine = content.replace(`\n${PROVIDED_ARGUMENTS_LINE}\n`, '\n')
+  if (withoutLine === content) {
+    throw new Error('Official opencode fixture lost its injected provided-arguments line.')
+  }
+  return withoutLine
 }
 
 describe('getToolInitStates', () => {
@@ -88,10 +88,10 @@ describe('getToolInitStates', () => {
 
   beforeAll(async () => {
     const loaded = await loadOpenSpecAgentCommandContents(
-      [process.execPath, OPENSPEC_19_BIN],
+      [process.execPath, OPENSPEC_111_BIN],
       ['explore']
     )
-    if (!loaded) throw new Error('Pinned OpenSpec 1.9 command generator is unavailable.')
+    if (!loaded) throw new Error('Pinned OpenSpec 1.11 command generator is unavailable.')
     officialCommandContents = loaded.catalog
   })
 
@@ -484,16 +484,19 @@ describe('getToolInitStates', () => {
   it('treats the OpenCode provided-arguments injection line as generator-owned equivalence', async () => {
     const officialContent = officialCommandContents.opencode?.explore
     if (!officialContent) throw new Error('Missing official opencode/explore command fixture.')
-    const withInjectedLine = injectProvidedArgumentsLine(officialContent)
-    expect(withInjectedLine).not.toBe(officialContent)
-    expect(withInjectedLine).toContain(PROVIDED_ARGUMENTS_LINE)
+    // The official 1.11 body already carries the adapter-injected passthrough line; the
+    // disk file models the pre-injection body from an earlier admitted line.
+    const withoutInjectedLine = removeProvidedArgumentsLine(officialContent)
+    expect(withoutInjectedLine).not.toBe(officialContent)
+    expect(withoutInjectedLine).not.toContain(PROVIDED_ARGUMENTS_LINE)
+    expect(officialContent).toContain(PROVIDED_ARGUMENTS_LINE)
 
     await mkdir(dirname(join(tempDir, '.opencode', 'commands', 'opsx-explore.md')), {
       recursive: true,
     })
     await writeFile(
       join(tempDir, '.opencode', 'commands', 'opsx-explore.md'),
-      withInjectedLine,
+      withoutInjectedLine,
       'utf8'
     )
 
@@ -513,7 +516,7 @@ describe('getToolInitStates', () => {
     })
   })
 
-  it('marks arbitrary commands-only artifacts stale when their contents do not match OpenSpec 1.9', async () => {
+  it('marks arbitrary commands-only artifacts stale when their contents do not match OpenSpec 1.11', async () => {
     await writeArtifact(join(tempDir, '.qwen', 'commands', 'opsx-explore.md'))
 
     const states = await getToolInitStates(tempDir, {

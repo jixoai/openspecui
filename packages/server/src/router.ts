@@ -4,7 +4,7 @@
  * 2. Register CLI, Root Context, Agent delivery, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
- * 5. Compose the public router and enforce v9 admission-gated CLI capabilities.
+ * 5. Compose the public router and enforce v11 admission-gated CLI capabilities.
  * 6. Install the supported OpenSpec CLI series through the global install stream (issue #258).
  * 7. Serve the capability-gated CLI MODIFIED-delta diff evidence for the Change Evidence tab.
  *
@@ -2425,7 +2425,7 @@ const agentIntegrationToolIdSchema = z
   .min(1)
   .refine(
     (toolId) => getAvailableTools().some((tool) => tool.value === toolId),
-    'Agent tool must be an available OpenSpec 1.9 registry id.'
+    'Agent tool must be an available registry id on the admitted OpenSpec CLI line.'
   )
 
 export const agentIntegrationsRouter = router({
@@ -2475,8 +2475,8 @@ export const agentIntegrationsRouter = router({
         if (Array.isArray(input.tools)) {
           // The input schema only knows the static newest registry; the admitted CLI line's
           // own projection is the execution authority. Reject every explicit tool the
-          // selected registry does not offer before any child process can spawn — a direct
-          // 1.8 RPC naming a 1.9-only target (Command Code) fails here, not at the CLI.
+          // selected registry does not offer before any child process can spawn — an RPC
+          // naming a target the admitted line never shipped fails here, not at the CLI.
           const offered = new Set(projection.registry.map((tool) => tool.value))
           const unavailable = input.tools.filter((toolId) => !offered.has(toolId))
           if (unavailable.length > 0) {

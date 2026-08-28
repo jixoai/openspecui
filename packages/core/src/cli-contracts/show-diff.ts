@@ -3,7 +3,8 @@
  * 1. Model the OpenSpec 1.11 `show <change> --json --diff` success payload as separately
  *    fetched CLI evidence; the diff is never recomputed or backfilled locally.
  * 2. Document `diff`/`warning` as MODIFIED-only upstream additions; ADDED, REMOVED, and
- *    RENAMED deltas are unchanged by `--diff` and the schema tolerates all four shapes.
+ *    RENAMED deltas are unchanged by `--diff`, and a delta outside MODIFIED that carries
+ *    either field is rejected as contract drift instead of parsed as tolerated evidence.
  * 3. Keep the shared diagnostic failure union for root-selection and unknown-item failures.
  *
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
@@ -41,6 +42,21 @@ export const CliShowChangeDeltaSchema = z
     warning: z.string().optional(),
   })
   .passthrough()
+  .superRefine((delta, ctx) => {
+    // Upstream emits `diff`/`warning` only on MODIFIED deltas. Any other operation
+    // carrying either field is contract drift, not tolerated evidence: parse fails so
+    // the caller preserves the raw payload instead of trusting a fabricated shape.
+    if (delta.operation === 'MODIFIED') return
+    for (const field of ['diff', 'warning'] as const) {
+      if (delta[field] !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [field],
+          message: `Only MODIFIED deltas carry ${field} evidence; ${delta.operation} deltas never do.`,
+        })
+      }
+    }
+  })
 
 /**
  * Typed successful `show <change> --json [--diff]` payload.

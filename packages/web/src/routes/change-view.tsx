@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Render schema-aware change artifacts and source files while retaining terminal status errors.
  * 2. Dispatch change workflows through routed compose/verify surfaces and the shared Operator launcher.
  * 3. Lock every change workflow action behind current Root Context and Status projection authority.

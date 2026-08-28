@@ -625,7 +625,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
     }
   })
 
-  it('keeps a batch per-change failure entry as that change evidence without failing the status-list Work', { timeout: 20_000 }, async () => {
+  it('keeps a batch per-change failure entry as that change evidence without failing the status-list Work', async () => {
     const { kernel, readInvocations, dispose } = await prepareBatchKernel('1.11.0', [
       'fail-change-b',
     ])
