@@ -5,6 +5,8 @@
  * 3. Prove explicit refresh and dispose own deterministic replacement and retirement boundaries.
  * 4. Prove version-selected inventories including unavailable-CLI sessions.
  * 5. Keep the initial real-registry reactive wait ahead of shared CI runners.
+ * 6. Lock the admitted 1.10/1.11 series snapshots: Zed on both lines, Antigravity `.agent` current on
+ *    1.10 versus `.agents` plus legacy-migration evidence on 1.11, and an empty 1.9 inventory.
  *
  * Original request (2026-08-01): "新增 Agent delivery projection service 及 checked tests。"
 
@@ -12,12 +14,14 @@
  * Original request (2026-08-28): shared ubuntu runners started timing the initial full-registry
  *   snapshot out ~1 in 2 full-suite runs (same class the opsx-kernel reactive budget was raised
  *   for on 2026-08-14); local quiet-machine runs stay green, so the wait budget is the defect.
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 
 import {
   clearCache,
   closeAllWatchers,
   ReactiveObservationEnvironment,
+  selectAgentDeliveryRegistry,
   type CliProjectionNotice,
   type EnvironmentGlobalProjectionData,
   type ToolInitState,
@@ -36,7 +40,7 @@ import type { ProjectionWorkSubscription } from './projection-work/index.js'
 
 const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
 const cliExecutor = {
-  checkAvailability: async () => ({ available: true, version: '1.9.0' }),
+  checkAvailability: async () => ({ available: true, version: '1.11.0' }),
 }
 const cliCommandAuthority = {
   getCliCommand: async () => ['not-an-importable-openspec-runner'],
@@ -151,7 +155,7 @@ async function writeGeneratedSkill(
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.9.0\n---\n`,
+    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.11.0\n---\n`,
     'utf8'
   )
   return path
@@ -213,7 +217,7 @@ describe('AgentDeliveryProjectionService', () => {
         delivery: 'skills',
         workflows: ['update'],
       })
-      expect(current.registry).toHaveLength(38)
+      expect(current.registry).toHaveLength(39)
       expect(current.registry.find((tool) => tool.value === 'agents')).toMatchObject({
         available: true,
         skillsDir: '.agents',
@@ -243,9 +247,24 @@ describe('AgentDeliveryProjectionService', () => {
         aliases: ['windsurf'],
         migrations: [{ from: '.windsurf', to: '.devin', needsConsent: true }],
       })
+      // The current 1.11 line projects Zed beside the shared root and Antigravity's
+      // migrated `.agents` root with its legacy `.agent` evidence.
+      expect(current.registry.find((tool) => tool.value === 'zed')).toMatchObject({
+        skillsDir: '.agents',
+        detectionPaths: ['.zed', '.agents/skills'],
+        capability: 'none',
+        command: null,
+      })
+      expect(current.registry.find((tool) => tool.value === 'antigravity')).toMatchObject({
+        skillsDir: '.agents',
+        legacySkillsDirs: ['.agent'],
+        detectionPaths: ['.agent', '.agents/workflows'],
+        migrations: [{ from: '.agent', to: '.agents', needsConsent: false }],
+        command: { pathTemplate: '.agents/workflows/opsx-{workflow}.md' },
+      })
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.9.0',
+        generatedByVersion: '1.11.0',
         installedSkillWorkflows: ['update'],
       })
 
@@ -287,7 +306,7 @@ describe('AgentDeliveryProjectionService', () => {
     try {
       const current = await service.getCurrent()
 
-      expect(current.registry).toHaveLength(38)
+      expect(current.registry).toHaveLength(39)
       expect(findToolState(current, 'claude')?.status).toBe('uninitialized')
       expect(getCliCommand).not.toHaveBeenCalled()
     } finally {
@@ -329,9 +348,9 @@ describe('AgentDeliveryProjectionService', () => {
     }
   })
 
-  it('selects the official 1.8 inventory when the admitted CLI is 1.8', async () => {
+  it('selects the official 1.10 series snapshot when the admitted CLI is 1.10', async () => {
     clearCache()
-    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-18-'))
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-110-'))
     const environment = new EnvironmentAuthorityFixture(
       environmentProjection({ delivery: 'skills', workflows: ['update'] })
     )
@@ -342,7 +361,7 @@ describe('AgentDeliveryProjectionService', () => {
       observationEnvironment,
       cliExecutor: {
         ...cliExecutor,
-        checkAvailability: async () => ({ available: true, version: '1.8.0' }),
+        checkAvailability: async () => ({ available: true, version: '1.10.0' }),
       },
       cliCommandAuthority,
     })
@@ -351,22 +370,71 @@ describe('AgentDeliveryProjectionService', () => {
       await writeGeneratedSkill(projectDir, 'update')
       const current = await service.getCurrent()
 
-      // The 1.8 line ships 37 official targets: no Command Code, no 1.9 restart facts.
-      expect(current.registry).toHaveLength(37)
-      expect(current.registry.find((tool) => tool.value === 'command-code')).toBeUndefined()
-      expect(current.registry.every((tool) => tool.requiresIdeRestart === undefined)).toBe(true)
-      // Unrelated 1.8 targets keep their own metadata.
-      expect(current.registry.find((tool) => tool.value === 'codex')).toMatchObject({
+      // The admitted 1.10 line ships the same official target count as 1.11: Zed (a 1.10+
+      // target) is visible, and per-series divergence appears only where 1.10 pins a
+      // different physical reality (Antigravity's still-current `.agent` root).
+      expect(current.registry).toHaveLength(39)
+      expect(current.registry.find((tool) => tool.value === 'zed')).toMatchObject({
         skillsDir: '.agents',
-        legacySkillsDirs: ['.codex'],
+        detectionPaths: ['.zed', '.agents/skills'],
+        capability: 'none',
+        command: null,
       })
-      expect(current.registry.find((tool) => tool.value === 'minimax-code')).toMatchObject({
-        globalSkillsDir: '.minimax',
+      const antigravity = current.registry.find((tool) => tool.value === 'antigravity')
+      expect(antigravity).toMatchObject({
+        skillsDir: '.agent',
+        command: { pathTemplate: '.agent/workflows/opsx-{workflow}.md' },
+        requiresIdeRestart: true,
       })
-      // The per-tool physical states follow the same version-selected inventory: no 1.9
-      // restart facts and no unshipped target states on a 1.8 session.
-      expect(current.states.map((state) => state.toolId)).not.toContain('command-code')
-      expect(current.states.every((state) => state.requiresIdeRestart === false)).toBe(true)
+      // 1.10 treats `.agent` as current: no shared-root membership, legacy roots, detection
+      // override, or migration evidence may leak from the 1.11 snapshot.
+      expect(antigravity?.legacySkillsDirs).toBeUndefined()
+      expect(antigravity?.detectionPaths).toBeUndefined()
+      expect(antigravity?.migrations).toBeUndefined()
+      // Restart facts that predate the admitted floor (since 1.9) stay visible on 1.10.
+      expect(current.registry.find((tool) => tool.value === 'cursor')).toMatchObject({
+        requiresIdeRestart: true,
+      })
+      // The physical states follow the same version-selected inventory.
+      expect(findToolState(current, 'zed')?.toolId).toBe('zed')
+      expect(findToolState(current, 'antigravity')).toMatchObject({ toolId: 'antigravity' })
+      expect(findToolState(current, 'claude')).toMatchObject({
+        status: 'initialized',
+        generatedByVersion: '1.11.0',
+        installedSkillWorkflows: ['update'],
+      })
+    } finally {
+      await service.dispose()
+      await rm(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  it('selects an empty inventory for a retired 1.9 session and matches the Core selector', async () => {
+    clearCache()
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-19-'))
+    const environment = new EnvironmentAuthorityFixture(
+      environmentProjection({ delivery: 'skills', workflows: ['update'] })
+    )
+    const observationEnvironment = new ReactiveObservationEnvironment()
+    const service = new AgentDeliveryProjectionService({
+      projectDir,
+      environmentGlobalProjectionService: environment,
+      observationEnvironment,
+      cliExecutor: {
+        ...cliExecutor,
+        checkAvailability: async () => ({ available: true, version: '1.9.3' }),
+      },
+      cliCommandAuthority,
+    })
+
+    try {
+      const current = await service.getCurrent()
+
+      // A bypassed 1.9 session must not inherit an admitted inventory; the service projection
+      // agrees exactly with the Core series selector over the same detected version.
+      expect(selectAgentDeliveryRegistry('1.9.3')).toEqual([])
+      expect(current.registry).toEqual([])
+      expect(current.states).toEqual([])
     } finally {
       await service.dispose()
       await rm(projectDir, { recursive: true, force: true })

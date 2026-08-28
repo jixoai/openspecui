@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Summarize read-only Root compatibility, selection, and failed-attempt state with links to Context.
  * 2. Summarize Environment Global profile, delivery, drift, and data scope with a link to Config.
  * 3. Preserve settled diagnostic facts during revalidation and use stable skeleton geometry on admission.
+ * 4. Label compatibility from the shared constants so the v11 1.10/1.11 law stays single-sourced.
  *
  * Original request (2026-07-20): "Settings diagnostics are read-only."
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
@@ -11,6 +12,7 @@
  * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
  * Owner Context direction (2026-07-29): link Root details to Config-owned Resolved Context.
  * Original request (2026-08-01): "v7不兼容1.6.x，明确要求必须使用 v1.7.x。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { InformationBadge } from '@/components/information-disclosure'
 import { DetailPanelSkeleton, RealtimeRevalidateCue } from '@/components/realtime'

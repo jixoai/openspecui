@@ -18,6 +18,7 @@
  * Owner correction (2026-07-29): Settings uses one shell scroll owner and container-driven field density.
  * Owner correction (2026-07-29): remove project-level Hosted App URL configuration; the daemon owns its local App shell.
  * Original request (2026-08-01): Settings labels Agent Integrations and delegates management to Config.
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -363,8 +364,8 @@ export function Settings() {
 
   // The install stream installs the admitted series; never present an out-of-range registry
   // latest as the update target (issue #258). Only a recommended (current-series) latest can be
-  // named literally — a supported-but-non-current latest (e.g. 1.8.x) would mislabel the
-  // actually-installed 1.9.x, so it also falls back to the series label.
+  // named literally — a supported-but-non-current latest (e.g. 1.10.x) would mislabel the
+  // actually-installed 1.11.x, so it also falls back to the series label.
   const pinnedInstallSpec = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
   const updateTargetVersion =
     cliSniffResult?.hasUpdate && cliSniffResult.latestVersion

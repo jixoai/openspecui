@@ -4,6 +4,8 @@
  * 2. Preserve session-only bypass and execute-path repair controls.
  * 3. Revalidate the shared Root Context Work through readonly refresh after explicit repair.
  * 4. Recommend installing the admitted CLI series, never an out-of-range `@latest` (issue #258).
+ * 5. Derive all mismatch dialog copy from the shared compatibility constants so the v11
+ *    admitted 1.10/1.11 range never forks from packages/core.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
@@ -15,6 +17,7 @@
  * Owner bypass-lifetime decision (2026-08-01): "仅当前页面会话有效"
  * Original request (2026-08-28, issue #258): "No available OpenSpec CLI runner." — the gate's
  *   install hint must not walk the user into a version this release line then blocks.
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'

@@ -22,6 +22,7 @@
  * packages/core/src/config.ts does. It never mutates anything and never installs packages.
  * The npx/bunx/... probes DO attempt real `--version` invocations, which may download a
  * package on first run (same as production resolution). Pass --no-network to skip them.
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { execFile, spawn } from 'node:child_process'
 import { arch, homedir, platform } from 'node:os'
@@ -37,7 +38,7 @@ const SHELL_RESOLVE_TIMEOUT_MS = 5_000
 
 // Mirror of packages/core OPENSPEC_CLI_TARGET_SERIES: fallback probes must resolve the series
 // the release line admits, never an unversioned @latest the compatibility gate can block.
-const OPENSPEC_CLI_TARGET_SERIES = '1.9'
+const OPENSPEC_CLI_TARGET_SERIES = '1.11'
 const OPENSPEC_CLI_FALLBACK_SPEC = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
 
 const PACKAGE_MANAGER_RUNNERS = [

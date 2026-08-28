@@ -1,26 +1,31 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.8.0 and 1.9.0 workflow contracts side by side.
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.10.0 and 1.11.0 workflow contracts side by side.
  * 2. Prove explicit planning completion and retained isComplete evidence on both lines.
  * 3. Prove skipped dependency identity without physical spec files.
  * 4. Prove Apply and Archive operation inputs remain distinct from artifact rules.
+ * 5. Prove `init --language` persists the fixed context block on both lines.
+ * 6. Prove the 1.10/1.11 JSON stream discipline: one stdout document, stderr without
+ *    telemetry or completion-tip noise.
  *
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
  */
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V9_VERSIONS,
+  PINNED_OPENSPEC_V11_VERSIONS,
   createPinnedFixtureRoot,
+  expectPinnedJsonDiscipline,
   expectPinnedVersion,
   parsePinnedSuccessJson,
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v9-fixtures.js'
+} from './__tests__/official-cli-v11-fixtures.js'
 import {
   CliApplyInstructionsSuccessSchema,
   CliArchiveInstructionsSuccessSchema,
@@ -28,7 +33,7 @@ import {
   CliWorkflowStatusSuccessSchema,
 } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.8/1.9 workflow fixtures', () => {
+describe('pinned OpenSpec 1.10/1.11 workflow fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -36,7 +41,7 @@ describe('pinned OpenSpec 1.8/1.9 workflow fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V9_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V11_VERSIONS) {
     it(`executes skipped Status plus Apply and Archive Instructions on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-workflow`)
       const project = join(fixtureRoot, 'project')
@@ -213,6 +218,75 @@ describe('pinned OpenSpec 1.8/1.9 workflow fixtures', () => {
       ])
       expect(apply.tasks.length).toBe(2)
       expect(apply.state).toBe('ready')
+    }, 60_000)
+
+    it(`persists the fixed three-line context block for init --language on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-language`)
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      await expectPinnedVersion(version, project, env)
+
+      const initialized = await runPinnedOpenspec(
+        version,
+        ['init', project, '--tools=none', '--language', 'Chinese'],
+        project,
+        env
+      )
+      expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
+
+      // `--language` writes a fixed three-line block under the existing `context`
+      // field; it is not a new config key and needs no dedicated OpenSpecUI editor.
+      const config = await readFile(join(project, 'openspec', 'config.yaml'), 'utf8')
+      expect(config).toContain('context: |\n')
+      expect(config).toContain('  Language: Chinese\n')
+      expect(config).toContain('  All artifacts must be written in Chinese.\n')
+      expect(config).toContain(
+        '  Keep OpenSpec structural headings and SHALL/MUST keywords in English.\n'
+      )
+
+      // init never overwrites an existing config; the language instruction belongs to
+      // the Active Root context field after initialization.
+      const reinitialized = await runPinnedOpenspec(
+        version,
+        ['init', project, '--tools=none', '--language', 'French'],
+        project,
+        env
+      )
+      expect(reinitialized.exitCode).not.toBe(0)
+      expect(reinitialized.stderr).toContain('--language does not overwrite')
+      const afterReject = await readFile(join(project, 'openspec', 'config.yaml'), 'utf8')
+      expect(afterReject).toContain('Language: Chinese')
+      expect(afterReject).not.toContain('French')
+    }, 60_000)
+
+    it(`keeps JSON runs to one stdout document with telemetry-free stderr on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-json-clean`)
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      // expectPinnedVersion doubles as the stdout purity proof: strict equality on the
+      // trimmed stdout fails if any telemetry or tip text shares the stream.
+      await expectPinnedVersion(version, project, env)
+
+      const initialized = await runPinnedOpenspec(
+        version,
+        ['init', project, '--tools=none'],
+        project,
+        env
+      )
+      expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
+
+      for (const args of [
+        ['schemas', '--json'],
+        ['list', '--json'],
+      ]) {
+        const result = await runPinnedOpenspec(version, args, project, env)
+        expect(result.exitCode, result.stdout + '\n' + result.stderr).toBe(0)
+        expectPinnedJsonDiscipline(result)
+      }
     }, 60_000)
   }
 })

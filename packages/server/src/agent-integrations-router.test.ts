@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Prove the public Agent Router exposes complete projection without client-authored policy inputs.
  * 2. Prove structured policy mutation preserves environment-global extension fields and refreshes authority.
  * 3. Prove Agent Init streams use Server-owned profile policy and propagate cancellation to the CLI handle.
@@ -9,6 +9,7 @@
  * Original request (2026-08-01): move Agent policy, inventory, Init/Update/repair, cancel, and Terminal evidence to Config.
  * Original request (2026-08-06): "Windows compatibility and adaptation, including the core and peripheral scripts."
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 
 import {
@@ -102,7 +103,7 @@ async function createFixture() {
   })
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.9.0',
+    version: '1.11.0',
   })
   disposals.push(async () => {
     vi.restoreAllMocks()
@@ -134,7 +135,7 @@ describe('agentIntegrationsRouter', () => {
       .createCaller(fixture.server.createContext())
       .agentIntegrations.get()
 
-    expect(projection.registry).toHaveLength(38)
+    expect(projection.registry).toHaveLength(39)
     expect(projection.policy).toEqual({
       profile: 'core',
       delivery: 'both',
@@ -242,9 +243,9 @@ describe('agentIntegrationsRouter', () => {
     const handle = { settled: terminal.promise, cancel } satisfies CliStreamHandle
     const initStream = vi.spyOn(fixture.server.cliExecutor, 'initStream').mockReturnValue(handle)
     vi.spyOn(fixture.server.agentDeliveryProjectionService, 'getCurrent').mockResolvedValue({
-      // The admitted 1.9 fixture must offer the requested tool: explicit Init tools are
+      // The admitted 1.11 fixture must offer the requested tool: explicit Init tools are
       // validated against the projection registry before any CLI spawn.
-      registry: selectAgentDeliveryRegistry('1.9.0'),
+      registry: selectAgentDeliveryRegistry('1.11.0'),
       policy: { profile: 'custom', delivery: 'commands', workflows: ['verify'] },
       states: [],
     })
@@ -326,7 +327,9 @@ describe('agentIntegrationsRouter', () => {
         appRouter
           .createCaller(fixture.server.createContext())
           .agentIntegrations.initStream({ tools: [toolId] })
-      ).rejects.toThrow('Agent tool must be an available OpenSpec 1.9 registry id.')
+      ).rejects.toThrow(
+        'Agent tool must be an available registry id on the admitted OpenSpec CLI line.'
+      )
       expect(initStream).not.toHaveBeenCalled()
     }
   )

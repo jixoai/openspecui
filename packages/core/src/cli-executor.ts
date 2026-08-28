@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Execute buffered CLI work through process/Worker backends with runner recovery, observer-explicit
  *    OTel phase evidence, bounded probes, and owner-scoped disposal.
  * 2. Own streaming CLI process trees through cancellation request, escalation, and confirmed settlement.
@@ -8,10 +8,13 @@
  * 4. Expose the physically separated OpenSpec 1.6-1.9 typed command facade with response-Span delivery
  *    separate from late child-process settlement evidence.
  * 5. Report eager-resolved exit codes as unknown instead of fabricated zeros.
+ * 6. Pass the OpenSpec 1.10 `init --language` context-block option through init/initStream argv only
+ *    for a non-empty value.
  *
  * Original request (2026-07-15): "你先负责后端（内核）的开发。"
  * Original request (2026-07-17): "A stream cancellation request is not child-process settlement."
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { context, trace, type Attributes, type Span } from '@opentelemetry/api'
 import { type ChildProcess } from 'child_process'
@@ -606,11 +609,15 @@ export class CliExecutor {
 
   /**
    * 执行 openspec init（非交互式）
+   *
+   * `language`（OpenSpec 1.10+）非空时透传 `--language <value>`；CLI 会在
+   * openspec/config.yaml 写入固定三行 context 块，并拒绝覆盖已有配置。
    */
   async init(options?: {
     tools?: string[] | 'all' | 'none'
     profile?: 'core' | 'custom'
     force?: boolean
+    language?: string
   }): Promise<CliResult> {
     const args = ['init']
     if (options?.tools !== undefined) {
@@ -622,6 +629,9 @@ export class CliExecutor {
     }
     if (options?.force) {
       args.push('--force')
+    }
+    if (options?.language) {
+      args.push('--language', options.language)
     }
     return this.execute(args)
   }
@@ -942,12 +952,15 @@ export class CliExecutor {
 
   /**
    * 流式执行 openspec init
+   *
+   * `language`（OpenSpec 1.10+）非空时透传 `--language <value>`。
    */
   initStream(
     options: {
       tools?: string[] | 'all' | 'none'
       profile?: 'core' | 'custom'
       force?: boolean
+      language?: string
     },
     onEvent: (event: CliStreamEvent) => void
   ): CliStreamHandle {
@@ -961,6 +974,9 @@ export class CliExecutor {
     }
     if (options.force) {
       args.push('--force')
+    }
+    if (options.language) {
+      args.push('--language', options.language)
     }
     return this.executeStream(args, onEvent)
   }
