@@ -6,11 +6,14 @@
  * 4. Derive the capability from the detected admitted CLI; both admitted v11 lines (1.10 and
  *    1.11) declare it, so the unavailable branch names the accepted range, not one series.
  * 5. Validate report payloads with the Core contract schema, never shallow shape guards.
+ * 6. Mount directly inside the Evidence workspace detail pane: the Accordion shell is gone, the
+ *    section header keeps the title and summary facts, and `onChip` reports only derived facts
+ *    (pass/fail from the typed report, typed unavailable) for the workspace rows.
  *
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  */
-import { EvidenceDisclosure } from '@/components/information-disclosure'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useRootActionState } from '@/lib/use-root-action-state'
@@ -26,7 +29,7 @@ import {
   parseOpenSpecCliVersion,
 } from '@openspecui/core/openspec-compat'
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 type ArchivedValidationReport = CliValidateReport
 
@@ -54,6 +57,16 @@ function parseValidationReport(value: unknown): ParsedArchivedValidationReport {
       (issue) => `${issue.path.length > 0 ? issue.path.join('.') : '<root>'}: ${issue.message}`
     ),
   }
+}
+
+/**
+ * Row-chip fact derived only from settled evidence. `positive`/`negative` come exclusively
+ * from the typed report totals or failure evidence; `unavailable` names a typed degradation.
+ * An unexecuted session reports no chip (`null`) — no fabricated verdict.
+ */
+export interface ArchivedValidationEvidenceChip {
+  label: string
+  tone: 'positive' | 'negative' | 'unavailable'
 }
 
 function IssueList({ issues }: { issues: ArchivedValidationReport['items'][number]['issues'] }) {
@@ -90,13 +103,46 @@ function RunButton({ pending, label, onRun }: { pending: boolean; label: string;
   )
 }
 
-/** On-demand, read-only archived-task validation evidence for the Change Evidence tab. */
-export function ArchivedValidationEvidence() {
+/**
+ * Structure-agnostic section frame for the Evidence workspace detail pane. The heading and
+ * summary line preserve the facts the former Accordion trigger carried; the content is
+ * presented directly — the workspace, not a disclosure, owns reveal behavior.
+ */
+function ArchivedValidationSection({
+  summary,
+  children,
+}: {
+  summary: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section
+      data-evidence-section="archived-validation"
+      aria-label="Archived validation"
+      className="min-w-0"
+    >
+      <header className="border-border/60 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b pb-2">
+        <h3 className="min-w-0 text-xs font-semibold">Archived validation</h3>
+        <span className="text-muted-foreground min-w-0 text-[11px]">{summary}</span>
+      </header>
+      <div className="min-w-0 pt-3">{children}</div>
+    </section>
+  )
+}
+
+/** On-demand, read-only archived-task validation evidence for the Change Evidence workspace. */
+export function ArchivedValidationEvidence({
+  onChip,
+}: {
+  /** Receives the currently derived row-chip fact; `null` means "no fact, no chip". */
+  onChip?: (chip: ArchivedValidationEvidenceChip | null) => void
+} = {}) {
   const [report, setReport] = useState<CliCommandResult<unknown> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const rootAction = useRootActionState()
   const cli = rootAction.context?.cli
+  const staticMode = isStaticMode()
   // `validate --archived` exists on OpenSpec 1.9+ and both admitted v11 lines (1.10 and 1.11)
   // declare it. An available-but-out-of-range session (e.g. a bypassed 1.9 CLI) must see the
   // capability as unavailable here, never a button that spawns a failing command.
@@ -104,13 +150,32 @@ export function ArchivedValidationEvidence() {
     cli?.available ? parseOpenSpecCliVersion(cli.version) : null
   )
 
-  if (isStaticMode()) {
+  // Row-chip fact for the workspace list — derived from the same settled states the section
+  // renders. Before a run there is no verdict to project, so no chip is fabricated.
+  const chip = useMemo<ArchivedValidationEvidenceChip | null>(() => {
+    if (staticMode) return { label: 'unavailable', tone: 'unavailable' }
+    if (cli?.available === true && !capabilities.archivedValidation) {
+      return { label: 'unavailable', tone: 'unavailable' }
+    }
+    if (!report && !error) return null
+    const parsed = report ? parseValidationReport(report.data) : { report: null, schemaIssues: [] }
+    if (error || !parsed.report) return { label: 'fail', tone: 'negative' }
+    return parsed.report.summary.totals.failed > 0
+      ? { label: 'fail', tone: 'negative' }
+      : { label: 'pass', tone: 'positive' }
+  }, [capabilities.archivedValidation, cli?.available, error, report, staticMode])
+
+  useEffect(() => {
+    onChip?.(chip)
+  }, [chip, onChip])
+
+  if (staticMode) {
     return (
-      <EvidenceDisclosure title="Archived validation" summary="Unavailable in static snapshot">
+      <ArchivedValidationSection summary="Unavailable in static snapshot">
         <p className="text-muted-foreground">
           Archived-task validation is live CLI evidence and is not captured in this static snapshot.
         </p>
-      </EvidenceDisclosure>
+      </ArchivedValidationSection>
     )
   }
 
@@ -119,13 +184,13 @@ export function ArchivedValidationEvidence() {
   if (cli?.available === true && !capabilities.archivedValidation) {
     const detected = cli.version ? ` (detected ${cli.version.trim()})` : ''
     return (
-      <EvidenceDisclosure title="Archived validation" summary="Unavailable on this CLI line">
+      <ArchivedValidationSection summary="Unavailable on this CLI line">
         <p className="text-muted-foreground">
           Archived-task validation requires an admitted OpenSpec CLI line (
           {OPENSPEC_CLI_ACCEPTED_RANGE}){detected}. This session&apos;s CLI does not declare the
           capability, so no command is offered.
         </p>
-      </EvidenceDisclosure>
+      </ArchivedValidationSection>
     )
   }
 
@@ -161,7 +226,7 @@ export function ArchivedValidationEvidence() {
 
   if (!report && !error) {
     return (
-      <EvidenceDisclosure title="Archived validation" summary="OpenSpec archived-task validation">
+      <ArchivedValidationSection summary="OpenSpec archived-task validation">
         <div className="space-y-2">
           <p className="text-muted-foreground">
             Run the official CLI&apos;s archived-task validation and keep its typed report as
@@ -169,7 +234,7 @@ export function ArchivedValidationEvidence() {
           </p>
           <RunButton pending={pending} label="Validate archived tasks" onRun={() => void run()} />
         </div>
-      </EvidenceDisclosure>
+      </ArchivedValidationSection>
     )
   }
 
@@ -181,7 +246,7 @@ export function ArchivedValidationEvidence() {
   if (error || !validationReport) {
     const schemaDiagnostic = parsed.schemaIssues.length > 0 ? parsed.schemaIssues.join('; ') : null
     return (
-      <EvidenceDisclosure title="Archived validation" summary="CLI failure evidence">
+      <ArchivedValidationSection summary="CLI failure evidence">
         <div className="space-y-2">
           <div className="text-destructive flex items-start gap-2 break-words" role="alert">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -195,15 +260,14 @@ export function ArchivedValidationEvidence() {
           </div>
           <RunButton pending={pending} label="Rerun" onRun={() => void run()} />
         </div>
-      </EvidenceDisclosure>
+      </ArchivedValidationSection>
     )
   }
 
   const validation = validationReport
   const failed = validation.summary.totals.failed
   return (
-    <EvidenceDisclosure
-      title="Archived validation"
+    <ArchivedValidationSection
       summary={`${validation.summary.totals.passed} passed · ${failed} failed`}
     >
       <div className="space-y-3">
@@ -237,6 +301,6 @@ export function ArchivedValidationEvidence() {
         </div>
         <RunButton pending={pending} label="Rerun" onRun={() => void run()} />
       </div>
-    </EvidenceDisclosure>
+    </ArchivedValidationSection>
   )
 }
