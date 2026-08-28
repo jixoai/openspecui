@@ -1,9 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Preserve Tool initialization projection semantics across delivery modes and physical scopes.
  * 2. Bound Tool artifact observation fanout at directory-inventory scale across recomputes.
- * 3. Project OpenSpec 1.9 capability, generated-version, migration, cleanup, global-root, and unavailable states.
- * 4. Require exact official command contents before a commands-only install can be current.
+ * 3. Project OpenSpec 1.10/1.11 capability, generated-version, migration, cleanup, global-root, and unavailable states.
+ * 4. Require exact official command contents before a commands-only install can be current,
+ *    tolerating only the OpenCode generator-owned provided-arguments injection line.
+ * 5. Judge generated-by staleness series-aware: either admitted line (1.10.x/1.11.x) is current for both.
  *
  * Original request (2026-07-25): "格式问题？md文件有什么格式问题，直接快速处理掉，然后继续工作"
  * Repeated fixed point (2026-07-26): clean CI runs 30163937799 and 30165778790 missed the same Launch update creation emission.
@@ -11,6 +13,7 @@
  * Review correction (2026-08-02): Agent delivery fixtures remain in an explicit checked TypeScript lane.
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  */
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'
@@ -62,6 +65,23 @@ async function writeOfficialCommand(
   await writeFile(filePath, content, 'utf8')
 }
 
+const PROVIDED_ARGUMENTS_LINE = '**Provided arguments**: $ARGUMENTS'
+
+/**
+ * Mirror the upstream OpenCode adapter injection: append the provided-arguments
+ * passthrough line after the complete `**Input**` contract block when the
+ * template carries no argument placeholder of its own.
+ */
+function injectProvidedArgumentsLine(content: string): string {
+  const lines = content.split('\n')
+  const inputIndex = lines.findIndex((line) => line.startsWith('**Input**'))
+  if (inputIndex === -1) throw new Error('Official opencode fixture lost its Input contract block.')
+  let insertAt = inputIndex + 1
+  while (insertAt < lines.length && lines[insertAt].trim() !== '') insertAt += 1
+  lines.splice(insertAt, 0, PROVIDED_ARGUMENTS_LINE)
+  return lines.join('\n')
+}
+
 describe('getToolInitStates', () => {
   let tempDir: string
   let previousCodexHome: string | undefined
@@ -95,11 +115,11 @@ describe('getToolInitStates', () => {
   it('reports initialized when expected skills and commands exist for delivery=both', async () => {
     await writeGeneratedSkill(
       join(tempDir, '.claude', 'skills', 'openspec-explore', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
     await writeGeneratedSkill(
       join(tempDir, '.claude', 'skills', 'openspec-apply-change', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
     await writeArtifact(join(tempDir, '.claude', 'commands', 'opsx', 'explore.md'))
     await writeArtifact(join(tempDir, '.claude', 'commands', 'opsx', 'apply.md'))
@@ -123,7 +143,7 @@ describe('getToolInitStates', () => {
   it('treats skills-only delivery as initialized without command files', async () => {
     await writeGeneratedSkill(
       join(tempDir, '.claude', 'skills', 'openspec-explore', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
 
     const states = await getToolInitStates(tempDir, {
@@ -141,7 +161,7 @@ describe('getToolInitStates', () => {
   it('reports partial when expected command artifacts are missing', async () => {
     await writeGeneratedSkill(
       join(tempDir, '.claude', 'skills', 'openspec-explore', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
 
     const states = await getToolInitStates(tempDir, {
@@ -158,11 +178,11 @@ describe('getToolInitStates', () => {
   it('reports partial when stale workflows are still present', async () => {
     await writeGeneratedSkill(
       join(tempDir, '.claude', 'skills', 'openspec-explore', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
     await writeGeneratedSkill(
       join(tempDir, '.claude', 'skills', 'openspec-apply-change', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
 
     const states = await getToolInitStates(tempDir, {
@@ -178,7 +198,7 @@ describe('getToolInitStates', () => {
   it('projects Codex skills at the shared .agents root with .codex as legacy migration evidence', async () => {
     await writeGeneratedSkill(
       join(tempDir, '.agents', 'skills', 'openspec-explore', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
 
     const states = await getToolInitStates(tempDir, {
@@ -199,7 +219,7 @@ describe('getToolInitStates', () => {
   it('reports Codex .codex skills as migration evidence without treating .codex as current', async () => {
     await writeGeneratedSkill(
       join(tempDir, '.codex', 'skills', 'openspec-explore', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
 
     const states = await getToolInitStates(tempDir, {
@@ -222,7 +242,7 @@ describe('getToolInitStates', () => {
     process.env.CODEX_HOME = codexHome
     await writeGeneratedSkill(
       join(tempDir, '.agents', 'skills', 'openspec-explore', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
     await writeArtifact(join(codexHome, 'prompts', 'opsx-explore.md'))
 
@@ -235,7 +255,7 @@ describe('getToolInitStates', () => {
     expect(state?.status).toBe('cleanup-needed')
     expect(state?.expectedSkillCount).toBe(1)
     expect(state?.expectedCommandCount).toBe(0)
-    expect(state).toHaveProperty('generatedByVersion', '1.9.0')
+    expect(state).toHaveProperty('generatedByVersion', '1.11.0')
     expect(state).toHaveProperty('cleanup.required', true)
     expect(state).toHaveProperty('cleanup.workflows', ['explore'])
   })
@@ -250,7 +270,7 @@ describe('getToolInitStates', () => {
     try {
       await writeGeneratedSkill(
         join(tempDir, '.minimax', 'skills', 'openspec-explore', 'SKILL.md'),
-        '1.9.0'
+        '1.11.0'
       )
 
       const states = await getToolInitStates(tempDir, {
@@ -315,18 +335,61 @@ describe('getToolInitStates', () => {
 
     await writeGeneratedSkill(
       join(tempDir, '.claude', 'skills', 'openspec-explore', 'SKILL.md'),
-      '1.9.1'
+      '1.10.4'
     )
     const runtimeMatched = await getToolInitStates(tempDir, {
       delivery: 'skills',
       workflows: ['explore'],
-      generatorVersion: '1.9.1',
+      generatorVersion: '1.11.1',
     })
     expect(runtimeMatched.find((entry) => entry.toolId === 'claude')).toMatchObject({
       readiness: 'initialized',
       status: 'initialized',
-      generatedByVersion: '1.9.1',
+      generatedByVersion: '1.10.4',
       issues: [],
+    })
+  })
+
+  it('treats either admitted generator series as current for both admitted sessions', async () => {
+    await writeGeneratedSkill(
+      join(tempDir, '.claude', 'skills', 'openspec-explore', 'SKILL.md'),
+      '1.10.2'
+    )
+    await writeArtifact(join(tempDir, '.claude', 'commands', 'opsx', 'explore.md'))
+
+    const states = await getToolInitStates(tempDir, {
+      delivery: 'both',
+      workflows: ['explore'],
+      generatorVersion: '1.11.0',
+    })
+    const state = states.find((entry) => entry.toolId === 'claude')
+
+    expect(state).toMatchObject({
+      readiness: 'initialized',
+      status: 'initialized',
+      generatedByVersion: '1.10.2',
+      issues: [],
+    })
+  })
+
+  it('flags below-admitted generator versions stale inside an admitted session', async () => {
+    await writeGeneratedSkill(
+      join(tempDir, '.claude', 'skills', 'openspec-explore', 'SKILL.md'),
+      '1.9.0'
+    )
+
+    const states = await getToolInitStates(tempDir, {
+      delivery: 'skills',
+      workflows: ['explore'],
+      generatorVersion: '1.11.0',
+    })
+    const state = states.find((entry) => entry.toolId === 'claude')
+
+    expect(state).toMatchObject({
+      readiness: 'initialized',
+      status: 'stale-version',
+      generatedByVersion: '1.9.0',
+      issues: ['stale-version'],
     })
   })
 
@@ -356,7 +419,7 @@ describe('getToolInitStates', () => {
   it('reports Windsurf artifacts as a consent-gated Devin migration without deleting them', async () => {
     await writeGeneratedSkill(
       join(tempDir, '.windsurf', 'skills', 'openspec-explore', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
     await writeArtifact(join(tempDir, '.windsurf', 'workflows', 'opsx-explore.md'))
 
@@ -380,7 +443,7 @@ describe('getToolInitStates', () => {
   it('uses Qwen Markdown command artifacts and projects the shared .agents target physically', async () => {
     await writeGeneratedSkill(
       join(tempDir, '.qwen', 'skills', 'openspec-explore', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
     await writeArtifact(join(tempDir, '.qwen', 'commands', 'opsx-explore.md'))
 
@@ -418,13 +481,45 @@ describe('getToolInitStates', () => {
     expect(state?.legacyCommandWorkflows).toEqual(['explore'])
   })
 
+  it('treats the OpenCode provided-arguments injection line as generator-owned equivalence', async () => {
+    const officialContent = officialCommandContents.opencode?.explore
+    if (!officialContent) throw new Error('Missing official opencode/explore command fixture.')
+    const withInjectedLine = injectProvidedArgumentsLine(officialContent)
+    expect(withInjectedLine).not.toBe(officialContent)
+    expect(withInjectedLine).toContain(PROVIDED_ARGUMENTS_LINE)
+
+    await mkdir(dirname(join(tempDir, '.opencode', 'commands', 'opsx-explore.md')), {
+      recursive: true,
+    })
+    await writeFile(
+      join(tempDir, '.opencode', 'commands', 'opsx-explore.md'),
+      withInjectedLine,
+      'utf8'
+    )
+
+    const states = await getToolInitStates(tempDir, {
+      delivery: 'commands',
+      workflows: ['explore'],
+      commandContents: officialCommandContents,
+    })
+    const state = states.find((entry) => entry.toolId === 'opencode')
+
+    expect(state).toMatchObject({
+      readiness: 'initialized',
+      status: 'initialized',
+      // The pinned fallback displays only because no runtime version was supplied.
+      generatedByVersion: '1.11.0',
+      issues: [],
+    })
+  })
+
   it('marks arbitrary commands-only artifacts stale when their contents do not match OpenSpec 1.9', async () => {
     await writeArtifact(join(tempDir, '.qwen', 'commands', 'opsx-explore.md'))
 
     const states = await getToolInitStates(tempDir, {
       delivery: 'commands',
       workflows: ['explore'],
-      generatorVersion: '1.9.0',
+      generatorVersion: '1.11.0',
       commandContents: officialCommandContents,
     })
     const state = states.find((entry) => entry.toolId === 'qwen')
@@ -447,7 +542,7 @@ describe('getToolInitStates', () => {
 
     await writeGeneratedSkill(
       join(tempDir, '.claude', 'skills', 'openspec-explore', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
     await writeArtifact(join(tempDir, '.claude', 'commands', 'opsx', 'explore.md'))
 
@@ -460,8 +555,8 @@ describe('getToolInitStates', () => {
   })
 
   it('retains the selected registry across replacement emissions', async () => {
-    const registry18 = selectAgentDeliveryRegistry('1.8.0')
-    expect(registry18).toHaveLength(37)
+    const registry110 = selectAgentDeliveryRegistry('1.10.0')
+    expect(registry110).toHaveLength(39)
     const environment = new ReactiveObservationEnvironment()
     const releaseRoot = await environment.acquireRoot(tempDir)
     const context = new ReactiveContext()
@@ -469,41 +564,100 @@ describe('getToolInitStates', () => {
       createToolInitStateProjection(tempDir, {
         delivery: 'skills',
         workflows: ['update'],
-        registry: registry18,
+        registry: registry110,
       })
     )
 
     try {
       const initial = await projection.next()
       expect(initial.done).toBe(false)
-      expect(initial.value).toHaveLength(37)
-      expect(initial.value.some((entry: ToolInitState) => entry.toolId === 'command-code')).toBe(
-        false
+      expect(initial.value).toHaveLength(39)
+      // The 1.10 per-series snapshot keeps Antigravity on `.agent`, carries zed, and
+      // exposes the IDE restart facts that line declares.
+      const antigravity = initial.value.find(
+        (entry: ToolInitState) => entry.toolId === 'antigravity'
       )
-      expect(
-        initial.value.every((entry: ToolInitState) => entry.requiresIdeRestart === false)
-      ).toBe(true)
+      expect(antigravity?.skillsScope).toEqual({ kind: 'project', skillsDir: '.agent' })
+      expect(antigravity?.requiresIdeRestart).toBe(true)
+      expect(initial.value.some((entry: ToolInitState) => entry.toolId === 'zed')).toBe(true)
+      expect(initial.value.some((entry: ToolInitState) => entry.toolId === 'command-code')).toBe(
+        true
+      )
 
       // A filesystem mutation forces a replacement emission through the rebuilt options; the
-      // 1.8 selection must survive it rather than reverting to the global newest inventory.
+      // 1.10 selection must survive it rather than reverting to the global newest inventory.
       const mutatedArtifact = join(tempDir, '.claude', 'skills', 'openspec-update', 'SKILL.md')
       await mkdir(dirname(mutatedArtifact), { recursive: true })
       await writeFile(mutatedArtifact, 'probe', 'utf8')
       await settleReactivePathMutation(mutatedArtifact)
       const replacement = await projection.next()
       expect(replacement.done).toBe(false)
-      expect(replacement.value).toHaveLength(37)
+      expect(replacement.value).toHaveLength(39)
       expect(
-        replacement.value.some((entry: ToolInitState) => entry.toolId === 'command-code')
-      ).toBe(false)
-      expect(
-        replacement.value.every((entry: ToolInitState) => entry.requiresIdeRestart === false)
-      ).toBe(true)
+        replacement.value.find((entry: ToolInitState) => entry.toolId === 'antigravity')
+          ?.skillsScope
+      ).toEqual({ kind: 'project', skillsDir: '.agent' })
+      expect(replacement.value.some((entry: ToolInitState) => entry.toolId === 'zed')).toBe(true)
     } finally {
       await projection.return(undefined)
       await releaseRoot()
       await environment.dispose()
     }
+  })
+
+  it('projects Antigravity 1.11 current roots at .agents with .agent as after-generation migration evidence', async () => {
+    await writeGeneratedSkill(
+      join(tempDir, '.agent', 'skills', 'openspec-explore', 'SKILL.md'),
+      '1.10.3'
+    )
+
+    const states = await getToolInitStates(tempDir, {
+      delivery: 'both',
+      workflows: ['explore'],
+      generatorVersion: '1.11.0',
+    })
+    const state = states.find((entry) => entry.toolId === 'antigravity')
+
+    expect(state).toMatchObject({
+      readiness: 'partial',
+      status: 'migration-required',
+      skillsScope: { kind: 'project', skillsDir: '.agents' },
+      legacySkillRoots: ['.agent'],
+      migration: {
+        from: '.agent',
+        to: '.agents',
+        needsConsent: false,
+        skillFiles: 1,
+        commandFiles: 0,
+      },
+    })
+    // The current `.agents` roots are still unpopulated: skills and commands read missing.
+    expect(state?.missingSkillWorkflows).toEqual(['explore'])
+    expect(state?.missingCommandWorkflows).toEqual(['explore'])
+  })
+
+  it('projects Antigravity 1.10 sessions with .agent as the current root and no migration evidence', async () => {
+    await writeGeneratedSkill(
+      join(tempDir, '.agent', 'skills', 'openspec-explore', 'SKILL.md'),
+      '1.10.3'
+    )
+    await writeArtifact(join(tempDir, '.agent', 'workflows', 'opsx-explore.md'))
+
+    const states = await getToolInitStates(tempDir, {
+      delivery: 'both',
+      workflows: ['explore'],
+      generatorVersion: '1.10.3',
+      registry: selectAgentDeliveryRegistry('1.10.1'),
+    })
+    const state = states.find((entry) => entry.toolId === 'antigravity')
+
+    expect(state).toMatchObject({
+      readiness: 'initialized',
+      status: 'initialized',
+      skillsScope: { kind: 'project', skillsDir: '.agent' },
+      legacySkillRoots: [],
+    })
+    expect(state?.migration).toBeUndefined()
   })
 
   it('bounds empty-installation observation fanout by physical inventory across recomputes', async () => {
@@ -604,17 +758,14 @@ describe('getToolInitStates', () => {
       const skillStart = emissions.length
       await writeGeneratedSkill(
         join(tempDir, '.agents', 'skills', 'openspec-update-change', 'SKILL.md'),
-        '1.9.0'
+        '1.11.0'
       )
       // Slow watchers can emit intermediate projections before the skill pair settles;
       // wait for the terminal status itself, not merely for a new emission count.
       await vi.waitFor(
         () =>
           expect(
-            emissions
-              .at(-1)
-              ?.find((entry) => entry.toolId === 'codex')
-              ?.status,
+            emissions.at(-1)?.find((entry) => entry.toolId === 'codex')?.status,
             `skill artifact creation (after ${skillStart} emissions)`
           ).toBe('initialized'),
         { timeout: 5_000 }
@@ -630,12 +781,12 @@ describe('getToolInitStates', () => {
   it('detects OpenSpec 1.6 update skills and commands for Oh My Pi and Trae', async () => {
     await writeGeneratedSkill(
       join(tempDir, '.omp', 'skills', 'openspec-update-change', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
     await writeArtifact(join(tempDir, '.omp', 'commands', 'opsx-update.md'))
     await writeGeneratedSkill(
       join(tempDir, '.trae', 'skills', 'openspec-update-change', 'SKILL.md'),
-      '1.9.0'
+      '1.11.0'
     )
     await writeArtifact(join(tempDir, '.trae', 'commands', 'opsx-update.md'))
 
