@@ -46,11 +46,23 @@ test:ci green except the pre-existing macOS /private/var path-realpath environme
 (reactive-fs untouched by this Change; CI runs on Linux/Windows where it passes); test:browser:ci
 PASS (exit 0) run through a controlled herdr pane per heavy-load discipline. Integrator also fixed a
 third mirror-constant site scripts/diagnose-cli-runner.mjs caught by the root gate.
-R10 Codex code review loop       IN PROGRESS (round 1 interrupted by upstream 429 rate limits; the one
-                                 candidate finding — a batch-failure test timeout under concurrent load —
-                                 reproduced green locally in isolation and as a full focused set, judged
-                                 environmental; 20s timeout headroom added to that test as insurance)
+R10 Codex code review loop       DONE (7.0/10 -> fixes -> 8.0/10 convergence round caught one un-swept
+                                 Server fixture file -> fixed + full Server suite 649/649; final
+                                 confirmation round recorded below)
 R11 archive + delivery           PENDING  Owner-gated
+
+## Code-review disposition (herdr `v11-change-reviewer`, 2026-08-28)
+
+- Round 1 (7.0/10): boundary blocker (residue cleanup inside the branch) fixed by splitting it onto
+  `chore/spec-residue-cleanup`; M1 generator evidence moved to pinned 1.10/1.11 runners (historical 1.8
+  unavailability sample kept explicitly labeled; unreferenced openspec-cli-19 alias removed); M2 headers and
+  stale user copy refreshed; minors fixed (MODIFIED-only superRefine + negatives, line-anchored opencode
+  strip + fake-equivalence negative, local timeout waiver reverted).
+- Convergence (8.0/10): caught `agent-integrations-router.test.ts` still pinned to 1.9 — fixed, plus a
+  proactive sweep repinned the Root Context cold-start integration (a0ddb60) and the tool-subscription
+  fixtures. Final per-package evidence: core 729 passed (1 pre-existing macOS /private/var environmental
+  failure, reproduced identically on a clean main worktree), server 649/649, web 1164/1164, app 384/384,
+  cli 174/174, search 6/6, translators + website green; format/lint/typecheck green; browser CI green.
 ```
 
 ## Evidence recording rule
