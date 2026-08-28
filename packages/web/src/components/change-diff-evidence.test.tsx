@@ -1,17 +1,20 @@
 /**
- * Orthogonal intents (created 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Lock the 1.11-session rendering: MODIFIED diff body, line roles, exact upstream warning,
- *    and CLI provenance are visible in the direct evidence layer.
+ *    and CLI provenance are directly visible in the Evidence workspace detail pane.
  * 2. Lock the near-miss contract: a delta carrying both warning and diff renders both.
  * 3. Prove 1.10 and static sessions never issue the diff transport call and degrade without
  *    fabricated evidence.
  * 4. Prove absent diff fields, command failure, and transport failure render typed evidence
  *    instead of a crash or an invented diff.
+ * 5. Lock the workspace row-chip facts: counts come only from CLI MODIFIED deltas, degradation
+ *    reports `unavailable`, and undetected/pending sessions report no chip.
  *
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  */
 import { isStaticMode } from '@/lib/static-mode'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ChangeDiffEvidence } from './change-diff-evidence'
 
@@ -40,7 +43,7 @@ const rootActionStateMock = vi.hoisted(() => ({
     evidence: [] as string[],
     context: {
       cli: { available: true, version: '1.11.0' },
-    },
+    } as { cli: { available: boolean; version: string } } | null,
     observedAt: 1,
   },
 }))
@@ -82,12 +85,15 @@ function setSessionVersion(version: string) {
 }
 
 /**
- * jsdom keeps collapsed Accordion panels out of the visibility tree, so panel assertions
- * open the disclosure through its trigger — the same pattern the archived-validation
- * evidence tests use.
+ * The de-accordioned section must present its diff body directly — visible without any
+ * disclosure interaction (the old Accordion kept it collapsed in jsdom's visibility tree).
  */
-function openDisclosure() {
-  fireEvent.click(screen.getByRole('button', { name: /Requirement diffs/ }))
+async function waitForVisibleDiffBody(container: HTMLElement) {
+  await waitFor(() => {
+    const body = container.querySelector<HTMLElement>('[data-diff-body]')
+    expect(body).not.toBeNull()
+    if (body) expect(body).toBeVisible()
+  })
 }
 
 describe('ChangeDiffEvidence', () => {
@@ -113,8 +119,11 @@ describe('ChangeDiffEvidence', () => {
     const { container } = render(<ChangeDiffEvidence changeId="add-search" />)
 
     await waitFor(() => expect(diffEvidenceQuery).toHaveBeenCalledWith({ id: 'add-search' }))
-    await waitFor(() => expect(container.querySelector('[data-diff-body]')).not.toBeNull())
-    openDisclosure()
+
+    // The de-accordioned section presents its content directly in the detail pane.
+    const section = container.querySelector('[data-evidence-section="requirement-diffs"]')
+    expect(section).not.toBeNull()
+    await waitForVisibleDiffBody(container)
 
     // Unified diff body: every line role is present and colored through its data attribute.
     const roles = Array.from(container.querySelectorAll('[data-diff-line]')).map((line) =>
@@ -147,8 +156,7 @@ describe('ChangeDiffEvidence', () => {
     diffEvidenceQuery.mockResolvedValue(executedEvidence())
     const { container } = render(<ChangeDiffEvidence changeId="add-search" />)
 
-    await waitFor(() => expect(container.querySelector('[data-diff-body]')).not.toBeNull())
-    openDisclosure()
+    await waitForVisibleDiffBody(container)
     expect(container.querySelector('[data-diff-warning]')).not.toBeNull()
     expect(container.querySelector('[data-diff-warning]')?.textContent).toBe(NEAR_MISS_WARNING)
     expect(container.querySelector('[data-diff-line="remove"]')).not.toBeNull()
@@ -157,7 +165,6 @@ describe('ChangeDiffEvidence', () => {
   it('never issues the transport call on an admitted 1.10 session and degrades', () => {
     setSessionVersion('1.10.0')
     render(<ChangeDiffEvidence changeId="add-search" />)
-    openDisclosure()
 
     expect(diffEvidenceQuery).toHaveBeenCalledTimes(0)
     expect(screen.getByText('Unavailable on this CLI line')).toBeVisible()
@@ -169,7 +176,6 @@ describe('ChangeDiffEvidence', () => {
   it('never issues the transport call in a static snapshot', () => {
     vi.mocked(isStaticMode).mockReturnValue(true)
     render(<ChangeDiffEvidence changeId="add-search" />)
-    openDisclosure()
 
     expect(diffEvidenceQuery).toHaveBeenCalledTimes(0)
     expect(screen.getByText('Unavailable in static snapshot')).toBeVisible()
@@ -188,8 +194,7 @@ describe('ChangeDiffEvidence', () => {
     )
     const { container } = render(<ChangeDiffEvidence changeId="add-search" />)
 
-    await waitFor(() => expect(screen.getByText(/CLI provided no diff fields/)).toBeInTheDocument())
-    openDisclosure()
+    await waitFor(() => expect(screen.getByText(/CLI provided no diff fields/)).toBeVisible())
     expect(container.querySelector('[data-diff-body]')).toBeNull()
     expect(container.querySelector('[data-diff-warning]')).toBeNull()
     expect(screen.getByText('openspec show add-search --json --diff')).toBeVisible()
@@ -204,10 +209,6 @@ describe('ChangeDiffEvidence', () => {
     })
     render(<ChangeDiffEvidence changeId="missing-change" />)
 
-    // The fetch settles into a fresh disclosure; wait for its trigger summary, then open it.
-    const settled = await screen.findByRole('button', { name: /CLI evidence unavailable/ })
-    fireEvent.click(settled)
-
     await waitFor(() =>
       expect(screen.getByText(/FS-001: No active change found with that name/)).toBeVisible()
     )
@@ -217,10 +218,49 @@ describe('ChangeDiffEvidence', () => {
   it('surfaces a transport failure as direct alert evidence', async () => {
     diffEvidenceQuery.mockRejectedValue(new Error('planning root unresolved'))
     render(<ChangeDiffEvidence changeId="add-search" />)
-    openDisclosure()
 
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent('planning root unresolved')
     )
+  })
+
+  it('reports the CLI MODIFIED-delta count as the only executed row-chip fact', async () => {
+    const onChip = vi.fn()
+    diffEvidenceQuery.mockResolvedValue(executedEvidence())
+    const { container } = render(<ChangeDiffEvidence changeId="add-search" onChip={onChip} />)
+
+    await waitForVisibleDiffBody(container)
+    expect(onChip).toHaveBeenLastCalledWith({ label: '1 MODIFIED', tone: 'neutral' })
+  })
+
+  it('reports unavailable chips for static and below-1.11 sessions and none while undetected', () => {
+    const staticChip = vi.fn()
+    vi.mocked(isStaticMode).mockReturnValue(true)
+    const { unmount } = render(<ChangeDiffEvidence changeId="add-search" onChip={staticChip} />)
+    expect(staticChip).toHaveBeenLastCalledWith({ label: 'unavailable', tone: 'unavailable' })
+    unmount()
+
+    const legacyChip = vi.fn()
+    setSessionVersion('1.10.0')
+    render(<ChangeDiffEvidence changeId="add-search" onChip={legacyChip} />)
+    expect(legacyChip).toHaveBeenLastCalledWith({ label: 'unavailable', tone: 'unavailable' })
+  })
+
+  it('reports an error chip for a transport failure and none while the CLI is undetected', async () => {
+    const onChip = vi.fn()
+    rootActionStateMock.state = {
+      ...rootActionStateMock.state,
+      context: null,
+    }
+    const { rerender } = render(<ChangeDiffEvidence changeId="add-search" onChip={onChip} />)
+    expect(onChip).toHaveBeenLastCalledWith(null)
+
+    diffEvidenceQuery.mockRejectedValue(new Error('planning root unresolved'))
+    rootActionStateMock.state = {
+      ...rootActionStateMock.state,
+      context: { cli: { available: true, version: '1.11.0' } },
+    }
+    rerender(<ChangeDiffEvidence changeId="add-search" onChip={onChip} />)
+    await waitFor(() => expect(onChip).toHaveBeenLastCalledWith({ label: 'error', tone: 'error' }))
   })
 })

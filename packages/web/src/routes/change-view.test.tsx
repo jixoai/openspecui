@@ -1,19 +1,22 @@
 /**
- * Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Verify change detail fallbacks and schema-driven artifact rendering.
  * 2. Verify retained errors and non-current authority lock actions without entering the Header.
  * 3. Verify Apply inputs remain separate and open from a Header Action Dialog.
  * 4. Verify active Change alone owns the routed Evidence tab and explicit unavailable facts.
+ * 5. Verify the Evidence tab renders the container-responsive list-detail workspace with
+ *    keyboard-reachable rows, crowded drill/back, and unfabricated row chips.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
  * Original request (2026-07-28): keep progress divergence direct while compressing its source counts.
  * Original request (2026-08-03): move complete Change evidence into a dedicated tab page.
  * Owner correction (2026-08-03): move Actions inline with the title, unify subtitle badges, and localize unavailable Tooltips.
+ * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  */
 import type { RootActionState } from '@/lib/use-root-action-state'
 import type { ChangeStatus } from '@openspecui/core'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createContext, type ComponentProps, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChangeView } from './change-view'
@@ -23,7 +26,26 @@ const applyInstructionsMock = vi.hoisted(() => vi.fn())
 const changeFilesMock = vi.hoisted(() => vi.fn())
 const rootActionMock = vi.hoisted(() => vi.fn())
 const openArchiveModalMock = vi.hoisted(() => vi.fn())
+const isStaticModeMock = vi.hoisted(() => vi.fn(() => false))
 const routedTabState = vi.hoisted(() => ({ selectedTab: undefined as string | undefined }))
+
+const diffEvidenceQueryMock = vi.hoisted(() =>
+  vi.fn((..._args: unknown[]): Promise<unknown> => Promise.reject(new Error('not under test')))
+)
+
+vi.mock('@/lib/trpc', () => ({
+  trpcClient: {
+    change: {
+      diffEvidence: {
+        query: (...args: unknown[]) => diffEvidenceQueryMock(...args),
+      },
+    },
+  },
+}))
+
+vi.mock('@/lib/static-mode', () => ({
+  isStaticMode: () => isStaticModeMock(),
+}))
 
 const rootActionFailureCases: Array<Extract<RootActionState, { status: 'blocked' | 'checking' }>> =
   [
@@ -57,6 +79,106 @@ const retainedChangeStatus = {
   ],
   provenance: { kind: 'static' },
 } satisfies ChangeStatus
+
+const liveCliChangeStatus = {
+  changeName: 'Extract Terminal View Webcomponent',
+  schemaName: 'opsx-collab-pr-loop',
+  isPlanningComplete: false,
+  applyRequires: [],
+  artifacts: [
+    { id: 'implementation', outputPath: 'implementation.md', status: 'ready', requires: [] },
+  ],
+  provenance: {
+    kind: 'cli',
+    planningHome: {
+      kind: 'repo',
+      root: '/planning',
+      changesDir: '/planning/openspec/changes',
+      defaultSchema: 'opsx-collab-pr-loop',
+    },
+    changeRoot: '/planning/openspec/changes/extract-terminal-view-webcomponent',
+    artifactPaths: {
+      implementation: {
+        outputPath: 'implementation.md',
+        resolvedOutputPath:
+          '/planning/openspec/changes/extract-terminal-view-webcomponent/implementation.md',
+        existingOutputPaths: [],
+      },
+    },
+    nextSteps: ['Apply the change.'],
+    actionContext: {
+      mode: 'repo-local',
+      sourceOfTruth: 'repo',
+      planningArtifacts: ['implementation'],
+      linkedContext: [],
+      allowedEditRoots: ['/planning'],
+      requiresAffectedAreaSelection: false,
+      constraints: [],
+    },
+    root: { path: '/planning', source: 'nearest' },
+    evidence: {
+      command: 'status',
+      success: true,
+      stdout: '{"changeName":"extract-terminal-view-webcomponent"}',
+      stderr: '',
+      exitCode: 0,
+      payload: { changeName: 'extract-terminal-view-webcomponent' },
+      diagnostics: [],
+      selector: {},
+    },
+  },
+} satisfies ChangeStatus
+
+/**
+ * jsdom ships no layout engine, so the workspace's spacious topology state is driven through
+ * the same ResizeObserver seam the production Git list-detail layout uses: a stubbed observer
+ * reports one synthetic content width per observe() call.
+ */
+const evidenceResizeCallbacks: ResizeObserverCallback[] = []
+let evidenceContainerWidth = 320
+
+function stubEvidenceResizeObserver(width: number) {
+  evidenceContainerWidth = width
+  class MockResizeObserver {
+    private readonly callback: ResizeObserverCallback
+
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback
+      evidenceResizeCallbacks.push(callback)
+    }
+
+    observe(target: Element) {
+      const element = target as HTMLElement
+      this.callback(
+        [
+          {
+            contentRect: {
+              width: evidenceContainerWidth,
+              height: element.clientHeight || 320,
+            } as DOMRectReadOnly,
+          } as ResizeObserverEntry,
+        ],
+        this as unknown as ResizeObserver
+      )
+    }
+
+    disconnect() {}
+    unobserve() {}
+  }
+
+  vi.stubGlobal('ResizeObserver', MockResizeObserver)
+}
+
+/** Simulate the workspace container growing or shrinking after the initial observation. */
+function resizeEvidenceContainerTo(width: number) {
+  evidenceContainerWidth = width
+  for (const callback of [...evidenceResizeCallbacks]) {
+    callback(
+      [{ contentRect: { width, height: 320 } as DOMRectReadOnly } as ResizeObserverEntry],
+      null as unknown as ResizeObserver
+    )
+  }
+}
 
 vi.mock('@/lib/use-opsx', () => ({
   useOpsxApplyInstructionsSubscription: applyInstructionsMock,
@@ -167,12 +289,15 @@ vi.mock('@tanstack/react-router', () => ({
 describe('ChangeView', () => {
   afterEach(() => {
     cleanup()
+    vi.unstubAllGlobals()
   })
 
   beforeEach(() => {
+    evidenceResizeCallbacks.length = 0
     statusMock.mockReset()
     applyInstructionsMock.mockReset().mockReturnValue({ data: undefined })
     changeFilesMock.mockReset()
+    isStaticModeMock.mockReset().mockReturnValue(false)
     rootActionMock.mockReset().mockReturnValue({
       status: 'ready',
       disabled: false,
@@ -463,6 +588,303 @@ describe('ChangeView', () => {
       'CLI Change context and Reference evidence are unavailable in this static snapshot.'
     )
     expect(screen.queryByText('artifact:implementation')).toBeNull()
+  })
+
+  it('replaces the stacked full-width accordions with a list-detail Evidence workspace', () => {
+    routedTabState.selectedTab = 'evidence'
+    isStaticModeMock.mockReturnValue(true)
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    expect(workspace.getAttribute('data-evidence-workspace')).not.toBeNull()
+    // Rows preserve the decision-plane layer order; static snapshots publish no CLI-result row.
+    const rows = Array.from(workspace.querySelectorAll<HTMLElement>('[data-evidence-row]'))
+    expect(rows.map((row) => row.getAttribute('data-evidence-row'))).toEqual([
+      'summary-paths',
+      'requirement-diffs',
+      'archived-validation',
+    ])
+    // The old stacked full-width accordion triggers are gone from the Evidence tab: the row
+    // buttons carry no disclosure state, and the section titles now live in detail headings.
+    expect(screen.queryByRole('button', { name: /Requirement diffs/, expanded: false })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /Archived validation/, expanded: false })
+    ).toBeNull()
+    // Chips derive only from settled facts: static degradation names unavailable, and a row
+    // without a fact (summary/paths) shows no chip at all.
+    const diffRow = rows.find(
+      (row) => row.getAttribute('data-evidence-row') === 'requirement-diffs'
+    )
+    expect(diffRow).not.toBeUndefined()
+    if (diffRow) expect(within(diffRow).getByText('unavailable')).toBeTruthy()
+    const validationRow = rows.find(
+      (row) => row.getAttribute('data-evidence-row') === 'archived-validation'
+    )
+    expect(validationRow).not.toBeUndefined()
+    if (validationRow) expect(within(validationRow).getByText('unavailable')).toBeTruthy()
+    const summaryRow = rows.find((row) => row.getAttribute('data-evidence-row') === 'summary-paths')
+    expect(summaryRow).not.toBeUndefined()
+    if (summaryRow) expect(within(summaryRow).queryByText('unavailable')).toBeNull()
+  })
+
+  it('adds the CLI-result row in the layer order for live CLI provenance', () => {
+    routedTabState.selectedTab = 'evidence'
+    statusMock.mockReturnValue({
+      data: liveCliChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    const rows = Array.from(workspace.querySelectorAll<HTMLElement>('[data-evidence-row]'))
+    expect(rows.map((row) => row.getAttribute('data-evidence-row'))).toEqual([
+      'summary-paths',
+      'requirement-diffs',
+      'archived-validation',
+      'cli-result',
+    ])
+    fireEvent.click(within(workspace).getByRole('button', { name: /CLI result/ }))
+    const detail = workspace.querySelector<HTMLElement>('[data-evidence-pane="detail"]')
+    expect(detail).not.toBeNull()
+    if (detail) {
+      expect(within(detail).getByText('status')).toBeVisible()
+      expect(within(detail).getByRole('button', { name: /Raw CLI payload/ })).toBeVisible()
+    }
+  })
+
+  it('keeps every evidence row a natural keyboard-reachable button', () => {
+    routedTabState.selectedTab = 'evidence'
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    const rows = Array.from(workspace.querySelectorAll<HTMLButtonElement>('[data-evidence-row]'))
+    expect(rows.length).toBe(3)
+    for (const row of rows) {
+      expect(row.tagName).toBe('BUTTON')
+      expect(row.getAttribute('tabindex')).not.toBe('-1')
+    }
+    fireEvent.click(rows[2])
+    const detail = workspace.querySelector<HTMLElement>('[data-evidence-pane="detail"]')
+    expect(detail).not.toBeNull()
+    if (detail) {
+      expect(within(detail).getByRole('heading', { name: 'Archived validation' })).toBeVisible()
+    }
+  })
+
+  it('drills from the crowded list into the detail and back without losing settled state', () => {
+    routedTabState.selectedTab = 'evidence'
+    isStaticModeMock.mockReturnValue(true)
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    // jsdom has no ResizeObserver, so the workspace starts crowded — the mobile-first base.
+    expect(workspace.getAttribute('data-evidence-topology')).toBe('crowded')
+    const list = workspace.querySelector<HTMLElement>('[data-evidence-pane="list"]')
+    const detail = workspace.querySelector<HTMLElement>('[data-evidence-pane="detail"]')
+    expect(list).not.toBeNull()
+    expect(detail).not.toBeNull()
+    if (!list || !detail) throw new Error('Expected both evidence panes')
+
+    // Before drilling the list is the only visible surface.
+    expect(list).toBeVisible()
+    expect(detail).not.toBeVisible()
+
+    fireEvent.click(within(list).getByRole('button', { name: /Requirement diffs/ }))
+
+    expect(detail).toBeVisible()
+    expect(list).not.toBeVisible()
+    const diffDetail = detail.querySelector<HTMLElement>(
+      '[data-evidence-detail="requirement-diffs"]'
+    )
+    expect(diffDetail).not.toBeNull()
+    if (diffDetail) {
+      expect(within(diffDetail).getByRole('heading', { name: 'Requirement diffs' })).toBeVisible()
+      expect(within(diffDetail).getByText('Unavailable in static snapshot')).toBeVisible()
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to evidence list' }))
+
+    // Back restores the list while the drilled detail stays mounted (no refetch surface loss)
+    // and the row selection is preserved for the next entry.
+    expect(list).toBeVisible()
+    expect(detail).not.toBeVisible()
+    expect(detail.querySelector('[data-evidence-detail="requirement-diffs"] h3')).not.toBeNull()
+    expect(
+      within(list)
+        .getByRole('button', { name: /Requirement diffs/ })
+        .getAttribute('aria-current')
+    ).toBe('true')
+  })
+
+  it('hands keyboard focus to the back affordance on drill and back to the originating row', () => {
+    routedTabState.selectedTab = 'evidence'
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    expect(workspace.getAttribute('data-evidence-topology')).toBe('crowded')
+
+    const row = within(workspace).getByRole('button', {
+      name: /Archived validation/,
+    }) as HTMLButtonElement
+    row.focus()
+    fireEvent.click(row)
+
+    const back = screen.getByRole('button', { name: 'Back to evidence list' })
+    expect(document.activeElement).toBe(back)
+
+    fireEvent.click(back)
+    expect(document.activeElement).toBe(row)
+    expect(
+      document.activeElement?.closest('[data-evidence-pane]')?.getAttribute('data-evidence-pane')
+    ).toBe('list')
+  })
+
+  it('moves focus off the unmounting back affordance when a drill grows spacious', async () => {
+    routedTabState.selectedTab = 'evidence'
+    stubEvidenceResizeObserver(320)
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    expect(workspace.getAttribute('data-evidence-topology')).toBe('crowded')
+
+    fireEvent.click(within(workspace).getByRole('button', { name: /Archived validation/ }))
+    const back = screen.getByRole('button', { name: 'Back to evidence list' })
+    expect(document.activeElement).toBe(back)
+
+    // Growing the container unmounts the back affordance; its captured focus must land on
+    // the selected row instead of falling to body.
+    await act(async () => {
+      resizeEvidenceContainerTo(1200)
+    })
+    expect(workspace.getAttribute('data-evidence-topology')).toBe('spacious')
+    const selectedRow = within(workspace).getByRole('button', {
+      name: /Archived validation/,
+    })
+    expect(document.activeElement).toBe(selectedRow)
+  })
+
+  it('does not refetch settled diff evidence across a crowded drill and back', async () => {
+    routedTabState.selectedTab = 'evidence'
+    rootActionMock.mockReturnValue({
+      status: 'ready',
+      disabled: false,
+      observedAt: 1,
+      title: null,
+      message: null,
+      evidence: [],
+      context: {
+        launchProject: { path: '/tmp/project' },
+        planningRoot: { path: '/tmp/project', source: 'nearest', healthy: true, status: [] },
+        storeId: null,
+        cli: { available: true, version: '1.11.0' },
+      },
+    })
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+    // A live 1.11 session makes the diff section fetch exactly once; the mock resolves so the
+    // section settles before the drill begins (a rejecting mock would leave it pending).
+    diffEvidenceQueryMock.mockResolvedValueOnce({
+      kind: 'executed',
+      deltas: [
+        { spec: 'billing', operation: 'MODIFIED', diff: '@@ -1 +1 @@\n-old\n+new', warning: null },
+      ],
+      provenance: {
+        command: 'show upgrade-billing --json --diff',
+        root: '/tmp/project',
+        rootSource: 'nearest',
+        exitCode: 0,
+      },
+    })
+
+    render(<ChangeView />)
+
+    // Wait for the live fetch to settle — the proof is only meaningful once one call happened.
+    await waitFor(() => expect(diffEvidenceQueryMock).toHaveBeenCalledTimes(1))
+
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    const list = workspace.querySelector<HTMLElement>('[data-evidence-pane="list"]')
+    expect(list).not.toBeNull()
+    if (!list) throw new Error('Expected the evidence list pane')
+
+    fireEvent.click(within(list).getByRole('button', { name: /Requirement diffs/ }))
+    const detail = workspace.querySelector<HTMLElement>('[data-evidence-pane="detail"]')
+    expect(detail).toBeVisible()
+
+    // The mounted section settled its single fetch; drilling back and re-entering must not
+    // spawn another one — the sections stay mounted, only visibility changes.
+    fireEvent.click(screen.getByRole('button', { name: 'Back to evidence list' }))
+    expect(list).toBeVisible()
+    fireEvent.click(within(list).getByRole('button', { name: /Requirement diffs/ }))
+    expect(detail).toBeVisible()
+
+    expect(diffEvidenceQueryMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the list and the selected detail together in a spacious container', () => {
+    stubEvidenceResizeObserver(1200)
+    routedTabState.selectedTab = 'evidence'
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    expect(workspace.getAttribute('data-evidence-topology')).toBe('spacious')
+    const list = workspace.querySelector<HTMLElement>('[data-evidence-pane="list"]')
+    const detail = workspace.querySelector<HTMLElement>('[data-evidence-pane="detail"]')
+    expect(list).not.toBeNull()
+    expect(detail).not.toBeNull()
+    if (!list || !detail) throw new Error('Expected both evidence panes')
+
+    // Spacious shows both panes without any drill, and no back affordance exists.
+    expect(list).toBeVisible()
+    expect(detail).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Back to evidence list' })).toBeNull()
+    expect(within(detail).getByRole('heading', { name: 'Summary & paths' })).toBeVisible()
+
+    // Selecting another row keeps both panes visible.
+    fireEvent.click(within(list).getByRole('button', { name: /Archived validation/ }))
+    expect(list).toBeVisible()
+    expect(detail).toBeVisible()
+    expect(within(detail).getByRole('heading', { name: 'Archived validation' })).toBeInTheDocument()
   })
 
   it('falls back to the shared content document tab when no artifact tab is available', () => {

@@ -1,17 +1,52 @@
 /**
- * Orthogonal intents (created 2026-08-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
  * 1. Render complete source-attributed Change paths, action context, and CLI evidence.
- * 2. Preserve layered Artifact, Reference, CLI-result, and raw-payload disclosure.
- * 3. Own bounded Evidence-tab scrolling and explicit static/unavailable presentation.
+ * 2. Expose the former stacked panel as two list-addressable Evidence workspace sections:
+ *    summary/paths first and CLI result (with the raw payload disclosure) last.
+ * 3. Preserve layered Artifact, Reference, CLI-result, and raw-payload disclosure and the
+ *    explicit static/unavailable presentation; the workspace detail pane owns scrolling.
  *
  * Original request (2026-08-03): use an Evidence tab to carry complete Change Detail information.
+ * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  */
 import { EvidenceDisclosure } from '@/components/information-disclosure'
 import type { ChangeStatus, CliReferenceIndexEntry } from '@openspecui/core'
+import type { ReactNode } from 'react'
 import type { ChangeReferenceEvidence } from './change-context-summary'
 
-/** Complete read-only evidence panel rendered inside the Change Evidence tab. */
-export function ChangeEvidencePanel({
+/** Shared section frame for the Evidence workspace detail pane; keeps the a11y heading. */
+function WorkspaceSection({
+  id,
+  title,
+  summary,
+  children,
+  container = false,
+}: {
+  id: string
+  title: string
+  summary?: ReactNode
+  children: ReactNode
+  container?: boolean
+}) {
+  return (
+    <section
+      data-evidence-section={id}
+      aria-label={title}
+      className={container ? '@container min-w-0' : 'min-w-0'}
+    >
+      <header className="border-border/60 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b pb-2">
+        <h3 className="min-w-0 text-xs font-semibold">{title}</h3>
+        {summary ? (
+          <span className="text-muted-foreground min-w-0 text-[11px]">{summary}</span>
+        ) : null}
+      </header>
+      <div className="min-w-0 pt-3 text-xs">{children}</div>
+    </section>
+  )
+}
+
+/** Readable paths/facts plus the layered Artifact and Reference disclosures (first row). */
+export function ChangeSummaryPathsSection({
   status,
   referenceEvidence,
 }: {
@@ -23,12 +58,8 @@ export function ChangeEvidencePanel({
   if (provenance.kind === 'static') {
     const artifactCount = status.artifacts.length
     return (
-      <section
-        data-change-evidence-scroll-owner=""
-        aria-label="Change Evidence"
-        className="scrollbar-thin scrollbar-track-transparent flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain p-4"
-      >
-        <div className="min-w-0 space-y-3 p-4 text-xs">
+      <WorkspaceSection id="summary-paths" title="Summary & paths">
+        <div className="space-y-3">
           <div className="border-border bg-muted/20 text-muted-foreground rounded-md border p-4 text-sm">
             CLI Change context and Reference evidence are unavailable in this static snapshot.
           </div>
@@ -39,19 +70,15 @@ export function ChangeEvidencePanel({
             <StaticArtifactOutputs artifacts={status.artifacts} />
           </EvidenceDisclosure>
         </div>
-      </section>
+      </WorkspaceSection>
     )
   }
 
   const artifactCount = Object.keys(provenance.artifactPaths).length
 
   return (
-    <section
-      data-change-evidence-scroll-owner=""
-      aria-label="Change Evidence"
-      className="scrollbar-thin scrollbar-track-transparent flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain"
-    >
-      <div className="@container min-w-0 space-y-3 p-4 text-xs">
+    <WorkspaceSection id="summary-paths" title="Summary & paths" container>
+      <div className="min-w-0 space-y-3">
         <ReadableChangeFacts provenance={provenance} />
         <EvidenceDisclosure
           title="Artifact outputs"
@@ -78,14 +105,24 @@ export function ChangeEvidencePanel({
         <EvidenceDisclosure title="References" summary={referenceSummary(referenceEvidence)}>
           <ReferenceEvidence evidence={referenceEvidence} />
         </EvidenceDisclosure>
-        <EvidenceDisclosure
-          title="CLI result"
-          summary={`${provenance.evidence.command} · exit ${provenance.evidence.exitCode ?? 'unknown'}`}
-        >
-          <CliResultEvidence evidence={provenance.evidence} />
-        </EvidenceDisclosure>
       </div>
-    </section>
+    </WorkspaceSection>
+  )
+}
+
+/** CLI result with the raw payload disclosure (last row; live CLI provenance only). */
+export function ChangeCliResultSection({ status }: { status: ChangeStatus }) {
+  if (status.provenance.kind === 'static') return null
+  const provenance = status.provenance
+
+  return (
+    <WorkspaceSection
+      id="cli-result"
+      title="CLI result"
+      summary={`${provenance.evidence.command} · exit ${provenance.evidence.exitCode ?? 'unknown'}`}
+    >
+      <CliResultEvidence evidence={provenance.evidence} />
+    </WorkspaceSection>
   )
 }
 

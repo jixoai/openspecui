@@ -37,3 +37,6 @@ openspec/.openspecui.json
 .wrangler/
 
 *HANDOFF.md
+
+# vitest browser-mode snapshot artifacts
+__screenshots__/
