@@ -2,8 +2,10 @@
   "extends": "./tsconfig.json",
   "include": [
     "src/cli-contracts/workflow.test.ts",
-    "src/official-cli-19-validation-fixtures.test.ts",
-    "src/official-cli-19-workflow-fixtures.test.ts",
+    "src/official-cli-v11-validation-fixtures.test.ts",
+    "src/official-cli-v11-workflow-fixtures.test.ts",
+    "src/official-cli-v11-batch-status-fixtures.test.ts",
+    "src/official-cli-v11-show-diff-fixtures.test.ts",
     "src/opsx-types.test.ts"
   ],
   "exclude": ["node_modules", "dist"]
