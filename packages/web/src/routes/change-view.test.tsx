@@ -29,6 +29,20 @@ const openArchiveModalMock = vi.hoisted(() => vi.fn())
 const isStaticModeMock = vi.hoisted(() => vi.fn(() => false))
 const routedTabState = vi.hoisted(() => ({ selectedTab: undefined as string | undefined }))
 
+const diffEvidenceQueryMock = vi.hoisted(() =>
+  vi.fn((..._args: unknown[]) => Promise.reject(new Error('not under test')))
+)
+
+vi.mock('@/lib/trpc', () => ({
+  trpcClient: {
+    change: {
+      diffEvidence: {
+        query: (...args: unknown[]) => diffEvidenceQueryMock(...args),
+      },
+    },
+  },
+}))
+
 vi.mock('@/lib/static-mode', () => ({
   isStaticMode: () => isStaticModeMock(),
 }))
@@ -703,6 +717,65 @@ describe('ChangeView', () => {
         .getByRole('button', { name: /Requirement diffs/ })
         .getAttribute('aria-current')
     ).toBe('true')
+  })
+
+  it('hands keyboard focus to the back affordance on drill and back to the originating row', () => {
+    routedTabState.selectedTab = 'evidence'
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    expect(workspace.getAttribute('data-evidence-topology')).toBe('crowded')
+
+    const row = within(workspace).getByRole('button', {
+      name: /Archived validation/,
+    }) as HTMLButtonElement
+    row.focus()
+    fireEvent.click(row)
+
+    const back = screen.getByRole('button', { name: 'Back to evidence list' })
+    expect(document.activeElement).toBe(back)
+
+    fireEvent.click(back)
+    expect(document.activeElement).toBe(row)
+    expect(
+      document.activeElement?.closest('[data-evidence-pane]')?.getAttribute('data-evidence-pane')
+    ).toBe('list')
+  })
+
+  it('does not refetch settled diff evidence across a crowded drill and back', async () => {
+    routedTabState.selectedTab = 'evidence'
+    statusMock.mockReturnValue({
+      data: retainedChangeStatus,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<ChangeView />)
+
+    const workspace = screen.getByRole('region', { name: 'Change Evidence' })
+    const list = workspace.querySelector<HTMLElement>('[data-evidence-pane="list"]')
+    expect(list).not.toBeNull()
+    if (!list) throw new Error('Expected the evidence list pane')
+
+    fireEvent.click(within(list).getByRole('button', { name: /Requirement diffs/ }))
+    const detail = workspace.querySelector<HTMLElement>('[data-evidence-pane="detail"]')
+    expect(detail).toBeVisible()
+
+    // The mounted section settled its single fetch; drilling back and re-entering must not
+    // spawn another one — the sections stay mounted, only visibility changes.
+    const settledCalls = diffEvidenceQueryMock.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Back to evidence list' }))
+    expect(list).toBeVisible()
+    fireEvent.click(within(list).getByRole('button', { name: /Requirement diffs/ }))
+    expect(detail).toBeVisible()
+
+    expect(diffEvidenceQueryMock.mock.calls.length).toBe(settledCalls)
   })
 
   it('shows the list and the selected detail together in a spacious container', () => {

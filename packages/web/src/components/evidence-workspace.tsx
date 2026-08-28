@@ -5,7 +5,9 @@
  *    archived validation -> CLI/raw payload) in keyboard-reachable list rows.
  * 3. Derive row chips only from settled section facts; never fabricate counts or verdicts.
  * 4. Keep the crowded drill presentational: the detail replaces the list with a back
- *    affordance, and back restores the list without unmounting settled evidence.
+ *    affordance, and back restores the list without unmounting settled evidence; focus
+ *    follows the drill (row -> back affordance -> originating row) so keyboard users never
+ *    land on a hidden element.
  * 5. Keep sub-selection local runtime state — it never enters routes or browser storage.
  *
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
@@ -66,6 +68,9 @@ function useSpaciousEvidenceLayout() {
   const [spacious, setSpacious] = useState(false)
 
   useEffect(() => {
+    // No-ResizeObserver environments stay on the crowded base on purpose: any engine old
+    // enough to lack ResizeObserver also lacks `@container`, so the CSS grid stays on its
+    // single-column base and the JS topology never disagrees with the rendered one.
     const node = ref.current
     if (!node || typeof ResizeObserver === 'undefined') return
 
@@ -95,6 +100,10 @@ export function EvidenceWorkspace({
   const { ref, spacious } = useSpaciousEvidenceLayout()
   const [selectedId, setSelectedId] = useState('summary-paths')
   const [drilled, setDrilled] = useState(false)
+  const rowRefs = useRef(new Map<string, HTMLButtonElement>())
+  const backRef = useRef<HTMLButtonElement | null>(null)
+  const drilledByRowId = useRef<string | null>(null)
+  const pendingRestoreRowId = useRef<string | null>(null)
   const [diffChip, setDiffChip] = useState<ChangeDiffEvidenceChip | null>(null)
   const [validationChip, setValidationChip] = useState<ArchivedValidationEvidenceChip | null>(null)
 
@@ -159,13 +168,31 @@ export function EvidenceWorkspace({
   const selectSection = useCallback(
     (id: string) => {
       setSelectedId(id)
-      if (!spacious) setDrilled(true)
+      if (!spacious) {
+        drilledByRowId.current = id
+        setDrilled(true)
+      }
     },
     [spacious]
   )
   const backToList = useCallback(() => {
+    pendingRestoreRowId.current = drilledByRowId.current
+    drilledByRowId.current = null
     setDrilled(false)
   }, [])
+
+  // Focus handoff for the crowded drill: opening the detail moves focus to the back
+  // affordance (the first control of the newly revealed surface); returning moves it back
+  // to the row that opened the drill. Without this, keyboard focus stays on a hidden row.
+  useEffect(() => {
+    if (drilled && !spacious) {
+      backRef.current?.focus()
+    } else if (!drilled) {
+      const rowId = pendingRestoreRowId.current
+      pendingRestoreRowId.current = null
+      if (rowId) rowRefs.current.get(rowId)?.focus()
+    }
+  }, [drilled, spacious])
 
   return (
     <section
@@ -191,6 +218,10 @@ export function EvidenceWorkspace({
               return (
                 <li key={section.id}>
                   <button
+                    ref={(node) => {
+                      if (node) rowRefs.current.set(section.id, node)
+                      else rowRefs.current.delete(section.id)
+                    }}
                     type="button"
                     data-evidence-row={section.id}
                     aria-current={selected ? 'true' : undefined}
@@ -223,6 +254,7 @@ export function EvidenceWorkspace({
         >
           {!spacious && drilled ? (
             <button
+              ref={backRef}
               type="button"
               data-evidence-back=""
               aria-label="Back to evidence list"
