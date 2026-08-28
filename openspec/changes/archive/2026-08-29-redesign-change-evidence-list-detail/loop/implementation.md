@@ -9,7 +9,9 @@ Original request (2026-08-28): "这种结构替代手风琴会更好"
 # Implementation state
 
 ```text
-R0 change authored              DONE   intake / research-plan / opsx-ui-views delta
+R0 change authored              DONE   intake / research-plan / opsx-ui-views delta; PR #266 merged
+                                       to main after all CI gates passed. Archive pending Owner
+                                       re-walkthrough acceptance.
 R1 implementation               DONE   touched files: web/components/evidence-workspace.tsx (new),
                                        web/components/change-diff-evidence.{tsx,test.tsx},
                                        web/components/archived-validation-evidence.{tsx,test.tsx},
@@ -32,11 +34,13 @@ R1 implementation               DONE   touched files: web/components/evidence-wo
                                        under machine load; both passed in isolation and the rerun was
                                        fully green. Slice owner: one implementation subagent;
                                        integrator re-ran every focused suite.
-R2 Codex review                 ROUND1 6.5/10 -> fixes; ROUND2 7.0/10 -> fixes; ROUND3 7.5/10 ->
-                                       fixes (spacious focus capture via focus events, live no-refetch
-                                       test, full command evidence; Enter/Space rejection accepted);
-                                       ROUND4 PENDING
-R3 rebuild walkthrough assets   PENDING  rebuild web bundle + copy-web + restart 3100/3101
+R2 Codex review                 DONE (6.5 -> 7.0 -> 7.5 -> 8.5/10 PR-ready; round-4 doc-only
+                                       counts correction applied)
+R3 rebuild walkthrough assets   DONE   branch build synced to the served asset directory; both
+                                       walkthrough servers restarted from the isolated branch
+                                       worktree (OPENSPECUI_HOME isolation; the shared machine
+                                       daemon belongs to another session) and the served App chunk
+                                       verified on the wire for data-evidence-row + the v11 gate.
 R4 Owner re-walkthrough        PENDING  acceptance boundary
 ```
 
