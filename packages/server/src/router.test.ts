@@ -23,7 +23,8 @@
  * Review correction (2026-08-02): Init cancellation and success require process and projection settlement.
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
- */
+  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+*/
 import {
   acquireWatcherRoot,
   CliExecutor,
@@ -3193,7 +3194,7 @@ apply:
       expect(invalidation.current('context')).toBe(0)
     })
 
-    it('runs OpenSpec 1.9 archived validation through the typed validate contract', async () => {
+    it('runs archived validation on an admitted line through the typed validate contract', async () => {
       const context = createMockContext()
       const planning = await resolveMockPlanningRoot(context)
       planning.rootContext = {
@@ -3206,7 +3207,7 @@ apply:
           status: [],
         },
         storeId: 'shared',
-        cli: { available: true, version: '1.9.0' },
+        cli: { available: true, version: '1.11.0' },
       }
       const caller = appRouter.createCaller(context)
 
@@ -3220,12 +3221,12 @@ apply:
       })
     })
 
-    it('rejects archived validation on a supported 1.8 session before any CLI execution', async () => {
+    it('rejects archived validation on a non-admitted CLI session before any CLI execution', async () => {
       const context = createMockContext()
       const planning = await resolveMockPlanningRoot(context)
       planning.rootContext = {
         ...planning.rootContext,
-        cli: { available: true, version: '1.8.0' },
+        cli: { available: true, version: '1.9.0' },
       }
       const caller = appRouter.createCaller(context)
       const validate = validateContractSpy(context)
