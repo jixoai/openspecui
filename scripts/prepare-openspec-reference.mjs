@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
- * 1. Initialize the pinned OpenSpec 1.11 reference submodule for clean CI checkouts.
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * 1. Initialize the pinned OpenSpec 1.12 reference submodule for clean CI checkouts.
  * 2. Build the ignored CLI distribution consumed by pinned integration fixtures.
  * 3. Reject submodule drift before any fixture can execute a different upstream revision.
  * 4. Invoke pnpm through a Windows-safe executable or quoted command-shim boundary.
@@ -14,6 +14,7 @@
  * Windows correction (2026-08-04): Node never executes pnpm.cmd directly.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作。"
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -23,7 +24,7 @@ import { resolvePnpmInvocation } from './lib/pnpm-invocation.mjs'
 
 const REPOSITORY_ROOT = process.cwd()
 const REFERENCE_PATH = resolve(REPOSITORY_ROOT, 'references/openspec')
-const EXPECTED_COMMIT = 'a0ddb60d040c61f4907436a9d91310934b1dda63'
+const EXPECTED_COMMIT = 'e062b9572be933564ba3899d059377dfa1393e32'
 const CLI_DIST_PATH = resolve(REFERENCE_PATH, 'dist/cli/index.js')
 
 function run(command, args, options = {}) {
