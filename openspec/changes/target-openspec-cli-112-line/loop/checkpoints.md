@@ -20,10 +20,12 @@ Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一�
 - Change artifacts: `.openspec.yaml`, `loop/{intake,research-plan,implementation,checkpoints}.md`,
   `specs/{openspec-cli-integration,opsx-workflow-ui,opsx-config-center,projection-contract-truth}/spec.md`.
 
-## CP1 — change review closed (PENDING)
+## CP1 — change review closed (DONE 2026-09-03)
 
-Codex change review via herdr; findings folded back into this Change before Batch A starts. Owner-default
-decisions confirmed or vetoed here — especially the single-series `>=1.12.0 <1.13.0` window.
+Codex change review via herdr (`v12-change-reviewer`, gpt-5.6-terra xhigh): Round-A 6/10 with five blockers →
+all adopted (commit 0e5fff17); Round-B 8/10 with zero blockers → all eight suggestions adopted. The
+single-series `>=1.12.0 <1.13.0` window stands as the Owner-default decision. Implementation batches may
+start.
 
 ## CP2 — core contracts land (PENDING)
 
