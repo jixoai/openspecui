@@ -13,6 +13,11 @@
  *    Raised the Windows rmdir retry budget 30 x 100 ms -> 150 x 200 ms (bounded ~30 s, inside the
  *    60 s hook) on 2026-09-04: the endpoint-target fixture's EBUSY outlived 3 s of retries twice
  *    in a row on the hosted runner while this file's subject code stayed byte-identical to main.
+ *    Root cause isolated the same day: the worker server's CLI probe fell back to
+ *    `npx -y @fission-ai/openspec@1.12` (the series rotation landed in this line; 1.12.0 was
+ *    published the same day) with cwd inside the fixture dir, and the network child outlived
+ *    close(). The endpoint fixture now pins an explicit local CLI runner so its probe is instant
+ *    and offline; the widened retry budget stays as runner tolerance for the rest of the family.
  * 6. The real worker-thread lifecycle case skips only on hosted Windows CI: `terminate()` can
  *    wait forever on a thread stuck in native teardown there. The ubuntu CI lane and local
  *    Windows runs keep the contract covered.
@@ -630,6 +635,19 @@ describe('worktree runtime registry lifecycle', () => {
     const targetPath = await mkdtemp(join(tmpdir(), 'openspecui-endpoint-target-'))
     const runtimeDir = await mkdtemp(join(tmpdir(), 'openspecui-endpoint-runtime-'))
     tempDirs.push(currentProjectDir, targetPath, runtimeDir)
+
+    // Hermetic CLI runner: the server's startup CLI probe would otherwise fall back to the
+    // network-dependent `npx -y @fission-ai/openspec@<series>` candidate with cwd inside this
+    // fixture dir; on the hosted Windows runner that freshly-published-spec child outlived
+    // close() and locked the dir past every bounded rmdir retry (the documented npx
+    // network-dependence class). An explicit local runner keeps the probe instant and offline
+    // with the same end state (CLI unavailable); this is fixture-scoped, not a production change.
+    await mkdir(join(targetPath, 'openspec'), { recursive: true })
+    await writeFile(
+      join(targetPath, 'openspec', '.openspecui.json'),
+      JSON.stringify({ cli: { command: process.execPath } }, null, 2),
+      'utf8'
+    )
 
     // Real worker thread from the source CLI: the actual bound address differs from the probe
     // when the preferred port is already taken, proving endpoint truth flows through ready.
