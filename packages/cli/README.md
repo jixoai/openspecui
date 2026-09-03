@@ -1,6 +1,6 @@
 <!--
-Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
-1. Document the npm-facing surface of the current openspecui release line (v11) only.
+Orthogonal intents (updated 2026-09-04 Asia/Shanghai):
+1. Document the npm-facing surface of the current openspecui release line (v12) only.
 2. Keep commands, compatibility, and hooks aligned with the repository README facts.
 3. Leave full version history and legacy archives to the repository README.
 

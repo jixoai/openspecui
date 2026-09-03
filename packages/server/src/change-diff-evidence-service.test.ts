@@ -79,10 +79,11 @@ function commandResultFixture(data: unknown, overrides: Record<string, unknown> 
 function depsFixture(
   gated: Awaited<ReturnType<CliExecutor['contracts']['showChangeDiff']>>
 ): ChangeDiffEvidenceDeps & { showChangeDiff: ReturnType<typeof vi.fn> } {
-  const showChangeDiff = vi.fn(async () => gated)
+  const showChangeDiffFn: CliExecutor['contracts']['showChangeDiff'] = async () => gated
+  const showChangeDiff = vi.fn(showChangeDiffFn)
   return {
     cliExecutor: {
-      contracts: { showChangeDiff: showChangeDiff as unknown as CliExecutor['contracts']['showChangeDiff'] },
+      contracts: { showChangeDiff },
     },
     showChangeDiff,
   }

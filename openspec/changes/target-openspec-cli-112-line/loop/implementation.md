@@ -152,3 +152,18 @@ Non-blocking adopted: barrel runtime exports of findings schemas/guard (C1); typ
 pinned anchor case (C3); implementation.md CP1 contradiction (integrator).
 
 Pending: round-2 re-review after C1/C3 land.
+
+## Code review round 2 (herdr v12-code-reviewer, 2026-09-04) — 9.0/10 (+4.0)
+
+Worked 6m (reviewer re-ran the focused evidence itself: core 78/78, server findings router 4/4,
+core/server/web typechecks). BLOCKING: none. All seven round-1 blockers confirmed closed, including the
+fixture-role disposition (positive workflow coverage on pinned 1.12; only the v11 --report boundary fixture
+retained, accepted under the single-series decision). W2 note: the reviewer's own run cleared the corrected
+version assertion and reached server launch, then hit workstation EMFILE before the known pre-existing
+Playwright timeout; the rotation-caused portion is closed.
+
+Both round-2 non-blocking suggestions adopted (integrator): packages/cli/README.md header intent line now
+v12 (the earlier fix had silently missed — prefix mismatch); the change-diff mock is now a genuinely typed
+vi.fn wrapping a precisely-typed async function (no double assertion).
+
+Review loop closed at 9.0/10 with zero blockers.
