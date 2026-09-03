@@ -1,10 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
- * 1. Lock the 1.11-session rendering: MODIFIED diff body, line roles, exact upstream warning,
- *    and CLI provenance are directly visible in the Evidence workspace detail pane.
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * 1. Lock the admitted 1.12-session rendering: MODIFIED diff body, line roles, exact upstream
+ *    warning, and CLI provenance are directly visible in the Evidence workspace detail pane.
  * 2. Lock the near-miss contract: a delta carrying both warning and diff renders both.
- * 3. Prove 1.10 and static sessions never issue the diff transport call and degrade without
- *    fabricated evidence.
+ * 3. Prove retired (1.10/1.11) and static sessions never issue the diff transport call and
+ *    degrade without fabricated evidence.
  * 4. Prove absent diff fields, command failure, and transport failure render typed evidence
  *    instead of a crash or an invented diff.
  * 5. Lock the workspace row-chip facts: counts come only from CLI MODIFIED deltas, degradation
@@ -12,6 +12,7 @@
  *
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
@@ -42,7 +43,7 @@ const rootActionStateMock = vi.hoisted(() => ({
     message: null,
     evidence: [] as string[],
     context: {
-      cli: { available: true, version: '1.11.0' },
+      cli: { available: true, version: '1.12.0' },
     } as { cli: { available: boolean; version: string } } | null,
     observedAt: 1,
   },
@@ -108,13 +109,13 @@ describe('ChangeDiffEvidence', () => {
       message: null,
       evidence: [],
       context: {
-        cli: { available: true, version: '1.11.0' },
+        cli: { available: true, version: '1.12.0' },
       },
       observedAt: 1,
     }
   })
 
-  it('renders the MODIFIED delta diff with line roles, warning, and CLI provenance on 1.11', async () => {
+  it('renders the MODIFIED delta diff with line roles, warning, and CLI provenance on an admitted 1.12 session', async () => {
     diffEvidenceQuery.mockResolvedValue(executedEvidence())
     const { container } = render(<ChangeDiffEvidence changeId="add-search" />)
 
@@ -162,7 +163,7 @@ describe('ChangeDiffEvidence', () => {
     expect(container.querySelector('[data-diff-line="remove"]')).not.toBeNull()
   })
 
-  it('never issues the transport call on an admitted 1.10 session and degrades', () => {
+  it('never issues the transport call on a retired 1.10 session and degrades', () => {
     setSessionVersion('1.10.0')
     render(<ChangeDiffEvidence changeId="add-search" />)
 
@@ -233,7 +234,7 @@ describe('ChangeDiffEvidence', () => {
     expect(onChip).toHaveBeenLastCalledWith({ label: '1 MODIFIED', tone: 'neutral' })
   })
 
-  it('reports unavailable chips for static and below-1.11 sessions and none while undetected', () => {
+  it('reports unavailable chips for static and retired sessions and none while undetected', () => {
     const staticChip = vi.fn()
     vi.mocked(isStaticMode).mockReturnValue(true)
     const { unmount } = render(<ChangeDiffEvidence changeId="add-search" onChip={staticChip} />)
@@ -258,7 +259,7 @@ describe('ChangeDiffEvidence', () => {
     diffEvidenceQuery.mockRejectedValue(new Error('planning root unresolved'))
     rootActionStateMock.state = {
       ...rootActionStateMock.state,
-      context: { cli: { available: true, version: '1.11.0' } },
+      context: { cli: { available: true, version: '1.12.0' } },
     }
     rerender(<ChangeDiffEvidence changeId="add-search" onChip={onChip} />)
     await waitFor(() => expect(onChip).toHaveBeenLastCalledWith({ label: 'error', tone: 'error' }))

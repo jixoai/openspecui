@@ -3207,7 +3207,7 @@ apply:
           status: [],
         },
         storeId: 'shared',
-        cli: { available: true, version: '1.11.0' },
+        cli: { available: true, version: '1.12.0' },
       }
       const caller = appRouter.createCaller(context)
 

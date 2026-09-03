@@ -381,11 +381,13 @@ export const CliValidateFindingsResultSchema = z.union([
  * Whether a findings result is the findings document rather than the request-failure
  * envelope. Passthrough tolerance alone cannot discriminate the union, so this mirrors
  * the upstream discriminator: a failure envelope never carries the `report` object.
+ *
+ * The input is deliberately `unknown`: route and evidence consumers receive the union
+ * of every validate transport (`CliValidate | CliValidateFindingsResult | null`), so the
+ * guard must accept the consumed boundary, not only the already-narrowed findings union.
  */
-export function isCliValidateFindings(
-  result: CliValidateFindingsResult
-): result is CliValidateFindings {
-  return 'report' in result
+export function isCliValidateFindings(result: unknown): result is CliValidateFindings {
+  return typeof result === 'object' && result !== null && 'report' in result
 }
 
 const CliArchiveTotalsSchema = z

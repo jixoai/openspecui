@@ -1,8 +1,9 @@
 /**
- * Orthogonal intents (created 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Own the Change Evidence tab's container-responsive list-detail workspace topology.
  * 2. Preserve the decision-plane evidence layer order (summary/paths -> requirement diffs ->
- *    archived validation -> CLI/raw payload) in keyboard-reachable list rows.
+ *    validation findings -> archived validation -> CLI/raw payload) in keyboard-reachable
+ *    list rows.
  * 3. Derive row chips only from settled section facts; never fabricate counts or verdicts.
  * 4. Keep the crowded drill presentational: the detail replaces the list with a back
  *    affordance, and back restores the list without unmounting settled evidence; focus
@@ -11,6 +12,7 @@
  * 5. Keep sub-selection local runtime state — it never enters routes or browser storage.
  *
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import {
   ArchivedValidationEvidence,
@@ -23,6 +25,10 @@ import {
   ChangeCliResultSection,
   ChangeSummaryPathsSection,
 } from '@/components/change-evidence-panel'
+import {
+  ValidationFindingsEvidence,
+  type ValidationFindingsEvidenceChip,
+} from '@/components/validation-findings-evidence'
 import { cn } from '@/lib/utils'
 import type { ChangeStatus } from '@openspecui/core'
 import { ArrowLeft } from 'lucide-react'
@@ -109,10 +115,14 @@ export function EvidenceWorkspace({
   // must be recorded by focus events rather than inspected after the fact.
   const backHadFocus = useRef(false)
   const [diffChip, setDiffChip] = useState<ChangeDiffEvidenceChip | null>(null)
+  const [findingsChip, setFindingsChip] = useState<ValidationFindingsEvidenceChip | null>(null)
   const [validationChip, setValidationChip] = useState<ArchivedValidationEvidenceChip | null>(null)
 
   const handleDiffChip = useCallback((chip: ChangeDiffEvidenceChip | null) => {
     setDiffChip(chip)
+  }, [])
+  const handleFindingsChip = useCallback((chip: ValidationFindingsEvidenceChip | null) => {
+    setFindingsChip(chip)
   }, [])
   const handleValidationChip = useCallback((chip: ArchivedValidationEvidenceChip | null) => {
     setValidationChip(chip)
@@ -146,6 +156,12 @@ export function EvidenceWorkspace({
         content: <ChangeDiffEvidence changeId={changeId} onChip={handleDiffChip} />,
       },
       {
+        id: 'validation-findings',
+        label: 'Validation findings',
+        chip: findingsChip,
+        content: <ValidationFindingsEvidence onChip={handleFindingsChip} />,
+      },
+      {
         id: 'archived-validation',
         label: 'Archived validation',
         chip: validationChip,
@@ -156,7 +172,9 @@ export function EvidenceWorkspace({
   }, [
     changeId,
     diffChip,
+    findingsChip,
     handleDiffChip,
+    handleFindingsChip,
     handleValidationChip,
     referenceEvidence,
     status,

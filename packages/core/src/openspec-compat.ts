@@ -20,7 +20,12 @@ export const OPENSPECUI_TARGET_MAJOR = 12
 // (the Core barrel re-exports Node-bound values like reactive-fs and must not be imported
 // as a value from browser code).
 export { CliCommandTransportSchema } from './cli-contracts/command-result.js'
-export { CliValidateReportSchema } from './cli-contracts/workflow.js'
+export {
+  CliValidateFindingsResultSchema,
+  CliValidateFindingsSchema,
+  CliValidateReportSchema,
+  isCliValidateFindings,
+} from './cli-contracts/workflow.js'
 
 // OpenSpecUI 12 opens a single-series window: only stable CLI 1.12.x is published and
 // fixture-verified today. Unlike v9/v11 there is no admitted non-current series; widening

@@ -1,18 +1,23 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Maintain reactive CLI-backed projections and their direct typed Projection Work readers.
  * 2. Share and release per-entity streams through one planning-root kernel lifecycle.
  * 3. Keep OpenSpec configuration ownership outside the workflow cache while tracking both YAML filename variants.
  * 4. Preserve typed Status and Artifact/Apply/Archive Instructions provenance with the resolved root selector.
  * 5. Resolve per-command CLI capabilities once per lifetime and gate version-only selectors behind admission.
- * 6. Serve the status-list projections through the capability-gated OpenSpec 1.11 batch transport
+ * 6. Serve the status-list projections through the capability-gated batch status transport
  *    (one `status --all` spawn) with projections, per-change dependencies, and failure evidence
- *    identical to the per-change serial transport; 1.10 sessions keep the serial path.
+ *    identical to the per-change serial transport; non-admitted sessions keep the serial path.
+ * 7. Expose the capability-gated OpenSpec 1.12 `validate --report findings` evidence fetch for
+ *    the server boundary: findings loads only behind the derived `findingsReport` capability,
+ *    decodes through its own result schema, and never replaces the full validate report as the
+ *    validation truth source.
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
@@ -24,10 +29,13 @@ import {
   CliRootSchema,
   CliWorkflowStatusSuccessSchema,
   isCliBatchStatusEntryFailure,
+  isCliValidateFindings,
   type CliBatchStatusEntry,
   type CliChangeListEntry,
   type CliCommandResult,
+  type CliDiagnosticFailure,
   type CliRootSelector,
+  type CliValidateFindings,
   type CliWorkflowStatusSuccess,
 } from './cli-contracts/index.js'
 import { CliSchemasSuccessSchema, isCliSchemasFailure } from './cli-contracts/schema-resolution.js'
@@ -383,6 +391,38 @@ type OpsxBatchStatusResolution =
   | { kind: 'per-change-failure' }
   /** The envelope did not report a requested change; callers keep serial semantics for it. */
   | { kind: 'missing' }
+
+/**
+ * Bulk scope a findings request must name explicitly (OpenSpec 1.12 law).
+ *
+ * Upstream rejects `--report findings` without a bulk scope, with an item name, and
+ * with archived+active mixing, so the kernel surface accepts exactly the four valid
+ * scopes and never an item target.
+ */
+export type OpsxValidationFindingsScope = 'all' | 'changes' | 'specs' | 'archived'
+
+/**
+ * Capability-gated `validate --report findings` evidence for the server boundary.
+ *
+ * - `unavailable`: the admitted session derives no `findingsReport` capability, so no
+ *   argv was composed at all — a bypassed or retired CLI must learn the refusal here,
+ *   never by watching the CLI reject an unknown option.
+ * - `findings`: the filtered findings document. This is a separate evidence transport,
+ *   never the validation truth: `summary` and `root` stay full-run values and
+ *   `report.returnedItems`/`report.totalItems` distinguish the filtered view from the
+ *   run size. The full validate report keeps its own transport and truth ownership.
+ * - `request-failure`: the CLI's typed `invalid_validation_report_request` envelope
+ *   (or another diagnostic failure). It is decoded evidence, not a thrown error, so
+ *   callers can show the CLI's own fix string.
+ */
+export type OpsxValidationFindingsProjection =
+  | { kind: 'unavailable'; capability: 'findingsReport' }
+  | { kind: 'findings'; value: CliValidateFindings; evidence: CliProjectionCommandEvidence }
+  | {
+      kind: 'request-failure'
+      value: CliDiagnosticFailure
+      evidence: CliProjectionCommandEvidence
+    }
 
 // ---------------------------------------------------------------------------
 // OpsxKernel
@@ -1548,6 +1588,52 @@ export class OpsxKernel {
       value.push(await this.fetchStatus(changeId))
     }
     return { value, evidence: batch.evidence }
+  }
+
+  /**
+   * Execute the capability-gated OpenSpec 1.12 findings evidence fetch (one spawn).
+   *
+   * Mirrors the batch status transport's wiring: the derived `findingsReport` capability
+   * is checked before any argv is composed, so a bypassed or retired session receives a
+   * typed refusal instead of a `--report findings` flag it may reject. Decoding goes
+   * through the contracts executor's own findings result schema; the upstream request
+   * error (`invalid_validation_report_request`) stays decoded evidence in
+   * `request-failure`, while an unparseable stdout document or transport failure routes
+   * through the existing `CliProjectionCommandError` path. Findings never replaces the
+   * full validate report as the validation truth source — the kernel keeps no validate
+   * projection here, so this loader is a separate evidence fetch for the server boundary.
+   * The single spawn satisfies the one-admission-slot constraint by construction.
+   */
+  async readValidationFindingsProjection(
+    scope: OpsxValidationFindingsScope
+  ): Promise<OpsxValidationFindingsProjection> {
+    const capabilities = await this.resolveCliCapabilities()
+    if (!capabilities.findingsReport) {
+      return { kind: 'unavailable', capability: 'findingsReport' }
+    }
+    await touchOpsxProjectDeps(this.projectDir)
+    const result = await this.cliExecutor.contracts.validate({
+      target: scope === 'archived' ? { kind: 'archived' } : { kind: 'scope', scope },
+      report: 'findings',
+      ...this.rootSelector,
+    })
+    if (!result.data) {
+      // Unparseable stdout or a transport-level failure: the existing command error path.
+      // The findings document and the request-failure envelope decode regardless of exit
+      // code, so a typed CLI answer with exit 1 never lands here.
+      const message =
+        result.contractError ||
+        result.stderr.trim() ||
+        result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')
+      throw new CliProjectionCommandError(
+        message || `openspec validate --report findings failed (exit ${result.exitCode ?? 'null'})`,
+        result
+      )
+    }
+    const evidence = toCliProjectionCommandEvidence(result)
+    return isCliValidateFindings(result.data)
+      ? { kind: 'findings', value: result.data, evidence }
+      : { kind: 'request-failure', value: result.data, evidence }
   }
 
   /** Execute one artifact-instructions projection in the caller-owned Work generation. */
