@@ -86,3 +86,39 @@ static evidence + findings). BLOCKING: none. All eight non-blocking suggestions 
 8. Report full-report row softened to shape-compatible.
 
 Change review is closed at 8/10 with no blockers; implementation batches may start.
+
+## Batch A disposition (2026-09-04, commit 9e0b0383)
+
+Four parallel subagents, non-overlapping file sets, all integrator-verified (diffs cross-checked; focused
+gates independently rerun): A1 compat gate + mirrors + UI copy (10 files; executed red via temporary
+pre-change restore); A2 Agent registry/staleness (6 files; 40-tool 1.12 inventory, provenance union kept,
+baseline-subset methodology); A3 v12 fixture helper (152 lines, v11-parity exports, both-XDG isolation
+rationale); A4 findings contracts + argv (schema beside full report, unknown-param guard, stash-based red).
+
+## Batch B disposition (2026-09-04, commit d782c98e)
+
+B1 fixture matrix: 8 new suites / 24 tests, 5 v11 suites deleted, mutation red executed (bins-map ->
+111 alias fails identity assert). B2 kernel: readValidationFindingsProjection behind the findingsReport
+capability gate (mutation red: without the gate the retired 1.11 fixture received --report argv); 5 stale
+kernel tests rebased; schemas-root fixtures re-pointed to the pinned 1.12 bin. B3 server+web: cli.validate
+findings union member + server capability gate + 4 router tests; 12 in-set server reds fixed; new
+validation-findings-evidence web surface (10 tests) + evidence-workspace section; evidence-component windows
+rotated. B3's three out-of-set core additions (compat subpath re-exports, barrel types, widened guard param)
+were integrator-reviewed and accepted.
+
+Integrator follow-ups landed with Batch B: typed-lane tsconfig rewiring; rotation-caused server anchors
+(router archived-validation fixture, tool-subscription install-stream/generatedBy, cold-start 1.12
+expectations); change-diff-evidence-service stale comments.
+
+## Broad gates (2026-09-04)
+
+- format:check PASS; lint:ci PASS (2 pre-existing warnings); typecheck PASS (all packages + scripts).
+- core: 746/747 — sole failure is the pre-existing macOS `/var` vs `/private/var` path-realpath
+  environmental failure (fails identically on clean main).
+- server: all v12-domain suites green; remaining failures fluctuate (9-17 across runs) exclusively inside
+  the git-subprocess/shutdown timing family (server-startup, router git/dashboard-stamp,
+  git-repository-binding-*) that fails with shifting membership identically on clean main (11 there);
+  zero failures in validate/findings/agent/cold-start domains.
+- web 1194/1194; app 384/384; search/website/translators/ai-provider all green; cli and
+  xterm-input-panel have no unit-test script (browser lanes cover xterm).
+- test:browser:ci: PASS (exit 0) — xterm/app/web browser lanes: 63 passed +1 skipped, 10, 18, 12.

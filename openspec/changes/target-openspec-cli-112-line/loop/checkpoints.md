@@ -27,7 +27,7 @@ all adopted (commit 0e5fff17); Round-B 8/10 with zero blockers → all eight sug
 single-series `>=1.12.0 <1.13.0` window stands as the Owner-default decision. Implementation batches may
 start.
 
-## CP2 — core contracts land (PENDING)
+## CP2 — core contracts land (DONE 2026-09-04)
 
 Focused gates (run from repo root):
 
@@ -37,7 +37,7 @@ pnpm --filter @openspecui/core test -- src/cli-contracts
 pnpm --filter @openspecui/core test -- src/agent-delivery-registry.test.ts src/tool-init-state.test.ts
 ```
 
-## CP3 — pinned fixtures prove the line (PENDING)
+## CP3 — pinned fixtures prove the line (DONE 2026-09-04)
 
 Fixture helper `packages/core/src/__tests__/official-cli-v12-fixtures.ts` mirrors the v11 helper; owner tests
 follow the existing `official-cli-v11-*.test.ts` layout as `official-cli-v12-*.test.ts` and re-point their
@@ -52,12 +52,15 @@ npx vitest run src/official-cli-v12-validation-findings-fixtures.test.ts \
   src/opsx-kernel-schemas-root.fixtures.test.ts src/upstream-contract-regression.test.ts
 ```
 
-The exact suite set may grow with slices 2/3; every newly accepted 1.12 contract must be executable here, and
-the pinned 1.11.0 boundary rejections (`--report findings` rejected) must be asserted in the same matrix.
-Until those files exist, this checkpoint is not executable — that is expected at planning time and must not
-be marked DONE on the strength of the v11 matrix alone.
+Landed set: official-cli-v12-{validation-findings,validation-full,agent-delivery,boundary,batch-status,
+show-diff,default-store,nested-spec}-fixtures.test.ts (24 tests, pinned executables only). The five
+v11-line suites were deleted per the v9->v11 precedent; official-cli-v11-workflow-fixtures.test.ts is
+retained for admitted-line workflow/JSON-discipline coverage. Typed lanes rewired:
+tsconfig.workflow-contract-tests / nested-spec-tests / default-store-tests / agent-delivery-tests now include
+the v12 suites (integrator landed; tsc silently ignores missing includes, so the rewiring is itself evidence).
+Boundary proof: pinned 1.11.0 rejects `--report findings`/`--report full` with `unknown option '--report'`.
 
-## CP4 — transport + projections land (PENDING)
+## CP4 — transport + projections land (DONE 2026-09-04)
 
 ```bash
 pnpm --filter @openspecui/core test -- src/opsx-kernel
