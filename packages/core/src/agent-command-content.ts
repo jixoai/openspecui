@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Resolve the running OpenSpec CLI's private command-generation boundary without bundling copied prompts.
  * 2. Produce exact per-Agent, per-workflow command contents for physical fingerprint comparison.
  * 3. Fail closed when the configured runner has no importable OpenSpec module or compatible generator contract.
@@ -11,6 +11,7 @@
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 
 import { dirname, resolve } from 'node:path'
@@ -29,7 +30,8 @@ export type AgentCommandContentCatalog = Readonly<
  * contract when a command template carries no argument placeholder of its own
  * (see the pinned upstream `command-generation/adapters/opencode.ts`). OpenSpecUI
  * treats this line as generator-owned, so command files may differ by exactly
- * this line and still be content-current across the admitted series pair.
+ * this line and still be content-current against the admitted 1.12 generator
+ * even when an older line's generator wrote the pre-injection body.
  */
 export const OPENCODE_PROVIDED_ARGUMENTS_LINE = '**Provided arguments**: $ARGUMENTS'
 
@@ -62,8 +64,8 @@ function stripInjectedProvidedArgumentsLine(content: string): string {
  *
  * Equivalence is exact string equality after BOM/CRLF normalization, plus one
  * deliberate tolerance: the OpenCode passthrough line above may appear as a
- * standalone line on either side, because 1.10+ adapters inject it while earlier
- * admitted runners did not. A longer body line that merely starts with the
+ * standalone line on either side, because 1.10+ adapters inject it while pre-1.10
+ * runners did not. A longer body line that merely starts with the
  * passthrough text is genuine content, never generator-owned. No other tool or
  * difference is tolerated.
  */

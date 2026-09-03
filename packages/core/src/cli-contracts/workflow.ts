@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Model camelCase workflow JSON independently from Store-family JSON.
  * 2. Preserve strict, archived, and bulk Validate plus Archive outcomes, including failure payloads.
  * 3. Preserve multiline requirement bodies from `show --json`.
@@ -7,11 +7,15 @@
  * 5. Export the successful Spec-document schema for browser-safe projection validation.
  * 6. Export the root-less Status payload fields and Requirement shape shared with the
  *    OpenSpec 1.11 batch Status and show --diff contracts.
+ * 7. Model the OpenSpec 1.12 `validate --report findings` document beside (never inside) the
+ *    full Validate report, sharing the bulk-item and summary shapes while keeping decoding
+ *    independent of the process exit code and of full-report validation truth.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { z } from 'zod'
 import {
@@ -300,26 +304,30 @@ const CliValidationTotalsSchema = z
   })
   .passthrough()
 
+/** One bulk Validate item: verdict, full issue array, and runtime-dependent duration. */
+export const CliValidateItemSchema = z
+  .object({
+    id: z.string(),
+    type: z.enum(['change', 'spec']),
+    valid: z.boolean(),
+    issues: z.array(CliValidationIssueSchema),
+    durationMs: z.number(),
+  })
+  .passthrough()
+
+/** Shared Validate summary: full-run totals plus per-type totals, never the filtered view. */
+export const CliValidateSummarySchema = z
+  .object({
+    totals: CliValidationTotalsSchema,
+    byType: z.record(CliValidationTotalsSchema),
+  })
+  .passthrough()
+
 /** Typed ordinary Validate report, also used by 1.9 `validate --archived --json`. */
 export const CliValidateReportSchema = z
   .object({
-    items: z.array(
-      z
-        .object({
-          id: z.string(),
-          type: z.enum(['change', 'spec']),
-          valid: z.boolean(),
-          issues: z.array(CliValidationIssueSchema),
-          durationMs: z.number(),
-        })
-        .passthrough()
-    ),
-    summary: z
-      .object({
-        totals: CliValidationTotalsSchema,
-        byType: z.record(CliValidationTotalsSchema),
-      })
-      .passthrough(),
+    items: z.array(CliValidateItemSchema),
+    summary: CliValidateSummarySchema,
     version: z.string(),
     root: CliRootSchema,
   })
@@ -327,6 +335,58 @@ export const CliValidateReportSchema = z
 
 /** Typed strict, non-strict, or archived Validate result, including failure diagnostics. */
 export const CliValidateSchema = z.union([CliValidateReportSchema, CliDiagnosticFailureSchema])
+
+/**
+ * Typed OpenSpec 1.12 `validate --report findings` document.
+ *
+ * The findings report is a filtered evidence transport beside the full report, never the
+ * validation truth: `itemFindings` carries only items with issues, while `summary` and
+ * `root` stay the full-run values the CLI computed over every item in scope.
+ * `report.returnedItems`/`report.totalItems` distinguish the filtered view from the run
+ * size, and the process exit code keeps the full-run rule (`failed > 0 -> 1`), so decoding
+ * never consults it. An empty scope is the success document
+ * `{ returnedItems: 0, totalItems: 0, itemFindings: [] }`, not a failure sum type.
+ */
+export const CliValidateFindingsSchema = z
+  .object({
+    report: z
+      .object({
+        kind: z.literal('validation-findings'),
+        version: z.string(),
+        scope: z.enum(['all', 'changes', 'specs', 'archived']),
+        returnedItems: z.number(),
+        totalItems: z.number(),
+      })
+      .passthrough(),
+    itemFindings: z.array(CliValidateItemSchema),
+    summary: CliValidateSummarySchema,
+    root: CliRootSchema,
+  })
+  .passthrough()
+
+/**
+ * Typed findings or request-failure result of `validate --report findings --json`.
+ *
+ * Invalid requests (no bulk scope, an item name, archived+active mixing, or an unknown
+ * report value) produce the shared status-array failure envelope with code
+ * `invalid_validation_report_request`, decoded here through the shared diagnostic
+ * failure schema including its optional `fix` string.
+ */
+export const CliValidateFindingsResultSchema = z.union([
+  CliValidateFindingsSchema,
+  CliDiagnosticFailureSchema,
+])
+
+/**
+ * Whether a findings result is the findings document rather than the request-failure
+ * envelope. Passthrough tolerance alone cannot discriminate the union, so this mirrors
+ * the upstream discriminator: a failure envelope never carries the `report` object.
+ */
+export function isCliValidateFindings(
+  result: CliValidateFindingsResult
+): result is CliValidateFindings {
+  return 'report' in result
+}
 
 const CliArchiveTotalsSchema = z
   .object({
@@ -377,4 +437,8 @@ export type CliArchiveInstructions = z.infer<typeof CliArchiveInstructionsSchema
 export type CliArchiveInstructionsSuccess = z.infer<typeof CliArchiveInstructionsSuccessSchema>
 export type CliValidate = z.infer<typeof CliValidateSchema>
 export type CliValidateReport = z.infer<typeof CliValidateReportSchema>
+export type CliValidateItem = z.infer<typeof CliValidateItemSchema>
+export type CliValidateSummary = z.infer<typeof CliValidateSummarySchema>
+export type CliValidateFindings = z.infer<typeof CliValidateFindingsSchema>
+export type CliValidateFindingsResult = z.infer<typeof CliValidateFindingsResultSchema>
 export type CliArchive = z.infer<typeof CliArchiveSchema>

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Orthogonal intents (updated 2026-08-09 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Reproduce the production CLI-runner resolution path and report every candidate attempt (no short-circuit).
  * 2. Surface Windows npm-global extension-less shim defects that `spawn({shell:false})` cannot execute.
  * 3. Emit machine-readable JSON via --json so users can paste objective evidence into bug reports.
@@ -23,6 +23,7 @@
  * The npx/bunx/... probes DO attempt real `--version` invocations, which may download a
  * package on first run (same as production resolution). Pass --no-network to skip them.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { execFile, spawn } from 'node:child_process'
 import { arch, homedir, platform } from 'node:os'
@@ -37,8 +38,9 @@ const CLI_PROBE_TIMEOUT_MS = Number(nodeEnv.OPENSPECUI_CLI_PROBE_TIMEOUT_MS) || 
 const SHELL_RESOLVE_TIMEOUT_MS = 5_000
 
 // Mirror of packages/core OPENSPEC_CLI_TARGET_SERIES: fallback probes must resolve the series
-// the release line admits, never an unversioned @latest the compatibility gate can block.
-const OPENSPEC_CLI_TARGET_SERIES = '1.11'
+// the release line admits, never an unversioned @latest the gate can block.
+// Keep in sync with packages/core/src/openspec-compat.ts (OpenSpecUI 12 -> 1.12).
+const OPENSPEC_CLI_TARGET_SERIES = '1.12'
 const OPENSPEC_CLI_FALLBACK_SPEC = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
 
 const PACKAGE_MANAGER_RUNNERS = [

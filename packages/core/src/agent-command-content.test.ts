@@ -1,15 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Prove the pinned OpenSpec CLI yields exact Agent command contents through the runtime generator bridge.
  * 2. Prove non-importable runners fail closed instead of fabricating current command evidence.
  * 3. Prove a CLI line without one adapter keeps every unrelated adapter's evidence
- *    (historical 1.8 Command Code exemplar; the admitted 1.10/1.11 pair shares one inventory).
+ *    (retired 1.11 lacks codeassistant; historical 1.8 lacks Command Code).
  * 4. Prove command-content equivalence tolerates exactly the OpenCode provided-arguments
  *    injection line and nothing else for tools without that adapter contract.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 
 import { resolve } from 'node:path'
@@ -20,37 +21,41 @@ import {
   OPENCODE_PROVIDED_ARGUMENTS_LINE,
 } from './agent-command-content.js'
 
-const OPENSPEC_111_BIN = resolve(
+const OPENSPEC_112_BIN = resolve(
+  import.meta.dirname,
+  '../node_modules/openspec-cli-112/bin/openspec.js'
+)
+
+// Retired runner (1.11 line, below the admitted single-series window): SourceCraft
+// Code Assistant is the registry tool whose command adapter this line never shipped,
+// so the retained executable proves the new minCliSeries boundary as a real
+// version-scoped unavailability. It is capability-boundary rejection evidence, not
+// an admission of 1.11 support.
+const OPENSPEC_111_BIN_RETIRED = resolve(
   import.meta.dirname,
   '../node_modules/openspec-cli-111/bin/openspec.js'
 )
 
-const OPENSPEC_110_BIN = resolve(
-  import.meta.dirname,
-  '../node_modules/openspec-cli-110/bin/openspec.js'
-)
-
 // Historical runner (1.8 line): Command Code is the one registry tool whose command
-// adapter a real installed runner can still lack. The admitted 1.10/1.11 pair ships
-// identical command-adapter inventories, so this runner remains the only executable
-// exemplar of version-scoped adapter unavailability. It is historical compatibility
-// evidence for that mechanism, not an admission of 1.8 support.
+// adapter this older runner lacks, exemplifying the same version-scoped mechanism
+// one line further back. It is historical compatibility evidence for that
+// mechanism, not an admission of 1.8 support.
 const OPENSPEC_18_BIN_HISTORICAL = resolve(
   import.meta.dirname,
   '../node_modules/openspec-cli-18/bin/openspec.js'
 )
 
 describe('loadOpenSpecAgentCommandContents', () => {
-  it('loads official per-Agent command contents from the pinned OpenSpec 1.11 generator', async () => {
+  it('loads official per-Agent command contents from the pinned OpenSpec 1.12 generator', async () => {
     const result = await loadOpenSpecAgentCommandContents(
-      [process.execPath, OPENSPEC_111_BIN],
+      [process.execPath, OPENSPEC_112_BIN],
       ['explore']
     )
     const catalog = result?.catalog
 
     expect(catalog?.claude?.explore).toContain('name: "OPSX: Explore"')
     expect(catalog?.claude?.explore).toContain('allowed-tools:')
-    // 1.11 adapters rewrite the invocation reference to each tool's own syntax.
+    // 1.12 adapters rewrite the invocation reference to each tool's own syntax.
     expect(catalog?.['amazon-q']?.explore).toContain('`@opsx-explore`')
     expect(catalog?.qwen?.explore).toContain('`/opsx-explore`')
     expect(catalog?.['command-code']?.explore).toContain('`/opsx-explore`')
@@ -58,24 +63,28 @@ describe('loadOpenSpecAgentCommandContents', () => {
     // argument passthrough line after the input contract.
     expect(catalog?.['command-code']?.explore?.startsWith('---')).toBe(false)
     expect(catalog?.['command-code']?.explore).toContain(OPENCODE_PROVIDED_ARGUMENTS_LINE)
+    // SourceCraft Code Assistant ships description-only YAML frontmatter commands.
+    expect(catalog?.codeassistant?.explore?.startsWith('---\ndescription:')).toBe(true)
+    expect(catalog?.opencode?.explore).toContain(OPENCODE_PROVIDED_ARGUMENTS_LINE)
     expect(catalog?.codex).toBeUndefined()
     expect(catalog?.['minimax-code']).toBeUndefined()
-    // The 1.11 runner ships every registry adapter, so nothing is version-unavailable.
+    // The 1.12 runner ships every registry adapter, so nothing is version-unavailable.
     expect(result?.unavailableTools).toEqual({})
   })
 
-  it('keeps the admitted 1.10 generator on the same adapter inventory and injection behavior', async () => {
+  it('retired 1.11: isolates the missing codeassistant adapter without erasing other evidence', async () => {
     const result = await loadOpenSpecAgentCommandContents(
-      [process.execPath, OPENSPEC_110_BIN],
+      [process.execPath, OPENSPEC_111_BIN_RETIRED],
       ['explore']
     )
 
-    // The admitted series pair (1.10/1.11) has no command-adapter divergence; the
-    // per-series generator facts they share are the complete inventory and the 1.10+
-    // OpenCode provided-arguments injection appended by the adapter itself.
-    expect(result?.unavailableTools).toEqual({})
+    // One missing adapter must not fail the whole observation.
+    expect(result).not.toBeNull()
     expect(result?.catalog?.claude?.explore).toContain('name: "OPSX: Explore"')
-    expect(result?.catalog?.opencode?.explore).toContain(OPENCODE_PROVIDED_ARGUMENTS_LINE)
+    // Codeassistant first ships with the 1.12 line: version-scoped unavailability,
+    // not absence of the tool from the registry.
+    expect(result?.catalog?.codeassistant).toBeUndefined()
+    expect(result?.unavailableTools?.codeassistant).toContain('first ships with OpenSpec CLI 1.12')
   })
 
   it("historical 1.8: isolates the line's missing Command Code adapter without erasing other evidence", async () => {

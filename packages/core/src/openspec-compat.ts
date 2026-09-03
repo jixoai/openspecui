@@ -1,9 +1,10 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Encode the shipped OpenSpecUI release line's OpenSpec CLI compatibility law.
  * 2. Classify current, supported non-current, unsupported, and unknown CLI versions.
  * 3. Express the accepted range and the recommended line as separate public facts.
- * 4. Derive per-command capabilities from the detected admitted CLI version.
+ * 4. Derive per-command capabilities (including the 1.12 findings report) from the detected
+ *    admitted CLI version.
  * 5. Re-export the browser-safe contract schemas for renderer evidence boundaries.
  *
  * Original request (2026-07-15): "CLI 1.6 兼容性门禁。"
@@ -11,8 +12,9 @@
  * Original request (2026-08-01): "v7不兼容1.6.x，明确要求必须使用 v1.7.x。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
-export const OPENSPECUI_TARGET_MAJOR = 11
+export const OPENSPECUI_TARGET_MAJOR = 12
 // Browser-safe contract schemas this surface re-exports for renderer evidence boundaries.
 // Both modules import only zod, so this subpath stays free of Node-only module graphs
 // (the Core barrel re-exports Node-bound values like reactive-fs and must not be imported
@@ -20,37 +22,43 @@ export const OPENSPECUI_TARGET_MAJOR = 11
 export { CliCommandTransportSchema } from './cli-contracts/command-result.js'
 export { CliValidateReportSchema } from './cli-contracts/workflow.js'
 
-export const OPENSPEC_CLI_TARGET_SERIES = '1.11'
-export const OPENSPEC_CLI_SUPPORTED_SERIES = ['1.10', '1.11'] as const
-export const OPENSPEC_CLI_MIN_VERSION = '1.10.0'
-export const OPENSPEC_CLI_TARGET_MIN_VERSION = '1.11.0'
-export const OPENSPEC_CLI_RECOMMENDED_MIN_VERSION = '1.11.0'
-export const OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION = '1.12.0'
-export const OPENSPEC_CLI_ACCEPTED_RANGE = '>=1.10.0 <1.12.0'
-export const OPENSPEC_CLI_RECOMMENDED_RANGE = '>=1.11.0 <1.12.0'
-export const OPENSPEC_CLI_REFERENCE_TAG_PATTERN = 'v1.11.*'
+// OpenSpecUI 12 opens a single-series window: only stable CLI 1.12.x is published and
+// fixture-verified today. Unlike v9/v11 there is no admitted non-current series; widening
+// to a future 1.13 is a separate verified decision, so OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION
+// keeps >=1.13.0 blocked by default.
+export const OPENSPEC_CLI_TARGET_SERIES = '1.12'
+export const OPENSPEC_CLI_SUPPORTED_SERIES = ['1.12'] as const
+export const OPENSPEC_CLI_MIN_VERSION = '1.12.0'
+export const OPENSPEC_CLI_TARGET_MIN_VERSION = '1.12.0'
+export const OPENSPEC_CLI_RECOMMENDED_MIN_VERSION = '1.12.0'
+export const OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION = '1.13.0'
+export const OPENSPEC_CLI_ACCEPTED_RANGE = '>=1.12.0 <1.13.0'
+export const OPENSPEC_CLI_RECOMMENDED_RANGE = '>=1.12.0 <1.13.0'
+export const OPENSPEC_CLI_REFERENCE_TAG_PATTERN = 'v1.12.*'
 
 /** Per-command capabilities derived from one admitted OpenSpec CLI version. */
 export interface OpenSpecCliCapabilities {
-  /** `openspec schemas --json --store <id>` accepts the selector (OpenSpec 1.9+; both admitted lines). */
+  /** `openspec schemas --json --store <id>` accepts the selector (OpenSpec 1.9+; the admitted 1.12 line). */
   schemasRootSelector: boolean
-  /** `openspec validate --archived --json` exists (OpenSpec 1.9+; both admitted lines). */
+  /** `openspec validate --archived --json` exists (OpenSpec 1.9+; the admitted 1.12 line). */
   archivedValidation: boolean
   /** `openspec init --language <language>` exists (OpenSpec 1.10+). */
   initLanguage: boolean
-  /** `openspec status --all --json` batch envelope exists (OpenSpec 1.11 only; 1.10 rejects the flag). */
+  /** `openspec status --all --json` batch envelope exists (OpenSpec 1.11+; the admitted 1.12 line accepts the flag). */
   batchStatus: boolean
-  /** `openspec show <change> --json --diff` requirement diffs exist (OpenSpec 1.11 only). */
+  /** `openspec show <change> --json --diff` requirement diffs exist (OpenSpec 1.11+; the admitted 1.12 line). */
   requirementDiff: boolean
+  /** `openspec validate --report findings --json` exists (OpenSpec 1.12 only; explicit bulk scope required). */
+  findingsReport: boolean
 }
 
 /**
  * Derive command capabilities from one parsed CLI version.
  *
  * Only an admitted version — stable inside the accepted range — can select version-specific
- * capabilities. Unsupported forms (prereleases, >=1.12, below-range) and unparseable output
+ * capabilities. Unsupported forms (prereleases, >=1.13, below-range) and unparseable output
  * keep their mismatch evidence and expose no capability, so a page-level version bypass can
- * never manufacture a 1.11 command surface for a CLI the release line does not admit.
+ * never manufacture a 1.12 command surface for a CLI the release line does not admit.
  */
 export function deriveOpenSpecCliCapabilities(
   version: OpenSpecCliVersion | null
@@ -62,6 +70,7 @@ export function deriveOpenSpecCliCapabilities(
       initLanguage: false,
       batchStatus: false,
       requirementDiff: false,
+      findingsReport: false,
     }
   }
   const onTargetSeries = isSeries(version, OPENSPEC_CLI_TARGET_SERIES)
@@ -71,6 +80,7 @@ export function deriveOpenSpecCliCapabilities(
     initLanguage: true,
     batchStatus: onTargetSeries,
     requirementDiff: onTargetSeries,
+    findingsReport: onTargetSeries,
   }
 }
 

@@ -19,6 +19,7 @@
  * Owner correction (2026-07-29): remove project-level Hosted App URL configuration; the daemon owns its local App shell.
  * Original request (2026-08-01): Settings labels Agent Integrations and delegates management to Config.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -364,8 +365,9 @@ export function Settings() {
 
   // The install stream installs the admitted series; never present an out-of-range registry
   // latest as the update target (issue #258). Only a recommended (current-series) latest can be
-  // named literally — a supported-but-non-current latest (e.g. 1.10.x) would mislabel the
-  // actually-installed 1.11.x, so it also falls back to the series label.
+  // named literally — under the v12 single-series window any non-recommended latest (an older
+  // line or an unpublished 1.13) would mislabel the actually-installed 1.12.x, so it falls back
+  // to the series label.
   const pinnedInstallSpec = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
   const updateTargetVersion =
     cliSniffResult?.hasUpdate && cliSniffResult.latestVersion

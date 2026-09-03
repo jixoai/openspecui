@@ -1,18 +1,21 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
- * 1. Lock the complete pinned OpenSpec 1.11 Agent delivery registry at the public Core boundary.
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * 1. Lock the complete pinned OpenSpec 1.12 Agent delivery registry at the public Core boundary.
  * 2. Prove capability, command format/invocation, alias, detection, setup, cleanup, migration,
  *    global skill roots, legacy roots, and IDE restart facts stay co-located.
- * 3. Prove per-series snapshots express the Antigravity `.agent` -> `.agents` divergence
- *    (1.10 keeps `.agent` current; 1.11 moves current roots and migrates after generation).
- * 4. Prove version-selected inventories admit only stable 1.10.x/1.11.x lines and declare the
- *    three-valued shared-root owner candidate set exactly as the pinned upstream source does.
+ * 3. Prove the 1.12 snapshot inherits every 1.11 physical fact (Antigravity `.agents`-current
+ *    with `.agent` legacy/migration; zed skills-only from '1.10') and adds SourceCraft Code
+ *    Assistant with `minCliSeries '1.12'`.
+ * 4. Prove version-selected inventories admit only stable 1.12.x — retired 1.10.x/1.11.x lines
+ *    select nothing — and declare the three-valued shared-root owner candidate set exactly
+ *    as the pinned upstream source does.
  * 5. Provide explicit mutation-resistance evidence for every load-bearing registry dimension.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Review correction (2026-08-02): checked mutation fixtures must not bypass fabricated-state nullability.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 
 import { describe, expect, it } from 'vitest'
@@ -281,6 +284,16 @@ const OFFICIAL_REGISTRY = [
   ],
   ['pi', 'Pi', '.pi', 'adapter-backed', '.pi/prompts/opsx-{workflow}.md', 'markdown', 'flat', '/'],
   [
+    'codeassistant',
+    'SourceCraft Code Assistant',
+    '.codeassistant',
+    'adapter-backed',
+    '.codeassistant/commands/opsx-{workflow}.md',
+    'markdown',
+    'flat',
+    '/',
+  ],
+  [
     'qoder',
     'Qoder',
     '.qoder',
@@ -445,8 +458,9 @@ function assertPinnedRegistry(registry: readonly ToolConfig[]): void {
       format: 'markdown',
     })
   )
-  // 1.11 base: Antigravity's current roots live at the shared `.agents` root while
-  // `.agent` stays readable for detection and migrates only after replacement generation.
+  // 1.12 base (inherited from 1.11): Antigravity's current roots live at the shared
+  // `.agents` root while `.agent` stays readable for detection and migrates only after
+  // replacement generation.
   expect(registryEntry(registry, 'antigravity')).toEqual(
     expect.objectContaining({
       skillsDir: '.agents',
@@ -460,13 +474,14 @@ function assertPinnedRegistry(registry: readonly ToolConfig[]): void {
       requiresIdeRestart: true,
     })
   )
-  // Cleanup stays scoped to pre-opsx filenames under the former root on both lines:
+  // Cleanup stays scoped to pre-opsx filenames under the former root:
   // upstream never lists the shared root because users may keep their own files there.
   expect(registryEntry(registry, 'antigravity')?.cleanup).toEqual({
     kind: 'project-patterns',
     patterns: ['.agent/workflows/openspec-*.md'],
   })
-  // Zed Agent joins on 1.10: skills-only, shared root, no command adapter, no restart fact.
+  // Zed Agent joined on 1.10 (provenance kept typed): skills-only, shared root, no
+  // command adapter, no restart fact.
   expect(registryEntry(registry, 'zed')).toEqual(
     expect.objectContaining({
       name: 'Zed Agent',
@@ -480,37 +495,44 @@ function assertPinnedRegistry(registry: readonly ToolConfig[]): void {
     })
   )
   expect(registryEntry(registry, 'zed')?.requiresIdeRestart).toBeUndefined()
-}
-
-/** Assert both admitted per-series inventories against the selection boundary itself. */
-function assertAdmittedSeriesInventories(): void {
-  const series110 = selectAgentDeliveryRegistry('1.10.3')
-  const series111 = selectAgentDeliveryRegistry('1.11.0')
-
-  // Both admitted lines ship the same tool set: zed's minCliSeries is 1.10.
-  expect(series110.map((tool) => tool.value)).toEqual(AI_TOOLS.map((tool) => tool.value))
-  expect(series111.map((tool) => tool.value)).toEqual(AI_TOOLS.map((tool) => tool.value))
-
-  // 1.10 still treats `.agent` as Antigravity's current root: no shared-root membership,
-  // no legacy roots, no migration evidence, no detection-path override.
-  expect(registryEntry(series110, 'antigravity')).toEqual(
+  // SourceCraft Code Assistant enters with 1.12: description-only YAML commands under
+  // the default `.codeassistant` detection root, natural-language skill references
+  // (upstream `NATURAL_LANGUAGE_SKILL_TOOLS`, like rovodev — but with command files,
+  // unlike rovodev), no IDE restart fact, no cleanup, no migrations.
+  expect(registryEntry(registry, 'codeassistant')).toEqual(
     expect.objectContaining({
-      skillsDir: '.agent',
+      name: 'SourceCraft Code Assistant',
+      available: true,
+      successLabel: 'SourceCraft Code Assistant',
+      skillsDir: '.codeassistant',
+      capability: 'adapter-backed',
       command: expect.objectContaining({
-        pathTemplate: '.agent/workflows/opsx-{workflow}.md',
+        pathTemplate: '.codeassistant/commands/opsx-{workflow}.md',
         format: 'markdown',
       }),
-      requiresIdeRestart: true,
+      minCliSeries: '1.12',
     })
   )
-  expect(registryEntry(series110, 'antigravity')?.legacySkillsDirs ?? []).toEqual([])
-  expect(registryEntry(series110, 'antigravity')?.migrations ?? []).toEqual([])
-  expect(registryEntry(series110, 'antigravity')?.detectionPaths).toBeUndefined()
-  expect(registryEntry(series110, 'zed')?.skillsDir).toBe('.agents')
+  expect(registryEntry(registry, 'codeassistant')?.detectionPaths).toBeUndefined()
+  expect(registryEntry(registry, 'codeassistant')?.requiresIdeRestart).toBeUndefined()
+  expect(registryEntry(registry, 'codeassistant')?.cleanup).toBeUndefined()
+  expect(registryEntry(registry, 'codeassistant')?.migrations).toBeUndefined()
+  expect(registryEntry(registry, 'codeassistant')?.legacySkillsDirs).toBeUndefined()
+}
 
-  // 1.11 moves Antigravity's current roots to the shared `.agents` root and keeps
-  // `.agent` as legacy + after-generation migration evidence.
-  expect(registryEntry(series111, 'antigravity')).toEqual(
+/** Assert the admitted per-series inventory against the selection boundary itself. */
+function assertAdmittedSeriesInventories(): void {
+  const series112 = selectAgentDeliveryRegistry('1.12.0')
+
+  // The admitted line ships the complete official tool set: every 1.11 tool keeps its
+  // physical facts and codeassistant (minCliSeries '1.12') joins; zed's provenance
+  // stays '1.10' without gating the 1.12 inventory.
+  expect(series112.map((tool) => tool.value)).toEqual(AI_TOOLS.map((tool) => tool.value))
+  expect(series112.some((tool) => tool.value === 'codeassistant')).toBe(true)
+
+  // 1.12 inherits 1.11's Antigravity reality: current roots at the shared `.agents`
+  // root with `.agent` as legacy + after-generation migration evidence.
+  expect(registryEntry(series112, 'antigravity')).toEqual(
     expect.objectContaining({
       skillsDir: '.agents',
       legacySkillsDirs: ['.agent'],
@@ -522,21 +544,24 @@ function assertAdmittedSeriesInventories(): void {
     })
   )
 
-  // IDE restart facts are declared on both admitted lines exactly where upstream does,
-  // and never on the skills-only zed / shared / codex targets.
-  for (const selected of [series110, series111]) {
-    expect(selected.filter((tool) => tool.requiresIdeRestart).map((tool) => tool.value)).toEqual([
-      ...EXPECTED_RESTART_TOOLS,
-    ])
-    expect(registryEntry(selected, 'zed')?.requiresIdeRestart).toBeUndefined()
-    for (const candidate of SHARED_AGENTS_SKILLS_OWNER_CANDIDATES) {
-      expect(registryEntry(selected, candidate)?.skillsDir).toBe('.agents')
-    }
+  // IDE restart facts are declared on the admitted line exactly where upstream does,
+  // and never on the skills-only zed / shared / codex targets or codeassistant.
+  expect(series112.filter((tool) => tool.requiresIdeRestart).map((tool) => tool.value)).toEqual([
+    ...EXPECTED_RESTART_TOOLS,
+  ])
+  expect(registryEntry(series112, 'zed')?.requiresIdeRestart).toBeUndefined()
+  expect(registryEntry(series112, 'codeassistant')?.requiresIdeRestart).toBeUndefined()
+  for (const candidate of SHARED_AGENTS_SKILLS_OWNER_CANDIDATES) {
+    expect(registryEntry(series112, candidate)?.skillsDir).toBe('.agents')
   }
 
   // Selected snapshots are plain per-series inventories: the override mechanism stays internal.
-  expect(series110.every((tool) => tool.perSeriesOverrides === undefined)).toBe(true)
-  expect(series111.every((tool) => tool.perSeriesOverrides === undefined)).toBe(true)
+  expect(series112.every((tool) => tool.perSeriesOverrides === undefined)).toBe(true)
+
+  // Retired below-range lines select no inventory at all: the 1.10/1.11 v11 window
+  // is not admitted by this release line, so it must not project a stale snapshot.
+  expect(selectAgentDeliveryRegistry('1.11.3')).toEqual([])
+  expect(selectAgentDeliveryRegistry('1.10.7')).toEqual([])
 }
 
 function cloneRegistry(): ToolConfig[] {
@@ -570,7 +595,7 @@ const EXPECTED_RESTART_TOOLS = [
   'trae',
 ] as const
 
-describe('OpenSpec 1.11 Agent delivery registry (pinned base)', () => {
+describe('OpenSpec 1.12 Agent delivery registry (pinned base)', () => {
   it('preserves the complete pinned metadata, command format, and invocation contract', () => {
     assertPinnedRegistry(AI_TOOLS)
   })
@@ -616,6 +641,7 @@ describe('OpenSpec 1.11 Agent delivery registry (pinned base)', () => {
       'oh-my-pi': 'yaml:description|direct',
       opencode: 'yaml:description|direct',
       pi: 'yaml:description|direct',
+      codeassistant: 'yaml:description|direct',
       qoder: 'yaml:name,description,category,tags|direct',
       qwen: 'yaml:description|direct',
       roocode: 'none|headings',
@@ -625,31 +651,30 @@ describe('OpenSpec 1.11 Agent delivery registry (pinned base)', () => {
   })
 })
 
-describe('per-series inventory selection (1.10 / 1.11)', () => {
-  it('selects the 1.10 official inventory with zed and the pre-migration Antigravity root', () => {
+describe('per-series inventory selection (1.12 single-series window)', () => {
+  it('selects the 1.12 official inventory with codeassistant and the 1.11-inherited Antigravity roots', () => {
     assertAdmittedSeriesInventories()
   })
 
   it('selects no inventory for non-admitted or unparseable versions', () => {
     // A page-level version bypass must not manufacture an admitted inventory: prereleases,
-    // the next series, below-range lines (including the retired 1.8/1.9 window), and
-    // unparseable output all select zero tools.
+    // the next series, below-range lines (including the retired 1.10/1.11 v11 window and
+    // 1.8/1.9), and unparseable output all select zero tools.
     expect(selectAgentDeliveryRegistry('1.9.5')).toEqual([])
     expect(selectAgentDeliveryRegistry('1.9.0')).toEqual([])
     expect(selectAgentDeliveryRegistry('1.8.0')).toEqual([])
-    expect(selectAgentDeliveryRegistry('1.11.0-rc.1')).toEqual([])
-    expect(selectAgentDeliveryRegistry('1.10.0-beta.1')).toEqual([])
-    expect(selectAgentDeliveryRegistry('1.12.0')).toEqual([])
+    expect(selectAgentDeliveryRegistry('1.11.0')).toEqual([])
+    expect(selectAgentDeliveryRegistry('1.10.7')).toEqual([])
+    expect(selectAgentDeliveryRegistry('1.12.0-rc.1')).toEqual([])
+    expect(selectAgentDeliveryRegistry('1.13.0')).toEqual([])
     expect(selectAgentDeliveryRegistry('2.0.0')).toEqual([])
     expect(selectAgentDeliveryRegistry('garbage')).toEqual([])
     expect(selectAgentDeliveryRegistry(null)).toEqual([])
   })
 
   it.each([
-    ['1.10.0', '1.10'],
-    ['1.10.7', '1.10'],
-    ['1.11.0', '1.11'],
-    ['1.11.3', '1.11'],
+    ['1.12.0', '1.12'],
+    ['1.12.4', '1.12'],
   ])('parses stable %s as the %s Agent inventory line', (cliVersion, expectedSeries) => {
     expect(parseOpenSpecCliSeries(cliVersion)).toBe(expectedSeries)
   })
@@ -658,10 +683,12 @@ describe('per-series inventory selection (1.10 / 1.11)', () => {
     '1.9.5',
     '1.8.0',
     '1.7.0',
-    '1.12.0',
+    '1.10.7',
+    '1.11.3',
+    '1.13.0',
     '2.0.0',
-    '1.11.0-rc.1',
-    '1.10.0-beta.1',
+    '1.12.0-rc.1',
+    '1.11.0-beta.1',
     'garbage',
     '',
     null,
@@ -677,15 +704,16 @@ describe('per-series inventory selection (1.10 / 1.11)', () => {
     // `codex` fallback. The registry declares candidates only; arbitration is owned by
     // the official CLI and projected by the Server Agent delivery service.
     expect(SHARED_AGENTS_SKILLS_OWNER_CANDIDATES).toEqual(['codex', 'zed', 'agents'])
-    // Antigravity joins the shared root on 1.11 but is adapter-backed and is excluded
-    // from skills-writer candidacy; its own `.agents/workflows` commands root is unaffected.
+    // Antigravity joined the shared root in 1.11 (carried forward on 1.12) but is
+    // adapter-backed and is excluded from skills-writer candidacy; its own
+    // `.agents/workflows` commands root is unaffected by that exclusion.
     expect(SHARED_AGENTS_SKILLS_OWNER_CANDIDATES).not.toContain('antigravity')
-    expect(registryEntry(selectAgentDeliveryRegistry('1.11.0'), 'antigravity')?.capability).toBe(
+    expect(registryEntry(selectAgentDeliveryRegistry('1.12.0'), 'antigravity')?.capability).toBe(
       'adapter-backed'
     )
   })
 
-  it('rejects removal of the zed entry from the admitted inventories', () => {
+  it('rejects removal of the zed entry from the admitted inventory', () => {
     const zedIndex = AI_TOOLS.findIndex((tool) => tool.value === 'zed')
     expect(zedIndex).toBeGreaterThan(-1)
     const [removed] = AI_TOOLS.splice(zedIndex, 1)
@@ -696,33 +724,55 @@ describe('per-series inventory selection (1.10 / 1.11)', () => {
     }
   })
 
-  it('rejects dropping the Antigravity 1.10 series override', () => {
-    const antigravity = requireRegistryEntry(AI_TOOLS, 'antigravity')
-    const overrides = antigravity.perSeriesOverrides
-    delete antigravity.perSeriesOverrides
+  it('rejects removal of the codeassistant entry from the admitted inventory', () => {
+    const codeassistantIndex = AI_TOOLS.findIndex((tool) => tool.value === 'codeassistant')
+    expect(codeassistantIndex).toBeGreaterThan(-1)
+    const [removed] = AI_TOOLS.splice(codeassistantIndex, 1)
     try {
       expect(() => assertAdmittedSeriesInventories()).toThrow()
     } finally {
-      antigravity.perSeriesOverrides = overrides
+      AI_TOOLS.splice(codeassistantIndex, 0, removed)
     }
   })
 
-  it('rejects projecting 1.11 shared-root paths as the base for a 1.10 session', () => {
+  it('rejects stripping the Antigravity migration evidence from the 1.12 snapshot', () => {
     const antigravity = requireRegistryEntry(AI_TOOLS, 'antigravity')
-    const originalSkillsDir = antigravity.skillsDir
-    antigravity.skillsDir = '.agent'
+    const migrations = antigravity.migrations
+    antigravity.migrations = []
     try {
       expect(() => assertAdmittedSeriesInventories()).toThrow()
     } finally {
-      antigravity.skillsDir = originalSkillsDir
+      antigravity.migrations = migrations
     }
   })
 })
 
 describe('registry mutation resistance', () => {
   it.each([
-    ['tool', (registry: ToolConfig[]) => registry.splice(7, 1)],
-    ['zed entry', (registry: ToolConfig[]) => registry.splice(36, 1)],
+    [
+      'tool',
+      (registry: ToolConfig[]) =>
+        registry.splice(
+          registry.findIndex((tool) => tool.value === 'codeartsagent'),
+          1
+        ),
+    ],
+    [
+      'zed entry',
+      (registry: ToolConfig[]) =>
+        registry.splice(
+          registry.findIndex((tool) => tool.value === 'zed'),
+          1
+        ),
+    ],
+    [
+      'codeassistant entry',
+      (registry: ToolConfig[]) =>
+        registry.splice(
+          registry.findIndex((tool) => tool.value === 'codeassistant'),
+          1
+        ),
+    ],
     [
       'capability',
       (registry: ToolConfig[]) =>
@@ -761,6 +811,19 @@ describe('registry mutation resistance', () => {
         const qwen = registryEntry(registry, 'qwen')
         if (qwen?.command) qwen.command.pathTemplate = '.qwen/commands/opsx-{workflow}.toml'
       },
+    ],
+    [
+      'codeassistant command mapping',
+      (registry: ToolConfig[]) => {
+        const codeassistant = registryEntry(registry, 'codeassistant')
+        if (codeassistant?.command)
+          codeassistant.command.pathTemplate = '.codeassistant/skills/opsx-{workflow}.md'
+      },
+    ],
+    [
+      'codeassistant series gate',
+      (registry: ToolConfig[]) =>
+        Object.assign(requireRegistryEntry(registry, 'codeassistant'), { minCliSeries: '1.11' }),
     ],
     [
       'legacy skills root',

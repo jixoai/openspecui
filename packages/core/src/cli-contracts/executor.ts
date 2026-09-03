@@ -1,15 +1,19 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Build root-aware read and workflow command argv.
  * 2. Build Store inspection and mutation argv through the official CLI surface.
  * 3. Build strict validate/archive argv without implicit recovery behavior.
  * 4. Parse every invocation, including Archive Instructions, through its command-specific evidence schema.
 
  * 5. Forward the selected Root selector only where the admitted CLI declares it.
+ * 6. Pass the OpenSpec 1.12 `validate --report <full|findings>` argv through beside the
+ *    explicit bulk scope and decode findings through their own result schema; the CLI
+ *    owns every request-combination rejection.
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import type { z } from 'zod'
 import type { CliResult } from '../cli-executor.js'
@@ -42,6 +46,7 @@ import {
   CliShowSpecSchema,
   CliSpecListSchema,
   CliTemplatesSchema,
+  CliValidateFindingsResultSchema,
   CliValidateSchema,
   CliWorkflowStatusSchema,
   type CliApplyInstructions,
@@ -54,6 +59,7 @@ import {
   type CliSpecList,
   type CliTemplates,
   type CliValidate,
+  type CliValidateFindingsResult,
   type CliWorkflowStatus,
 } from './workflow.js'
 
@@ -124,10 +130,18 @@ export type CliValidateTarget =
   /** OpenSpec 1.9 archived-task validation over the resolved root's archive. */
   | { kind: 'archived' }
 
-/** JSON Validate options, including explicit target and root selection. */
+/** JSON Validate options, including explicit target, report transport, and root selection. */
 export interface CliValidateJsonOptions extends CliRootSelector {
   target: CliValidateTarget
   strict?: boolean
+  /**
+   * OpenSpec 1.12 report transport. `findings` returns the filtered findings document
+   * and requires an explicit bulk scope upstream (`--all`, `--changes`, `--specs`, or
+   * `--archived`); `full` is the explicit default. This layer only passes the argv
+   * through: the CLI owns every request-combination rejection (item name, archived plus
+   * active mixing, unknown report values) and answers through the typed failure envelope.
+   */
+  report?: 'full' | 'findings'
 }
 
 type ExecuteCli = (args: string[]) => Promise<CliResult>
@@ -348,8 +362,21 @@ export class OpenSpecCliContractExecutor {
     return this.execute(args, CliStoreCleanupSchema)
   }
 
-  /** Validate an item, scope, or the archive without inferring retries or readiness. */
-  async validate(options: CliValidateJsonOptions): Promise<CliCommandResult<CliValidate>> {
+  /**
+   * Validate an item, scope, or the archive without inferring retries or readiness.
+   *
+   * With `report: 'findings'` (OpenSpec 1.12) the argv gains `--report findings` beside
+   * the explicit bulk-scope flag and the result decodes through the findings schema,
+   * never through the full-report union: a findings document is a filtered evidence
+   * transport, so the decode split keeps the two truths separate.
+   */
+  async validate(
+    options: CliValidateJsonOptions & { report: 'findings' }
+  ): Promise<CliCommandResult<CliValidateFindingsResult>>
+  async validate(options: CliValidateJsonOptions): Promise<CliCommandResult<CliValidate>>
+  async validate(
+    options: CliValidateJsonOptions
+  ): Promise<CliCommandResult<CliValidate | CliValidateFindingsResult>> {
     const args = ['validate']
     if (options.target.kind === 'item') {
       args.push(options.target.id)
@@ -360,8 +387,11 @@ export class OpenSpecCliContractExecutor {
       args.push('--archived')
     }
     if (options.strict) args.push('--strict')
+    if (options.report) args.push('--report', options.report)
     args.push('--json')
-    return this.execute(this.withRoot(args, options), CliValidateSchema)
+    return options.report === 'findings'
+      ? this.execute(this.withRoot(args, options), CliValidateFindingsResultSchema)
+      : this.execute(this.withRoot(args, options), CliValidateSchema)
   }
 
   /** Archive one change without implicit validation bypass or retry. */

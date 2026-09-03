@@ -1,11 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Lock command argv for root-aware workflow and Reference reads.
  * 2. Lock official Store mutation argv without registry synthesis.
  * 3. Lock strict Archive mutation and Archive Instructions JSON argv.
  * 4. Lock schema and template JSON reads to checked command contracts.
- *
+ * 5. Lock the OpenSpec 1.12 validate `--report <full|findings>` argv passthrough: appended
+ *    only when requested, combined with an explicit bulk scope, never synthesized locally.
+
  * Original request (2026-07-15): "坚持 CLI-first。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from './cli-executor.js'
@@ -137,6 +140,31 @@ describe('CliExecutor OpenSpec 1.6 contracts', () => {
       ['validate', '--all', '--json'],
       ['validate', '--archived', '--json', '--store', 'shared'],
       ['archive', 'add-auth', '--json', '--yes', '--skip-specs', '--store', 'shared'],
+    ])
+    expect(execute).toHaveBeenCalledTimes(4)
+  })
+
+  it('appends --report only when a validate report transport is requested', async () => {
+    await executor.contracts.validate({
+      target: { kind: 'scope', scope: 'all' },
+      report: 'findings',
+    })
+    await executor.contracts.validate({
+      target: { kind: 'archived' },
+      report: 'findings',
+      store: 'shared',
+    })
+    await executor.contracts.validate({
+      target: { kind: 'scope', scope: 'changes' },
+      report: 'full',
+    })
+    await executor.contracts.validate({ target: { kind: 'scope', scope: 'specs' } })
+
+    expect(execute.mock.calls.map(([args]) => args)).toEqual([
+      ['validate', '--all', '--report', 'findings', '--json'],
+      ['validate', '--archived', '--report', 'findings', '--json', '--store', 'shared'],
+      ['validate', '--changes', '--report', 'full', '--json'],
+      ['validate', '--specs', '--json'],
     ])
     expect(execute).toHaveBeenCalledTimes(4)
   })

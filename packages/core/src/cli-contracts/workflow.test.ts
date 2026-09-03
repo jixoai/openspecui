@@ -1,14 +1,18 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Lock OpenSpec 1.8/1.9 Status artifact status, dependency arrays, and planning completion.
  * 2. Lock Apply and Archive operation-instruction payloads at the CLI contract boundary.
  * 3. Lock the `schemas --json` success/failure sum type and archived Validate report decoding.
  * 4. Lock the OpenSpec 1.11 batch Status envelope, `show --diff` contract, capability gates,
  *    and the OpenSpec 1.10 `init --language` argv passthrough.
- *
+ * 5. Lock the OpenSpec 1.12 validate findings report beside the full report: filtered
+ *    itemFindings, preserved full-run totals, exit-code-free decoding, the empty-scope
+ *    success document, and the `invalid_validation_report_request` failure envelope.
+
  * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'
@@ -20,6 +24,7 @@ import {
   isCliBatchStatusRootSelectionFailure,
 } from './batch-status.js'
 import { parseCliCommandResult } from './command-result.js'
+import { CliDiagnosticFailureSchema } from './common.js'
 import { OpenSpecCliContractExecutor } from './executor.js'
 import {
   CliSchemasFailureSchema,
@@ -31,8 +36,12 @@ import { CliShowChangeDiffSchema, CliShowChangeDiffSuccessSchema } from './show-
 import {
   CliApplyInstructionsSuccessSchema,
   CliArchiveSchema,
+  CliValidateFindingsResultSchema,
+  CliValidateFindingsSchema,
+  CliValidateReportSchema,
   CliValidateSchema,
   CliWorkflowStatusSuccessSchema,
+  isCliValidateFindings,
 } from './workflow.js'
 
 const root = { path: '/repo', source: 'nearest' as const }
@@ -268,6 +277,9 @@ describe('OpenSpec 1.8/1.9 workflow CLI contracts', () => {
   })
 })
 
+// Admitted-line capabilities under the OpenSpecUI 12 single-series window: stable 1.12.x
+// derives the 1.11-introduced batch/diff transports; the retired 1.10/1.11 lines derive none.
+const capabilities112 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.12.0'))
 const capabilities111 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.11.0'))
 const capabilities110 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.10.0'))
 
@@ -512,6 +524,219 @@ describe('OpenSpec 1.11 show --diff CLI contract', () => {
   })
 })
 
+/**
+ * Executed `validate --all --report findings --json` document from the pinned v1.12.0
+ * build (references/openspec-1.12.0-report.md): the item stays `valid: true` with one
+ * merge-conflict INFO issue and the run exits 0.
+ */
+const executedFindingsDocument = {
+  report: {
+    kind: 'validation-findings',
+    version: '1.0',
+    scope: 'all',
+    returnedItems: 1,
+    totalItems: 1,
+  },
+  itemFindings: [
+    {
+      id: 'test-change',
+      type: 'change',
+      valid: true,
+      issues: [
+        {
+          level: 'INFO',
+          path: 'missing-spec/spec.md',
+          message:
+            'Archive would refuse this delta: missing-spec: target spec does not exist; only ADDED requirements are allowed for new specs. MODIFIED and RENAMED operations require an existing spec.',
+        },
+      ],
+      durationMs: 19,
+    },
+  ],
+  summary: {
+    totals: { items: 1, passed: 1, failed: 0 },
+    byType: {
+      change: { items: 1, passed: 1, failed: 0 },
+      spec: { items: 0, passed: 0, failed: 0 },
+    },
+  },
+  root: { path: '/private/tmp/os112-fixture', source: 'nearest' },
+}
+
+describe('OpenSpec 1.12 validate findings CLI contract', () => {
+  it('decodes the executed populated findings document with preserved full-run totals', () => {
+    const parsed = CliValidateFindingsSchema.parse(executedFindingsDocument)
+
+    expect(parsed.report).toEqual({
+      kind: 'validation-findings',
+      version: '1.0',
+      scope: 'all',
+      returnedItems: 1,
+      totalItems: 1,
+    })
+    expect(parsed.itemFindings).toHaveLength(1)
+    const finding = parsed.itemFindings[0]
+    if (finding === undefined) throw new Error('missing finding')
+    expect(finding.id).toBe('test-change')
+    expect(finding.type).toBe('change')
+    // INFO is verdict-neutral: the item carrying it stays valid.
+    expect(finding.valid).toBe(true)
+    expect(finding.issues[0]).toMatchObject({
+      level: 'INFO',
+      path: 'missing-spec/spec.md',
+    })
+    expect(finding.issues[0]?.message).toContain('Archive would refuse this delta:')
+    // summary/root stay the full-report values, not the filtered view.
+    expect(parsed.summary.totals).toEqual({ items: 1, passed: 1, failed: 0 })
+    expect(parsed.root).toEqual({ path: '/private/tmp/os112-fixture', source: 'nearest' })
+  })
+
+  it('keeps the findings document outside every full-report validate schema', () => {
+    // Findings is a separate transport, never the full validation truth: the full
+    // report union and the diagnostic failure schema must both reject it.
+    expect(CliValidateReportSchema.safeParse(executedFindingsDocument).success).toBe(false)
+    expect(CliValidateSchema.safeParse(executedFindingsDocument).success).toBe(false)
+    expect(CliDiagnosticFailureSchema.safeParse(executedFindingsDocument).success).toBe(false)
+  })
+
+  it('decodes the empty-scope findings document as a normal success, not a failure', () => {
+    const parsed = CliValidateFindingsResultSchema.parse({
+      report: {
+        kind: 'validation-findings',
+        version: '1.0',
+        scope: 'specs',
+        returnedItems: 0,
+        totalItems: 0,
+      },
+      itemFindings: [],
+      summary: {
+        totals: { items: 0, passed: 0, failed: 0 },
+        byType: {},
+      },
+      root,
+    })
+
+    expect(isCliValidateFindings(parsed)).toBe(true)
+    if (!isCliValidateFindings(parsed)) throw new Error('expected findings document')
+    expect(parsed.report.returnedItems).toBe(0)
+    expect(parsed.report.totalItems).toBe(0)
+    expect(parsed.itemFindings).toEqual([])
+    expect(CliDiagnosticFailureSchema.safeParse(parsed).success).toBe(false)
+  })
+
+  it('filters itemFindings to items with issues and decodes exit-1 stdout without consulting the exit code', () => {
+    // Hand-crafted contract shape: a two-item run whose clean item never enters
+    // itemFindings while summary keeps both, and whose failure exits 1.
+    const stdout = JSON.stringify({
+      report: {
+        kind: 'validation-findings',
+        version: '1.0',
+        scope: 'changes',
+        returnedItems: 1,
+        totalItems: 2,
+      },
+      itemFindings: [
+        {
+          id: 'broken-change',
+          type: 'change',
+          valid: false,
+          issues: [
+            { level: 'ERROR', path: 'tasks.md', message: '2 incomplete tasks (0/2 completed).' },
+          ],
+          durationMs: 4,
+        },
+      ],
+      summary: {
+        totals: { items: 2, passed: 1, failed: 1 },
+        byType: { change: { items: 2, passed: 1, failed: 1 } },
+      },
+      root,
+    })
+    const parsed = parseCliCommandResult(
+      { success: false, stdout, stderr: '', exitCode: 1 } satisfies CliResult,
+      CliValidateFindingsResultSchema
+    )
+
+    expect(parsed.contractError).toBeUndefined()
+    const data = parsed.data
+    if (data === null || !isCliValidateFindings(data)) {
+      throw new Error('expected findings document')
+    }
+    expect(data.itemFindings.map((finding) => finding.id)).toEqual(['broken-change'])
+    expect(data.summary.totals.items).toBe(2)
+  })
+
+  it('decodes the invalid_validation_report_request envelope with its fix preserved', () => {
+    // Hand-crafted contract shape for the shared status-array failure envelope; the
+    // pinned 1.12.0 executable fixtures prove the exact upstream wording later.
+    const requestError = {
+      status: [
+        {
+          severity: 'error',
+          code: 'invalid_validation_report_request',
+          message:
+            '--report findings requires one bulk scope (--all, --changes, --specs, or --archived) and no item name.',
+          fix: 'Re-run with an explicit bulk scope, for example: openspec validate --all --report findings --json',
+        },
+      ],
+    }
+    const parsed = CliValidateFindingsResultSchema.parse(requestError)
+
+    expect(isCliValidateFindings(parsed)).toBe(false)
+    if (!isCliValidateFindings(parsed)) {
+      expect(parsed.status[0]).toMatchObject({
+        severity: 'error',
+        code: 'invalid_validation_report_request',
+      })
+      expect(parsed.status[0]?.fix).toBe(
+        'Re-run with an explicit bulk scope, for example: openspec validate --all --report findings --json'
+      )
+    }
+    // The findings document schema never decodes the request-error path.
+    expect(CliValidateFindingsSchema.safeParse(requestError).success).toBe(false)
+  })
+})
+
+describe('OpenSpec 1.12 validate findings contract executor', () => {
+  let execute: Mock<(args: string[]) => Promise<CliResult>>
+  let contracts: OpenSpecCliContractExecutor
+
+  beforeEach(() => {
+    execute = vi.fn(async () => ({
+      success: true,
+      stdout: JSON.stringify(executedFindingsDocument),
+      stderr: '',
+      exitCode: 0,
+    }))
+    contracts = new OpenSpecCliContractExecutor(execute)
+  })
+
+  it('decodes a findings document only through the findings report option', async () => {
+    const findings = await contracts.validate({
+      target: { kind: 'scope', scope: 'all' },
+      report: 'findings',
+    })
+
+    expect(execute.mock.calls.map(([args]) => args)).toEqual([
+      ['validate', '--all', '--report', 'findings', '--json'],
+    ])
+    expect(findings.contractError).toBeUndefined()
+    const findingsData = findings.data
+    if (findingsData === null || !isCliValidateFindings(findingsData)) {
+      throw new Error('expected findings document')
+    }
+    expect(findingsData.report.kind).toBe('validation-findings')
+    expect(findingsData.report.returnedItems).toBe(1)
+
+    // The same stdout is a contract error without the report option: the full
+    // report schema must never swallow a findings document.
+    const full = await contracts.validate({ target: { kind: 'scope', scope: 'all' } })
+    expect(execute.mock.calls[1]?.[0]).toEqual(['validate', '--all', '--json'])
+    expect(full.contractError).toBeDefined()
+    expect(full.data).toBeNull()
+  })
+})
+
 describe('capability-gated 1.11 command argv', () => {
   let execute: Mock<(args: string[]) => Promise<CliResult>>
   let contracts: OpenSpecCliContractExecutor
@@ -526,9 +751,9 @@ describe('capability-gated 1.11 command argv', () => {
     contracts = new OpenSpecCliContractExecutor(execute)
   })
 
-  it('builds status --all --json argv only for the 1.11 batch capability', async () => {
+  it('builds status --all --json argv only for the admitted batch capability', async () => {
     const admitted = await contracts.workflowStatusAll({
-      capabilities: capabilities111,
+      capabilities: capabilities112,
       schema: 'custom',
       store: 'shared',
     })
@@ -538,14 +763,18 @@ describe('capability-gated 1.11 command argv', () => {
       ['status', '--all', '--json', '--schema', 'custom', '--store', 'shared'],
     ])
 
-    const refused = await contracts.workflowStatusAll({ capabilities: capabilities110 })
+    const refused = await contracts.workflowStatusAll({ capabilities: capabilities111 })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'batchStatus' })
+    expect(await contracts.workflowStatusAll({ capabilities: capabilities110 })).toEqual({
+      kind: 'unavailable',
+      capability: 'batchStatus',
+    })
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
-  it('builds show <change> --json --diff argv only for the 1.11 diff capability', async () => {
+  it('builds show <change> --json --diff argv only for the admitted diff capability', async () => {
     const admitted = await contracts.showChangeDiff('add-auth', {
-      capabilities: capabilities111,
+      capabilities: capabilities112,
       store: 'shared',
     })
 
@@ -554,8 +783,12 @@ describe('capability-gated 1.11 command argv', () => {
       ['show', 'add-auth', '--json', '--diff', '--store', 'shared'],
     ])
 
-    const refused = await contracts.showChangeDiff('add-auth', { capabilities: capabilities110 })
+    const refused = await contracts.showChangeDiff('add-auth', { capabilities: capabilities111 })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'requirementDiff' })
+    expect(await contracts.showChangeDiff('add-auth', { capabilities: capabilities110 })).toEqual({
+      kind: 'unavailable',
+      capability: 'requirementDiff',
+    })
     expect(execute).toHaveBeenCalledTimes(1)
   })
 })

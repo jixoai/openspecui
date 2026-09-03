@@ -1,17 +1,19 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
- * 1. Preserve the complete pinned OpenSpec 1.11 Agent delivery registry in one typed physical owner.
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * 1. Preserve the complete pinned OpenSpec 1.12 Agent delivery registry in one typed physical owner.
  * 2. Co-locate capability, command artifact, invocation, alias, setup, cleanup, and migration metadata.
  * 3. Model current/legacy project roots, user-global skill roots, detection paths, and IDE restart facts.
- * 4. Express the single per-series root divergence (Antigravity `.agent` -> `.agents`, 1.11 only)
- *    as typed series overrides so each admitted line selects a faithful snapshot.
+ * 4. Keep the per-series override mechanism available for future widened windows while the
+ *    admitted window is the single '1.12' line (every 1.11 physical fact carries forward).
  * 5. Declare the shared `.agents` skills-root owner candidate set and its arbitration order as
  *    metadata only; physical arbitration stays owned by the official CLI and the Server projection.
- * 6. Select the official inventory per admitted CLI line (1.10 / 1.11).
+ * 6. Select the official inventory for the admitted CLI line ('1.12') only; retired minors
+ *    ('1.10'/'1.11') stay typed as provenance history and select no inventory.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { parseOpenSpecCliVersion } from './openspec-compat.js'
 
@@ -102,21 +104,23 @@ export interface AIToolOption {
 }
 
 /** Official OpenSpec CLI lines with distinct Agent inventories admitted by this release line. */
-export type AgentCliSeries = '1.10' | '1.11'
+export type AgentCliSeries = '1.12'
 
 /**
- * Historical provenance lines for registry facts that predate the admitted window
- * (`minCliSeries`, `requiresIdeRestartSince`). Selection math treats them as ordered
- * history: a provenance line below the admitted floor never gates a v11 inventory.
+ * Historical provenance lines for registry facts that predate or retire out of the
+ * admitted window (`minCliSeries`, `requiresIdeRestartSince`, and on-disk
+ * `generatedBy` stamps typed at their consumers). Selection math treats them as
+ * ordered history: a provenance line below the admitted line never gates a v12
+ * inventory, and retired admitted lines ('1.10'/'1.11') select no inventory at all.
  */
-export type AgentProvenanceCliSeries = '1.9' | AgentCliSeries
+export type AgentProvenanceCliSeries = '1.9' | '1.10' | '1.11' | AgentCliSeries
 
 /**
  * Per-series divergence applied when one admitted CLI line pins a different physical
  * reality than the newest line. The base registry always mirrors the newest admitted
- * line (1.11); an override replaces the listed fields for an older admitted line.
- * A field explicitly set to `undefined` clears the newest-line value — OpenSpec 1.10
- * carries no Antigravity legacy roots, detection paths, or migration evidence.
+ * line (1.12); an override replaces the listed fields for an older admitted line
+ * when a future release widens the window again. A field explicitly set to
+ * `undefined` clears the newest-line value.
  */
 export interface AgentDeliverySeriesOverride {
   skillsDir?: string
@@ -135,6 +139,8 @@ function agentCliSeriesOrder(series: AgentProvenanceCliSeries): number {
       return 10
     case '1.11':
       return 11
+    case '1.12':
+      return 12
   }
 }
 
@@ -146,14 +152,15 @@ export const SHARED_SKILLS_TARGET_MARKER = '.openspec-target'
 
 /**
  * Candidate owners that may render the shared `.agents` skills root, in pinned upstream
- * registry order (`codex`, `zed`, `agents` on both admitted lines).
+ * registry order (`codex`, `zed`, `agents` on the admitted line).
  *
  * Arbitration is owned by the official CLI and projected by the Server Agent delivery
  * service — never by this registry — and follows: the `.openspec-target` marker, then
  * the owner inferred from generated invocation syntax, then `agents` when current skills
- * already exist, then the `codex` fallback. Antigravity joins the shared root on 1.11
- * but is adapter-backed and is excluded from skills-writer candidacy; its own
- * `.agents/workflows` commands root is unaffected by that exclusion.
+ * already exist, then the `codex` fallback. Antigravity joined the shared root in
+ * 1.11 (carried forward on 1.12) but is adapter-backed and is excluded from
+ * skills-writer candidacy; its own `.agents/workflows` commands root is unaffected
+ * by that exclusion.
  */
 export const SHARED_AGENTS_SKILLS_OWNER_CANDIDATES: readonly ['codex', 'zed', 'agents'] = [
   'codex',
@@ -164,13 +171,12 @@ export const SHARED_AGENTS_SKILLS_OWNER_CANDIDATES: readonly ['codex', 'zed', 'a
 /**
  * Select the official Agent delivery inventory for one CLI version string.
  *
- * Only a stable, admitted version — current (1.11.x) or supported non-current
- * (1.10.x) — selects an inventory. Unsupported forms (prereleases, >=1.12,
- * below-range lines including 1.8/1.9) and unparseable output select none: a
- * page-level version bypass must not manufacture an admitted inventory for a
- * CLI the release line refuses to admit. The returned snapshot carries the
- * per-series physical reality of the selected line (Antigravity roots differ
- * between 1.10 and 1.11).
+ * Only a stable, admitted version — stable 1.12.x on this single-series line —
+ * selects an inventory. Unsupported forms (prereleases, >=1.13, below-range lines
+ * including the retired 1.10/1.11 v11 window and 1.8/1.9) and unparseable output
+ * select none: a page-level version bypass must not manufacture an admitted
+ * inventory for a CLI the release line refuses to admit. The returned snapshot
+ * carries the 1.12 physical reality (which inherits every 1.11 root fact).
  */
 export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConfig[] {
   const series = parseOpenSpecCliSeries(cliVersion)
@@ -203,15 +209,15 @@ export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConf
  *
  * Delegates to the single compat version parser so the same stdout that classifies a session
  * also selects its inventory — two parsers must never disagree at this boundary. Returns
- * '1.11' only for stable 1.11.x, '1.10' only for stable 1.10.x, and null for every
- * non-admitted form: prereleases, >=1.12, below-range lines (including 1.9.x), or
- * unparseable output.
+ * '1.12' only for stable 1.12.x, and null for every non-admitted form: prereleases,
+ * >=1.13, retired below-range lines (including the 1.10/1.11 v11 window and 1.9.x),
+ * or unparseable output. Retired minors stay typed as `AgentProvenanceCliSeries`
+ * history for registry facts and on-disk stamps; they never select an inventory here.
  */
 export function parseOpenSpecCliSeries(cliVersion: string | null): AgentCliSeries | null {
   const version = parseOpenSpecCliVersion(cliVersion ?? undefined)
   if (!version || version.prerelease !== null) return null
-  if (version.major === 1 && version.minor === 11) return '1.11'
-  if (version.major === 1 && version.minor === 10) return '1.10'
+  if (version.major === 1 && version.minor === 12) return '1.12'
   return null
 }
 
@@ -282,7 +288,7 @@ const projectCleanup = (...patterns: string[]): AgentProjectCleanup => ({
   patterns,
 })
 
-/** Complete OpenSpec 1.11 Agent delivery registry in official order (the newest admitted line). */
+/** Complete OpenSpec 1.12 Agent delivery registry in official order (the newest admitted line). */
 export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
   {
     name: 'Amazon Q Developer',
@@ -300,14 +306,16 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
   },
   {
     // OpenSpec 1.11 moved Antigravity workspace skills and workflows from `.agent`
-    // to the shared `.agents` root. Detection keys off `.agent` and
-    // `.agents/workflows` rather than the bare shared root; the legacy root
-    // migrates only after the replacement is generated so divergent files are
-    // kept and reported. Antigravity itself never writes the shared skills tree
-    // (adapter-backed tools are excluded from skills-writer arbitration).
-    // Cleanup stays scoped to pre-opsx filenames under the former `.agent` root
-    // on both lines: upstream never lists the shared root because users may
-    // keep their own files there.
+    // to the shared `.agents` root, and 1.12 keeps that physical reality. Detection
+    // keys off `.agent` and `.agents/workflows` rather than the bare shared root;
+    // the legacy root migrates only after the replacement is generated so divergent
+    // files are kept and reported. Antigravity itself never writes the shared skills
+    // tree (adapter-backed tools are excluded from skills-writer arbitration).
+    // Cleanup stays scoped to pre-opsx filenames under the former `.agent` root:
+    // upstream never lists the shared root because users may keep their own files
+    // there. (The retired 1.10 line treated `.agent` as the current root; it left
+    // the admitted window with OpenSpecUI 12 and selects no inventory, so the
+    // per-series override mechanism stays free for a future widened window.)
     name: 'Antigravity',
     value: 'antigravity',
     available: true,
@@ -323,18 +331,6 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     migrations: [
       { from: '.agent', to: '.agents', needsConsent: false, timing: 'after-generation' },
     ],
-    perSeriesOverrides: {
-      // OpenSpec 1.10 still treats `.agent` as Antigravity's current root: no
-      // shared-root membership, no legacy roots, no detection-path override,
-      // and no migration evidence.
-      '1.10': {
-        skillsDir: '.agent',
-        legacySkillsDirs: undefined,
-        detectionPaths: undefined,
-        command: command('.agent/workflows/opsx-{workflow}.md', yamlMarkdown('description')),
-        migrations: undefined,
-      },
-    },
   },
   {
     name: 'Auggie (Augment CLI)',
@@ -706,6 +702,22 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     skillsDir: '.pi',
     capability: 'adapter-backed',
     command: command('.pi/prompts/opsx-{workflow}.md', yamlMarkdown('description')),
+  },
+  {
+    // SourceCraft Code Assistant enters with OpenSpec 1.12. Skills live under
+    // `.codeassistant/skills/` and are referenced in natural language (upstream
+    // `NATURAL_LANGUAGE_SKILL_TOOLS`, like Rovo Dev) — unlike rovodev it also
+    // ships command files at `.codeassistant/commands/opsx-<id>.md` with YAML
+    // frontmatter carrying only `description`. Default `.codeassistant`
+    // detection root, no IDE restart fact, no legacy roots, no migrations.
+    name: 'SourceCraft Code Assistant',
+    value: 'codeassistant',
+    minCliSeries: '1.12',
+    available: true,
+    successLabel: 'SourceCraft Code Assistant',
+    skillsDir: '.codeassistant',
+    capability: 'adapter-backed',
+    command: command('.codeassistant/commands/opsx-{workflow}.md', yamlMarkdown('description')),
   },
   {
     name: 'Qoder',
