@@ -81,7 +81,9 @@ function depsFixture(
 ): ChangeDiffEvidenceDeps & { showChangeDiff: ReturnType<typeof vi.fn> } {
   const showChangeDiff = vi.fn(async () => gated)
   return {
-    cliExecutor: { contracts: { showChangeDiff: showChangeDiff as unknown as never } },
+    cliExecutor: {
+      contracts: { showChangeDiff: showChangeDiff as unknown as CliExecutor['contracts']['showChangeDiff'] },
+    },
     showChangeDiff,
   }
 }

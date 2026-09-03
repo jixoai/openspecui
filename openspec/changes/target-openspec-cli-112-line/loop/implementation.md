@@ -13,7 +13,7 @@ Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一�
 
 - CP0 done: worktree + submodule pin (`e062b9572be933564ba3899d059377dfa1393e32`) + pin guards + evidence
   report + change artifacts, committed on `target-openspec-cli-112-line`.
-- CP1 pending: Codex change review before any production slice starts.
+- CP1..CP4 done and CP5 gates recorded below; see checkpoints.md and the dispositions in this file.
 
 ## Evidence recording rule
 
@@ -122,3 +122,33 @@ expectations); change-diff-evidence-service stale comments.
 - web 1194/1194; app 384/384; search/website/translators/ai-provider all green; cli and
   xterm-input-panel have no unit-test script (browser lanes cover xterm).
 - test:browser:ci: PASS (exit 0) — xterm/app/web browser lanes: 63 passed +1 skipped, 10, 18, 12.
+
+## Code review round 1 (herdr v12-code-reviewer, gpt-5.6-terra xhigh, 2026-09-04) — 5/10
+
+Worked 2h 37m. Seven blockers (all verified by Codex direct probes and re-verified by ZCode before repair):
+
+1. w2-project-binding-playwright.ts version assertion still `1.11.0` -> deterministic gate failure. FIXED
+   (integrator): assertion now `1.12.0`. Gate rerun: the version probe passes and the fixture reaches the
+   app; the remaining `#project-binding-store` 20s wait timeout reproduces IDENTICALLY on clean main
+   (pre-existing environmental Playwright failure on this machine, documented for PR notes), so the
+   rotation-caused portion of blocker 1 is closed.
+2. CliValidateFindingsSchema accepted `returnedItems > totalItems` and empty `itemFindings[].issues`.
+   FIXED (C1): schema refinements + adversarial tests.
+3. isCliValidateFindings classified by `'report' in result` alone (stray-key misclassification). FIXED
+   (C1): discriminator-validating guard + negative test.
+4. Executor emitted `--report findings` with no capability check (argv owner unenforced). FIXED (C1):
+   gated `validateFindings` surface mirroring workflowStatusAll's capabilities-pick refusal, cascade to
+   kernel + router.
+5. official-cli-v11-workflow-fixtures.test.ts remained a positive suite in the accepted typed lane.
+   FIXED (C3): coverage ported to official-cli-v12-workflow-fixtures.test.ts on the pinned 1.12.0
+   executable; v11 file deleted (boundary negatives already live in the v12 boundary suite).
+6. AGENTS.md pinned clean-build law still named v1.7.0/4e16790d (third stale statement). FIXED
+   (integrator): law now follows the newest report's pin.
+7. Release docs: AGENTS release-law "(v9 today)", cli README v11 identity, "both admitted lines".
+   FIXED (integrator): v12 single-series wording everywhere.
+
+Non-blocking adopted: barrel runtime exports of findings schemas/guard (C1); typed mock replacing
+`as unknown as never` (integrator); stale v11 headers refreshed (integrator + C1); marker-symlink
+pinned anchor case (C3); implementation.md CP1 contradiction (integrator).
+
+Pending: round-2 re-review after C1/C3 land.

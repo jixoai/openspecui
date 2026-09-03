@@ -1,8 +1,8 @@
 /**
  * Orthogonal intents (created 2026-08-28 Asia/Shanghai):
  * 1. Project the OpenSpec `show <change> --json --diff` MODIFIED-delta evidence for Change Detail.
- * 2. Gate every fetch behind the admitted CLI's `requirementDiff` capability so 1.10 sessions never
- *    construct the argv at all.
+ * 2. Gate every fetch behind the admitted CLI's `requirementDiff` capability so sessions without
+ *    the capability never construct the argv at all.
  * 3. Project capability refusal, root loss, and command failure as typed unavailability — never as
  *    transport errors that would fail the whole Evidence tab.
  * 4. Retain per-delta spec/operation/diff/warning and CLI provenance exactly as the CLI delivered

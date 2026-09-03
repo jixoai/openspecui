@@ -15,7 +15,8 @@
  * Owner correction (2026-08-03): move Actions inline with the title, unify subtitle badges, and localize unavailable Tooltips.
  * Original request (2026-08-15): 刷新/解析中状态收敛为副标题行内的 shiny 徽章，不再占据 statusRegion 块。
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。" — the Evidence
- *   tab gains the 1.11-gated CLI MODIFIED-delta diff evidence beside the existing layers.
+ *   tab gains the capability-gated CLI MODIFIED-delta diff evidence beside the existing layers.
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进" — the Evidence tab gains the findings evidence section.
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  */
 import { ApplyProgressNotice } from '@/components/apply-progress-notice'

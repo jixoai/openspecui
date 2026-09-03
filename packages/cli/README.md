@@ -85,7 +85,7 @@ URL-valued App mode is not supported: the daemon always serves the App shell bun
 - **OPSX change workflow** — kanban lanes over tracked task phases with Continue / Fast-forward / Apply / Verify / Archive operators driven by live CLI evidence; admitted sessions load the whole change status list in one `status --all` spawn
 - **Change evidence** — MODIFIED deltas can present the CLI's own requirement diff and warning evidence (`show --diff`) beside the local delta projection, plus validation findings reports (`validate --report findings`) with informational merge-conflict findings
 - **Dashboard** — active changes with CLI-owned applying progress and a curated Code Git snapshot
-- **Config workbench** — route-backed owners for project binding, active root, environment globals, and schemas, plus an adaptive setup guide and `init --language` on both admitted CLI lines
+- **Config workbench** — route-backed owners for project binding, active root, environment globals, and schemas, plus an adaptive setup guide and `init --language` on the admitted CLI line
 - **Agent delivery** — the CLI-owned registry projects per-version agent commands and skills, including SourceCraft Code Assistant (from 1.12, `.codeassistant`), Zed, and the Antigravity `.agent` → `.agents` migration
 - **Terminals** — multi-tab PTY sessions (xterm and ghostty-web) with direct agent send
 - **Git view** — commits, patches, and worktrees with explicit code/planning scope
