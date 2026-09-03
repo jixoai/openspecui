@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Present the CLI-provided MODIFIED-delta `diff`/`warning` fields as Change Detail evidence.
  * 2. Color the unified diff body by line role (+/-/@@) without recomputing anything locally.
  * 3. Render the exact upstream warning text beside its diff so a near-miss never swallows evidence.
- * 4. Gate the fetch on the detected admitted CLI's `requirementDiff` capability (1.11 only) and on
- *    live mode: static snapshots and 1.10 sessions never issue the transport call.
+ * 4. Gate the fetch on the detected admitted CLI's `requirementDiff` capability (the admitted
+ *    1.12 line) and on live mode: static snapshots and retired sessions never issue the
+ *    transport call.
  * 5. Degrade to the existing delta presentation when the fields are absent — no fabricated diff
  *    or warning may appear.
  * 6. Mount directly inside the Evidence workspace detail pane: the Accordion shell is gone, the
@@ -13,12 +14,14 @@
  *
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useRootActionState } from '@/lib/use-root-action-state'
 import {
   deriveOpenSpecCliCapabilities,
+  OPENSPEC_CLI_ACCEPTED_RANGE,
   parseOpenSpecCliVersion,
 } from '@openspecui/core/openspec-compat'
 import type { ChangeDiffEvidence, ChangeDiffEvidenceDelta } from '@openspecui/server'
@@ -149,7 +152,7 @@ function RequirementDiffsSection({
   )
 }
 
-/** CLI MODIFIED-delta diff evidence for the Change Evidence workspace (live 1.11 sessions only). */
+/** CLI MODIFIED-delta diff evidence for the Change Evidence workspace (admitted-line live sessions only). */
 export function ChangeDiffEvidence({
   changeId,
   onChip,
@@ -160,9 +163,10 @@ export function ChangeDiffEvidence({
 }) {
   const rootAction = useRootActionState()
   const cli = rootAction.context?.cli
-  // `show --diff` exists only on OpenSpec 1.11. A detected-but-below-1.11 session (admitted 1.10
-  // or a bypassed retired CLI) must never issue the call, and the server re-checks the same
-  // capability before any argv is constructed.
+  // `show --diff` is a `requirementDiff` capability of the admitted line (1.12 under
+  // OpenSpecUI 12). A detected-but-retired session (1.10/1.11 or a bypassed older CLI) must
+  // never issue the call, and the server re-checks the same capability before any argv is
+  // constructed.
   const capabilities = deriveOpenSpecCliCapabilities(
     cli?.available ? parseOpenSpecCliVersion(cli.version) : null
   )
@@ -175,7 +179,7 @@ export function ChangeDiffEvidence({
 
   useEffect(() => {
     // Static publication carries no requirement-diff payload (projection-contract-truth law),
-    // and a below-1.11 session never declares the capability: both leave the transport untouched.
+    // and a retired session never declares the capability: both leave the transport untouched.
     if (staticMode || !diffCapable) return
     let cancelled = false
     setPending(true)
@@ -229,15 +233,15 @@ export function ChangeDiffEvidence({
   }
 
   if (!diffCapable) {
-    // Only a detected-but-below-1.11 CLI names its line. While CLI evidence is still pending
+    // Only a detected-but-retired CLI names its version. While CLI evidence is still pending
     // (or the runner is unavailable) the section stays neutral instead of claiming the
     // session was classified.
     if (cli?.available !== true) {
       return (
         <RequirementDiffsSection summary="CLI diff evidence">
           <p className="text-muted-foreground">
-            Requirement diff evidence from `show --diff` appears here on admitted OpenSpec CLI 1.11
-            sessions once the CLI is detected.
+            Requirement diff evidence from `show --diff` appears here on admitted OpenSpec CLI
+            sessions ({OPENSPEC_CLI_ACCEPTED_RANGE}) once the CLI is detected.
           </p>
         </RequirementDiffsSection>
       )
@@ -246,9 +250,9 @@ export function ChangeDiffEvidence({
     return (
       <RequirementDiffsSection summary="Unavailable on this CLI line">
         <p className="text-muted-foreground">
-          Requirement diffs require an admitted OpenSpec CLI 1.11 session{detected}. This
-          session&apos;s CLI does not declare the `show --diff` capability, so the delta
-          presentation keeps using the captured local content.
+          Requirement diffs require an admitted OpenSpec CLI session ({OPENSPEC_CLI_ACCEPTED_RANGE})
+          {detected}. This session&apos;s CLI does not declare the `show --diff` capability, so the
+          delta presentation keeps using the captured local content.
         </p>
       </RequirementDiffsSection>
     )
@@ -280,7 +284,7 @@ export function ChangeDiffEvidence({
     return (
       <RequirementDiffsSection summary="CLI diff evidence">
         <p className="text-muted-foreground">
-          Requirement diff evidence from `show --diff` appears here on 1.11 sessions.
+          Requirement diff evidence from `show --diff` appears here on admitted CLI sessions.
         </p>
       </RequirementDiffsSection>
     )
@@ -291,7 +295,7 @@ export function ChangeDiffEvidence({
       evidence.reason === 'command-failed'
         ? evidence.detail
         : evidence.reason === 'capability'
-          ? 'The detected OpenSpec CLI does not declare the 1.11 requirement-diff capability.'
+          ? 'The detected OpenSpec CLI does not declare the requirement-diff capability.'
           : 'The planning root is unavailable, so requirement-diff evidence cannot be fetched.'
     return (
       <RequirementDiffsSection summary="CLI evidence unavailable">

@@ -1,11 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Lock command argv for root-aware workflow and Reference reads.
  * 2. Lock official Store mutation argv without registry synthesis.
  * 3. Lock strict Archive mutation and Archive Instructions JSON argv.
  * 4. Lock schema and template JSON reads to checked command contracts.
- *
+ * 5. Lock the OpenSpec 1.12 `validate --report findings` argv behind the
+ *    capability-gated `validateFindings` method: a direct caller without the admitted
+ *    `findingsReport` capability receives the typed refusal and no argv at all, and
+ *    plain validate composes no `--report` flag (the retired 1.11 line rejects it).
+
  * Original request (2026-07-15): "坚持 CLI-first。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from './cli-executor.js'
@@ -139,6 +144,30 @@ describe('CliExecutor OpenSpec 1.6 contracts', () => {
       ['archive', 'add-auth', '--json', '--yes', '--skip-specs', '--store', 'shared'],
     ])
     expect(execute).toHaveBeenCalledTimes(4)
+  })
+
+  it('composes the whole --report argv only through the capability-gated findings method', async () => {
+    // A direct caller without the admitted `findingsReport` capability receives the
+    // typed refusal and no argv at all: the retired 1.11 line rejects `--report`
+    // entirely (full and findings alike), so plain validate may never compose it.
+    const refused = await executor.contracts.validateFindings({
+      target: { kind: 'scope', scope: 'all' },
+      capabilities: { findingsReport: false },
+    })
+    expect(refused).toEqual({ kind: 'unavailable', capability: 'findingsReport' })
+    expect(execute).not.toHaveBeenCalled()
+
+    const admitted = await executor.contracts.validateFindings({
+      target: { kind: 'archived' },
+      capabilities: { findingsReport: true },
+      store: 'shared',
+    })
+    expect(admitted).toMatchObject({ kind: 'executed' })
+
+    expect(execute.mock.calls.map(([args]) => args)).toEqual([
+      ['validate', '--archived', '--report', 'findings', '--json', '--store', 'shared'],
+    ])
+    expect(execute).toHaveBeenCalledTimes(1)
   })
 
   it('adds --no-validate only for an explicit archive request', async () => {

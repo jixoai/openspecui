@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX Status/Instructions, Dashboard, readonly refresh, and archive procedures.
  * 2. Register CLI, Root Context, Agent delivery, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
- * 5. Compose the public router and enforce v11 admission-gated CLI capabilities.
+ * 5. Compose the public router and enforce admission-gated CLI capabilities on the
+ *   OpenSpecUI 12 line (>=1.12.0 <1.13.0), including the 1.12 findings report transport.
  * 6. Install the supported OpenSpec CLI series through the global install stream (issue #258).
  * 7. Serve the capability-gated CLI MODIFIED-delta diff evidence for the Change Evidence tab.
  *
@@ -39,15 +40,19 @@
  * Review correction (2026-08-02): Init cancellation and success wait for objective process and projection settlement.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。" — the Change
  *   Evidence tab gains the 1.11-gated `show --diff` projection without touching existing procedures.
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
 
  */
 import type {
   ChangeFile,
   ChangeProjectionBatch,
   ChangeProjectionData,
+  CliCommandResult,
   CliExecutor,
   CliStreamEvent,
   CliStreamHandle,
+  CliValidate,
+  CliValidateFindingsResult,
   ConfigManager,
   DashboardGitSnapshot,
   DashboardSummaryInvalidation,
@@ -158,6 +163,7 @@ import {
 } from '@openspecui/core/notifications'
 import {
   deriveOpenSpecCliCapabilities,
+  OPENSPEC_CLI_ACCEPTED_RANGE,
   OPENSPEC_CLI_TARGET_SERIES,
   parseOpenSpecCliVersion,
 } from '@openspecui/core/openspec-compat'
@@ -1746,13 +1752,14 @@ export const changeRouter = router({
   }),
 
   /**
-   * CLI MODIFIED-delta diff evidence for the Change Evidence tab (live-only, OpenSpec 1.11).
+   * CLI MODIFIED-delta diff evidence for the Change Evidence tab (live-only, gated on the
+   * admitted line's `requirementDiff` capability, which the 1.12 line declares).
    *
    * Separately fetched CLI evidence over `show <change> --json --diff`: the local delta parser
    * keeps owning the delta display and this projection never recomputes a diff. Sessions
-   * without the `requirementDiff` capability (admitted 1.10.x, retired, bypassed, or
-   * unavailable CLI) receive a typed unavailable projection without spawning any process,
-   * so the read stays non-throwing evidence instead of an Evidence-tab transport failure.
+   * without the `requirementDiff` capability (retired, bypassed, or unavailable CLI) receive a
+   * typed unavailable projection without spawning any process, so the read stays non-throwing
+   * evidence instead of an Evidence-tab transport failure.
    */
   diffEvidence: publicProcedure
     .input(z.object({ id: z.string() }))
@@ -2289,38 +2296,75 @@ export const cliRouter = router({
         z.object({
           kind: z.literal('archived'),
         }),
+        // OpenSpec 1.12 `validate --report findings`: one explicit bulk scope, never an
+        // item target, answered through the typed findings/result union so the filtered
+        // document never masquerades as the full validation report.
+        z.object({
+          kind: z.literal('findings'),
+          scope: z.enum(['all', 'changes', 'specs', 'archived']),
+        }),
       ])
     )
     .mutation(async ({ ctx, input }) => {
-      return runPlanningRoot(ctx, ({ rootContext }) => {
-        // `validate --archived` exists on OpenSpec 1.9+, so every admitted 1.10/1.11
-        // session carries the capability. A non-admitted or unobserved CLI must learn the
-        // capability is unavailable before any process is spawned, never by watching the
-        // CLI reject an unknown option.
-        if (input.kind === 'archived') {
+      // One public boundary for both validate transports; the explicit return union keeps
+      // the findings document a separate typed truth beside the full report.
+      return runPlanningRoot(
+        ctx,
+        async ({
+          rootContext,
+        }): Promise<CliCommandResult<CliValidate | CliValidateFindingsResult>> => {
+          // `validate --archived` exists on OpenSpec 1.9+ and every admitted session on the
+          // current line carries the capability, while `--report findings` exists on OpenSpec
+          // 1.12 only. A non-admitted or unobserved CLI must learn the capability is
+          // unavailable before any process is spawned, never by watching the CLI reject an
+          // unknown option.
           const cli = rootContext.cli
           const capabilities = deriveOpenSpecCliCapabilities(
             cli.available ? parseOpenSpecCliVersion(cli.version) : null
           )
-          if (!capabilities.archivedValidation) {
+          if (input.kind === 'archived' && !capabilities.archivedValidation) {
             throw new TRPCError({
               code: 'PRECONDITION_FAILED',
               message:
-                'Archived task validation requires an admitted OpenSpec CLI line (both admitted lines declare the archived-validation capability).',
+                'Archived task validation requires an admitted OpenSpec CLI line (the admitted line declares the archived-validation capability).',
             })
           }
+          if (input.kind === 'findings') {
+            // `--report` exists on OpenSpec 1.12 only, so the whole report argv is owned by
+            // the executor's capability-gated `validateFindings` method: a non-admitted or
+            // unobserved CLI must learn the capability is unavailable before any process is
+            // spawned, never by watching the CLI reject an unknown option. The route owns
+            // only the public refusal translation; the findings transport itself stays a
+            // separate typed truth beside the full report, decoded through the findings
+            // schema, never the full-report union.
+            const gated = await ctx.cliExecutor.contracts.validateFindings({
+              target:
+                input.scope === 'archived'
+                  ? { kind: 'archived' }
+                  : { kind: 'scope', scope: input.scope },
+              capabilities: { findingsReport: capabilities.findingsReport },
+              ...getRootContextCliSelector(rootContext),
+            })
+            if (gated.kind !== 'executed') {
+              throw new TRPCError({
+                code: 'PRECONDITION_FAILED',
+                message: `Validation findings require the admitted OpenSpec CLI line (accepted ${OPENSPEC_CLI_ACCEPTED_RANGE} declares the findings-report capability).`,
+              })
+            }
+            return gated.result
+          }
+          return ctx.cliExecutor.contracts.validate({
+            target:
+              input.kind === 'item'
+                ? { kind: 'item', id: input.id, type: input.type }
+                : input.kind === 'scope'
+                  ? { kind: 'scope', scope: input.scope }
+                  : { kind: 'archived' },
+            strict: input.kind === 'archived' ? undefined : input.strict,
+            ...getRootContextCliSelector(rootContext),
+          })
         }
-        return ctx.cliExecutor.contracts.validate({
-          target:
-            input.kind === 'item'
-              ? { kind: 'item', id: input.id, type: input.type }
-              : input.kind === 'scope'
-                ? { kind: 'scope', scope: input.scope }
-                : { kind: 'archived' },
-          strict: input.kind === 'archived' ? undefined : input.strict,
-          ...getRootContextCliSelector(rootContext),
-        })
-      })
+      )
     }),
 
   /** 流式执行 validate（实时输出） */

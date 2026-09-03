@@ -1,23 +1,24 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.10.0 and 1.11.0 workflow contracts side by side.
- * 2. Prove explicit planning completion and retained isComplete evidence on both lines.
- * 3. Prove skipped dependency identity without physical spec files.
- * 4. Prove Apply and Archive operation inputs remain distinct from artifact rules.
- * 5. Prove `init --language` persists the fixed context block on both lines.
- * 6. Prove the 1.10/1.11 JSON stream discipline: one stdout document, stderr without
+ * Orthogonal intents (created 2026-09-04 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.12.0 workflow contract end to end: skipped Status,
+ *    tasks/Apply/Archive Instructions on one real skip-specs change.
+ * 2. Prove explicit planning completion (`isPlanningComplete`) stays protocol truth while
+ *    `isComplete` remains retained alias evidence, and Apply `progress` stays authoritative
+ *    over the actionable task list (planning/task separation).
+ * 3. Prove Apply and Archive operation guidance stays distinct from artifact rules.
+ * 4. Prove `init --language` persists the fixed context block and never overwrites config.
+ * 5. Prove the 1.12 JSON stream discipline: one stdout document, stderr without
  *    telemetry or completion-tip noise.
  *
- * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
- * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
- * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
+ * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V11_VERSIONS,
+  PINNED_OPENSPEC_V12_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -25,7 +26,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v11-fixtures.js'
+  type PinnedOpenspecV12Version,
+} from './__tests__/official-cli-v12-fixtures.js'
 import {
   CliApplyInstructionsSuccessSchema,
   CliArchiveInstructionsSuccessSchema,
@@ -33,7 +35,21 @@ import {
   CliWorkflowStatusSuccessSchema,
 } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.10/1.11 workflow fixtures', () => {
+async function initProject(
+  version: PinnedOpenspecV12Version,
+  project: string,
+  env: NodeJS.ProcessEnv
+): Promise<void> {
+  const initialized = await runPinnedOpenspec(
+    version,
+    ['init', project, '--tools=none'],
+    project,
+    env
+  )
+  expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
+}
+
+describe('pinned OpenSpec 1.12 workflow fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -41,7 +57,7 @@ describe('pinned OpenSpec 1.10/1.11 workflow fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V11_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V12_VERSIONS) {
     it(`executes skipped Status plus Apply and Archive Instructions on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-workflow`)
       const project = join(fixtureRoot, 'project')
@@ -49,14 +65,7 @@ describe('pinned OpenSpec 1.10/1.11 workflow fixtures', () => {
       await mkdir(project, { recursive: true })
 
       await expectPinnedVersion(version, project, env)
-
-      const initialized = await runPinnedOpenspec(
-        version,
-        ['init', project, '--tools=none'],
-        project,
-        env
-      )
-      expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
+      await initProject(version, project, env)
 
       const created = await runPinnedOpenspec(
         version,
@@ -106,8 +115,8 @@ describe('pinned OpenSpec 1.10/1.11 workflow fixtures', () => {
         requires: ['proposal'],
       })
       expect(status.artifactPaths.specs?.existingOutputPaths).toEqual([])
-      // Planning completion is explicit protocol truth on both supported lines and
-      // isComplete stays retained alias evidence, not the projection authority.
+      // Planning completion is explicit protocol truth and isComplete stays retained
+      // alias evidence, not the projection authority.
       expect(typeof status.isPlanningComplete).toBe('boolean')
       expect(typeof status.isComplete).toBe('boolean')
 
@@ -163,14 +172,7 @@ describe('pinned OpenSpec 1.10/1.11 workflow fixtures', () => {
       await mkdir(project, { recursive: true })
 
       await expectPinnedVersion(version, project, env)
-
-      const initialized = await runPinnedOpenspec(
-        version,
-        ['init', project, '--tools=none'],
-        project,
-        env
-      )
-      expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
+      await initProject(version, project, env)
 
       const created = await runPinnedOpenspec(
         version,
@@ -270,14 +272,7 @@ describe('pinned OpenSpec 1.10/1.11 workflow fixtures', () => {
       // expectPinnedVersion doubles as the stdout purity proof: strict equality on the
       // trimmed stdout fails if any telemetry or tip text shares the stream.
       await expectPinnedVersion(version, project, env)
-
-      const initialized = await runPinnedOpenspec(
-        version,
-        ['init', project, '--tools=none'],
-        project,
-        env
-      )
-      expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
+      await initProject(version, project, env)
 
       for (const args of [
         ['schemas', '--json'],

@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "include": [
     "src/agent-command-content.test.ts",
+    "src/official-cli-v12-agent-delivery-fixtures.test.ts",
     "src/agent-delivery-registry.test.ts",
     "src/agent-delivery-policy.test.ts",
     "src/tool-config.test.ts",

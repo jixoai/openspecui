@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Verify change detail fallbacks and schema-driven artifact rendering.
  * 2. Verify retained errors and non-current authority lock actions without entering the Header.
  * 3. Verify Apply inputs remain separate and open from a Header Action Dialog.
@@ -13,6 +13,7 @@
  * Original request (2026-08-03): move complete Change evidence into a dedicated tab page.
  * Owner correction (2026-08-03): move Actions inline with the title, unify subtitle badges, and localize unavailable Tooltips.
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import type { RootActionState } from '@/lib/use-root-action-state'
 import type { ChangeStatus } from '@openspecui/core'
@@ -608,6 +609,7 @@ describe('ChangeView', () => {
     expect(rows.map((row) => row.getAttribute('data-evidence-row'))).toEqual([
       'summary-paths',
       'requirement-diffs',
+      'validation-findings',
       'archived-validation',
     ])
     // The old stacked full-width accordion triggers are gone from the Evidence tab: the row
@@ -648,6 +650,7 @@ describe('ChangeView', () => {
     expect(rows.map((row) => row.getAttribute('data-evidence-row'))).toEqual([
       'summary-paths',
       'requirement-diffs',
+      'validation-findings',
       'archived-validation',
       'cli-result',
     ])
@@ -672,12 +675,12 @@ describe('ChangeView', () => {
 
     const workspace = screen.getByRole('region', { name: 'Change Evidence' })
     const rows = Array.from(workspace.querySelectorAll<HTMLButtonElement>('[data-evidence-row]'))
-    expect(rows.length).toBe(3)
+    expect(rows.length).toBe(4)
     for (const row of rows) {
       expect(row.tagName).toBe('BUTTON')
       expect(row.getAttribute('tabindex')).not.toBe('-1')
     }
-    fireEvent.click(rows[2])
+    fireEvent.click(rows[3])
     const detail = workspace.querySelector<HTMLElement>('[data-evidence-pane="detail"]')
     expect(detail).not.toBeNull()
     if (detail) {
@@ -808,7 +811,7 @@ describe('ChangeView', () => {
         launchProject: { path: '/tmp/project' },
         planningRoot: { path: '/tmp/project', source: 'nearest', healthy: true, status: [] },
         storeId: null,
-        cli: { available: true, version: '1.11.0' },
+        cli: { available: true, version: '1.12.0' },
       },
     })
     statusMock.mockReturnValue({
@@ -816,7 +819,7 @@ describe('ChangeView', () => {
       isLoading: false,
       error: null,
     })
-    // A live 1.11 session makes the diff section fetch exactly once; the mock resolves so the
+    // A live 1.12 session makes the diff section fetch exactly once; the mock resolves so the
     // section settles before the drill begins (a rejecting mock would leave it pending).
     diffEvidenceQueryMock.mockResolvedValueOnce({
       kind: 'executed',

@@ -254,6 +254,7 @@
     "openspec-cli-18": "npm:@fission-ai/openspec@1.8.0",
     "openspec-cli-110": "npm:@fission-ai/openspec@1.10.0",
     "openspec-cli-111": "npm:@fission-ai/openspec@1.11.0",
+    "openspec-cli-112": "npm:@fission-ai/openspec@1.12.0",
     "tsdown": "^0.16.6",
     "typescript": "^5.7.2",
     "vitest": "^4.1.0"

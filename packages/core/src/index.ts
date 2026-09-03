@@ -1,17 +1,20 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Expose the public Core package contract through one stable barrel.
  * 2. Keep filesystem, CLI, Root Context, workflow/operation inputs, live, and static types source-distinct.
  * 3. Publish browser-safe subpath contracts, including Dashboard Summary v2 and the external Codex
  *    command observation root, without forcing browser runtimes through this root.
  * 4. Export the typed Git repository binding and Dashboard provenance contracts, the generic CLI-backed
  *    projection lifecycle, and argv-safe subprocess/invocation/tree owners.
- * 5. Re-export the v11 admission, capability, registry-selection, and typed static-failure boundaries.
+ * 5. Re-export the admission, capability, registry-selection, and typed static-failure
+ *    boundaries, including the OpenSpec 1.12 findings runtime schemas and union guard
+ *    beside the sibling CLI contract schemas (not only their types).
  *
  * Original request (2026-07-15): "用强类型合同承载 OpenSpec 1.6 的客观事实。"
  * Original request (2026-07-17): "Root-scoped stream startup returns an owned handle, not a void cancel function."
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 /**
  * @openspecui/core
@@ -675,10 +678,13 @@ export {
   CliStoreListSchema,
   CliStoreMutationSchema,
   CliStoreSchema,
+  CliValidateFindingsResultSchema,
+  CliValidateFindingsSchema,
   CliValidateReportSchema,
   CliValidateSchema,
   CliWorkflowStatusSchema,
   OpenSpecCliContractExecutor,
+  isCliValidateFindings,
   parseCliCommandResult,
   type CliApplyInstructions,
   type CliArchive,
@@ -715,6 +721,8 @@ export {
   type CliStoreRemoveOptions,
   type CliStoreSetupOptions,
   type CliValidate,
+  type CliValidateFindings,
+  type CliValidateFindingsResult,
   type CliValidateJsonOptions,
   type CliValidateReport,
   type CliValidateTarget,

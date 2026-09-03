@@ -1,8 +1,8 @@
 /**
  * Orthogonal intents (created 2026-08-28 Asia/Shanghai):
- * 1. Project the OpenSpec 1.11 `show <change> --json --diff` MODIFIED-delta evidence for Change Detail.
- * 2. Gate every fetch behind the admitted CLI's `requirementDiff` capability so 1.10 sessions never
- *    construct the argv at all.
+ * 1. Project the OpenSpec `show <change> --json --diff` MODIFIED-delta evidence for Change Detail.
+ * 2. Gate every fetch behind the admitted CLI's `requirementDiff` capability so sessions without
+ *    the capability never construct the argv at all.
  * 3. Project capability refusal, root loss, and command failure as typed unavailability — never as
  *    transport errors that would fail the whole Evidence tab.
  * 4. Retain per-delta spec/operation/diff/warning and CLI provenance exactly as the CLI delivered
@@ -107,8 +107,8 @@ function buildShowDiffCommand(changeId: string, store: string | undefined): stri
  * Read the CLI MODIFIED-delta diff evidence for one change.
  *
  * The projection is separately fetched CLI evidence: the local delta parser keeps owning the
- * delta display and nothing here recomputes or backfills a diff. Sessions without the 1.11
- * `requirementDiff` capability (admitted 1.10, retired, bypassed, or unavailable CLI) and
+ * delta display and nothing here recomputes or backfills a diff. Sessions without the
+ * `requirementDiff` capability (retired, bypassed, or unavailable CLI) and
  * sessions without a resolved planning root return a typed unavailable projection without
  * spawning any process.
  */

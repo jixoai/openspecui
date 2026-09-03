@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Prove the plain-Node Windows diagnostic resolves an npm-style CLI shim and retires its timed-out tree.
  * 2. Distinguish a complete diagnostic report from an early child-process failure before JSON parsing.
  * 3. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
@@ -11,6 +11,7 @@
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  * Original request (2026-08-28, issue #258): diagnostic fallback probes must not report an
  *   out-of-range @latest as a working runner.
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { spawnSync } from 'node:child_process'
 import {

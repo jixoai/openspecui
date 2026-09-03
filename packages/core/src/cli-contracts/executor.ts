@@ -1,15 +1,21 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Build root-aware read and workflow command argv.
  * 2. Build Store inspection and mutation argv through the official CLI surface.
  * 3. Build strict validate/archive argv without implicit recovery behavior.
  * 4. Parse every invocation, including Archive Instructions, through its command-specific evidence schema.
 
  * 5. Forward the selected Root selector only where the admitted CLI declares it.
+ * 6. Own the OpenSpec 1.12 `validate --report findings` argv exclusively inside the
+ *    capability-gated `validateFindings` method (the retired 1.11 line rejects `--report`
+ *    entirely), decode findings through their own result schema, and answer a
+ *    non-admitted session with a typed refusal before any argv is composed; the CLI
+ *    owns every remaining request-combination rejection.
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import type { z } from 'zod'
 import type { CliResult } from '../cli-executor.js'
@@ -42,6 +48,7 @@ import {
   CliShowSpecSchema,
   CliSpecListSchema,
   CliTemplatesSchema,
+  CliValidateFindingsResultSchema,
   CliValidateSchema,
   CliWorkflowStatusSchema,
   type CliApplyInstructions,
@@ -54,6 +61,7 @@ import {
   type CliSpecList,
   type CliTemplates,
   type CliValidate,
+  type CliValidateFindingsResult,
   type CliWorkflowStatus,
 } from './workflow.js'
 
@@ -79,12 +87,31 @@ export interface CliWorkflowOptions extends CliRootSelector {
  */
 export type CliGatedCommandResult<T> =
   | { kind: 'executed'; result: CliCommandResult<T> }
-  | { kind: 'unavailable'; capability: 'batchStatus' | 'requirementDiff' }
+  | { kind: 'unavailable'; capability: 'batchStatus' | 'requirementDiff' | 'findingsReport' }
 
 /** Options for the OpenSpec 1.11 batch Status command. */
 export interface CliWorkflowStatusAllOptions extends CliWorkflowOptions {
   /** Capabilities of the admitted CLI; `batchStatus` must be true to construct argv. */
   capabilities: Pick<OpenSpecCliCapabilities, 'batchStatus'>
+}
+
+/**
+ * Bulk scope (or the archive) targeted by the OpenSpec 1.12 findings report.
+ *
+ * Upstream requires one explicit bulk scope for `--report findings` and rejects an
+ * item name with the typed `invalid_validation_report_request` envelope, so the gated
+ * surface accepts exactly the valid scopes — never an item target.
+ */
+export type CliValidateFindingsTarget =
+  | { kind: 'scope'; scope: 'all' | 'changes' | 'specs' }
+  | { kind: 'archived' }
+
+/** Options for the OpenSpec 1.12 gated findings report command. */
+export interface CliValidateFindingsOptions extends CliRootSelector {
+  /** Capabilities of the admitted CLI; `findingsReport` must be true to construct argv. */
+  capabilities: Pick<OpenSpecCliCapabilities, 'findingsReport'>
+  /** One explicit bulk scope; the CLI owns every remaining request-combination rejection. */
+  target: CliValidateFindingsTarget
 }
 
 /** Options for the OpenSpec 1.11 show-change diff command. */
@@ -348,7 +375,13 @@ export class OpenSpecCliContractExecutor {
     return this.execute(args, CliStoreCleanupSchema)
   }
 
-  /** Validate an item, scope, or the archive without inferring retries or readiness. */
+  /**
+   * Validate an item, scope, or the archive without inferring retries or readiness.
+   *
+   * This plain transport never composes a `--report` flag: the report argv belongs to
+   * `validateFindings` alone, because the retired 1.11 line rejects `--report` entirely
+   * and a report-carrying request is a separate typed truth, never the full-report union.
+   */
   async validate(options: CliValidateJsonOptions): Promise<CliCommandResult<CliValidate>> {
     const args = ['validate']
     if (options.target.kind === 'item') {
@@ -362,6 +395,31 @@ export class OpenSpecCliContractExecutor {
     if (options.strict) args.push('--strict')
     args.push('--json')
     return this.execute(this.withRoot(args, options), CliValidateSchema)
+  }
+
+  /**
+   * Read the filtered OpenSpec 1.12 findings evidence for one bulk scope (one spawn).
+   *
+   * Gated by the `findingsReport` capability because only the 1.12 line declares the
+   * `--report` flag at all: a non-admitted CLI receives the typed refusal before any
+   * argv exists, never a flag it would reject. The findings document decodes through
+   * its own result schema (findings document or `invalid_validation_report_request`
+   * envelope), never the full-report union: a findings document is a filtered evidence
+   * transport, so the decode split keeps the two truths separate.
+   */
+  async validateFindings(
+    options: CliValidateFindingsOptions
+  ): Promise<CliGatedCommandResult<CliValidateFindingsResult>> {
+    if (!options.capabilities.findingsReport) {
+      return { kind: 'unavailable', capability: 'findingsReport' }
+    }
+    const args = ['validate']
+    args.push(options.target.kind === 'archived' ? '--archived' : `--${options.target.scope}`)
+    args.push('--report', 'findings', '--json')
+    return {
+      kind: 'executed',
+      result: await this.execute(this.withRoot(args, options), CliValidateFindingsResultSchema),
+    }
   }
 
   /** Archive one change without implicit validation bypass or retry. */

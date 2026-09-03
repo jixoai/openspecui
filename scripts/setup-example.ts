@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Scaffold the E2E example project (openspec/ structure, sample specs and changes,
  *    .openspecui.json) for `pnpm example:setup [--clean]`.
  * 2. Pin the example's npx runner to the admitted CLI series instead of an unversioned
@@ -9,6 +9,7 @@
  * Original request (2026-08-28, issue #258): the example's npx runner stays pinned to the
  * admitted CLI series instead of an unversioned @latest the compatibility gate can block.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 
 import { existsSync } from 'fs'
@@ -236,8 +237,8 @@ const SAMPLE_AGENTS_MD = `# AI Agent Instructions
 
 // Mirror of packages/core OPENSPEC_CLI_TARGET_SERIES: the example runner must resolve the
 // series this release line admits, never an unversioned @latest the gate can block.
-// Keep in sync with packages/core/src/openspec-compat.ts (OpenSpecUI 11 -> 1.11).
-const OPENSPEC_CLI_TARGET_SERIES = '1.11'
+// Keep in sync with packages/core/src/openspec-compat.ts (OpenSpecUI 12 -> 1.12).
+const OPENSPEC_CLI_TARGET_SERIES = '1.12'
 
 const CONFIG = {
   cli: {

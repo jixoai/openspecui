@@ -20,8 +20,9 @@ OpenSpecUI is a web interface for OpenSpec workflows (live mode + static export)
 
 | OpenSpecUI         | OpenSpec CLI line                                          |
 | ------------------ | ---------------------------------------------------------- |
-| `@latest` / `@^11` | current: `>=1.11.0 <1.12.0`; supported: `>=1.10.0 <1.12.0` |
-| `@^9` (legacy)     | current: `>=1.9.0 <1.10.0`; supported: `>=1.8.0 <1.10.0`   |
+| `@latest` / `@^12` | current + supported: `>=1.12.0 <1.13.0`                    |
+| `@^11` (legacy)    | current: `>=1.11.0 <1.12.0`; supported: `>=1.10.0 <1.12.0` |
+| `@^9`              | current: `>=1.9.0 <1.10.0`; supported: `>=1.8.0 <1.10.0`   |
 | `@^7`              | `>=1.7.0 <1.8.0`                                           |
 | `@^6`              | current: `>=1.6.0 <1.7.0`; compatible: `>=1.7.0 <1.8.0`    |
 | `@^5`              | current: `>=1.5.0 <1.6.0`; accepted: `>=1.4.0 <1.6.0`      |
@@ -30,14 +31,15 @@ OpenSpecUI is a web interface for OpenSpec workflows (live mode + static export)
 | `@^2`              | `>=1.2.0 <1.3.0`                                           |
 | `@^1`              | `>=1.0.0 <1.2.0`                                           |
 
-OpenSpecUI major versions ordinarily track OpenSpec CLI minor lines. OpenSpecUI 11 adapts OpenSpec
-CLI 1.10.x and 1.11.x in one release line: stable 1.11.x is the current, recommended line, stable
-1.10.x is supported non-current, and OpenSpecUI deliberately skips a separate 10 release while
-taking on every 1.10 protocol obligation. OpenSpecUI 9 remains the historical 1.8.x/1.9.x product
-line.
+OpenSpecUI major versions ordinarily track OpenSpec CLI minor lines. OpenSpecUI 12 adapts OpenSpec
+CLI 1.12.x as a single-series line: stable 1.12.x is current and recommended, and `1.13` is not
+pre-claimed — when it ships, admission is a separately verified decision (a 12.x window widening or
+a new major). OpenSpecUI 11 remains the historical 1.10.x/1.11.x product line and deliberately
+skipped a separate 10 release while taking on every 1.10 protocol obligation.
 
 Legacy docs:
 
+- 1.11: [`README-1.11.0.md`](./README-1.11.0.md)
 - 1.9: [`README-1.9.0.md`](./README-1.9.0.md)
 - 1.7: [`README-1.7.0.md`](./README-1.7.0.md)
 - 1.6: [`README-1.6.0.md`](./README-1.6.0.md)
@@ -62,25 +64,25 @@ Direct Project Web defaults to `http://localhost:3100` when that presentation is
 
 ## OpenSpec CLI Compatibility
 
-- OpenSpecUI 11 accepts stable OpenSpec CLI `>=1.10.0 <1.12.0` and recommends the 1.11 line.
-- Stable 1.11.x is identified as the current line; stable 1.10.x is supported non-current.
-- OpenSpec CLI 1.9.x and older lines, CLI `>=1.12.0`, and every prerelease are unsupported by
-  OpenSpecUI 11 and blocked by default.
+- OpenSpecUI 12 accepts stable OpenSpec CLI `>=1.12.0 <1.13.0` and recommends the 1.12 line.
+- Stable 1.12.x is identified as the current line; this is a single-series window.
+- OpenSpec CLI 1.11.x and 1.10.x (the OpenSpecUI 11 window), older lines, CLI `>=1.13.0`, and every
+  prerelease are unsupported by OpenSpecUI 12 and blocked by default.
 - If an incompatible CLI executable is available, the mismatch Dialog offers **Skip version check**.
   This bypass is held only by the current page runtime, clears on refresh/reopen, and does not
   create a compatibility promise.
 
-OpenSpecUI 11 adds: one-spawn batch status loading through `openspec status --all` for 1.11
-sessions (1.10 keeps the per-change path), Change Detail requirement diff/warning evidence through
-`openspec show --diff` for MODIFIED deltas, `openspec init --language` on both admitted lines, and
-an expanded Agent delivery registry — Zed joins from CLI 1.10 (skills-only, `.agents/skills`), and
-Antigravity migrates its skills root from `.agent` to `.agents` starting with CLI 1.11 while 1.10
-keeps `.agent` current.
+OpenSpecUI 12 adds: a capability-gated validation findings surface through `openspec validate
+--report findings` (findings-only items with preserved full-run totals and exit codes),
+merge-conflict advisory findings rendered as a first-class informational class, and SourceCraft
+Code Assistant in the Agent delivery registry (`.codeassistant`, natural-language skill references).
+Batch status (`status --all`), requirement diff evidence (`show --diff`), `init --language`, Zed,
+and the Antigravity `.agent` → `.agents` migration continue on the admitted 1.12 line.
 
 Upgrade CLI:
 
 ```bash
-npm install -g @fission-ai/openspec@1.11
+npm install -g @fission-ai/openspec@1.12
 ```
 
 ## Common Flows
