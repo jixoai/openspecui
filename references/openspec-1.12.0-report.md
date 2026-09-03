@@ -67,12 +67,50 @@ shared JSON failure envelope):
 | `validate --archived --report findings --json`                                   | n/a                                       | same envelope with `scope:'archived'`; `--all --archived --report findings` rejected with `invalid_validation_report_request`       | Archived findings is a separate scope; archived+active mixing is a typed request error (exit 1).          |
 | `validate --report findings` (no bulk scope) / with item name / `--report bogus` | n/a                                       | `{ status:[{ severity:'error', code:'invalid_validation_report_request', message, fix }] }`, exit 1                                | Typed request-error envelope; findings requires an explicit bulk scope and no item name.                  |
 | `validate --all` (text mode) with a failing change                               | prints only `✗ change/<id>` per item      | prints `✗ change/<id>` then per-issue lines `  ✗ [ERROR] path: message`; `Details:` hint unchanged                                  | Human bulk output gained per-issue detail; JSON full report unchanged (`{items, summary, version, root}`). |
-| `init . --tools codeassistant`                                                   | unknown tool                              | `11 skills and 11 commands in .codeassistant/`; skills `.codeassistant/skills/openspec-*/SKILL.md`, commands `.codeassistant/commands/opsx-*.md`; no IDE-restart line | New Agent delivery matrix entry; skills referenced by natural language, not slash commands.        |
+| `init . --tools codeassistant`                                                   | unknown tool                              | `11 skills and 11 commands in .codeassistant/`; skills `.codeassistant/skills/openspec-*/SKILL.md`, commands `.codeassistant/commands/opsx-*.md`; no IDE-restart line | New Agent delivery matrix entry; skills referenced by natural language, not slash commands. The 11+11 count is an observation from a fresh `init` with the default `spec-driven` schema and default profile selection — the workflow catalog is larger, so this count is a fixture fact, not an invariant. |
 | `init . --tools qoder`                                                           | `Restart your IDE for the new commands to take effect.` | `Restart your IDE to refresh commands.`                                                                             | Shared init/update restart wording; new shared module is the sole source.                      |
 | `init` directory structure                                                       | empty `openspec/specs/`, `openspec/changes/archive/` untracked by Git | both gain `.gitkeep` anchors; re-init restores missing markers without overwriting files or following marker symlinks | Anchored empty dirs are part of init's created-path ledger.                                       |
 
 A delta whose MODIFIED spec also fails structural validation produces the ERROR finding only; the merge-conflict
 INFO for the same path is suppressed by the already-reported filter. Do not expect both on one path.
+
+Executed populated findings document (`validate --all --report findings --json` on the fixture above; the item
+stays `valid: true` and the run exits 0):
+
+```json
+{
+  "report": {
+    "kind": "validation-findings",
+    "version": "1.0",
+    "scope": "all",
+    "returnedItems": 1,
+    "totalItems": 1
+  },
+  "itemFindings": [
+    {
+      "id": "test-change",
+      "type": "change",
+      "valid": true,
+      "issues": [
+        {
+          "level": "INFO",
+          "path": "missing-spec/spec.md",
+          "message": "Archive would refuse this delta: missing-spec: target spec does not exist; only ADDED requirements are allowed for new specs. MODIFIED and RENAMED operations require an existing spec."
+        }
+      ],
+      "durationMs": 19
+    }
+  ],
+  "summary": {
+    "totals": { "items": 1, "passed": 1, "failed": 0 },
+    "byType": {
+      "change": { "items": 1, "passed": 1, "failed": 0 },
+      "spec": { "items": 0, "passed": 0, "failed": 0 }
+    }
+  },
+  "root": { "path": "/private/tmp/os112-fixture", "source": "nearest" }
+}
+```
 
 ## Protocol delta
 
@@ -103,7 +141,9 @@ rejects an item name and archived+active mixing, and answers with one JSON docum
 run size, and the process exit code stays the full-run rule (`failed > 0 -> 1`), so findings never re-labals
 verdicts. `--report full` is the explicit default and changes nothing. Invalid requests produce the shared
 `status`-array error envelope with code `invalid_validation_report_request` and a `fix` string. The full bulk
-JSON envelope (`items`, `summary`, `version: '1.0'`, `root`) is byte-compatible with 1.11.
+JSON envelope (`items`, `summary`, `version: '1.0'`, `root`) is schema-compatible with 1.11 — 1.12 legitimately
+adds `INFO` issues inside `items[*].issues` and runtime-dependent values (for example `durationMs`), so
+"byte-identical output" is not claimed.
 
 OpenSpecUI consequence: a new capability-gated CLI contract (`findingsReport`), used as evidence/surface
 transport. Findings must not replace the full report as the validation truth source, and UI presentation of a
@@ -114,8 +154,9 @@ findings document must show both its filtered `returnedItems` and the full-run t
 With `mainSpecsDir` known, change validation dry-runs archive's `findSpecUpdates` + `buildUpdatedSpec` and
 emits `INFO` issues: `Archive would refuse this delta: <reason>` per conflicting delta, or one
 `Could not check archive merge conflicts: <error>` when the advisory check itself fails (which no longer
-discards the report). Filesystem errors (errno defined) inside the dry run are skipped, and paths already
-reported as ERROR/WARNING/missing-header/empty-section are not duplicated. `INFO` existed in the level enum
+discards the report). Filesystem errors (errno defined) inside the dry run are skipped. The exact
+already-reported filter is: paths of ERROR-level issues collected so far, plus `missingHeaderSpecs` paths, plus
+empty-section spec paths — WARNING-level paths are NOT in the filter. `INFO` existed in the level enum
 before 1.12; validate now produces it, `--strict` escalation unchanged (strict counts errors/warnings).
 
 Related: `buildUpdatedSpec` rethrows every filesystem error except `ENOENT`/`ENOTDIR`, so an unreadable target
@@ -143,9 +184,12 @@ per-series overrides, mirroring how Zed entered at 1.10.
 `init` (both fresh and `--extend`) writes `.gitkeep` anchors under `ANCHORED_OPENSPEC_DIRS` (`specs/`,
 `changes/archive/`) through the now-exported `ensureDirectoryAnchor`: it lists the directory first, writes with
 the `wx` flag only when empty, tolerates `EEXIST`, and never replaces a file or follows a marker symlink.
-Re-running init restores missing markers without overwriting existing files. OpenSpecUI's Initialize Project
-Alert keeps delegating to `openspec init`; no parallel anchor logic may be introduced, and direct directory
-enumeration that counts anchors as content must treat `.gitkeep` as an anchor, not an artifact.
+`InitCommand` calls the anchor writer directly with the ledger parameter defaulted to an empty array — the
+`CreatedPathLedgerEntry[]` ledger is owned by the store-root callers in `openspec-root.ts`, so init-created
+anchors do not join a store-created-path ledger. Re-running init restores missing markers without overwriting
+existing files. OpenSpecUI's Initialize Project Alert keeps delegating to `openspec init`; no parallel anchor
+logic may be introduced, and direct directory enumeration that counts anchors as content must treat `.gitkeep`
+as an anchor, not an artifact.
 
 ### 5. The IDE restart hint is one shared module
 

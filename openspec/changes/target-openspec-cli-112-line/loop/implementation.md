@@ -38,7 +38,30 @@ orthogonal-intent/original-request header. This change's original request line i
 
 (round dispositions recorded here as reviews complete)
 
-## Round-A review disposition (PENDING)
+## Round-A review disposition (herdr v12-change-reviewer, gpt-5.6-terra xhigh, 2026-09-03) — 6/10
 
-Codex change review of the planning artifacts; expected focus: single-series window decision, findings
-contract shape, registry snapshot inheritance, fixture roles (112 positive / 111 boundary).
+Worked 1h 28m. Verdict: strong version decision and mostly reliable research, but five pre-implementation
+blockers. Disposition of every finding:
+
+Blocking (all adopted):
+1. Slice 1 missed `scripts/diagnose-cli-runner.mjs` (+ test) `OPENSPEC_CLI_TARGET_SERIES = '1.11'` mirror →
+   added to the current-state inventory, Slice 1 owners, red/green cases.
+2. Missing MODIFIED `OPSX Command Mapping` delta → added, complete with all 11 scenarios preserved and 1.12
+   semantics (capability-gated availability wording).
+3. Missing MODIFIED `Kernel-First OPSX Read Model` / `Explicit Planning Completion Projection` /
+   `MODIFIED Delta Diff Evidence Surface` deltas → added, scenario-preserving, capability wording.
+4. Slice 4 red case ("a hand-authored payload proves a 1.12 behavior") was not executable → replaced with the
+   honest absence red plus a post-implementation mutation red (bins-map -> 111 alias fails the `--version`
+   identity assertion).
+5. Report promised "findings JSON (below)" without the payload → the executed populated findings document is
+   now embedded verbatim.
+
+Non-blocking (all adopted): exact already-reported filter documented (ERROR paths + missing-header +
+empty-section; WARNING excluded); 11+11 count qualified as a fixture fact with init config stated; `.gitkeep`
+anchors distinguished from the store-created-path ledger (init passes an empty ledger); Slice 6 names the
+`cli.validate` router boundary and server integration tests; Slice 7 names the fixed changesets group and a
+`11.1.0 -> 12.0.0` dry run; `README-zh-*.md` narrowed to the current `README-zh.md`; `AgentProvenanceCliSeries`
+historical union retention recorded in decision 5; scenario-title preservation note added to decision 9;
+"byte-compatible" softened to "envelope/schema-compatible".
+
+Pending: Round-B re-review after these corrections.

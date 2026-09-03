@@ -113,6 +113,91 @@ compatibility evidence, CLI payloads, downstream errors, or product support clai
 - **AND** downstream execution SHALL fail through its typed availability boundary rather than a simulated
   supported CLI
 
+### Requirement: OPSX Command Mapping
+
+OpenSpecUI SHALL map workflow actions, schema resolution, and project setup to official OpenSpec 1.12
+commands with exact selected-Root or Launch Project ownership. It SHALL derive command availability from the
+admitted running CLI's capabilities before invocation, rather than exposing a capability-gated command (batch
+status, requirement diff, validation findings) to a session without that capability.
+
+#### Scenario: Execute OPSX status
+
+- **GIVEN** a status refresh is requested
+- **WHEN** the UI calls the CLI
+- **THEN** the system SHALL execute `openspec status --json`
+
+#### Scenario: Execute OPSX instructions
+
+- **GIVEN** an artifact is selected
+- **WHEN** the UI requests instructions
+- **THEN** the system SHALL execute `openspec instructions <artifact> --json`
+
+#### Scenario: Execute OPSX apply instructions
+
+- **GIVEN** apply guidance is requested for a change
+- **WHEN** the UI requests apply instructions
+- **THEN** the system SHALL execute `openspec instructions apply --json`
+- **AND** normalize CLI-provided `contextFiles` into artifact-id to file-path-array mappings
+
+#### Scenario: Invoke update from a change action
+
+- **GIVEN** a user selects Update for an existing change
+- **WHEN** command invocation mode is active
+- **THEN** the system SHALL produce `/opsx:update <change-id>`
+- **AND** preserve `update` as the workflow action passed through the public hook contract
+
+#### Scenario: Invoke sync from a change action
+
+- **GIVEN** a user selects Sync for an existing change
+- **WHEN** command invocation mode is active
+- **THEN** the system SHALL produce `/opsx:sync <change-id>`
+- **AND** preserve `sync` as the workflow action passed through the public hook contract
+
+#### Scenario: Request Apply Instructions with runtime inputs
+
+- **GIVEN** an active Change and current selected Root
+- **WHEN** Apply guidance is requested
+- **THEN** OpenSpecUI SHALL execute `openspec instructions apply --change <id> --json` with the current Root selector
+- **AND** preserve CLI-provided `context`, `operationGuidance`, `contextFiles`, and Root evidence as typed facts
+
+#### Scenario: Request Archive Instructions
+
+- **GIVEN** an active Change and current selected Root
+- **WHEN** Archive guidance is requested
+- **THEN** OpenSpecUI SHALL execute `openspec instructions archive --change <id> --json` with the current Root selector
+- **AND** preserve CLI-provided `context`, `operationGuidance`, Root evidence
+- **AND** SHALL NOT derive Archive input from Status or artifact rules
+
+#### Scenario: Resolve schemas through the selected 1.9 Root
+
+- **GIVEN** an admitted OpenSpec CLI 1.12.x session has selected Root `store-a`
+- **WHEN** Config requests its schema catalog
+- **THEN** the system SHALL execute `openspec schemas --json --store store-a`
+- **AND** preserve either its successful catalog or its selected-Root failure envelope as the selected Root's CLI fact
+
+#### Scenario: Resolve schemas without a 1.9-only selector on 1.8
+
+- **GIVEN** an admitted OpenSpec CLI session on the supported line
+- **WHEN** Config requests its schema catalog with a selected Root
+- **THEN** the system SHALL resolve through the selected-Root selector on the admitted line
+- **AND** the retired 1.8 selector restriction SHALL NOT downgrade any admitted session to a selectorless query
+
+#### Scenario: Restrict archived validation to OpenSpec 1.9
+
+- **GIVEN** an admitted OpenSpec CLI 1.12.x session
+- **WHEN** Change Evidence requests archived validation
+- **THEN** the system SHALL execute `openspec validate --archived --json`
+- **AND** the retired 1.8 unavailability branch SHALL NOT downgrade any admitted session
+
+#### Scenario: Initialize only the Launch Project
+
+- **GIVEN** the Launch Project has no local OpenSpec initialization
+- **WHEN** the user explicitly confirms Initialize Project
+- **THEN** OpenSpecUI SHALL execute `openspec init <launch-project> --tools=none`
+- **AND** SHALL NOT target an external Active Root or Store
+- **AND** SHALL NOT select, install, migrate, or clean Agent artifacts
+- **AND** SHALL stream command and final settlement evidence
+
 ### Requirement: Batch Status Envelope Contract
 
 OpenSpecUI SHALL provide a typed `status --all --json` contract for admitted OpenSpec CLI 1.12 sessions. The
