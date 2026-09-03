@@ -13,15 +13,15 @@ Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然�
 
 A visual interface for [OpenSpec](https://openspec.dev) — the visual projection and operator for spec-driven development with AI agents.
 
-OpenSpecUI 11 gives OpenSpec projects a reactive dashboard, an objective change workflow, a config workbench, real terminals, and static export — while the OpenSpec CLI stays the source of truth for every workflow fact.
+OpenSpecUI 12 gives OpenSpec projects a reactive dashboard, an objective change workflow, a config workbench, real terminals, and static export — while the OpenSpec CLI stays the source of truth for every workflow fact.
 
 ## Requirements
 
-- **OpenSpec CLI**: `>=1.10.0 <1.12.0` — the stable 1.11 line is current and recommended; stable 1.10.x is supported non-current. Older lines (including 1.9.x and below), prereleases, and `>=1.12.0` are blocked by default.
+- **OpenSpec CLI**: `>=1.12.0 <1.13.0` — the stable 1.12 line is current and recommended (single-series window). Older lines (including the 1.10.x/1.11.x OpenSpecUI 11 window), prereleases, and `>=1.13.0` are blocked by default.
 - **Node.js**: `>= 20.19.0`
 
 ```bash
-npm install -g @fission-ai/openspec@1.11
+npm install -g @fission-ai/openspec@1.12
 ```
 
 ## Quick start
@@ -82,11 +82,11 @@ URL-valued App mode is not supported: the daemon always serves the App shell bun
 
 ## What's inside
 
-- **OPSX change workflow** — kanban lanes over tracked task phases with Continue / Fast-forward / Apply / Verify / Archive operators driven by live CLI evidence; 1.11 sessions load the whole change status list in one `status --all` spawn
-- **Change evidence** — MODIFIED deltas can present the CLI's own requirement diff and warning evidence (`show --diff`, 1.11) beside the local delta projection
+- **OPSX change workflow** — kanban lanes over tracked task phases with Continue / Fast-forward / Apply / Verify / Archive operators driven by live CLI evidence; admitted sessions load the whole change status list in one `status --all` spawn
+- **Change evidence** — MODIFIED deltas can present the CLI's own requirement diff and warning evidence (`show --diff`) beside the local delta projection, plus validation findings reports (`validate --report findings`) with informational merge-conflict findings
 - **Dashboard** — active changes with CLI-owned applying progress and a curated Code Git snapshot
 - **Config workbench** — route-backed owners for project binding, active root, environment globals, and schemas, plus an adaptive setup guide and `init --language` on both admitted CLI lines
-- **Agent delivery** — the CLI-owned registry projects per-version agent commands and skills, including Zed (from 1.10) and the Antigravity `.agent` → `.agents` migration (from 1.11)
+- **Agent delivery** — the CLI-owned registry projects per-version agent commands and skills, including SourceCraft Code Assistant (from 1.12, `.codeassistant`), Zed, and the Antigravity `.agent` → `.agents` migration
 - **Terminals** — multi-tab PTY sessions (xterm and ghostty-web) with direct agent send
 - **Git view** — commits, patches, and worktrees with explicit code/planning scope
 - **Search** — reactive in live mode, worker-backed in static exports
