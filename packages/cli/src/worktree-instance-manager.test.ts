@@ -10,6 +10,9 @@
  *    10 s hook budget, so cleanup owns an explicit bounded hook timeout. Raised 30 s -> 60 s on
  *    2026-08-28: the same slow-hosted-runner class (a run whose import phase alone took 48 s)
  *    pushed the guarded-child close past 30 s twice in a row; local runs stay far under it.
+ *    Raised the Windows rmdir retry budget 30 x 100 ms -> 150 x 200 ms (bounded ~30 s, inside the
+ *    60 s hook) on 2026-09-04: the endpoint-target fixture's EBUSY outlived 3 s of retries twice
+ *    in a row on the hosted runner while this file's subject code stayed byte-identical to main.
  * 6. The real worker-thread lifecycle case skips only on hosted Windows CI: `terminate()` can
  *    wait forever on a thread stuck in native teardown there. The ubuntu CI lane and local
  *    Windows runs keep the contract covered.
@@ -74,8 +77,8 @@ afterEach(async () => {
       rm(dir, {
         recursive: true,
         force: true,
-        maxRetries: process.platform === 'win32' ? 30 : 0,
-        retryDelay: 100,
+        maxRetries: process.platform === 'win32' ? 150 : 0,
+        retryDelay: 200,
       })
     )
   )
