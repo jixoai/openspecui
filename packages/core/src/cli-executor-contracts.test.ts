@@ -4,8 +4,10 @@
  * 2. Lock official Store mutation argv without registry synthesis.
  * 3. Lock strict Archive mutation and Archive Instructions JSON argv.
  * 4. Lock schema and template JSON reads to checked command contracts.
- * 5. Lock the OpenSpec 1.12 validate `--report <full|findings>` argv passthrough: appended
- *    only when requested, combined with an explicit bulk scope, never synthesized locally.
+ * 5. Lock the OpenSpec 1.12 `validate --report findings` argv behind the
+ *    capability-gated `validateFindings` method: a direct caller without the admitted
+ *    `findingsReport` capability receives the typed refusal and no argv at all, and
+ *    plain validate composes no `--report` flag (the retired 1.11 line rejects it).
 
  * Original request (2026-07-15): "坚持 CLI-first。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
@@ -144,29 +146,28 @@ describe('CliExecutor OpenSpec 1.6 contracts', () => {
     expect(execute).toHaveBeenCalledTimes(4)
   })
 
-  it('appends --report only when a validate report transport is requested', async () => {
-    await executor.contracts.validate({
+  it('composes the whole --report argv only through the capability-gated findings method', async () => {
+    // A direct caller without the admitted `findingsReport` capability receives the
+    // typed refusal and no argv at all: the retired 1.11 line rejects `--report`
+    // entirely (full and findings alike), so plain validate may never compose it.
+    const refused = await executor.contracts.validateFindings({
       target: { kind: 'scope', scope: 'all' },
-      report: 'findings',
+      capabilities: { findingsReport: false },
     })
-    await executor.contracts.validate({
+    expect(refused).toEqual({ kind: 'unavailable', capability: 'findingsReport' })
+    expect(execute).not.toHaveBeenCalled()
+
+    const admitted = await executor.contracts.validateFindings({
       target: { kind: 'archived' },
-      report: 'findings',
+      capabilities: { findingsReport: true },
       store: 'shared',
     })
-    await executor.contracts.validate({
-      target: { kind: 'scope', scope: 'changes' },
-      report: 'full',
-    })
-    await executor.contracts.validate({ target: { kind: 'scope', scope: 'specs' } })
+    expect(admitted).toMatchObject({ kind: 'executed' })
 
     expect(execute.mock.calls.map(([args]) => args)).toEqual([
-      ['validate', '--all', '--report', 'findings', '--json'],
       ['validate', '--archived', '--report', 'findings', '--json', '--store', 'shared'],
-      ['validate', '--changes', '--report', 'full', '--json'],
-      ['validate', '--specs', '--json'],
     ])
-    expect(execute).toHaveBeenCalledTimes(4)
+    expect(execute).toHaveBeenCalledTimes(1)
   })
 
   it('adds --no-validate only for an explicit archive request', async () => {

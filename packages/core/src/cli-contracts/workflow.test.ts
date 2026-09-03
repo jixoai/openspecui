@@ -6,8 +6,11 @@
  * 4. Lock the OpenSpec 1.11 batch Status envelope, `show --diff` contract, capability gates,
  *    and the OpenSpec 1.10 `init --language` argv passthrough.
  * 5. Lock the OpenSpec 1.12 validate findings report beside the full report: filtered
- *    itemFindings, preserved full-run totals, exit-code-free decoding, the empty-scope
- *    success document, and the `invalid_validation_report_request` failure envelope.
+ *    itemFindings with at least one issue each, returnedItems bounded by totalItems,
+ *    preserved full-run totals, exit-code-free decoding, the empty-scope success
+ *    document, the `invalid_validation_report_request` failure envelope, a
+ *    discriminator-shape (not key-presence) union guard, and the capability-gated
+ *    `validateFindings` executor method that owns the whole `--report` argv.
 
  * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
@@ -695,6 +698,72 @@ describe('OpenSpec 1.12 validate findings CLI contract', () => {
     // The findings document schema never decodes the request-error path.
     expect(CliValidateFindingsSchema.safeParse(requestError).success).toBe(false)
   })
+
+  it('rejects a report whose returnedItems exceeds totalItems', () => {
+    // Pinned CLI law (references/openspec v1.12.0 projectValidationFindings):
+    // returnedItems counts the filtered items and totalItems the full run, so a
+    // document claiming more returned items than the run size is not CLI evidence.
+    const inconsistent = {
+      ...executedFindingsDocument,
+      report: { ...executedFindingsDocument.report, returnedItems: 2, totalItems: 1 },
+    }
+
+    expect(CliValidateFindingsSchema.safeParse(inconsistent).success).toBe(false)
+    // The result union cannot rescue it either: the document carries no status array,
+    // so the diagnostic failure branch rejects it independently.
+    expect(CliValidateFindingsResultSchema.safeParse(inconsistent).success).toBe(false)
+  })
+
+  it('rejects an itemFindings entry with an empty issues array', () => {
+    // Every findings item exists because it carries at least one issue: upstream
+    // filters `item.issues.length > 0`, so an issue-less entry is not a findings item.
+    const withEmptyIssues = {
+      ...executedFindingsDocument,
+      itemFindings: [{ ...executedFindingsDocument.itemFindings[0], issues: [] }],
+    }
+
+    expect(CliValidateFindingsSchema.safeParse(withEmptyIssues).success).toBe(false)
+  })
+})
+
+describe('isCliValidateFindings discriminator guard', () => {
+  it('accepts the executed findings document', () => {
+    expect(isCliValidateFindings(executedFindingsDocument)).toBe(true)
+  })
+
+  it('does not misclassify a diagnostic failure that carries a stray report key', () => {
+    // Passthrough tolerance means a diagnostic failure envelope may legally carry
+    // unknown keys: a bare `report`-presence check would misroute such a payload to
+    // the findings branch, so the guard must validate the discriminator shape.
+    const strayReport = {
+      status: [
+        {
+          severity: 'error',
+          code: 'invalid_validation_report_request',
+          message: '--report findings requires one bulk scope.',
+        },
+      ],
+      report: {},
+    }
+    expect(isCliValidateFindings(strayReport)).toBe(false)
+
+    const wrongKind = {
+      status: strayReport.status,
+      report: { kind: 'full-report', returnedItems: 1, totalItems: 1 },
+    }
+    expect(isCliValidateFindings(wrongKind)).toBe(false)
+
+    const nonNumericCounts = {
+      ...executedFindingsDocument,
+      report: { ...executedFindingsDocument.report, returnedItems: '1' },
+    }
+    expect(isCliValidateFindings(nonNumericCounts)).toBe(false)
+
+    const notAnObject = { report: 'validation-findings' }
+    expect(isCliValidateFindings(notAnObject)).toBe(false)
+    expect(isCliValidateFindings(null)).toBe(false)
+    expect(isCliValidateFindings(undefined)).toBe(false)
+  })
 })
 
 describe('OpenSpec 1.12 validate findings contract executor', () => {
@@ -711,25 +780,37 @@ describe('OpenSpec 1.12 validate findings contract executor', () => {
     contracts = new OpenSpecCliContractExecutor(execute)
   })
 
-  it('decodes a findings document only through the findings report option', async () => {
-    const findings = await contracts.validate({
+  it('composes the findings argv only through the capability-gated findings method', async () => {
+    const findings = await contracts.validateFindings({
       target: { kind: 'scope', scope: 'all' },
-      report: 'findings',
+      capabilities: capabilities112,
     })
 
+    expect(findings.kind).toBe('executed')
     expect(execute.mock.calls.map(([args]) => args)).toEqual([
       ['validate', '--all', '--report', 'findings', '--json'],
     ])
-    expect(findings.contractError).toBeUndefined()
-    const findingsData = findings.data
+    if (findings.kind !== 'executed') throw new Error('expected executed result')
+    expect(findings.result.contractError).toBeUndefined()
+    const findingsData = findings.result.data
     if (findingsData === null || !isCliValidateFindings(findingsData)) {
       throw new Error('expected findings document')
     }
     expect(findingsData.report.kind).toBe('validation-findings')
     expect(findingsData.report.returnedItems).toBe(1)
 
-    // The same stdout is a contract error without the report option: the full
-    // report schema must never swallow a findings document.
+    // A non-admitted session receives the typed refusal before any argv exists:
+    // the retired 1.11 line rejects `--report` entirely, so no spawn may happen.
+    const refused = await contracts.validateFindings({
+      target: { kind: 'scope', scope: 'all' },
+      capabilities: capabilities111,
+    })
+    expect(refused).toEqual({ kind: 'unavailable', capability: 'findingsReport' })
+    expect(execute).toHaveBeenCalledTimes(1)
+
+    // The same stdout through plain validate is a contract error: the full
+    // report schema must never swallow a findings document, and plain validate
+    // composes no `--report` argv at all.
     const full = await contracts.validate({ target: { kind: 'scope', scope: 'all' } })
     expect(execute.mock.calls[1]?.[0]).toEqual(['validate', '--all', '--json'])
     expect(full.contractError).toBeDefined()

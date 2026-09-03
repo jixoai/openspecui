@@ -10,7 +10,8 @@
  *    identical to the per-change serial transport; non-admitted sessions keep the serial path.
  * 7. Expose the capability-gated OpenSpec 1.12 `validate --report findings` evidence fetch for
  *    the server boundary: findings loads only behind the derived `findingsReport` capability,
- *    decodes through its own result schema, and never replaces the full validate report as the
+ *    routes argv composition through the executor's gated `validateFindings` method, decodes
+ *    through its own result schema, and never replaces the full validate report as the
  *    validation truth source.
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
@@ -1594,10 +1595,12 @@ export class OpsxKernel {
    * Execute the capability-gated OpenSpec 1.12 findings evidence fetch (one spawn).
    *
    * Mirrors the batch status transport's wiring: the derived `findingsReport` capability
-   * is checked before any argv is composed, so a bypassed or retired session receives a
-   * typed refusal instead of a `--report findings` flag it may reject. Decoding goes
-   * through the contracts executor's own findings result schema; the upstream request
-   * error (`invalid_validation_report_request`) stays decoded evidence in
+   * is checked before reactive dependencies are touched or any argv is composed, so a
+   * bypassed or retired session receives a typed refusal instead of a `--report findings`
+   * flag it may reject. The argv itself is owned by the contracts executor's gated
+   * `validateFindings` method (defense in depth: the executor refuses again before
+   * composing argv), which also decodes through the findings result schema; the upstream
+   * request error (`invalid_validation_report_request`) stays decoded evidence in
    * `request-failure`, while an unparseable stdout document or transport failure routes
    * through the existing `CliProjectionCommandError` path. Findings never replaces the
    * full validate report as the validation truth source — the kernel keeps no validate
@@ -1612,11 +1615,17 @@ export class OpsxKernel {
       return { kind: 'unavailable', capability: 'findingsReport' }
     }
     await touchOpsxProjectDeps(this.projectDir)
-    const result = await this.cliExecutor.contracts.validate({
+    const gated = await this.cliExecutor.contracts.validateFindings({
       target: scope === 'archived' ? { kind: 'archived' } : { kind: 'scope', scope },
-      report: 'findings',
+      capabilities: { findingsReport: capabilities.findingsReport },
       ...this.rootSelector,
     })
+    if (gated.kind === 'unavailable') {
+      // Defense in depth only: the early capability check above already refused
+      // non-admitted sessions, so the executor's own gate never refuses here.
+      return { kind: 'unavailable', capability: 'findingsReport' }
+    }
+    const result = gated.result
     if (!result.data) {
       // Unparseable stdout or a transport-level failure: the existing command error path.
       // The findings document and the request-failure envelope decode regardless of exit

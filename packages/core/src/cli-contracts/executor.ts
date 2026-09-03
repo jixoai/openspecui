@@ -6,9 +6,11 @@
  * 4. Parse every invocation, including Archive Instructions, through its command-specific evidence schema.
 
  * 5. Forward the selected Root selector only where the admitted CLI declares it.
- * 6. Pass the OpenSpec 1.12 `validate --report <full|findings>` argv through beside the
- *    explicit bulk scope and decode findings through their own result schema; the CLI
- *    owns every request-combination rejection.
+ * 6. Own the OpenSpec 1.12 `validate --report findings` argv exclusively inside the
+ *    capability-gated `validateFindings` method (the retired 1.11 line rejects `--report`
+ *    entirely), decode findings through their own result schema, and answer a
+ *    non-admitted session with a typed refusal before any argv is composed; the CLI
+ *    owns every remaining request-combination rejection.
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
@@ -85,12 +87,31 @@ export interface CliWorkflowOptions extends CliRootSelector {
  */
 export type CliGatedCommandResult<T> =
   | { kind: 'executed'; result: CliCommandResult<T> }
-  | { kind: 'unavailable'; capability: 'batchStatus' | 'requirementDiff' }
+  | { kind: 'unavailable'; capability: 'batchStatus' | 'requirementDiff' | 'findingsReport' }
 
 /** Options for the OpenSpec 1.11 batch Status command. */
 export interface CliWorkflowStatusAllOptions extends CliWorkflowOptions {
   /** Capabilities of the admitted CLI; `batchStatus` must be true to construct argv. */
   capabilities: Pick<OpenSpecCliCapabilities, 'batchStatus'>
+}
+
+/**
+ * Bulk scope (or the archive) targeted by the OpenSpec 1.12 findings report.
+ *
+ * Upstream requires one explicit bulk scope for `--report findings` and rejects an
+ * item name with the typed `invalid_validation_report_request` envelope, so the gated
+ * surface accepts exactly the valid scopes — never an item target.
+ */
+export type CliValidateFindingsTarget =
+  | { kind: 'scope'; scope: 'all' | 'changes' | 'specs' }
+  | { kind: 'archived' }
+
+/** Options for the OpenSpec 1.12 gated findings report command. */
+export interface CliValidateFindingsOptions extends CliRootSelector {
+  /** Capabilities of the admitted CLI; `findingsReport` must be true to construct argv. */
+  capabilities: Pick<OpenSpecCliCapabilities, 'findingsReport'>
+  /** One explicit bulk scope; the CLI owns every remaining request-combination rejection. */
+  target: CliValidateFindingsTarget
 }
 
 /** Options for the OpenSpec 1.11 show-change diff command. */
@@ -130,18 +151,10 @@ export type CliValidateTarget =
   /** OpenSpec 1.9 archived-task validation over the resolved root's archive. */
   | { kind: 'archived' }
 
-/** JSON Validate options, including explicit target, report transport, and root selection. */
+/** JSON Validate options, including explicit target and root selection. */
 export interface CliValidateJsonOptions extends CliRootSelector {
   target: CliValidateTarget
   strict?: boolean
-  /**
-   * OpenSpec 1.12 report transport. `findings` returns the filtered findings document
-   * and requires an explicit bulk scope upstream (`--all`, `--changes`, `--specs`, or
-   * `--archived`); `full` is the explicit default. This layer only passes the argv
-   * through: the CLI owns every request-combination rejection (item name, archived plus
-   * active mixing, unknown report values) and answers through the typed failure envelope.
-   */
-  report?: 'full' | 'findings'
 }
 
 type ExecuteCli = (args: string[]) => Promise<CliResult>
@@ -365,18 +378,11 @@ export class OpenSpecCliContractExecutor {
   /**
    * Validate an item, scope, or the archive without inferring retries or readiness.
    *
-   * With `report: 'findings'` (OpenSpec 1.12) the argv gains `--report findings` beside
-   * the explicit bulk-scope flag and the result decodes through the findings schema,
-   * never through the full-report union: a findings document is a filtered evidence
-   * transport, so the decode split keeps the two truths separate.
+   * This plain transport never composes a `--report` flag: the report argv belongs to
+   * `validateFindings` alone, because the retired 1.11 line rejects `--report` entirely
+   * and a report-carrying request is a separate typed truth, never the full-report union.
    */
-  async validate(
-    options: CliValidateJsonOptions & { report: 'findings' }
-  ): Promise<CliCommandResult<CliValidateFindingsResult>>
-  async validate(options: CliValidateJsonOptions): Promise<CliCommandResult<CliValidate>>
-  async validate(
-    options: CliValidateJsonOptions
-  ): Promise<CliCommandResult<CliValidate | CliValidateFindingsResult>> {
+  async validate(options: CliValidateJsonOptions): Promise<CliCommandResult<CliValidate>> {
     const args = ['validate']
     if (options.target.kind === 'item') {
       args.push(options.target.id)
@@ -387,11 +393,33 @@ export class OpenSpecCliContractExecutor {
       args.push('--archived')
     }
     if (options.strict) args.push('--strict')
-    if (options.report) args.push('--report', options.report)
     args.push('--json')
-    return options.report === 'findings'
-      ? this.execute(this.withRoot(args, options), CliValidateFindingsResultSchema)
-      : this.execute(this.withRoot(args, options), CliValidateSchema)
+    return this.execute(this.withRoot(args, options), CliValidateSchema)
+  }
+
+  /**
+   * Read the filtered OpenSpec 1.12 findings evidence for one bulk scope (one spawn).
+   *
+   * Gated by the `findingsReport` capability because only the 1.12 line declares the
+   * `--report` flag at all: a non-admitted CLI receives the typed refusal before any
+   * argv exists, never a flag it would reject. The findings document decodes through
+   * its own result schema (findings document or `invalid_validation_report_request`
+   * envelope), never the full-report union: a findings document is a filtered evidence
+   * transport, so the decode split keeps the two truths separate.
+   */
+  async validateFindings(
+    options: CliValidateFindingsOptions
+  ): Promise<CliGatedCommandResult<CliValidateFindingsResult>> {
+    if (!options.capabilities.findingsReport) {
+      return { kind: 'unavailable', capability: 'findingsReport' }
+    }
+    const args = ['validate']
+    args.push(options.target.kind === 'archived' ? '--archived' : `--${options.target.scope}`)
+    args.push('--report', 'findings', '--json')
+    return {
+      kind: 'executed',
+      result: await this.execute(this.withRoot(args, options), CliValidateFindingsResultSchema),
+    }
   }
 
   /** Archive one change without implicit validation bypass or retry. */

@@ -1,12 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
- * 1. Expose the public OpenSpec CLI 1.10-1.11 command-contract surface.
+ * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * 1. Expose the public OpenSpec CLI command-contract surface for the admitted 1.12 line.
  * 2. Keep command evidence, common facts, Store facts, and workflow facts discoverable together.
  * 3. Expose the focused Schema-resolution, batch-status, and show-diff contract modules.
+ * 4. Carry the OpenSpec 1.12 validate findings contract (schemas, union guard, and the
+ *    capability-gated `validateFindings` executor method) beside the full-report contract.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 export * from './batch-status.js'
 export * from './command-result.js'

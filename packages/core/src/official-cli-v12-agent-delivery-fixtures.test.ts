@@ -1,15 +1,19 @@
 /**
- * Orthogonal intents (created 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-04 Asia/Shanghai):
  * 1. Execute the pinned OpenSpec 1.12.0 SourceCraft Code Assistant delivery contract
  *    against an isolated machine environment: 6 skills + 6 commands under the default
  *    core profile with the physical `.codeassistant` layout.
  * 2. Prove init anchors empty directories with `.gitkeep`, restores missing anchors on
  *    re-init, and never overwrites existing files or anchors non-empty directories.
- * 3. Prove the shared IDE restart hint wording: qoder prints it, codeassistant does not.
+ * 3. Prove a pre-existing `.gitkeep` anchor is never followed or overwritten: a symlink
+ *    anchor stays a symlink to its untouched target, and a regular anchor file keeps
+ *    its content (upstream `ensureDirectoryAnchor` writes with the `wx` flag and
+ *    tolerates EEXIST; this suite asserts that observable behavior only).
+ * 4. Prove the shared IDE restart hint wording: qoder prints it, codeassistant does not.
  *
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
-import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, lstat, mkdir, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -151,6 +155,55 @@ describe('pinned OpenSpec 1.12 Agent delivery fixtures', () => {
       expect(
         await readFile(join(project, 'openspec', 'changes', 'archive', 'real.md'), 'utf8')
       ).toBe('existing content\n')
+    }, 60_000)
+
+    it(`never follows or overwrites a pre-existing .gitkeep anchor on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(
+        `cli-${version.replace(/\./g, '')}-gitkeep-symlink`
+      )
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      const initialized = await runPinnedOpenspec(
+        version,
+        ['init', project, '--tools=none'],
+        project,
+        env
+      )
+      expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
+
+      // Replace the specs anchor with a symlink pointing outside the openspec tree;
+      // a CLI that followed the anchor would truncate this target through the link.
+      const targetPath = join(project, 'anchor-target.md')
+      await writeFile(targetPath, 'protected target content\n')
+      await rm(join(project, 'openspec', 'specs', '.gitkeep'))
+      await symlink('../../anchor-target.md', join(project, 'openspec', 'specs', '.gitkeep'))
+
+      // Replace the archive anchor with a regular file carrying its own content.
+      await rm(join(project, 'openspec', 'changes', 'archive', '.gitkeep'))
+      await writeFile(
+        join(project, 'openspec', 'changes', 'archive', '.gitkeep'),
+        'custom anchor content\n'
+      )
+
+      const reinited = await runPinnedOpenspec(
+        version,
+        ['init', project, '--tools=none'],
+        project,
+        env
+      )
+      expect(reinited.exitCode, reinited.stdout + '\n' + reinited.stderr).toBe(0)
+
+      // The symlink anchor stays a symlink with the same target...
+      const anchorStat = await lstat(join(project, 'openspec', 'specs', '.gitkeep'))
+      expect(anchorStat.isSymbolicLink()).toBe(true)
+      // ...its target is never followed, so the protected content survives intact.
+      expect(await readFile(targetPath, 'utf8')).toBe('protected target content\n')
+      // The regular anchor file keeps its exact content instead of being rewritten empty.
+      expect(
+        await readFile(join(project, 'openspec', 'changes', 'archive', '.gitkeep'), 'utf8')
+      ).toBe('custom anchor content\n')
     }, 60_000)
 
     it(`prints the shared restart hint for qoder on OpenSpec ${version}`, async () => {

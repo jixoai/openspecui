@@ -7,7 +7,7 @@
     "src/official-cli-v12-batch-status-fixtures.test.ts",
     "src/official-cli-v12-show-diff-fixtures.test.ts",
     "src/official-cli-v12-boundary-fixtures.test.ts",
-    "src/official-cli-v11-workflow-fixtures.test.ts",
+    "src/official-cli-v12-workflow-fixtures.test.ts",
     "src/opsx-types.test.ts"
   ],
   "exclude": ["node_modules", "dist"]

@@ -2310,7 +2310,9 @@ export const cliRouter = router({
       // the findings document a separate typed truth beside the full report.
       return runPlanningRoot(
         ctx,
-        ({ rootContext }): Promise<CliCommandResult<CliValidate | CliValidateFindingsResult>> => {
+        async ({
+          rootContext,
+        }): Promise<CliCommandResult<CliValidate | CliValidateFindingsResult>> => {
           // `validate --archived` exists on OpenSpec 1.9+ and every admitted session on the
           // current line carries the capability, while `--report findings` exists on OpenSpec
           // 1.12 only. A non-admitted or unobserved CLI must learn the capability is
@@ -2327,23 +2329,29 @@ export const cliRouter = router({
                 'Archived task validation requires an admitted OpenSpec CLI line (the admitted line declares the archived-validation capability).',
             })
           }
-          if (input.kind === 'findings' && !capabilities.findingsReport) {
-            throw new TRPCError({
-              code: 'PRECONDITION_FAILED',
-              message: `Validation findings require the admitted OpenSpec CLI line (accepted ${OPENSPEC_CLI_ACCEPTED_RANGE} declares the findings-report capability).`,
-            })
-          }
           if (input.kind === 'findings') {
-            // The findings transport is a separate typed truth beside the full report: the
-            // executor decodes it through the findings schema, never the full-report union.
-            return ctx.cliExecutor.contracts.validate({
+            // `--report` exists on OpenSpec 1.12 only, so the whole report argv is owned by
+            // the executor's capability-gated `validateFindings` method: a non-admitted or
+            // unobserved CLI must learn the capability is unavailable before any process is
+            // spawned, never by watching the CLI reject an unknown option. The route owns
+            // only the public refusal translation; the findings transport itself stays a
+            // separate typed truth beside the full report, decoded through the findings
+            // schema, never the full-report union.
+            const gated = await ctx.cliExecutor.contracts.validateFindings({
               target:
                 input.scope === 'archived'
                   ? { kind: 'archived' }
                   : { kind: 'scope', scope: input.scope },
-              report: 'findings',
+              capabilities: { findingsReport: capabilities.findingsReport },
               ...getRootContextCliSelector(rootContext),
             })
+            if (gated.kind !== 'executed') {
+              throw new TRPCError({
+                code: 'PRECONDITION_FAILED',
+                message: `Validation findings require the admitted OpenSpec CLI line (accepted ${OPENSPEC_CLI_ACCEPTED_RANGE} declares the findings-report capability).`,
+              })
+            }
+            return gated.result
           }
           return ctx.cliExecutor.contracts.validate({
             target:

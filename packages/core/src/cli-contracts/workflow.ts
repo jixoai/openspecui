@@ -9,7 +9,10 @@
  *    OpenSpec 1.11 batch Status and show --diff contracts.
  * 7. Model the OpenSpec 1.12 `validate --report findings` document beside (never inside) the
  *    full Validate report, sharing the bulk-item and summary shapes while keeping decoding
- *    independent of the process exit code and of full-report validation truth.
+ *    independent of the process exit code and of full-report validation truth. Decode owns
+ *    the upstream-guaranteed invariants (non-empty per-item issues, returnedItems bounded
+ *    by totalItems), and the union guard validates the discriminator shape rather than
+ *    mere `report`-key presence.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
@@ -346,6 +349,14 @@ export const CliValidateSchema = z.union([CliValidateReportSchema, CliDiagnostic
  * size, and the process exit code keeps the full-run rule (`failed > 0 -> 1`), so decoding
  * never consults it. An empty scope is the success document
  * `{ returnedItems: 0, totalItems: 0, itemFindings: [] }`, not a failure sum type.
+ *
+ * Two upstream-guaranteed invariants are decode-level facts (pinned v1.12.0
+ * `projectValidationFindings`): every `itemFindings` entry carries at least one issue
+ * (upstream filters `item.issues.length > 0`), and `returnedItems` never exceeds
+ * `totalItems` (the filtered view is a subset of the full run). Upstream also happens to
+ * set `returnedItems === itemFindings.length` today; that equality stays unasserted so a
+ * future patch-level count adjustment inside the admitted range cannot fabricate a
+ * contract error out of otherwise well-formed CLI evidence.
  */
 export const CliValidateFindingsSchema = z
   .object({
@@ -363,6 +374,24 @@ export const CliValidateFindingsSchema = z
     root: CliRootSchema,
   })
   .passthrough()
+  .superRefine((document, ctx) => {
+    if (document.report.returnedItems > document.report.totalItems) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['report', 'returnedItems'],
+        message: `returnedItems (${document.report.returnedItems}) must not exceed totalItems (${document.report.totalItems}).`,
+      })
+    }
+    document.itemFindings.forEach((finding, index) => {
+      if (finding.issues.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['itemFindings', index, 'issues'],
+          message: 'Every findings item must carry at least one issue.',
+        })
+      }
+    })
+  })
 
 /**
  * Typed findings or request-failure result of `validate --report findings --json`.
@@ -379,15 +408,31 @@ export const CliValidateFindingsResultSchema = z.union([
 
 /**
  * Whether a findings result is the findings document rather than the request-failure
- * envelope. Passthrough tolerance alone cannot discriminate the union, so this mirrors
- * the upstream discriminator: a failure envelope never carries the `report` object.
+ * envelope. Passthrough tolerance means a failure envelope may legally carry unknown
+ * keys, so mere `report`-key presence cannot discriminate the union: the guard validates
+ * the upstream discriminator shape — `report` is an object whose `kind` is the
+ * `validation-findings` literal and whose count fields are numbers.
  *
  * The input is deliberately `unknown`: route and evidence consumers receive the union
  * of every validate transport (`CliValidate | CliValidateFindingsResult | null`), so the
  * guard must accept the consumed boundary, not only the already-narrowed findings union.
+ * It stays a cheap shape check, never a second decode: schema-level invariants
+ * (issue presence, count bounds) belong to `CliValidateFindingsSchema` alone.
  */
 export function isCliValidateFindings(result: unknown): result is CliValidateFindings {
-  return typeof result === 'object' && result !== null && 'report' in result
+  if (typeof result !== 'object' || result === null) return false
+  const report = (result as { report?: unknown }).report
+  if (typeof report !== 'object' || report === null) return false
+  const { kind, returnedItems, totalItems } = report as {
+    kind?: unknown
+    returnedItems?: unknown
+    totalItems?: unknown
+  }
+  return (
+    kind === 'validation-findings' &&
+    typeof returnedItems === 'number' &&
+    typeof totalItems === 'number'
+  )
 }
 
 const CliArchiveTotalsSchema = z
