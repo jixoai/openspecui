@@ -65,3 +65,24 @@ historical union retention recorded in decision 5; scenario-title preservation n
 "byte-compatible" softened to "envelope/schema-compatible".
 
 Pending: Round-B re-review after these corrections.
+
+## Round-B review disposition (herdr v12-change-reviewer, gpt-5.6-terra xhigh, 2026-09-03) — 8/10 (up from 6)
+
+Worked 38m. Verdict: all five Round-A blockers materially addressed; strict validation passes; scenario
+preservation verified (OPSX Mapping 11/11, kernel 4/4, planning 1/1, diff 2/2, Agent inventory + SourceCraft,
+static evidence + findings). BLOCKING: none. All eight non-blocking suggestions adopted:
+
+1. 11+11 artifact count was not reproducible: an isolated default-profile run generates 6 skills + 6
+   commands (verified independently by ZCode with isolated `XDG_CONFIG_HOME`/`XDG_DATA_HOME`; the original
+   observation was contaminated by a machine-global custom profile). Report and plan now state the
+   profile-dependent count with the isolated 6+6 default fact; fixtures must pin the profile context.
+2. Plan "byte-compatible" -> envelope/schema-compatible.
+3. Plan no longer claims init anchors join the created-path ledger (init passes an empty ledger).
+4. CP6 narrowed to `README-zh.md` and now carries the fixed-group + `11.1.0 -> 12.0.0` dry-run requirement.
+5. Slice 6 names the focused server `cli.validate` integration-test command.
+6. `cli-health-gate.tsx` copy ownership clarified (Slice 1 owns content; Slice 6 only re-verifies); Slice 4's
+   devDep edit marked integrator-owned.
+7. Report sources now include `src/commands/change.ts`.
+8. Report full-report row softened to shape-compatible.
+
+Change review is closed at 8/10 with no blockers; implementation batches may start.

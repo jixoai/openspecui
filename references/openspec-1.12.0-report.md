@@ -43,7 +43,8 @@ Upstream delta           20 commits, src +418/-95 across 19 files (plus tests/do
 
 Sources inspected:
 
-- `references/openspec` at the pinned v1.12.0 tag: `src/commands/validate.ts`, `src/core/validation/validator.ts`,
+- `references/openspec` at the pinned v1.12.0 tag: `src/commands/validate.ts`, `src/commands/change.ts`,
+  `src/core/validation/validator.ts`,
   `src/core/specs-apply.ts`, `src/core/command-generation/adapters/codeassistant.ts`,
   `src/core/command-generation/{registry,adapters/index}.ts`, `src/core/config.ts`, `src/core/init.ts`,
   `src/core/update.ts`, `src/core/openspec-root.ts`, `src/core/shared/ide-restart.ts`,
@@ -66,8 +67,8 @@ shared JSON failure envelope):
 | `validate --specs --report findings --json` on a project with zero specs         | n/a                                       | `{ report: { kind:'validation-findings', version:'1.0', scope:'specs', returnedItems:0, totalItems:0 }, itemFindings: [], ... }`   | Empty-scope findings is a normal success document, not a failure sum type.                                |
 | `validate --archived --report findings --json`                                   | n/a                                       | same envelope with `scope:'archived'`; `--all --archived --report findings` rejected with `invalid_validation_report_request`       | Archived findings is a separate scope; archived+active mixing is a typed request error (exit 1).          |
 | `validate --report findings` (no bulk scope) / with item name / `--report bogus` | n/a                                       | `{ status:[{ severity:'error', code:'invalid_validation_report_request', message, fix }] }`, exit 1                                | Typed request-error envelope; findings requires an explicit bulk scope and no item name.                  |
-| `validate --all` (text mode) with a failing change                               | prints only `✗ change/<id>` per item      | prints `✗ change/<id>` then per-issue lines `  ✗ [ERROR] path: message`; `Details:` hint unchanged                                  | Human bulk output gained per-issue detail; JSON full report unchanged (`{items, summary, version, root}`). |
-| `init . --tools codeassistant`                                                   | unknown tool                              | `11 skills and 11 commands in .codeassistant/`; skills `.codeassistant/skills/openspec-*/SKILL.md`, commands `.codeassistant/commands/opsx-*.md`; no IDE-restart line | New Agent delivery matrix entry; skills referenced by natural language, not slash commands. The 11+11 count is an observation from a fresh `init` with the default `spec-driven` schema and default profile selection — the workflow catalog is larger, so this count is a fixture fact, not an invariant. |
+| `validate --all` (text mode) with a failing change                               | prints only `✗ change/<id>` per item      | prints `✗ change/<id>` then per-issue lines `  ✗ [ERROR] path: message`; `Details:` hint unchanged                                  | Human bulk output gained per-issue detail; JSON full report stays shape-compatible (`{items, summary, version, root}` with possible new `INFO` issues). |
+| `init . --tools codeassistant` (isolated `XDG_CONFIG_HOME`/`XDG_DATA_HOME`)       | unknown tool                              | `6 skills and 6 commands in .codeassistant/` (default core profile: propose/explore/apply/update/sync/archive); skills `.codeassistant/skills/openspec-<workflow>/SKILL.md`, commands `.codeassistant/commands/opsx-*.md`; no IDE-restart line | New Agent delivery matrix entry; skills referenced by natural language, not slash commands. The count is profile-dependent: an isolated default run reproduces 6+6; the workflow catalog is larger (an all-workflows custom profile generated 11+11 in a non-isolated run). Fixtures must pin the profile context. |
 | `init . --tools qoder`                                                           | `Restart your IDE for the new commands to take effect.` | `Restart your IDE to refresh commands.`                                                                             | Shared init/update restart wording; new shared module is the sole source.                      |
 | `init` directory structure                                                       | empty `openspec/specs/`, `openspec/changes/archive/` untracked by Git | both gain `.gitkeep` anchors; re-init restores missing markers without overwriting files or following marker symlinks | Anchored empty dirs are part of init's created-path ledger.                                       |
 
@@ -168,8 +169,8 @@ first-class level (display class, not noise) while keeping validity arithmetic C
 ```text
 toolId            codeassistant
 AI_TOOLS entry    SourceCraft Code Assistant; skillsDir .codeassistant; available; NOT requiresIdeRestart
-skills root       .codeassistant/skills/openspec-<workflow>/SKILL.md (11 skills)
-commands root     .codeassistant/commands/opsx-<command>.md (11 commands; YAML frontmatter description only)
+skills root       .codeassistant/skills/openspec-<workflow>/SKILL.md (per selected profile; 6 under the default core profile)
+commands root     .codeassistant/commands/opsx-<command>.md (per selected profile; YAML frontmatter description only)
 skill references  natural-language prose (NATURAL_LANGUAGE_SKILL_TOOLS), no slash invocation for skills
 migrations        none; detection is the default .codeassistant root
 ```

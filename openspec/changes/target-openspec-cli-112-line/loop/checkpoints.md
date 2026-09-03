@@ -74,7 +74,10 @@ Subset runs must be justified in PR notes when package-local.
 ## CP6 — release prep (PENDING)
 
 - `.changeset/*.md` major bump for the fixed group.
-- `README.md` + `README-zh-*.md` + `packages/cli/README.md` under the release README law.
+- `README.md` + `README-zh.md` (current line only; versioned historical README archives stay untouched) +
+  `packages/cli/README.md` under the release README law.
+- Changeset covers the fixed group `["openspecui", "@openspecui/*"]` (ignoring `@openspecui/ai-provider`);
+  `changeset status` plus a dry run prove `11.1.0 -> 12.0.0` for every publishable package.
 - AGENTS.md v12 architecture-decision entry; correct the two stale v1.7.0 submodule-pin statements.
 - No publish; Owner decides release.
 
