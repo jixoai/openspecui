@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-04 Asia/Shanghai):
  * 1. Own the Change Evidence tab's container-responsive list-detail workspace topology.
  * 2. Preserve the decision-plane evidence layer order (summary/paths -> requirement diffs ->
  *    validation findings -> archived validation -> CLI/raw payload) in keyboard-reachable
@@ -10,9 +10,13 @@
  *    follows the drill (row -> back affordance -> originating row) so keyboard users never
  *    land on a hidden element.
  * 5. Keep sub-selection local runtime state — it never enters routes or browser storage.
+ * 6. Separate the workspace planes visually: the list column is the muted rail and the
+ *    detail column is the card surface; detail prose caps its measure, and only the
+ *    selected row ever carries a row fill.
  *
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Owner walkthrough correction (2026-09-04): findings must attribute their owning change; the Evidence detail panel styling follows the vision review.
  */
 import {
   ArchivedValidationEvidence,
@@ -159,7 +163,7 @@ export function EvidenceWorkspace({
         id: 'validation-findings',
         label: 'Validation findings',
         chip: findingsChip,
-        content: <ValidationFindingsEvidence onChip={handleFindingsChip} />,
+        content: <ValidationFindingsEvidence changeId={changeId} onChip={handleFindingsChip} />,
       },
       {
         id: 'archived-validation',
@@ -235,7 +239,9 @@ export function EvidenceWorkspace({
           data-evidence-pane="list"
           hidden={!showList || undefined}
           className={cn(
-            'scrollbar-thin scrollbar-track-transparent border-border/60 @[40rem]:border-r min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain',
+            // List plane: muted rail; only the selected row ever carries a row fill, so a
+            // gray row can never read as a selection state.
+            'scrollbar-thin scrollbar-track-transparent bg-muted/40 border-border @[40rem]:border-r min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain',
             !showList && 'hidden'
           )}
         >
@@ -275,7 +281,9 @@ export function EvidenceWorkspace({
           data-change-evidence-scroll-owner=""
           hidden={!showDetail || undefined}
           className={cn(
-            'scrollbar-thin scrollbar-track-transparent min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain',
+            // Detail plane: the card surface beside the muted list rail. Prose paragraphs
+            // cap their measure so long evidence lines stay readable at wide widths.
+            'scrollbar-thin scrollbar-track-transparent bg-card min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain',
             showDetail ? 'flex flex-col' : 'hidden'
           )}
         >
@@ -292,7 +300,7 @@ export function EvidenceWorkspace({
                 backHadFocus.current = false
               }}
               onClick={backToList}
-              className="bg-background/95 border-border/60 text-muted-foreground hover:text-foreground focus-visible:ring-primary sticky top-0 z-10 flex min-h-9 w-full min-w-0 items-center gap-1.5 border-b px-3 text-xs outline-none backdrop-blur focus-visible:ring-2 focus-visible:ring-inset"
+              className="bg-card/95 border-border/60 text-muted-foreground hover:text-foreground focus-visible:ring-primary sticky top-0 z-10 flex min-h-9 w-full min-w-0 items-center gap-1.5 border-b px-3 text-xs outline-none backdrop-blur focus-visible:ring-2 focus-visible:ring-inset"
             >
               <ArrowLeft className="h-3.5 w-3.5 shrink-0" aria-hidden />
               Evidence list
@@ -303,9 +311,11 @@ export function EvidenceWorkspace({
               key={section.id}
               data-evidence-detail={section.id}
               // Every section stays mounted so re-selection never refetches settled evidence;
-              // `hidden` keeps the inactive ones out of the accessibility tree.
+              // `hidden` keeps the inactive ones out of the accessibility tree. Paragraph
+              // prose inside the detail caps its measure; monospace facts and code blocks
+              // keep the full column.
               hidden={section.id !== activeSection.id}
-              className="min-w-0 px-4 pb-4"
+              className="min-w-0 px-4 pb-4 [&_p]:max-w-[88ch]"
             >
               {section.content}
             </div>
