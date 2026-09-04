@@ -8,7 +8,9 @@
  *
  * Original request (2026-08-03): use an Evidence tab to carry complete Change Detail information.
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
+ * Owner walkthrough correction (2026-09-04): every Evidence detail layer renders the shared EvidenceLayerHeader contract (title dominant over body, house-standard border padding); this replaces each layer's local weak header.
  */
+import { EvidenceLayerHeader } from '@/components/evidence-layer-header'
 import { EvidenceDisclosure } from '@/components/information-disclosure'
 import type { ChangeStatus, CliReferenceIndexEntry } from '@openspecui/core'
 import type { ReactNode } from 'react'
@@ -34,13 +36,8 @@ function WorkspaceSection({
       aria-label={title}
       className={container ? '@container min-w-0' : 'min-w-0'}
     >
-      <header className="border-border/60 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b pb-2">
-        <h3 className="min-w-0 text-xs font-semibold">{title}</h3>
-        {summary ? (
-          <span className="text-muted-foreground min-w-0 text-[11px]">{summary}</span>
-        ) : null}
-      </header>
-      <div className="min-w-0 pt-3 text-xs">{children}</div>
+      <EvidenceLayerHeader title={title} summary={summary} />
+      <div className="min-w-0 text-xs">{children}</div>
     </section>
   )
 }

@@ -15,8 +15,9 @@
  *    guards, and keep the CLI-owned request-error envelope on the direct plane.
  *
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
- * Owner walkthrough correction (2026-09-04): findings must attribute their owning change; the Evidence detail panel styling follows the vision review.
+ * Owner walkthrough correction (2026-09-04): findings must attribute their owning change; the Evidence detail panel styling follows the vision review and every detail layer renders the shared EvidenceLayerHeader contract (title dominant over body, house-standard border padding) instead of a local weak header.
  */
+import { EvidenceLayerHeader } from '@/components/evidence-layer-header'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useRootActionState } from '@/lib/use-root-action-state'
@@ -133,7 +134,7 @@ function FindingCard({ item }: { item: FindingsItem }) {
                 </span>
               ) : null}
             </header>
-            <p className="text-foreground/90 px-2.5 py-2 text-sm leading-relaxed [overflow-wrap:anywhere]">
+            <p className="text-foreground/90 px-2.5 py-2 text-xs leading-relaxed [overflow-wrap:anywhere]">
               {issue.message}
             </p>
           </li>
@@ -197,11 +198,8 @@ function ValidationFindingsSection({
       aria-label="Validation findings"
       className="min-w-0"
     >
-      <header className="border-border mb-4 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b pb-2">
-        <h3 className="min-w-0 text-xs font-semibold">Validation findings</h3>
-        <span className="text-muted-foreground min-w-0 text-[11px]">{summary}</span>
-      </header>
-      <div className="min-w-0">{children}</div>
+      <EvidenceLayerHeader title="Validation findings" summary={summary} />
+      <div className="min-w-0 text-xs">{children}</div>
     </section>
   )
 }
@@ -318,12 +316,12 @@ export function ValidationFindingsEvidence({
           {pending ? (
             <div className="flex items-center gap-2" role="status" data-findings-running="">
               <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" aria-hidden />
-              <span className="text-sm font-medium">Running findings report…</span>
+              <span className="text-xs font-medium">Running findings report…</span>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm font-semibold">No findings loaded</p>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-xs font-semibold">No findings loaded</p>
+              <p className="text-muted-foreground">
                 Load the official CLI&apos;s validation findings to see advisory issues reported for
                 the active changes in this scope — including archive-merge advisories. This is
                 read-only evidence; nothing is repaired from here.
