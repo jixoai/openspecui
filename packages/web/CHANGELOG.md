@@ -1,5 +1,29 @@
 # @openspecui/web
 
+## 12.0.0
+
+### Major Changes
+
+- d272b1f: OpenSpecUI 12: adapt the OpenSpec CLI 1.12 line.
+  - Compatibility window: OpenSpec CLI `>=1.12.0 <1.13.0` (single-series; stable 1.12.x current and
+    recommended). CLI `1.10.x`/`1.11.x` (the OpenSpecUI 11 window) and older lines are blocked by default;
+    prereleases and `>=1.13.0` remain blocked.
+  - `validate --report findings` is a new capability-gated typed contract and validation evidence surface:
+    findings-only items with preserved full-run totals and exit codes; `invalid_validation_report_request`
+    request errors flow through the shared diagnostic envelope.
+  - Merge-conflict advisory findings (`Archive would refuse this delta` / `Could not check archive merge
+conflicts`) render as a first-class informational (INFO) class without changing validity evidence.
+  - Agent delivery adds SourceCraft Code Assistant (`.codeassistant`, natural-language skill references,
+    commands at `.codeassistant/commands/opsx-<id>.md`, no IDE restart, no migration) for 1.12 sessions;
+    generator staleness rotates to the 1.12.0 baseline.
+  - Pinned executable fixtures: `openspec-cli-112` proves the new contracts; the retained
+    `openspec-cli-111` proves capability-boundary rejections.
+
+### Patch Changes
+
+- 13bb0e1: Unify every Evidence detail layer on one shared `EvidenceLayerHeader` contract (title `text-sm` semibold over a `text-xs` body with house-standard border padding), replacing each layer's local weak header where body prose previously rendered as large as or larger than the section title.
+- 67998d9: Attribute validation findings to their owning change and restyle the Evidence detail panel: current-change findings render under a This-change heading while other changes collapse into a labeled disclosure with prominent owning ids; finding cards gain semantic level chips with distinct glyphs, mono paths, word-boundary message wrapping, a muted-label provenance grid with count chips and a command-provenance footer, distinct not-loaded/running/loaded states, and visible list/detail plane separation.
+
 ## 11.1.0
 
 ### Minor Changes
