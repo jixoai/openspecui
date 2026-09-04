@@ -15,7 +15,9 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Owner walkthrough correction (2026-09-04): every Evidence detail layer renders the shared EvidenceLayerHeader contract (title dominant over body, house-standard border padding); this replaces each layer's local weak header.
  */
+import { EvidenceLayerHeader } from '@/components/evidence-layer-header'
 import { isStaticMode } from '@/lib/static-mode'
 import { trpcClient } from '@/lib/trpc'
 import { useRootActionState } from '@/lib/use-root-action-state'
@@ -143,11 +145,8 @@ function RequirementDiffsSection({
       aria-label="Requirement diffs"
       className="min-w-0"
     >
-      <header className="border-border/60 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b pb-2">
-        <h3 className="min-w-0 text-xs font-semibold">Requirement diffs</h3>
-        <span className="text-muted-foreground min-w-0 text-[11px]">{summary}</span>
-      </header>
-      <div className="min-w-0 pt-3">{children}</div>
+      <EvidenceLayerHeader title="Requirement diffs" summary={summary} />
+      <div className="min-w-0 text-xs">{children}</div>
     </section>
   )
 }
