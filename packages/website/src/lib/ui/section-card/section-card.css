@@ -1,0 +1,46 @@
+@layer theme, base, components, utilities;
+
+/* jixoai section-card css — THE EDGE-RIDING SEPARATOR (Owner,
+ * 2026-09-03 rev.2): the header zone's authored border-b RETIRED into
+ * a structural <Separator> (the Dialog r13/r14 economy: presence ships
+ * with the component, consumers never hand-write one; the zones pad
+ * THEMSELVES). The line rides the header row's BOTTOM EDGE — pinned
+ * into the same cell as the header zone (grid-area 1/1 +
+ * align-self: end), painting over the zone's own bottom padding —
+ * instead of owning a 1px track:
+ *
+ * WHY NO [sep] TRACK (rev.1's lesson): named/positional rows assume
+ * the section's template is always the resolution source — but inside
+ * a card-grid SUBGRID the rows are RENTED, and a wrapped card's band
+ * rents IMPLICIT rows where extra zone rows and their names don't
+ * exist: zones collapsed onto one another (grid-row by name fell back
+ * to auto and stacked). INTEGER cell placement resolves identically
+ * standalone (this template) and in every subgrid band; the line
+ * stays edge-to-edge because the cell spans the card's full inline
+ * extent — the retired border's extent, minus its px inset.
+ *
+ *   row 1  header zone, with the separator pinned to its bottom edge
+ *   row 2  body zone (content sizes the card)
+ */
+@layer components {
+  :where([data-jx-section]) {
+    display: grid;
+    /* minmax(0,1fr), not the implicit auto column: a grid's auto track
+       sizes to content max-content, so a wide CodeCard line blew the
+       card out horizontally (and drowned the code block's overflow-x
+       scroll — the zone was already as wide as the code). The 0 floor
+       lets the track shrink to the card; content wraps or scrolls. */
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+  }
+  :where([data-jx-section-header]) {
+    grid-area: 1 / 1;
+  }
+  :where([data-jx-section-sep]) {
+    grid-area: 1 / 1;
+    align-self: end;
+  }
+  :where([data-jx-section-body]) {
+    grid-area: 2 / 1;
+  }
+}

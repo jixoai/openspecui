@@ -1,0 +1,110 @@
+@layer theme, base, components, utilities;
+
+/* jixoai card-grid — D1-exempt residue (tw4, 2026-08-24). The grid
+ * container's paint lives as utilities in the markup; what remains is
+ * everything that reaches the CONSUMER-AUTHORED children (the children
+ * snippet authors the cards, so no markup of ours can carry their
+ * paint): the subgrid equalization law, the lone-card measure cap and
+ * the IO-armed entrance state machine. Static child geometry sits in
+ * @layer components; the entrance (a state machine overriding nothing
+ * the children paint with their own utilities… except opacity/transform
+ * during the cascade) rides the unlayered :where() carve-out so it
+ * beats any utility the cards themselves carry. */
+
+@layer components {
+  /* auto-fit collapses every empty track, so a single-card group would
+     stretch to the full container width — one short card as a page-wide
+     banner. Cap the lone card at an editorial measure instead. */
+  .jx-card-grid > *:only-child {
+    max-width: 46rem;
+  }
+  @supports (grid-template-rows: subgrid) {
+    .jx-card-grid {
+      grid-template-rows: auto 1fr;
+    }
+    /* every card spans the shared rows and subgrids them: row 1 = header
+       (all headers stretch to the tallest, e.g. a two-line eyebrow), row 2
+       = body (fills to the tallest). row-gap 0: the card's own chrome
+       (borders/padding) provides the internal rhythm.
+       THE CONTENT-AGNOSTIC LAW (Owner, 2026-09-03 rev.2): the grid NEVER
+       asks what a child is — any two-block card qualifies unchanged
+       (first block = header, second = body). A [sep] third shared row
+       (rev.1) taxed every two-block consumer and stranded zone-named
+       cards in wrapped bands' implicit rows; the section-card's structural
+       separator rides its header row's bottom edge instead
+       (section-card.css) — aligned across the row through the SAME
+       equalized header row the retired border-b always used. */
+    .jx-card-grid > * {
+      display: grid;
+      grid-row: span 2;
+      grid-template-rows: subgrid;
+      row-gap: 0;
+    }
+    /* opt a child out when it is not a two-block card */
+    .jx-card-grid > *[data-no-subgrid] {
+      grid-row: auto;
+      grid-template-rows: none;
+    }
+    /* THE FOOT MODE (Owner, 2026-09-03): `foot` declares a third
+       shared row — head aligns, body fills, FOOT aligns at the band
+       bottoms — for zone-trio cards (the card component's integer
+       cell placement resolves in every rented band). The mode is
+       EXPLICIT on the landlord: mixed spans in one grid silently
+       misplace bands (auto-placement packs a span-2 card into a
+       span-3 card's third row), so it is never inferred from the
+       children. The default two-row contract above stays
+       byte-identical for every existing consumer. */
+    .jx-card-grid[data-rows='foot'] {
+      grid-template-rows: auto 1fr auto;
+    }
+    .jx-card-grid[data-rows='foot'] > * {
+      grid-row: span 3;
+    }
+    .jx-card-grid[data-rows='foot'] > *[data-no-subgrid] {
+      grid-row: auto;
+    }
+  }
+}
+
+/* ── the internal stagger (time axis) ──
+   Hidden only while JS is live (html.js) and not yet entered; the
+   is-entered class flips the cascade: each card transitions with a
+   per-index delay (70ms steps, capped at the 8th child). */
+:where(html.js .jx-card-grid:not(.is-entered) > *) {
+  opacity: 0;
+  transform: translateY(26px);
+}
+:where(.jx-card-grid.is-entered > *) {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 320ms ease-out calc(var(--jx-card-i, 0) * 70ms),
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1) calc(var(--jx-card-i, 0) * 70ms);
+}
+:where(.jx-card-grid > *:nth-child(2)) {
+  --jx-card-i: 1;
+}
+:where(.jx-card-grid > *:nth-child(3)) {
+  --jx-card-i: 2;
+}
+:where(.jx-card-grid > *:nth-child(4)) {
+  --jx-card-i: 3;
+}
+:where(.jx-card-grid > *:nth-child(5)) {
+  --jx-card-i: 4;
+}
+:where(.jx-card-grid > *:nth-child(6)) {
+  --jx-card-i: 5;
+}
+:where(.jx-card-grid > *:nth-child(7)) {
+  --jx-card-i: 6;
+}
+:where(.jx-card-grid > *:nth-child(8)) {
+  --jx-card-i: 7;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(html.js .jx-card-grid:not(.is-entered) > *),
+  :where(.jx-card-grid.is-entered > *) {
+    transition: none;
+  }
+}

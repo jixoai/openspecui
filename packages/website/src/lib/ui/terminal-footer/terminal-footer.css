@@ -1,0 +1,29 @@
+@layer theme, base, components, utilities;
+
+/* jixoai terminal-footer (composition-first, 2026-08-25) —
+ *
+ * TWO residues, both beyond utilities:
+ * 1. the text-stroke fallback (tw4, 2026-08-24, kept): engines without
+ *    -webkit-text-stroke get a soft solid tint instead of the hollow
+ *    word; the rule must override the component's own text-transparent
+ *    utility paint, so it rides the UNLAYERED :where() carve-out (the
+ *    toggle/Part A precedent).
+ * 2. free-link paint inside columns: the anchors are consumer-authored
+ *    children — no utility slot exists on them, so the meta row's
+ *    muted→brand hover law lands as layered descendant rules.
+ */
+
+@layer components {
+  :where([data-jx-terminal-footer-column] a) {
+    transition: color 150ms ease-out;
+  }
+  :where([data-jx-terminal-footer-column] a):hover {
+    color: var(--primary);
+  }
+}
+
+@supports not (-webkit-text-stroke: 1px black) {
+  :where(.jx-footer-ghost) {
+    color: color-mix(in oklab, var(--border) 35%, transparent);
+  }
+}
