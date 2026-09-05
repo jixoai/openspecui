@@ -23,7 +23,7 @@
     <div class="space-y-2">
       <h3 class="font-nav text-[14px] tracking-tight">Signature</h3>
       <code
-        class="bg-terminal text-terminal-foreground scrollbar-thin scrollbar-track-transparent block overflow-x-auto px-3 py-2 text-[12px] leading-5"
+        class="bg-terminal text-terminal-foreground block overflow-x-auto px-3 py-2 text-[12px] leading-5"
       >
         {hook.signature}
       </code>
@@ -51,14 +51,14 @@
 
     {#if hook.exampleHtml}
       <div
-        class="shiki-code border-border scrollbar-thin scrollbar-track-transparent overflow-x-auto border text-[12px] leading-5"
+        class="shiki-code border-border overflow-x-auto border text-[12px] leading-5"
       >
         <!-- Shiki HTML is generated at build time from repository-owned hook examples. -->
         {@html hook.exampleHtml}
       </div>
     {:else}
       <pre
-        class="bg-terminal text-terminal-foreground scrollbar-thin scrollbar-track-transparent overflow-x-auto px-3 py-3 text-[12px] leading-5"
+        class="bg-terminal text-terminal-foreground overflow-x-auto px-3 py-3 text-[12px] leading-5"
       ><code>{hook.example}</code></pre>
     {/if}
   </div>

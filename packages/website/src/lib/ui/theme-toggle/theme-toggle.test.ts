@@ -1,7 +1,15 @@
-import ThemeSwitcher from '$lib/components/theme-switcher.svelte'
-import { en } from '$lib/i18n/locales/en'
+/*
+ * Orthogonal intents (updated 2026-09-06 Asia/Shanghai):
+ * 1. Verify the registry ThemeToggle drives the site theme contract
+ *    (localStorage "theme", `.dark` class + colorScheme on the root).
+ *
+ * Replaces the retired hand-rolled theme-switcher test with the same
+ * three-state coverage against the @jixoai registry component
+ * (2026-09-06 registry adoption).
+ */
+import ThemeToggle from '$lib/ui/theme-toggle/theme-toggle.svelte'
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen } from '@testing-library/svelte'
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 function setPrefersDark(matches: boolean): void {
@@ -22,7 +30,7 @@ function setPrefersDark(matches: boolean): void {
   })
 }
 
-describe('ThemeSwitcher', () => {
+describe('ThemeToggle', () => {
   beforeEach(() => {
     window.localStorage.clear()
     document.documentElement.classList.remove('dark')
@@ -30,7 +38,8 @@ describe('ThemeSwitcher', () => {
   })
 
   it('persists and applies explicit themes', async () => {
-    render(ThemeSwitcher, { content: en })
+    render(ThemeToggle, { variant: 'full' })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'dark' })).toBeInTheDocument())
 
     await fireEvent.click(screen.getByRole('button', { name: 'dark' }))
 
@@ -44,7 +53,8 @@ describe('ThemeSwitcher', () => {
   })
 
   it('keeps system as a selectable mode', async () => {
-    render(ThemeSwitcher, { content: en })
+    render(ThemeToggle, { variant: 'full' })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'system' })).toBeInTheDocument())
 
     await fireEvent.click(screen.getByRole('button', { name: 'system' }))
 
@@ -53,9 +63,9 @@ describe('ThemeSwitcher', () => {
 
   it('applies system theme from the browser color-scheme preference', async () => {
     setPrefersDark(true)
-    render(ThemeSwitcher, { content: en })
+    render(ThemeToggle, { variant: 'full' })
 
-    await fireEvent.click(screen.getByRole('button', { name: 'system' }))
+    await fireEvent.click(await waitFor(() => screen.getByRole('button', { name: 'system' })))
 
     expect(window.localStorage.getItem('theme')).toBe('system')
     expect(document.documentElement).toHaveClass('dark')

@@ -6,7 +6,6 @@ Orthogonal intents (updated 2026-08-19 Asia/Shanghai):
 Original request (2026-08-19): "可以用是Scroll-Animation 来实现相关的 features 展示，但是注意动效要克制"
 -->
 <script lang="ts">
-  import { reveal } from '$lib/actions/reveal'
   import SectionTitle from '$lib/components/home/section-title.svelte'
   import type { WebsiteContent } from '$lib/i18n/schema'
 
@@ -69,22 +68,22 @@ Original request (2026-08-19): "可以用是Scroll-Animation 来实现相关的 
           bind:this={featureRows[index]}
           class="grid gap-2.5 border-t border-border py-6 min-[760px]:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1.15fr)] min-[760px]:items-baseline min-[760px]:gap-10 sm:py-7"
         >
-          <div class="bg-border h-px w-full min-[760px]:col-span-full" use:reveal={{ rule: true }}></div>
+          <div class="bg-border h-px w-full min-[760px]:col-span-full" data-reveal="rule"></div>
           <div
             class="font-nav text-primary text-[clamp(1.3rem,2.2vw,1.8rem)] leading-none"
-            use:reveal={{ delay: 40, rise: 12 }}
+            data-reveal="" style="--reveal-rise: 12px"
           >
             {`0${index + 1}`}
           </div>
           <h3
             class="text-[clamp(1.2rem,2vw,1.55rem)] font-bold tracking-[-0.015em]"
-            use:reveal={{ delay: 70, rise: 12 }}
+            data-reveal="" style="--reveal-rise: 12px"
           >
             {item.title}
           </h3>
           <p
             class="text-muted-foreground max-w-[62ch] text-pretty text-sm leading-6"
-            use:reveal={{ delay: 100, rise: 12 }}
+            data-reveal="" style="--reveal-rise: 12px"
           >
             {item.body}
           </p>

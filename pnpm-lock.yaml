@@ -771,6 +771,19 @@ importers:
         version: 18.0.0
 
   packages/website:
+    dependencies:
+      '@fontsource-variable/jetbrains-mono':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/share-tech-mono':
+        specifier: ^5.2.7
+        version: 5.2.7
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      tailwind-merge:
+        specifier: ^3.4.0
+        version: 3.4.0
     devDependencies:
       '@sveltejs/adapter-static':
         specifier: ^3.0.10
@@ -809,7 +822,7 @@ importers:
         specifier: ^4.4.8
         version: 4.4.8(picomatch@4.0.3)(svelte@5.55.5)(typescript@5.9.3)
       typescript:
-        specifier: ^5.7.2
+        specifier: ^5.9.3
         version: 5.9.3
       vite:
         specifier: ^8.0.0

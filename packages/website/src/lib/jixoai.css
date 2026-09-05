@@ -1,0 +1,2240 @@
+/**
+ * jixoai design-language token sheet (registry/files/theme/jixoai.css).
+ *
+ * Law (Owner decisions, 2026-08-20):
+ * - OKLCH mirrors the openspecui configuration; the ONLY per-project value
+ *   is --brand-hue (oklch hue degrees; dark mode drifts -4°).
+ * - Non-primary colors keep FIXED hues across jixoai sites.
+ * - Neutrals are pure achromatic; shadows are hard offsets, radius 0 with a
+ *   bevel upgrade where supported; the terminal bar is always dark.
+ *
+ * Law (Owner decision, 2026-08-22 — floating surfaces): every
+ * popover/dialog-family panel paints its hard offset shadow as a REAL
+ * ::after layer (see .jx-surface below) with solid|acrylic|auto
+ * variants; dialog scrims are --scrim (semi-transparent black/white,
+ * never a brand tint).
+ *
+ * Law (Owner decision, 2026-08-23 — press): interactive bodies NEVER
+ * move on hover — the shadow alone grows; active presses the body
+ * +1px into the page while the box-shadow's offsets counter-shrink
+ * by the same vector — the shadow paint stays anchored (.jx-press).
+ *
+ * Effect loops (2026-08-23 r3): shimmer / pulse / rainbow / ripple
+ * are OPT-IN press-button features modeled on the animation-svelte
+ * reference (github.com/SikandarJODD/animations); their parametric
+ * implementation lives IN the component (press-button.svelte), not
+ * here — the theme owns laws, not options.
+ */
+
+@import '@fontsource-variable/jetbrains-mono';
+@import '@fontsource/share-tech-mono';
+
+:root,
+.jx-light {
+  --brand-hue: 27; /* pre-JS flash value only — the live hue is wall-clock driven by hue-runtime. per-project defaults: unipty=165 幽绿, openspecui=27 */
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0 0 0);
+  /* unlocked-light bezel (Owner, 2026-08-21): theme="light" surfaces get a
+     light CRT shell — dark-locked remains the default */
+  --terminal: oklch(0.9551 0 0);
+  --terminal-foreground: oklch(0 0 0);
+  --terminal-hover: color-mix(in oklab, var(--terminal-foreground) 14%, var(--terminal));
+  --terminal-muted: color-mix(in oklab, var(--terminal-foreground) 8%, var(--terminal));
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0 0 0);
+  --primary: oklch(0.6489 0.237 var(--brand-hue));
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.968 0.211 109.7692);
+  --secondary-foreground: oklch(0 0 0);
+  --muted: oklch(0.9551 0 0);
+  --muted-foreground: oklch(0.3211 0 0);
+  --accent: oklch(0.5635 0.2408 260.8178);
+  --accent-foreground: oklch(1 0 0);
+  --destructive: oklch(0 0 0);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0 0 0);
+  --input: oklch(0 0 0);
+  --ring: var(--primary);
+  /* semantic state palette (Owner ruling 2026-08-24, openspec D5):
+     success/warning/info/error with -foreground pairs; dark lifts L,
+     lowers C, keeps the hue. --destructive STAYS the monochrome
+     inversion pair (destructive actions) — error is the red semantic. */
+  --success: oklch(0.62 0.19 145);
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.82 0.18 85);
+  --warning-foreground: oklch(0 0 0);
+  --info: oklch(0.62 0.16 245);
+  --info-foreground: oklch(1 0 0);
+  --error: oklch(0.6 0.2 25);
+  --error-foreground: oklch(1 0 0);
+
+  /* chart rides the semantic palette (D5 harmony audit) */
+  --chart-1: var(--primary);
+  --chart-2: var(--success);
+  --chart-3: var(--info);
+  --chart-4: var(--warning);
+  --chart-5: var(--error);
+
+  --font-sans: 'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, Menlo,
+    Consolas, 'Liberation Mono', monospace;
+  --font-mono: var(--font-sans);
+  --font-nav: 'Share Tech Mono', 'JetBrains Mono Variable', monospace;
+
+  --radius: 0px;
+  @supports (corner-shape: bevel) {
+    --radius: 8px;
+  }
+
+  --shadow-color: hsl(0 0% 0%);
+  --shadow-2xs: 1px 1px 0px 0px hsl(0 0% 0% / 0.5);
+  --shadow-xs: 2px 2px 0px 0px hsl(0 0% 0% / 0.5);
+  --shadow-sm: 2px 2px 0px 0px hsl(0 0% 0% / 1), 1px 1px 0px 1px hsl(0 0% 100% / 0.5);
+  --shadow: 4px 4px 0px 0px hsl(0 0% 0% / 1);
+  --shadow-md: 4px 4px 0px 0px hsl(0 0% 0% / 1), 4px 2px 4px -1px hsl(0 0% 100% / 1);
+  /* --shadow-lg REMOVED (F-10, adversarial-review 2026-09-02): dead
+     rung — zero consumers anywhere in the workspace; --shadow-md is
+     the float tier's ceiling */
+  /* press poses (2026-08-23 r2): each hover pose minus the 1px press
+     vector — .jx-press:active swaps to them so the shadow paint stays
+     anchored while the body slides; keep in sync when a base changes */
+  --shadow-xs-press: 1px 1px 0px 0px hsl(0 0% 0% / 0.5);
+  --shadow-sm-press: 1px 1px 0px 0px hsl(0 0% 0% / 1), 0px 0px 0px 1px hsl(0 0% 100% / 0.5);
+  --shadow-md-press: 3px 3px 0px 0px hsl(0 0% 0% / 1), 3px 1px 4px -1px hsl(0 0% 100% / 1);
+
+  /* ── the elevation grammar (Owner ruling, 2026-09-01; float tier
+     re-worded 2026-09-02, adversarial-review F-4) ────────────────────
+     Shadow offset ∝ the distance between the element's plane and the
+     surface it casts upon (website-scaffold: the top layer floats
+     above the shell body). Five tiers, one physics:
+       float   topLayer → mainLayer projection. TWO tracks, honestly
+               named: INTERACTIVE surfaces (float-button, overlays
+               that are controls) ride the --shadow / --shadow-md
+               tokens; the PANEL/DIALOG families ride the floating-
+               surface law below (.jx-surface — the subtractive ink
+               layer: --surface-shadow veil over the fixed backdrop
+               treatment), NOT these offset tokens
+       raise   in-layer interactive lift — the .jx-press law,
+               xs → sm (press-button, chip, action buttons)
+       lift    static focus surface, light raise — --shadow-2xs
+               (card family: section-card, alert, empty, result…)
+       engrave glyph incised INTO the plane — --shadow-engrave (kbd)
+       well    fillable container recess — --shadow-well; interaction
+               NEVER changes the tier: hover changes intensity only
+               (--shadow-well-hover), focus changes border + caret
+               color (input/textarea/select shells)
+     Ink inverts per theme (the white-shadow law); geometry never
+     drifts between themes. Off-default expression is a deliberate
+     prop/custom modulation — never a per-component invention.
+
+     THE ENGRAVE DUET (Owner ruling 2026-09-04): the tier paints BOTH
+     inner walls of the incision — the shade wall (top-left, where
+     the light is blocked) and the glow wall (bottom-right, where the
+     light catches) — a single-sided inset reads as a smudge, the
+     duet reads as carved. The two inks are tokens of their own: the
+     flat press's corner-tint border (below, the press law) mixes
+     from the SAME pair, so the whole pressed face stays one light
+     model. */
+  --jx-engrave-shade: hsl(0 0% 0% / 0.4);
+  --jx-engrave-glow: hsl(0 0% 100% / 0.96);
+  --shadow-engrave: inset 1px 1px 0px 0px var(--jx-engrave-shade),
+    inset -1px -1px 0px 0px var(--jx-engrave-glow);
+  --shadow-well: inset 1px 1px 0px 0px hsl(0 0% 0% / 0.12);
+  --shadow-well-hover: inset 1px 1px 0px 0px hsl(0 0% 0% / 0.28);
+
+  /* paper metaphor (print sim, F-5 2026-09-02): the paged preview's
+     sheet depth — a DOCUMENTED exemption from the offset grammar
+     above. Paper photographed on a desk casts soft photographic depth,
+     not the grammar's hard plane offsets. Theme-INDEPENDENT by design:
+     the sheet is white in both themes, so its shadow stays black —
+     one definition, no .dark override (consumed by lib/print
+     sim-shell.css with this same fallback) */
+  --shadow-paper: 0 10px 30px hsl(0 0% 0% / 0.35), 0 2px 8px hsl(0 0% 0% / 0.25);
+
+  /* floating-surface law (2026-08-22): restrained black-only scrims;
+     the shadow LAYER keeps its original color, always SEMI-TRANSPARENT
+     (Owner ruling, 2026-08-22 r2: light mode = translucent black,
+     dark mode = translucent white) — light mode DARKENS what it covers */
+  --scrim: hsl(0 0% 0% / 0.32);
+  --surface-shadow: oklch(1 0 0 / 0.32); /* white — r14-17, Owner */
+
+  /* Scrollbar law (Owner, 2026-08-22): every scrollable area paints a
+     thin, theme-linked thumb over a transparent track. currentColor is
+     the theme link — the thumb inherits the text color of the surface
+     it scrolls (dark terminal bezels get light thumbs, light panels
+     dark ones; .dark / .jx-light scoping needs no overrides here).
+     --jx-scrollbar-thin/auto are the real per-OS scrollbar widths,
+     published once by <jx-scrollbar-measure> (registry lib
+     scrollbar-measure); they stay 0px on overlay-scrollbar systems, so
+     the padding-inline compensation recipes degrade to the authored
+     padding exactly there. macOS classic reference: thin 11px, auto
+     14px — never hardcode either. */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: color-mix(in oklab, currentColor 30%, transparent);
+  --scrollbar-thumb-hover: color-mix(in oklab, currentColor 50%, transparent);
+  --scrollbar-thumb-active: color-mix(in oklab, currentColor 66%, transparent);
+  --jx-scrollbar-thin: 0px;
+  --jx-scrollbar-auto: 0px;
+}
+
+.dark {
+  --background: oklch(0 0 0);
+  --foreground: oklch(1 0 0);
+  --terminal: oklch(0.2 0 0);
+  --terminal-foreground: oklch(1 0 0);
+  --terminal-hover: color-mix(in oklab, var(--terminal-foreground) 14%, var(--terminal));
+  --terminal-muted: color-mix(in oklab, var(--terminal-foreground) 8%, var(--terminal));
+  --card: oklch(0.3211 0 0);
+  --card-foreground: oklch(1 0 0);
+  --popover: oklch(0.3211 0 0);
+  --popover-foreground: oklch(1 0 0);
+  /* the primary hue drifts -4° toward dark, mirroring the reference */
+  --primary: oklch(0.7044 0.1872 calc(var(--brand-hue) - 4));
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.9691 0.2005 109.6228);
+  --secondary-foreground: oklch(0 0 0);
+  --muted: oklch(0.2178 0 0);
+  --muted-foreground: oklch(0.8452 0 0);
+  --accent: oklch(0.6755 0.1765 252.2592);
+  --accent-foreground: oklch(0 0 0);
+  --destructive: oklch(1 0 0);
+  --destructive-foreground: oklch(0 0 0);
+  --border: oklch(1 0 0);
+  --input: oklch(1 0 0);
+  --ring: var(--primary);
+  --success: oklch(0.72 0.16 145);
+  --success-foreground: oklch(0 0 0);
+  --warning: oklch(0.78 0.17 85);
+  --warning-foreground: oklch(0 0 0);
+  --info: oklch(0.74 0.14 245);
+  --info-foreground: oklch(0 0 0);
+  --error: oklch(0.72 0.16 25);
+  --error-foreground: oklch(0 0 0);
+
+  --chart-1: var(--primary);
+  --chart-2: var(--success);
+  --chart-3: var(--info);
+  --chart-4: var(--warning);
+  --chart-5: var(--error);
+
+  --shadow-color: hsl(0 0% 100%);
+  /* shadow GEOMETRY rides the light baseline rung for rung (Owner ruling,
+     2026-09-01: sizes must not drift between themes — only the INK
+     inverts to white; the old 4px-everywhere small rungs were copy-paste
+     drift, not design) */
+  --shadow-2xs: 1px 1px 0px 0px hsl(0 0% 100% / 0.5);
+  --shadow-xs: 2px 2px 0px 0px hsl(0 0% 100% / 0.5);
+  /* ink compensation (F-11, 2026-09-02): the second layer's alpha is
+     deliberately NOT mirrored (0.5 light / 1.0 dark) — the black ring
+     rides directly on the white offset over a black ground, where
+     half-alpha would read as a gray smear; geometry stays rung for
+     rung, only the ink density compensates */
+  --shadow-sm: 2px 2px 0px 0px hsl(0 0% 100% / 1), 1px 1px 0px 1px hsl(0 0% 0% / 1);
+  --shadow: 4px 4px 0px 0px hsl(0 0% 100% / 1);
+  --shadow-md: 4px 4px 0px 0px hsl(0 0% 100% / 1), 4px 2px 4px -1px hsl(0 0% 0% / 1);
+  /* --shadow-lg removed with the light block (F-10) */
+  /* press poses — same minus-1px law as the light block above */
+  --shadow-xs-press: 1px 1px 0px 0px hsl(0 0% 100% / 0.5);
+  --shadow-sm-press: 1px 1px 0px 0px hsl(0 0% 100% / 1), 0px 0px 0px 1px hsl(0 0% 0% / 1);
+  --shadow-md-press: 3px 3px 0px 0px hsl(0 0% 100% / 1), 3px 1px 4px -1px hsl(0 0% 0% / 1);
+  /* elevation grammar, dark side: same geometry rung for rung, the
+     ink inverted to white (the white-shadow law); --shadow-paper is
+     theme-INDEPENDENT (paper stays white — see the light block).
+     The engrave duet inverts BOTH inks (the law's mechanical face —
+     the glow wall's black on dark reads as the carved sheen) */
+  --jx-engrave-shade: hsl(0 0% 100% / 0.4);
+  --jx-engrave-glow: hsl(0 0% 0% / 0.96);
+  --shadow-engrave: inset 1px 1px 0px 0px var(--jx-engrave-shade),
+    inset -1px -1px 0px 0px var(--jx-engrave-glow);
+  --shadow-well: inset 1px 1px 0px 0px hsl(0 0% 100% / 0.12);
+  --shadow-well-hover: inset 1px 1px 0px 0px hsl(0 0% 100% / 0.28);
+
+  /* floating-surface law, dark side: inverted — scrims and the shadow
+     layer are semi-transparent WHITE and BRIGHTEN (the white-shadow
+     law; same 0.32 veil strength as light mode's black) */
+  --scrim: hsl(0 0% 100% / 0.1);
+  --surface-shadow: oklch(0 0 0 / 0.32); /* black — r14-17, Owner */
+}
+
+:where([data-density='lg']) {
+  --jx-text: var(--jx-density-text-lg);
+  --jx-leading: var(--jx-density-leading-lg);
+  --jx-line: var(--jx-density-line-lg);
+  --jx-gap: var(--jx-density-inline-gap-lg);
+  --jx-media-gutter: var(--jx-density-media-gutter-lg);
+  --jx-gap-end: var(--jx-density-end-gap-lg);
+  --jx-stack: var(--jx-density-stack-gap-lg);
+  --jx-inset: var(--jx-density-inline-inset-lg);
+  --jx-gap-content: var(--jx-density-content-gap-lg);
+  --jx-row-min: var(--jx-density-row-min-lg);
+  --jx-hit: var(--jx-density-hit-min-lg);
+  --jx-icon: var(--jx-density-media-icon-lg);
+  --jx-image: var(--jx-density-media-image-lg);
+  --jx-text-secondary: var(--jx-density-secondary-text-lg);
+  --jx-leading-secondary: var(--jx-density-secondary-leading);
+  --jx-line-secondary: var(--jx-density-secondary-line-lg);
+  --jx-toggle-track: var(--jx-line);
+  --jx-toggle-width: calc(var(--jx-toggle-track) * 2);
+  --jx-toggle-knob: calc(var(--jx-toggle-track) - var(--jx-unit));
+  --jx-slider-track: max(var(--jx-unit), calc(var(--jx-line) / 2));
+  --jx-textarea-min: max(var(--jx-hit), calc(var(--jx-line) * 3 + var(--jx-stack) * 2 + 2px));
+  --jx-color-lane: max(var(--jx-hit), calc(var(--jx-icon) + var(--jx-inset) * 2 + 2px));
+}
+
+/* ============================================================
+   Scrollbar law — application layer (Owner, 2026-08-22)
+
+   Paint is global: scrollbar-color/width are inherited properties, so
+   one `*` rule styles every scroller and non-scrollers merely carry
+   the unused value. The hover chain works because :hover propagates
+   to ancestors — the cursor anywhere over a scrollport's content
+   intensifies that scrollport's thumb (and any outer scroller's).
+
+   The GUTTER is deliberately NOT global. The spec reserves stable
+   gutters on overflow:hidden boxes too (scroll containers include
+   hidden), which would dead-band every clip surface — toggle knob
+   tracks, progress fills, name echoes — by 2x the scrollbar width on
+   classic-scrollbar systems. So each real scrollport opts in through
+   its own scoped rule:
+
+     scrollbar-gutter: stable both-edges;
+     padding-inline: max(<authored> - var(--jx-scrollbar-thin, 0px), 0px);
+
+   (the gutter sits between the inner border edge and the outer
+   padding edge, so subtracting it from padding-inline keeps the
+   visual inset unchanged; max() clamps surfaces whose authored
+   padding is thinner than the scrollbar). Engines without
+   scrollbar-gutter never see the compensated values — the probe
+   publishes widths only when BOTH scrollbar-width and
+   scrollbar-gutter are supported. Horizontal-only scrollers whose
+   vertical scrollbar can never appear (carousel track, table frame)
+   stay on the auto gutter: stable would reserve dead space forever.
+   ============================================================ */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+  *:hover {
+    scrollbar-color: var(--scrollbar-thumb-hover) var(--scrollbar-track);
+  }
+  *:active {
+    scrollbar-color: var(--scrollbar-thumb-active) var(--scrollbar-track);
+  }
+}
+
+/* Glass material: translucent surface + real backdrop blur. Outline (not
+   border) so the box line never affects layout and stays crisp over the
+   blurred backdrop; identical outline law as the ToC toggle. */
+.jx-glass {
+  background: color-mix(in oklab, var(--background) 68%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  backdrop-filter: blur(14px) saturate(1.35);
+}
+
+/* ============================================================
+   Floating-surface law (Owner rulings, 2026-08-22 → 2026-08-23 r18)
+   Every popover/dialog-family panel is TWO (scrolling: THREE)
+   elements with strict ownership — CSS owns LAYOUT and STATIC PAINT
+   only; EVERY animation belongs to the component's WAAPI motion
+   kernel (there are NO CSS keyframes/transitions in this law):
+
+     .jx-surface        the PLATFORM element (popover attr / <dialog>):
+                        anchoring, sizing, and the open/close motion —
+                        driven by the kernel. It paints NOTHING (UA
+                        dialog backgrounds and borders die here).
+     .jx-surface-shadow the shadow layer. Kernel components render it
+                        as a REAL DOM child (pseudo-elements are
+                        unreachable from WAAPI); kernel-less components
+                        fall back to the ::after pseudo, statically.
+     .jx-surface-body   THE SURFACE: the variant fill, the 1px border,
+                        and the acrylic backdrop-filter (blur only).
+                        It never scrolls or clips.
+     ::before ring      opt-in ([data-border-ring]): the 1px outline for
+                        MASKED bodies (irregular silhouettes) — two
+                        silhouette masks subtracted into a ring.
+     scroll ring        wherever content can overflow, a third element
+                        inside the body owns overflow + padding.
+
+   Variants — data-variant="solid | acrylic | auto" (default auto):
+     solid    opaque surface fill; the shadow layer keeps its
+              ORIGINAL COLOR as a translucent veil — semi-transparent
+              black in light mode, white in dark (never opaque, never
+              brand-tinted)
+     acrylic  the body fill at 72% alpha behind blur(14px); the shadow
+              layer carries the fixed backdrop treatment
+     auto     acrylic, falling back to solid under
+              prefers-reduced-transparency
+
+   The shadow veil: --surface-shadow (WHITE light / BLACK dark, 0.32 —
+   r14-17, Owner: inverted from the scrim's polarity) over a FIXED
+   backdrop-filter — brightness(0.5) blur(8px) contrast(2) — identical
+   in light and dark. Full rect, UNDER the body fill; its offset
+   (--jx-surface-ox/oy, 6px fallback) shares its signs with the slide
+   vector, so the shadow falls to the panel's outward side. The veil's
+   MASS rides the backdrop-filter, not the background: the scrim has
+   already darkened (light) / lightened (dark) the page behind, so a
+   like-polarity veil would double it into mud — the inverted, lighter
+   base lets the filter's own effect read through.
+
+   Scrim law: dialog-family ::backdrop uses --scrim — semi-transparent
+   BLACK in light mode, WHITE in dark. Never a brand tint.
+   ============================================================ */
+.jx-surface {
+  isolation: isolate; /* the shadow layer must not escape the panel */
+  /* the panel NEVER clips: the UA sheet gives modal <dialog>s
+     overflow:auto, which would cut the shadow sliver off at the box
+     edge — scroll rings own every scroll */
+  overflow: visible;
+  /* the platform element paints nothing (UA dialog backgrounds AND
+     borders die here too); the fill + border live on the
+     .jx-surface-body child */
+  background: none;
+  border: none;
+  /* opacity stays 1 in the cascade on BOTH sides: every opacity
+     CHANGE comes from the runtime kernel (an animated opacity — even
+     a constant 1 — activates the compositor's opacity channel and
+     breaks backdrop-filter blur, and a cascade flip would be an
+     unanimated jump). Closed panels are display:none anyway */
+  opacity: 1;
+  translate: var(--jx-surface-in-x, 0px) var(--jx-surface-in-y, 6px);
+}
+/* KERNEL panels only (.jx-waapi, set by the component running the
+   shared motion kernel): allow-discrete holds display+overlay through
+   the kernel's whole exit run (the discrete flip lands at delay + 50%
+   of the duration = 460ms). Covers BOTH flavors — popovers
+   (:popover-open) and dialogs ([open] removal flips display the same
+   way, so dialog.close() can fire immediately and the exit still
+   plays). Kernel-less panels must NOT carry this transition — nothing
+   would animate, the closed panel would linger rendered for the full
+   window before vanishing (Codex r18 audit) */
+.jx-surface.jx-waapi {
+  transition:
+    display 460ms allow-discrete 230ms,
+    overlay 460ms allow-discrete 230ms;
+}
+/* the dialog-family scrim rides the SAME timeline: ::backdrop inherits
+   the dialog's custom properties (Chromium), so its opacity IS the
+   progress — one law, no parallel transition (r29) */
+.jx-surface.jx-waapi::backdrop {
+  opacity: var(--jx-p, 1);
+}
+/* under reduced motion the kernel is skipped — the discrete window
+   must go too, or the closed panel lingers rendered for ~700ms with
+   nothing animating (Codex r2) */
+@media (prefers-reduced-motion: reduce) {
+  .jx-surface.jx-waapi {
+    transition: none;
+  }
+  .jx-surface.jx-waapi::backdrop {
+    opacity: 1;
+  }
+}
+/* open resting pose: kernel-less components rest here directly */
+.jx-surface:popover-open,
+.jx-surface[open] {
+  opacity: 1;
+  translate: 0 0;
+}
+/* ══ DECLARATIVE MOTION LAW (Owner ruling, 2026-08-23 r26) ══
+   ONE animated custom property — --jx-p, the timeline progress ∈[0,1]
+   (registered via @property so WAAPI can animate it and Chrome's
+   animation panel can debug it). EVERY visible property is a pure
+   formula of it; the kernel JS never touches layout properties:
+
+     T0 ───── p=0.5 (T1) ───── p=1 (T2)
+     opacity/blur   first half   (blurIn)
+     slide          whole run    (M1·(1−p) along the live axis)
+     materials      second half  (--jx-t: clamp((p−.5)·2))
+     shadow split   second half  (M2·t)
+
+   The direction is a LIVE unit vector (--jx-dx/dy), rAF-tracked from
+   the panel/anchor bounding centers by the kernel — the panel and its
+   shadow therefore always move along the real connecting axis
+   (position-try flips included; degenerate axis falls back to the
+   project default: bottom-right). All math runs on the main thread
+   every frame (no compositor acceleration) — accepted trade-off for
+   full declarativity. The first-frame law rides the formulas: at p=0
+   opacity computes to 0, so the pre-JS frame can never flash. */
+@property --jx-p {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+/* the second-half sub-progress must be a REGISTERED number: as a bare
+   custom property it stays a lazy token string, and color-mix's
+   percentage calc does not re-evaluate nested clamp(var()) per frame
+   (the body α sat at its end value through the whole entry — found in
+   the r26 live probe). Registered, it computes to a number each frame
+   and inherits as one */
+@property --jx-t {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+.jx-surface.jx-waapi {
+  --jx-dx: 0.70710678; /* live axis (rAF); degenerate → bottom-right */
+  --jx-dy: 0.70710678;
+  --jx-m1: 2.5rem; /* slide distance along the axis (configurable) */
+  --jx-m2: 8px; /* shadow separation distance (~6px per component) */
+  --jx-t: clamp(calc((var(--jx-p) - 0.5) * 2), 0, 1); /* 2nd-half sub-progress */
+  opacity: clamp(calc(var(--jx-p) * 2), 0, 1);
+  filter: blur(calc((1 - clamp(calc(var(--jx-p) * 2), 0, 1)) * 100px));
+  translate:
+    calc(var(--jx-dx) * var(--jx-m1) * (1 - var(--jx-p)))
+    calc(var(--jx-dy) * var(--jx-m1) * (1 - var(--jx-p)));
+}
+/* materials develop in the second half; solid keeps an opaque fill */
+/* the material formulas sit AFTER the variant rules on purpose: same
+   specificity as the acrylic fill, and the kernel's animated formulas
+   must win by source order (the r26 probe read a static 0.72 — the
+   acrylic rule had been overriding them all along) */
+.jx-surface.jx-surface.jx-waapi .jx-surface-body {
+  /* (0,4,0) — the variant acrylic rule (0,3,0) sits later in the file
+   and was winning the cascade all along; every "lazy paint" theory in
+   the r26 probe session was this misdiagnosis) */
+  background: oklch(
+    from var(--jx-surface-solid-fill, var(--popover))
+    l c h / calc(1 - clamp(calc((var(--jx-p) - 0.5) * 2), 0, 1) * 0.28)
+  );
+}
+.jx-surface.jx-surface.jx-waapi .jx-surface-shadow {
+  /* from the VEIL token (r14-17): the animated alpha rides the token's
+     polarity — white in light, black in dark — instead of the generic
+     --shadow-color, so the resting pose lands exactly on
+     oklch(1 0 0 / 0.32) / oklch(0 0 0 / 0.32) */
+  background: oklch(
+    from var(--surface-shadow)
+    l c h / calc(1 - clamp(calc((var(--jx-p) - 0.5) * 2), 0, 1) * 0.68)
+  );
+  translate:
+    calc(var(--jx-dx) * var(--jx-m2) * var(--jx-t))
+    calc(var(--jx-dy) * var(--jx-m2) * var(--jx-t));
+}
+/* solid keeps an opaque fill — its formula IS the end state */
+.jx-surface.jx-surface.jx-waapi[data-variant='solid'] .jx-surface-body {
+  background: var(--jx-surface-solid-fill, var(--popover));
+}
+/* SOLID never defocuses: the variant is the opaque, static-weight
+   material — a blurred solid panel reads as broken glass, and the
+   filter would be pure compositor cost over an opaque fill (Owner
+   ruling, r28) */
+.jx-surface.jx-surface.jx-waapi[data-variant='solid'] {
+  filter: none;
+}
+
+/* kernel-layer animation lock: the motion kernel owns these layers'
+   animations; the class survives Svelte style re-renders. The pseudo
+   shadow is disabled on kernel surfaces — their REAL shadow element
+   owns the split formula */
+.jx-surface.jx-waapi,
+.jx-surface.jx-waapi .jx-surface-body,
+.jx-surface.jx-waapi .jx-surface-shadow {
+  animation: none;
+}
+.jx-surface.jx-waapi::after {
+  content: none;
+}
+/* at rest the filter drops to NONE: a lingering blur(0px) keeps a
+   filter layer alive and disturbs the backdrop compositing (Owner
+   ruling, r27); the axis tracker toggles the class from lastP */
+.jx-surface.jx-waapi.jx-rest {
+  filter: none;
+}
+/* the kernel must never strand an invisible panel: reduced motion
+   skips the kernel (CSS must show the panel), and a no-JS page has no
+   kernel at all (the site's bootstrap tags <html class="js">) */
+@media (prefers-reduced-motion: reduce) {
+  .jx-surface.jx-waapi:popover-open {
+    opacity: 1;
+  }
+}
+html:not(.js) .jx-surface.jx-waapi:popover-open {
+  opacity: 1;
+}
+/* the no-JS page has no kernel: the formulas would park the panel at
+   p=0 geometry (translated out, blurred, translucent) — reset every
+   animated channel to the resting pose (Codex P1) */
+html:not(.js) .jx-surface.jx-waapi:popover-open {
+  translate: none;
+  filter: none;
+}
+html:not(.js) .jx-surface.jx-waapi:popover-open .jx-surface-body {
+  background: var(--jx-surface-acrylic-fill, color-mix(in oklab, var(--popover) 72%, transparent));
+}
+html:not(.js) .jx-surface.jx-waapi:popover-open .jx-surface-shadow {
+  translate: var(--jx-m2, 8px) var(--jx-m2, 8px);
+  background: var(--surface-shadow);
+}
+
+/* THE SURFACE: the panel's direct child — fill + border + blur. The
+   radius rides the inheritance chain so the fill, the border, and the
+   shadow share one silhouette. */
+.jx-surface-body {
+  position: relative;
+  border: 1px solid var(--jx-surface-border-color, var(--border));
+  border-radius: inherit;
+  corner-shape: inherit;
+  background: var(--jx-surface-solid-fill, var(--popover));
+}
+
+/* the scroll+padding ring inside the surface body (scrolling
+   components): overflow + padding + scrollbar gutter live here */
+.jx-surface-scroll {
+  scrollbar-gutter: stable both-edges;
+}
+
+/* THE BORDER RING — for MASKED surfaces (2026-08-23): an irregular
+   silhouette (the tooltip notch, cut through the body's mask) can't use
+   `border`, and can't use filter: drop-shadow (the surface has a fill);
+   this layer paints the 1px outline instead. Opt in with
+   [data-border-ring] on the platform element and set
+   --jx-surface-ring (the outer silhouette) plus --jx-surface-ring-inner
+   (the same silhouette inset by 1px) as mask images — mask-composite
+   subtracts the inner from the outer, leaving exactly the ring.
+   Regular surfaces never opt in: zero paint, zero cost. */
+.jx-surface[data-border-ring]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1; /* above the surface body's fill */
+  pointer-events: none;
+  background: var(--jx-surface-border-color, var(--border));
+  -webkit-mask-image: var(--jx-surface-ring, none), var(--jx-surface-ring-inner, none);
+  -webkit-mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-image: var(--jx-surface-ring, none), var(--jx-surface-ring-inner, none);
+  mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+  mask-composite: subtract;
+}
+
+/* MASKED surfaces: the shadow veil must follow the irregular silhouette
+   too — unmasked it would bleed through the body mask's dug-away
+   regions (the tooltip's notch flanks) as a black smear. Same opt-in
+   ([data-border-ring]) and the same outer-silhouette var; the veil's
+   outward translate then reads as a sliver past the bubble's edge,
+   aligned with the notch cut. */
+.jx-surface[data-border-ring]::after {
+  -webkit-mask-image: var(--jx-surface-ring, none);
+  -webkit-mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-image: var(--jx-surface-ring, none);
+  mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+}
+
+/* THE SHADOW LAYER — static paint for BOTH renderings (the ::after
+   pseudo for kernel-less components; the real .jx-surface-shadow
+   child for kernel components — identical geometry, filter, and
+   resting pose) */
+.jx-surface::after,
+.jx-surface-shadow {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  corner-shape: inherit;
+  -webkit-backdrop-filter: brightness(0.5) blur(8px) contrast(2);
+  backdrop-filter: brightness(0.5) blur(8px) contrast(2);
+  background: var(--jx-surface-shadow, var(--surface-shadow));
+}
+.jx-surface:popover-open::after,
+.jx-surface[open]::after {
+  /* resting pose: separated at the adaptive offset */
+  opacity: 1;
+  translate: var(--jx-surface-ox, 6px) var(--jx-surface-oy, 6px);
+}
+.jx-surface-shadow {
+  /* resting pose, shared with the pseudo above */
+  translate: var(--jx-surface-ox, 6px) var(--jx-surface-oy, 6px);
+}
+
+/* open-state shadow pose for the pseudo (the real element reads the
+   same customs) */
+.jx-surface::after {
+  opacity: 0;
+  translate: 0 0;
+}
+
+/* acrylic / auto: the body carries ONE filter — blur. Bezel panels
+   retune the fill through the custom properties, keeping their
+   identity in BOTH variants. */
+.jx-surface[data-variant='acrylic'] .jx-surface-body,
+.jx-surface[data-variant='auto'] .jx-surface-body {
+  background: var(--jx-surface-acrylic-fill, color-mix(in oklab, var(--popover) 72%, transparent));
+  -webkit-backdrop-filter: blur(14px) brightness(2);
+  backdrop-filter: blur(14px) brightness(2);
+}
+/* auto = acrylic UNLESS the environment asks for less transparency —
+   then exactly solid */
+@media (prefers-reduced-transparency: reduce) {
+  .jx-surface[data-variant='auto'] .jx-surface-body {
+    background: var(--jx-surface-solid-fill, var(--popover));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /* the kernel's animated formula sits at (0,4,0) — the plain fallback
+     above never beat it, so auto panels kept their 0.72 alpha under
+     reduced transparency (blur died, tint stayed — Codex P0). This
+     override matches the formula's specificity and comes later */
+  .jx-surface.jx-surface.jx-waapi[data-variant='auto'] .jx-surface-body {
+    background: var(--jx-surface-solid-fill, var(--popover));
+  }
+}
+
+/* ============================================================
+   Press law (Owner rulings, 2026-08-23 → r2): hover NEVER moves the
+   body — the shadow alone grows (xs → sm). Active presses the body
+   +1px,+1px INTO the page while the box-shadow's own offsets shrink
+   by the same vector (the *-press poses above) — the shadow's PAINT
+   never moves on screen. No pseudo layer, no stacking machinery
+   (r1 painted the shadow on a counter-translated ::after; r2 dropped
+   it — one less stacking context per interactive element): the
+   shadow is the element's own box-shadow and the arithmetic lives
+   in tokens. The law owns the transition chain (unlayered rules beat
+   layered utilities): components must not carry their own
+   transition-*.
+
+   Pose opting: --jx-press-shadow / -hover / -active re-point all
+   three poses (bigger floats rest on --shadow; shadow-less surfaces
+   — ghost idioms — set all three to none and keep the bare +1px
+   press). --jx-press-move is the fourth seam — the press VECTOR
+   itself (the flat texture nulls it and lets an engrave-tier inset
+   alone create the illusion of movement, Owner 2026-09-03).
+   ============================================================ */
+.jx-press {
+  box-shadow: var(--jx-press-shadow, var(--shadow-xs));
+  transition:
+    translate 150ms ease-out,
+    box-shadow 150ms ease-out,
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out;
+}
+.jx-press:hover {
+  box-shadow: var(--jx-press-shadow-hover, var(--shadow-sm));
+}
+/* :active comes LAST: at equal specificity the later rule wins over
+   :hover, so a mouse press swaps the hover pose straight to its
+   press twin */
+.jx-press:active {
+  translate: var(--jx-press-move, 1px 1px);
+  box-shadow: var(--jx-press-shadow-active, var(--shadow-sm-press));
+}
+/* ── THE FLAT CORNER TINT (Owner ruling 2026-09-04): a pressed flat
+   button is a CARVED face, and the carving extends to the border —
+   the four corners of the ring mix toward the same duet the inset
+   paints (shade at top-left, glow at bottom-right), so the whole
+   pressed edge reads under ONE light model instead of a floating
+   inset beside a static frame. Keyed on the flat STAMP the
+   component emits with its pose block; the tint rides the border
+   RING only (an excluded-mask overlay over the 1px frame — paint is
+   alpha-composited over whatever rung color the border carries, no
+   per-rung knowledge), appears with :active, and never touches
+   layout (position:relative is paint-only geometry) ── */
+.jx-press[data-jx-press-flat] {
+  position: relative;
+}
+.jx-press[data-jx-press-flat]:active::before {
+  content: '';
+  position: absolute;
+  inset: -1px; /* over the border ring exactly: abs insets measure
+    from the padding edge, so -1px spans the 1px frame */
+  border: 1px solid transparent; /* offsets the mask's padding-box
+    back onto the button's own padding edge */
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      to bottom right,
+      color-mix(in oklab, var(--jx-engrave-shade) 55%, transparent),
+      transparent 60%
+    ),
+    linear-gradient(
+      to top left,
+      color-mix(in oklab, var(--jx-engrave-glow) 55%, transparent),
+      transparent 60%
+    );
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .jx-press {
+    transition: none;
+  }
+}
+
+/* Tailwind v4 token → utility mapping (map EVERY token; unmapped tokens
+   silently yield dead utilities) and the dark variant. */
+@custom-variant dark (&:where(.dark, .dark *));
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-terminal: var(--terminal);
+  --color-terminal-foreground: var(--terminal-foreground);
+  --color-terminal-hover: var(--terminal-hover);
+  --color-terminal-muted: var(--terminal-muted);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-error: var(--error);
+  --color-error-foreground: var(--error-foreground);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-nav: var(--font-nav);
+  --radius: var(--radius);
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-engrave: var(--shadow-engrave);
+  --shadow-well: var(--shadow-well);
+  --shadow-well-hover: var(--shadow-well-hover);
+  --shadow-paper: var(--shadow-paper);
+}
+
+/* Reveal hooks, scroll-driven era (Owner approval, 2026-08-24): pure CSS.
+   animation-timeline: view() resolves against the NEAREST scrollport
+   (the grid shell's .jx-shell-body here) — entrances settle from the
+   FIRST PAINT with zero hydration dependency, and below-fold content
+   reveals as it enters the scrollport. The reveal.ts IO action, the
+   html.js gate and the .is-revealed classes are retired. Above-fold
+   content at load is already past its entry range = final state,
+   instantly visible — no flash, no wait. Engines without scroll-driven
+   animations see everything visible (the no-JS semantics, by design).
+   Markup contract unchanged: static data-reveal attributes only. */
+@supports (animation-timeline: view()) {
+  [data-reveal] {
+    animation: jx-reveal-rise both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 75%;
+  }
+  [data-reveal='rule'] {
+    animation: jx-reveal-rule both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 70%;
+  }
+}
+@keyframes jx-reveal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--reveal-rise, 26px));
+  }
+}
+@keyframes jx-reveal-rule {
+  from {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal],
+  [data-reveal='rule'] {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   The density scale (design-language-kernel appendix A, 2026-08-26;
+   2xs rung 2026-09-05-density-2xs)
+   — 尺规思维: every dimension is an EQUATION from the ruler.
+   U = --jx-unit (4px), T = --jx-text-base (13px).
+   Five densities (2xs/xs/sm/default/lg) with REAL differentiation:
+   text 10/11/12/13/15px, lines 14/16/18/20/24px,
+   rows 24/28/32/40/48px. 2xs is the pro-tool extreme (operation
+   surfaces: inspectors, data grids, tool palettes) — OPT-IN ONLY,
+   never default (the adoption law); its ONE scoped law: the hit
+   floor redeclares at 6U (24px, the WCAG 2.5.8 AA minimum) inside
+   [data-density='2xs'] — non-touch pointers, the deliberate
+   pro-density stance.
+   Hit floor (Owner ruling, 2026-08-29 "彻底跟字"): the hit lane
+   tracks the type scale; the 11U (44px) touch-first clamp is
+   retired — the max() law survives as a guardrail at 7U (28px,
+   above the WCAG 2.5.8 AA 24px lane floor), which never binds at
+   the other rungs' row-min values (28/32/40/48).
+   Scopes exist ONLY here (and the byte-identical mirror) — never in
+   component css; components consume the inherited --jx-* aliases.
+   ============================================================ */
+:root {
+  --jx-unit: 0.25rem;        /* U = 4px at the 16px root */
+  --jx-text-base: 0.8125rem; /* T_base = 13px */
+  --jx-hit-floor: calc(var(--jx-unit) * 7); /* 28px guardrail, not a clamp */
+
+  --jx-density-text-2xs: calc(var(--jx-text-base) - calc(var(--jx-unit) * 3 / 4));
+  --jx-density-text-xs: calc(var(--jx-text-base) - calc(var(--jx-unit) / 2));
+  --jx-density-text-sm: calc(var(--jx-text-base) - calc(var(--jx-unit) / 4));
+  --jx-density-text-default: var(--jx-text-base);
+  --jx-density-text-lg: calc(var(--jx-text-base) + calc(var(--jx-unit) / 2));
+
+  --jx-density-leading-2xs: calc(14 / 10);
+  --jx-density-leading-xs: calc(16 / 11);
+  --jx-density-leading-sm: 1.5;
+  --jx-density-leading-default: calc(20 / 13);
+  --jx-density-leading-lg: 1.6;
+
+  --jx-density-inline-factor-2xs: 2;
+  --jx-density-inline-factor-xs: 2;
+  --jx-density-inline-factor-sm: 2;
+  --jx-density-inline-factor-default: 3;
+  --jx-density-inline-factor-lg: 4;
+  --jx-density-stack-factor-2xs: 1;
+  --jx-density-stack-factor-xs: 1;
+  --jx-density-stack-factor-sm: 1;
+  --jx-density-stack-factor-default: 2;
+  --jx-density-stack-factor-lg: 2;
+  --jx-density-row-floor-2xs: 6;
+  --jx-density-row-floor-xs: 7;
+  --jx-density-row-floor-sm: 8;
+  --jx-density-row-floor-default: 10;
+  --jx-density-row-floor-lg: 12;
+
+  --jx-density-line-2xs: calc(var(--jx-density-text-2xs) * var(--jx-density-leading-2xs));
+  --jx-density-line-xs: calc(var(--jx-density-text-xs) * var(--jx-density-leading-xs));
+  --jx-density-line-sm: calc(var(--jx-density-text-sm) * var(--jx-density-leading-sm));
+  --jx-density-line-default: calc(var(--jx-density-text-default) * var(--jx-density-leading-default));
+  --jx-density-line-lg: calc(var(--jx-density-text-lg) * var(--jx-density-leading-lg));
+
+  --jx-density-inline-gap-2xs: calc(var(--jx-unit) * var(--jx-density-inline-factor-2xs));
+  --jx-density-inline-gap-xs: calc(var(--jx-unit) * var(--jx-density-inline-factor-xs));
+  --jx-density-inline-gap-sm: calc(var(--jx-unit) * var(--jx-density-inline-factor-sm));
+  --jx-density-inline-gap-default: calc(var(--jx-unit) * var(--jx-density-inline-factor-default));
+  --jx-density-inline-gap-lg: calc(var(--jx-unit) * var(--jx-density-inline-factor-lg));
+  --jx-density-media-gutter-2xs: var(--jx-density-inline-gap-2xs);
+  --jx-density-media-gutter-xs: var(--jx-density-inline-gap-xs);
+  --jx-density-media-gutter-sm: var(--jx-density-inline-gap-sm);
+  --jx-density-media-gutter-default: var(--jx-density-inline-gap-default);
+  --jx-density-media-gutter-lg: var(--jx-density-inline-gap-lg);
+  --jx-density-end-gap-2xs: var(--jx-density-inline-gap-2xs);
+  --jx-density-end-gap-xs: var(--jx-density-inline-gap-xs);
+  --jx-density-end-gap-sm: var(--jx-density-inline-gap-sm);
+  --jx-density-end-gap-default: var(--jx-density-inline-gap-default);
+  --jx-density-end-gap-lg: var(--jx-density-inline-gap-lg);
+  --jx-density-stack-gap-2xs: calc(var(--jx-unit) * var(--jx-density-stack-factor-2xs));
+  --jx-density-stack-gap-xs: calc(var(--jx-unit) * var(--jx-density-stack-factor-xs));
+  --jx-density-stack-gap-sm: calc(var(--jx-unit) * var(--jx-density-stack-factor-sm));
+  --jx-density-stack-gap-default: calc(var(--jx-unit) * var(--jx-density-stack-factor-default));
+  --jx-density-stack-gap-lg: calc(var(--jx-unit) * var(--jx-density-stack-factor-lg));
+
+  --jx-density-inline-inset-2xs: var(--jx-density-inline-gap-2xs);
+  --jx-density-inline-inset-xs: var(--jx-density-inline-gap-xs);
+  --jx-density-inline-inset-sm: var(--jx-density-inline-gap-sm);
+  --jx-density-inline-inset-default: var(--jx-density-inline-gap-default);
+  --jx-density-inline-inset-lg: var(--jx-density-inline-gap-lg);
+
+  --jx-density-content-gap-2xs: max(calc(var(--jx-unit) / 2), calc(var(--jx-density-stack-gap-2xs) / 2));
+  --jx-density-content-gap-xs: max(calc(var(--jx-unit) / 2), calc(var(--jx-density-stack-gap-xs) / 2));
+  --jx-density-content-gap-sm: max(calc(var(--jx-unit) / 2), calc(var(--jx-density-stack-gap-sm) / 2));
+  --jx-density-content-gap-default: max(calc(var(--jx-unit) / 2), calc(var(--jx-density-stack-gap-default) / 2));
+  --jx-density-content-gap-lg: max(calc(var(--jx-unit) / 2), calc(var(--jx-density-stack-gap-lg) / 2));
+
+  --jx-density-row-min-2xs: max(
+    calc(var(--jx-density-line-2xs) + var(--jx-density-stack-gap-2xs) + var(--jx-density-stack-gap-2xs)),
+    calc(var(--jx-unit) * var(--jx-density-row-floor-2xs))
+  );
+  --jx-density-row-min-xs: max(
+    calc(var(--jx-density-line-xs) + var(--jx-density-stack-gap-xs) + var(--jx-density-stack-gap-xs)),
+    calc(var(--jx-unit) * var(--jx-density-row-floor-xs))
+  );
+  --jx-density-row-min-sm: max(
+    calc(var(--jx-density-line-sm) + var(--jx-density-stack-gap-sm) + var(--jx-density-stack-gap-sm)),
+    calc(var(--jx-unit) * var(--jx-density-row-floor-sm))
+  );
+  --jx-density-row-min-default: max(
+    calc(var(--jx-density-line-default) + var(--jx-density-stack-gap-default) + var(--jx-density-stack-gap-default)),
+    calc(var(--jx-unit) * var(--jx-density-row-floor-default))
+  );
+  --jx-density-row-min-lg: max(
+    calc(var(--jx-density-line-lg) + var(--jx-density-stack-gap-lg) + var(--jx-density-stack-gap-lg)),
+    calc(var(--jx-unit) * var(--jx-density-row-floor-lg))
+  );
+
+  --jx-density-hit-min-2xs: max(var(--jx-density-row-min-2xs), var(--jx-hit-floor));
+  --jx-density-hit-min-xs: max(var(--jx-density-row-min-xs), var(--jx-hit-floor));
+  --jx-density-hit-min-sm: max(var(--jx-density-row-min-sm), var(--jx-hit-floor));
+  --jx-density-hit-min-default: max(var(--jx-density-row-min-default), var(--jx-hit-floor));
+  --jx-density-hit-min-lg: max(var(--jx-density-row-min-lg), var(--jx-hit-floor));
+
+  --jx-density-media-icon-2xs: var(--jx-density-line-2xs);
+  --jx-density-media-icon-xs: var(--jx-density-line-xs);
+  --jx-density-media-icon-sm: var(--jx-density-line-sm);
+  --jx-density-media-icon-default: var(--jx-density-line-default);
+  --jx-density-media-icon-lg: var(--jx-density-line-lg);
+  --jx-density-media-image-2xs: calc(var(--jx-density-line-2xs) * 2);
+  --jx-density-media-image-xs: calc(var(--jx-density-line-xs) * 2);
+  --jx-density-media-image-sm: calc(var(--jx-density-line-sm) * 2);
+  --jx-density-media-image-default: calc(var(--jx-density-line-default) * 2);
+  --jx-density-media-image-lg: calc(var(--jx-density-line-lg) * 2);
+
+  /* Secondary text stays a role, not a component literal. At 2xs it
+     DEGENERATES: max(0.625rem, 10px − 1px) = 10px = the primary size —
+     the role distinction collapses at its floor (differentiate by ink,
+     never by size, below xs). */
+  --jx-density-secondary-text-2xs: max(0.625rem, calc(var(--jx-density-text-2xs) - calc(var(--jx-unit) / 4)));
+  --jx-density-secondary-text-xs: max(0.625rem, calc(var(--jx-density-text-xs) - calc(var(--jx-unit) / 4)));
+  --jx-density-secondary-text-sm: max(0.625rem, calc(var(--jx-density-text-sm) - calc(var(--jx-unit) / 4)));
+  --jx-density-secondary-text-default: max(0.625rem, calc(var(--jx-density-text-default) - calc(var(--jx-unit) / 4)));
+  --jx-density-secondary-text-lg: max(0.625rem, calc(var(--jx-density-text-lg) - calc(var(--jx-unit) / 4)));
+  --jx-density-secondary-leading: 1.5;
+  --jx-density-secondary-line-2xs: calc(var(--jx-density-secondary-text-2xs) * var(--jx-density-secondary-leading));
+  --jx-density-secondary-line-xs: calc(var(--jx-density-secondary-text-xs) * var(--jx-density-secondary-leading));
+  --jx-density-secondary-line-sm: calc(var(--jx-density-secondary-text-sm) * var(--jx-density-secondary-leading));
+  --jx-density-secondary-line-default: calc(var(--jx-density-secondary-text-default) * var(--jx-density-secondary-leading));
+  --jx-density-secondary-line-lg: calc(var(--jx-density-secondary-text-lg) * var(--jx-density-secondary-leading));
+  --jx-icon-optical: 0px;
+}
+
+/* ── variant grammar (openspec/changes/variant-grammar, frozen r1) ─
+   The paint ladder's four global hue slots: fill (solid ground +
+   same-hue border), tonal (12%/45% tint recipe), outline (structural
+   border). Semantic color is INJECTED into these slots (action =
+   destructive, status = error/success/warning/info), never expressed
+   as variant names. Inheritable: a subtree or instance override
+   retunes every ladder consumer inside. Ghost has no slot — it
+   derives its hover tint from --jx-tonal. Density-free: color only.
+   THEME-SCOPED (Owner 2026-09-04, the canvas bug): custom properties
+   substitute their var() at the DECLARING element — a :root-only
+   declaration hands every descendant the root's already-substituted
+   value, so a scoped .dark/.jx-light (component-canvas stage,
+   terminal-card, print) redefining --border never flipped
+   --jx-outline with it. The selector list re-declares the slots ON
+   each theme scope, so the substitution re-runs against the scope's
+   own --primary/--border — one declaration point, zero duplicates. */
+:root,
+.jx-light,
+.dark {
+  --jx-fill: var(--primary);
+  --jx-fill-ink: var(--primary-foreground);
+  --jx-tonal: var(--primary);
+  --jx-outline: var(--border);
+}
+
+/* ── hue-injection utilities (openspec/changes/hue-injection-utilities,
+   2026-08-27) ──────────────────────────────────────────────────────
+   The grammar's intent layer, authored as TW4-native @utility rules
+   (declaration-equivalent to the arbitrary-property form — probed
+   via @tailwindcss/node candidatesToCss; orderings verified in the
+   built sheet on the resolved Tailwind 4.3.3):
+   installing this theme sheet IS installing the plugin — no JS, no
+   consumer setup. Canonical for the curated semantic set; the
+   arbitrary-property class remains the escape hatch for anything
+   else. Action/status split holds BY CONSTRUCTION: there is no
+   jx-hue-destructive (destructive is an ACTION — the pair below),
+   and the pair emits --jx-fill WITH --jx-fill-ink in one class, so
+   the always-inject-both law is structural, not documentation. */
+@utility jx-hue-primary { --jx-tonal: var(--primary); }
+@utility jx-hue-neutral { --jx-tonal: var(--muted-foreground); }
+@utility jx-hue-error { --jx-tonal: var(--error); }
+@utility jx-hue-success { --jx-tonal: var(--success); }
+@utility jx-hue-warning { --jx-tonal: var(--warning); }
+@utility jx-hue-info { --jx-tonal: var(--info); }
+@utility jx-pair-destructive {
+  --jx-fill: var(--destructive);
+  --jx-fill-ink: var(--destructive-foreground);
+}
+
+/* ── jx-html standard layer (native-contract-fusion V2 → css-laws V3,
+   2026-08-28) ──────────────────────────────────────────────────────
+   The native form-control laws are SINGLE-SOURCED as TS objects in
+   packages/css-laws/src/laws/*.ts. THREE projections are generated
+   between the markers below and in jx-pure.css:
+     utility — .jx-html-* classes here, @layer components (registry
+               markup consumes the classes; consumer utilities win
+               over law paint by layer order — the placement law)
+     face    — element-default rules in jx-pure.css Part B
+     alias   — Tier-2 opt-in classes in jx-pure.css Part A (unlayered)
+   Law composition happens in TS (composeLaw) — the @apply chain is
+   retired. DOM isomorphism (design §11.2) rides on top unchanged:
+   the switch is ONE input[role=switch] on both sides; the tgroup is
+   a subtree law over bare labels. ────────────────────────────── */
+
+/* @jixoai/css-laws:begin:jx-html-utility — GENERATED, do not edit (source: packages/css-laws/src/laws) */
+@layer components {
+.jx-html-input {
+  corner-shape: var(--corner-shape, bevel);
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: var(--jx-hit, 2.5rem);
+  padding-block: var(--jx-gap, 0.5rem);
+  padding-inline: var(--jx-inset, 0.75rem);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--shadow-well);
+  caret-color: var(--primary);
+  font: inherit;
+  font-size: var(--jx-text, 0.875rem);
+  line-height: var(--jx-leading, 1.45);
+  transition: box-shadow 150ms ease-out, border-color 150ms ease-out;
+}
+
+.jx-html-input::placeholder {
+  color: var(--jx-placeholder, color-mix(in oklab, var(--foreground) 40%, var(--background)));
+  opacity: 1;
+}
+
+.jx-html-input:hover:not(:disabled) {
+  box-shadow: var(--shadow-well-hover);
+}
+
+.jx-html-input:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+  border-color: var(--ring);
+}
+
+.jx-html-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jx-html-input[aria-invalid='true'] {
+  border-style: dashed;
+}
+
+.jx-html-input::-webkit-calendar-picker-indicator {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  width: 1.4em;
+  height: 1.4em;
+  margin-inline-start: var(--jx-gap, 0.5rem);
+  cursor: pointer;
+  background-image: var(--jx-icon-calendar, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3C/svg%3E"));
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.jx-html-input[type='time']::-webkit-calendar-picker-indicator {
+  background-image: var(--jx-icon-clock, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E"));
+}
+
+.jx-html-input[type='email'] {
+  padding-inline: calc(var(--jx-inset, 0.75rem) + 1.4em + var(--jx-gap, 0.5rem)) var(--jx-inset, 0.75rem);
+  background-image: var(--jx-icon-mail, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='20' height='16' x='2' y='4' rx='2'/%3E%3Cpath d='m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7'/%3E%3C/svg%3E"));
+  background-position: left var(--jx-inset, 0.75rem) center;
+  background-size: 1.4em;
+  background-repeat: no-repeat;
+}
+
+.jx-html-input[type='search'] {
+  padding-inline: calc(var(--jx-inset, 0.75rem) + 1.4em + var(--jx-gap, 0.5rem)) var(--jx-inset, 0.75rem);
+  background-image: var(--jx-icon-search, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E"));
+  background-position: left var(--jx-inset, 0.75rem) center;
+  background-size: 1.4em;
+  background-repeat: no-repeat;
+}
+
+.jx-html-input[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.4em;
+  height: 1.4em;
+  margin-inline-start: var(--jx-gap, 0.5rem);
+  cursor: pointer;
+  background-image: var(--jx-icon-clear, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E"));
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    .jx-html-input {
+      transition: none;
+    }
+  }
+
+.jx-html-textarea {
+  corner-shape: var(--corner-shape, bevel);
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: var(--jx-textarea-min, 5rem);
+  padding-block: var(--jx-gap, 0.5rem);
+  padding-inline: var(--jx-inset, 0.75rem);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--shadow-well);
+  caret-color: var(--primary);
+  font: inherit;
+  font-size: var(--jx-text, 0.875rem);
+  line-height: var(--jx-leading, 1.45);
+  transition: box-shadow 150ms ease-out, border-color 150ms ease-out;
+  height: auto;
+  resize: vertical;
+}
+
+.jx-html-textarea::placeholder {
+  color: var(--jx-placeholder, color-mix(in oklab, var(--foreground) 40%, var(--background)));
+  opacity: 1;
+}
+
+.jx-html-textarea:hover:not(:disabled) {
+  box-shadow: var(--shadow-well-hover);
+}
+
+.jx-html-textarea:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+  border-color: var(--ring);
+}
+
+.jx-html-textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jx-html-textarea[aria-invalid='true'] {
+  border-style: dashed;
+}
+
+.jx-html-textarea::-webkit-calendar-picker-indicator {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  width: 1.4em;
+  height: 1.4em;
+  margin-inline-start: var(--jx-gap, 0.5rem);
+  cursor: pointer;
+  background-image: var(--jx-icon-calendar, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3C/svg%3E"));
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.jx-html-textarea[type='time']::-webkit-calendar-picker-indicator {
+  background-image: var(--jx-icon-clock, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E"));
+}
+
+.jx-html-textarea[type='email'] {
+  padding-inline: calc(var(--jx-inset, 0.75rem) + 1.4em + var(--jx-gap, 0.5rem)) var(--jx-inset, 0.75rem);
+  background-image: var(--jx-icon-mail, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='20' height='16' x='2' y='4' rx='2'/%3E%3Cpath d='m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7'/%3E%3C/svg%3E"));
+  background-position: left var(--jx-inset, 0.75rem) center;
+  background-size: 1.4em;
+  background-repeat: no-repeat;
+}
+
+.jx-html-textarea[type='search'] {
+  padding-inline: calc(var(--jx-inset, 0.75rem) + 1.4em + var(--jx-gap, 0.5rem)) var(--jx-inset, 0.75rem);
+  background-image: var(--jx-icon-search, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E"));
+  background-position: left var(--jx-inset, 0.75rem) center;
+  background-size: 1.4em;
+  background-repeat: no-repeat;
+}
+
+.jx-html-textarea[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.4em;
+  height: 1.4em;
+  margin-inline-start: var(--jx-gap, 0.5rem);
+  cursor: pointer;
+  background-image: var(--jx-icon-clear, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E"));
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    .jx-html-textarea {
+      transition: none;
+    }
+  }
+
+.jx-html-select {
+  --jx-icon-chevron-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  corner-shape: var(--corner-shape, bevel);
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: var(--jx-hit, 2.5rem);
+  padding-block: var(--jx-gap, 0.5rem);
+  padding-inline: var(--jx-inset, 0.75rem);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--shadow-well);
+  caret-color: var(--primary);
+  font: inherit;
+  font-size: var(--jx-text, 0.875rem);
+  line-height: var(--jx-leading, 1.45);
+  transition: box-shadow 150ms ease-out, border-color 150ms ease-out;
+  cursor: pointer;
+  padding-inline-end: calc(var(--jx-inset, 0.75rem) + var(--jx-icon, 1.25rem));
+}
+
+.jx-html-select::placeholder {
+  color: var(--jx-placeholder, color-mix(in oklab, var(--foreground) 40%, var(--background)));
+  opacity: 1;
+}
+
+.jx-html-select:hover:not(:disabled) {
+  box-shadow: var(--shadow-well-hover);
+}
+
+.jx-html-select:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+  border-color: var(--ring);
+}
+
+.jx-html-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jx-html-select[aria-invalid='true'] {
+  border-style: dashed;
+}
+
+.jx-html-select::-webkit-calendar-picker-indicator {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  width: 1.4em;
+  height: 1.4em;
+  margin-inline-start: var(--jx-gap, 0.5rem);
+  cursor: pointer;
+  background-image: var(--jx-icon-calendar, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3C/svg%3E"));
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.jx-html-select[type='time']::-webkit-calendar-picker-indicator {
+  background-image: var(--jx-icon-clock, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E"));
+}
+
+.jx-html-select[type='email'] {
+  padding-inline: calc(var(--jx-inset, 0.75rem) + 1.4em + var(--jx-gap, 0.5rem)) var(--jx-inset, 0.75rem);
+  background-image: var(--jx-icon-mail, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='20' height='16' x='2' y='4' rx='2'/%3E%3Cpath d='m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7'/%3E%3C/svg%3E"));
+  background-position: left var(--jx-inset, 0.75rem) center;
+  background-size: 1.4em;
+  background-repeat: no-repeat;
+}
+
+.jx-html-select[type='search'] {
+  padding-inline: calc(var(--jx-inset, 0.75rem) + 1.4em + var(--jx-gap, 0.5rem)) var(--jx-inset, 0.75rem);
+  background-image: var(--jx-icon-search, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E"));
+  background-position: left var(--jx-inset, 0.75rem) center;
+  background-size: 1.4em;
+  background-repeat: no-repeat;
+}
+
+.jx-html-select[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.4em;
+  height: 1.4em;
+  margin-inline-start: var(--jx-gap, 0.5rem);
+  cursor: pointer;
+  background-image: var(--jx-icon-clear, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E"));
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    .jx-html-select {
+      transition: none;
+    }
+  }
+
+  @supports not selector(::-moz-range-progress) {
+    .jx-html-select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: var(--jx-icon-chevron, var(--jx-icon-chevron-svg));
+      background-position: right var(--jx-inset, 0.75rem) center;
+      background-size: var(--jx-icon, 1.25rem);
+      background-repeat: no-repeat;
+    }
+    .jx-html-select:hover:not(:disabled) {
+      filter: none;
+    }
+  }
+
+.jx-html-select:where([multiple], [size]) {
+  min-height: 5.75rem;
+  padding-block: 0.375rem 0.5rem;
+  cursor: default;
+  background-image: none;
+}
+
+.jx-html-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  width: var(--jx-icon, 1.25rem);
+  height: var(--jx-icon, 1.25rem);
+  margin: 0;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--background);
+  cursor: pointer;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+
+.jx-html-checkbox::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  display: block;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  background: var(--primary-foreground);
+  opacity: 0;
+  transform: rotate(45deg);
+  clip-path: polygon(20% 100%, 20% 80%, 50% 80%, 50% 80%, 70% 80%, 70% 100%);
+  transition: clip-path 150ms ease-out, opacity 150ms ease-out, transform 150ms ease-out;
+}
+
+.jx-html-checkbox:checked::before {
+  opacity: 1;
+  clip-path: polygon(20% 100%, 20% 80%, 50% 80%, 50% 0%, 70% 0%, 70% 100%);
+}
+
+.jx-html-checkbox:indeterminate::before {
+  opacity: 1;
+  transform: rotate(0deg);
+  clip-path: polygon(10% 40%, 10% 60%, 45% 60%, 55% 60%, 90% 60%, 90% 40%);
+}
+
+.jx-html-checkbox:hover:not(:checked):not(:disabled) {
+  border-color: var(--primary);
+}
+
+.jx-html-checkbox:checked, .jx-html-checkbox:indeterminate {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.jx-html-checkbox:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+
+.jx-html-checkbox:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jx-html-checkbox[aria-invalid='true'] {
+  border-style: dashed;
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    .jx-html-checkbox {
+      transition: none;
+    }
+    .jx-html-checkbox::before {
+      transition: none;
+    }
+  }
+
+.jx-html-radio {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  width: var(--jx-icon, 1.25rem);
+  height: var(--jx-icon, 1.25rem);
+  margin: 0;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--background);
+  cursor: pointer;
+  transition: border-color 150ms ease-out;
+}
+
+.jx-html-radio::before {
+  content: none;
+  position: absolute;
+  inset: 2px;
+  display: block;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  background: var(--primary-foreground);
+  opacity: 0;
+  transform: rotate(45deg);
+  clip-path: polygon(20% 100%, 20% 80%, 50% 80%, 50% 80%, 70% 80%, 70% 100%);
+  transition: clip-path 150ms ease-out, opacity 150ms ease-out, transform 150ms ease-out;
+}
+
+.jx-html-radio:checked::before {
+  opacity: 1;
+  clip-path: polygon(20% 100%, 20% 80%, 50% 80%, 50% 0%, 70% 0%, 70% 100%);
+}
+
+.jx-html-radio:indeterminate::before {
+  opacity: 1;
+  transform: rotate(0deg);
+  clip-path: polygon(10% 40%, 10% 60%, 45% 60%, 55% 60%, 90% 60%, 90% 40%);
+}
+
+.jx-html-radio::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  display: block;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  border-radius: 50%;
+  background: var(--primary);
+  transform: scale(0);
+  transition: transform 150ms ease-out;
+}
+
+.jx-html-radio:checked::after {
+  transform: scale(1);
+}
+
+.jx-html-radio:hover:not(:checked):not(:disabled) {
+  border-color: var(--primary);
+}
+
+.jx-html-radio:checked, .jx-html-radio:indeterminate {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.jx-html-radio:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+
+.jx-html-radio:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jx-html-radio[aria-invalid='true'] {
+  border-style: dashed;
+}
+
+.jx-html-radio:checked {
+  background: var(--background);
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    .jx-html-radio {
+      transition: none;
+    }
+    .jx-html-radio::before {
+      transition: none;
+    }
+  }
+
+.jx-html-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  position: relative;
+  width: var(--jx-toggle-width, 2.5rem);
+  height: var(--jx-toggle-track, 1.5rem);
+  margin: 0;
+  flex: none;
+  padding: calc((var(--jx-toggle-track, 1.5rem) - var(--jx-toggle-knob, 1rem)) / 2 - var(--jx-toggle-knob-border, 1px));
+  border: 0;
+  box-shadow: 0 0 0 1px var(--border) inset;
+  border-radius: calc(infinity * 1px);
+  background: var(--muted);
+  cursor: pointer;
+  transition: background-color 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.jx-html-switch::before {
+  content: '';
+  position: absolute;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  inset-block: calc((var(--jx-toggle-track, 1.5rem) - var(--jx-toggle-knob, 1rem)) / 2 - var(--jx-toggle-knob-border, 1px));
+  inset-inline-start: calc((var(--jx-toggle-track, 1.5rem) - var(--jx-toggle-knob, 1rem)) / 2 - var(--jx-toggle-knob-border, 1px));
+  inline-size: calc(var(--jx-toggle-knob, 1rem) + 2 * var(--jx-toggle-knob-border, 1px));
+  block-size: calc(var(--jx-toggle-knob, 1rem) + 2 * var(--jx-toggle-knob-border, 1px));
+  border-radius: calc(infinity * 1px);
+  border: var(--jx-toggle-knob-border, 1px) solid var(--jx-toggle-knob-border-color, var(--primary));
+  background: var(--background);
+  transform: translateX(0);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), background-color 200ms cubic-bezier(0.22, 1, 0.36, 1), border-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.jx-html-switch:checked::before {
+  transform: translateX(calc(var(--jx-toggle-width, 2.5rem) - var(--jx-toggle-track, 1.5rem)));
+  background: var(--primary-foreground);
+}
+
+.jx-html-switch:hover:not(:checked):not(:disabled) {
+  box-shadow: 0 0 0 1px var(--primary) inset;
+}
+
+.jx-html-switch:checked {
+  background: var(--primary);
+}
+
+.jx-html-switch:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+
+.jx-html-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    .jx-html-switch {
+      transition: none;
+    }
+    .jx-html-switch::before {
+      transition: none;
+    }
+  }
+
+.jx-html-range {
+  --jx-range-thumb: 100cqh;
+  --jx-range-track: calc(100cqh / 2.5);
+  --jx-range-ring: calc(100cqh / 8);
+  --jx-slider-fill-color: var(--primary);
+  --jx-range-length: calc(var(--jx-unit, 0.25rem) * 40);
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  display: block;
+  width: 100%;
+  height: var(--jx-icon, 1.5rem);
+  margin: 0;
+  border: 0;
+  border-radius: calc(infinity * 1px);
+  background: transparent;
+  container-type: size;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.jx-html-range::-webkit-slider-runnable-track {
+  height: var(--jx-range-track);
+  border-radius: calc(infinity * 1px);
+  background: var(--muted);
+}
+
+.jx-html-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  width: var(--jx-range-thumb);
+  height: var(--jx-range-thumb);
+  margin-top: calc((var(--jx-range-track) - var(--jx-range-thumb)) / 2);
+  border-radius: 50%;
+  border: var(--jx-range-ring) solid var(--primary);
+  background: var(--background);
+  box-shadow: calc(-100cqw - var(--jx-range-thumb) / 2) 0 0 100cqw var(--jx-slider-fill-color);
+}
+
+.jx-html-range:dir(rtl)::-webkit-slider-thumb {
+  box-shadow: calc(100cqw + var(--jx-range-thumb) / 2) 0 0 100cqw var(--jx-slider-fill-color);
+}
+
+.jx-html-range[orient="vertical"] {
+  --jx-range-thumb: 100cqw;
+  --jx-range-track: calc(100cqw / 2.5);
+  --jx-range-ring: calc(100cqw / 8);
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: var(--jx-icon, 1.5rem);
+  height: var(--jx-range-length);
+}
+
+.jx-html-range[orient="vertical"]::-webkit-slider-runnable-track {
+  width: var(--jx-range-track);
+  height: auto;
+  border-radius: calc(infinity * 1px);
+  background: var(--muted);
+}
+
+.jx-html-range[orient="vertical"]::-webkit-slider-thumb {
+  margin-top: 0;
+  margin-left: calc((var(--jx-range-track) - var(--jx-range-thumb)) / 2);
+  box-shadow: 0 calc(100cqh + var(--jx-range-thumb) / 2) 0 100cqh var(--jx-slider-fill-color);
+}
+
+.jx-html-range[orient="vertical"]:dir(rtl)::-webkit-slider-thumb {
+  box-shadow: 0 calc(100cqh + var(--jx-range-thumb) / 2) 0 100cqh var(--jx-slider-fill-color);
+}
+
+.jx-html-range[orient="vertical"]::-moz-range-track {
+  width: var(--jx-range-track);
+  height: auto;
+  border-radius: calc(infinity * 1px);
+  background: var(--muted);
+}
+
+.jx-html-range[orient="vertical"]::-moz-range-progress {
+  width: var(--jx-range-track);
+  height: auto;
+  border-radius: calc(infinity * 1px);
+  background: var(--jx-slider-fill-color);
+}
+
+.jx-html-range::-moz-range-track {
+  height: var(--jx-range-track);
+  border-radius: calc(infinity * 1px);
+  background: var(--muted);
+}
+
+.jx-html-range::-moz-range-progress {
+  height: var(--jx-range-track);
+  border-radius: calc(infinity * 1px);
+  background: var(--jx-slider-fill-color);
+}
+
+.jx-html-range::-moz-range-thumb {
+  box-sizing: border-box;
+  corner-shape: var(--corner-shape, bevel);
+  width: var(--jx-range-thumb);
+  height: var(--jx-range-thumb);
+  border-radius: 50%;
+  border: var(--jx-range-ring) solid var(--primary);
+  background: var(--background);
+}
+
+.jx-html-range:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.jx-html-range:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jx-html-color {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  width: calc(var(--jx-hit, 2.5rem) - 2px);
+  height: auto;
+  align-self: stretch;
+  flex: none;
+  padding: calc(var(--jx-hit, 2.5rem) / 6);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  corner-shape: round;
+  background: conic-gradient(from 0deg, #ff0000 0deg, #ffff00 60deg, #00ff00 120deg, #00ffff 180deg, #0000ff 240deg, #ff00ff 300deg, #ff0000 360deg);
+  cursor: pointer;
+}
+
+.jx-html-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.jx-html-color::-webkit-color-swatch {
+  border: 2px solid #FFF;
+  border-radius: 50%;
+  corner-shape: round;
+}
+
+.jx-html-color::-moz-color-swatch {
+  border: 0;
+  border-radius: 0;
+}
+
+.jx-html-tgroup {
+  corner-shape: var(--corner-shape, bevel);
+  display: inline-flex;
+  width: fit-content;
+  flex-wrap: wrap;
+  overflow: hidden;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: var(--shadow-2xs);
+}
+
+.jx-html-tgroup> label {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--jx-hit, 2.5rem);
+  padding-block: calc((var(--jx-hit, 2.5rem) - var(--jx-line, 1.25rem)) / 2);
+  padding-inline: var(--jx-inset, 0.75rem);
+  font-family: var(--font-nav);
+  font-size: var(--jx-text, 0.8125rem);
+  line-height: var(--jx-line, 1.25rem);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted-foreground);
+  background-color: transparent;
+  border-inline-end: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  transition: color 150ms ease-out, background-color 150ms ease-out;
+}
+
+.jx-html-tgroup> label:last-child {
+  border-inline-end: 0;
+}
+
+.jx-html-tgroup> label:not(:has(input:disabled)):hover {
+  color: var(--foreground);
+}
+
+.jx-html-tgroup> label:has(input:checked) {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.jx-html-tgroup> label:has(input:checked):not(:has(input:disabled)):hover {
+  color: var(--primary-foreground);
+}
+
+.jx-html-tgroup> label:has(input:focus-visible) {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+
+.jx-html-tgroup> label:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.jx-html-tgroup> label > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    .jx-html-tgroup> label {
+      transition: none;
+    }
+  }
+
+.jx-html-clear {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--jx-hit, 2.5rem);
+  min-height: var(--jx-hit, 2.5rem);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--jx-text, 0.875rem);
+  line-height: var(--jx-leading, 1.45);
+  cursor: pointer;
+}
+
+.jx-html-clear.jx-clear-glyph {
+  display: block;
+  width: 10px;
+  height: 10px;
+  background-color: currentColor;
+  -webkit-mask: var(--jx-icon-clear, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E")) center / contain no-repeat;
+  mask: var(--jx-icon-clear, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E")) center / contain no-repeat;
+}
+
+.jx-html-clear:hover {
+  color: var(--foreground);
+}
+
+.jx-html-clear:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+
+.jx-html-control {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: var(--jx-hit, 2.5rem);
+  padding: var(--jx-gap, 0.5rem) var(--jx-inset, 0.75rem);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--shadow-well);
+  caret-color: var(--primary);
+  font-size: var(--jx-text, 0.875rem);
+  color-scheme: light;
+  transition: box-shadow 150ms ease-out, border-color 150ms ease-out;
+}
+
+.jx-html-control::placeholder {
+  color: var(--jx-placeholder, color-mix(in oklab, var(--foreground) 40%, var(--background)));
+  opacity: 1;
+}
+
+.jx-html-control:hover {
+  box-shadow: var(--shadow-well-hover);
+}
+
+.jx-html-control:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+  border-color: var(--ring);
+}
+
+.jx-html-control:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jx-html-control[aria-invalid='true'] {
+  border-style: dashed;
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.jx-html-control[aria-invalid='false'] {
+  border-color: var(--primary);
+}
+
+.jx-html-control::-webkit-calendar-picker-indicator {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.4em;
+  height: 1.4em;
+  margin-inline-start: var(--jx-gap, 0.5rem);
+  cursor: pointer;
+  background-image: var(--jx-icon-calendar, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3C/svg%3E"));
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.jx-html-control[type='time']::-webkit-calendar-picker-indicator {
+  background-image: var(--jx-icon-clock, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E"));
+}
+
+.jx-html-control[type='email'] {
+  padding-inline-start: calc(var(--jx-inset, 0.75rem) + 1.4em + var(--jx-gap, 0.5rem));
+  background-image: var(--jx-icon-mail, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='20' height='16' x='2' y='4' rx='2'/%3E%3Cpath d='m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7'/%3E%3C/svg%3E"));
+  background-position: left var(--jx-inset, 0.75rem) center;
+  background-size: 1.4em;
+  background-repeat: no-repeat;
+}
+
+.jx-html-control[type='search'] {
+  padding-inline-start: calc(var(--jx-inset, 0.75rem) + 1.4em + var(--jx-gap, 0.5rem));
+  background-image: var(--jx-icon-search, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E"));
+  background-position: left var(--jx-inset, 0.75rem) center;
+  background-size: 1.4em;
+  background-repeat: no-repeat;
+}
+
+.jx-html-control[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.4em;
+  height: 1.4em;
+  margin-inline-start: var(--jx-gap, 0.5rem);
+  cursor: pointer;
+  background-image: var(--jx-icon-clear, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E"));
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    .jx-html-control {
+      transition: none;
+    }
+  }
+
+.jx-html-control-shell {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  min-height: var(--jx-hit, 2.5rem);
+  gap: var(--jx-gap, 0.5rem);
+  font-size: var(--jx-text, 0.875rem);
+  padding-inline: var(--jx-inset, 0.75rem);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--background);
+  box-shadow: var(--shadow-well);
+  transition: box-shadow 150ms ease-out, border-color 150ms ease-out;
+}
+
+.jx-html-control-shell:has(> .jx-html-clear:last-child) {
+  padding-inline-end: 0;
+}
+
+.jx-html-control-shell:hover {
+  box-shadow: var(--shadow-well-hover);
+}
+
+.jx-html-control-shell:has(:focus) {
+  border-color: var(--ring);
+}
+
+.jx-html-control-shell:has(:focus-visible) {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+
+.jx-html-control-shell:has([aria-invalid='true']), .jx-html-control-shell.jx-invalid {
+  border-style: dashed;
+}
+
+.jx-html-control-shell:has(:disabled) {
+  border-color: var(--muted);
+  cursor: not-allowed;
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    .jx-html-control-shell {
+      transition: none;
+    }
+  }
+
+.jx-html-control-lane {
+  flex: 1 1 auto;
+  min-height: calc(var(--jx-hit, 2.5rem) - 2px);
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  outline: none;
+  background: transparent;
+  color: var(--foreground);
+  caret-color: var(--primary);
+  font: inherit;
+  font-size: var(--jx-text, 0.875rem);
+}
+
+.jx-html-control-lane::placeholder {
+  color: var(--jx-placeholder, color-mix(in oklab, var(--foreground) 40%, var(--background)));
+  opacity: 1;
+}
+
+.jx-html-control-lane::-webkit-calendar-picker-indicator {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.4em;
+  height: 1.4em;
+  margin-inline-start: var(--jx-gap, 0.5rem);
+  cursor: pointer;
+  background-image: var(--jx-icon-calendar, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3C/svg%3E"));
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.jx-html-control-lane[type='time']::-webkit-calendar-picker-indicator {
+  background-image: var(--jx-icon-clock, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E"));
+}
+
+.jx-html-control-lane[type='email'] {
+  padding-inline-start: calc(1.4em + var(--jx-gap, 0.5rem));
+  background-image: var(--jx-icon-mail, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='20' height='16' x='2' y='4' rx='2'/%3E%3Cpath d='m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7'/%3E%3C/svg%3E"));
+  background-position: left 0 center;
+  background-size: 1.4em;
+  background-repeat: no-repeat;
+}
+
+.jx-html-control-lane[type='search'] {
+  padding-inline-start: calc(1.4em + var(--jx-gap, 0.5rem));
+  background-image: var(--jx-icon-search, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E"));
+  background-position: left 0 center;
+  background-size: 1.4em;
+  background-repeat: no-repeat;
+}
+
+.jx-html-control-lane[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.4em;
+  height: 1.4em;
+  margin-inline-start: var(--jx-gap, 0.5rem);
+  cursor: pointer;
+  background-image: var(--jx-icon-clear, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E"));
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+}
+/* @jixoai/css-laws:end:jx-html-utility */
+
+:where(:root:not([data-density]), [data-density='default']) {
+  --jx-text: var(--jx-density-text-default);
+  --jx-leading: var(--jx-density-leading-default);
+  --jx-line: var(--jx-density-line-default);
+  --jx-gap: var(--jx-density-inline-gap-default);
+  --jx-media-gutter: var(--jx-density-media-gutter-default);
+  --jx-gap-end: var(--jx-density-end-gap-default);
+  --jx-stack: var(--jx-density-stack-gap-default);
+  --jx-inset: var(--jx-density-inline-inset-default);
+  --jx-gap-content: var(--jx-density-content-gap-default);
+  --jx-row-min: var(--jx-density-row-min-default);
+  --jx-hit: var(--jx-density-hit-min-default);
+  --jx-icon: var(--jx-density-media-icon-default);
+  --jx-image: var(--jx-density-media-image-default);
+  --jx-text-secondary: var(--jx-density-secondary-text-default);
+  --jx-leading-secondary: var(--jx-density-secondary-leading);
+  --jx-line-secondary: var(--jx-density-secondary-line-default);
+  --jx-toggle-track: var(--jx-line);
+  --jx-toggle-width: calc(var(--jx-toggle-track) * 2);
+  --jx-toggle-knob: calc(var(--jx-toggle-track) - var(--jx-unit));
+  --jx-slider-track: max(var(--jx-unit), calc(var(--jx-line) / 2));
+  --jx-textarea-min: max(var(--jx-hit), calc(var(--jx-line) * 3 + var(--jx-stack) * 2 + 2px));
+  --jx-color-lane: max(var(--jx-hit), calc(var(--jx-icon) + var(--jx-inset) * 2 + 2px));
+}
+
+:where([data-density='xs']) {
+  --jx-text: var(--jx-density-text-xs);
+  --jx-leading: var(--jx-density-leading-xs);
+  --jx-line: var(--jx-density-line-xs);
+  --jx-gap: var(--jx-density-inline-gap-xs);
+  --jx-media-gutter: var(--jx-density-media-gutter-xs);
+  --jx-gap-end: var(--jx-density-end-gap-xs);
+  --jx-stack: var(--jx-density-stack-gap-xs);
+  --jx-inset: var(--jx-density-inline-inset-xs);
+  --jx-gap-content: var(--jx-density-content-gap-xs);
+  --jx-row-min: var(--jx-density-row-min-xs);
+  --jx-hit: var(--jx-density-hit-min-xs);
+  --jx-icon: var(--jx-density-media-icon-xs);
+  --jx-image: var(--jx-density-media-image-xs);
+  --jx-text-secondary: var(--jx-density-secondary-text-xs);
+  --jx-leading-secondary: var(--jx-density-secondary-leading);
+  --jx-line-secondary: var(--jx-density-secondary-line-xs);
+  --jx-toggle-track: var(--jx-line);
+  --jx-toggle-width: calc(var(--jx-toggle-track) * 2);
+  --jx-toggle-knob: calc(var(--jx-toggle-track) - var(--jx-unit));
+  --jx-slider-track: max(var(--jx-unit), calc(var(--jx-line) / 2));
+  --jx-textarea-min: max(var(--jx-hit), calc(var(--jx-line) * 3 + var(--jx-stack) * 2 + 2px));
+  --jx-color-lane: max(var(--jx-hit), calc(var(--jx-icon) + var(--jx-inset) * 2 + 2px));
+}
+
+:where([data-density='sm']) {
+  --jx-text: var(--jx-density-text-sm);
+  --jx-leading: var(--jx-density-leading-sm);
+  --jx-line: var(--jx-density-line-sm);
+  --jx-gap: var(--jx-density-inline-gap-sm);
+  --jx-media-gutter: var(--jx-density-media-gutter-sm);
+  --jx-gap-end: var(--jx-density-end-gap-sm);
+  --jx-stack: var(--jx-density-stack-gap-sm);
+  --jx-inset: var(--jx-density-inline-inset-sm);
+  --jx-gap-content: var(--jx-density-content-gap-sm);
+  --jx-row-min: var(--jx-density-row-min-sm);
+  --jx-hit: var(--jx-density-hit-min-sm);
+  --jx-icon: var(--jx-density-media-icon-sm);
+  --jx-image: var(--jx-density-media-image-sm);
+  --jx-text-secondary: var(--jx-density-secondary-text-sm);
+  --jx-leading-secondary: var(--jx-density-secondary-leading);
+  --jx-line-secondary: var(--jx-density-secondary-line-sm);
+  --jx-toggle-track: var(--jx-line);
+  --jx-toggle-width: calc(var(--jx-toggle-track) * 2);
+  --jx-toggle-knob: calc(var(--jx-toggle-track) - var(--jx-unit));
+  --jx-slider-track: max(var(--jx-unit), calc(var(--jx-line) / 2));
+  --jx-textarea-min: max(var(--jx-hit), calc(var(--jx-line) * 3 + var(--jx-stack) * 2 + 2px));
+  --jx-color-lane: max(var(--jx-hit), calc(var(--jx-icon) + var(--jx-inset) * 2 + 2px));
+}
+
+/* ── the 2xs scope (2026-09-05-density-2xs) — the pro-tool extreme.
+   The ONE scoped floor in the sheet (the canvas-bug law: custom
+   properties substitute their var() at the DECLARING element, so a
+   :root-only hit-min would hand descendants the root-substituted
+   28px whatever this scope says): the scope redeclares BOTH the
+   floor and the 2xs hit-min — inside it the guardrail is 6U = 24px,
+   the WCAG 2.5.8 AA minimum, the deliberate pro-pointer stance for
+   non-touch operation surfaces (the adoption law: opt-in only,
+   never default). Placement keeps the chrome scope pinned AFTER
+   every density scope (:where() source order). */
+:where([data-density='2xs']) {
+  --jx-hit-floor: calc(var(--jx-unit) * 6); /* scoped: 24px = WCAG 2.5.8 AA */
+  --jx-density-hit-min-2xs: max(var(--jx-density-row-min-2xs), var(--jx-hit-floor));
+  --jx-text: var(--jx-density-text-2xs);
+  --jx-leading: var(--jx-density-leading-2xs);
+  --jx-line: var(--jx-density-line-2xs);
+  --jx-gap: var(--jx-density-inline-gap-2xs);
+  --jx-media-gutter: var(--jx-density-media-gutter-2xs);
+  --jx-gap-end: var(--jx-density-end-gap-2xs);
+  --jx-stack: var(--jx-density-stack-gap-2xs);
+  --jx-inset: var(--jx-density-inline-inset-2xs);
+  --jx-gap-content: var(--jx-density-content-gap-2xs);
+  --jx-row-min: var(--jx-density-row-min-2xs);
+  --jx-hit: var(--jx-density-hit-min-2xs);
+  --jx-icon: var(--jx-density-media-icon-2xs);
+  --jx-image: var(--jx-density-media-image-2xs);
+  --jx-text-secondary: var(--jx-density-secondary-text-2xs);
+  --jx-leading-secondary: var(--jx-density-secondary-leading);
+  --jx-line-secondary: var(--jx-density-secondary-line-2xs);
+  --jx-toggle-track: var(--jx-line);
+  --jx-toggle-width: calc(var(--jx-toggle-track) * 2);
+  --jx-toggle-knob: calc(var(--jx-toggle-track) - var(--jx-unit));
+  --jx-slider-track: max(var(--jx-unit), calc(var(--jx-line) / 2));
+  --jx-textarea-min: max(var(--jx-hit), calc(var(--jx-line) * 3 + var(--jx-stack) * 2 + 2px));
+  --jx-color-lane: max(var(--jx-hit), calc(var(--jx-icon) + var(--jx-inset) * 2 + 2px));
+}
+
+/* ============================================================
+   The chrome scope (chrome-density-tier, 2026-08-26) — the
+   POINTER-MODALITY contract for bar/shell chrome, pinned AFTER the
+   density scopes (source order wins at :where()'s zero specificity).
+   Density is the CONTENT scale axis; chrome is the modality axis:
+   bezel chrome is pointer-first, high-frequency, dense — one 32px
+   band (hit = U×8), 16px action glyphs (icon = U×4), sm-tier text
+   and gaps. Pinning is ABSOLUTE (density-independent); aliases NOT
+   pinned here (row-min, secondary, toggle/slider lanes…) fall
+   through to the ambient density scope by inheritance — chrome
+   means a band, not a second scale. Control rows OUTSIDE a chrome
+   subtree keep the 44px touch floor untouched. Stamp data-jx-chrome
+   on chrome roots (the TerminalHeader bezel is the first stamper).
+   ============================================================ */
+:where([data-jx-chrome]) {
+  --jx-text: var(--jx-density-text-sm);
+  --jx-leading: var(--jx-density-leading-sm);
+  --jx-line: var(--jx-density-line-sm);
+  --jx-gap: var(--jx-density-inline-gap-sm);
+  --jx-stack: var(--jx-density-stack-gap-sm);
+  --jx-inset: var(--jx-density-inline-inset-sm);
+  --jx-hit: calc(var(--jx-unit) * 8);
+  --jx-icon: calc(var(--jx-unit) * 4);
+  --jx-image: calc(var(--jx-unit) * 8);
+}

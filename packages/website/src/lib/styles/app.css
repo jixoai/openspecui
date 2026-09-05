@@ -1,10 +1,97 @@
-@import '../../../../web/src/index.css';
+/*
+ * Orthogonal intents (updated 2026-09-06 Asia/Shanghai):
+ * 1. Site css entry: Tailwind v4 + the jixoai-theme registry token sheet
+ *    (`src/lib/jixoai.css`, jixoai-ui 0.3.0, --brand-hue: 27 — the site's
+ *    ONLY color source since 2026-09-06; the former
+ *    `@import '../../../../web/src/index.css'` palette borrow is retired).
+ * 2. Structural token supplements the registry sheet does not provide
+ *    (the Tailwind ladders: radius/shadow scale + --font-serif), kept
+ *    byte-parity with packages/web/src/index.css so project-owned
+ *    components keep their utilities instead of silently falling back
+ *    to Tailwind soft defaults.
+ * 3. Site-only surfaces: anchor smooth scroll, Shiki dual-theme coupling.
+ *
+ * Original request (2026-09-06): 官网接入 @jixoai registry（jixoai-ui 0.3.0）。
+ * The reveal section retired with the old IO action: entrances are the
+ * registry sheet's scroll-driven [data-reveal] CSS (static markup only).
+ */
+@import 'tailwindcss';
+@import '../jixoai.css';
 @source '../';
-@source '../../../../web/src';
 
-/* Anchor navigation (rail index, section links) matches the approved prototype's smooth scroll. */
-html {
-  scroll-behavior: smooth;
+/* ── Structural token supplements (registry gaps) ─────────────────────
+ * Everything the jixoai sheet owns (colors, fonts it maps, the 2xs…md
+ * hard-shadow rungs, --radius itself) stays in jixoai.css. These mirror
+ * packages/web/src/index.css exactly for rungs the registry dropped or
+ * never had; grep (2026-09-06) found no direct site consumers of the
+ * lg/xl/2xl shadows, the radius ladder or font-serif yet — they ship as
+ * insurance per the adoption spec so no utility can quietly degrade. */
+:root {
+  --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+  --shadow-lg: 4px 4px 0px 0px hsl(0 0% 0% / 1), 4px 4px 6px -1px hsl(0 0% 100% / 1);
+  --shadow-xl: 4px 4px 0px 0px hsl(0 0% 0% / 1), 4px 8px 10px -1px hsl(0 0% 100% / 1);
+  --shadow-2xl: 4px 4px 0px 0px hsl(0 0% 0% / 2.5);
+}
+.dark {
+  --shadow-lg: 4px 4px 0px 0px hsl(0 0% 100% / 1), 4px 4px 6px -1px hsl(0 0% 0% / 1);
+  --shadow-xl: 4px 4px 0px 0px hsl(0 0% 100% / 1), 4px 8px 10px -1px hsl(0 0% 0% / 1);
+  --shadow-2xl: 4px 4px 0px 0px hsl(0 0% 100% / 2.5);
+}
+
+/* Radius reset (registry gap, unipty precedent): jixoai.css maps --radius
+ * but owns no scale reset — without `--radius-*: initial` the rounded-*
+ * utilities silently fall back to Tailwind's soft default scale and break
+ * the radius-0 + bevel identity. The ladder then derives from the one
+ * --radius token (0px, bevel-upgraded to 8px where supported). */
+@theme inline {
+  --radius-*: initial;
+  --radius: var(--radius);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* 2xs…md shadow rungs are registry-mapped; lg/xl/2xl are the site
+   * supplement (the neubrutalism hard-shadow series above). */
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
+
+  --font-serif: var(--font-serif);
+
+  /* Explicit parity declaration with packages/web's sheet; value equals
+   * the Tailwind v4 default (no behavior change, documentation-only). */
+  --spacing: 0.25rem;
+}
+
+/* ── Base layer (parity with the pre-registry borrow from packages/web,
+ * plus the jixoai site-family focus/selection law) ──────────────────── */
+@layer base {
+  * {
+    @apply border-border;
+    corner-shape: bevel;
+    accent-color: var(--primary);
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-mono);
+  }
+  .font-nav {
+    font-family: var(--font-nav);
+  }
+  button {
+    cursor: pointer;
+  }
+  :where(a, button):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 30%, transparent);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -13,39 +100,10 @@ html {
   }
 }
 
-/*
- * Scroll reveal (2026-08-19): hidden only when JS is live, so prerendered and
- * no-JS output stays fully visible. Rules draw horizontally instead of rising.
- */
-html.js [data-reveal] {
-  opacity: 0;
-  transform: translateY(var(--reveal-rise, 10px));
-}
-html.js [data-reveal].is-revealed {
-  opacity: 1;
-  transform: none;
-  transition:
-    opacity 260ms ease-out var(--reveal-delay, 0ms),
-    transform 320ms cubic-bezier(0.22, 0.61, 0.36, 1) var(--reveal-delay, 0ms);
-}
-html.js [data-reveal='rule'] {
-  opacity: 1;
-  transform: scaleX(0);
-  transform-origin: left center;
-}
-html.js [data-reveal='rule'].is-revealed {
-  transform: scaleX(1);
-  transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0ms);
-}
-@media (prefers-reduced-motion: reduce) {
-  html.js [data-reveal],
-  html.js [data-reveal='rule'] {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-}
-
+/* ── Shiki dual-theme coupling (build-time highlight output) ───────────
+ * Highlighting itself is css-coupling-free (syntax-highlight.js); these
+ * rules only map the generated --shiki-light/dark variables onto the
+ * site theme. */
 .shiki-code .shiki {
   margin: 0;
   background-color: var(--shiki-light-bg);
