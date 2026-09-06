@@ -4,6 +4,9 @@ Orthogonal intents (updated 2026-09-06 Asia/Shanghai):
    theme-toggle) around the locale pages; header/footer/theme-switcher
    hand-rolled components retired with the registry adoption.
 2. Keep language-switcher project-owned (it rides the header switcher slot).
+3. Mobile-fit the switcher slot (2026-09-06 audit): compact icon theme
+   toggle below sm — the labeled full toggle + switcher + hamburger
+   overflowed the bar at ≤390px (hamburger clipped off-screen).
 
 Original request (2026-09-06): 官网接入 @jixoai registry（jixoai-ui 0.3.0）。
 -->
@@ -56,8 +59,20 @@ Original request (2026-09-06): 官网接入 @jixoai registry（jixoai-ui 0.3.0�
     </NavigationMenu>
 
     {#snippet switcher()}
+      <!-- Mobile audit fix (2026-09-06): the labeled `full` toggle + language
+           switcher + hamburger measured 365px of right-wing width — at 390px
+           and below the wing (flex-none) pushed the hamburger off-screen and
+           gave the document horizontal overflow. Below sm the wing carries the
+           compact `icon` toggle instead (the registry family form: one compact
+           control in the bar); the labeled segmented control returns ≥sm.
+           CSS-toggled twins — no JS breakpoint, no hydration flash. -->
       <div class="flex flex-wrap items-center gap-2">
-        <ThemeToggle variant="full" />
+        <span class="hidden sm:inline-flex">
+          <ThemeToggle variant="full" />
+        </span>
+        <span class="sm:hidden">
+          <ThemeToggle variant="icon" />
+        </span>
         <LanguageSwitcher {content} {lang} {pathname} />
       </div>
     {/snippet}
