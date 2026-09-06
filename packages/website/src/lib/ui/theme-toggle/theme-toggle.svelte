@@ -14,6 +14,19 @@
   bezel's currentColor color-mix paint rides arbitrary-value utilities;
   the segmented group's last-slot border and the data-active fill are
   JS-known, so conditional strings carry them.
+
+  Localization (2026-09-06, consumer-feedback-fixes P0-1): the mode
+  vocabulary is a presentation payload, not structure — the OPTIONAL
+  `labels` prop localizes the three mode labels and the full variant's
+  group aria name:
+
+    labels?: { light: string; dark: string; system: string;
+               groupAriaLabel?: string }
+
+  Absent → the English literals shipped to date, byte-identical render
+  and aria; present → labels + aria localize while the VALUE domain
+  (light/dark/system) and the localStorage "theme" contract stay
+  untouched (a zh page says 系统, the stored value stays `system`).
 -->
 <script lang="ts">
   import { icons } from '$lib/icons';
@@ -22,20 +35,41 @@
 
   type Theme = 'light' | 'dark' | 'system';
 
+  /** the localization payload: the three mode labels + the full
+   *  variant's group aria name (defaults = the English literals) */
+  export interface ThemeToggleLabels {
+    light: string;
+    dark: string;
+    system: string;
+    groupAriaLabel?: string;
+  }
+
   interface Props {
     variant?: ThemeToggleVariant;
     /** full variant only: hide the text labels, show icons alone. */
     hideLabels?: boolean;
+    /** localize the mode labels and the group aria name; absent =
+     *  English (the shipped defaults) — no behavioral change */
+    labels?: ThemeToggleLabels;
   }
 
-  let { variant, hideLabels = false }: Props = $props();
+  let { variant, hideLabels = false, labels = undefined }: Props = $props();
   // the family Defaults is the single read point (context-defaults-
   // economy 3.4): variant rides a literal slot (own 'compact', never
   // reads context — a structural selector, not a paint rung)
   const d = $derived(ThemeToggleDefaults.resolve({ variant }));
 
   const ORDER: Theme[] = ['light', 'dark', 'system'];
-  const LABEL: Record<Theme, string> = { light: 'light', dark: 'dark', system: 'system' };
+  // the resolved vocabulary: explicit labels over the English own — one
+  // spread inside $derived (a reactive labels swap re-resolves), the
+  // full three-key shape required so a partial localization cannot
+  // half-happen
+  const LABEL: Record<Theme, string> = $derived({
+    light: 'light',
+    dark: 'dark',
+    system: 'system',
+    ...labels,
+  });
 
   let current = $state<Theme>('system');
 
@@ -83,7 +117,7 @@
 {/snippet}
 
 {#if d.variant === 'full'}
-  <div data-jx-theme-segmented="" class="font-nav inline-flex" role="group" aria-label="Color theme">
+  <div data-jx-theme-segmented="" class="font-nav inline-flex" role="group" aria-label={labels?.groupAriaLabel ?? 'Color theme'}>
     {#each ORDER as theme, index (theme)}
       <button
         type="button"

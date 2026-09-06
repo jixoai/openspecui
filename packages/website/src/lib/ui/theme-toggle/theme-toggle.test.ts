@@ -2,12 +2,16 @@
  * Orthogonal intents (updated 2026-09-06 Asia/Shanghai):
  * 1. Verify the registry ThemeToggle drives the site theme contract
  *    (localStorage "theme", `.dark` class + colorScheme on the root).
+ * 2. Verify the zh localization payload (consumer-feedback-fixes P0-1
+ *    `labels` prop): labels + group aria localize while the stored value
+ *    stays the light/dark/system domain.
  *
  * Replaces the retired hand-rolled theme-switcher test with the same
  * three-state coverage against the @jixoai registry component
  * (2026-09-06 registry adoption).
  */
 import ThemeToggle from '$lib/ui/theme-toggle/theme-toggle.svelte'
+import { zh } from '$lib/i18n/locales/zh'
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -70,5 +74,19 @@ describe('ThemeToggle', () => {
     expect(window.localStorage.getItem('theme')).toBe('system')
     expect(document.documentElement).toHaveClass('dark')
     expect(document.documentElement.style.colorScheme).toBe('dark')
+  })
+
+  it('localizes zh labels and group aria while the stored value domain stays English', async () => {
+    render(ThemeToggle, { variant: 'full', labels: zh.theme })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '深色' })).toBeInTheDocument())
+    expect(screen.getByRole('group', { name: '颜色主题' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '浅色' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '跟随系统' })).toBeInTheDocument()
+
+    await fireEvent.click(screen.getByRole('button', { name: '深色' }))
+
+    expect(window.localStorage.getItem('theme')).toBe('dark')
+    expect(document.documentElement).toHaveClass('dark')
   })
 })

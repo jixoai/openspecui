@@ -31,7 +31,7 @@
 
 :root,
 .jx-light {
-  --brand-hue: 27; /* pre-JS flash value only — the live hue is wall-clock driven by hue-runtime. per-project defaults: unipty=165 幽绿, openspecui=27 */
+  --brand-hue: 27; /* the registry's own default (ui.jixoai.com pink) — for REGISTRY CONSUMERS this static value is the live one (jixoai-ui init --hue rewrites it); the wall-clock hue rotation is ui.jixoai.com's site-local hue-runtime script, never shipped to consumers. per-project values: unipty=165 幽绿, openspecui=27 */
 
   --background: oklch(1 0 0);
   --foreground: oklch(0 0 0);
