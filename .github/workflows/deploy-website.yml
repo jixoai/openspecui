@@ -1,0 +1,53 @@
+name: Deploy website
+
+# [cf-ci 2026-09-06] Cloudflare Pages deployment moves from manual
+# `cf:deploy` to CI. Same wrangler project (openspecui-website), token
+# auth via repo secrets (CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID —
+# Owner-configured 2026-09-06). Building in Actions keeps the pipeline
+# identical in shape to the family's other sites; the local cf:deploy
+# path remains as a manual fallback. Triggers: website-affecting pushes
+# to main + manual dispatch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/website/**
+      - .github/workflows/deploy-website.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-website
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.20.0"
+          cache: pnpm
+      - name: Install the website toolchain (filtered)
+        run: pnpm install --frozen-lockfile --filter @openspecui/website...
+      - name: Build the static site
+        run: pnpm --filter @openspecui/website run build
+      - name: Static checks (artifact shape)
+        run: |
+          dist=packages/website/dist
+          test -f "$dist/index.html"
+          test -f "$dist/en/index.html"
+          test -f "$dist/zh/index.html"
+          test -f "$dist/llms.txt"
+      - name: Deploy to Cloudflare Pages
+        run: >-
+          pnpm --filter @openspecui/website exec wrangler pages deploy dist
+          --project-name openspecui-website --branch main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
