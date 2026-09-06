@@ -24,4 +24,17 @@ describe('HookReference', () => {
 
     expect(screen.getByText('highlighted')).toBeVisible()
   })
+
+  it('wraps the example scroller in the edge-veil host', () => {
+    render(HookReference, {
+      hook: {
+        ...en.hooks.onReadDocument,
+        exampleHtml: '<pre class="shiki"><code>highlighted</code></pre>',
+      },
+    })
+
+    const host = document.querySelector('.code-veil-host')
+    expect(host).not.toBeNull()
+    expect(host?.querySelector('.shiki-code')).not.toBeNull()
+  })
 })
