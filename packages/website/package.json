@@ -12,7 +12,12 @@
     "cf:deploy": "pnpm build && wrangler pages deploy dist --project-name openspecui-website",
     "cf:project:create": "wrangler pages project create openspecui-website --production-branch main"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource/share-tech-mono": "^5.2.7",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.4.0"
+  },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.59.1",
@@ -26,7 +31,7 @@
     "shiki": "^3.17.0",
     "svelte": "^5.55.5",
     "svelte-check": "^4.4.8",
-    "typescript": "^5.7.2",
+    "typescript": "^5.9.3",
     "vite": "^8.0.0",
     "vitest": "^4.1.0",
     "wrangler": "^4.72.0"

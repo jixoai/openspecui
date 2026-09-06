@@ -1,0 +1,86 @@
+@layer theme, base, components, utilities;
+
+@layer components {
+/* jixoai popover — D1-exempt residue (tw4, 2026-08-24): panel anchor
+ * geometry only. Flush anchoring (Owner, 2026-08-23 r22): the adaptive
+ * shadow always falls to the OUTWARD side (away from the anchor), so
+ * the panel can hug the anchor directly — the gap default MUST stay 0
+ * here (a margin utility would beat the @supports viewport-center
+ * fallback's margin:auto in this same layer and break no-anchor
+ * engines). The anchor GAP (2026-08-26, Owner ruling): --jx-pop-gap
+ * carries a full margin shorthand — put the value on the side FACING
+ * the anchor ("8px 0 0 0" under a bottom placement) for a gap with
+ * flush inline alignment; a uniform value insets the alignment edges
+ * too. Known limit: position-try flips do NOT mirror element margins
+ * (Chromium, empirically pinned 2026-08-26) — a flipped state hugs
+ * flush again; per-flip gap fidelity would need @position-try
+ * candidates (margin is a legal descriptor), out of scope here.
+ * The scroll law's try-fallbacks + anchors-visible hide a panel whose
+ * anchor scrolled away. Trigger/caret/scroll paint lives in the
+ * markup. */
+.jx-pop {
+  position: fixed;
+  margin: var(--jx-pop-gap, 0px);
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  position-try: flip-block, flip-inline, flip-block flip-inline;
+  position-visibility: anchors-visible;
+  width: fit-content;
+  height: fit-content;
+  max-width: min(92vw, 22rem);
+  padding: 0;
+  font-size: 13px;
+  color: var(--popover-foreground);
+}
+/* Engines without the FULL anchored-positioning set: authored
+   viewport-center — the v1 visual, never worse. The check is JOINT
+   (Codex co-review 2026-08-26): anchor-name alone is true in engines
+   that still lack position-area/try (Safari 26 partial support), which
+   would skip this fallback and strand the panel; both legacy and
+   current area property names reset (the fallback used to reset only
+   inset-area). */
+@supports not (
+  (anchor-name: --jx-pop-fallback) and
+  (position-anchor: --jx-pop-fallback) and
+  (position-area: bottom) and
+  (position-try-fallbacks: flip-block)
+) {
+  .jx-pop {
+    position-anchor: auto !important;
+    inset-area: none !important;
+    position-area: none !important;
+    inset: 0;
+    margin: auto !important; /* the gap is meaningless at viewport-center */
+  }
+}
+/* Popovers get a ::backdrop too; light dismiss must never dim the page. */
+.jx-pop::backdrop {
+  background: transparent;
+}
+}
+
+/* ── UNLAYERED ───────────────────────────────────────────────────────
+ * CASCADE CARVE-OUT (P3 finding, 2026-08-24 — the Part A precedent):
+ * rules that must override the component's OWN utility paint (or the
+ * unlayered jx-surface law) cannot live under @layer components. They
+ * ride UNLAYERED behind :where() — zero specificity, so consumer css
+ * still ties-wins within the unlayered level. */
+
+/* the real .jx-pop-shadow child owns the shadow (the kernel animates it
+   in lockstep); the law's ::after fallback is disabled to avoid
+   painting both — natural specificity beats the unlayered
+   .jx-surface::after law ((0,2,1) > (0,1,1)) */
+.jx-pop.jx-surface::after {
+  content: none;
+}
+
+/* caret: flips while open via :has + ::popover-open (progressive —
+   engines without it simply keep the closed caret) */
+:where(.jx-pop-anchor:has(+ .jx-pop:popover-open)) .jx-pop-caret {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.jx-pop-caret) {
+    transition: none;
+  }
+}

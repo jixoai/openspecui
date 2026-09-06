@@ -8,7 +8,6 @@ Original request (2026-08-19): "RUN IT 这里也需要支持点击复制"
 Owner componentization correction (2026-08-19): "应该组件化就组件化" — command buttons come from the shared component.
 -->
 <script lang="ts">
-  import { reveal } from '$lib/actions/reveal'
   import CommandCopyButton from '$lib/components/home/command-copy-button.svelte'
   import { RUNNER_STORAGE_KEY } from '$lib/constants'
   import type { RunnerId, WebsiteContent } from '$lib/i18n/schema'
@@ -49,7 +48,7 @@ Owner componentization correction (2026-08-19): "应该组件化就组件化" �
   <div
     class="mx-auto grid w-full max-w-[90rem] gap-9 px-4 py-12 sm:px-6 min-[940px]:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] min-[940px]:items-start min-[940px]:gap-14 lg:px-8"
   >
-    <div use:reveal>
+    <div data-reveal="">
       <h2 class="font-nav text-lg uppercase tracking-[0.3em]">{content.run.title}</h2>
       <p class="mt-4 max-w-[46ch] text-sm leading-6 opacity-70">{content.run.summary}</p>
       <label
@@ -94,7 +93,7 @@ Owner componentization correction (2026-08-19): "应该组件化就组件化" �
         <p class="mt-3 text-[13px] leading-5 opacity-70">{content.run.serveWebSummary}</p>
       {/if}
     </div>
-    <div class="flex flex-col gap-5" use:reveal={{ delay: 90 }}>
+    <div class="flex flex-col gap-5" data-reveal="">
       <div>
         <p class="font-nav mb-2 text-[11px] tracking-[0.2em] opacity-60">
           <span class="text-primary">{'>_'}</span>

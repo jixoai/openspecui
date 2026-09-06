@@ -28,7 +28,7 @@
 <noscript>
   <main class="bg-terminal text-terminal-foreground grid min-h-dvh place-items-center px-4">
     <section
-      class="border-terminal-border bg-terminal-muted max-w-lg border p-6 text-center shadow-sm"
+      class="border-terminal-foreground/30 bg-terminal-muted max-w-lg border p-6 text-center shadow-sm"
     >
       <p class="font-nav text-primary text-[11px] uppercase tracking-[0.24em]">OpenSpec UI</p>
       <h1 class="font-nav mt-3 text-balance text-2xl tracking-tight">OpenSpec UI</h1>
@@ -37,7 +37,7 @@
       </p>
       <div class="mt-5 flex flex-wrap justify-center gap-3 text-sm">
         <a class="bg-primary text-primary-foreground px-3 py-2 font-medium" href="/en/">English</a>
-        <a class="border-terminal-border px-3 py-2 font-medium" href="/zh/">中文</a>
+        <a class="border-terminal-foreground/30 px-3 py-2 font-medium" href="/zh/">中文</a>
       </div>
     </section>
   </main>

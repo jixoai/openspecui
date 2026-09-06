@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import SectionCard from '$lib/components/section-card.svelte'
+  import SectionCard from '$lib/ui/section-card/section-card.svelte'
   import type { WebsiteContent, WebsiteLanguage } from '$lib/i18n/schema'
 
   interface Props {

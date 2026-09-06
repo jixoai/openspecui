@@ -1,0 +1,29 @@
+@layer theme, base, components, utilities;
+
+/* jixoai terminal-card — D1-exempt residue (tw4, 2026-08-24): ONLY the
+ * line-reveal state machine — the .jx-out/.jx-out-shown class pair and
+ * the reduced-motion kill. It repaints over the utility cascade
+ * (opacity/transform/transition), so it rides the UNLAYERED :where()
+ * carve-out (the toggle/Part A precedent). */
+
+:where(.jx-out) {
+  color: color-mix(in oklab, var(--terminal-foreground) 65%, transparent);
+  opacity: 0;
+  transform: translateY(5px);
+}
+:where(.jx-out-shown) {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 150ms ease-out,
+    transform 170ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.jx-out),
+  :where(.jx-out-shown) {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

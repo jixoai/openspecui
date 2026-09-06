@@ -23,7 +23,6 @@ const config = {
     }),
     alias: {
       '@/*': './src/*',
-      '@openspecui/web-src/*': '../web/src/*',
     },
   },
 }

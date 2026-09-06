@@ -1,0 +1,636 @@
+@layer theme, base, components, utilities;
+
+@layer components {
+/**
+ * jixoai website scaffold styles (registry/files/ui/website-scaffold.css).
+ * Import once per site alongside website-scaffold.svelte.
+ *
+ * Grid architecture (Owner + Codex review, 2026-08-23 — supersedes the
+ * 2026-08-21 absolute-overlay plane). THE container is .jx-shell-host;
+ * every form below is a container query on it, so the scaffold is
+ * embeddable and its layers can never desync from the pages they frame:
+ *
+ *   .jx-shell-host (container: jx-shell, inline-size)
+ *   .jx-shell      grid: columns per form, ONE row; both layers span
+ *                  everything (line placement, never areas — see the
+ *                  component header comment)
+ *   .jx-top-layer  column-subgrid + own rows/areas per form; chrome plane
+ *   .jx-shell-body spans the whole shell (grid-column 1 / -1 — no subgrid
+ *                  since the 2026-09-01 full-width+padding form; row-subgrid
+ *                  was disproven by a live Chromium test: tall main
+ *                  overflows the page track and overlaps the footer); the
+ *                  scroller; chrome reserved by padding driven by
+ *                  --jx-header-h (the one measurement)
+ *
+ * THE OVERLAY POINTER LAW (adjudicated D-1 fix, 2026-09-02): every
+ * overlay container is pointer-TRANSPARENT and only real content opts
+ * back in. The top layer and its slots are pointer-events:none; chrome
+ * children (header/toc/tree) opt in as whole surfaces, but a FLOAT
+ * wrapper never does — adopted float content re-enables pointers on
+ * its own interactive surface (the toast stack is pointer-events:none
+ * and its cards pointer-events:auto). An adopted float that covers
+ * the stage must never shield the page beneath it.
+ *
+ * SPA view-transition system (Plan A, 2026-08-21 — unchanged): the header
+ * band is "site-header" and persists; the ACTIVE nav pill is
+ * "vt-nav-active" and morphs between pages; the main column is
+ * "page-main" and slides with an asymmetric travel + blur + reveal mask;
+ * reduced motion degrades to a plain crossfade.
+ */
+
+/* ── the shell grid ── */
+:where(.jx-shell-host){
+  container-type: inline-size;
+  container-name: jx-shell;
+  block-size: 100vh;
+  block-size: 100dvh;
+  overflow: clip;
+}
+
+:where(.jx-shell){
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  block-size: 100%;
+
+  /* base form (<900): content only. Shared vars live here so both layers
+     and every descendant read ONE truth:
+     --jx-header-h     measured (scaffold script) — the header band height
+     --jx-chrome-bar   the single-row chrome bar height (toc top bar, tree
+                       bottom bar — Codex r2: one constant, no scattering)
+     --jx-chrome-top   extra chrome overlaying the body top (toc bar row)
+     --jx-chrome-bottom  bottom reservation clearing the tree bar (Codex
+                       r2 P1: without it the bar covers the footer links)
+     --jx-toc-line     where pinned chrome ends; consumed as the body's
+                       scroll-padding so anchor jumps land ON the line */
+  grid-template-columns: [content-start] minmax(0, 1fr) [content-end];
+  /* slot-aware side columns (Owner request, 2026-08-24): the rail/toc
+     tracks collapse to 0 when their chrome is absent (:has detects the
+     [data-area] node) — the content column expands, no dead side
+     whitespace. Track COUNT stays constant so the areas stay valid. */
+  --jx-rail-w: 0px;
+  --jx-toc-w: 0px;
+  /* header band height per form — the PRIMARY source (Codex firstpaint
+     ruling): measured collapsed heights 58px (<900) / 74px (>=900); the
+     scaffold script's RO only corrects deviations (disclosure open) */
+  --jx-header-h: 58px;
+  --jx-chrome-bar: 44px;
+  --jx-chrome-top: 0px;
+  --jx-chrome-bottom: 0px;
+  --jx-line-extra: 0px;
+  --jx-toc-line: calc(
+    var(--jx-header-h, 64px) + var(--jx-chrome-top) + var(--jx-line-extra)
+  );
+}
+/* a toc is adopted → the narrow form owes it the bar row and the
+   anchor line its extra breathing room */
+:where(.jx-shell:has(.jx-top-layer [data-area='toc'])){
+  --jx-chrome-top: 0px;
+  --jx-line-extra: 32px;
+}
+@container jx-shell (max-width: 899.9px) {
+  :where(.jx-shell:has(.jx-top-layer [data-area='toc'])){
+    --jx-chrome-top: var(--jx-chrome-bar);
+  }
+
+}
+/* a tree is adopted on the bar forms → the body clears its bottom bar
+   (the expanded panel is an overlay and needs no reservation) */
+@container jx-shell (max-width: 1199.9px) {
+  :where(.jx-shell:has(.jx-top-layer [data-area='tree'])){
+    --jx-chrome-bottom: calc(var(--jx-chrome-bar) + 0.75rem);
+  }
+
+}
+@container jx-shell (min-width: 900px) {
+  :where(.jx-shell){
+    grid-template-columns:
+      [content-start] minmax(0, 1fr) [content-end toc-start] var(--jx-toc-w) [toc-end];
+    --jx-header-h: 74px;
+  }
+  :where(.jx-shell:has(.jx-top-layer [data-area='toc'])){
+    --jx-toc-w: 15rem;
+  }
+
+}
+@container jx-shell (min-width: 1200px) {
+  :where(.jx-shell){
+    grid-template-columns:
+      [rail-start] var(--jx-rail-w) [rail-end content-start] minmax(0, 1fr)
+      [content-end toc-start] var(--jx-toc-w) [toc-end];
+  }
+  :where(.jx-shell:has(.jx-top-layer [data-area='tree'])){
+    --jx-rail-w: 16rem;
+  }
+
+}
+
+/* ── the chrome plane ── */
+:where(.jx-top-layer){
+  grid-row: 1;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+
+  /* base rows: header + tocbar (auto-sized: 0 when no toc is adopted) */
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    'header'
+    'tocbar'
+    'stage';
+  pointer-events: none;
+  z-index: 40;
+}
+@container jx-shell (min-width: 900px) {
+  :where(.jx-top-layer){
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'header header'
+      'stage toc';
+  }
+
+}
+@container jx-shell (min-width: 1200px) {
+  :where(.jx-top-layer){
+    grid-template-areas:
+      'header header header'
+      'tree stage toc';
+  }
+
+}
+:where(.jx-scaffold-header){
+  grid-area: header;
+  pointer-events: auto;
+}
+
+/* the static chrome slot and the dynamic float slot repeat the layer's
+   whole grid so their children land in named areas through [data-area]
+   roles. Static and dynamic NEVER mix (Codex firstpaint risk 3): the
+   ordered-adoption logic only ever touches .jx-float-slot's children. */
+:where(.jx-chrome-slot),
+:where(.jx-float-slot){
+  grid-row: 1 / -1;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-template-rows: subgrid;
+  pointer-events: none;
+}
+:where(.jx-chrome-slot > *),
+:where(.jx-float-slot > *){
+  pointer-events: auto;
+}
+/* …but the OVERLAY POINTER LAW stops the same grant at float wrappers
+   (adjudicated D-1 fix, 2026-09-02 — the P0 click shield): the float
+   plane's adopted [data-area='float'] node is pointer-TRANSPARENT;
+   the content inside opts back in where it is actually interactive
+   (the toast stack paints pointer-events:none, its cards auto). An
+   adopted float that covers the stage must never shield the page
+   beneath it. This rule MUST follow the generic child grant above —
+   equal :where() specificity, source order decides. */
+:where(.jx-float-slot > [data-area='float']){
+  pointer-events: none;
+}
+
+/* role → cell resolution (one role, many cells — never per-form JS) */
+:where(.jx-top-layer [data-area='toc']){
+  grid-area: tocbar;
+}
+@container jx-shell (min-width: 900px) {
+  :where(.jx-top-layer [data-area='toc']){
+    grid-area: toc;
+    align-self: start;
+    /* leave room for the tree bottom bar on the medium form */
+    max-height: calc(100% - 5rem);
+    overflow: hidden auto;
+    /* KNOWN COST (F-15, 2026-09-02): this scrollable interaction box
+       spans the rail's full inline size, INCLUDING the strip where the
+       body's own scrollbar rides (the 2026-09-01 full-width form moved
+       the page scrollbar to the viewport's right edge, under this
+       rail). Dragging the page scrollbar at the exact right edge
+       inside the toc's vertical extent must start above or below it.
+       Adjudicated: recorded, not yielded — a fixed inset yield would
+       guess the scrollbar width and break the rail's own edge. */
+  }
+
+}
+@container jx-shell (min-width: 1200px) {
+  :where(.jx-top-layer [data-area='toc']){
+    max-height: calc(100% - 1.25rem);
+  }
+
+}
+:where(.jx-top-layer [data-area='tree']){
+  grid-row: stage;
+  grid-column: 1 / -1;
+  align-self: end;
+}
+@container jx-shell (min-width: 1200px) {
+  :where(.jx-top-layer [data-area='tree']){
+    grid-area: tree;
+    align-self: start;
+  }
+
+}
+:where(.jx-top-layer [data-area='float']){
+  grid-area: stage;
+  /* content-sized at the stage's corner — the float wrapper NEVER
+     stretches over the stage: the adopted stack owns its own
+     geometry, so a stretched plane (and with it the stretched-card
+     defect) cannot exist by construction.
+     THE NINE SLOTS (Owner R3, 2026-09-02): data-float-pos names a
+     physical slot of the stage cell; the default is the BOTTOM-right
+     (place-self: end — the classic toast corner, sonner's default).
+     Slot names are physical words; place-self VALUES are logical, so
+     an RTL page mirrors the slot (left-top renders top-right) — the
+     same mirroring the pre-R3 single-corner rule had, kept honest
+     instead of physically pinned. */
+  place-self: end;
+}
+:where(.jx-top-layer [data-area='float'][data-float-pos='left-top']){
+  place-self: start start;
+}
+:where(.jx-top-layer [data-area='float'][data-float-pos='center-top']){
+  place-self: start center;
+}
+:where(.jx-top-layer [data-area='float'][data-float-pos='right-top']){
+  place-self: start end;
+}
+:where(.jx-top-layer [data-area='float'][data-float-pos='left-center']){
+  place-self: center start;
+}
+:where(.jx-top-layer [data-area='float'][data-float-pos='center-center']){
+  place-self: center;
+}
+:where(.jx-top-layer [data-area='float'][data-float-pos='right-center']){
+  place-self: center end;
+}
+:where(.jx-top-layer [data-area='float'][data-float-pos='left-bottom']){
+  place-self: end start;
+}
+:where(.jx-top-layer [data-area='float'][data-float-pos='center-bottom']){
+  place-self: end center;
+}
+/* right-bottom IS the default (place-self: end) — stated once above,
+   not duplicated here */
+
+/* ── the scrolling layer ──
+   The full-width + padding form (Owner experiment, 2026-09-01 —
+   supersedes the 2026-08-24 rev.3 content-cell ruling): the body
+   spans the WHOLE shell (1 / -1); the side reservations move from
+   grid tracks to PADDING, reading the same shared --jx-rail-w /
+   --jx-toc-w vars the tracks read (slot-aware: both collapse to 0
+   when their chrome is absent, so the <900 form keeps its full-width
+   body with no reservations). Pure CSS — the ONE truth stays the
+   shell's own custom properties, inherited by the body. Geometry is
+   byte-identical to the content-cell form: content box x/width equal
+   the old content column exactly; the difference is only the box the
+   SCROLLBAR rides — now the viewport's own right edge (the toc rail's
+   ground is transparent, so the strip stays visible through it). */
+:where(.jx-shell-body){
+  grid-row: 1;
+  grid-column: 1 / -1;
+  padding-inline-start: var(--jx-rail-w, 0px);
+  padding-inline-end: var(--jx-toc-w, 0px);
+  overflow-y: auto;
+  overscroll-behavior-y: none;
+  /* chrome reservation: header band (+ the narrow toc bar) on top; the
+     tree bottom bar's collapsed height at the end (Codex r2 P1: without
+     it the bar covers the footer). The grid supplies columns; rows stay
+     the body's own flow (row-subgrid is disproven — see the component
+     header comment) */
+  padding-block-start: calc(var(--jx-header-h, 64px) + var(--jx-chrome-top, 0px));
+  padding-block-end: var(--jx-chrome-bottom, 0px);
+  scroll-padding-block-start: var(--jx-toc-line, 96px);
+  scroll-behavior: smooth;
+}
+/* plain flow inside the scroller cell — the grid column placement is
+   the scroller's own job now */
+:where(.jx-shell-body > main),
+:where(.jx-shell-body > footer){
+  min-inline-size: 0;
+}
+
+/* ── immersive: per-zone transforms (ONE state, three zones) ──
+   The plane never moves; navigation chrome leaves, the reading state
+   compacts by exactly the header band (Owner ruling, 2026-08-23).
+   THE COMPACTION IS A GROWTH LAW (2026-09-05, the rail-bottom-gap
+   report): the rails' height CAPS grow by the same --jx-header-h the
+   transform surrenders — max-height + translate ride ONE transition,
+   so a cap-bound rail's bottom edge stays mathematically pinned
+   (height +74 cancels translateY −74) while its top follows the
+   departing header. Without the growth a full-height rail kept its
+   shown height and left a header-height hole at its foot. */
+:where(.jx-scaffold-header){
+  transition: transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+:where(.jx-top-layer [data-area='toc']),
+:where(.jx-top-layer [data-area='tree']){
+  transition:
+    transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    max-height 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+:where(.jx-shell-host[data-hidden] .jx-scaffold-header){
+  transform: translateY(-101%);
+}
+:where(.jx-shell-host[data-hidden] .jx-top-layer [data-area='toc']){
+  transform: translateY(calc(-1 * var(--jx-header-h, 64px)));
+}
+:where(.jx-shell-host[data-hidden] .jx-top-layer [data-area='tree']){
+  transform: translateY(100%);
+}
+/* the caps grow in their CONTAINER FORMS (where they are declared) */
+@container jx-shell (min-width: 900px) {
+  :where(.jx-shell-host[data-hidden] .jx-top-layer [data-area='toc']){
+    max-height: calc(100% - 5rem + var(--jx-header-h, 64px));
+  }
+
+}
+@container jx-shell (min-width: 1200px) {
+  :where(.jx-shell-host[data-hidden] .jx-top-layer [data-area='toc']){
+    max-height: calc(100% - 1.25rem + var(--jx-header-h, 64px));
+  }
+
+}
+/* the ARRIVAL pose (Owner polish ruling, 2026-08-26): a bottom bar
+   arriving with the page starts in its EXITED position — data-rail-away,
+   set by the site layout BEFORE the view transition (so the arriving
+   page never carries the bar through VT snapshots: top-layer, no
+   backdrop-filter) and dropped when the transition finishes. The SAME
+   transform + transition pair the scroll watcher drives through
+   data-hidden plays the entrance — one animation owner, so a scroll
+   interrupt mid-entrance retargets this transition instead of racing
+   a second animation. No opacity anywhere: an opacity tween would
+   break the bar's blur compositing like a snapshot layer does. */
+:where(.jx-shell-host[data-rail-away] .jx-top-layer [data-area='tree']){
+  transform: translateY(100%);
+}
+@container jx-shell (min-width: 1200px) {
+  /* the rail form is a persistent navigation surface (Owner ruling,
+     2026-08-24): it compacts under the departing header exactly like the
+     toc — it never leaves the screen */
+  :where(.jx-shell-host[data-hidden] .jx-top-layer [data-area='tree']){
+    transform: translateY(calc(-1 * var(--jx-header-h, 64px)));
+  }
+  /* the side form rides the VT slide — the arrival pose never applies
+     (also the mid-transition resize guard: a shell crossing 1200px
+     mid-entrance simply shows the rail) */
+  :where(.jx-shell-host[data-rail-away] .jx-top-layer [data-area='tree']){
+    transform: none;
+  }
+
+}
+
+:where(.jx-skip-link){
+  clip-path: inset(50%);
+  height: 1px;
+  left: 0;
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  width: 1px;
+  z-index: 100;
+}
+:where(.jx-skip-link:focus-visible){
+  clip-path: none;
+  height: auto;
+  width: auto;
+  padding: 0.5rem 0.75rem;
+  background: var(--background);
+  color: var(--foreground);
+  outline: 1px solid var(--border);
+  outline-offset: -1px;
+}
+
+:where(.jx-page-main){
+  view-transition-name: page-main;
+}
+:where(.jx-scaffold-header){
+  view-transition-name: site-header;
+}
+
+/* ── the nav indicator: morphs between pages, slowest layer ── */
+:where(html[data-vt-kind='page-carousel']::view-transition-group(vt-nav-active)){
+  z-index: 5;
+  animation-duration: 450ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  isolation: isolate;
+  overflow: clip;
+  /* the GROUP is the effect (Owner, 2026-08-21): with the snapshots
+     hidden, the morphing group box itself brightens whatever VT layer is
+     behind it — the persistent header with its pill text — instead of
+     painting an opaque rect over it. High stacking becomes harmless. */
+  -webkit-backdrop-filter: brightness(2);
+  backdrop-filter: brightness(2);
+}
+:where(html[data-vt-kind='page-carousel'][data-vt-nav='light']::view-transition-group(vt-nav-active)){
+  -webkit-backdrop-filter: brightness(0.85);
+  backdrop-filter: brightness(0.85);
+}
+:where(html[data-vt-kind='page-carousel']::view-transition-old(vt-nav-active)),
+:where(html[data-vt-kind='page-carousel']::view-transition-new(vt-nav-active)){
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  mix-blend-mode: normal;
+  opacity: 0;
+}
+
+/* ── the page panel: asymmetric slide + scale + blur + reveal mask ── */
+:where(html[data-vt-kind='page-carousel']::view-transition-group(page-main)){
+  z-index: 1;
+  isolation: isolate;
+  /* The group never tweens size/position (Owner, 2026-08-21): geometry is
+     fully owned by the old/new rules below — both snapshots share one box,
+     so there is nothing to interpolate and no vertical morph, ever. */
+  animation: none;
+}
+:where(html[data-vt-kind='page-carousel']::view-transition-old(page-main)),
+:where(html[data-vt-kind='page-carousel']::view-transition-new(page-main)){
+  /* Precise old/new geometry (Owner, 2026-08-21): both snapshots render in
+     ONE shared box — absolutely positioned at the group's origin, full
+     width, viewport height, pixels undistorted, top-aligned (no center
+     cropping, no stretch). Height therefore never animates because both
+     states are already identical; only the slide/blur/mask keyframes run
+     on these elements themselves. */
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  object-fit: none;
+  object-position: top left;
+  overflow: clip;
+  mix-blend-mode: normal;
+  mask-repeat: no-repeat;
+  mask-mode: alpha;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: 400% 100%;
+  mask-size: 400% 100%;
+}
+
+:where(html[data-vt-kind='page-carousel'][data-vt-direction='forward']::view-transition-old(page-main)){
+  -webkit-mask-image: linear-gradient(
+    to left,
+    black 0%,
+    black 25%,
+    transparent 75%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to left, black 0%, black 25%, transparent 75%, transparent 100%);
+  animation:
+    jx-page-old-forward 330ms cubic-bezier(0.4, 0, 0.2, 1) forwards,
+    jx-page-mask-forward-out 330ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+:where(html[data-vt-kind='page-carousel'][data-vt-direction='forward']::view-transition-new(page-main)){
+  -webkit-mask-image: linear-gradient(
+    to left,
+    black 0%,
+    black 25%,
+    transparent 75%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to left, black 0%, black 25%, transparent 75%, transparent 100%);
+  animation:
+    jx-page-new-forward 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards,
+    jx-page-mask-forward-in 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+:where(html[data-vt-kind='page-carousel'][data-vt-direction='backward']::view-transition-old(page-main)){
+  -webkit-mask-image: linear-gradient(
+    to right,
+    black 0%,
+    black 25%,
+    transparent 75%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to right, black 0%, black 25%, transparent 75%, transparent 100%);
+  animation:
+    jx-page-old-backward 330ms cubic-bezier(0.4, 0, 0.2, 1) forwards,
+    jx-page-mask-backward-out 330ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+:where(html[data-vt-kind='page-carousel'][data-vt-direction='backward']::view-transition-new(page-main)){
+  -webkit-mask-image: linear-gradient(
+    to right,
+    black 0%,
+    black 25%,
+    transparent 75%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to right, black 0%, black 25%, transparent 75%, transparent 100%);
+  animation:
+    jx-page-new-backward 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards,
+    jx-page-mask-backward-in 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* ── keyframes: asymmetric travel (in 136px, out 112px), scale, blur ── */
+@keyframes jx-page-new-forward{
+  from {
+    filter: blur(4px);
+    transform: translateX(136px) scale(0.985);
+  }
+  to {
+    filter: blur(0);
+    transform: translateX(0);
+  }
+}
+@keyframes jx-page-old-forward{
+  from {
+    transform: translateX(0);
+  }
+  to {
+    filter: blur(4px);
+    transform: translateX(-112px) scale(0.985);
+  }
+}
+@keyframes jx-page-new-backward{
+  from {
+    filter: blur(4px);
+    transform: translateX(-136px) scale(0.985);
+  }
+  to {
+    filter: blur(0);
+    transform: translateX(0);
+  }
+}
+@keyframes jx-page-old-backward{
+  from {
+    transform: translateX(0);
+  }
+  to {
+    filter: blur(4px);
+    transform: translateX(112px) scale(0.985);
+  }
+}
+
+/* ── mask travel: the soft reveal edge ── */
+@keyframes jx-page-mask-forward-in{
+  from {
+    -webkit-mask-position: 0%;
+    mask-position: 0%;
+  }
+  to {
+    -webkit-mask-position: 100%;
+    mask-position: 100%;
+  }
+}
+@keyframes jx-page-mask-forward-out{
+  from {
+    -webkit-mask-position: 100%;
+    mask-position: 100%;
+  }
+  to {
+    -webkit-mask-position: 0%;
+    mask-position: 0%;
+  }
+}
+@keyframes jx-page-mask-backward-in{
+  from {
+    -webkit-mask-position: 100%;
+    mask-position: 100%;
+  }
+  to {
+    -webkit-mask-position: 0%;
+    mask-position: 0%;
+  }
+}
+@keyframes jx-page-mask-backward-out{
+  from {
+    -webkit-mask-position: 0%;
+    mask-position: 0%;
+  }
+  to {
+    -webkit-mask-position: 100%;
+    mask-position: 100%;
+  }
+}
+
+/* Reduced motion: instant chrome swaps, plain crossfade pages. */
+@media (prefers-reduced-motion: reduce) {
+  :where(.jx-scaffold-header),
+:where(.jx-top-layer [data-area='toc']),
+:where(.jx-top-layer [data-area='tree']){
+    transition: none;
+  }
+  :where(.jx-shell-body){
+    scroll-behavior: auto;
+  }
+  :where(html[data-vt-kind='page-carousel']::view-transition-old(page-main)),
+:where(html[data-vt-kind='page-carousel']::view-transition-new(page-main)){
+    animation: 120ms ease-out both;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+  :where(html[data-vt-kind='page-carousel']::view-transition-old(page-main)){
+    to {
+      opacity: 0;
+    }
+  }
+  :where(html[data-vt-kind='page-carousel']::view-transition-new(page-main)){
+    from {
+      opacity: 0;
+    }
+  }
+
+}
+}

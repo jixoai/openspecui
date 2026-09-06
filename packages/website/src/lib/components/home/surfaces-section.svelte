@@ -7,7 +7,6 @@ Original request (2026-08-19): "THREE SURFACES 这里需要能支持点击复制
 Owner componentization correction (2026-08-19): "应该组件化就组件化" — command buttons and the section heading come from shared components.
 -->
 <script lang="ts">
-  import { reveal } from '$lib/actions/reveal'
   import CommandCopyButton from '$lib/components/home/command-copy-button.svelte'
   import SectionTitle from '$lib/components/home/section-title.svelte'
   import type { WebsiteContent } from '$lib/i18n/schema'
@@ -25,7 +24,7 @@ Owner componentization correction (2026-08-19): "应该组件化就组件化" �
     {#each content.surfaces.items as item, index (item.title)}
       <article
         class="flex flex-col gap-2.5 border-t border-border p-6 min-[940px]:border-t-0 min-[940px]:border-l min-[940px]:first:border-l-0"
-        use:reveal={{ delay: index * 70, rise: 12 }}
+        data-reveal="" style="--reveal-rise: 12px"
       >
         <div class="surface-numeral font-nav" aria-hidden="true">{`0${index + 1}`}</div>
         <h3 class="font-nav text-[19px]">{item.title}</h3>

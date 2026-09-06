@@ -1,0 +1,41 @@
+@layer theme, base, components, utilities;
+
+/* jixoai hero-section — D1-exempt residue (tw4, 2026-08-24): the rise
+ * keyframes (not expressible as utilities) and the reduced-motion kill
+ * (overrides the animate utility — unlayered carve-out; the skeleton
+ * pattern). The cascade itself rides the animate-[…] utility in the
+ * markup, delays through animation-delay arbitrary properties.
+ *
+ * The hero's entrance is a TIME-based cascade (Owner request,
+ * 2026-08-24 — after the scroll-driven era made above-fold content
+ * appear without any entrance): the old staggered reveal (0/60/120/
+ * 160/200/260ms, rise 12-14px) reborn as pure CSS. `backwards` holds
+ * the from-state through each delay; it plays at first paint — no JS,
+ * no hydration wait. Scroll-driven [data-reveal] is intentionally NOT
+ * used here: above-fold elements are past their entry range.
+ *
+ * composition-first-apis (2026-08-25): the title is caller-authored
+ * content, so its <em> accent paint lives here — a :where()
+ * components-layer descendant rule (the split-em styling the old
+ * titleLead/titleAccent props carried; consumer utilities still win
+ * by the layer law). */
+
+@keyframes jx-hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--jx-hero-rise, 10px));
+  }
+}
+
+@layer components {
+  :where([data-jx-hero-title]) em {
+    color: var(--primary);
+    font-style: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.jx-hero-step) {
+    animation: none;
+  }
+}

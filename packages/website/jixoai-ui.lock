@@ -1,0 +1,153 @@
+{
+  "items": {
+    "jixoai-theme": {
+      "files": {
+        "src/lib/jixoai.css": "66053c3cbc269f65d758d119252da2785294d78c75763ac5bf9e9f14ac6eea49"
+      }
+    },
+    "press-button": {
+      "files": {
+        "src/lib/ui/press-button/press-button.svelte": "abf06e74d1265f79c941717d2edf00be0269a8dffbb330c7f5821db692d1380e",
+        "src/lib/ui/press-button/index.ts": "71f9a43a19a774907a644efcda0ea9eb11a5d999ee00568748d24a73ce000e40",
+        "src/lib/ui/press-button/press-button.css": "77138cc5139190bc4db9f681f3f62b36435a90f8a21d8077792b23170936cff2",
+        "src/lib/ui/press-button/ripple.svelte.ts": "13f251a6416cc84835d0b1c7a93956e2b9d3467bb977df8ef88f233966524904",
+        "src/lib/ui/press-button/press-button-defaults.svelte.ts": "2b6ec3555115a23e9e6770d4e3129aa0b6221c2a70801fb76b60fd150472d949"
+      }
+    },
+    "website-scaffold": {
+      "files": {
+        "src/lib/ui/website-scaffold/website-scaffold.svelte": "4884372f209f575ee96373384c6773197c03c9209a943ef235618c8b41972d3b",
+        "src/lib/ui/website-scaffold/website-scaffold.css": "4813424a67d78951cea836f381a3dafe8b8d75ff1e7f58a0ab937a0193ac9add",
+        "src/lib/ui/website-scaffold/index.ts": "c3491fc0e2b51aef88cb06669a56511d3ff7678cda18cefb17c398e85e577f27"
+      }
+    },
+    "scrollbar-measure": {
+      "files": {
+        "src/lib/scrollbar-measure.ts": "ff8466abdb0f3809bb25c40676f9111203ed9d0b41c4db45bc46c458766009ae"
+      }
+    },
+    "llms-txt": {
+      "files": {
+        "vite-plugins/llms-txt.mjs": "fd95ec00ae49d7f763922b690161c95698e0f33b7e8339f03faeca79310938f8"
+      }
+    },
+    "terminal-header": {
+      "files": {
+        "src/lib/ui/terminal-header/terminal-header.svelte": "89546d30dfe2e3fc0a242737b5a05bf6ea65074e572f93e084ee5d8fa1673f47",
+        "src/lib/ui/terminal-header/index.ts": "e55c3c6983d34d278fbc09ed98fca3790608b2842d91f9fe12c039e266cc1718",
+        "src/lib/ui/terminal-header/terminal-header.css": "9d27280fa4d89f272ac079a72f313aa83d1d5b52b658e670503a1dc73e40739c"
+      }
+    },
+    "terminal-footer": {
+      "files": {
+        "src/lib/ui/terminal-footer/index.ts": "942cc89bc77bf5943e76003abdcf7dff402b93a9dbaafc0b98946c407c13faa3",
+        "src/lib/ui/terminal-footer/terminal-footer-column.svelte": "139cafa7410dacd20a7b297c77879315d1803bb311179a432c29f3a9ab9d548f",
+        "src/lib/ui/terminal-footer/terminal-footer.css": "bb9b29b1b946f01dac72e205a9abcffda9bc062fb9209099725fdf2f25b4733d",
+        "src/lib/ui/terminal-footer/terminal-footer.svelte": "7ae9ae32aed921b9d4f2fc9a2c95d79ea3df702c26fc8653a29bea45bbc548a1"
+      }
+    },
+    "theme-toggle": {
+      "files": {
+        "src/lib/ui/theme-toggle/theme-toggle.svelte": "f263d0672584a975bb64cd738249b15d22f0d40cef9c975757624978d06bd9a2",
+        "src/lib/ui/theme-toggle/index.ts": "01fb8895e16e5cc43f1ad86706818c11abaf83a75fc8abe8d1577e70a57f55a4",
+        "src/lib/ui/theme-toggle/theme-toggle-defaults.svelte.ts": "b77821cf5ffbc6d043ed0a900a907be3e136bcac435606512ac407f3399f15dd"
+      }
+    },
+    "terminal-card": {
+      "files": {
+        "src/lib/ui/terminal-card/terminal-card.svelte": "5d2508919ffc9d18ecf994d201c08c44856b998ccce2469af6e9f66a54a3e083",
+        "src/lib/ui/terminal-card/index.ts": "2997b40c4c5dca8b42de17435f4020c17313817e69fea12d2027a47b8a8d92ae",
+        "src/lib/ui/terminal-card/terminal-card.css": "08861119097435bc8a70f79cf612939752c16d1e2298ef994903901e23d9d316"
+      }
+    },
+    "section-card": {
+      "files": {
+        "src/lib/ui/section-card/section-card.svelte": "77b0bc0f99901acaf97e47d6ad1db5cbbe8e71910d783fd6f182d394f52f60b2",
+        "src/lib/ui/section-card/section-card.css": "738ff9b09cff59e11501d4a811f5a36738ac2f7670816d48f19cc304b8598087",
+        "src/lib/ui/section-card/index.ts": "12951780bf450291139cae8cd77c105f4fbb91573817920dda09238621c71343",
+        "src/lib/ui/section-card/section-card-defaults.svelte.ts": "402de935a76fae64c41b5c166de85abee1f108a8dd59264858b5d608bab9db2f"
+      }
+    },
+    "card-grid": {
+      "files": {
+        "src/lib/ui/card-grid/card-grid.svelte": "da9d5131a9d40c5e9571457a33e227b15a533ed962375d07ac04b1523008c239",
+        "src/lib/ui/card-grid/index.ts": "9af2bf660c21abb1db38c4c4c94efd308df2a773e1d6a400f0752bfd553e3fd6",
+        "src/lib/ui/card-grid/card-grid.css": "ba62cb2d71f3b63675f0fcd94c604a9e873271b20d57665ff4d99907ac864829"
+      }
+    },
+    "hero-section": {
+      "files": {
+        "src/lib/ui/hero-section/hero-section.css": "4524f9eedf9cb9aae1532816d9676e354c987b214a519e550b6f9c44bd6edc11",
+        "src/lib/ui/hero-section/hero-section.svelte": "cc2a28097b9bb53ac56de1ea01469d0069f8a23b9aa179c7a3b6b015bb5423bb",
+        "src/lib/ui/hero-section/index.ts": "87d5a050b2321516f2dc12b851afadd3b02ab1a9479d8cd7e6ddd436a064d450"
+      }
+    },
+    "utils": {
+      "files": {
+        "src/lib/utils.ts": "79167d4dc48ad045b3d6c70610409eb967adf60a293724228a11c5bd0ef042a4"
+      }
+    },
+    "icons": {
+      "files": {
+        "src/lib/icons.ts": "8c3444ed032f15fa527da9e5e01e74b7b7245238f405583e68d371a917bb7d5c"
+      }
+    },
+    "defaults": {
+      "files": {
+        "src/lib/defaults.svelte.ts": "ddefc3a69ebaa367ac81798348988a7eaa8f1a736be720895a2bc6af82d59582"
+      }
+    },
+    "density": {
+      "files": {
+        "src/lib/density.svelte.ts": "0918b62d4661521a9efbab35d27783d8de363a6f7aee086b41af1ec3a837e629"
+      }
+    },
+    "paint": {
+      "files": {
+        "src/lib/paint.svelte.ts": "bc69d1c591561038b37393a4955e55822b269e5602d602df0c63ffe8246a4ea3"
+      }
+    },
+    "context-plugin": {
+      "files": {
+        "src/lib/context-plugin.svelte.ts": "f0579853a19393e6e4bca9209b13d43d19bbf60b898fced7e431eda442af228e"
+      }
+    },
+    "separator": {
+      "files": {
+        "src/lib/ui/separator/separator.svelte": "f5c4f50af9ef8644063ecc0a719c6b20bc510b2c91e0697f1c9f397cd81a6306",
+        "src/lib/ui/separator/separator.css": "94c361c188516e3ed351b7b8e7d4c2c9bb00d51958d746572066b83f605e5ccb",
+        "src/lib/ui/separator/index.ts": "1e1322dcd7f13d0645b237e20759a373bc8055c3b2a4a36172adac7f370b95f3",
+        "src/lib/ui/separator/separator-defaults.svelte.ts": "2e0da5c89fdde91f43f787e9617b76ab4131ac5ed8c56f28446bc34a5075564f"
+      }
+    },
+    "figure": {
+      "files": {
+        "src/lib/ui/figure/figure.svelte": "b494f07d5bd003a772d09a4c1ee4fd9bb068f3a4dc3fb1851e57c6f8b7c3262d",
+        "src/lib/ui/figure/numbering.svelte.ts": "34aebd37ebd8196a6826875e859adf4889f9ebf0df6666b544dc7ec7d9e7c125",
+        "src/lib/ui/figure/numbering-provider.svelte": "382e0470eb16e105d48f11fb6ce6dc6b7864c720cc94476e7d2e345e999b352c",
+        "src/lib/ui/figure/index.ts": "e125cd52d3079e72998d730525d9054e7711bd1301339c3beecdc5f4c72beec1"
+      }
+    },
+    "navigation-menu": {
+      "files": {
+        "src/lib/ui/navigation-menu/navigation-menu-indicator.svelte": "fea2aba3a89925ab7989f6f393ae1bfb2291a67645f3182150a29ce6a1254019",
+        "src/lib/ui/navigation-menu/index.ts": "558123109c2e9e008493ca2117acbe6e374072678a1aa8e8ca19b36567eabbf3",
+        "src/lib/ui/navigation-menu/navigation-menu-item.svelte": "bf7ff265b7671ae61fac15fd8da5448edc84f73d344951d68db1bda4b73788fb",
+        "src/lib/ui/navigation-menu/navigation-menu-link.svelte": "7a34cb39e1f43ed596a19bd06c01af90c4abdc0cd00b7e1fc123ea64a9892278",
+        "src/lib/ui/navigation-menu/navigation-menu-panel.svelte": "5bd076120a9d02573391f5d80c9ae6d4c090e09353f23e5fa6920842f32bbcce",
+        "src/lib/ui/navigation-menu/navigation-menu-trigger.svelte": "ff5aab083e50ae173ea56221307fc3f40b33e54b09192e252d4e0ef2f2649cf9",
+        "src/lib/ui/navigation-menu/navigation-menu.svelte": "a94ba67f6770979543b268f414d945db37e79d28075490bed0b7c0bb972d007c",
+        "src/lib/ui/navigation-menu/navigation-menu-defaults.svelte.ts": "3e925b11cc0645a1c6bfd8d847e40ceadfdc0fafd471a1597cbb3240b14ef0f1"
+      }
+    },
+    "popover": {
+      "files": {
+        "src/lib/ui/popover/popover.svelte": "5b015eaf0834e8a0574fa1e9e9b9da47650d743186e124a627ce3e8a875c9843",
+        "src/lib/ui/popover/index.ts": "6a8ca88d52be7beb9eb8697115d44995d9755be266dfdbe1ae002b0013778a75",
+        "src/lib/ui/popover/popover.css": "979953090c19c73df8a210fa40ea77112a475b6dbe264bd9d6653b35e1818708",
+        "src/lib/surface-motion.ts": "67865ab34c210fb5f30f9128bb5940272dae067668d8cd86e96a757759694aa0",
+        "src/lib/ui/popover/popover-defaults.svelte.ts": "9b7aeffabd4c2772b870744b8442fe9700493d26880718fb9515fe5d37e6ad97"
+      }
+    }
+  }
+}

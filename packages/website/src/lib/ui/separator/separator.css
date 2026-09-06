@@ -1,0 +1,126 @@
+/*
+ * jixoai separator — the ink engine (2026-09-01, Owner ruling).
+ * ONE ink, two engines, six geometries; zero color tokens:
+ *
+ *   contrast ghost (default)  backdrop-filter: contrast(0.5) — the
+ *     backdrop's own tonal shift, auto-adaptive over any ground. The
+ *     shaped variants are MASKS over this strip (a mask shapes the
+ *     element, and backdrop-filter only paints where the element
+ *     paints): dashed 6/4, dense 3/3, a dotted chain, an SVG wave.
+ *   blend fade  an alpha-ramped white gradient under
+ *     mix-blend-mode: difference — the backdrop inverts toward mid
+ *     proportionally to alpha: transparent → light → dark → light →
+ *     transparent, visible on any ground without a single color.
+ *     PEAK ALPHA is capped at 0.6 (2026-09-02): a white difference
+ *     layer dead-centers exactly at a 50% backdrop (Co = Cb for ANY
+ *     alpha there — the engine's one blind spot), and a 0.9 peak
+ *     slammed the ramp's bright/dark ends to near-full inversion
+ *     (0.98 ground → 0.12 output). The softer peak keeps the band a
+ *     tonal shift, not a black slash; the exact-mid dip is inherent
+ *     to colorless ink and documented, not fixable by alpha.
+ *
+ * Orientation swaps the mask AXIS (vertical reads top-to-bottom);
+ * everything rides :where() so consumer utilities always win.
+ */
+@layer theme, base, components, utilities;
+
+@layer components {
+  /* ── the base strip: the contrast ghost ── */
+  :where([data-jx-separator][data-orientation='horizontal']) {
+    inline-size: 100%;
+    block-size: 1px;
+    backdrop-filter: contrast(0.5);
+  }
+  :where([data-jx-separator][data-orientation='vertical']) {
+    inline-size: 1px;
+    backdrop-filter: contrast(0.5);
+  }
+
+  /* ── dashed (6 on / 4 off) ── */
+  :where([data-jx-separator='dashed'][data-orientation='horizontal']) {
+    mask-image: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 10px);
+    -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 10px);
+  }
+  :where([data-jx-separator='dashed'][data-orientation='vertical']) {
+    mask-image: repeating-linear-gradient(180deg, #000 0 6px, transparent 6px 10px);
+    -webkit-mask-image: repeating-linear-gradient(180deg, #000 0 6px, transparent 6px 10px);
+  }
+
+  /* ── dense (3 on / 3 off) ── */
+  :where([data-jx-separator='dense'][data-orientation='horizontal']) {
+    mask-image: repeating-linear-gradient(90deg, #000 0 3px, transparent 3px 6px);
+    -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 3px, transparent 3px 6px);
+  }
+  :where([data-jx-separator='dense'][data-orientation='vertical']) {
+    mask-image: repeating-linear-gradient(180deg, #000 0 3px, transparent 3px 6px);
+    -webkit-mask-image: repeating-linear-gradient(180deg, #000 0 3px, transparent 3px 6px);
+  }
+
+  /* ── dotted: a chain of round dots (2px lanes) ── */
+  :where([data-jx-separator='dotted'][data-orientation='horizontal']) {
+    block-size: 2px;
+    mask-image: radial-gradient(circle 1px at 1px 1px, #000 99%, transparent 100%);
+    -webkit-mask-image: radial-gradient(circle 1px at 1px 1px, #000 99%, transparent 100%);
+    mask-size: 5px 2px;
+    -webkit-mask-size: 5px 2px;
+    mask-repeat: repeat-x;
+    -webkit-mask-repeat: repeat-x;
+  }
+  :where([data-jx-separator='dotted'][data-orientation='vertical']) {
+    inline-size: 2px;
+    mask-image: radial-gradient(circle 1px at 1px 1px, #000 99%, transparent 100%);
+    -webkit-mask-image: radial-gradient(circle 1px at 1px 1px, #000 99%, transparent 100%);
+    mask-size: 2px 5px;
+    -webkit-mask-size: 2px 5px;
+    mask-repeat: repeat-y;
+    -webkit-mask-repeat: repeat-y;
+  }
+
+  /* ── wavy: an SVG sine mask (6px lanes) ── */
+  :where([data-jx-separator='wavy'][data-orientation='horizontal']) {
+    block-size: 6px;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6'%3E%3Cpath d='M0 3 Q3 .4 6 3 T12 3' fill='none' stroke='black' stroke-width='1.3'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6'%3E%3Cpath d='M0 3 Q3 .4 6 3 T12 3' fill='none' stroke='black' stroke-width='1.3'/%3E%3C/svg%3E");
+    mask-size: 12px 6px;
+    -webkit-mask-size: 12px 6px;
+    mask-repeat: repeat-x;
+    -webkit-mask-repeat: repeat-x;
+  }
+  :where([data-jx-separator='wavy'][data-orientation='vertical']) {
+    inline-size: 6px;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='12'%3E%3Cpath d='M3 0 Q.4 3 3 6 T3 12' fill='none' stroke='black' stroke-width='1.3'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='12'%3E%3Cpath d='M3 0 Q.4 3 3 6 T3 12' fill='none' stroke='black' stroke-width='1.3'/%3E%3C/svg%3E");
+    mask-size: 6px 12px;
+    -webkit-mask-size: 6px 12px;
+    mask-repeat: repeat-y;
+    -webkit-mask-repeat: repeat-y;
+  }
+
+  /* ── fade: the blend engine (no filter, no mask) — the backdrop
+     inverts toward mid proportionally to the gradient's alpha; peak
+     capped at 0.6 (the header documents the exact-mid blind spot) ── */
+  :where([data-jx-separator='fade'][data-orientation='horizontal']) {
+    backdrop-filter: none;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(255 255 255 / 0.35) 30%,
+      rgb(255 255 255 / 0.6) 50%,
+      rgb(255 255 255 / 0.35) 70%,
+      transparent
+    );
+    mix-blend-mode: difference;
+  }
+  :where([data-jx-separator='fade'][data-orientation='vertical']) {
+    backdrop-filter: none;
+    background: linear-gradient(
+      180deg,
+      transparent,
+      rgb(255 255 255 / 0.35) 30%,
+      rgb(255 255 255 / 0.6) 50%,
+      rgb(255 255 255 / 0.35) 70%,
+      transparent
+    );
+    mix-blend-mode: difference;
+  }
+}
