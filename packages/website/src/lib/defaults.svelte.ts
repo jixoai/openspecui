@@ -99,11 +99,13 @@ export function defineAxisSlot<T>(
 ): DefaultsSlot<T> {
   const silentAmbient = (): T | undefined => undefined;
   const slot = (explicit: T | undefined): T => resolve(explicit, silentAmbient);
-  // (site patch, 2026-09-06): TS 5.9 widens the computed unique-symbol key
-  // inside Object.assign's inferred type AND rejects every carrier cast to
-  // the branded shape (specific symbol prop vs symbol index signature), so
-  // the brand lands through Object.defineProperty — same runtime result,
-  // no cast (openspecui website svelte-check gate).
+  // the brand lands through Object.defineProperty (TS 5.9,
+  // consumer-feedback-fixes P1-4): the computed unique-symbol key
+  // widens inside Object.assign's inferred type (it types as a string
+  // index, not the specific symbol prop), so the branded result cannot
+  // be asserted back to DefaultsSlot — defineProperty stamps the same
+  // field with identical runtime effect (the brand is read by type only;
+  // nothing enumerates the slot)
   const branded = slot as DefaultsSlot<T>;
   Object.defineProperty(branded, SLOT_BRAND, { value: 'defaults-slot' });
   Object.defineProperty(branded, 'name', { value: name });
@@ -216,8 +218,9 @@ export function defineComponentDefaults<S extends Record<string, AnyBrandedSlot>
     resolve(partial) {
       const resolved = {} as { [K in keyof S]: ReturnType<S[K]> };
       for (const key of Object.keys(slots) as (keyof S & string)[]) {
-        // (site patch, 2026-09-06): double cast — the slot's contravariant
-        // parameter fails TS 5.9's single-assertion overlap check
+        // double assertion (TS 5.9): the slot's contravariant parameter
+        // fails the single-assertion overlap check — through unknown the
+        // callable shape is recovered without weakening DefaultsSlot
         const slot = slots[key] as unknown as (explicit: unknown) => unknown;
         resolved[key] = slot(partial[key]) as {
           [K in keyof S]: ReturnType<S[K]>;

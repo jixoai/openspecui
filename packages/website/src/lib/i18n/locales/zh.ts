@@ -32,6 +32,15 @@ export const zh = {
     label: '复制',
     done: '已复制',
   },
+  /** Registry theme-toggle labels (consumer-feedback-fixes P0-1): zh 页以中文
+   *  呈现模式词汇，en 省略本块、渲染 registry 英文默认值；存储值始终是
+   *  light/dark/system，不随本地化变化。 */
+  theme: {
+    light: '浅色',
+    dark: '深色',
+    system: '跟随系统',
+    groupAriaLabel: '颜色主题',
+  },
   hero: {
     eyebrow: 'OPENSPECUI 9 — OPENSPEC 的可视化投影',
     titleLead: '操作 OpenSpec，让 UI 始终',

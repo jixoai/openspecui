@@ -91,25 +91,27 @@ applied) plus SITE SUPPLEMENTS only:
   `data-reveal="rule"` attributes). The bootstrap's `root.js` class
   stays — card-grid's entrance keys on it.
 
-### Local patches to registry files (upstream-fix candidates)
+### Local patches to registry files — SUPERSEDED (2026-09-06, consumer-feedback-fixes)
 
-Four registry files carry small `(site patch, 2026-09-06)` markers —
-mechanical, semantics-neutral TypeScript 5.9 fixes that the registry's
-own mirror app never surfaces (it runs no svelte-check):
+The four formerly site-patched files (three TS 5.9 patches + the
+hue-applied `jixoai.css`) were superseded by the registry's
+`consumer-feedback-fixes` release: `jixoai-ui upgrade` (2026-09-06)
+reported `updated 7, unchanged 54` and wrote the canonical versions —
+upstream adopted the same mechanical TS 5.9 fixes (carrier casts in
+`src/lib/context-plugin.svelte.ts`, `Object.defineProperty` brand in
+`src/lib/defaults.svelte.ts`, `flat`-below-`resolvedRaised` reorder in
+`src/lib/ui/press-button/press-button.svelte`; comments cite
+`consumer-feedback-fixes P1-4`). Zero `(site patch, …)` markers remain;
+svelte-check reports the same 0 errors / 3 registry-file warnings as
+main-with-patches. The other updated items: `theme-toggle.svelte`
+(optional `labels` prop — see Theme contract), `hero-section.svelte`
+(`copyCommand` snippet-conditional, site composes neither), and doc
+comment context fixes in `jixoai.css` (registry-consumer hue semantics)
++ `scrollbar-measure.ts` (`$lib` dialect note).
 
-- `src/lib/context-plugin.svelte.ts` — brand/readOnly assignments go
-  through mutable carrier casts instead of the readonly branded
-  interfaces.
-- `src/lib/defaults.svelte.ts` — the slot brand lands via
-  `Object.defineProperty` (TS 5.9 widens computed unique-symbol keys in
-  `Object.assign`'s inferred type); one double cast in `resolve()`.
-- `src/lib/ui/press-button/press-button.svelte` — the `flat` `$derived`
-  moved below `resolvedRaised` (lazy evaluation; order-only change).
-
-These survive `jixoai-ui upgrade` (the lock stores CANONICAL hashes, so a
-converged upgrade writes nothing). A future registry item whose hash
-changes WILL overwrite the patch — re-apply or drop it if upstream fixed
-the typing.
+`jixoai-ui upgrade` remains the supersede mechanism (the lock stores
+CANONICAL hashes; disk now matches everywhere except the hue rewrite in
+`src/lib/jixoai.css`, which is the intended steady state).
 
 ### Theme contract
 
@@ -123,9 +125,17 @@ verbatim: localStorage key `theme` (`light|dark|system`), `.dark` class +
 local re-expression with the same surface (`getWebsiteStoredTheme` /
 `persistWebsiteTheme` / `applyWebsiteTheme` / `installWebsiteThemeSync`).
 The registry `theme-toggle` (full variant, in the header switcher slot)
-drives the same contract; its group aria-label is the component's own
-hardcoded `Color theme` (not localized like the retired hand-rolled
-switcher's label — accepted, registry items stay verbatim).
+drives the same contract; since `consumer-feedback-fixes` (P0-1) its
+mode vocabulary is localizable through the optional `labels` prop: the
+zh locale carries a `theme` block (浅色/深色/跟随系统, group aria
+颜色主题 — see `src/lib/i18n/locales/zh.ts`) which the locale layout
+passes to both toggle twins; the en locale omits the block (schema
+field optional), so `labels` stays undefined and the registry's English
+literals render byte-identical. Localization is presentation-only: the
+stored values stay `light|dark|system` (guarded by
+`src/lib/ui/theme-toggle/theme-toggle.test.ts`). The `icon` variant's
+own `aria-label` (`theme: <mode>`) is not covered by `labels` upstream
+— left as-is, recorded here rather than patched.
 
 ### AI export layer
 
@@ -152,5 +162,8 @@ repeated builds.
   verified in both modes).
 - Build contract: `dist/` + `_headers` intact; `wrangler.jsonc`
   untouched; dev port 13006 unchanged.
-- `jixoai-ui upgrade`: first AND second run report `updated 0,
-  unchanged 61` — zero writes, lock stable.
+- `jixoai-ui upgrade`: adoption-era runs reported `updated 0, unchanged
+  61` (zero writes, lock stable); the 2026-09-06 consumer-feedback-fixes
+  run reported `updated 7, unchanged 54, tasks ran 0, skipped 3`, lock
+  refreshed — disk now matches the lock everywhere except the intended
+  hue-27 rewrite in `src/lib/jixoai.css`.

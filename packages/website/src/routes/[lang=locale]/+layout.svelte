@@ -7,6 +7,13 @@ Orthogonal intents (updated 2026-09-06 Asia/Shanghai):
 3. Mobile-fit the switcher slot (2026-09-06 audit): compact icon theme
    toggle below sm — the labeled full toggle + switcher + hamburger
    overflowed the bar at ≤390px (hamburger clipped off-screen).
+4. Localize the theme-toggle vocabulary (2026-09-06,
+   consumer-feedback-fixes P0-1): zh content carries the optional `theme`
+   block and passes it as the registry `labels` prop (浅色/深色/跟随系统 +
+   group aria 颜色主题); en omits the block, so `content.theme` is
+   undefined → the registry's English defaults render byte-identical. The
+   icon-variant twin ignores labels (its aria stays `theme: <mode>`), the
+   pass-through is uniform for future parity.
 
 Original request (2026-09-06): 官网接入 @jixoai registry（jixoai-ui 0.3.0）。
 -->
@@ -68,10 +75,10 @@ Original request (2026-09-06): 官网接入 @jixoai registry（jixoai-ui 0.3.0�
            CSS-toggled twins — no JS breakpoint, no hydration flash. -->
       <div class="flex flex-wrap items-center gap-2">
         <span class="hidden sm:inline-flex">
-          <ThemeToggle variant="full" />
+          <ThemeToggle variant="full" labels={content.theme} />
         </span>
         <span class="sm:hidden">
-          <ThemeToggle variant="icon" />
+          <ThemeToggle variant="icon" labels={content.theme} />
         </span>
         <LanguageSwitcher {content} {lang} {pathname} />
       </div>

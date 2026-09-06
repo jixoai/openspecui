@@ -2,12 +2,12 @@
   "items": {
     "jixoai-theme": {
       "files": {
-        "src/lib/jixoai.css": "66053c3cbc269f65d758d119252da2785294d78c75763ac5bf9e9f14ac6eea49"
+        "src/lib/jixoai.css": "9d5287b003de3bdb1b7a143f0aff220497427bab62b24e8550103583224546b8"
       }
     },
     "press-button": {
       "files": {
-        "src/lib/ui/press-button/press-button.svelte": "abf06e74d1265f79c941717d2edf00be0269a8dffbb330c7f5821db692d1380e",
+        "src/lib/ui/press-button/press-button.svelte": "219aecba205977cf44229d4fe06486b862f951f6c7c120704783e1dd96bebbf5",
         "src/lib/ui/press-button/index.ts": "71f9a43a19a774907a644efcda0ea9eb11a5d999ee00568748d24a73ce000e40",
         "src/lib/ui/press-button/press-button.css": "77138cc5139190bc4db9f681f3f62b36435a90f8a21d8077792b23170936cff2",
         "src/lib/ui/press-button/ripple.svelte.ts": "13f251a6416cc84835d0b1c7a93956e2b9d3467bb977df8ef88f233966524904",
@@ -23,7 +23,7 @@
     },
     "scrollbar-measure": {
       "files": {
-        "src/lib/scrollbar-measure.ts": "ff8466abdb0f3809bb25c40676f9111203ed9d0b41c4db45bc46c458766009ae"
+        "src/lib/scrollbar-measure.ts": "f2e4fe0157b842df2a6aee2e3604c42cc6056795a6e51bcef52d3b46c2f21016"
       }
     },
     "llms-txt": {
@@ -48,7 +48,7 @@
     },
     "theme-toggle": {
       "files": {
-        "src/lib/ui/theme-toggle/theme-toggle.svelte": "f263d0672584a975bb64cd738249b15d22f0d40cef9c975757624978d06bd9a2",
+        "src/lib/ui/theme-toggle/theme-toggle.svelte": "d8211c090139b61f37e3206766ec68c7eed00f0d21d1db2f26997e037226c47e",
         "src/lib/ui/theme-toggle/index.ts": "01fb8895e16e5cc43f1ad86706818c11abaf83a75fc8abe8d1577e70a57f55a4",
         "src/lib/ui/theme-toggle/theme-toggle-defaults.svelte.ts": "b77821cf5ffbc6d043ed0a900a907be3e136bcac435606512ac407f3399f15dd"
       }
@@ -78,7 +78,7 @@
     "hero-section": {
       "files": {
         "src/lib/ui/hero-section/hero-section.css": "4524f9eedf9cb9aae1532816d9676e354c987b214a519e550b6f9c44bd6edc11",
-        "src/lib/ui/hero-section/hero-section.svelte": "cc2a28097b9bb53ac56de1ea01469d0069f8a23b9aa179c7a3b6b015bb5423bb",
+        "src/lib/ui/hero-section/hero-section.svelte": "4870d6a89f49466ebf2f26e5c4e93dc32cb8336462663322062e9df3dc091d64",
         "src/lib/ui/hero-section/index.ts": "87d5a050b2321516f2dc12b851afadd3b02ab1a9479d8cd7e6ddd436a064d450"
       }
     },
@@ -94,7 +94,7 @@
     },
     "defaults": {
       "files": {
-        "src/lib/defaults.svelte.ts": "ddefc3a69ebaa367ac81798348988a7eaa8f1a736be720895a2bc6af82d59582"
+        "src/lib/defaults.svelte.ts": "dda01adc9ffe859963335e7002d0fad16a3a3696bad93bfbeb8ed65112c34743"
       }
     },
     "density": {
@@ -109,7 +109,7 @@
     },
     "context-plugin": {
       "files": {
-        "src/lib/context-plugin.svelte.ts": "f0579853a19393e6e4bca9209b13d43d19bbf60b898fced7e431eda442af228e"
+        "src/lib/context-plugin.svelte.ts": "2ce8f35971f396c71297fbf2af66d30625ef6232ca6055928d9f4803c62fc5f7"
       }
     },
     "separator": {

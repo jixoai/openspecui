@@ -46,6 +46,18 @@ export interface WebsiteContent {
     label: string
     done: string
   }
+  /** Registry theme-toggle localization payload (consumer-feedback-fixes
+   *  P0-1 `labels` prop; structural twin of the component's ThemeToggleLabels).
+   *  OPTIONAL by construction: absent → the registry's English defaults render
+   *  byte-identical (en omits it); zh supplies the Chinese vocabulary. The
+   *  value domain (light/dark/system) and the localStorage `theme` contract
+   *  are presentation-independent and never localized. */
+  theme?: {
+    light: string
+    dark: string
+    system: string
+    groupAriaLabel?: string
+  }
   hero: {
     eyebrow: string
     /** Rendered as large lead type; the accent fragment renders in the primary color. */

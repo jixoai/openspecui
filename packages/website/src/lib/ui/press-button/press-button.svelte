@@ -331,13 +331,14 @@
   // adopts, never mints physics of its own
   const texture = getContext<PressTextureApi | undefined>(PRESS_TEXTURE_KEY);
   const resolvedRaised = $derived(raised ?? texture?.raised ?? true);
+
   // the flat STAMP (Owner ruling, 2026-09-04): the kernel's corner-tint
   // border keys on it — the pressed face is one carved light model,
   // not an inset beside a static frame. Same gate as the pose block
-  // (flat × non-link; link carries no jx-press at all).
-  // (site patch, 2026-09-06): moved below resolvedRaised — $derived bodies
-  // evaluate lazily so the reorder is semantics-neutral; TS 5.9 flags the
-  // forward reference (openspecui website svelte-check gate)
+  // (flat × non-link; link carries no jx-press at all). Declared
+  // BELOW resolvedRaised on purpose: TS 5.9 flags the forward
+  // reference — $derived bodies evaluate lazily, so the reorder is
+  // semantics-neutral (consumer-feedback-fixes P1-4)
   const flat = $derived(!resolvedRaised && resolvedVariant !== 'link');
 
   // ---- the one-shot success flash (the async idiom's second step) -----

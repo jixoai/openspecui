@@ -28,9 +28,11 @@
  *
  * Usage — import for its side effect once in the root layout (the
  * registration guard keeps module evaluation safe under SSR/prerender,
- * same law as the form-field bridge):
+ * same law as the form-field bridge). SvelteKit consumers write the
+ * $lib dialect (the @lib spelling is the registry TARGET alias in
+ * components.json, not an import specifier):
  *
- *   import '@lib/scrollbar-measure';
+ *   import '$lib/scrollbar-measure';
  */
 if (typeof document !== 'undefined' && !customElements.get('jx-scrollbar-measure')) {
   class JxScrollbarMeasure extends HTMLElement {

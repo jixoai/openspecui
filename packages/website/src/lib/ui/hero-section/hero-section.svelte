@@ -35,8 +35,12 @@
     summary: string         max-62ch lead paragraph
     badges?: snippet        the badge row content — compose Badge parts
                              (badges: string[] is dead)
-    copyCommand: string     the command on the primary CTA (clipboard
-                             payload — value-domain data)
+    copyCommand?: string    the command on the primary CTA (clipboard
+                             payload — value-domain data). SNIPPET-
+                             CONDITIONAL (2026-09-06): required exactly
+                             when the DEFAULT copy CTA renders — provide
+                             a #copy snippet instead and the prop is
+                             unused (and may be omitted)
     copyLabel?: string      aria affordance of the DEFAULT copy CTA
     copy?: snippet          replaces the default copy CTA wholesale
     terminal: snippet       the right-column demo (terminal-card)
@@ -62,8 +66,10 @@
   interface Props extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
     eyebrow: string;
     summary: string;
-    /** the clipboard payload — the default CTA's label AND copy target */
-    copyCommand: string;
+    /** the clipboard payload — the default CTA's label AND copy target.
+     *  Snippet-conditional: required when the default CTA renders (no
+     *  `copy` snippet); unused — and optional — when `copy` replaces it */
+    copyCommand?: string;
     /** aria affordance for the default copy CTA ("copy" / localized) */
     copyLabel?: string;
     /** the h1 content; <em> inside carries the accent paint */
@@ -82,7 +88,7 @@
   let {
     eyebrow,
     summary,
-    copyCommand,
+    copyCommand = '',
     copyLabel = 'copy',
     title,
     badges,
