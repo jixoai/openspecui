@@ -61,7 +61,9 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
       disclose it).
 - [x] PR #283 opened from the branch; Codex final review: 9.0/10 APPROVE WITH NON-BLOCKING NOTES,
       non-blocking notes N1/N2/N4 fixed and N3 acknowledged (evidence boundaries stay separate facts).
-- [ ] Required PR checks green.
+- [x] Required PR checks green (third CI round after the prepare-script fix and the web
+      change-diff-evidence rotation): CI Scope, Changeset Gate, Fast Gate, Windows Portability Gate,
+      Browser Gate + both shards — all pass on run 34651529010.
 - [ ] Owner acceptance: final end-to-end browser walkthrough (Owner-only).
 - [ ] Archive change, merge, release — Owner decision.
 - [ ] GitHub issues surveyed and handled with objective links after delivery.
