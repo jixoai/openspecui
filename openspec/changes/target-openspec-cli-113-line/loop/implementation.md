@@ -177,3 +177,12 @@ dispositioned:
 4. **N4 (fixed)**: `agent-command-content.test.ts` and `tool-init-state.test.ts` now state that their
    openspec-cli-112 generator fixtures are historical/boundary evidence; positive v13 acceptance lives
    in the official-cli-v13 suites.
+- Post-review CI fix (first PR check run): all three failing gates traced to one step —
+  `scripts/prepare-openspec-reference.mjs` installed the submodule with `--ignore-workspace`, which
+  blinds pnpm to the submodule's own `pnpm-workspace.yaml`; upstream 1.13.0 moved its dependency
+  overrides there (package.json no longer carries them), so the frozen install died with
+  `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. The Browser Gate failure was a cascade (`SHARD_RESULT: skipped`
+  after the Fast Gate failed). Fix: drop the flag (the submodule's own workspace file makes it its own
+  install root; parent discovery was never the concern). Verified locally end-to-end (script exit 0),
+  and under the CI pnpm line forced real (`pnpm@10.22.0` with
+  `--config.manage-package-manager-versions=false`, exit 0) — no packageManager bump needed.

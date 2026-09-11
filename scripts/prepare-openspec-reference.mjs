@@ -65,7 +65,12 @@ if (actualCommit !== EXPECTED_COMMIT) {
 }
 
 console.log(`[openspec-ref-prepare] pinned SHA ${actualCommit}`)
-runPnpm(['install', '--frozen-lockfile', '--ignore-scripts', '--ignore-workspace'], {
+
+// No `--ignore-workspace` here: upstream v1.13.0 declares its dependency overrides in the submodule's own
+// pnpm-workspace.yaml (moved out of package.json), and that flag makes pnpm ignore the file entirely, so
+// the frozen install dies with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH. The submodule's own workspace file makes
+// it its own install root, so parent-workspace discovery was never the concern this flag protected.
+runPnpm(['install', '--frozen-lockfile', '--ignore-scripts'], {
   cwd: REFERENCE_PATH,
 })
 runPnpm(['run', 'build'], { cwd: REFERENCE_PATH })
