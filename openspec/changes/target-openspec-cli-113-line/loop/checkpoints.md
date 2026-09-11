@@ -20,9 +20,11 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
 
 ## CP1 — Window and contract (implementation)
 
-- [ ] Slice 1 constants rotated; `openspec-compat.test.ts` green; boundary red recorded (1.12.x → unsupported).
-- [ ] Slice 2 Apply Instructions schema extended; contract tests green with the executed 1.13 payloads.
-- [ ] `pnpm --filter @openspecui/core typecheck` green.
+- [x] Slice 1 constants rotated; `openspec-compat.test.ts` green (10/10); boundary red recorded (5 failing
+      assertions, 1.12.x → unsupported); diagnose mirror test green with boundary assertions.
+- [x] Slice 2 Apply Instructions schema extended through input/projection schemas; contract tests green
+      (48/48 across 3 files); red recorded (warnings dropped by projection schema).
+- [x] `pnpm --filter @openspecui/core exec tsc --noEmit` green.
 
 ## CP2 — Projection and Web surface (implementation)
 

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Prove public Agent subscriptions consume Environment-owned policy and launch-local artifacts.
  * 2. Prove fixed global CLI installation retires runner authority and invalidates Root Context before public terminal settlement.
  * 3. Prove commands-only subscriptions distinguish arbitrary content from exact runtime CLI output.
@@ -15,9 +15,11 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  *
- *   The pinned fallback spec and generated-by expectations follow the v12 1.12 series.
+ *   The pinned fallback spec and generated-by expectations follow the v13 1.13 series
+ *   (the versioned install-series assertion itself belongs to the compat window owner).
  * Original request (2026-08-28, issue #258): the global install stream installs the admitted
  *   versioned series instead of an unversioned spec the admission gate can block.
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import {
   clearCache,
@@ -78,7 +80,7 @@ async function writeArtifact(filePath: string, content = '# external fixture\n')
 
 async function writeGeneratedSkill(filePath: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.12.0"\n---\n', 'utf8')
+  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.13.0"\n---\n', 'utf8')
 }
 
 async function prepareCachedRunnerReplacement(
@@ -167,7 +169,7 @@ async function createRouterFixture(
   const releaseLaunchObservation = await server.observationEnvironment.acquireRoot(launchRoot)
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.12.0',
+    version: '1.13.0',
   })
   const environment = {
     kind: 'environment-global',
@@ -452,7 +454,7 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
         expect(findToolState(initialized, 'claude')).toMatchObject({
           status: 'initialized',
           readiness: 'initialized',
-          generatedByVersion: '1.12.0',
+          generatedByVersion: '1.13.0',
           issues: [],
         })
 

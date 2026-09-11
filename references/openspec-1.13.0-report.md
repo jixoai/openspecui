@@ -77,12 +77,13 @@ then `openspec new change no-specs-but-tasks`, default `spec-driven` schema):
 | Engines / packageManager                                     | `>=20.19.0` / pnpm 10        | unchanged (`>=20.19.0`, `pnpm@10.34.5`); pnpm overrides moved out of `package.json` into `pnpm-workspace.yaml`  | Reference-build and fixture-install flow unaffected.                                              |
 
 Executed ready-state document (scenario 2 above; `warnings` shown in full because its exact text is the
-projection contract):
+projection contract). Upstream `JSON.stringify` omits empty-valued keys, so `missingArtifacts` is **absent**
+from the real stdout — the field only appears in the blocked document. Slice-2 verification reproduced both
+literal payloads with the same npm executable:
 
 ```json
 {
   "state": "ready",
-  "missingArtifacts": null,
   "missingPrerequisites": ["specs", "design"],
   "warnings": [
     "This change has no delta specs and does not declare `skip_specs: true`, so `openspec validate no-specs-but-tasks` fails on it. Write the delta specs before implementing (`openspec instructions specs --change no-specs-but-tasks`), or add `skip_specs: true` to <changeDir>/.openspec.yaml if this change really changes no specified behavior."
@@ -102,7 +103,9 @@ Semantics verified from source (`collectMissingPrerequisites` / `collectApplyWar
   spec-producing artifact, or one whose spec artifact is `skip_specs`-declared, never warns. The warning text
   names the schema's own spec artifact id when exactly one exists (`<artifact-id>` placeholder otherwise) and
   embeds the absolute metadata path.
-- Both fields are conditionally spread — absent (not `null`/`[]`) when empty. 1.12 consumers never saw them.
+- Both fields are conditionally spread — absent (not `null`/`[]`) when empty; upstream `JSON.stringify`
+  omits the key entirely, and the blocked-state `missingArtifacts` likewise disappears once unblocked. 1.12
+  consumers never saw them.
 
 ## Protocol delta
 

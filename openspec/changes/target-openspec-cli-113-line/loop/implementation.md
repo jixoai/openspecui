@@ -12,8 +12,29 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
 ## Current state
 
 - CP0 done: worktree + submodule pin (`9d4e5974e5c0d9a09b9c6c1e1eb0975e80ec4461`) + evidence report + change
-  artifacts, on branch `target-openspec-cli-113-line` (uncommitted until the Codex change review round lands).
-- Slices: not started.
+  artifacts; Codex Round-A (5.8 REVISE) folded; Round-B (8.7 APPROVE WITH NON-BLOCKING NOTES) recorded.
+- Batch A done (Slices 1, 2, 4): committed after integrator review of the three subagent reports.
+  - Slice 1: compat window/constants + diagnose-runner mirror (+test, boundary assertions) +
+    setup-example mirror. Real red: 5 failing compat assertions recorded (`/tmp/slice1-red-compat.log`).
+    Green: compat 10/10, diagnose 3 passed | 1 win32-only skip, core tsc clean.
+  - Slice 2: Apply contract chain (workflow schema, opsx-types input/projection schemas, focused projection
+    test; planning-cli-projection needs zero production change — pass-through is structural). Real red:
+    `warnings` dropped by projection schema (`/tmp/slice2-red-run.log`). Green: 48/48 across 3 files, tsc
+    clean. Fact correction folded into the report: the real ready-state stdout omits `missingArtifacts`
+    (upstream JSON.stringify drops empty-valued keys) — optional, never null.
+  - Slice 4: registry series `'1.13'` + provenance union retains `'1.12'` (SourceCraft `minCliSeries`
+    untouched); pinned generator `1.13.0`. Real red: 2 staleness assertions (`/tmp/slice4-red-tool-init-state.log`).
+    Green: registry/state 78/78, server projection 8/8 (+ new retired-1.12 test), integrations 9/9,
+    tool-subscription 4/5 — the remaining red is `tool-subscription-router.test.ts:674` expecting
+    `@fission-ai/openspec@1.12`, which is Slice 6's owner (natural red preserved).
+- Environment notes from Batch A (all three agents): `pnpm --filter <pkg> test -- <file>` does NOT filter —
+  vitest (cac) drops the `--` args and the full suite runs. Use `pnpm --filter <pkg> exec vitest run <file>`
+  for focused gates. The reference submodule needed `pnpm install --frozen-lockfile && node build.js` once
+  for `dist/cli/index.js` (untracked build output). Known unrelated failures: `path-realpath.test.ts`
+  macOS `/var` flake (pre-existing on main) and environment-load CLI probe timeouts under parallel full
+  suites (not seen with focused runs).
+- `agent-command-content.ts:33` still comments "admitted 1.12 generator" — assigned to Slice 5 as a
+  drive-by comment correction.
 
 ## Evidence recording rule
 

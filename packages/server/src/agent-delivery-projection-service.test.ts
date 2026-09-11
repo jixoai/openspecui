@@ -1,13 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Prove one-shot Agent delivery uses authoritative Environment policy and the complete Core registry.
  * 2. Prove retained Agent delivery re-emits from physical file changes and Environment policy replacement.
  * 3. Prove explicit refresh and dispose own deterministic replacement and retirement boundaries.
  * 4. Prove version-selected inventories including unavailable-CLI sessions.
  * 5. Keep the initial real-registry reactive wait ahead of shared CI runners.
- * 6. Lock the admitted 1.12 series snapshot: every 1.11 physical fact carries forward, Zed stays
- *    skills-only, Antigravity keeps its `.agents` root plus `.agent` legacy-migration evidence,
- *    codeassistant joins with `.codeassistant`, and retired sessions (1.10/1.11/1.9) select none.
+ * 6. Lock the admitted 1.13 series snapshot: every 1.12/1.11 physical fact carries forward,
+ *    Zed stays skills-only, Antigravity keeps its `.agents` root plus `.agent` legacy-migration
+ *    evidence, codeassistant joins with `.codeassistant`, and retired sessions
+ *    (1.10/1.11/1.12/1.9) select none.
  *
  * Original request (2026-08-01): "新增 Agent delivery projection service 及 checked tests。"
 
@@ -17,6 +18,7 @@
  *   for on 2026-08-14); local quiet-machine runs stay green, so the wait budget is the defect.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 
 import {
@@ -42,7 +44,7 @@ import type { ProjectionWorkSubscription } from './projection-work/index.js'
 
 const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
 const cliExecutor = {
-  checkAvailability: async () => ({ available: true, version: '1.12.0' }),
+  checkAvailability: async () => ({ available: true, version: '1.13.0' }),
 }
 const cliCommandAuthority = {
   getCliCommand: async () => ['not-an-importable-openspec-runner'],
@@ -157,7 +159,7 @@ async function writeGeneratedSkill(
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.12.0\n---\n`,
+    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.13.0\n---\n`,
     'utf8'
   )
   return path
@@ -249,9 +251,9 @@ describe('AgentDeliveryProjectionService', () => {
         aliases: ['windsurf'],
         migrations: [{ from: '.windsurf', to: '.devin', needsConsent: true }],
       })
-      // The admitted 1.12 line projects Zed beside the shared root and Antigravity's
+      // The admitted 1.13 line projects Zed beside the shared root and Antigravity's
       // migrated `.agents` root with its legacy `.agent` evidence; codeassistant joins
-      // as the 1.12-only SourceCraft Code Assistant target.
+      // as the SourceCraft Code Assistant target introduced on the 1.12 line.
       expect(current.registry.find((tool) => tool.value === 'zed')).toMatchObject({
         skillsDir: '.agents',
         detectionPaths: ['.zed', '.agents/skills'],
@@ -265,8 +267,9 @@ describe('AgentDeliveryProjectionService', () => {
         migrations: [{ from: '.agent', to: '.agents', needsConsent: false }],
         command: { pathTemplate: '.agents/workflows/opsx-{workflow}.md' },
       })
-      // codeassistant is the 1.12-only inventory entry: SourceCraft roots, adapter-backed
-      // capability, and no IDE-restart fact.
+      // codeassistant entered the inventory on the 1.12 line and carries forward on the
+      // admitted 1.13 line: SourceCraft roots, adapter-backed capability, and no
+      // IDE-restart fact.
       expect(current.registry.find((tool) => tool.value === 'codeassistant')).toMatchObject({
         available: true,
         skillsDir: '.codeassistant',
@@ -278,7 +281,7 @@ describe('AgentDeliveryProjectionService', () => {
       ).toBeUndefined()
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.12.0',
+        generatedByVersion: '1.13.0',
         installedSkillWorkflows: ['update'],
       })
 
@@ -352,7 +355,7 @@ describe('AgentDeliveryProjectionService', () => {
 
     try {
       const current = await service.getCurrent()
-      // No live CLI means no admitted inventory: the pinned 1.12.0 generator version must not
+      // No live CLI means no admitted inventory: the pinned 1.13.0 generator version must not
       // fabricate one.
       expect(current.registry).toEqual([])
       expect(current.states).toEqual([])
@@ -388,6 +391,40 @@ describe('AgentDeliveryProjectionService', () => {
       // session must not inherit an admitted inventory, and the service projection
       // agrees exactly with the Core series selector over the same detected version.
       expect(selectAgentDeliveryRegistry('1.10.0')).toEqual([])
+      expect(current.registry).toEqual([])
+      expect(current.states).toEqual([])
+    } finally {
+      await service.dispose()
+      await rm(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  it('selects an empty inventory for a retired 1.12 session and matches the Core selector', async () => {
+    clearCache()
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-112-'))
+    const environment = new EnvironmentAuthorityFixture(
+      environmentProjection({ delivery: 'skills', workflows: ['update'] })
+    )
+    const observationEnvironment = new ReactiveObservationEnvironment()
+    const service = new AgentDeliveryProjectionService({
+      projectDir,
+      environmentGlobalProjectionService: environment,
+      observationEnvironment,
+      cliExecutor: {
+        ...cliExecutor,
+        checkAvailability: async () => ({ available: true, version: '1.12.0' }),
+      },
+      cliCommandAuthority,
+    })
+
+    try {
+      await writeGeneratedSkill(projectDir, 'update')
+      const current = await service.getCurrent()
+
+      // The v12 window retired with the v13 single-series admission: a bypassed 1.12
+      // session must not inherit an admitted inventory, and the service projection
+      // agrees exactly with the Core series selector over the same detected version.
+      expect(selectAgentDeliveryRegistry('1.12.0')).toEqual([])
       expect(current.registry).toEqual([])
       expect(current.states).toEqual([])
     } finally {

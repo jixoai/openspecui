@@ -1,13 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
- * 1. Lock the complete pinned OpenSpec 1.12 Agent delivery registry at the public Core boundary.
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * 1. Lock the complete pinned OpenSpec 1.13 Agent delivery registry at the public Core boundary.
  * 2. Prove capability, command format/invocation, alias, detection, setup, cleanup, migration,
  *    global skill roots, legacy roots, and IDE restart facts stay co-located.
- * 3. Prove the 1.12 snapshot inherits every 1.11 physical fact (Antigravity `.agents`-current
- *    with `.agent` legacy/migration; zed skills-only from '1.10') and adds SourceCraft Code
- *    Assistant with `minCliSeries '1.12'`.
- * 4. Prove version-selected inventories admit only stable 1.12.x — retired 1.10.x/1.11.x lines
- *    select nothing — and declare the three-valued shared-root owner candidate set exactly
+ * 3. Prove the 1.13 snapshot inherits every 1.12/1.11 physical fact (Antigravity `.agents`-current
+ *    with `.agent` legacy/migration; zed skills-only from '1.10') and keeps SourceCraft Code
+ *    Assistant with `minCliSeries '1.12'` (the physical 1.12 introduction fact).
+ * 4. Prove version-selected inventories admit only stable 1.13.x — retired 1.10.x/1.11.x/1.12.x
+ *    lines select nothing — and declare the three-valued shared-root owner candidate set exactly
  *    as the pinned upstream source does.
  * 5. Provide explicit mutation-resistance evidence for every load-bearing registry dimension.
  *
@@ -16,6 +16,7 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 
 import { describe, expect, it } from 'vitest'
@@ -458,7 +459,7 @@ function assertPinnedRegistry(registry: readonly ToolConfig[]): void {
       format: 'markdown',
     })
   )
-  // 1.12 base (inherited from 1.11): Antigravity's current roots live at the shared
+  // 1.13 base (inherited from 1.12/1.11): Antigravity's current roots live at the shared
   // `.agents` root while `.agent` stays readable for detection and migrates only after
   // replacement generation.
   expect(registryEntry(registry, 'antigravity')).toEqual(
@@ -495,7 +496,8 @@ function assertPinnedRegistry(registry: readonly ToolConfig[]): void {
     })
   )
   expect(registryEntry(registry, 'zed')?.requiresIdeRestart).toBeUndefined()
-  // SourceCraft Code Assistant enters with 1.12: description-only YAML commands under
+  // SourceCraft Code Assistant enters with 1.12 and carries forward on the admitted
+  // 1.13 line: description-only YAML commands under
   // the default `.codeassistant` detection root, natural-language skill references
   // (upstream `NATURAL_LANGUAGE_SKILL_TOOLS`, like rovodev — but with command files,
   // unlike rovodev), no IDE restart fact, no cleanup, no migrations.
@@ -522,17 +524,17 @@ function assertPinnedRegistry(registry: readonly ToolConfig[]): void {
 
 /** Assert the admitted per-series inventory against the selection boundary itself. */
 function assertAdmittedSeriesInventories(): void {
-  const series112 = selectAgentDeliveryRegistry('1.12.0')
+  const series113 = selectAgentDeliveryRegistry('1.13.0')
 
-  // The admitted line ships the complete official tool set: every 1.11 tool keeps its
-  // physical facts and codeassistant (minCliSeries '1.12') joins; zed's provenance
-  // stays '1.10' without gating the 1.12 inventory.
-  expect(series112.map((tool) => tool.value)).toEqual(AI_TOOLS.map((tool) => tool.value))
-  expect(series112.some((tool) => tool.value === 'codeassistant')).toBe(true)
+  // The admitted line ships the complete official tool set: every 1.12 tool keeps its
+  // physical facts and codeassistant (minCliSeries '1.12') carries forward; zed's
+  // provenance stays '1.10' without gating the 1.13 inventory.
+  expect(series113.map((tool) => tool.value)).toEqual(AI_TOOLS.map((tool) => tool.value))
+  expect(series113.some((tool) => tool.value === 'codeassistant')).toBe(true)
 
-  // 1.12 inherits 1.11's Antigravity reality: current roots at the shared `.agents`
-  // root with `.agent` as legacy + after-generation migration evidence.
-  expect(registryEntry(series112, 'antigravity')).toEqual(
+  // 1.13 inherits 1.11's Antigravity reality (carried through 1.12): current roots at the
+  // shared `.agents` root with `.agent` as legacy + after-generation migration evidence.
+  expect(registryEntry(series113, 'antigravity')).toEqual(
     expect.objectContaining({
       skillsDir: '.agents',
       legacySkillsDirs: ['.agent'],
@@ -546,20 +548,21 @@ function assertAdmittedSeriesInventories(): void {
 
   // IDE restart facts are declared on the admitted line exactly where upstream does,
   // and never on the skills-only zed / shared / codex targets or codeassistant.
-  expect(series112.filter((tool) => tool.requiresIdeRestart).map((tool) => tool.value)).toEqual([
+  expect(series113.filter((tool) => tool.requiresIdeRestart).map((tool) => tool.value)).toEqual([
     ...EXPECTED_RESTART_TOOLS,
   ])
-  expect(registryEntry(series112, 'zed')?.requiresIdeRestart).toBeUndefined()
-  expect(registryEntry(series112, 'codeassistant')?.requiresIdeRestart).toBeUndefined()
+  expect(registryEntry(series113, 'zed')?.requiresIdeRestart).toBeUndefined()
+  expect(registryEntry(series113, 'codeassistant')?.requiresIdeRestart).toBeUndefined()
   for (const candidate of SHARED_AGENTS_SKILLS_OWNER_CANDIDATES) {
-    expect(registryEntry(series112, candidate)?.skillsDir).toBe('.agents')
+    expect(registryEntry(series113, candidate)?.skillsDir).toBe('.agents')
   }
 
   // Selected snapshots are plain per-series inventories: the override mechanism stays internal.
-  expect(series112.every((tool) => tool.perSeriesOverrides === undefined)).toBe(true)
+  expect(series113.every((tool) => tool.perSeriesOverrides === undefined)).toBe(true)
 
-  // Retired below-range lines select no inventory at all: the 1.10/1.11 v11 window
-  // is not admitted by this release line, so it must not project a stale snapshot.
+  // Retired below-range lines select no inventory at all: the 1.10/1.11/1.12 v11/v12
+  // windows are not admitted by this release line, so they must not project a stale snapshot.
+  expect(selectAgentDeliveryRegistry('1.12.5')).toEqual([])
   expect(selectAgentDeliveryRegistry('1.11.3')).toEqual([])
   expect(selectAgentDeliveryRegistry('1.10.7')).toEqual([])
 }
@@ -595,7 +598,7 @@ const EXPECTED_RESTART_TOOLS = [
   'trae',
 ] as const
 
-describe('OpenSpec 1.12 Agent delivery registry (pinned base)', () => {
+describe('OpenSpec 1.13 Agent delivery registry (pinned base)', () => {
   it('preserves the complete pinned metadata, command format, and invocation contract', () => {
     assertPinnedRegistry(AI_TOOLS)
   })
@@ -651,30 +654,32 @@ describe('OpenSpec 1.12 Agent delivery registry (pinned base)', () => {
   })
 })
 
-describe('per-series inventory selection (1.12 single-series window)', () => {
-  it('selects the 1.12 official inventory with codeassistant and the 1.11-inherited Antigravity roots', () => {
+describe('per-series inventory selection (1.13 single-series window)', () => {
+  it('selects the 1.13 official inventory with codeassistant and the 1.11-inherited Antigravity roots', () => {
     assertAdmittedSeriesInventories()
   })
 
   it('selects no inventory for non-admitted or unparseable versions', () => {
     // A page-level version bypass must not manufacture an admitted inventory: prereleases,
-    // the next series, below-range lines (including the retired 1.10/1.11 v11 window and
-    // 1.8/1.9), and unparseable output all select zero tools.
+    // the next series, below-range lines (including the retired 1.10/1.11/1.12 v11/v12
+    // windows and 1.8/1.9), and unparseable output all select zero tools.
     expect(selectAgentDeliveryRegistry('1.9.5')).toEqual([])
     expect(selectAgentDeliveryRegistry('1.9.0')).toEqual([])
     expect(selectAgentDeliveryRegistry('1.8.0')).toEqual([])
+    expect(selectAgentDeliveryRegistry('1.12.0')).toEqual([])
     expect(selectAgentDeliveryRegistry('1.11.0')).toEqual([])
     expect(selectAgentDeliveryRegistry('1.10.7')).toEqual([])
     expect(selectAgentDeliveryRegistry('1.12.0-rc.1')).toEqual([])
-    expect(selectAgentDeliveryRegistry('1.13.0')).toEqual([])
+    expect(selectAgentDeliveryRegistry('1.13.0-rc.1')).toEqual([])
+    expect(selectAgentDeliveryRegistry('1.14.0')).toEqual([])
     expect(selectAgentDeliveryRegistry('2.0.0')).toEqual([])
     expect(selectAgentDeliveryRegistry('garbage')).toEqual([])
     expect(selectAgentDeliveryRegistry(null)).toEqual([])
   })
 
   it.each([
-    ['1.12.0', '1.12'],
-    ['1.12.4', '1.12'],
+    ['1.13.0', '1.13'],
+    ['1.13.4', '1.13'],
   ])('parses stable %s as the %s Agent inventory line', (cliVersion, expectedSeries) => {
     expect(parseOpenSpecCliSeries(cliVersion)).toBe(expectedSeries)
   })
@@ -685,9 +690,11 @@ describe('per-series inventory selection (1.12 single-series window)', () => {
     '1.7.0',
     '1.10.7',
     '1.11.3',
-    '1.13.0',
+    '1.12.5',
+    '1.14.0',
     '2.0.0',
     '1.12.0-rc.1',
+    '1.13.0-rc.1',
     '1.11.0-beta.1',
     'garbage',
     '',
@@ -704,11 +711,11 @@ describe('per-series inventory selection (1.12 single-series window)', () => {
     // `codex` fallback. The registry declares candidates only; arbitration is owned by
     // the official CLI and projected by the Server Agent delivery service.
     expect(SHARED_AGENTS_SKILLS_OWNER_CANDIDATES).toEqual(['codex', 'zed', 'agents'])
-    // Antigravity joined the shared root in 1.11 (carried forward on 1.12) but is
+    // Antigravity joined the shared root in 1.11 (carried forward on 1.12/1.13) but is
     // adapter-backed and is excluded from skills-writer candidacy; its own
     // `.agents/workflows` commands root is unaffected by that exclusion.
     expect(SHARED_AGENTS_SKILLS_OWNER_CANDIDATES).not.toContain('antigravity')
-    expect(registryEntry(selectAgentDeliveryRegistry('1.12.0'), 'antigravity')?.capability).toBe(
+    expect(registryEntry(selectAgentDeliveryRegistry('1.13.0'), 'antigravity')?.capability).toBe(
       'adapter-backed'
     )
   })
@@ -735,7 +742,7 @@ describe('per-series inventory selection (1.12 single-series window)', () => {
     }
   })
 
-  it('rejects stripping the Antigravity migration evidence from the 1.12 snapshot', () => {
+  it('rejects stripping the Antigravity migration evidence from the 1.13 snapshot', () => {
     const antigravity = requireRegistryEntry(AI_TOOLS, 'antigravity')
     const migrations = antigravity.migrations
     antigravity.migrations = []

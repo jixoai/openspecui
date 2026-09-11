@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Model camelCase workflow JSON independently from Store-family JSON.
  * 2. Preserve strict, archived, and bulk Validate plus Archive outcomes, including failure payloads.
  * 3. Preserve multiline requirement bodies from `show --json`.
@@ -13,12 +13,17 @@
  *    the upstream-guaranteed invariants (non-empty per-item issues, returnedItems bounded
  *    by totalItems), and the union guard validates the discriminator shape rather than
  *    mere `report`-key presence.
+ * 8. Type the OpenSpec 1.13 Apply Instructions `missingPrerequisites` (build-order closure,
+ *    present even when ready) and `warnings` (no-delta-specs advisory) as additive optional
+ *    success members that never gain default empty arrays, never alter `state`/`progress`/
+ *    `tasks`/`missingArtifacts` semantics, and stay verbatim CLI evidence.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { z } from 'zod'
 import {
@@ -259,6 +264,10 @@ export const CliApplyInstructionsSuccessSchema = z
     tasks: z.array(CliApplyTaskSchema),
     state: z.enum(['blocked', 'all_done', 'ready']),
     missingArtifacts: z.array(z.string()).optional(),
+    // OpenSpec 1.13 additive members: conditionally spread upstream, so they are
+    // optional here with no default; evidence only, never apply gating.
+    missingPrerequisites: z.array(z.string()).optional(),
+    warnings: z.array(z.string()).optional(),
     instruction: z.string(),
     references: z.array(CliReferenceIndexEntrySchema).optional(),
     context: z.string().optional(),
