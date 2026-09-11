@@ -17,6 +17,8 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Note: openspec-cli-112 generator fixtures below are historical/boundary evidence for staleness and
+ * legacy-compat classification; positive v13 acceptance lives in the official-cli-v13 suite.
  */
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join, resolve } from 'path'

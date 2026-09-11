@@ -7,13 +7,14 @@ Orthogonal intents (updated 2026-09-04 Asia/Shanghai):
 Original request (2026-08-19): "现在我们需要为 openspecui 这个 npm 包撰写一下 README.md 文件。但是不用发版本，下次发版本的时候带上去就行。和仓库的 README.md 不同的是，它更侧重于当前这个版本 v9."
 Owner release law (2026-08-19): every release that updates the repository README must also update this package README.
 Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
 -->
 
 # OpenSpecUI
 
 A visual interface for [OpenSpec](https://openspec.dev) — the visual projection and operator for spec-driven development with AI agents.
 
-OpenSpecUI 12 gives OpenSpec projects a reactive dashboard, an objective change workflow, a config workbench, real terminals, and static export — while the OpenSpec CLI stays the source of truth for every workflow fact.
+OpenSpecUI 13 gives OpenSpec projects a reactive dashboard, an objective change workflow, a config workbench, real terminals, and static export — while the OpenSpec CLI stays the source of truth for every workflow fact.
 
 ## Requirements
 

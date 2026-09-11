@@ -155,3 +155,25 @@ implementation may start under the CP/Slice evidence rules. Non-blocking notes, 
 5. PR notes attach the unmodified-main `path-realpath.test.ts` failure output; the flake is never reported as
    a green gate.
 6. This Round-B disposition recorded (this entry).
+
+### Final review disposition (herdr v13-change-reviewer, gpt-5.6-terra xhigh, 2026-09-12) — 9.0/10, APPROVE WITH NON-BLOCKING NOTES
+
+Worked 28m 55s against the real delivered diff (8 commits, PR #283). No blockers found across the
+compat window, Apply contract/projection, Web direct-plane surface, Agent registry/generator, the
+9-suite official fixture matrix, pin guards, changeset/README/AGENTS, and a 50-file header-law audit;
+four focused test groups re-run independently by the reviewer (all green). Non-blocking notes,
+dispositioned:
+
+1. **N1 (fixed)**: `packages/cli/README.md` header/current-line prose still said v12 — rotated to
+   OpenSpecUI 13 with the 2026-09-12 intent line.
+2. **N2 (fixed)**: `packages/server/src/router.ts` and `packages/core/src/cli-projection-sequence.ts`
+   header active-wording rotated to the v13 window / "1.12+" provenance phrasing; root README (en/zh)
+   intent timestamps advanced to 2026-09-12. The AGENTS.md top-of-file summary continues to list the
+   adaptation baselines cumulatively by design; the full v13 architecture decision is recorded in the
+   body.
+3. **N3 (acknowledged, no code change)**: the full-gate and Owner-only walkthrough evidence boundaries
+   stay as separate delivery facts; the PR body already discloses the 78/79 test:ci result and the
+   main-reproduced path-realpath flake rather than claiming a full green.
+4. **N4 (fixed)**: `agent-command-content.test.ts` and `tool-init-state.test.ts` now state that their
+   openspec-cli-112 generator fixtures are historical/boundary evidence; positive v13 acceptance lives
+   in the official-cli-v13 suites.

@@ -1,6 +1,8 @@
 /**
  * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
- * 1. Prove the pinned OpenSpec CLI yields exact Agent command contents through the runtime generator bridge.
+ * 1. Prove the pinned OpenSpec CLI yields exact Agent command contents through the runtime generator bridge
+ *    (the pinned generator fixtures here are HISTORICAL/equivalence evidence — they run retired executable
+ *    lines like openspec-cli-112/111 deliberately; positive v13 acceptance lives in official-cli-v13-*).
  * 2. Prove non-importable runners fail closed instead of fabricating current command evidence.
  * 3. Prove a CLI line without one adapter keeps every unrelated adapter's evidence
  *    (retired 1.11 lacks codeassistant; historical 1.8 lacks Command Code).
@@ -11,6 +13,7 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 
 import { resolve } from 'node:path'
