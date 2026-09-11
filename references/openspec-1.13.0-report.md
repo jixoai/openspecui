@@ -127,10 +127,13 @@ warning names the objective downstream fact (`openspec validate` fails) rather t
 `state`, `progress`, `tasks`, `missingArtifacts`, exit codes, and the failure sum type are unchanged.
 
 OpenSpecUI consequence: `CliApplyInstructionsSuccessSchema` gains the two optional fields and the planning
-projection surfaces them. Per the OPSX-first information hierarchy law the warning is direct-plane evidence
-(it predicts a validation failure), while `missingPrerequisites` is readable next-step evidence. The 2026-08-18
-law still holds: `Applying` plus CLI `completed/total` remains driven by CLI task evidence, not by these
-fields.
+projection surfaces them. Two compatibility layers are distinct facts: 1.12's `.passthrough()` decode merely
+*tolerates* the members, while the v13 obligation is *projection* — the fields must also survive
+`ApplyInstructionsInputSchema`/`ApplyInstructionsProjectionSchema` (`opsx-types.ts`) and the Server/Web
+transport chain, or the Web surface silently drops them. Per the OPSX-first information hierarchy law the
+warning is direct-plane evidence (it predicts a validation failure), while `missingPrerequisites` is readable
+next-step evidence. The 2026-08-18 law still holds: `Applying` plus CLI `completed/total` remains driven by CLI
+task evidence, not by these fields.
 
 ### 2. Apply remedy text now names CLI verbs
 

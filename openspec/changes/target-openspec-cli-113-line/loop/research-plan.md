@@ -13,11 +13,23 @@ Evidence source: `references/openspec-1.13.0-report.md` (pinned `v1.13.0` @ `9d4
 its production owner, its red case (as it fails today, or the honest statement why a red cannot be captured
 pre-implementation), and its green case.
 
+## Spec hygiene (Round-A B4)
+
+Scenario titles inside MODIFIED deltas are **current-spec scenario identity**, preserved so archive refuses to
+drop them; behavior is defined by the complete GIVEN/THEN bodies, not the titles. Titles such as
+`SourceCraft Code Assistant enters at 1.12`, `Zed is a 1.10-line skills-only target`, or
+`Accept the current 1.12 line` therefore describe *historical introduction or historical admission*, while
+their bodies state the v13 semantics (admitted 1.13.x appears; older lines blocked/unavailable). Two facts an
+implementer must not conflate: `minCliSeries: '1.12'` on SourceCraft is the physical introduction fact and
+does NOT rotate; `AgentCliSeries` and the pinned generator DO rotate to the 1.13 line. A focused spec-review
+checklist item (CP2/CP3) re-reads each renamed-semantics scenario before its slice lands.
+
 ## CP0 — Planning baseline (done before slices)
 
 Worktree `openspecui-113` on branch `target-openspec-cli-113-line`; submodule `references/openspec` pinned to
 `v1.13.0` (`9d4e5974e5c0d9a09b9c6c1e1eb0975e80ec4461`); evidence report written; change artifacts written;
-committed before review.
+committed before review. Round-A review (herdr `v13-change-reviewer`, gpt-5.6-terra xhigh, 2026-09-12,
+5.8/10 REVISE) blockers B1–B4 are folded into the slices below.
 
 ## Slice 1 — Compatibility window and constants rotation
 
@@ -27,47 +39,63 @@ Owners:
   `OPENSPEC_CLI_TARGET_SERIES = '1.13'`; `SUPPORTED_SERIES = ['1.13']`; min/target/recommended `1.13.0`;
   `NEXT_SERIES_MIN_VERSION = '1.14.0'`; accepted/recommended ranges `>=1.13.0 <1.14.0`;
   `REFERENCE_TAG_PATTERN = 'v1.13.*'`; classification messages name v13.
-- `scripts/diagnose-cli-runner.mjs` and `scripts/setup-example.ts`: `OPENSPEC_CLI_TARGET_SERIES` mirrors.
+- `scripts/diagnose-cli-runner.mjs` **and its test `scripts/diagnose-cli-runner.test.mjs`** (Round-A B3): the
+  mirror `OPENSPEC_CLI_TARGET_SERIES = '1.12'` rotates to `'1.13'`; the test gains boundary assertions — a
+  1.12.x probe resolution is rejected/flagged by the rotated mirror while the 1.13 fallback spec resolves.
+- `scripts/setup-example.ts` (mirror `OPENSPEC_CLI_TARGET_SERIES`) and its callers/tests
+  (`scripts/setup-example` consumers in `packages/cli` test expectations, Slice 6).
 - Header comments updated with the 2026-09-12 original request line.
 
-Red: `openspec-compat.test.ts` cases asserting 1.12-current classification and `>=1.12.0 <1.13.0` ranges fail
-after the window moves (assertions are updated in the same slice; the red is captured by running the old
-assertions against the new constants before rewriting them — record the failing output). Boundary facts: 1.12.x
-stable must now classify `unsupported` with v13 ranges in the message.
+Red (fixed command, per Round-A non-blocking 1): run
+`pnpm --filter @openspecui/core test -- src/openspec-compat.test.ts` against the current assertions after
+landing only the constants change — the 1.12-current classification and `>=1.12.0 <1.13.0` range assertions
+fail with the recorded diff output (capture `vitest` failure text; do not mix typecheck failures into this
+red). The new boundary fact: stable 1.12.x must classify `unsupported` with v13 ranges in the message.
 
-Green: focused `pnpm --filter @openspecui/core test -- src/openspec-compat.test.ts`; then
-`node scripts/diagnose-cli-runner.mjs --help`-level smoke (script parses; no full probe run required in the
-slice).
+Green: focused `src/openspec-compat.test.ts` plus `node --test scripts/diagnose-cli-runner.test.mjs` (or the
+repo's runner for `.test.mjs`) green; record both commands.
 
-## Slice 2 — Apply Instructions typed contract extension
+## Slice 2 — Apply Instructions typed contract extension through the whole projection chain
 
-Owners:
+Round-A B1: the decode schema alone does not carry the fields across the Kernel/Projection/Server boundary.
+Owners (complete chain):
 
-- `packages/core/src/cli-contracts/workflow.ts`: `CliApplyInstructionsSuccessSchema` gains
-  `missingPrerequisites: z.array(z.string()).optional()` and `warnings: z.array(z.string()).optional()`.
-- Contract tests in the same file's test owner (find the existing apply-instructions contract test file):
-  parse the executed 1.13.0 documents embedded in the report (blocked with the four-id chain; ready with the
-  one-warning array and `[specs, design]`).
+- `packages/core/src/cli-contracts/workflow.ts` (+ `packages/core/src/cli-contracts/workflow.test.ts`):
+  `CliApplyInstructionsSuccessSchema` gains `missingPrerequisites: z.array(z.string()).optional()` and
+  `warnings: z.array(z.string()).optional()`; contract tests parse the executed 1.13.0 documents embedded in
+  the report (blocked with the four-id chain; ready with the one-warning array and `[specs, design]`).
+- `packages/core/src/opsx-types.ts` (+ `packages/core/src/opsx-types.test.ts`): `ApplyInstructionsInputSchema`
+  and `ApplyInstructionsProjectionSchema` gain the same optional members so the fields survive input decode
+  and projection parse (today both schemas list only `missingArtifacts` and the members would be dropped).
+- `packages/core/src/planning-cli-projection.ts`: no new branching — the projection copies the typed members
+  through; add/extend its focused test to pin the pass-through.
 
-Red: today the typed schema does not expose the fields, so a test asserting
-`result.data.missingPrerequisites` on the pinned 1.13 payload fails to compile/assert — record the compile or
-assertion failure before the schema change.
+Red (fixed command): extend `opsx-types.test.ts` first with a parse of the report's ready-state 1.13 payload
+through `ApplyInstructionsProjectionSchema` asserting `warnings` survives — run
+`pnpm --filter @openspecui/core test -- src/opsx-types.test.ts` and record the failing assertion (field
+`undefined`) before touching production schemas.
 
-Green: focused contract test file green; `pnpm --filter @openspecui/core typecheck`.
+Green: the three focused files green; `pnpm --filter @openspecui/core typecheck`; both new members stay
+optional with no default empty arrays anywhere in Core → Server.
 
-## Slice 3 — Planning projection and Web surface
+## Slice 3 — Server transport and Web surface
 
-Owners:
+Round-A non-blocking 2: the exact render owner is locked before coding and recorded in `implementation.md`;
+the candidate set from current code is fixed now:
 
-- `packages/core/src/planning-cli-projection.ts` (+ its server projection service
-  `packages/server/src/planning-cli-projection-service.ts`): preserve the two new fields as typed projection
-  facts.
-- Change Detail apply-guidance owner in `packages/web` (the Action-owned bounded Apply dialog plus the Change
-  detail evidence regions): render `warnings` on the direct plane (CLI-owned provenance, exact upstream text,
-  never fabricated when absent) and `missingPrerequisites` as readable build-order next-step evidence.
+- `packages/server/src/planning-cli-projection-service.ts` (+ `planning-cli-projection-service` test) and the
+  `opsx` apply-instructions transport in `packages/server/src/router.ts` (+ `router.test.ts` apply-instruction
+  cases): preserve the two fields as typed projection facts end-to-end.
+- `packages/web/src/lib/use-opsx.ts` (typed hook surface) and the Change Detail apply-guidance render owners
+  `packages/web/src/routes/change-view.tsx` + `packages/web/src/components/apply-progress-notice.tsx` (+
+  `change-view.test.tsx`): `warnings` render on the direct plane with CLI provenance and exact upstream text;
+  `missingPrerequisites` render as readable build-order next-step evidence, visually distinct from blockers.
+  The implementer must verify which of the candidate components physically renders apply guidance and record
+  the final owner file set in `implementation.md` before writing the component change.
 
-Red: a Web component test rendering apply instructions with a warning asserts the warning text appears in the
-direct plane — fails today because the projection drops the field (record the failing assertion).
+Red: a Web component test feeding apply instructions with the report's ready-state warning asserts the warning
+text appears in the direct plane — fails today because the projection drops the field (record the failing
+assertion output).
 
 Green: focused component test green; no horizontal overflow introduced (Change Detail evidence law).
 
@@ -75,10 +103,10 @@ Green: focused component test green; no horizontal overflow introduced (Change D
 
 Owners:
 
-- `packages/core/src/agent-delivery-registry.ts`: `AgentCliSeries = '1.13'`; `resolveAgentCliSeries` admits
-  `minor === 13`; registry header records that 1.13 carries forward every 1.12 physical fact (no new tool
-  entries upstream); `minCliSeries` values unchanged (SourceCraft stays `'1.12'` — a physical fact of its
-  introduction).
+- `packages/core/src/agent-delivery-registry.ts` (+ its tests): `AgentCliSeries = '1.13'`;
+  `resolveAgentCliSeries` admits `minor === 13`; registry header records that 1.13 carries forward every 1.12
+  physical fact (no new tool entries upstream); `minCliSeries` values unchanged (SourceCraft stays `'1.12'` —
+  a physical fact of its introduction, not an admission line; see Spec hygiene).
 - `packages/core/src/tool-init-state.ts`: `PINNED_AGENT_GENERATOR_VERSION = '1.13.0'`; staleness comparison
   stays series-aware (1.13.x-generated artifacts not stale; 1.12.x-generated now below-admitted → stale).
 - Registry/state tests (`agent-delivery-registry`, `tool-init-state`, server
@@ -89,48 +117,65 @@ the pinned generator rotates (below-admitted) — record before rewriting expect
 
 Green: focused registry/state test files green.
 
-## Slice 5 — Reference pin guard and executable fixture matrix
+## Slice 5 — Reference pin guard and the complete executable fixture matrix
 
-Owners:
+Round-A B2: the positive matrix is the full v13 obligation, not two files. Owners:
 
 - `scripts/prepare-openspec-reference.mjs`: `EXPECTED_COMMIT` → `9d4e5974e5c0d9a09b9c6c1e1eb0975e80ec4461`;
   header intents updated.
+- `packages/core/src/upstream-contract-regression.test.ts`: the reference-commit pin assertion rotates from
+  `e062b957...` to `9d4e5974...` (ZCode-found gap, same class as B2/B3).
 - `packages/core/package.json`: add `"openspec-cli-113": "npm:@fission-ai/openspec@1.13.0"` (integrator-owned:
-  lockfile regenerated once, centrally).
+  lockfile regenerated once, centrally; acceptance evidence per Round-A non-blocking 3: `pnpm install` lockfile
+  diff shows the new alias edge, and the installed shim resolves to
+  `node_modules/openspec-cli-113/bin/openspec.js`).
 - `packages/core/src/__tests__/official-cli-v13-fixtures.ts`: new helper mirroring the v12 helper (pinned bins
   map, isolated env, hidden-console runner, JSON stream discipline).
-- `packages/core/src/official-cli-v13-agent-delivery-fixtures.test.ts` and
-  `official-cli-v13-batch-status-fixtures.test.ts` (new, mirroring the v12 pair): prove accepted contracts on
-  1.13.0 — version identity, agent delivery inventory parity (6 skills + 6 commands isolated default profile),
-  batch status envelope, requirement diff, findings report, and the new Apply Instructions fields against a
-  fixture repository created inside the test.
-- Existing `official-cli-v12-*` fixture tests: retain as boundary negatives only (the 1.12.0 executable must
-  classify unsupported against the v13 gate); update their role comments accordingly. The v11 helper and its
-  boundary tests stay untouched.
+- **Full v13 positive matrix** — for every v12 positive suite that proves a still-accepted contract, a v13
+  counterpart runs the same contract against the 1.13.0 executable (`openspec-cli-113`), each asserting
+  `--version` provenance first:
+  - `official-cli-v13-workflow-fixtures.test.ts` (from v12 workflow suite)
+  - `official-cli-v13-default-store-fixtures.test.ts` (from v12 default-store suite)
+  - `official-cli-v13-nested-spec-fixtures.test.ts` (from v12 nested-spec suite)
+  - `official-cli-v13-show-diff-fixtures.test.ts` (from v12 show-diff suite)
+  - `official-cli-v13-validation-full-fixtures.test.ts` (from v12 validation-full suite)
+  - `official-cli-v13-validation-findings-fixtures.test.ts` (from v12 validation-findings suite)
+  - `official-cli-v13-batch-status-fixtures.test.ts` (from v12 batch-status suite)
+  - `official-cli-v13-agent-delivery-fixtures.test.ts` (from v12 agent-delivery suite; isolated default
+    profile 6 skills + 6 commands parity)
+  - **plus** `official-cli-v13-apply-readiness-fixtures.test.ts` (new): the two executed report scenarios —
+    blocked chain `[proposal, specs, design, tasks]` and ready warning text — against a fixture repository
+    created inside the test.
+- Boundary role: the retained `openspec-cli-112` executable proves below-admitted rejections against the v13
+  gate (`official-cli-v12-boundary-fixtures.test.ts` rotates its role; other v12 suites are retired from the
+  positive matrix once their v13 counterparts land — deleted in this slice, not left as stale positives). The
+  v11 helper and its boundary tests stay untouched.
 
-Red: before the alias lands, the new fixture test file cannot resolve `openspec-cli-113/bin/openspec.js` —
-record the resolution failure. Post-implementation mutation red: pointing the bins map at the 112 alias fails
-the `--version` identity assertion.
+Red: before the alias lands, the new v13 fixture files cannot resolve `openspec-cli-113/bin/openspec.js` —
+record the resolution failure. Post-implementation mutation red: pointing a bins-map entry at the 112 alias
+fails the `--version` identity assertion.
 
-Green: focused v13 fixture tests green; `pnpm --filter @openspecui/core test -- src/official-cli-v13-...`.
+Green: all v13 fixture files green via
+`pnpm --filter @openspecui/core test -- src/official-cli-v13-`; boundary suite green; the retired v12 positive
+suites are deleted in the same commit as their v13 counterparts.
 
-## Slice 6 — Cross-package window/copy alignment
+## Slice 6 — Cross-package window/copy alignment (grouped by owner class)
 
-Owners:
+Round-A non-blocking 4: four independent red/green units instead of one wide gate:
 
-- `packages/web` copy/tests referencing the v12 window (cli-health-gate, settings diagnostics, use-cli-runner,
-  change-view, validation-findings, archived-validation, cli-validate-findings-router, evidence-workspace and
-  their tests).
-- `packages/server` router copy/tests (`router.test.ts`, `root-context-cold-start.integration.test.ts`,
-  `tool-subscription-router.test.ts`, `change-diff-evidence-service.test.ts`,
-  `agent-delivery-projection-service.test.ts`, `cli-validate-findings-router.test.ts`).
-- `packages/cli` (`worktree-instance-manager.test.ts`) and `scripts/setup-example.ts` test expectations.
-- Headers updated in every touched file.
+1. Compatibility copy (Web): `cli-health-gate` (+test), `settings` diagnostics, `use-cli-runner`,
+   `openspec-settings-diagnostics` (+tests) — mismatch-dialog copy and pinned-install spec strings.
+2. Server evidence: `router.test.ts`, `root-context-cold-start.integration.test.ts`,
+   `tool-subscription-router.test.ts`, `change-diff-evidence-service.test.ts`,
+   `agent-delivery-projection-service.test.ts`, `cli-validate-findings-router.test.ts`.
+3. Web evidence: `change-view.test.tsx`, `validation-findings-evidence` (+test),
+   `archived-validation-evidence` (+test), `evidence-workspace` (+test).
+4. CLI/scripts: `packages/cli/src/worktree-instance-manager.test.ts`, `scripts/setup-example.ts` consumers.
 
-Red: run the named focused test files before the copy change and record the mismatch-dialog/range assertions
-that fail against the new constants.
+Red: run each group's focused files before the copy change and record the assertions that fail against the
+new constants (range strings, series labels).
 
-Green: each named focused file green.
+Green: each group's focused files green, recorded per group.
 
 ## Slice 7 — Release preparation (integrator-owned)
 
@@ -142,13 +187,16 @@ Green: each named focused file green.
 - `AGENTS.md` architecture-decision entry for the v13 admission (after implementation settles).
 - Full local gates: `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`,
   `pnpm test:browser:ci` (or the justified scoped subset recorded in the PR notes).
+- Known pre-existing environmental failure (not this change's regression, verified on unmodified `main`):
+  `packages/core/src/reactive-fs/path-realpath.test.ts` — macOS `/var` vs `/private/var` TMPDIR symlink
+  expectation. Recorded in PR notes as an upstream-of-this-change flake; not silently skipped.
 
 ## Batch topology
 
-- Batch A (parallel): Slice 1, Slice 2, Slice 4 (disjoint file sets; Slice 2's schema file is not touched by
-  1 or 4).
-- Batch B (parallel): Slice 3 (depends on Slice 2 schema), Slice 5 (depends on Slice 1 constants for boundary
-  negatives), Slice 6 (depends on Slice 1 constants).
+- Batch A (parallel): Slice 1, Slice 2, Slice 4 (disjoint file sets; Slice 2's schema files are not touched
+  by 1 or 4).
+- Batch B (parallel): Slice 3 (depends on Slice 2 schemas), Slice 5 (depends on Slice 1 constants for
+  boundary negatives), Slice 6 (depends on Slice 1 constants).
 - Batch C: Slice 7 integrator-only after A+B are green.
 - Shared files (`package.json` devDeps, lockfile, AGENTS.md, README files, `.changeset/`) are integrator-owned.
 

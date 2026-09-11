@@ -33,9 +33,12 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
 
 - [ ] Slice 4 registry series `'1.13'`, pinned generator `1.13.0`; staleness rotation red recorded; focused
       registry/state tests green.
-- [ ] Slice 5 pin guard `EXPECTED_COMMIT` rotated; `openspec-cli-113` alias installed; v13 fixture helper +
-      tests green on the real 1.13.0 executable; v12 fixtures retained as boundary negatives; mutation red
-      (bins-map → 112 alias) recorded.
+- [ ] Slice 5 pin guard `EXPECTED_COMMIT` rotated; `upstream-contract-regression` commit pin rotated;
+      `openspec-cli-113` alias installed with lockfile-diff + installed-shim evidence.
+- [ ] **Complete v13 positive fixture matrix green** (workflow, default-store, nested-spec, show-diff,
+      validation-full, validation-findings, batch-status, agent-delivery, apply-readiness) on the real 1.13.0
+      executable with `--version` provenance; v12 boundary negatives retained; retired v12 positive suites
+      deleted with their counterparts; mutation red (bins-map → 112 alias) recorded.
 
 ## CP4 — Cross-package alignment (implementation)
 
