@@ -186,3 +186,13 @@ dispositioned:
   install root; parent discovery was never the concern). Verified locally end-to-end (script exit 0),
   and under the CI pnpm line forced real (`pnpm@10.22.0` with
   `--config.manage-package-manager-versions=false`, exit 0) — no packageManager bump needed.
+- Second CI round (after the prepare fix): all three gates converged on exactly one file —
+  `packages/web/src/components/change-diff-evidence.test.tsx` (7 tests; Windows Gate 7/1202, Fast Gate
+  same set, Browser Gate cascade-skip). Root cause: the web-side admitted fixture still declared
+  `version: '1.12.0'` (only its server twin was in the slice lists). Rotated to `1.13.0` (10/10 green
+  locally). Honest correction of an earlier claim: the local "test:ci 78/79" verdict was incomplete —
+  `pnpm -r` aborts at the first failing package (core's known path-realpath flake), so the web suite
+  never executed locally; per-package explicit runs are now the rule (web/cli/app green; server
+  652/658 with one load-sensitive startup-timing test that also fails on unmodified main under load —
+  spawn-traced: the fake CLI only receives `--version`/`config*` within the 1s waitFor window on both
+  trees; CI's quiet runners fire store-list in time and the test passes there).
