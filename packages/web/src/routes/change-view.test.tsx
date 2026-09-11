@@ -1,11 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Verify change detail fallbacks and schema-driven artifact rendering.
  * 2. Verify retained errors and non-current authority lock actions without entering the Header.
  * 3. Verify Apply inputs remain separate and open from a Header Action Dialog.
  * 4. Verify active Change alone owns the routed Evidence tab and explicit unavailable facts.
  * 5. Verify the Evidence tab renders the container-responsive list-detail workspace with
  *    keyboard-reachable rows, crowded drill/back, and unfabricated row chips.
+ * 6. Verify OpenSpec 1.13 Apply warnings and the build-order chain stay on the direct
+ *    status plane, and absent fields keep the pre-1.13 presentation unchanged.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
@@ -14,6 +16,7 @@
  * Owner correction (2026-08-03): move Actions inline with the title, unify subtitle badges, and localize unavailable Tooltips.
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import type { RootActionState } from '@/lib/use-root-action-state'
 import type { ChangeStatus } from '@openspecui/core'
@@ -575,6 +578,105 @@ describe('ChangeView', () => {
     expect(screen.getByText('Run focused verification before marking work complete.')).toBeVisible()
   })
 
+  it('keeps OpenSpec 1.13 Apply warnings and the build-order chain on the direct status plane', () => {
+    statusMock.mockReturnValue({
+      data: {
+        changeName: 'Extract Terminal View Webcomponent',
+        schemaName: 'opsx-collab-pr-loop',
+        isPlanningComplete: false,
+        applyRequires: [],
+        artifacts: [
+          { id: 'implementation', outputPath: 'implementation.md', status: 'ready', requires: [] },
+        ],
+        provenance: { kind: 'static' },
+      },
+      isLoading: false,
+      error: null,
+    })
+    // Ready-state 1.13 document: warnings plus a non-gating missingPrerequisites chain
+    // (conditional artifacts apply does not block on). Upstream omits empty keys, so both
+    // fields arrive as present arrays and no missingArtifacts key exists.
+    applyInstructionsMock.mockReturnValue({
+      data: {
+        state: 'ready',
+        warnings: [
+          'This change has no delta specs and does not declare `skip_specs: true`, so `openspec validate extract-terminal-view-webcomponent` fails on it. Write the delta specs before implementing (`openspec instructions specs --change extract-terminal-view-webcomponent`), or add `skip_specs: true` to /planning/openspec/changes/extract-terminal-view-webcomponent/.openspec.yaml if this change really changes no specified behavior.',
+        ],
+        missingPrerequisites: ['specs', 'design'],
+        applyInstructionProgress: {
+          source: 'openspec-instructions-apply',
+          total: 2,
+          complete: 1,
+          remaining: 1,
+          state: 'ready',
+          divergence: null,
+        },
+      },
+    })
+
+    render(<ChangeView />)
+
+    const region = screen.getByTestId('opsx-detail-status-region')
+    // The warning text is verbatim on the direct plane — not only inside the Apply inputs
+    // dialog, a Tooltip, or a collapsed disclosure.
+    expect(
+      within(region).getByText(
+        /This change has no delta specs and does not declare `skip_specs: true`/
+      )
+    ).toBeVisible()
+    expect(within(region).getByText(/^Apply warnings/)).toBeVisible()
+    // The build-order chain names every missing prerequisite id beside the warning.
+    expect(within(region).getByText(/^Next in build order/)).toBeVisible()
+    expect(within(region).getByText('specs')).toBeVisible()
+    expect(within(region).getByText('design')).toBeVisible()
+    // Ready-state build-order evidence never adopts the blocker alert role.
+    expect(within(region).queryByRole('alert')).toBeNull()
+  })
+
+  it('keeps the pre-1.13 Apply presentation when the 1.13 evidence fields are absent', () => {
+    statusMock.mockReturnValue({
+      data: {
+        changeName: 'Extract Terminal View Webcomponent',
+        schemaName: 'opsx-collab-pr-loop',
+        isPlanningComplete: false,
+        applyRequires: [],
+        artifacts: [
+          { id: 'implementation', outputPath: 'implementation.md', status: 'ready', requires: [] },
+        ],
+        provenance: { kind: 'static' },
+      },
+      isLoading: false,
+      error: null,
+    })
+    applyInstructionsMock.mockReturnValue({
+      data: {
+        context: 'Preserve the project-specific deployment boundary.',
+        operationGuidance: ['Implement tasks in order.'],
+        applyInstructionProgress: {
+          source: 'openspec-instructions-apply',
+          total: 3,
+          complete: 2,
+          remaining: 1,
+          state: 'ready',
+          divergence: null,
+        },
+      },
+    })
+
+    render(<ChangeView />)
+
+    // Absent keys degrade to the existing presentation: no status region appears, no
+    // warning/build-order surface is synthesized, and the Apply inputs dialog still owns
+    // context/guidance exactly as before.
+    expect(screen.queryByTestId('opsx-detail-status-region')).toBeNull()
+    expect(screen.queryByText('Apply warnings')).toBeNull()
+    expect(screen.queryByText('Next in build order')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Apply inputs' }))
+    expect(screen.getByRole('dialog', { name: 'Apply inputs' })).toBeVisible()
+    expect(screen.getByText('Preserve the project-specific deployment boundary.')).toBeVisible()
+    expect(screen.getByText('Implement tasks in order.')).toBeVisible()
+  })
+
   it('routes static Change evidence into its dedicated tab', () => {
     routedTabState.selectedTab = 'evidence'
     statusMock.mockReturnValue({
@@ -811,7 +913,10 @@ describe('ChangeView', () => {
         launchProject: { path: '/tmp/project' },
         planningRoot: { path: '/tmp/project', source: 'nearest', healthy: true, status: [] },
         storeId: null,
-        cli: { available: true, version: '1.12.0' },
+        // Admitted-line CLI for the v13 window (>=1.13.0 <1.14.0): the diff-evidence
+        // capability gate only fetches on the admitted series, so a retired 1.12 fixture
+        // would leave the transport untouched and time out this test.
+        cli: { available: true, version: '1.13.0' },
       },
     })
     statusMock.mockReturnValue({
@@ -819,7 +924,7 @@ describe('ChangeView', () => {
       isLoading: false,
       error: null,
     })
-    // A live 1.12 session makes the diff section fetch exactly once; the mock resolves so the
+    // A live admitted session makes the diff section fetch exactly once; the mock resolves so the
     // section settles before the drill begins (a rejecting mock would leave it pending).
     diffEvidenceQueryMock.mockResolvedValueOnce({
       kind: 'executed',

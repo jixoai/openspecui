@@ -1,7 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-09-04 Asia/Shanghai):
- * 1. Present the typed 1.12 findings document: INFO as a distinct informational class,
- *    `returnedItems` beside preserved full-run totals, CLI provenance, filtered labeling.
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * 1. Present the typed 1.12+ findings document (admitted 1.13 line): INFO as a distinct
+ *    informational class, `returnedItems` beside preserved full-run totals, CLI provenance,
+ *    filtered labeling.
  * 2. Attribute findings to their owning change: the current change's entries are the
  *    primary list, other active changes' entries stay in a labeled secondary disclosure,
  *    and scope-level counts are never filtered to the current change.
@@ -15,6 +16,7 @@
  *
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Owner walkthrough correction (2026-09-04): findings must attribute their owning change; the Evidence detail panel styling follows the vision review.
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -45,7 +47,7 @@ const rootActionStateMock = vi.hoisted(() => ({
     message: '',
     evidence: [],
     context: {
-      cli: { available: true, version: '1.12.0' },
+      cli: { available: true, version: '1.13.0' },
     },
     observedAt: 1,
   },
@@ -56,9 +58,9 @@ vi.mock('@/lib/use-root-action-state', () => ({
 }))
 
 /**
- * Transport fixture wrapping one findings payload. The executed 1.12 document keeps the
- * item `valid: true` while carrying the merge-conflict INFO finding — the projection must
- * never re-label that verdict.
+ * Transport fixture wrapping one findings payload. The executed findings document (observed
+ * on the pinned 1.12 reference) keeps the item `valid: true` while carrying the
+ * merge-conflict INFO finding — the projection must never re-label that verdict.
  */
 function findingsTransport(data: unknown, overrides: Record<string, unknown> = {}) {
   return {
@@ -121,7 +123,7 @@ describe('ValidationFindingsEvidence', () => {
       message: '',
       evidence: [],
       context: {
-        cli: { available: true, version: '1.12.0' },
+        cli: { available: true, version: '1.13.0' },
       },
       observedAt: 1,
     }
@@ -403,7 +405,7 @@ describe('ValidationFindingsEvidence', () => {
   it('offers no findings action on a retired CLI session', () => {
     rootActionStateMock.state = {
       ...rootActionStateMock.state,
-      context: { cli: { available: true, version: '1.11.0' } },
+      context: { cli: { available: true, version: '1.12.0' } },
     }
     render(<ValidationFindingsEvidence changeId="test-change" />)
 
@@ -411,7 +413,7 @@ describe('ValidationFindingsEvidence', () => {
     expect(
       screen.getByText(/Validation findings require the admitted OpenSpec CLI line/)
     ).toBeVisible()
-    expect(screen.getByText(/detected 1\.11\.0/)).toBeVisible()
+    expect(screen.getByText(/detected 1\.12\.0/)).toBeVisible()
     expect(
       screen.queryByRole('button', { name: 'Load validation findings' })
     ).not.toBeInTheDocument()
@@ -470,7 +472,7 @@ describe('ValidationFindingsEvidence', () => {
     const retiredChip = vi.fn()
     rootActionStateMock.state = {
       ...rootActionStateMock.state,
-      context: { cli: { available: true, version: '1.11.0' } },
+      context: { cli: { available: true, version: '1.12.0' } },
     }
     render(<ValidationFindingsEvidence changeId="test-change" onChip={retiredChip} />)
     expect(retiredChip).toHaveBeenLastCalledWith({ label: 'unavailable', tone: 'unavailable' })

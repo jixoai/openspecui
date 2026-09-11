@@ -1,11 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Render schema-aware change artifacts and source files while retaining terminal status errors.
  * 2. Dispatch change workflows through routed compose/verify surfaces and the shared Operator launcher.
  * 3. Lock every change workflow action behind current Root Context and Status projection authority.
  * 4. Present Apply progress directly and expose project context/guidance through a Header Action Dialog.
  * 5. Keep compact Change facts in subtitle badges while routing complete CLI evidence through a dedicated tab.
  * 6. Mount the container-responsive list-detail Evidence workspace as the sole Evidence tab surface.
+ * 7. Mount OpenSpec 1.13 Apply warnings and the build-order chain on the direct status plane.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
@@ -18,6 +19,9 @@
  *   tab gains the capability-gated CLI MODIFIED-delta diff evidence beside the existing layers.
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进" — the Evidence tab gains the findings evidence section.
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ *   — the status region gains the OpenSpec 1.13 Apply `warnings` and `missingPrerequisites`
+ *   direct-plane evidence beside the existing divergence notice.
  */
 import { ApplyProgressNotice } from '@/components/apply-progress-notice'
 import {
@@ -136,7 +140,12 @@ export function ChangeView() {
     Boolean(error) ||
     rootAction.status === 'blocked' ||
     hasReferenceFailures ||
-    Boolean(applyInstructions?.applyInstructionProgress.divergence)
+    Boolean(applyInstructions?.applyInstructionProgress.divergence) ||
+    // OpenSpec 1.13 Apply evidence owns the direct plane: warnings predict a validation
+    // failure and the build-order chain is next-step evidence, so either presence mounts
+    // the status region even while the Apply state is already `ready`.
+    (applyInstructions?.warnings?.length ?? 0) > 0 ||
+    (applyInstructions?.missingPrerequisites?.length ?? 0) > 0
 
   return (
     <OpsxEntityDetailView
@@ -241,6 +250,8 @@ export function ChangeView() {
             {applyInstructions ? (
               <ApplyProgressNotice
                 applyInstructionProgress={applyInstructions.applyInstructionProgress}
+                warnings={applyInstructions.warnings}
+                missingPrerequisites={applyInstructions.missingPrerequisites}
               />
             ) : null}
           </div>

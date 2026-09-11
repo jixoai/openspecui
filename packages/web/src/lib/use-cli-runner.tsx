@@ -15,6 +15,7 @@
  * Original request (2026-08-28, issue #258): the displayed install command must match the
  *   Server-owned stream, which installs the admitted series instead of an out-of-range @latest.
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import '@/styles/terminal-effects.css'
 import type { CliStreamEvent } from '@openspecui/core'

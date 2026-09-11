@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Resolve the running OpenSpec CLI's private command-generation boundary without bundling copied prompts.
  * 2. Produce exact per-Agent, per-workflow command contents for physical fingerprint comparison.
  * 3. Fail closed when the configured runner has no importable OpenSpec module or compatible generator contract.
@@ -12,6 +12,7 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): rotate the admitted-generator comment to the 1.13 line (comment only).
  */
 
 import { dirname, resolve } from 'node:path'
@@ -30,7 +31,7 @@ export type AgentCommandContentCatalog = Readonly<
  * contract when a command template carries no argument placeholder of its own
  * (see the pinned upstream `command-generation/adapters/opencode.ts`). OpenSpecUI
  * treats this line as generator-owned, so command files may differ by exactly
- * this line and still be content-current against the admitted 1.12 generator
+ * this line and still be content-current against the admitted 1.13 generator
  * even when an older line's generator wrote the pre-injection body.
  */
 export const OPENCODE_PROVIDED_ARGUMENTS_LINE = '**Provided arguments**: $ARGUMENTS'

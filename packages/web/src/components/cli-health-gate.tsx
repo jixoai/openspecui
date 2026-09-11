@@ -1,11 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Gate Web compatibility from the shared Root Context CLI evidence only.
  * 2. Preserve session-only bypass and execute-path repair controls.
  * 3. Revalidate the shared Root Context Work through readonly refresh after explicit repair.
  * 4. Recommend installing the admitted CLI series, never an out-of-range `@latest` (issue #258).
- * 5. Derive all mismatch dialog copy from the shared compatibility constants so the v12
- *    admitted single-series 1.12 window never forks from packages/core.
+ * 5. Derive all mismatch dialog copy from the shared compatibility constants so the v13
+ *    admitted single-series 1.13 window never forks from packages/core.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
@@ -19,6 +19,7 @@
  *   install hint must not walk the user into a version this release line then blocks.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { queryClient, trpc, trpcClient } from '@/lib/trpc'

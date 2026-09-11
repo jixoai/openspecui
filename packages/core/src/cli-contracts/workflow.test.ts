@@ -897,7 +897,7 @@ describe('OpenSpec 1.13 apply instructions CLI contract', () => {
 
     expect(parsed.state).toBe('ready')
     expect(parsed.warnings).toEqual([executedApplyReady113Warning])
-    expect(parsed.warnings[0]).toContain('`openspec validate no-specs-but-tasks` fails on it')
+    expect(parsed.warnings?.[0]).toContain('`openspec validate no-specs-but-tasks` fails on it')
     // Ready may still name conditional artifacts that apply does not gate on.
     expect(parsed.missingPrerequisites).toEqual(['specs', 'design'])
     expect(parsed.progress).toEqual({ total: 2, complete: 1, remaining: 1 })

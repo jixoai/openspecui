@@ -35,6 +35,34 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
   suites (not seen with focused runs).
 - `agent-command-content.ts:33` still comments "admitted 1.12 generator" — assigned to Slice 5 as a
   drive-by comment correction.
+- Batch B done (Slices 3, 5, 6):
+  - Slice 3: render owners locked — `change-view.tsx` (status region + `hasDirectStatus` gate) and
+    `apply-progress-notice.tsx` (direct-plane warnings block with CLI provenance, neutral build-order block
+    with `role="status"`, divergence preserved). Server service/router needed zero production change
+    (pass-through structural; kernel spread covers it). Real red: three TestingLibrary failures (warnings
+    absent from the direct plane). Green: web 29 tests, server projection 12, router 1.13 apply case;
+    web+server typechecks clean. Cross-slice fix: one crowded-drill fixture carried `version: '1.12.0'` and
+    lost `requirementDiff` under the rotated window — fixture rotated to `1.13.0`.
+  - Slice 5: full positive matrix migrated (9 v13 suites + `__tests__/official-cli-v13-fixtures.ts` helper);
+    joint gate 13 files / 76 tests green; `--version` provenance asserted everywhere; mutation red captured
+    (bins-map → 112 fails identity). Boundary suite rotated to v13-gate semantics (1.12.0 below-admitted,
+    same fixture shows 1.13 fields present / 1.12 absent). 8 retired v12 positive suites deleted with
+    `git diff --name-status` + orphan-scan proof; tsconfig fixture lanes rotated to the v13 includes.
+    Lockfile +23 lines, installed shim verified `1.13.0`. Drive-bys: `agent-command-content.ts:33` comment;
+    Batch-A leftover TS18048 (`parsed.warnings?.[0]`); missed-by-plan
+    `opsx-kernel-schemas-root.fixtures.test.ts` rotated to the admitted 1.13 line (schemas-root forwarding
+    proof). All mirror assertions passed with zero expectation drift — 1.13 keeps every 1.12 contract the
+    suites pin.
+  - Slice 6: four owner-class groups red/green — web compat copy (cli-health-gate 9 failed → 11/11), server
+    evidence (router 106→107 incl. the natural red at `tool-subscription-router.test.ts:674`, change-diff
+    6 failed → 9/9, findings 4 failed → 4/4, cold-start pin rotation → 1/1), web evidence (findings/archived
+    fixtures rotated → 47/47), cli/scripts (constant-following green; diagnose mirror re-verified through the
+    canonical root config). Zero production logic changes.
+  - Integrator follow-up: `packages/web/scripts/w2-project-binding-playwright.ts` `PINNED_OPENSPEC_COMMIT`
+    rotated to `9d4e5974...` (Slice 6 escalation; header updated).
+  - Known load-dependent flake (pre-existing, HEAD-reproduced by Slice 6): server git-scope test sits near
+    its 5s budget under parallel load; re-verified green in isolation. To be re-run during the full gate
+    window on a quiet machine.
 
 ## Evidence recording rule
 

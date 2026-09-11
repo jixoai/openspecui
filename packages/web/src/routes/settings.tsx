@@ -20,6 +20,7 @@
  * Original request (2026-08-01): Settings labels Agent Integrations and delegates management to Config.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -365,8 +366,8 @@ export function Settings() {
 
   // The install stream installs the admitted series; never present an out-of-range registry
   // latest as the update target (issue #258). Only a recommended (current-series) latest can be
-  // named literally — under the v12 single-series window any non-recommended latest (an older
-  // line or an unpublished 1.13) would mislabel the actually-installed 1.12.x, so it falls back
+  // named literally — under the v13 single-series window any non-recommended latest (an older
+  // line or an unpublished 1.14) would mislabel the actually-installed 1.13.x, so it falls back
   // to the series label.
   const pinnedInstallSpec = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
   const updateTargetVersion =

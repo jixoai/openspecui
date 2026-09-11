@@ -15,8 +15,8 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  *
- *   The pinned fallback spec and generated-by expectations follow the v13 1.13 series
- *   (the versioned install-series assertion itself belongs to the compat window owner).
+ *   The pinned fallback spec, generated-by expectations, and the versioned install-series
+ *   assertion follow the v13 1.13 series from the shared compat constants.
  * Original request (2026-08-28, issue #258): the global install stream installs the admitted
  *   versioned series instead of an unversioned spec the admission gate can block.
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
@@ -51,7 +51,7 @@ import { createServer } from './server.js'
 const REACTIVE_MISSING_PATH_FALLBACK_MS = Number(process.env.CI_TOOL_WAIT_MS ?? 1_000)
 // Loaded CI runners need a wider first-projection budget than the reactive fallback
 // implies; the wait targets the same settlement, only tolerates slower runners.
-// The pinned 1.12 runner's heavier cold start (its module graph now loads the diff
+// The pinned runner's heavier cold start (its module graph now loads the diff
 // package) pushed shared-runner settlement past the 15-cycle budget this file last
 // used, the same shared-runner wait-budget class c0ab7f36 and c4ed106c raised.
 const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS =
@@ -671,7 +671,7 @@ describe(
         await expect(Promise.all(runnerAtExit)).resolves.toMatchObject([{ version: 'runner-b' }])
         expect(events).toEqual([{ type: 'exit', exitCode: 0 }])
         expect(executeCommandStream).toHaveBeenCalledWith(
-          ['npm', 'install', '-g', '@fission-ai/openspec@1.12'],
+          ['npm', 'install', '-g', '@fission-ai/openspec@1.13'],
           expect.any(Function)
         )
       } finally {

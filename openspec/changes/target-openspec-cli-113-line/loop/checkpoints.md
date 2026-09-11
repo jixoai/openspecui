@@ -28,23 +28,28 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
 
 ## CP2 — Projection and Web surface (implementation)
 
-- [ ] Slice 3 projection preserves `missingPrerequisites`/`warnings`; Change Detail renders warnings on the
-      direct plane; focused component test green; red recorded.
+- [x] Slice 3 projection preserves `missingPrerequisites`/`warnings` (structural pass-through; server
+      service/router zero production change); Change Detail renders warnings on the direct plane
+      (`change-view.tsx` + `apply-progress-notice.tsx` owners locked); focused tests green (web 29, server
+      12 + router case); red recorded (three TestingLibrary failures).
 
 ## CP3 — Registry, staleness, fixtures (implementation)
 
-- [ ] Slice 4 registry series `'1.13'`, pinned generator `1.13.0`; staleness rotation red recorded; focused
-      registry/state tests green.
-- [ ] Slice 5 pin guard `EXPECTED_COMMIT` rotated; `upstream-contract-regression` commit pin rotated;
-      `openspec-cli-113` alias installed with lockfile-diff + installed-shim evidence.
-- [ ] **Complete v13 positive fixture matrix green** (workflow, default-store, nested-spec, show-diff,
-      validation-full, validation-findings, batch-status, agent-delivery, apply-readiness) on the real 1.13.0
-      executable with `--version` provenance; v12 boundary negatives retained; retired v12 positive suites
-      deleted with their counterparts; mutation red (bins-map → 112 alias) recorded.
+- [x] Slice 4 registry series `'1.13'` (provenance union retains `'1.12'`), pinned generator `1.13.0`;
+      staleness rotation red recorded (2 assertions); focused registry/state tests green (78/78, 8/8, 9/9,
+      tool-subscription agent assertions green).
+- [x] Slice 5 pin guard `EXPECTED_COMMIT` rotated; `upstream-contract-regression` commit pin rotated (7/7);
+      `openspec-cli-113` alias installed with lockfile-diff (+23 lines) + installed-shim evidence (1.13.0).
+- [x] **Complete v13 positive fixture matrix green** — 9 suites, joint gate 13 files / 76 tests, every file
+      `--version`-provenance-asserted; v12 boundary suite retained (1.12.0 below-admitted, 2/2); retired v12
+      positive suites deleted with retirement proof; mutation red (bins-map → 112) recorded.
 
 ## CP4 — Cross-package alignment (implementation)
 
-- [ ] Slice 6 named focused test files green across web/server/cli/scripts; red recorded.
+- [x] Slice 6 four owner-class groups green (web compat 134/134 combined, server router 107/107 +
+      change-diff 9/9 + findings 4/4 + cold-start 1/1 + tool-subscription 5/5, web evidence 47/47,
+      cli/scripts constant-following); red recorded per group. Integrator rotated the
+      `w2-project-binding-playwright.ts` pin escalation.
 
 ## CP5 — Release preparation (delivery)
 
