@@ -17,11 +17,11 @@ OpenSpecUI 12 gives OpenSpec projects a reactive dashboard, an objective change 
 
 ## Requirements
 
-- **OpenSpec CLI**: `>=1.12.0 <1.13.0` — the stable 1.12 line is current and recommended (single-series window). Older lines (including the 1.10.x/1.11.x OpenSpecUI 11 window), prereleases, and `>=1.13.0` are blocked by default.
+- **OpenSpec CLI**: `>=1.13.0 <1.14.0` — the stable 1.13 line is current and recommended (single-series window). Older lines (including the 1.12.x OpenSpecUI 12 window), prereleases, and `>=1.14.0` are blocked by default.
 - **Node.js**: `>= 20.19.0`
 
 ```bash
-npm install -g @fission-ai/openspec@1.12
+npm install -g @fission-ai/openspec@1.13
 ```
 
 ## Quick start

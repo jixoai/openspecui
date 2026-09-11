@@ -25,7 +25,7 @@ delta and selects the **new-major** path, consistent with the cadence every line
 v9 -> 1.8+1.9, v11 -> 1.10+1.11, v12 -> 1.12, v13 -> 1.13):
 
 - The delta is small but real: Apply Instructions gains two protocol-visible JSON fields
-  (`missingPrerequisites`, `warnings`) whose *projection* is a v13 obligation, and generated guidance content
+  (`missingPrerequisites`, `warnings`) whose _projection_ is a v13 obligation, and generated guidance content
   changed (explore/propose), which rotates the generator-staleness baseline. Both fit the established
   one-line-per-series delivery vehicle (typed contract + capability window + README scope) better than a
   bridge, and a bridge would force the staleness baseline to become series-conditional inside 12.x.
@@ -68,13 +68,13 @@ Sources inspected:
 Commands below used the npm-published 1.13.0 executable in an isolated fixture (`openspec init . --tools=none`,
 then `openspec new change no-specs-but-tasks`, default `spec-driven` schema):
 
-| Command and fixture                                          | 1.12.0                       | 1.13.0                                                                                                       | v13 consequence                                                                                   |
-| ------------------------------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `openspec --version`                                         | `1.12.0`                     | `1.13.0`                                                                                                     | Version classification input only.                                                                |
-| `instructions apply --json`, change with only `.openspec.yaml` | `missingArtifacts:["tasks"]` | `state:blocked`, `missingArtifacts:["tasks"]`, **`missingPrerequisites:["proposal","specs","design","tasks"]`** (build-order closure), no `warnings` | New informational field naming the whole prerequisite chain, not just apply's first hop.          |
-| `instructions apply --json`, change with `proposal.md` + `tasks.md` (1/2 done), no delta specs | `state:"ready"` (no field) | `state:"ready"`, **`warnings:[...]`** no-delta-specs advisory naming `openspec validate` failure + both remedies, **`missingPrerequisites:["specs","design"]`** (conditional artifacts not built), `progress:{2,1,1}` | New warning class on the ready state; pairs the ready signal with the validate-refusing gap.       |
-| `instructions apply` text (blocked)                          | `Use the openspec-continue-change skill...` | `Not created yet, in build order: ...` + `Create it with \`openspec instructions <artifact> --change <name>\`` | Remedies name CLI verbs now (the `core` profile never installs that skill). Text surfaces must not pattern-match the old string. |
-| Engines / packageManager                                     | `>=20.19.0` / pnpm 10        | unchanged (`>=20.19.0`, `pnpm@10.34.5`); pnpm overrides moved out of `package.json` into `pnpm-workspace.yaml`  | Reference-build and fixture-install flow unaffected.                                              |
+| Command and fixture                                                                            | 1.12.0                                      | 1.13.0                                                                                                                                                                                                                | v13 consequence                                                                                                                  |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `openspec --version`                                                                           | `1.12.0`                                    | `1.13.0`                                                                                                                                                                                                              | Version classification input only.                                                                                               |
+| `instructions apply --json`, change with only `.openspec.yaml`                                 | `missingArtifacts:["tasks"]`                | `state:blocked`, `missingArtifacts:["tasks"]`, **`missingPrerequisites:["proposal","specs","design","tasks"]`** (build-order closure), no `warnings`                                                                  | New informational field naming the whole prerequisite chain, not just apply's first hop.                                         |
+| `instructions apply --json`, change with `proposal.md` + `tasks.md` (1/2 done), no delta specs | `state:"ready"` (no field)                  | `state:"ready"`, **`warnings:[...]`** no-delta-specs advisory naming `openspec validate` failure + both remedies, **`missingPrerequisites:["specs","design"]`** (conditional artifacts not built), `progress:{2,1,1}` | New warning class on the ready state; pairs the ready signal with the validate-refusing gap.                                     |
+| `instructions apply` text (blocked)                                                            | `Use the openspec-continue-change skill...` | `Not created yet, in build order: ...` + `Create it with \`openspec instructions <artifact> --change <name>\``                                                                                                        | Remedies name CLI verbs now (the `core` profile never installs that skill). Text surfaces must not pattern-match the old string. |
+| Engines / packageManager                                                                       | `>=20.19.0` / pnpm 10                       | unchanged (`>=20.19.0`, `pnpm@10.34.5`); pnpm overrides moved out of `package.json` into `pnpm-workspace.yaml`                                                                                                        | Reference-build and fixture-install flow unaffected.                                                                             |
 
 Executed ready-state document (scenario 2 above; `warnings` shown in full because its exact text is the
 projection contract). Upstream `JSON.stringify` omits empty-valued keys, so `missingArtifacts` is **absent**
@@ -125,13 +125,13 @@ Semantics verified from source (`collectMissingPrerequisites` / `collectApplyWar
 ### 1. Apply readiness guidance is two new typed fields, not a new gate
 
 `missingPrerequisites` and `warnings` are additive optional members of the Apply Instructions success
-document. Apply still blocks on `apply.requires` alone; the new fields describe *why* and *what else*, and the
+document. Apply still blocks on `apply.requires` alone; the new fields describe _why_ and _what else_, and the
 warning names the objective downstream fact (`openspec validate` fails) rather than changing apply's verdict.
 `state`, `progress`, `tasks`, `missingArtifacts`, exit codes, and the failure sum type are unchanged.
 
 OpenSpecUI consequence: `CliApplyInstructionsSuccessSchema` gains the two optional fields and the planning
 projection surfaces them. Two compatibility layers are distinct facts: 1.12's `.passthrough()` decode merely
-*tolerates* the members, while the v13 obligation is *projection* — the fields must also survive
+_tolerates_ the members, while the v13 obligation is _projection_ — the fields must also survive
 `ApplyInstructionsInputSchema`/`ApplyInstructionsProjectionSchema` (`opsx-types.ts`) and the Server/Web
 transport chain, or the Web surface silently drops them. Per the OPSX-first information hierarchy law the
 warning is direct-plane evidence (it predicts a validation failure), while `missingPrerequisites` is readable
@@ -166,7 +166,7 @@ with a single `openspec config profile` pointer (`formatOptionalWorkflowsNote`; 
 a workflow surface). Separately, `update`'s staleness check now also compares command-file content when a
 skill `generatedBy` version exists — a hand-edited or truncated command file no longer reads as "up to date"
 (#1808). The repair itself is CLI-owned; OpenSpecUI's Agent Update projection keeps invoking `openspec update`
-and may now observe *more* repairs, which its evidence presentation must tolerate without new logic.
+and may now observe _more_ repairs, which its evidence presentation must tolerate without new logic.
 
 ### 6. Parser and archive-merge correctness fixes (CLI-internal)
 
@@ -175,7 +175,7 @@ keeps duplicate delta section headers as a list (each body read, own line number
 and the archive audit handles wrapped scenario bullets and `+`-bulleted specs. `specs-apply.ts` collapses blank
 runs only outside fenced code blocks. These change what validates and archives successfully — more inputs are
 now accepted and fewer silently dropped — but no JSON shape moved. OpenSpecUI delegates parsing/merging to
-the CLI (CLI-first law); fixtures that assert *acceptance* of these forms belong to the pinned 1.13.0 fixture
+the CLI (CLI-first law); fixtures that assert _acceptance_ of these forms belong to the pinned 1.13.0 fixture
 matrix, not to parallel UI-side logic.
 
 ### 7. Upstream packaging notes (fixture-install implications only)
@@ -194,19 +194,19 @@ pinned source diff, not changelog prose.
 
 ## Current owner map
 
-| Surface                     | Primary production owner                                             | Existing evidence owner                  | v13 change                                                                        |
-| --------------------------- | -------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------- |
-| compatibility gate and copy | `packages/core/src/openspec-compat.ts`                               | `openspec-compat.test.ts`                | v13 accepted/current classification; 1.12 -> blocked; NEXT_SERIES 1.14.0           |
-| workflow JSON contracts     | `packages/core/src/cli-contracts/workflow.ts`, `executor.ts`         | contract tests                           | Apply Instructions `missingPrerequisites` + `warnings` optional members            |
-| CLI execution               | `packages/core/src/cli-executor.ts`                                  | executor contract tests                  | no argv change (instructions apply flags unchanged)                               |
-| capability gates            | `packages/core/src/openspec-compat.ts` (`deriveOpenSpecCliCapabilities`) | capability tests                     | target series '1.13'; existing capabilities stay true; no new flag required        |
-| Agent registry/state        | `packages/core/src/agent-delivery-registry.ts`, `tool-init-state.ts` | registry/state tests                     | pinned generator 1.13.0; staleness rotation; no new tool entries in 1.13           |
-| Agent delivery projection   | `packages/server/src/agent-delivery-projection-service.ts`           | service tests                            | tolerate update-driven command-file repairs in evidence                            |
-| planning projection         | `packages/core/src/planning-cli-projection.ts`, server service       | projection tests                         | project apply warnings (direct plane) + missingPrerequisites (readable evidence)   |
-| Change Detail apply UI      | Change Detail Apply dialog owner                                     | Web component tests                      | warnings and build-order chain presentation                                        |
-| reference pin guard         | `scripts/prepare-openspec-reference.mjs`                             | script + fixture guards                  | EXPECTED_COMMIT -> 9d4e5974; intent header update                                 |
-| pinned fixtures             | `packages/core/src/__tests__/official-cli-v12-fixtures.ts` + alias   | fixture matrix tests                     | new v13 helper + `openspec-cli-113` alias; retained 1.12.0 proves boundary rejections |
-| distribution release        | Changesets plus package build/pack scripts                           | release/package tests                    | major v13 preparation only                                                        |
+| Surface                     | Primary production owner                                                 | Existing evidence owner   | v13 change                                                                            |
+| --------------------------- | ------------------------------------------------------------------------ | ------------------------- | ------------------------------------------------------------------------------------- |
+| compatibility gate and copy | `packages/core/src/openspec-compat.ts`                                   | `openspec-compat.test.ts` | v13 accepted/current classification; 1.12 -> blocked; NEXT_SERIES 1.14.0              |
+| workflow JSON contracts     | `packages/core/src/cli-contracts/workflow.ts`, `executor.ts`             | contract tests            | Apply Instructions `missingPrerequisites` + `warnings` optional members               |
+| CLI execution               | `packages/core/src/cli-executor.ts`                                      | executor contract tests   | no argv change (instructions apply flags unchanged)                                   |
+| capability gates            | `packages/core/src/openspec-compat.ts` (`deriveOpenSpecCliCapabilities`) | capability tests          | target series '1.13'; existing capabilities stay true; no new flag required           |
+| Agent registry/state        | `packages/core/src/agent-delivery-registry.ts`, `tool-init-state.ts`     | registry/state tests      | pinned generator 1.13.0; staleness rotation; no new tool entries in 1.13              |
+| Agent delivery projection   | `packages/server/src/agent-delivery-projection-service.ts`               | service tests             | tolerate update-driven command-file repairs in evidence                               |
+| planning projection         | `packages/core/src/planning-cli-projection.ts`, server service           | projection tests          | project apply warnings (direct plane) + missingPrerequisites (readable evidence)      |
+| Change Detail apply UI      | Change Detail Apply dialog owner                                         | Web component tests       | warnings and build-order chain presentation                                           |
+| reference pin guard         | `scripts/prepare-openspec-reference.mjs`                                 | script + fixture guards   | EXPECTED_COMMIT -> 9d4e5974; intent header update                                     |
+| pinned fixtures             | `packages/core/src/__tests__/official-cli-v12-fixtures.ts` + alias       | fixture matrix tests      | new v13 helper + `openspec-cli-113` alias; retained 1.12.0 proves boundary rejections |
+| distribution release        | Changesets plus package build/pack scripts                               | release/package tests     | major v13 preparation only                                                            |
 
 ## Scope boundary
 

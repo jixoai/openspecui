@@ -18,7 +18,7 @@ pre-implementation), and its green case.
 Scenario titles inside MODIFIED deltas are **current-spec scenario identity**, preserved so archive refuses to
 drop them; behavior is defined by the complete GIVEN/THEN bodies, not the titles. Titles such as
 `SourceCraft Code Assistant enters at 1.12`, `Zed is a 1.10-line skills-only target`, or
-`Accept the current 1.12 line` therefore describe *historical introduction or historical admission*, while
+`Accept the current 1.12 line` therefore describe _historical introduction or historical admission_, while
 their bodies state the v13 semantics (admitted 1.13.x appears; older lines blocked/unavailable). Two facts an
 implementer must not conflate: `minCliSeries: '1.12'` on SourceCraft is the physical introduction fact and
 does NOT rotate; `AgentCliSeries` and the pinned generator DO rotate to the 1.13 line. A focused spec-review
