@@ -15,7 +15,7 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
 - [x] `references/openspec` submodule pinned `v1.13.0` @ `9d4e5974e5c0d9a09b9c6c1e1eb0975e80ec4461`.
 - [x] `references/openspec-1.13.0-report.md` written with executed CLI evidence.
 - [x] Change artifacts (specs deltas + loop docs) written.
-- [ ] Codex change review round: no blocking findings (target >= 8/10 disposition).
+- [x] Codex change review: Round-B 8.7/10 APPROVE WITH NON-BLOCKING NOTES (Round-A 5.8 REVISE folded).
 - [ ] CP0 committed.
 
 ## CP1 — Window and contract (implementation)

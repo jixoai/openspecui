@@ -43,7 +43,8 @@ Owners:
   mirror `OPENSPEC_CLI_TARGET_SERIES = '1.12'` rotates to `'1.13'`; the test gains boundary assertions — a
   1.12.x probe resolution is rejected/flagged by the rotated mirror while the 1.13 fallback spec resolves.
 - `scripts/setup-example.ts` (mirror `OPENSPEC_CLI_TARGET_SERIES`) and its callers/tests
-  (`scripts/setup-example` consumers in `packages/cli` test expectations, Slice 6).
+  (`scripts/setup-example` consumers in `packages/cli` test expectations, Slice 6). Slice 1 green includes a
+  static mirror assertion that the setup-example series constant equals the rotated value (Round-B n1).
 - Header comments updated with the 2026-09-12 original request line.
 
 Red (fixed command, per Round-A non-blocking 1): run
@@ -91,7 +92,9 @@ the candidate set from current code is fixed now:
   `change-view.test.tsx`): `warnings` render on the direct plane with CLI provenance and exact upstream text;
   `missingPrerequisites` render as readable build-order next-step evidence, visually distinct from blockers.
   The implementer must verify which of the candidate components physically renders apply guidance and record
-  the final owner file set in `implementation.md` before writing the component change.
+  the final owner file set in `implementation.md` before writing the component change. The Web test writes the
+  three assertions as separate cases — direct-plane warning, next-step chain, absent-field degradation
+  (Round-B n2).
 
 Red: a Web component test feeding apply instructions with the report's ready-state warning asserts the warning
 text appears in the direct plane — fails today because the projection drops the field (record the failing
@@ -148,8 +151,9 @@ Round-A B2: the positive matrix is the full v13 obligation, not two files. Owner
     created inside the test.
 - Boundary role: the retained `openspec-cli-112` executable proves below-admitted rejections against the v13
   gate (`official-cli-v12-boundary-fixtures.test.ts` rotates its role; other v12 suites are retired from the
-  positive matrix once their v13 counterparts land — deleted in this slice, not left as stale positives). The
-  v11 helper and its boundary tests stay untouched.
+  positive matrix once their v13 counterparts land — deleted in this slice, not left as stale positives, with
+  the retirement proven by `git diff --name-status` against the fixture inventory and no orphaned helper
+  references, Round-B n3). The v11 helper and its boundary tests stay untouched.
 
 Red: before the alias lands, the new v13 fixture files cannot resolve `openspec-cli-113/bin/openspec.js` —
 record the resolution failure. Post-implementation mutation red: pointing a bins-map entry at the 112 alias

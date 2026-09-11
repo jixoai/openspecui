@@ -68,3 +68,21 @@ evidence (n3); Slice 6 grouped into four owner-class red/green units (n4); repor
 tolerance from projection compatibility (n5); CP3 gains a separate complete-matrix checkbox (n6).
 
 Pending: Round-B re-review after these corrections.
+
+### Round-B review disposition (herdr v13-change-reviewer, gpt-5.6-terra xhigh, 2026-09-12) — 8.7/10, APPROVE WITH NON-BLOCKING NOTES
+
+Worked 2m 52s. Verdict: B1–B4 all materially closed (owner chains, full positive matrix, mirror-test gate,
+spec-hygiene split verified against current source); strict validation re-passed; no new blockers. Disposition:
+implementation may start under the CP/Slice evidence rules. Non-blocking notes, all adopted:
+
+1. Slice 1 green gate now names a static setup-example mirror assertion (series constant check) instead of
+   deferring all setup-example coverage to Slice 6 "consumers".
+2. Slice 3 implementer locks the final Web render owner in this file before coding, and the three assertions
+   (direct-plane warning, next-step chain, absent-field degradation) are written as separate test cases.
+3. Slice 5 retirement of v12 positive suites must be proven with `git diff --name-status` against the fixture
+   inventory; v12 boundary helper/tests stay executable.
+4. The actual diagnose-test runner command (not the parenthesized alternative) is recorded in the slice
+   report.
+5. PR notes attach the unmodified-main `path-realpath.test.ts` failure output; the flake is never reported as
+   a green gate.
+6. This Round-B disposition recorded (this entry).
