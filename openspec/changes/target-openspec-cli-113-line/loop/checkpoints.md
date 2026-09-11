@@ -53,9 +53,12 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
 
 ## CP5 — Release preparation (delivery)
 
-- [ ] Slice 7 Changeset (major), README law updates, AGENTS.md architecture decision.
-- [ ] Full local gates (`format:check`, `lint:ci`, `typecheck`, `test:ci`, `test:browser:ci`) or the justified
-      scoped subset recorded in PR notes.
+- [x] Slice 7 Changeset (major), README law updates (repo en/zh + archived 1.12 copies + CLI package
+      README), CLAUDE.md report pointer, AGENTS.md architecture decision.
+- [x] Full local gates: `format:check` green, `lint:ci` green, `typecheck` green, `test:browser:ci`
+      green, `test:ci` 78/79 files green — the single failure is the pre-existing `path-realpath`
+      environmental flake reproduced identically on unmodified `main` (evidence log recorded; PR notes
+      disclose it).
 - [ ] PR opened from the branch; CI green; Codex final review disposition recorded.
 - [ ] Owner acceptance: final end-to-end browser walkthrough (Owner-only).
 - [ ] Archive change, merge, release — Owner decision.

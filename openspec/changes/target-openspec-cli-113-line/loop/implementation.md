@@ -71,7 +71,18 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
   (`scripts/pnpm-invocation.test.mjs` 5s spawn timeout under gate load; isolated rerun green, file
   untouched by this change). First `test:browser:ci` run failed on a missing Playwright
   `chromium_headless_shell-1208` executable (machine prerequisite); installed via
-  `pnpm exec playwright install chromium`, both gates re-run — results recorded below on completion.
+  `pnpm exec playwright install chromium`. Final gates: `test:browser:ci` green; `test:ci` **78 files
+  passed, 1 failed** — the single failure is `src/reactive-fs/path-realpath.test.ts` (`/var` vs
+  `/private/var` TMPDIR symlink assertion), reproduced identically on **unmodified `main`** (evidence:
+  `/tmp/main-realpath-flake.log`, exit 1, same assertion); disclosed in PR notes, never reported green.
+- The stray-prettier incident also touched the `references/openspec` submodule working tree (caught
+  because `upstream-contract-regression` reads pinned-tag source through it); restored with
+  `git checkout -- .` inside the submodule, keeping the untracked `dist/` fixture build.
+- Integrator follow-up during the full gate (missed-owner class, same as Slice 5's schemas-root find):
+  `packages/core/src/opsx-kernel-cli-projection.test.ts` modeled the admitted session as fixture version
+  `1.12.0`, so batch/findings capability derivations failed under the rotated window. Rotated the fixture
+  pair to `1.13.0` admitted / `1.12.0` retired with the gate predicate `startsWith('1.13')`; both affected
+  files re-verified green (21/21).
 
 ## Evidence recording rule
 
