@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Lock OpenSpec 1.8/1.9 Status artifact status, dependency arrays, and planning completion.
  * 2. Lock Apply and Archive operation-instruction payloads at the CLI contract boundary.
  * 3. Lock the `schemas --json` success/failure sum type and archived Validate report decoding.
@@ -11,11 +11,17 @@
  *    document, the `invalid_validation_report_request` failure envelope, a
  *    discriminator-shape (not key-presence) union guard, and the capability-gated
  *    `validateFindings` executor method that owns the whole `--report` argv.
+ * 6. Lock the OpenSpec 1.13 Apply Instructions additive members against the two executed
+ *    1.13.0 payloads (blocked and ready): `missingPrerequisites` is the build-order
+ *    closure preserved verbatim even in the ready state, `warnings` appears only when
+ *    upstream spreads it, both stay optional with no empty-array default, and neither
+ *    changes `state`/`progress`/`tasks`/`missingArtifacts` facts.
 
  * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'
@@ -280,8 +286,10 @@ describe('OpenSpec 1.8/1.9 workflow CLI contracts', () => {
   })
 })
 
-// Admitted-line capabilities under the OpenSpecUI 12 single-series window: stable 1.12.x
-// derives the 1.11-introduced batch/diff transports; the retired 1.10/1.11 lines derive none.
+// Admitted-line capabilities under the OpenSpecUI 13 single-series window: stable 1.13.x
+// derives the 1.11-introduced batch/diff and 1.12 findings transports; the retired
+// 1.10/1.11/1.12 lines derive none and prove capability-boundary rejections only.
+const capabilities113 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.13.0'))
 const capabilities112 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.12.0'))
 const capabilities111 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.11.0'))
 const capabilities110 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.10.0'))
@@ -783,7 +791,7 @@ describe('OpenSpec 1.12 validate findings contract executor', () => {
   it('composes the findings argv only through the capability-gated findings method', async () => {
     const findings = await contracts.validateFindings({
       target: { kind: 'scope', scope: 'all' },
-      capabilities: capabilities112,
+      capabilities: capabilities113,
     })
 
     expect(findings.kind).toBe('executed')
@@ -800,12 +808,18 @@ describe('OpenSpec 1.12 validate findings contract executor', () => {
     expect(findingsData.report.returnedItems).toBe(1)
 
     // A non-admitted session receives the typed refusal before any argv exists:
-    // the retired 1.11 line rejects `--report` entirely, so no spawn may happen.
+    // the retired 1.12/1.11 lines reject `--report` entirely, so no spawn may happen.
     const refused = await contracts.validateFindings({
       target: { kind: 'scope', scope: 'all' },
-      capabilities: capabilities111,
+      capabilities: capabilities112,
     })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'findingsReport' })
+    expect(
+      await contracts.validateFindings({
+        target: { kind: 'scope', scope: 'all' },
+        capabilities: capabilities111,
+      })
+    ).toEqual({ kind: 'unavailable', capability: 'findingsReport' })
     expect(execute).toHaveBeenCalledTimes(1)
 
     // The same stdout through plain validate is a contract error: the full
@@ -815,6 +829,101 @@ describe('OpenSpec 1.12 validate findings contract executor', () => {
     expect(execute.mock.calls[1]?.[0]).toEqual(['validate', '--all', '--json'])
     expect(full.contractError).toBeDefined()
     expect(full.data).toBeNull()
+  })
+})
+
+/**
+ * Executed `instructions apply --change no-specs-but-tasks --json` documents from the
+ * npm-published 1.13.0 executable (references/openspec-1.13.0-report.md, Verified CLI
+ * observations): scenario 1 is a change holding only `.openspec.yaml` (blocked), scenario 2
+ * adds `proposal.md` plus a half-done `tasks.md` and no delta specs (ready). Both are
+ * verbatim stdout; upstream `JSON.stringify` omits absent members, so the ready document
+ * carries no `missingArtifacts` and the blocked document carries no `warnings`.
+ */
+const executedApplyBlocked113 = {
+  changeName: 'no-specs-but-tasks',
+  changeDir: '/private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks',
+  schemaName: 'spec-driven',
+  contextFiles: {},
+  progress: { total: 0, complete: 0, remaining: 0 },
+  tasks: [],
+  state: 'blocked',
+  missingArtifacts: ['tasks'],
+  missingPrerequisites: ['proposal', 'specs', 'design', 'tasks'],
+  instruction:
+    'Cannot apply this change yet. Missing artifacts: tasks.\nNot created yet, in build order: proposal, specs, design, tasks. Build the ones this change needs before applying - the schema says which are conditional.\nCreate each with `openspec instructions <artifact> --change no-specs-but-tasks` (`openspec status --change no-specs-but-tasks` shows what is left).',
+  root: { path: '/private/tmp/os113-slice2.SykHfF', source: 'nearest' },
+}
+
+const executedApplyReady113Warning =
+  'This change has no delta specs and does not declare `skip_specs: true`, so `openspec validate no-specs-but-tasks` fails on it. Write the delta specs before implementing (`openspec instructions specs --change no-specs-but-tasks`), or add `skip_specs: true` to /private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks/.openspec.yaml if this change really changes no specified behavior.'
+
+const executedApplyReady113 = {
+  changeName: 'no-specs-but-tasks',
+  changeDir: '/private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks',
+  schemaName: 'spec-driven',
+  contextFiles: {
+    proposal: ['/private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks/proposal.md'],
+    tasks: ['/private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks/tasks.md'],
+  },
+  progress: { total: 2, complete: 1, remaining: 1 },
+  tasks: [
+    { id: '1', description: 'First task done', done: true },
+    { id: '2', description: 'Second task pending', done: false },
+  ],
+  state: 'ready',
+  missingPrerequisites: ['specs', 'design'],
+  warnings: [executedApplyReady113Warning],
+  instruction:
+    'Read context files, work through pending tasks, mark complete as you go.\nPause if you hit blockers or need clarification.',
+  root: { path: '/private/tmp/os113-slice2.SykHfF', source: 'nearest' },
+}
+
+describe('OpenSpec 1.13 apply instructions CLI contract', () => {
+  it('decodes the executed blocked payload with the build-order prerequisite closure', () => {
+    const parsed = CliApplyInstructionsSuccessSchema.parse(executedApplyBlocked113)
+
+    expect(parsed.state).toBe('blocked')
+    expect(parsed.missingArtifacts).toEqual(['tasks'])
+    expect(parsed.missingPrerequisites).toEqual(['proposal', 'specs', 'design', 'tasks'])
+    // Warnings fire only outside the blocked state; upstream omits the key, so the
+    // contract must keep it undefined rather than materialize an empty array.
+    expect(parsed.warnings).toBeUndefined()
+    expect('warnings' in parsed).toBe(false)
+  })
+
+  it('decodes the executed ready payload with verbatim warnings and conditional prerequisites', () => {
+    const parsed = CliApplyInstructionsSuccessSchema.parse(executedApplyReady113)
+
+    expect(parsed.state).toBe('ready')
+    expect(parsed.warnings).toEqual([executedApplyReady113Warning])
+    expect(parsed.warnings?.[0]).toContain('`openspec validate no-specs-but-tasks` fails on it')
+    // Ready may still name conditional artifacts that apply does not gate on.
+    expect(parsed.missingPrerequisites).toEqual(['specs', 'design'])
+    expect(parsed.progress).toEqual({ total: 2, complete: 1, remaining: 1 })
+    // Upstream omits `missingArtifacts` when empty (JSON.stringify drops undefined);
+    // the member is optional, never null and never defaulted.
+    expect(parsed.missingArtifacts).toBeUndefined()
+    expect('missingArtifacts' in parsed).toBe(false)
+  })
+
+  it('keeps the 1.12-era payload without either new member decoding unchanged', () => {
+    const parsed = CliApplyInstructionsSuccessSchema.parse({
+      changeName: 'add-auth',
+      changeDir: '/repo/openspec/changes/add-auth',
+      schemaName: 'spec-driven',
+      contextFiles: {},
+      progress: { total: 1, complete: 0, remaining: 1 },
+      tasks: [{ id: '1', description: 'Implement auth.', done: false }],
+      state: 'ready',
+      instruction: 'Implement pending tasks.',
+      root,
+    })
+
+    expect(parsed.state).toBe('ready')
+    expect(parsed.missingPrerequisites).toBeUndefined()
+    expect(parsed.warnings).toBeUndefined()
+    expect(parsed.tasks).toHaveLength(1)
   })
 })
 
@@ -834,7 +943,7 @@ describe('capability-gated 1.11 command argv', () => {
 
   it('builds status --all --json argv only for the admitted batch capability', async () => {
     const admitted = await contracts.workflowStatusAll({
-      capabilities: capabilities112,
+      capabilities: capabilities113,
       schema: 'custom',
       store: 'shared',
     })
@@ -844,8 +953,14 @@ describe('capability-gated 1.11 command argv', () => {
       ['status', '--all', '--json', '--schema', 'custom', '--store', 'shared'],
     ])
 
-    const refused = await contracts.workflowStatusAll({ capabilities: capabilities111 })
+    // Every line below the admitted 1.13 window derives no capability: the retained
+    // 1.12/1.11/1.10 series prove capability-boundary rejections only.
+    const refused = await contracts.workflowStatusAll({ capabilities: capabilities112 })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'batchStatus' })
+    expect(await contracts.workflowStatusAll({ capabilities: capabilities111 })).toEqual({
+      kind: 'unavailable',
+      capability: 'batchStatus',
+    })
     expect(await contracts.workflowStatusAll({ capabilities: capabilities110 })).toEqual({
       kind: 'unavailable',
       capability: 'batchStatus',
@@ -855,7 +970,7 @@ describe('capability-gated 1.11 command argv', () => {
 
   it('builds show <change> --json --diff argv only for the admitted diff capability', async () => {
     const admitted = await contracts.showChangeDiff('add-auth', {
-      capabilities: capabilities112,
+      capabilities: capabilities113,
       store: 'shared',
     })
 
@@ -864,8 +979,13 @@ describe('capability-gated 1.11 command argv', () => {
       ['show', 'add-auth', '--json', '--diff', '--store', 'shared'],
     ])
 
-    const refused = await contracts.showChangeDiff('add-auth', { capabilities: capabilities111 })
+    // Retained below-window series prove capability-boundary rejections only.
+    const refused = await contracts.showChangeDiff('add-auth', { capabilities: capabilities112 })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'requirementDiff' })
+    expect(await contracts.showChangeDiff('add-auth', { capabilities: capabilities111 })).toEqual({
+      kind: 'unavailable',
+      capability: 'requirementDiff',
+    })
     expect(await contracts.showChangeDiff('add-auth', { capabilities: capabilities110 })).toEqual({
       kind: 'unavailable',
       capability: 'requirementDiff',

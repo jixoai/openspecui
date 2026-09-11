@@ -2,12 +2,13 @@
   "extends": "./tsconfig.json",
   "include": [
     "src/cli-contracts/workflow.test.ts",
-    "src/official-cli-v12-validation-findings-fixtures.test.ts",
-    "src/official-cli-v12-validation-full-fixtures.test.ts",
-    "src/official-cli-v12-batch-status-fixtures.test.ts",
-    "src/official-cli-v12-show-diff-fixtures.test.ts",
+    "src/official-cli-v13-validation-findings-fixtures.test.ts",
+    "src/official-cli-v13-validation-full-fixtures.test.ts",
+    "src/official-cli-v13-batch-status-fixtures.test.ts",
+    "src/official-cli-v13-show-diff-fixtures.test.ts",
+    "src/official-cli-v13-workflow-fixtures.test.ts",
+    "src/official-cli-v13-apply-readiness-fixtures.test.ts",
     "src/official-cli-v12-boundary-fixtures.test.ts",
-    "src/official-cli-v12-workflow-fixtures.test.ts",
     "src/opsx-types.test.ts"
   ],
   "exclude": ["node_modules", "dist"]

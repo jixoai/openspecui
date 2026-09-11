@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Execute one deterministic same-origin Project Binding A-to-B acceptance flow.
  * 2. Pin the OpenSpec 1.12 executable, Store registry scope, and disposable roots.
  * 3. Assert desktop/mobile layout and browser error hygiene with bounded process-tree cleanup.
@@ -15,6 +15,7 @@
  * Original request (2026-08-04): "?????????macOS???????????Windows????????????"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作。"
  */
@@ -34,7 +35,7 @@ const TSX_CLI = join(REPO_ROOT, 'packages/web/node_modules/tsx/dist/cli.mjs')
 const VITE_CLI = join(REPO_ROOT, 'packages/web/node_modules/vite/bin/vite.js')
 const PINNED_OPENSPEC_ROOT = join(REPO_ROOT, 'references/openspec')
 const PINNED_OPENSPEC_BIN = join(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
-const PINNED_OPENSPEC_COMMIT = 'e062b9572be933564ba3899d059377dfa1393e32'
+const PINNED_OPENSPEC_COMMIT = '9d4e5974e5c0d9a09b9c6c1e1eb0975e80ec4461'
 const BACKEND_PORT = 14_236
 const WEB_PORT = 14_237
 const STARTUP_TIMEOUT_MS = 30_000

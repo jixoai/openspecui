@@ -1,17 +1,21 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Prove the plain-Node Windows diagnostic resolves an npm-style CLI shim and retires its timed-out tree.
  * 2. Distinguish a complete diagnostic report from an early child-process failure before JSON parsing.
  * 3. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  * 4. Compare `where.exe` evidence through canonical paths because hosted runners mix 8.3 short
  *    forms (RUNNER~1) with long forms in TEMP-derived fixture roots.
  * 5. Keep the diagnostic's fallback candidate set pinned to the Core-admitted CLI series.
+ * 6. Prove the rotated mirror rejects the retired 1.12 series while the 1.13 fallback spec
+ *    resolves an admitted series, and keep the setup-example runner mirror on the same
+ *    rotated constant.
  *
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
  * Original request (2026-08-28, issue #258): diagnostic fallback probes must not report an
  *   out-of-range @latest as a working runner.
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { spawnSync } from 'node:child_process'
 import {
@@ -31,6 +35,7 @@ import { describe, expect, it } from 'vitest'
 import { readWindowsProcessTable } from '../packages/core/src/child-process-tree.js'
 
 const DIAGNOSTIC_SCRIPT = fileURLToPath(new URL('./diagnose-cli-runner.mjs', import.meta.url))
+const SETUP_EXAMPLE_SCRIPT = fileURLToPath(new URL('./setup-example.ts', import.meta.url))
 
 function canonicalWindowsPath(value) {
   try {
@@ -50,6 +55,45 @@ describe('CLI runner diagnostic candidate parity', () => {
     // Every commandParts reference to the package must carry the pinned series; a bare
     // '@fission-ai/openspec' spec would probe @latest, which the gate can block.
     expect(source).not.toMatch(/'@fission-ai\/openspec'/)
+  })
+
+  it('rejects a retired 1.12 probe resolution while the rotated 1.13 fallback spec stays admitted', async () => {
+    const { readFile } = await import('node:fs/promises')
+    const source = await readFile(DIAGNOSTIC_SCRIPT, 'utf8')
+    const { classifyOpenSpecCliVersion, OPENSPEC_CLI_TARGET_SERIES } = await import(
+      '../packages/core/src/openspec-compat.js'
+    )
+
+    // The rotated mirror builds its fallback spec from the admitted series only; a stale
+    // 1.12 mirror spec must not survive the constants rotation.
+    expect(OPENSPEC_CLI_TARGET_SERIES).toBe('1.13')
+    expect(source).toContain(
+      'const OPENSPEC_CLI_FALLBACK_SPEC = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`'
+    )
+    expect(source).not.toContain('@fission-ai/openspec@1.12')
+    expect(source).not.toContain("'1.12'")
+
+    // A probe that resolves the retired 1.12 series reports a version the gate blocks,
+    // while the pinned fallback resolves the admitted current series.
+    expect(classifyOpenSpecCliVersion('1.12.5')).toMatchObject({
+      status: 'unsupported',
+      blocksCoreInteractions: true,
+    })
+    expect(classifyOpenSpecCliVersion(`${OPENSPEC_CLI_TARGET_SERIES}.0`)).toMatchObject({
+      status: 'current',
+      recommended: true,
+      blocksCoreInteractions: false,
+    })
+  })
+
+  it('keeps the setup-example runner mirror on the Core-admitted CLI series', async () => {
+    const { readFile } = await import('node:fs/promises')
+    const source = await readFile(SETUP_EXAMPLE_SCRIPT, 'utf8')
+    const { OPENSPEC_CLI_TARGET_SERIES } = await import('../packages/core/src/openspec-compat.js')
+
+    // The example npx runner mirrors the same rotated constant; a divergent mirror would
+    // scaffold an example the compatibility gate blocks.
+    expect(source).toContain(`const OPENSPEC_CLI_TARGET_SERIES = '${OPENSPEC_CLI_TARGET_SERIES}'`)
   })
 })
 

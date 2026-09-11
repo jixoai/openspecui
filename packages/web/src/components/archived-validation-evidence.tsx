@@ -1,9 +1,9 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Present OpenSpec `validate --archived --json` as typed CLI evidence.
  * 2. Preserve item issues, totals, root, and exit/failure evidence without repair actions.
  * 3. Identify the evidence as unavailable in static snapshots instead of fabricating it.
- * 4. Derive the capability from the detected admitted CLI; the admitted 1.12 line declares
+ * 4. Derive the capability from the detected admitted CLI; the admitted 1.13 line declares
  *    it, so the unavailable branch names the accepted range, not one series.
  * 5. Validate report payloads with the Core contract schema, never shallow shape guards.
  * 6. Mount directly inside the Evidence workspace detail pane: the Accordion shell is gone, the
@@ -15,6 +15,7 @@
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Owner walkthrough correction (2026-09-04): every Evidence detail layer renders the shared EvidenceLayerHeader contract (title dominant over body, house-standard border padding); this replaces each layer's local weak header.
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { EvidenceLayerHeader } from '@/components/evidence-layer-header'
 import { isStaticMode } from '@/lib/static-mode'
@@ -143,8 +144,8 @@ export function ArchivedValidationEvidence({
   const rootAction = useRootActionState()
   const cli = rootAction.context?.cli
   const staticMode = isStaticMode()
-  // `validate --archived` exists on OpenSpec 1.9+ and the admitted 1.12 line declares it.
-  // An available-but-out-of-range session (e.g. a bypassed 1.11 CLI) must see the
+  // `validate --archived` exists on OpenSpec 1.9+ and the admitted 1.13 line declares it.
+  // An available-but-out-of-range session (e.g. a bypassed 1.12 CLI) must see the
   // capability as unavailable here, never a button that spawns a failing command.
   const capabilities = deriveOpenSpecCliCapabilities(
     cli?.available ? parseOpenSpecCliVersion(cli.version) : null

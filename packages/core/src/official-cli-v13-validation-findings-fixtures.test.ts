@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (created 2026-09-03 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.12.0 `validate --report findings --json` contract
+ * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.13.0 `validate --report findings --json` contract
  *    against real fixture projects: the populated findings document, empty-scope
  *    documents, and the typed request-error envelope.
  * 2. Prove the merge-conflict INFO class stays verdict-neutral (`valid: true`, exit 0)
@@ -9,13 +9,13 @@
  *    exits 1 while stdout stays one complete JSON document and `summary` keeps the
  *    full-run totals.
  *
- * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V12_VERSIONS,
+  PINNED_OPENSPEC_V13_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -24,8 +24,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV12Version,
-} from './__tests__/official-cli-v12-fixtures.js'
+  type PinnedOpenspecV13Version,
+} from './__tests__/official-cli-v13-fixtures.js'
 import { CliDiagnosticFailureSchema } from './cli-contracts/common.js'
 import {
   CliValidateFindingsResultSchema,
@@ -40,7 +40,7 @@ const REPORT_REQUEST_FIX =
   'without an item name. Do not combine archived and active scopes.'
 
 async function initProject(
-  version: PinnedOpenspecV12Version,
+  version: PinnedOpenspecV13Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -55,7 +55,7 @@ async function initProject(
 
 /** A change whose delta MODIFIES requirements of a spec that does not exist. */
 async function createModifiedAgainstMissingSpecChange(
-  version: PinnedOpenspecV12Version,
+  version: PinnedOpenspecV13Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -93,7 +93,7 @@ async function createModifiedAgainstMissingSpecChange(
 
 /** A loadable change that fails validation through an ERROR issue. */
 async function createFailingChange(
-  version: PinnedOpenspecV12Version,
+  version: PinnedOpenspecV13Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -125,7 +125,7 @@ async function createFailingChange(
   )
 }
 
-describe('pinned OpenSpec 1.12 validation findings fixtures', () => {
+describe('pinned OpenSpec 1.13 validation findings fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -133,7 +133,7 @@ describe('pinned OpenSpec 1.12 validation findings fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V12_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V13_VERSIONS) {
     it(`returns a populated findings document whose merge-conflict INFO stays verdict-neutral on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(
         `cli-${version.replace(/\./g, '')}-findings-populated`

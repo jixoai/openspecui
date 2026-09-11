@@ -1,6 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-09-04 Asia/Shanghai):
- * 1. Present the OpenSpec 1.12 `validate --report findings` document as typed CLI evidence.
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * 1. Present the OpenSpec 1.12+ `validate --report findings` document (the admitted 1.13
+ *    line carries the capability) as typed CLI evidence.
  * 2. Attribute every item finding to its owning change: entries owned by the current change
  *    render as the primary "This change" list, while entries owned by other active changes
  *    stay in a clearly-labeled secondary disclosure with prominent change attribution — a
@@ -16,6 +17,7 @@
  *
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Owner walkthrough correction (2026-09-04): findings must attribute their owning change; the Evidence detail panel styling follows the vision review and every detail layer renders the shared EvidenceLayerHeader contract (title dominant over body, house-standard border padding) instead of a local weak header.
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { EvidenceLayerHeader } from '@/components/evidence-layer-header'
 import { isStaticMode } from '@/lib/static-mode'
@@ -229,9 +231,9 @@ export function ValidationFindingsEvidence({
   const rootAction = useRootActionState()
   const cli = rootAction.context?.cli
   const staticMode = isStaticMode()
-  // `validate --report findings` exists on OpenSpec 1.12 only. A detected-but-retired
-  // session (for example a bypassed 1.11 CLI) must see no findings action here, never a
-  // button that spawns a command the CLI rejects.
+  // `validate --report findings` exists on OpenSpec 1.12+ and the admitted 1.13 line
+  // carries it. A detected-but-retired session (for example a bypassed 1.12 CLI) must see
+  // no findings action here, never a button that spawns a command the CLI rejects.
   const capabilities = deriveOpenSpecCliCapabilities(
     cli?.available ? parseOpenSpecCliVersion(cli.version) : null
   )

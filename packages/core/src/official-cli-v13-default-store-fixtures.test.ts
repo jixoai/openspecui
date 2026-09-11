@@ -1,14 +1,14 @@
 /**
- * Orthogonal intents (created 2026-09-03 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.12.0 CLI against machine `defaultStore` root
+ * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.13.0 CLI against machine `defaultStore` root
  *    selection.
  * 2. Prove effective, absent, and stale fallback outcomes preserve upstream provenance
- *    and fixes on the v12 single-series window.
- * 3. Carry over the admitted-line defaultStore contract proven for 1.10/1.11; hide
+ *    and fixes on the v13 single-series window.
+ * 3. Carry over the admitted-line defaultStore contract proven for 1.10-1.12; hide
  *    fixture subprocess console windows (`windowsHide`) for uniform hidden-console
  *    execution on Windows.
  *
- * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-01): adapt OpenSpec 1.7 machine `defaultStore` without fabricating effective Root truth.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
@@ -17,18 +17,18 @@ import { mkdir, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V12_VERSIONS,
+  PINNED_OPENSPEC_V13_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   parsePinnedJson,
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v12-fixtures.js'
+} from './__tests__/official-cli-v13-fixtures.js'
 import { CliDiagnosticFailureSchema } from './cli-contracts/common.js'
 import { CliContextSchema, CliDoctorSchema } from './cli-contracts/store.js'
 
-describe('pinned OpenSpec 1.12 defaultStore fixtures', () => {
+describe('pinned OpenSpec 1.13 defaultStore fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -36,7 +36,7 @@ describe('pinned OpenSpec 1.12 defaultStore fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V12_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V13_VERSIONS) {
     it(`reports global_default only when the configured Store is selected effectively on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-default-store`)
       const storeRoot = join(fixtureRoot, 'team-context')

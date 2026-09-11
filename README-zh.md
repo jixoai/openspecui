@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
 1. 说明当前 OpenSpec 兼容线与项目工作流。
 2. 说明 serve、App daemon、Direct Web 与静态导出命令。
 3. 说明项目 Hooks，同时保持 OpenSpec CLI 的事实权威。
@@ -20,7 +20,8 @@ OpenSpecUI 是 OpenSpec 工作流的 Web 界面（动态模式 + 静态导出）
 
 | OpenSpecUI         | OpenSpec CLI 线                                      |
 | ------------------ | ---------------------------------------------------- |
-| `@latest` / `@^12` | 当前 + 已支持：`>=1.12.0 <1.13.0`                    |
+| `@latest` / `@^13` | 当前 + 已支持：`>=1.13.0 <1.14.0`                    |
+| `@^12`（历史）     | 当前 + 已支持：`>=1.12.0 <1.13.0`                    |
 | `@^11`（历史）     | 当前：`>=1.11.0 <1.12.0`；已支持：`>=1.10.0 <1.12.0` |
 | `@^9`              | 当前：`>=1.9.0 <1.10.0`；已支持：`>=1.8.0 <1.10.0`   |
 | `@^7`              | `>=1.7.0 <1.8.0`                                     |
@@ -31,12 +32,13 @@ OpenSpecUI 是 OpenSpec 工作流的 Web 界面（动态模式 + 静态导出）
 | `@^2`              | `>=1.2.0 <1.3.0`                                     |
 | `@^1`              | `>=1.0.0 <1.2.0`                                     |
 
-OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 12 以单系列线适配 OpenSpec
-CLI 1.12.x：稳定版 1.12.x 是当前推荐线；`1.13` 不做预先承诺——发布后另行验证决定（12.x 扩窗或新
-major）。OpenSpecUI 11 保留为历史 1.10.x/1.11.x 产品线（曾刻意跳过 v10 并完整承担 1.10 协议义务）。
+OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 13 以单系列线适配 OpenSpec
+CLI 1.13.x：稳定版 1.13.x 是当前推荐线；`1.14` 不做预先承诺——发布后另行验证决定（13.x 扩窗或新
+major）。OpenSpecUI 12 保留为历史 1.12.x 产品线，OpenSpecUI 11 保留为历史 1.10.x/1.11.x 产品线。
 
 历史文档：
 
+- 1.12：[`README-zh-1.12.0.md`](./README-zh-1.12.0.md)
 - 1.11：[`README-zh-1.11.0.md`](./README-zh-1.11.0.md)
 - 1.9：[`README-zh-1.9.0.md`](./README-zh-1.9.0.md)
 - 1.7：[`README-zh-1.7.0.md`](./README-zh-1.7.0.md)
@@ -62,21 +64,22 @@ openspecui
 
 ## OpenSpec CLI 兼容性
 
-- OpenSpecUI 12 接受稳定版 OpenSpec CLI `>=1.12.0 <1.13.0`，并推荐 1.12 线。
-- 稳定版 1.12.x 会被识别为当前线；这是单系列窗口。
-- OpenSpec CLI 1.11.x 与 1.10.x（OpenSpecUI 11 窗口）、更旧的 CLI 线、CLI `>=1.13.0` 以及所有预发布版均不受 OpenSpecUI 12 支持，并会被默认阻断。
+- OpenSpecUI 13 接受稳定版 OpenSpec CLI `>=1.13.0 <1.14.0`，并推荐 1.13 线。
+- 稳定版 1.13.x 会被识别为当前线；这是单系列窗口。
+- OpenSpec CLI 1.12.x（OpenSpecUI 12 窗口）、更旧的 CLI 线、CLI `>=1.14.0` 以及所有预发布版均不受 OpenSpecUI 13 支持，并会被默认阻断。
 - 若不兼容的 CLI 可执行文件仍然存在，版本不匹配对话框会提供 **Skip version check**。该绕过只在当前页面运行期有效，刷新或重新打开后清除，也不构成兼容性承诺。
 
-OpenSpecUI 12 新增：能力门控的校验 findings 面（`openspec validate --report findings`，只含问题条目，
-保留完整运行的总计与退出码）、以独立信息级呈现的合并冲突 advisory findings，以及 Agent 交付注册表中的
-SourceCraft Code Assistant（`.codeassistant`，skills 走自然语言引用）。批量状态（`status --all`）、
-requirement diff 证据（`show --diff`）、`init --language`、Zed 与 Antigravity `.agent` → `.agents`
-迁移在已接受的 1.12 线上继续可用。
+OpenSpecUI 13 新增：CLI 拥有的 Apply 就绪指引——`instructions apply` 的 warnings（无 delta specs 预警，
+预示 `validate` 将失败）在 Change Detail 直接平面呈现，`missingPrerequisites` 构建序链作为可读的下一步
+证据呈现。Agent 交付注册表轮换到 1.13 系列（1.12 物理事实全部前向继承），pin 生成器基线移至
+1.13.0。校验 findings（`--report findings`）、合并冲突信息级 findings、SourceCraft Code Assistant
+（`.codeassistant`）、批量状态（`status --all`）、requirement diff 证据（`show --diff`）、
+`init --language`、Zed 与 Antigravity `.agent` → `.agents` 迁移在已接受的 1.13 线上继续可用。
 
 升级 CLI：
 
 ```bash
-npm install -g @fission-ai/openspec@1.12
+npm install -g @fission-ai/openspec@1.13
 ```
 
 ## 常见流程

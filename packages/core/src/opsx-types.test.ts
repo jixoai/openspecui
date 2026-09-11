@@ -1,12 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Verify Apply instruction context-file normalization.
  * 2. Require command-specific CLI evidence on demand-driven instruction leaves.
  * 3. Preserve typed OpenSpec 1.6 Reference indexes on both instruction surfaces.
  * 4. Preserve OpenSpec 1.7 operation inputs and skipped dependency identity.
+ * 5. Preserve the OpenSpec 1.13 Apply `warnings` and `missingPrerequisites` fields
+ *    verbatim through the projection schema without defaulting them to empty arrays
+ *    and without letting them alter state/progress semantics.
  *
  * Original request (2026-07-15): "Preserve CLI-provided paths, action context, References, and diagnostics end to end."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { describe, expect, it } from 'vitest'
 import { ApplyInstructionsSchema, ArtifactInstructionsSchema } from './opsx-types.js'
@@ -153,6 +157,58 @@ describe('ApplyInstructionsSchema', () => {
 
     expect(parsed.context).toBe('Authentication changes require a threat model.')
     expect(parsed.operationGuidance).toEqual(['Run security-focused tests before completion.'])
+  })
+
+  it('preserves OpenSpec 1.13 ready-state warnings and missingPrerequisites verbatim', () => {
+    // Executed `instructions apply --change no-specs-but-tasks --json` from the
+    // npm-published 1.13.0 executable (references/openspec-1.13.0-report.md,
+    // Verified CLI observations, scenario 2): a ready change whose conditional
+    // specs/design artifacts were never built and which has no delta specs.
+    const parsed = ApplyInstructionsSchema.parse({
+      ...baseApplyInstructions,
+      changeName: 'no-specs-but-tasks',
+      changeDir: '/private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks',
+      contextFiles: {
+        proposal: [
+          '/private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks/proposal.md',
+        ],
+        tasks: ['/private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks/tasks.md'],
+      },
+      progress: { total: 2, complete: 1, remaining: 1 },
+      tasks: [
+        { id: '1', description: 'First task done', done: true },
+        { id: '2', description: 'Second task pending', done: false },
+      ],
+      missingPrerequisites: ['specs', 'design'],
+      warnings: [
+        'This change has no delta specs and does not declare `skip_specs: true`, so `openspec validate no-specs-but-tasks` fails on it. Write the delta specs before implementing (`openspec instructions specs --change no-specs-but-tasks`), or add `skip_specs: true` to /private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks/.openspec.yaml if this change really changes no specified behavior.',
+      ],
+    })
+
+    expect(parsed.warnings).toEqual([
+      'This change has no delta specs and does not declare `skip_specs: true`, so `openspec validate no-specs-but-tasks` fails on it. Write the delta specs before implementing (`openspec instructions specs --change no-specs-but-tasks`), or add `skip_specs: true` to /private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks/.openspec.yaml if this change really changes no specified behavior.',
+    ])
+    expect(parsed.missingPrerequisites).toEqual(['specs', 'design'])
+    // Evidence fields never rewrite the readiness or progress semantics.
+    expect(parsed.state).toBe('ready')
+    expect(parsed.applyInstructionProgress).toMatchObject({
+      total: 2,
+      complete: 1,
+      remaining: 1,
+      state: 'ready',
+    })
+  })
+
+  it('keeps both OpenSpec 1.13 Apply fields absent without synthesizing empty arrays', () => {
+    const parsed = ApplyInstructionsSchema.parse({
+      ...baseApplyInstructions,
+      contextFiles: {},
+    })
+
+    expect(parsed.warnings).toBeUndefined()
+    expect(parsed.missingPrerequisites).toBeUndefined()
+    expect('warnings' in parsed).toBe(false)
+    expect('missingPrerequisites' in parsed).toBe(false)
   })
 })
 

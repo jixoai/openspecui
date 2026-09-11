@@ -1,13 +1,15 @@
 /**
- * Orthogonal intents (created 2026-09-03 Asia/Shanghai):
- * 1. Prove the public `cli.validate` findings member runs the OpenSpec 1.12
- *    `validate --report findings` transport through the real Core contract executor.
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * 1. Prove the public `cli.validate` findings member runs the OpenSpec 1.12+
+ *    `validate --report findings` transport (admitted 1.13 line) through the real Core
+ *    contract executor.
  * 2. Prove the typed findings document and the `invalid_validation_report_request`
  *    status envelope both pass through the route boundary without rewriting.
  * 3. Prove a non-admitted CLI session is refused before any argv is constructed,
  *    naming the accepted range the compatibility gate owns.
  *
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { OpenSpecCliContractExecutor, type RootContext } from '@openspecui/core'
 import { isCliValidateFindings } from '@openspecui/core/openspec-compat'
@@ -117,8 +119,8 @@ function createFindingsCallerFixture(
 }
 
 describe('cli.validate findings transport', () => {
-  it('runs the findings report through the real contract executor on an admitted 1.12 session', async () => {
-    const fixture = createFindingsCallerFixture('1.12.0', () => ({
+  it('runs the findings report through the real contract executor on an admitted 1.13 session', async () => {
+    const fixture = createFindingsCallerFixture('1.13.0', () => ({
       stdout: JSON.stringify(findingsPayload()),
       exitCode: 0,
     }))
@@ -153,7 +155,7 @@ describe('cli.validate findings transport', () => {
   })
 
   it('maps the archived findings scope onto the archived bulk flag', async () => {
-    const fixture = createFindingsCallerFixture('1.12.0', () => ({
+    const fixture = createFindingsCallerFixture('1.13.0', () => ({
       stdout: JSON.stringify(findingsPayload()),
       exitCode: 0,
     }))
@@ -166,7 +168,7 @@ describe('cli.validate findings transport', () => {
   })
 
   it('passes the typed request-error envelope through without rewriting it as a thrown error', async () => {
-    const fixture = createFindingsCallerFixture('1.12.0', () => ({
+    const fixture = createFindingsCallerFixture('1.13.0', () => ({
       stdout: JSON.stringify(requestErrorPayload()),
       exitCode: 1,
     }))
@@ -187,7 +189,7 @@ describe('cli.validate findings transport', () => {
   })
 
   it('refuses findings on a non-admitted CLI session before any argv is constructed', async () => {
-    const fixture = createFindingsCallerFixture('1.11.0', () => ({
+    const fixture = createFindingsCallerFixture('1.12.0', () => ({
       stdout: JSON.stringify(findingsPayload()),
       exitCode: 0,
     }))
@@ -196,9 +198,9 @@ describe('cli.validate findings transport', () => {
       fixture.caller.cli.validate({ kind: 'findings', scope: 'changes' })
     ).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
-      message: expect.stringContaining('>=1.12.0 <1.13.0'),
+      message: expect.stringContaining('>=1.13.0 <1.14.0'),
     })
-    // The 1.12-only report flag never reaches a spawned CLI process.
+    // The findings report flag never reaches a spawned CLI process on a retired session.
     expect(fixture.executedArgv).toEqual([])
   })
 })

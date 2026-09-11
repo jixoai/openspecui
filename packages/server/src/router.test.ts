@@ -1,10 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-08-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Prove public Router owner boundaries and dedicated Planning-root stream settlement.
  * 2. Prove strict Archive identity, generation, validation, diagnostics, and Store selection publicly.
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
  * 4. Prove stale Git binding intent conflicts before rebound repository side effects.
  * 5. Prove Root, Store, Planning CLI, and v11 admission-gated capability routes through real owners.
+ * 6. Prove OpenSpec 1.13 Apply warnings and prerequisite evidence survive the public transport verbatim.
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-17): "Every public application mutation remains inside its Server-owned root and lifetime."
  * Original request (2026-07-17): "Rejected Validate and Update handles converge to one public terminal error."
@@ -24,6 +25,7 @@
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
 */
 import {
   acquireWatcherRoot,
@@ -3207,7 +3209,7 @@ apply:
           status: [],
         },
         storeId: 'shared',
-        cli: { available: true, version: '1.12.0' },
+        cli: { available: true, version: '1.13.0' },
       }
       const caller = appRouter.createCaller(context)
 
@@ -3827,6 +3829,59 @@ apply:
         undefined
       )
       expect(pendingWarmup).not.toHaveBeenCalled()
+    })
+
+    it('preserves OpenSpec 1.13 apply warnings and prerequisite evidence through the transport', async () => {
+      const context = createMockContext()
+      const planning = await resolveMockPlanningRoot(context)
+      // Ready-state 1.13 document: upstream JSON.stringify omits empty-valued keys, so no
+      // `missingArtifacts` key exists and the two additive members arrive as present arrays.
+      const warning =
+        'This change has no delta specs and does not declare `skip_specs: true`, so `openspec validate add-caching` fails on it. Write the delta specs before implementing (`openspec instructions specs --change add-caching`), or add `skip_specs: true` to /tmp/openspecui-router-test/openspec/changes/add-caching/.openspec.yaml if this change really changes no specified behavior.'
+      planning.kernel.readApplyInstructionsProjection.mockResolvedValueOnce({
+        changeName: 'add-caching',
+        changeDir: '/tmp/openspecui-router-test/openspec/changes/add-caching',
+        schemaName: 'spec-driven',
+        contextFiles: {},
+        tasks: [],
+        state: 'ready',
+        missingPrerequisites: ['specs', 'design'],
+        warnings: [warning],
+        instruction: 'Apply when ready.',
+        applyInstructionProgress: {
+          source: 'openspec-instructions-apply',
+          total: 2,
+          complete: 1,
+          remaining: 1,
+          state: 'ready',
+          divergence: null,
+        },
+        evidence: {
+          command: 'instructions apply',
+          success: true,
+          stdout: '{"state":"ready"}',
+          stderr: '',
+          exitCode: 0,
+          payload: { state: 'ready' },
+          diagnostics: [],
+          selector: {},
+          root: { path: '/tmp/openspecui-router-test', source: 'nearest' },
+        },
+      })
+      const caller = appRouter.createCaller(context)
+
+      const result = await caller.opsx.applyInstructions({ change: 'add-caching' })
+
+      expect(result.state).toBe('ready')
+      expect(result.missingPrerequisites).toEqual(['specs', 'design'])
+      expect(result.warnings).toEqual([warning])
+      expect(result.missingArtifacts).toBeUndefined()
+      expect(result.applyInstructionProgress).toMatchObject({
+        state: 'ready',
+        complete: 1,
+        total: 2,
+        divergence: null,
+      })
     })
 
     it('delegates workflow invocation preparation to the workflow service', async () => {

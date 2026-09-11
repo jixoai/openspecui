@@ -1,21 +1,21 @@
 /**
- * Orthogonal intents (created 2026-09-03 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.12.0 `show <change> --json --diff` contract against
+ * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.13.0 `show <change> --json --diff` contract against
  *    a real fixture project: MODIFIED deltas carry the unified diff body.
  * 2. Prove the diff stays CLI-owned evidence (`@@` hunks, `-`/`+` lines, no warning on
  *    a clean modification; the exact upstream near-miss header warning when names
  *    differ in case).
- * 3. Carry over the admitted-line requirement-diff contract proven for 1.11 onto the
- *    v12 single-series window.
+ * 3. Carry over the admitted-line requirement-diff contract proven for 1.11-1.12 onto
+ *    the v13 single-series window.
  *
- * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V12_VERSIONS,
+  PINNED_OPENSPEC_V13_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -23,8 +23,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV12Version,
-} from './__tests__/official-cli-v12-fixtures.js'
+  type PinnedOpenspecV13Version,
+} from './__tests__/official-cli-v13-fixtures.js'
 import { CliShowChangeDiffSuccessSchema } from './cli-contracts/show-diff.js'
 
 const MAIN_SPEC = [
@@ -43,7 +43,7 @@ const MAIN_SPEC = [
 ].join('\n')
 
 async function initProject(
-  version: PinnedOpenspecV12Version,
+  version: PinnedOpenspecV13Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -57,7 +57,7 @@ async function initProject(
 }
 
 async function createChangeWithDelta(
-  version: PinnedOpenspecV12Version,
+  version: PinnedOpenspecV13Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string,
@@ -81,7 +81,7 @@ async function createChangeWithDelta(
   await writeFile(join(changeDir, 'specs', 'billing', 'spec.md'), delta)
 }
 
-describe('pinned OpenSpec 1.12 show --diff fixtures', () => {
+describe('pinned OpenSpec 1.13 show --diff fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -89,7 +89,7 @@ describe('pinned OpenSpec 1.12 show --diff fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V12_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V13_VERSIONS) {
     it(`attaches a unified diff with hunks to a clean MODIFIED delta on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-show-diff`)
       const project = join(fixtureRoot, 'project')

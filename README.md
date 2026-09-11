@@ -8,6 +8,7 @@ Original request (2026-07-29): "补充 openspecui --web == openspecui serve --we
 Original request (2026-08-01): "v7不兼容1.6.x，明确要求必须使用 v1.7.x。"
 Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
 Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
+Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
 -->
 
 # OpenSpec UI
@@ -20,7 +21,8 @@ OpenSpecUI is a web interface for OpenSpec workflows (live mode + static export)
 
 | OpenSpecUI         | OpenSpec CLI line                                          |
 | ------------------ | ---------------------------------------------------------- |
-| `@latest` / `@^12` | current + supported: `>=1.12.0 <1.13.0`                    |
+| `@latest` / `@^13` | current + supported: `>=1.13.0 <1.14.0`                    |
+| `@^12` (legacy)    | current + supported: `>=1.12.0 <1.13.0`                    |
 | `@^11` (legacy)    | current: `>=1.11.0 <1.12.0`; supported: `>=1.10.0 <1.12.0` |
 | `@^9`              | current: `>=1.9.0 <1.10.0`; supported: `>=1.8.0 <1.10.0`   |
 | `@^7`              | `>=1.7.0 <1.8.0`                                           |
@@ -31,14 +33,15 @@ OpenSpecUI is a web interface for OpenSpec workflows (live mode + static export)
 | `@^2`              | `>=1.2.0 <1.3.0`                                           |
 | `@^1`              | `>=1.0.0 <1.2.0`                                           |
 
-OpenSpecUI major versions ordinarily track OpenSpec CLI minor lines. OpenSpecUI 12 adapts OpenSpec
-CLI 1.12.x as a single-series line: stable 1.12.x is current and recommended, and `1.13` is not
-pre-claimed — when it ships, admission is a separately verified decision (a 12.x window widening or
-a new major). OpenSpecUI 11 remains the historical 1.10.x/1.11.x product line and deliberately
-skipped a separate 10 release while taking on every 1.10 protocol obligation.
+OpenSpecUI major versions ordinarily track OpenSpec CLI minor lines. OpenSpecUI 13 adapts OpenSpec
+CLI 1.13.x as a single-series line: stable 1.13.x is current and recommended, and `1.14` is not
+pre-claimed — when it ships, admission is a separately verified decision (a 13.x window widening or
+a new major). OpenSpecUI 12 remains the historical 1.12.x product line, OpenSpecUI 11 the historical
+1.10.x/1.11.x line.
 
 Legacy docs:
 
+- 1.12: [`README-1.12.0.md`](./README-1.12.0.md)
 - 1.11: [`README-1.11.0.md`](./README-1.11.0.md)
 - 1.9: [`README-1.9.0.md`](./README-1.9.0.md)
 - 1.7: [`README-1.7.0.md`](./README-1.7.0.md)
@@ -64,25 +67,27 @@ Direct Project Web defaults to `http://localhost:3100` when that presentation is
 
 ## OpenSpec CLI Compatibility
 
-- OpenSpecUI 12 accepts stable OpenSpec CLI `>=1.12.0 <1.13.0` and recommends the 1.12 line.
-- Stable 1.12.x is identified as the current line; this is a single-series window.
-- OpenSpec CLI 1.11.x and 1.10.x (the OpenSpecUI 11 window), older lines, CLI `>=1.13.0`, and every
-  prerelease are unsupported by OpenSpecUI 12 and blocked by default.
+- OpenSpecUI 13 accepts stable OpenSpec CLI `>=1.13.0 <1.14.0` and recommends the 1.13 line.
+- Stable 1.13.x is identified as the current line; this is a single-series window.
+- OpenSpec CLI 1.12.x (the OpenSpecUI 12 window), older lines, CLI `>=1.14.0`, and every
+  prerelease are unsupported by OpenSpecUI 13 and blocked by default.
 - If an incompatible CLI executable is available, the mismatch Dialog offers **Skip version check**.
   This bypass is held only by the current page runtime, clears on refresh/reopen, and does not
   create a compatibility promise.
 
-OpenSpecUI 12 adds: a capability-gated validation findings surface through `openspec validate
---report findings` (findings-only items with preserved full-run totals and exit codes),
-merge-conflict advisory findings rendered as a first-class informational class, and SourceCraft
-Code Assistant in the Agent delivery registry (`.codeassistant`, natural-language skill references).
-Batch status (`status --all`), requirement diff evidence (`show --diff`), `init --language`, Zed,
-and the Antigravity `.agent` → `.agents` migration continue on the admitted 1.12 line.
+OpenSpecUI 13 adds: CLI-owned Apply readiness guidance — `instructions apply` warnings (the
+no-delta-specs advisory that predicts a `validate` failure) render on the Change Detail direct plane,
+and the `missingPrerequisites` build-order chain renders as readable next-step evidence. The Agent
+delivery registry rotates to the 1.13 series with every 1.12 physical fact carried forward, and the
+pinned generator baseline moves to 1.13.0. Validation findings (`--report findings`), merge-conflict
+informational findings, SourceCraft Code Assistant (`.codeassistant`), batch status (`status --all`),
+requirement diff evidence (`show --diff`), `init --language`, Zed, and the Antigravity `.agent` →
+`.agents` migration continue on the admitted 1.13 line.
 
 Upgrade CLI:
 
 ```bash
-npm install -g @fission-ai/openspec@1.12
+npm install -g @fission-ai/openspec@1.13
 ```
 
 ## Common Flows

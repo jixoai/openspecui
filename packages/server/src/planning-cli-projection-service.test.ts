@@ -1,13 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Prove selector-exact isolation, including Reference-content invalidation, and same-identity single-flight.
  * 2. Prove retained A becomes display-only during B and survives a refresh failure.
  * 3. Prove an initial failure publishes no fabricated Planning CLI snapshot.
  * 4. Prove explicit and config-dependent retirement suppress late prior generations.
  * 5. Prove lifecycle Push carries no business data while every Instructions selector remains isolated.
+ * 6. Prove OpenSpec 1.13 Apply `warnings`/`missingPrerequisites` evidence survives the projection
+ *    Work boundary verbatim without altering state or progress semantics.
  *
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-26): "public Pull retains full CliProjection failure evidence."
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import {
   CliProjectionCommandError,
@@ -244,6 +247,79 @@ describe('PlanningCliProjectionService', () => {
         })
       })
       expect(executeCli).toHaveBeenCalledWith(['list', '--specs', '--json'])
+    } finally {
+      subscription.unsubscribe()
+      fixture.runtime.clear()
+    }
+  })
+
+  it('preserves OpenSpec 1.13 apply warning and prerequisite evidence verbatim', async () => {
+    // Ready-state 1.13 document: upstream omits empty keys, so `missingArtifacts` is absent
+    // while `missingPrerequisites` (conditional build-order artifacts) and `warnings`
+    // (no-delta-specs advisory) are present arrays that must cross the projection Work
+    // boundary without being defaulted, gated, or rewritten.
+    const warning =
+      'This change has no delta specs and does not declare `skip_specs: true`, so `openspec validate alpha` fails on it. Write the delta specs before implementing (`openspec instructions specs --change alpha`), or add `skip_specs: true` to /planning/openspec/changes/alpha/.openspec.yaml if this change really changes no specified behavior.'
+    const fixture = createFixture(async () => createStatus('unexpected'), undefined, {
+      kernel: {
+        readApplyInstructionsProjection: async () => ({
+          changeName: 'alpha',
+          changeDir: '/planning/openspec/changes/alpha',
+          schemaName: 'spec-driven',
+          contextFiles: {},
+          tasks: [],
+          state: 'ready' as const,
+          missingPrerequisites: ['specs', 'design'],
+          warnings: [warning],
+          instruction: 'Apply when ready.',
+          applyInstructionProgress: {
+            source: 'openspec-instructions-apply' as const,
+            total: 2,
+            complete: 1,
+            remaining: 1,
+            state: 'ready' as const,
+            divergence: null,
+          },
+          evidence: {
+            command: 'instructions apply' as const,
+            success: true,
+            stdout: '{"state":"ready"}',
+            stderr: '',
+            exitCode: 0,
+            payload: { state: 'ready' },
+            diagnostics: [],
+            selector: {},
+            root: { path: '/planning', source: 'nearest' as const },
+          },
+        }),
+      },
+    })
+    const selector = {
+      kind: 'opsx-apply-instructions',
+      change: 'alpha',
+    } satisfies PlanningCliProjectionSelector
+    const subscription = fixture.service.subscribe(selector, () => {})
+
+    try {
+      await vi.waitFor(() => {
+        expect(fixture.service.read(selector)).toMatchObject({
+          state: 'ready',
+          data: {
+            kind: 'opsx-apply-instructions',
+            value: {
+              state: 'ready',
+              missingPrerequisites: ['specs', 'design'],
+              warnings: [warning],
+              applyInstructionProgress: {
+                state: 'ready',
+                complete: 1,
+                total: 2,
+                divergence: null,
+              },
+            },
+          },
+        })
+      })
     } finally {
       subscription.unsubscribe()
       fixture.runtime.clear()

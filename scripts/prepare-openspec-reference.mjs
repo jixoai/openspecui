@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
- * 1. Initialize the pinned OpenSpec 1.12 reference submodule for clean CI checkouts.
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * 1. Initialize the pinned OpenSpec 1.13 reference submodule for clean CI checkouts.
  * 2. Build the ignored CLI distribution consumed by pinned integration fixtures.
  * 3. Reject submodule drift before any fixture can execute a different upstream revision.
  * 4. Invoke pnpm through a Windows-safe executable or quoted command-shim boundary.
@@ -15,6 +15,8 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作。"
+ * Original request (2026-09-12): rotate the reference pin from v1.12.0 (e062b957) to the released
+ * v1.13.0 tag (9d4e5974) for the OpenSpecUI 13 adaptation line.
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -24,7 +26,7 @@ import { resolvePnpmInvocation } from './lib/pnpm-invocation.mjs'
 
 const REPOSITORY_ROOT = process.cwd()
 const REFERENCE_PATH = resolve(REPOSITORY_ROOT, 'references/openspec')
-const EXPECTED_COMMIT = 'e062b9572be933564ba3899d059377dfa1393e32'
+const EXPECTED_COMMIT = '9d4e5974e5c0d9a09b9c6c1e1eb0975e80ec4461'
 const CLI_DIST_PATH = resolve(REFERENCE_PATH, 'dist/cli/index.js')
 
 function run(command, args, options = {}) {
@@ -63,7 +65,12 @@ if (actualCommit !== EXPECTED_COMMIT) {
 }
 
 console.log(`[openspec-ref-prepare] pinned SHA ${actualCommit}`)
-runPnpm(['install', '--frozen-lockfile', '--ignore-scripts', '--ignore-workspace'], {
+
+// No `--ignore-workspace` here: upstream v1.13.0 declares its dependency overrides in the submodule's own
+// pnpm-workspace.yaml (moved out of package.json), and that flag makes pnpm ignore the file entirely, so
+// the frozen install dies with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH. The submodule's own workspace file makes
+// it its own install root, so parent-workspace discovery was never the concern this flag protected.
+runPnpm(['install', '--frozen-lockfile', '--ignore-scripts'], {
   cwd: REFERENCE_PATH,
 })
 runPnpm(['run', 'build'], { cwd: REFERENCE_PATH })

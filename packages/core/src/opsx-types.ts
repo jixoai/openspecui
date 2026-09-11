@@ -1,13 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Publish runtime schemas for final Projection Work payloads, including transformed Apply progress.
  * 2. Keep isPlanningComplete as the authoritative planning fact over any local tracked alias.
  * 3. Carry CLI status evidence, diagnostics, and per-artifact requires as typed facts.
  * 4. Preserve root-context and store projections as browser-safe contracts.
  * 5. Keep projection notices distinct from payload data so failures never masquerade as results.
+ * 6. Project the OpenSpec 1.13 Apply `warnings` and `missingPrerequisites` fields through the
+ *    input and final projection schemas verbatim: optional everywhere, never defaulted to
+ *    empty arrays, and never allowed to alter state/progress/tasks semantics.
  *
  * Original request (2026-07-15): "为内核载荷建立强类型。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 import { z } from 'zod'
 import type { CliJsonValue } from './cli-contracts/command-result.js'
@@ -153,6 +157,10 @@ const ApplyInstructionsInputSchema = z.object({
   tasks: z.array(ApplyTaskSchema),
   state: z.enum(['blocked', 'all_done', 'ready']),
   missingArtifacts: z.array(z.string()).optional(),
+  // OpenSpec 1.13 additive members: conditionally spread upstream, so they are
+  // optional here with no default; verbatim evidence, never apply gating.
+  missingPrerequisites: z.array(z.string()).optional(),
+  warnings: z.array(z.string()).optional(),
   instruction: z.string(),
   references: z.array(CliReferenceIndexEntrySchema).optional(),
   context: z.string().optional(),
@@ -194,6 +202,10 @@ export const ApplyInstructionsProjectionSchema = z.object({
   tasks: z.array(ApplyTaskSchema),
   state: z.enum(['blocked', 'all_done', 'ready']),
   missingArtifacts: z.array(z.string()).optional(),
+  // OpenSpec 1.13 additive members: conditionally spread upstream, so they are
+  // optional here with no default; verbatim evidence, never apply gating.
+  missingPrerequisites: z.array(z.string()).optional(),
+  warnings: z.array(z.string()).optional(),
   instruction: z.string(),
   references: z.array(CliReferenceIndexEntrySchema).optional(),
   context: z.string().optional(),

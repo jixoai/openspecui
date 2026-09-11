@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
  * 1. Prove the public Agent Router exposes complete projection without client-authored policy inputs.
  * 2. Prove structured policy mutation preserves environment-global extension fields and refreshes authority.
  * 3. Prove Agent Init streams use Server-owned profile policy and propagate cancellation to the CLI handle.
@@ -11,6 +11,7 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  */
 
 import {
@@ -104,7 +105,7 @@ async function createFixture() {
   })
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.12.0',
+    version: '1.13.0',
   })
   disposals.push(async () => {
     vi.restoreAllMocks()
@@ -152,7 +153,8 @@ describe('agentIntegrationsRouter', () => {
       available: true,
       capability: 'skills-invocable',
     })
-    // The admitted 1.12 line projects the SourceCraft Code Assistant inventory entry.
+    // The admitted 1.13 line projects the SourceCraft Code Assistant inventory entry
+    // (introduced on the 1.12 line).
     expect(projection.registry.find((tool) => tool.value === 'codeassistant')).toMatchObject({
       available: true,
       skillsDir: '.codeassistant',
@@ -249,9 +251,9 @@ describe('agentIntegrationsRouter', () => {
     const handle = { settled: terminal.promise, cancel } satisfies CliStreamHandle
     const initStream = vi.spyOn(fixture.server.cliExecutor, 'initStream').mockReturnValue(handle)
     vi.spyOn(fixture.server.agentDeliveryProjectionService, 'getCurrent').mockResolvedValue({
-      // The admitted 1.12 fixture must offer the requested tool: explicit Init tools are
+      // The admitted 1.13 fixture must offer the requested tool: explicit Init tools are
       // validated against the projection registry before any CLI spawn.
-      registry: selectAgentDeliveryRegistry('1.12.0'),
+      registry: selectAgentDeliveryRegistry('1.13.0'),
       policy: { profile: 'custom', delivery: 'commands', workflows: ['verify'] },
       states: [],
     })

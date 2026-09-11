@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
- * 1. Pin the official OpenSpec v1.4 through v1.12 source contracts used by OpenSpecUI.
+ * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * 1. Pin the official OpenSpec v1.4 through v1.13 source contracts used by OpenSpecUI.
  * 2. Prevent a version-gate-only adaptation from masking missing workflow or root behavior.
  * 3. Keep validation, archive, task, batch status, requirement-diff, and init-language
  *    fixtures traceable to first-party source.
@@ -12,6 +12,8 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
  * Original request (2026-09-03): "openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作。"
+ * Original request (2026-09-12): rotate the reference pin assertion from v1.12.0 (e062b957) to the
+ * released v1.13.0 tag (9d4e5974) for the OpenSpecUI 13 adaptation line.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -85,13 +87,13 @@ describe('first-party OpenSpec 1.4-1.7 contracts', () => {
     expect(rootInspection).toContain('inspectOptionalPlanningDirectory')
   })
 
-  it('pins the reference checkout to the official v1.12.0 commit', () => {
+  it('pins the reference checkout to the official v1.13.0 commit', () => {
     const commit = execFileSync('git', ['-C', upstreamRoot, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
       windowsHide: true,
     }).trim()
 
-    expect(commit).toBe('e062b9572be933564ba3899d059377dfa1393e32')
+    expect(commit).toBe('9d4e5974e5c0d9a09b9c6c1e1eb0975e80ec4461')
   })
 
   it('locks the retained planning-completion, schemas sum type, and archived validation sources', () => {

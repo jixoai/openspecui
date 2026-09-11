@@ -5,7 +5,7 @@
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
  * 4. Register translation runtime, model, asset, and cache procedures.
  * 5. Compose the public router and enforce admission-gated CLI capabilities on the
- *   OpenSpecUI 12 line (>=1.12.0 <1.13.0), including the 1.12 findings report transport.
+ *   OpenSpecUI 13 line (>=1.13.0 <1.14.0), including the 1.12+ findings report transport.
  * 6. Install the supported OpenSpec CLI series through the global install stream (issue #258).
  * 7. Serve the capability-gated CLI MODIFIED-delta diff evidence for the Change Evidence tab.
  *
@@ -41,6 +41,7 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。" — the Change
  *   Evidence tab gains the 1.11-gated `show --diff` projection without touching existing procedures.
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
 
  */
 import type {
