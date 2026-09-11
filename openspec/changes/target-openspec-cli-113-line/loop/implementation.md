@@ -60,9 +60,18 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
     canonical root config). Zero production logic changes.
   - Integrator follow-up: `packages/web/scripts/w2-project-binding-playwright.ts` `PINNED_OPENSPEC_COMMIT`
     rotated to `9d4e5974...` (Slice 6 escalation; header updated).
-  - Known load-dependent flake (pre-existing, HEAD-reproduced by Slice 6): server git-scope test sits near
-    its 5s budget under parallel load; re-verified green in isolation. To be re-run during the full gate
-    window on a quiet machine.
+- Known load-dependent flake (pre-existing, HEAD-reproduced by Slice 6): server git-scope test sits near
+  its 5s budget under parallel load; re-verified green in isolation. To be re-run during the full gate
+  window on a quiet machine.
+- Full gates (Slice 7): `format:check`, `lint:ci`, `typecheck` green. Integrator incident, recorded
+  honestly: a repo-root `prettier --write` without explicit paths reformatted 111 out-of-scope files
+  (archived changes, skills docs, website, unrelated sources) — all restored via
+  `git checkout --` against an explicit keep-list before commit; nothing out of scope was committed
+  (verified: commits touch only change-owned files). First `test:ci` run had one environmental failure
+  (`scripts/pnpm-invocation.test.mjs` 5s spawn timeout under gate load; isolated rerun green, file
+  untouched by this change). First `test:browser:ci` run failed on a missing Playwright
+  `chromium_headless_shell-1208` executable (machine prerequisite); installed via
+  `pnpm exec playwright install chromium`, both gates re-run — results recorded below on completion.
 
 ## Evidence recording rule
 
