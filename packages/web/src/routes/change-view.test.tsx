@@ -28,6 +28,9 @@ import { ChangeView } from './change-view'
 const statusMock = vi.hoisted(() => vi.fn())
 const applyInstructionsMock = vi.hoisted(() => vi.fn())
 const changeFilesMock = vi.hoisted(() => vi.fn())
+const changesSubscriptionMock = vi.hoisted(() =>
+  vi.fn(() => ({ data: undefined, isLoading: false, error: null }))
+)
 const rootActionMock = vi.hoisted(() => vi.fn())
 const openArchiveModalMock = vi.hoisted(() => vi.fn())
 const isStaticModeMock = vi.hoisted(() => vi.fn(() => false))
@@ -199,6 +202,7 @@ vi.mock('@/lib/use-opsx', () => ({
 
 vi.mock('@/lib/use-subscription', () => ({
   useChangeFilesSubscription: changeFilesMock,
+  useChangesSubscription: changesSubscriptionMock,
 }))
 
 vi.mock('@/lib/use-root-action-state', () => ({
@@ -617,18 +621,24 @@ describe('ChangeView', () => {
     render(<ChangeView />)
 
     const region = screen.getByTestId('opsx-detail-status-region')
-    // The warning text is verbatim on the direct plane — not only inside the Apply inputs
-    // dialog, a Tooltip, or a collapsed disclosure.
+    // Collapsed by default: one summary row carries the warning count, the full build-order
+    // chain, and CLI attribution — discoverable without hover or expansion, and the long
+    // verbatim text does not consume the page.
+    const summary = within(region).getByRole('status', {
+      name: 'Apply readiness guidance from openspec instructions apply',
+    })
+    expect(summary).toBeVisible()
+    expect(summary).toHaveTextContent('1 apply warning')
+    expect(summary).toHaveTextContent('next in build order: specs → design')
+    expect(within(region).queryByText(/This change has no delta specs/)).toBeNull()
+    // One explicit expansion reveals the verbatim upstream warning on the same direct plane.
+    fireEvent.click(summary.querySelector('button[aria-controls]')!)
     expect(
       within(region).getByText(
         /This change has no delta specs and does not declare `skip_specs: true`/
       )
     ).toBeVisible()
     expect(within(region).getByText(/^Apply warnings/)).toBeVisible()
-    // The build-order chain names every missing prerequisite id beside the warning.
-    expect(within(region).getByText(/^Next in build order/)).toBeVisible()
-    expect(within(region).getByText('specs')).toBeVisible()
-    expect(within(region).getByText('design')).toBeVisible()
     // Ready-state build-order evidence never adopts the blocker alert role.
     expect(within(region).queryByRole('alert')).toBeNull()
   })

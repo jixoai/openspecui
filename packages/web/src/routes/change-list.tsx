@@ -14,6 +14,8 @@
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-09-12): Owner walkthrough: unify the Change display title — generic
+ *   "# Proposal" headings fall back to the change id on every surface.
  */
 import { ChangeRow, ChangeRowChevron } from '@/components/change-row'
 import {
@@ -22,6 +24,7 @@ import {
   RealtimeRevalidateCue,
   RealtimeSkeletonLine,
 } from '@/components/realtime'
+import { changeDisplayTitle } from '@/lib/change-display-title'
 import {
   classifyChangeWorkflowPhase,
   inferTrackedArtifactStatus,
@@ -197,7 +200,7 @@ export function ChangeList() {
                     __vtHandoff: {
                       family: 'changes',
                       entityId: change.id,
-                      title: change.name,
+                      title: changeDisplayTitle(change.id, change.name),
                       subtitle: change.id,
                     },
                   })}
@@ -208,7 +211,7 @@ export function ChangeList() {
                   <div className="flex items-center gap-3">
                     <ChangeRow
                       changeId={change.id}
-                      name={change.name}
+                      name={changeDisplayTitle(change.id, change.name)}
                       phase={phase}
                       updatedAt={change.updatedAt}
                       formatTime={formatRelativeTime}

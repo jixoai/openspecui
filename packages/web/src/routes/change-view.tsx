@@ -20,6 +20,8 @@
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进" — the Evidence tab gains the findings evidence section.
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-12): Owner walkthrough: unify the Change display title (generic "# Proposal"
+ *   headings fall back to the change id) and collapse Apply readiness guidance into one summary row.
  *   — the status region gains the OpenSpec 1.13 Apply `warnings` and `missingPrerequisites`
  *   direct-plane evidence beside the existing divergence notice.
  */
@@ -37,7 +39,8 @@ import { RootActionNotice } from '@/components/root-action-notice'
 import { buildOpsxComposeHref, type OpsxComposeActionId } from '@/lib/opsx-compose'
 import { useChangeOperatorLauncher } from '@/lib/use-change-operator-launcher'
 import { useOpsxApplyInstructionsSubscription, useOpsxStatusSubscription } from '@/lib/use-opsx'
-import { useChangeFilesSubscription } from '@/lib/use-subscription'
+import { useChangeFilesSubscription, useChangesSubscription } from '@/lib/use-subscription'
+import { changeDisplayTitle } from '@/lib/change-display-title'
 import { vtNavController } from '@/lib/view-transitions/navigation'
 import { readSharedElementHandoffState } from '@/lib/view-transitions/shared-elements'
 import { useLocation, useParams } from '@tanstack/react-router'
@@ -57,6 +60,14 @@ export function ChangeView() {
   const { data: status, isLoading, error } = statusProjection
   const { data: applyInstructions } = useOpsxApplyInstructionsSubscription({ change: changeId })
   const { data: files } = useChangeFilesSubscription(changeId)
+  const changesProjection = useChangesSubscription()
+  const changesRows = changesProjection.data
+  // Same derivation as the Changes list rows; the CLI status name is the canonical id in
+  // practice, so it only ever serves as a pre-rows fallback, never a second title source.
+  const displayTitle = changeDisplayTitle(
+    changeId,
+    changesRows?.find((row) => row.id === changeId)?.name ?? status?.changeName
+  )
 
   const handleComposeAction = useCallback(
     (actionId: OpsxComposeActionId, artifactId?: string) => {
@@ -154,7 +165,7 @@ export function ChangeView() {
       backTo="/changes"
       backTitle="Back to Changes"
       icon={GitBranch}
-      title={status?.changeName}
+      title={displayTitle}
       subtitle={
         status ? (
           <ChangeContextSummary

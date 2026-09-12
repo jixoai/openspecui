@@ -4,11 +4,12 @@
  * 2. Compress agreement to one subtitle badge; keep divergence a direct blocker.
  * 3. Keep divergence's two objective source counts side by side with their causes.
  * 4. Keep tooltips as the keyboard-reachable explanation for every compact count.
- * 5. Render OpenSpec 1.13 Apply `warnings` verbatim on the direct plane with CLI
- *    attribution; they predict a validation failure, so a Tooltip-only surface is forbidden.
- * 6. Render OpenSpec 1.13 `missingPrerequisites` as a readable build-order chain that
- *    stays evidence (status semantics), visually and semantically distinct from blockers,
- *    including when the Apply state is already `ready`.
+ * 5. Render OpenSpec 1.13 Apply `warnings`/`missingPrerequisites` as ONE always-visible summary
+ *    row (count + build-order chain, CLI attribution) whose verbatim evidence is one explicit
+ *    expansion away on the same direct plane — advisory guidance must stay discoverable without
+ *    consuming the page; a Tooltip-only surface remains forbidden.
+ * 6. Keep `missingPrerequisites` visually and semantically distinct from blockers (status
+ *    semantics), including when the Apply state is already `ready`.
  * 7. Degrade to the previous presentation when either 1.13 field is absent — absent keys
  *    are the upstream encoding for "none", so no empty state is ever synthesized.
  *
@@ -17,11 +18,13 @@
  * Original request (2026-08-15): Owner walkthrough: agreement is one badge in the subtitle row,
  *   not a two-line block; only divergence owns a notice.
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-12): Owner walkthrough: the always-expanded warning/build-order blocks
+ *   consumed the page; collapse them behind one summary row while keeping direct-plane discovery.
  */
 import { InformationBadge } from '@/components/information-disclosure'
 import type { ApplyInstructionProgress } from '@openspecui/core'
-import { AlertTriangle, ListOrdered } from 'lucide-react'
-import { Fragment } from 'react'
+import { AlertTriangle, ChevronDown, ChevronRight, ListOrdered } from 'lucide-react'
+import { Fragment, useState } from 'react'
 
 /**
  * One compact, source-attributed Apply progress badge for the Change subtitle row.
@@ -48,9 +51,13 @@ export function ApplyProgressBadge({
 /** Upstream command that owns every fact rendered by these notices. */
 const APPLY_COMMAND_ATTRIBUTION = 'openspec instructions apply'
 
+const GUIDANCE_DETAIL_ID = 'apply-readiness-guidance-detail'
+
 /**
  * Render the Apply/tracked divergence as one direct, source-attributed blocker, plus the
- * OpenSpec 1.13 `warnings` and `missingPrerequisites` evidence as direct-plane notices.
+ * OpenSpec 1.13 `warnings` and `missingPrerequisites` evidence as one collapsible summary row:
+ * the row itself names the warning count and the build-order chain (discovery needs no hover),
+ * and expanding reveals the verbatim upstream evidence on the same direct plane.
  * Returns null when none apply — the agreement case lives in the subtitle badge row via
  * {@link ApplyProgressBadge}, and absent 1.13 keys render nothing.
  */
@@ -68,59 +75,95 @@ export function ApplyProgressNotice({
   const divergence = applyInstructionProgress.divergence
   const hasWarnings = (warnings?.length ?? 0) > 0
   const hasPrerequisites = (missingPrerequisites?.length ?? 0) > 0
+  const [expanded, setExpanded] = useState(false)
   if (!divergence && !hasWarnings && !hasPrerequisites) return null
+
+  const guidanceSummaryParts: string[] = []
+  if (hasWarnings) {
+    const count = warnings!.length
+    guidanceSummaryParts.push(`${count} apply warning${count > 1 ? 's' : ''}`)
+  }
+  if (hasPrerequisites) {
+    guidanceSummaryParts.push(`next in build order: ${missingPrerequisites!.join(' → ')}`)
+  }
 
   return (
     <>
-      {hasWarnings ? (
+      {hasWarnings || hasPrerequisites ? (
         <div
           role="status"
-          data-apply-notice="warnings"
-          aria-label={`Apply warnings from ${APPLY_COMMAND_ATTRIBUTION}`}
-          className="flex min-w-0 items-start gap-2 border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+          data-apply-notice="summary"
+          aria-label={`Apply readiness guidance from ${APPLY_COMMAND_ATTRIBUTION}`}
+          className={
+            hasWarnings
+              ? 'flex min-w-0 items-center gap-2 border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100'
+              : 'text-muted-foreground flex min-w-0 items-center gap-2 rounded-md border px-3 py-1.5 text-xs'
+          }
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <div className="min-w-0 space-y-1">
-            <div className="font-medium">
-              Apply warnings — reported by {APPLY_COMMAND_ATTRIBUTION}
-            </div>
-            <ul className="space-y-1">
-              {warnings?.map((warning) => (
-                <li key={warning} className="break-words">
-                  {warning}
-                </li>
-              ))}
-            </ul>
-          </div>
+          {hasWarnings ? (
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          ) : (
+            <ListOrdered className="h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            aria-expanded={expanded}
+            aria-controls={GUIDANCE_DETAIL_ID}
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
+          >
+            <span className="truncate font-medium">{guidanceSummaryParts.join(' · ')}</span>
+            <span className="text-muted-foreground shrink-0 font-normal">
+              — {APPLY_COMMAND_ATTRIBUTION}
+            </span>
+          </button>
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
         </div>
       ) : null}
-      {hasPrerequisites ? (
+      {expanded && (hasWarnings || hasPrerequisites) ? (
         <div
-          role="status"
-          data-apply-notice="build-order"
-          aria-label="Apply build-order prerequisites"
-          className="text-muted-foreground flex min-w-0 items-start gap-2 rounded-md border px-3 py-2 text-xs"
+          id={GUIDANCE_DETAIL_ID}
+          className="text-muted-foreground space-y-2 rounded-md border px-3 py-2 text-xs"
         >
-          <ListOrdered className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <div className="min-w-0 space-y-1">
-            <div className="text-foreground font-medium">
-              Next in build order — reported by {APPLY_COMMAND_ATTRIBUTION}
+          {hasWarnings ? (
+            <div data-apply-notice="warnings" className="min-w-0 space-y-1">
+              <div className="text-foreground font-medium">
+                Apply warnings — reported by {APPLY_COMMAND_ATTRIBUTION}
+              </div>
+              <ul className="space-y-1">
+                {warnings?.map((warning) => (
+                  <li key={warning} className="break-words">
+                    {warning}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="flex flex-wrap items-center gap-1">
-              {missingPrerequisites?.map((artifactId, index) => (
-                <Fragment key={artifactId}>
-                  {index > 0 ? (
-                    <span className="text-muted-foreground/70" aria-hidden="true">
-                      →
+          ) : null}
+          {hasPrerequisites ? (
+            <div data-apply-notice="build-order" className="min-w-0 space-y-1">
+              <div className="text-foreground font-medium">
+                Next in build order — reported by {APPLY_COMMAND_ATTRIBUTION}
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {missingPrerequisites?.map((artifactId, index) => (
+                  <Fragment key={artifactId}>
+                    {index > 0 ? (
+                      <span className="text-muted-foreground/70" aria-hidden="true">
+                        →
+                      </span>
+                    ) : null}
+                    <span className="bg-muted break-words rounded border px-1 py-0.5 font-mono [overflow-wrap:anywhere]">
+                      {artifactId}
                     </span>
-                  ) : null}
-                  <span className="bg-muted break-words rounded border px-1 py-0.5 font-mono [overflow-wrap:anywhere]">
-                    {artifactId}
-                  </span>
-                </Fragment>
-              ))}
+                  </Fragment>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       ) : null}
       {divergence ? (
