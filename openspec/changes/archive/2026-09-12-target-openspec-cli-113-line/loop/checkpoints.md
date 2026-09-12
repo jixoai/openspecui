@@ -16,7 +16,7 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
 - [x] `references/openspec-1.13.0-report.md` written with executed CLI evidence.
 - [x] Change artifacts (specs deltas + loop docs) written.
 - [x] Codex change review: Round-B 8.7/10 APPROVE WITH NON-BLOCKING NOTES (Round-A 5.8 REVISE folded).
-- [ ] CP0 committed.
+- [x] CP0 committed (51b0515e; the review checkbox above it closed at Round-B).
 
 ## CP1 — Window and contract (implementation)
 
@@ -64,6 +64,9 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
 - [x] Required PR checks green (third CI round after the prepare-script fix and the web
       change-diff-evidence rotation): CI Scope, Changeset Gate, Fast Gate, Windows Portability Gate,
       Browser Gate + both shards — all pass on run 34651529010.
-- [ ] Owner acceptance: final end-to-end browser walkthrough (Owner-only).
-- [ ] Archive change, merge, release — Owner decision.
-- [ ] GitHub issues surveyed and handled with objective links after delivery.
+- [x] Owner acceptance passed (2026-09-12): functional walkthrough on the isolated instance
+      accepted; two UX defects filed and delivered in #284, re-verified in browser.
+- [x] Owner decision (2026-09-12): release authorized; 13.0.0 published (npm latest, tags,
+      GitHub Release verified; one release rerun recovered the main package); archive delivered in
+      this change.
+- [x] GitHub issue #282 answered with objective links and closed after #283 merged.
