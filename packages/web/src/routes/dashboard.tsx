@@ -20,6 +20,8 @@
  * Original request (2026-07-31): "基于真实的布局去做骨架屏，或者说是直接让卡片自身去支持 Pending 样式"
  * Original request (2026-07-31): "Code Git Snapshot 的 Other Worktrees 默认隐藏 (detached)。然后commitList这里默认显示5个就好"
  * Original request (2026-07-31): "检查目前的这个 Code Git Snapshot，它非常慢，有时候甚至要十几秒"
+ * Original request (2026-09-12): Owner walkthrough: unify the Change display title — generic
+ *   "# Proposal" headings fall back to the change id on every surface.
  * Owner correction (2026-07-31): Hidden documents pause the timer; visibility resumes the remaining delay or refreshes once when the absolute deadline elapsed.
 
  */
@@ -42,6 +44,7 @@ import {
   RealtimeSkeleton,
 } from '@/components/realtime'
 import type { SelectOption } from '@/components/select'
+import { changeDisplayTitle } from '@/lib/change-display-title'
 import {
   classifyChangeWorkflowPhase,
   inferTrackedArtifactStatus,
@@ -710,7 +713,7 @@ export function Dashboard() {
                   __vtHandoff: {
                     family: 'changes',
                     entityId: change.id,
-                    title: change.name,
+                    title: changeDisplayTitle(change.id, change.name),
                     subtitle: change.id,
                   },
                 })}
@@ -724,7 +727,7 @@ export function Dashboard() {
                 <div className="flex min-w-0 items-center gap-3">
                   <ChangeRow
                     changeId={change.id}
-                    name={change.name}
+                    name={changeDisplayTitle(change.id, change.name)}
                     phase={phase}
                     updatedAt={change.updatedAt}
                     formatTime={formatRelativeTime}

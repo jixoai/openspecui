@@ -4,8 +4,9 @@
  * 2. Prove compact source counts retain keyboard-reachable explanations.
  * 3. Prove agreement renders one subtitle badge and never a separate block.
  * 4. Prove the divergence notice is absent when the sources agree.
- * 5. Prove OpenSpec 1.13 Apply warnings stay on the direct plane with CLI attribution
- *    and verbatim upstream text, never only inside a Tooltip or collapsed disclosure.
+ * 5. Prove OpenSpec 1.13 Apply guidance renders as ONE always-visible summary row (count +
+ *    build-order chain + CLI attribution) whose verbatim upstream text is one explicit
+ *    expansion away on the same direct plane — never Tooltip-only, never undiscoverable.
  * 6. Prove missingPrerequisites renders as a readable build-order chain distinct from blockers.
  * 7. Prove absent 1.13 fields degrade to the existing presentation with no synthesized state.
  *
@@ -13,6 +14,8 @@
  * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
  * Original request (2026-08-15): Owner walkthrough: agreement is one badge in the subtitle row.
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-12): Owner walkthrough: collapse the always-expanded warning/build-order
+ *   blocks into one summary row; the page must not be consumed by advisory guidance.
  */
 import type { ApplyInstructionProgress } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -103,7 +106,7 @@ describe('ApplyProgressNotice OpenSpec 1.13 evidence', () => {
     cleanup()
   })
 
-  it('keeps upstream Apply warnings on the direct plane with CLI attribution', () => {
+  it('summarizes warnings in one visible row and reveals verbatim text on explicit expansion', () => {
     render(
       <ApplyProgressNotice
         applyInstructionProgress={progress(false)}
@@ -111,17 +114,25 @@ describe('ApplyProgressNotice OpenSpec 1.13 evidence', () => {
       />
     )
 
-    const notice = screen.getByRole('status', {
-      name: 'Apply warnings from openspec instructions apply',
+    // Collapsed: the summary row is the direct plane — count, CLI attribution, no hover needed
+    // to discover the predicted validation failure; the long verbatim text is not sprawled yet.
+    const summary = screen.getByRole('status', {
+      name: 'Apply readiness guidance from openspec instructions apply',
     })
-    expect(notice).toBeVisible()
-    expect(notice).toHaveTextContent('Apply warnings')
-    expect(notice).toHaveTextContent('openspec instructions apply')
-    // The upstream message survives verbatim on the direct plane — no Tooltip-only copy.
+    expect(summary).toBeVisible()
+    expect(summary).toHaveTextContent('1 apply warning')
+    expect(summary).toHaveTextContent('openspec instructions apply')
+    expect(screen.queryByText(upstreamApplyWarning)).toBeNull()
+
+    // One explicit expansion reveals the verbatim upstream message on the same direct plane.
+    fireEvent.click(summary.querySelector('button[aria-controls]')!)
     expect(screen.getByText(upstreamApplyWarning)).toBeVisible()
+    expect(
+      screen.getByText('Apply warnings — reported by openspec instructions apply')
+    ).toBeVisible()
   })
 
-  it('renders missingPrerequisites as a readable build-order chain, never a blocker', () => {
+  it('shows the build-order chain in the summary row without expansion, never as a blocker', () => {
     render(
       <ApplyProgressNotice
         applyInstructionProgress={progress(false)}
@@ -129,28 +140,49 @@ describe('ApplyProgressNotice OpenSpec 1.13 evidence', () => {
       />
     )
 
-    const notice = screen.getByRole('status', { name: 'Apply build-order prerequisites' })
-    expect(notice).toBeVisible()
-    expect(notice).toHaveTextContent('Next in build order')
-    expect(notice).toHaveTextContent('specs')
-    expect(notice).toHaveTextContent('design')
-    expect(notice).toHaveTextContent('openspec instructions apply')
+    // The chain is short enough to live in the summary itself: readable next-step evidence.
+    const summary = screen.getByRole('status', {
+      name: 'Apply readiness guidance from openspec instructions apply',
+    })
+    expect(summary).toBeVisible()
+    expect(summary).toHaveTextContent('next in build order: specs → design')
+    expect(summary).toHaveTextContent('openspec instructions apply')
     // Build-order evidence keeps status semantics and never adopts the blocker alert role.
-    expect(notice.getAttribute('role')).toBe('status')
+    expect(summary.getAttribute('role')).toBe('status')
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('combines warnings and the chain into one summary row and expands both', () => {
+    render(
+      <ApplyProgressNotice
+        applyInstructionProgress={progress(false)}
+        warnings={[upstreamApplyWarning, 'second warning']}
+        missingPrerequisites={['specs', 'design']}
+      />
+    )
+
+    const summary = screen.getByRole('status', {
+      name: 'Apply readiness guidance from openspec instructions apply',
+    })
+    expect(summary).toHaveTextContent('2 apply warnings')
+    expect(summary).toHaveTextContent('next in build order: specs → design')
+    fireEvent.click(summary.querySelector('button[aria-controls]')!)
+    expect(screen.getByText(upstreamApplyWarning)).toBeVisible()
+    expect(screen.getByText('second warning')).toBeVisible()
   })
 
   it('keeps the existing divergence presentation when the 1.13 fields are absent', () => {
     render(<ApplyProgressNotice applyInstructionProgress={progress(true)} />)
 
     // Absent keys degrade to the previous surface exactly: the divergence notice renders
-    // and no warning/build-order block or empty-state text is synthesized.
+    // and no guidance summary row or empty-state text is synthesized.
     expect(screen.getByText('Upstream task progress divergence')).toBeVisible()
     expect(screen.queryByText('Apply warnings')).toBeNull()
     expect(screen.queryByText('Next in build order')).toBeNull()
     expect(
-      screen.queryByRole('status', { name: 'Apply warnings from openspec instructions apply' })
+      screen.queryByRole('status', {
+        name: 'Apply readiness guidance from openspec instructions apply',
+      })
     ).toBeNull()
-    expect(screen.queryByRole('status', { name: 'Apply build-order prerequisites' })).toBeNull()
   })
 })

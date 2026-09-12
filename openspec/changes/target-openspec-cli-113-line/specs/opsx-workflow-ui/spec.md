@@ -43,23 +43,27 @@ SHALL NOT be reused as positive evidence for the current line.
 ### Requirement: Apply Readiness Guidance Surface
 
 Change Detail SHALL present CLI-owned Apply readiness guidance when an admitted OpenSpec CLI session provides
-it. `warnings` SHALL render on the direct plane with CLI provenance and exact upstream text, without hover or
-expansion being required to discover a predicted validation failure. `missingPrerequisites` SHALL render as
-readable build-order next-step evidence, visually distinct from blockers. Both SHALL degrade to the existing
-presentation when the fields are absent, and neither SHALL gate or relabel the Apply action itself.
+it, as ONE always-visible summary row on the direct status plane: the row names the warning count, the
+complete build-order chain, and the owning CLI command, so a predicted validation failure is discoverable
+without hover or expansion while the page is not consumed by advisory prose. The exact upstream warning text
+SHALL remain on the same direct plane behind one explicit expansion of that row (a Tooltip-only surface is
+forbidden). `missingPrerequisites` SHALL stay visually and semantically distinct from blockers. Both SHALL
+degrade to the existing presentation when the fields are absent, and neither SHALL gate or relabel the Apply
+action itself.
 
 #### Scenario: Warning renders on the direct plane
 
 - **GIVEN** an admitted 1.13 session provides Apply Instructions with the no-delta-specs warning
 - **WHEN** Change Detail renders apply guidance
-- **THEN** the warning text SHALL be visible in the direct evidence layer with CLI provenance
-- **AND** it SHALL NOT exist only inside Tooltip or collapsed disclosure content
+- **THEN** one summary row SHALL be visible in the direct evidence layer naming the warning count and CLI
+  provenance without hover
+- **AND** the verbatim warning text SHALL become visible with one explicit expansion on the same plane
 
 #### Scenario: Build-order chain is readable evidence
 
 - **GIVEN** Apply Instructions report `missingPrerequisites`
 - **WHEN** Change Detail renders apply guidance
-- **THEN** the chain SHALL be presented as ordered artifact ids
+- **THEN** the chain SHALL be presented as ordered artifact ids inside the summary row
 - **AND** it SHALL NOT be styled or labeled as a blocker when `state` is `ready`
 
 #### Scenario: Degrade without the fields

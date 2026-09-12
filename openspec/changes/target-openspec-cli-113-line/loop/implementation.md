@@ -177,6 +177,21 @@ dispositioned:
 4. **N4 (fixed)**: `agent-command-content.test.ts` and `tool-init-state.test.ts` now state that their
    openspec-cli-112 generator fixtures are historical/boundary evidence; positive v13 acceptance lives
    in the official-cli-v13 suites.
+- Owner walkthrough round (2026-09-12, post-merge): functional acceptance PASSED; two UX defects
+  filed and fixed on `fix/walkthrough-v13-ux` (branched off merged main):
+  1. The always-expanded Apply warnings/build-order blocks consumed the Change Detail page.
+     `ApplyProgressNotice` now renders ONE collapsible summary row (`data-apply-notice="summary"`:
+     warning count + full build-order chain + CLI attribution, `role="status"`, default collapsed)
+     whose expansion reveals the verbatim upstream evidence on the same direct plane
+     (`warnings`/`build-order` detail anchors preserved); divergence stays a direct uncollapsed
+     block. Spec delta updated to codify the summary-row contract; notice + route tests rewritten
+     (51/51 focused green).
+  2. Title mismatch: the Changes list titled rows with the legacy parser's proposal H1 (the
+     scaffold's generic "# Proposal"), while Change Detail titled with the CLI status changeName
+     (= id). New shared `changeDisplayTitle(id, name)` (web lib): an informative H1 wins, generic
+     `proposal` headings / blank / id-equal values fall back to the change id. Wired into
+     change-list rows + VT handoff, dashboard rows, and the Change Detail header (rows name with
+     status changeName as pre-rows fallback). Helper unit tests added.
 - Post-review CI fix (first PR check run): all three failing gates traced to one step —
   `scripts/prepare-openspec-reference.mjs` installed the submodule with `--ignore-workspace`, which
   blinds pnpm to the submodule's own `pnpm-workspace.yaml`; upstream 1.13.0 moved its dependency
