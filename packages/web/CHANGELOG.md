@@ -1,5 +1,15 @@
 # @openspecui/web
 
+## 13.0.0
+
+### Major Changes
+
+- 67f5533: OpenSpecUI 13: adapt to OpenSpec CLI 1.13.x as a new single-series line (`>=1.13.0 <1.14.0`); the previous 1.12 v12 window, prereleases, `>=1.14.0`, and unparseable versions are blocked by default. Apply Instructions now project the CLI-owned `missingPrerequisites` (build-order closure of unread artifacts, present even in the ready state) and `warnings` (the no-delta-specs advisory that predicts a `validate` failure) end-to-end: typed CLI contract, Core input/projection schemas, Server transport, and a direct-plane Change Detail presentation with readable build-order evidence and graceful degradation. The Agent delivery registry rotates its series to '1.13' with every 1.12 physical fact carried forward (no new tools upstream; SourceCraft's 1.12 introduction stays a provenance fact), the pinned generator baseline moves to 1.13.0 with series-aware staleness (1.12.x-generated artifacts read stale), and the pinned executable fixture matrix rotates to the published `@fission-ai/openspec@1.13.0` with the retained 1.12.0 executable proving below-admitted boundary rejections.
+
+### Patch Changes
+
+- cb4c75d: Walkthrough UX polish for the OpenSpecUI 13 Apply readiness guidance and Change titles: the Apply warnings/build-order notices collapse into one always-visible summary row (warning count + build-order chain + `openspec instructions apply` attribution) whose verbatim upstream evidence is one explicit expansion away, restoring the page to advisory-free default height while keeping direct-plane discovery; and every Change surface (Changes list, Dashboard rows, Change Detail header) now derives one shared display title — an informative proposal heading wins, generic `# Proposal` scaffold headings and parser-less rows fall back to the change id — ending the list/detail title mismatch.
+
 ## 12.0.0
 
 ### Major Changes

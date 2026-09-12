@@ -1,40 +1,40 @@
 {
- "name": "@openspecui/website",
- "version": "12.0.0",
- "private": true,
- "type": "module",
- "scripts": {
-  "dev": "vite --host=127.0.0.1 --port 13006",
-  "build": "vite build && node scripts/llms.mjs",
-  "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-  "test": "vitest run",
-  "cf:dev": "pnpm build && wrangler pages dev dist",
-  "cf:deploy": "pnpm build && wrangler pages deploy dist --project-name openspecui-website",
-  "cf:project:create": "wrangler pages project create openspecui-website --production-branch main"
- },
- "dependencies": {
-  "@fontsource-variable/jetbrains-mono": "^5.2.8",
-  "@fontsource/share-tech-mono": "^5.2.7",
-  "clsx": "^2.1.1",
-  "tailwind-merge": "^3.4.0"
- },
- "devDependencies": {
-  "@sveltejs/adapter-static": "^3.0.10",
-  "@sveltejs/kit": "^2.59.1",
-  "@sveltejs/vite-plugin-svelte": "^7.1.2",
-  "@tailwindcss/vite": "^4.2.1",
-  "@testing-library/jest-dom": "^6.6.3",
-  "@testing-library/svelte": "^5.3.1",
-  "jsdom": "^25.0.1",
-  "lucide-svelte": "^0.472.0",
-  "mdsvex": "^0.12.7",
-  "shiki": "^3.17.0",
-  "svelte": "^5.55.5",
-  "svelte-check": "^4.4.8",
-  "tailwindcss": "^4.2.1",
-  "typescript": "^5.9.3",
-  "vite": "^8.0.0",
-  "vitest": "^4.1.0",
-  "wrangler": "^4.72.0"
- }
+  "name": "@openspecui/website",
+  "version": "13.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host=127.0.0.1 --port 13006",
+    "build": "vite build && node scripts/llms.mjs",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "cf:dev": "pnpm build && wrangler pages dev dist",
+    "cf:deploy": "pnpm build && wrangler pages deploy dist --project-name openspecui-website",
+    "cf:project:create": "wrangler pages project create openspecui-website --production-branch main"
+  },
+  "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource/share-tech-mono": "^5.2.7",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.4.0"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.59.1",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@tailwindcss/vite": "^4.2.1",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/svelte": "^5.3.1",
+    "jsdom": "^25.0.1",
+    "lucide-svelte": "^0.472.0",
+    "mdsvex": "^0.12.7",
+    "shiki": "^3.17.0",
+    "svelte": "^5.55.5",
+    "svelte-check": "^4.4.8",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.72.0"
+  }
 }
