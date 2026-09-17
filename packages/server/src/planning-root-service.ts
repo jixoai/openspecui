@@ -302,15 +302,17 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         })
         return catalog.entries.filter((entry) => entry.source === 'referenced')
       },
-      // OpenSpec 1.13.1: search subtracts the kernel-derived namespace-name set; a missing
-      // CLI list resolves empty so search keeps indexing the full local listing.
+      // OpenSpec 1.13.1: search subtracts the kernel-derived namespace-name set by PEEKING
+      // the change-list projection — it never requests/forces the CLI Work itself, so search
+      // adds no cold CLI computation and keeps indexing the full local listing whenever the
+      // projection is not `ready`/current (degradation law).
       async () => {
         try {
-          const data = await planningCliProjectionService.getCurrent({
-            kind: 'opsx-change-list',
-          })
-          if (data.kind !== 'opsx-change-list') return []
-          return data.namespaces
+          const projection = planningCliProjectionService.read({ kind: 'opsx-change-list' })
+          if (projection.state !== 'ready' || projection.data.kind !== 'opsx-change-list') {
+            return []
+          }
+          return projection.data.namespaces
         } catch {
           return []
         }
