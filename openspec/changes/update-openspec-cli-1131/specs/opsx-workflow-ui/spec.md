@@ -12,8 +12,9 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 
 The `opsx-change-list` projection SHALL keep its `entries` and compat `value` actionable-only: an entry
 the CLI marked with `nested` is excluded at the kernel projection boundary, and the projection SHALL
-carry the CLI's top-level change-list `warnings` as the single authoritative derivation of the
-nested-name set. Change-row builders keep their own id sources and SHALL subtract that set where change
+carry the CLI's top-level change-list `warnings` as display evidence. The namespace-name set SHALL be a
+structural derivation — the `name` of every CLI entry carrying `nested` — never parsed from warning
+message text. Change-row builders keep their own id sources and SHALL subtract that set where change
 inventories are built: the Changes projection, the Dashboard summary inputs (Kanban inherits), search
 change documents, and the Store content projection's independent `list --json` decode. The Changes page
 SHALL render the warnings as direct-plane evidence: a visible warning region naming the namespace
@@ -33,14 +34,18 @@ CLI-gated.
 - **THEN** the warning SHALL be visible on the direct plane with the directory name and verbatim message
 - **AND** the namespaced directory SHALL NOT appear among the actionable change rows
 
-#### Scenario: One nested-name set, subtracted at every row source
+#### Scenario: One structural namespace-name set, subtracted at every row source
 
 - **GIVEN** a change list where an entry carries `nested: ["area/alpha"]` while the local directory
   listing also contains `area`
 - **WHEN** the kernel projection is built and change inventories are assembled
 - **THEN** the entry SHALL be excluded from the actionable `entries` and compat `value`
 - **AND** the Changes projection, Dashboard summary inputs, search change documents, and Store content
-  changes SHALL subtract the warnings-derived nested-name set from their own id sources
+  changes SHALL subtract the structurally-derived namespace-name set (entry `name`s carrying `nested`)
+  from their own id sources
+- **AND** an entry carrying `nested` SHALL stay excluded even when top-level `warnings` are absent
+- **AND** a warning without a structurally-nested matching entry SHALL exclude nothing, and warning
+  message text SHALL never be parsed to infer directory identity
 - **AND** no surface SHALL implement a second, divergent derivation of which directories are namespaced
 
 #### Scenario: Row visibility degrades, never gates, on CLI loss

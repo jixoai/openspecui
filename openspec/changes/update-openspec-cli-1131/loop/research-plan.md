@@ -61,8 +61,11 @@ identical); `list --json` gains no fields on fixtures without namespace folders 
 Round-A B1 folded: change-row ids come from local directory listings (`adapter.listChanges()` /
 `listChangesWithMeta()`), not from the CLI list; the Store content panel decodes `list --json` through a
 second independent schema; search indexes the local listing. Filtering CLI `entries` alone therefore
-removes task summaries, not rows. The design is: **one authoritative nested-name set derived from the
-kernel projection's `warnings`; every row builder subtracts it from its own id source.**
+removes task summaries, not rows. Round-B N2 refined the derivation: **the namespace-name set is
+structural — the `name` of every CLI entry carrying `nested`; `warnings` are display evidence only and
+their message text is never parsed.** An entry with `nested` filters even when `warnings` are absent; a
+warning without a structurally-nested matching entry excludes nothing. Every row builder subtracts the
+set from its own id source.
 
 Owners (one batch; files disjoint from Slice 3):
 
@@ -73,21 +76,24 @@ Owners (one batch; files disjoint from Slice 3):
   `code` is `z.string()` (not a literal) because the upstream contract says "Today the only code is
   `nested_change_directory`" — an in-window patch may add codes, and a literal would fail the whole
   decode; the UI treats unknown codes as generic hygiene warnings (Round-A N2). Absent-when-empty is
-  preserved (optional, no defaults) per the typed-CLI-contract law.
+  preserved (optional, no defaults) per the typed-CLI-contract law. Red case (Round-B N1, adapted — the
+  schema family is `.passthrough()`, verified): pre-change `safeParse` on a `nested`-bearing payload
+  succeeds and retains the member untyped; the projection drops it; post-change it is modeled and
+  projected.
 - `packages/core/src/planning-cli-projection.ts` — `opsx-change-list` projection payload gains optional
   `warnings`; `entries` remain the actionable-only change set.
 - `packages/core/src/opsx-kernel.ts` (`fetchChangeListProjection`) — exclude entries carrying `nested`
   from `entries` AND from the compat `value` name array (both stay the actionable set); project
   top-level `warnings` through.
 - `packages/server/src/planning-root-service.ts` — `readCliChangeListEntriesFor` (or its caller) also
-  exposes the warnings-derived nested-name set alongside the entries Map it already returns.
+  exposes the structurally-derived namespace-name set alongside the entries Map it already returns.
 - `packages/server/src/changes-projection-service.ts` — when building rows from
-  `adapter.listChanges()`, subtract the nested-name set (it already joins CLI entries there);
+  `adapter.listChanges()`, subtract the namespace-name set (it already joins CLI entries there);
   degradation: no CLI projection -> today's behavior (row kept, summary absent).
-- `packages/server/src/dashboard-summary.ts` — subtract the nested-name set from its local listing
+- `packages/server/src/dashboard-summary.ts` — subtract the namespace-name set from its local listing
   before building Active Changes inputs (Kanban inherits via the same inputs).
 - `packages/server/src/search-documents.ts` — change-document enumeration must not index namespaced
-  directories when the nested-name set is available (consume the changes projection or accept the set
+  directories when the namespace-name set is available (consume the changes projection or accept the set
   via its options); degradation identical.
 - `packages/core/src/store-content-projection.ts` (+ server service) — the independent Store content
   `list --json` decode excludes entries carrying `nested` from its projected change list.
@@ -98,8 +104,13 @@ Owners (one batch; files disjoint from Slice 3):
 Red (structural, today): a fixture repository with `changes/area/alpha/` — (a) CLI payload decode keeps
 `warnings` but the projection drops it (assert); (b) `area` renders as a normal Changes row from the
 local listing (TestingLibrary red); (c) `area` is indexed by search and present in Store content
-changes (service-level red); (d) no warnings surface exists. Green: all invert. Degradation red: with
-the CLI projection unavailable, rows remain (assert the contract is preserved).
+changes (service-level red); (d) no warnings surface exists. Round-B N3 additions: (e) a namespace
+directory whose name collides with a real change name must not leak a `0/0` summary onto the real
+change via the entries Map join; (f) a namespace wrapping two or more nested changes stays excluded on
+every surface; (g) nested-present-but-warnings-absent still filters (structural derivation); (h)
+warnings-present-without-matching-nested-entry excludes nothing (no message-text parsing). Green: all
+invert. Degradation red: with the CLI projection unavailable, rows remain (assert the contract is
+preserved).
 
 Fixture construction constraint (Round-A N3): the namespace root must not contain a `tasks.md` — the
 upstream `list.ts` computes task fields for namespace dirs through the same code path, so 0/0 is the
@@ -150,6 +161,10 @@ Owners:
   + `nested` (P1) and a `+`/ordered-marker tasks fixture asserting CLI counts match the parity semantics
   (P2). Findings-content classes (P4) join the validation-findings fixture only where the existing harness
   builds such repositories cheaply; otherwise record them as report-level evidence, not fixture debt.
+- Decode-regression evidence (Round-B N5): contract-level tests proving the new error codes and exit
+  semantics ride existing generic diagnostics without decode failure — `store_remove_contains_registered_store`
+  and `invalid_item` codes survive decode as open strings, non-zero exits preserve structured
+  stdout/stderr evidence, and the generic renderer never downgrades an unknown code to a decode failure.
 - `openspec/specs/**` deltas applied via this change; `AGENTS.md` evidence-map line for the 1.13.1 pin;
   README untouched (tables already range-scoped) unless review finds an explicit `1.13.0` runtime claim —
   the known mentions are historical narrative and stay.

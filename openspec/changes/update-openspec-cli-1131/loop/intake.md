@@ -70,15 +70,18 @@ report, docs pin references, and a changeset for an OpenSpecUI 13.x release.
 2. **Single pinned positive fixture.** `openspec-cli-113` alias rotates to `1.13.1`; no second `1.13.0`
    executable fixture is retained (one-pinned-per-series pattern; every 1.13.1 change is additive-optional,
    so 1.13.0 owns no rejection case the retained 1.12.0 boundary fixture does not).
-3. **The kernel projection owns one authoritative nested-name set; row builders subtract it.**
+3. **The kernel projection owns one authoritative namespace-name set; row builders subtract it.**
    `fetchChangeListProjection` keeps `entries` and the compat `value` actionable-only (entries carrying
-   `nested` are excluded) and projects top-level `warnings` — the single derivation of the nested-name
-   set. Change-row builders keep their own id sources (local directory listings) and subtract the set
-   where they already join CLI data: Changes projection, Dashboard summary, search change documents,
-   and the Store content projection's independent `list --json` decode. When the CLI list is
-   unavailable, surfaces degrade to today's behavior (rows stay, summaries absent) — row visibility
-   never becomes CLI-gated. (Round-A B1: filtering CLI entries alone removes summaries, not rows,
-   because row ids come from local listings.)
+   `nested` are excluded) and projects top-level `warnings` as display evidence. The namespace-name set
+   is a **structural** derivation: the `name` of every entry that carries `nested` (Round-B N2 — the
+   entry field is the classification fact; warnings are advisory transport and their message text is
+   never parsed). An entry with `nested` filters even when warnings are absent; a warning without a
+   structurally-nested matching entry excludes nothing. Change-row builders keep their own id sources
+   (local directory listings) and subtract the set where they already join CLI data: Changes projection,
+   Dashboard summary, search change documents, and the Store content projection's independent
+   `list --json` decode. When the CLI list is unavailable, surfaces degrade to today's behavior (rows
+   stay, summaries absent) — row visibility never becomes CLI-gated. (Round-A B1: filtering CLI entries
+   alone removes summaries, not rows, because row ids come from local listings.)
 4. **Warnings surface on the Changes page direct plane** (amber evidence region naming the directory and
    upstream message); Dashboard stays actionable-changes-only. Namespaced directories get no change-detail
    route entry (upstream reads now fail on them).

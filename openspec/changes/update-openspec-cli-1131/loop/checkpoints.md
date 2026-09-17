@@ -22,7 +22,17 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
       All folded into report/intake/research-plan/spec deltas this round. Codex channel was down (local
       proxy 502); super-thinker executed Round-A per the RemixCode fallback; Codex Round-B pending proxy
       recovery.
-- [ ] Codex Round-B review approved (score recorded here).
+- [x] Codex Round-B review (2026-09-17, gpt-5.6-terra via herdr, 12m29s): **no blockers —
+      implementation freeze lifted** ("抽样交叉验证未发现证据报告与 pinned 上游源码相冲突的事实性论断").
+      Six non-blocking suggestions N1-N6 folded this round: N2 adopted (namespace-name set is structural
+      from `entries[].nested` presence + `name`; warnings are display-only; no message-text parsing);
+      N3 adopted (collision/multi-nested red cases); N4 adopted (pin+manifest+lockfile same-commit
+      baseline asserted — satisfied by `c0dacb0e`; later slices forbid install commands); N5 adopted
+      (decode-regression evidence in Slice 4); N6 adopted (Slice 3 brief already writes canonical
+      `[x]`/`[ ]` — read-alignment vs write-normalization split kept explicit); N1 corrected — the
+      schema family IS `.passthrough()` (verified `workflow.ts:36-53`); its red case (tolerate-then-strip
+      vs model-and-project) was adopted into Slice 2. Sections 3-4 (quality prose + score) restated
+      separately; recorded below when received.
 
 ## CP1 — Pin rotation (implementation)
 
