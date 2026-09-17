@@ -141,4 +141,5 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
       lifts the score to 8.5/10 and allows PR delivery. N1''/N2'' recorded as considered (documented
       view-layer `[]` normalization kept; fixture asserts structural fields + message key-phrases);
       N3'' (realpath environmental triage) accepted with PR-notes evidence required.
-- [ ] PR open from `target/openspec-cli-1131-patch`; Owner walkthrough boundary stated in PR notes.
+- [x] PR open from `target/openspec-cli-1131-patch`: **#287** (20 commits); PR notes state the
+      Owner-walkthrough boundary, both environmental triages with repro evidence, and the release path.
