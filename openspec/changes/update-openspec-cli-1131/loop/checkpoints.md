@@ -75,14 +75,21 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 
 ## CP3 — Task-line reading parity (implementation)
 
-- [ ] `task-progress.ts` pattern mirrors the CLI semantics (markers, ordered, indentation, single-token
-      markers incl. padded `[ x]`=done, whitespace-only boxes, link guard, multi-token `[WIP]` excluded,
-      CRLF, no `$` anchor); done iff `x`/`X`.
-- [ ] `toggleMarkdownTask` operates on widened forms writing canonical `[x]`/`[ ]`.
-- [ ] New unit cases green (Round-A B2-corrected list in research plan); existing narrow-syntax cases
-      unchanged; `parser` + `tracked-task-mutation` gates green (Round-A N1).
-- [ ] Divergence regression: `+`-marker tasks no longer produce a false tracked-task-mismatch badge.
-- [ ] CLI-progress authority tests stay green (local reading never redefines CLI denominators).
+- [x] `task-progress.ts` pattern mirrors the CLI semantics verbatim (markers, ordered, indentation,
+      single-token markers incl. padded `[ x]`=done, whitespace-only boxes, link guard, multi-token
+      `[WIP]` excluded, CRLF, no `$` anchor); done iff `x`/`X` (`(m[1] ?? '').toLowerCase() === 'x'`).
+- [x] `toggleMarkdownTask` operates on widened forms via a prefix/box/tail-grouped pattern, writing
+      canonical `[x]`/`[ ]` and preserving indentation, marker, and CRLF bytes (`[\s\S]*` tail).
+- [x] New unit cases green (5 red -> green; link-guard case already green as guard); existing
+      narrow-syntax cases unchanged; gates: core task/parser 29/29, opsx-types 9/9, server
+      tracked-task-mutation 1/1 (Round-A N1).
+- [x] Divergence regression covered (`+`-marker document no longer mismatches); upstream-vs-local
+      32-line corpus differential run by the implementing agent — marker+description semantics
+      identical.
+- [x] CLI-progress authority tests stay green (web change-view 23/23).
+- Implementation-agent self-caught defect: initial write-back doubled `[` (prefix group already
+      contained it) — caught by an existing toggle test, fixed before delivery; recorded as evidence the
+      narrow-syntax guard works.
 
 ## CP4 — Fixture extension, docs, changeset (implementation)
 

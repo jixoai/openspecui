@@ -14,9 +14,9 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 | --- | --- | --- | --- |
 | CP0 | worktree + pin + report + change artifacts | done | submodule `v1.13.1` @ `634c557`; report + this change |
 | CP0-R1 | Round-A review + blocker fold | done | super-thinker 6.5/10 REVISE -> B1/B2/B3 folded (see checkpoints) |
-| 1 | fixture alias + identity constants + reference guard + CLAUDE pointer | done | red `expected '1.13.1' to be '1.13.0'` -> 29/29 green @ 1.13.1; commit `c0dacb0e` |
-| 2 | change-list nested/warnings contract + projection + Changes surface | pending | — |
-| 3 | task-line reading parity + toggle parity | pending | — |
+| 1 | fixture alias + identity constants + reference guard + CLAUDE pointer | done | red `expected '1.13.1' to be '1.13.0'` -> 29/29 green @ 1.13.1; commit `c0dacb0e`; out-of-plan pins `b825c87c`/`6eefdc10` |
+| 2 | change-list nested/warnings contract + projection + Changes surface | in flight | subagent running |
+| 3 | task-line reading parity + toggle parity | done | red 5 failing -> green; 29/29 core task/parser + 9/9 opsx-types + 1/1 server toggle + 23/23 web change-view; tsc clean; upstream-vs-local 32-line corpus differential identical; commit on Slice 3 integration |
 | 4 | fixture-matrix extension + docs + changeset | pending | — |
 
 ## Decisions taken during implementation
