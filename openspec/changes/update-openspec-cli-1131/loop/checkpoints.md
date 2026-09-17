@@ -103,11 +103,21 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 
 ## CP4 — Fixture extension, docs, changeset (implementation)
 
-- [ ] Namespace-folder fixture repository asserts executable `list --json` `warnings` + `nested`.
-- [ ] `+`/ordered-marker tasks fixture asserts CLI counts; parity confirmed against local reading.
-- [ ] `AGENTS.md` evidence-map pin line updated to 1.13.1 (`634c557`); README verified untouched (or
-      explicit-runtime-claim audit recorded).
-- [ ] `.changeset/*.md` for `openspecui` patch release.
+- [x] Namespace-folder fixture repository asserts executable `list --json` `warnings` + `nested`
+      (real 1.13.1 executable, isolated HOME/XDG; namespace root holds directories only per Round-A N3;
+      also asserts the validate ERROR finding for the namespaced id and that a coexisting plain change
+      stays normal).
+- [x] `+`/ordered-marker tasks fixture asserts CLI counts (real executable: total 5 / completed 2 across
+      plus/ordered/ordered-done/indented-wave/padded-done, with `[WIP]` and link bullets excluded);
+      local `parseMarkdownTasks` asserted line-by-line equal on the same document.
+- [x] Decode regression evidence (Round-B N5): `store_remove_contains_registered_store` and
+      `invalid_item` payloads decode through the generic diagnostics schemas with codes preserved;
+      non-zero-exit results keep structured stdout/stderr and the typed failure envelope
+      (`workflow.test.ts` 43->46 green).
+- [x] `AGENTS.md`: 2026-09-17 in-window patch-rotation decision line + live-pin pointer updated to
+      `v1.13.1` (`634c557`); README verified untouched (both `1.13.0` mentions are historical v13
+      release narrative — generator staleness is series-aware and unchanged by the patch).
+- [x] `.changeset/openspec-1131-patch-rotation.md` for the fixed-group patch release.
 
 ## CP5 — Gates and delivery (implementation)
 
