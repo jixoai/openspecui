@@ -7,6 +7,7 @@
  * 5. Attach mutation-safe file identity to every tracked task.
  *
  * Original request (2026-07-15): "统计信息仍然有一定的间接价值。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — task-line reading parity with CLI 1.13.1 (update-openspec-cli-1131 Slice 3).
  */
 import { opsxPathMatchesPattern } from './opsx-entity.js'
 import type { SchemaArtifact, SchemaDetail } from './opsx-types.js'
@@ -116,7 +117,34 @@ interface TextTaskSource {
   content: string
 }
 
-const CHECKBOX_TASK_LINE = /^\s*[-*]\s+\[([ xX])\]\s+(.+)$/
+/**
+ * Task-line pattern mirroring the admitted OpenSpec CLI 1.13 reading
+ * (references/openspec/src/utils/task-progress.ts, pinned v1.13.1): any
+ * CommonMark list marker - `-`, `*`, `+`, or an ordered `1.`/`1)` of up to
+ * nine digits - with optional leading indentation, followed by a checkbox
+ * holding at most one non-`]`/non-whitespace token, or whitespace only.
+ * The closing bracket may not continue Markdown link syntax (`(` or `[`),
+ * with one deliberate exception: a whitespace-only box (`- [ ](...)`) still
+ * counts. A line is done only when its marker lowercases to `x`; every other
+ * marker (`~`, digits, an empty box) reads as not-done, accepting the CLI's
+ * documented over-count of single-token labels such as `- [1] note` while
+ * multi-token boxes (`- [WIP]`) never match. Unanchored at the end so CRLF
+ * lines keep parsing (`.` stops before `\r`).
+ */
+const CHECKBOX_TASK_LINE =
+  /^\s*(?:[-*+]|\d{1,9}[.)])\s*\[(?:\s*([^\]\s]?)\s*\](?![([])|\s+\])\s*(.*)/
+
+/**
+ * Same task-line set as CHECKBOX_TASK_LINE, grouped so the write-back keeps
+ * the prefix (indentation, list marker, spacing before the box) and the tail
+ * after the closing bracket byte-for-byte while only the box itself is
+ * rewritten to the canonical `[x]`/`[ ]`. The tail uses `[\s\S]*` because
+ * `.` stops before `\r`, and an end-anchored `.*` tail would drop the CR of
+ * a CRLF task line on write-back. Group 2 (the marker) is intentionally
+ * unread here: only the canonical replacement marker is written.
+ */
+const CHECKBOX_TASK_TOGGLE_PATTERN =
+  /^(\s*(?:[-*+]|\d{1,9}[.)])\s*\[)(?:\s*([^\]\s]?)\s*\](?![([])|\s+\])([\s\S]*)$/
 const MARKDOWN_FILE_PATH = /\.(?:md|markdown)$/i
 
 export function isMarkdownTaskSourcePath(path: string): boolean {
@@ -146,7 +174,7 @@ export function parseMarkdownTasks(
     tasks.push({
       id: `task-${taskIndex}`,
       text: taskMatch[2].trim(),
-      completed: taskMatch[1].toLowerCase() === 'x',
+      completed: (taskMatch[1] ?? '').toLowerCase() === 'x',
       section: currentSection || undefined,
     })
   }
@@ -318,12 +346,12 @@ export function toggleMarkdownTask(
   const lines = content.split('\n')
   let currentTaskIndex = 0
   for (let index = 0; index < lines.length; index += 1) {
-    const taskMatch = /^(\s*[-*]\s+)\[([ xX])\](\s+.*)$/.exec(lines[index])
+    const taskMatch = CHECKBOX_TASK_TOGGLE_PATTERN.exec(lines[index])
     if (!taskMatch) continue
     currentTaskIndex += 1
     if (currentTaskIndex !== taskIndex) continue
 
-    lines[index] = `${taskMatch[1]}[${completed ? 'x' : ' '}]${taskMatch[3]}`
+    lines[index] = `${taskMatch[1]}${completed ? 'x' : ' '}]${taskMatch[3]}`
     return lines.join('\n')
   }
   return null

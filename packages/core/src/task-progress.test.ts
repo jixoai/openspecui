@@ -1,8 +1,18 @@
+/**
+ * Orthogonal intents (updated 2026-09-17 Asia/Shanghai):
+ * 1. Prove tracked workflow truth and checklist analytics select the exact tracked artifact.
+ * 2. Prove task-line reading parity with the admitted OpenSpec CLI 1.13 semantics.
+ * 3. Prove checkbox toggles write canonical markers over the widened forms.
+ *
+ * Original request (2026-07-15): "统计信息仍然有一定的间接价值。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — task-line reading parity with CLI 1.13.1 (update-openspec-cli-1131 Slice 3).
+ */
 import { describe, expect, it } from 'vitest'
 import type { SchemaDetail } from './opsx-types.js'
 import type { ChangeFile } from './schemas.js'
 import {
   createApplyInstructionProgress,
+  parseMarkdownTasks,
   projectTaskProjectionsFromMarkdownFiles,
   toggleMarkdownTask,
 } from './task-progress.js'
@@ -217,5 +227,79 @@ describe('task projections', () => {
         tracked: { total: 3, completed: 1, remaining: 2, phase: 'in-progress' },
       },
     })
+  })
+})
+
+describe('task-line reading parity with the admitted CLI (1.13.1)', () => {
+  it('counts every widened CommonMark marker line as one task', () => {
+    const widened: Array<[line: string, done: boolean, text: string]> = [
+      ['+ [ ] a', false, 'a'],
+      ['1. [ ] a', false, 'a'],
+      ['1) [x] a', true, 'a'],
+      ['  - [~] a', false, 'a'],
+      ['* [x]done', true, 'done'],
+      ['- [ x] a', true, 'a'],
+      ['- [] a', false, 'a'],
+      ['- [  ] a', false, 'a'],
+      ['- [1] a', false, 'a'],
+      ['- [ ](...)', false, '(...)'],
+      ['- [ ][...]', false, '[...]'],
+      ['- [x]', true, ''],
+    ]
+
+    for (const [line, done, text] of widened) {
+      const parsed = parseMarkdownTasks(line)
+      expect(parsed, `expected exactly one task: ${JSON.stringify(line)}`).toHaveLength(1)
+      expect(parsed[0], JSON.stringify(line)).toMatchObject({ completed: done, text })
+    }
+  })
+
+  it('keeps multi-token markers and Markdown link bullets out of the counts', () => {
+    const excluded = ['- [WIP] note', '- [doc](./d.md)', '- [1](./one)', '- [x](./link.md)']
+
+    for (const line of excluded) {
+      expect(parseMarkdownTasks(line), `expected no task: ${JSON.stringify(line)}`).toHaveLength(0)
+    }
+  })
+
+  it('tolerates CRLF line endings while parsing', () => {
+    const parsed = parseMarkdownTasks('+ [x] done\r\n1) [ ] a\r')
+
+    expect(parsed.map((task) => task.completed)).toEqual([true, false])
+    expect(parsed.map((task) => task.text)).toEqual(['done', 'a'])
+  })
+
+  it('toggles widened marker forms with canonical checkbox write-back', () => {
+    expect(toggleMarkdownTask('+ [ ] a', 1, true)).toBe('+ [x] a')
+    expect(toggleMarkdownTask('+ [x] a', 1, false)).toBe('+ [ ] a')
+    expect(toggleMarkdownTask('1. [~] a', 1, true)).toBe('1. [x] a')
+    expect(toggleMarkdownTask('  1) [X] done', 1, false)).toBe('  1) [ ] done')
+    expect(toggleMarkdownTask('* [x]done', 1, false)).toBe('* [ ]done')
+    expect(toggleMarkdownTask('+ [ ] a\r', 1, true)).toBe('+ [x] a\r')
+  })
+
+  it('counts task lines for toggling with the same parity as reading', () => {
+    const content = '## Work\n- [doc](./d.md)\n+ [ ] alpha\n1. [~] beta\n  - [x] gamma\n'
+
+    expect(toggleMarkdownTask(content, 2, true)).toBe(
+      '## Work\n- [doc](./d.md)\n+ [ ] alpha\n1. [x] beta\n  - [x] gamma\n'
+    )
+    expect(toggleMarkdownTask(content, 4, false)).toBeNull()
+  })
+
+  it('does not flag tracked-task divergence when CLI apply and local tracked read the same widened-syntax document', () => {
+    const tracked = projectTaskProjectionsFromMarkdownFiles(
+      [file('work/widened.md', '+ [x] Alpha\n+ [ ] Beta\n1. [~] Gamma\n1) [ ] Delta')],
+      { schemaDetail, hasSchemaMetadata: true }
+    ).trackedTaskProgress
+
+    expect(tracked).toMatchObject({ total: 4, completed: 1, remaining: 3, phase: 'in-progress' })
+
+    const applyInstructionProgress = createApplyInstructionProgress(
+      { total: 4, complete: 1, remaining: 3, state: 'ready' },
+      tracked
+    )
+
+    expect(applyInstructionProgress.divergence).toBeNull()
   })
 })
