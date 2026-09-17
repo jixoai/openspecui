@@ -133,5 +133,12 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
       `chromium_headless_shell-1208` (environmental, first-run failure only).
 - [x] Changed-file header audit complete (every changed TS/TSX file, tests included; tsconfig lane
       JSONs match existing lane style with no comment headers).
-- [ ] Codex Round-C implementation review approved; score recorded.
+- [x] Codex Round-C implementation review (2026-09-17, gpt-5.6-terra via herdr, 17m20s): **7.9/10
+      REVISE** — Round-B's four conditions confirmed closed at the implementation level ("实现质量已达到
+      可交付水准…可执行证据不是单纯镜像实现测试"); the sole blocker B1'' was this change's own stale
+      `implementation.md` status line ("implementation not started" contradicting the landed chain) —
+      fixed in the same round with the full slice/gate/round evidence table. Codex pre-stated the fix
+      lifts the score to 8.5/10 and allows PR delivery. N1''/N2'' recorded as considered (documented
+      view-layer `[]` normalization kept; fixture asserts structural fields + message key-phrases);
+      N3'' (realpath environmental triage) accepted with PR-notes evidence required.
 - [ ] PR open from `target/openspec-cli-1131-patch`; Owner walkthrough boundary stated in PR notes.

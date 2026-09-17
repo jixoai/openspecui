@@ -8,16 +8,20 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 
 # OpenSpec CLI 1.13.1 patch implementation log
 
-## Status: planning — Round-A folded, awaiting Codex Round-B (proxy down), implementation not started
+## Status: implemented — all slices landed, broad gates green, Round-C B1'' folded; PR delivery next
 
 | Slice | Scope | Status | Evidence |
 | --- | --- | --- | --- |
 | CP0 | worktree + pin + report + change artifacts | done | submodule `v1.13.1` @ `634c557`; report + this change |
 | CP0-R1 | Round-A review + blocker fold | done | super-thinker 6.5/10 REVISE -> B1/B2/B3 folded (see checkpoints) |
-| 1 | fixture alias + identity constants + reference guard + CLAUDE pointer | done | red `expected '1.13.1' to be '1.13.0'` -> 29/29 green @ 1.13.1; commit `c0dacb0e`; out-of-plan pins `b825c87c`/`6eefdc10` |
-| 2 | change-list nested/warnings contract + projection + Changes surface | done | 14 runtime reds + type-boundary red -> green; core 72/72, server 35/35 + router 107/107, web 21/21; integrator added transport subtraction + v12-boundary version-arg rotation |
-| 3 | task-line reading parity + toggle parity | done | red 5 failing -> green; 29/29 core task/parser + 9/9 opsx-types + 1/1 server toggle + 23/23 web change-view; tsc clean; upstream-vs-local 32-line corpus differential identical; commit on Slice 3 integration |
-| 4 | fixture-matrix extension + docs + changeset | pending | — |
+| CP0-R2 | Codex Round-B fold + REVISE conditions | done | 6.5/10 REVISE, 4 conditions resolved (structural set, degradation semantics, interfaces/tests, P5 correction) |
+| 1 | fixture alias + identity constants + reference guard + CLAUDE pointer | done | red `expected '1.13.1' to be '1.13.0'` -> 29/29 green @ 1.13.1; commit `c0dacb0e`; out-of-plan pins `b825c87c`/`6eefdc10`; fifth pin point + lane registration post-test:ci (`opsx-kernel-schemas-root.fixtures.test.ts`) |
+| 2 | change-list nested/warnings contract + projection + Changes surface | done | commit `fa146e5e` (26 files); 14 runtime reds + type-boundary red -> green; core 72/72, server 35/35 + router 107/107, web 21/21; integrator added `change.listWithMeta`/`subscribe` transport subtraction + v12-boundary version-arg rotation |
+| 3 | task-line reading parity + toggle parity | done | commit `92d50a73`; red 5 failing -> green; 29/29 core task/parser + 9/9 opsx-types + 1/1 server toggle + 23/23 web change-view; upstream-vs-local 32-line corpus differential identical |
+| 4 | executable fixtures + decode regression + docs + changeset | done | commits `3c1a488d` (fixtures + decode) + `f57cc675` (AGENTS.md decision + changeset); real-CLI nested/warnings evidence, task-count parity 5/2, diagnostics decode regression 43->46 |
+| Gates | format / lint / typecheck / test:ci / test:browser:ci | done | all green; test:ci 778/780 + 13 skipped with the two triages recorded below and in CP5 |
+| Round-C | Codex implementation review | done | 7.9/10 REVISE with the single blocker B1'' (this file's stale status line) — fixed here; codex pre-committed 8.5/10 and PR delivery once fixed. N1''/N2'' considered: the use-opsx `[]` normalization keeps its documented view-layer rationale; the nested fixture already asserts the structural fields (code/name/nested) plus two message key-phrases. N3'' (realpath triage) accepted with PR-notes evidence. |
+| Delivery | PR from `target/openspec-cli-1131-patch` | pending | PR notes carry the Owner-walkthrough boundary and both environmental triages |
 
 ## Decisions taken during implementation
 
