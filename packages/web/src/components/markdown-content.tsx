@@ -1,3 +1,13 @@
+/**
+ * Orthogonal intents (created 2026-09-18 Asia/Shanghai):
+ * 1. Render markdown with GFM support, shiki code highlighting, and annotation components.
+ * 2. Render task lines with the CLI 1.13.1 widened reading semantics (remarkCliTaskParity)
+ *    so the reading surface and CLI task counts describe the same document.
+ *
+ * Original request (2026-09-18): owner walkthrough — the Change Detail tasks view showed
+ * 4 checkboxes (1 checked) beside a CLI-owned "Tasks 2/6" badge (update-openspec-cli-1131
+ * follow-up); the block renderer now appends the parity plugin after remark-gfm.
+ */
 import type { Root } from 'hast'
 import {
   Fragment,
@@ -13,6 +23,7 @@ import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { codeToHtml } from 'shiki'
 import type { Plugin } from 'unified'
+import { remarkCliTaskParity } from '@/lib/remark-cli-task-parity'
 
 type InlineAnnotationDataAttributes = Partial<Record<`data-${string}`, string | number | boolean>>
 type BlockAnnotationDataAttributes = Partial<Record<`data-${string}`, string | number | boolean>>
@@ -82,7 +93,7 @@ export function MarkdownContent({
   return (
     <div className={`markdown-content ${className}`}>
       <Markdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkCliTaskParity]}
         rehypePlugins={rehypePlugins}
         components={{
           ...annotationComponents,

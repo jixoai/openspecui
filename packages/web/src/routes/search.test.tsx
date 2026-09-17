@@ -7,6 +7,8 @@
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ * Original request (2026-09-18): owner walkthrough follow-up — result cards for change/archive
+ * hits showed the generic scaffold heading "Proposal"; apply the shared display-title fallback.
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -96,6 +98,36 @@ describe('SearchRoute', () => {
     expect(navControllerMock.getAreaForPath).toHaveBeenCalledWith('/changes/add-auth')
     expect(navControllerMock.push).toHaveBeenCalledWith('bottom', '/changes/add-auth', null)
     expect(popAreaLifecycleMock.requestClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to the change id for generic proposal headings on result cards', () => {
+    useLocationMock.mockReturnValue({
+      search: '?query=proposal',
+      state: null,
+    })
+    useSearchMock.mockReturnValue({
+      scope: 'active-root',
+      data: [
+        {
+          documentId: 'change:task-parity',
+          kind: 'change',
+          scope: 'active-root',
+          title: 'Proposal',
+          href: '/changes/task-parity',
+          path: 'openspec/changes/task-parity',
+          score: 100,
+          snippet: 'Widened task reading',
+          updatedAt: 1,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    })
+
+    render(<SearchRoute />)
+
+    expect(screen.getByRole('button', { name: /task-parity/i })).toBeTruthy()
+    expect(screen.queryByText(/^Proposal$/)).toBeNull()
   })
 
   it('syncs input query to pop route via replace', () => {
