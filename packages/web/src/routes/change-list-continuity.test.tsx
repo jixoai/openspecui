@@ -1,5 +1,6 @@
 /**
  * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — mock the new hygiene-warnings hook (update-openspec-cli-1131 Slice 2).
  * 1. Prove ChangeList keeps id-keyed rows physically continuous across reactive removals and reorders.
  * 2. Prove a newer subscription snapshot retires a late local transition commit.
  * 3. Keep only native View Transition edges deterministic while exercising the real local continuity owner.
@@ -75,6 +76,7 @@ vi.mock('@/lib/use-subscription', () => ({
 
 vi.mock('@/lib/use-opsx', () => ({
   useOpsxStatusListSubscription: useOpsxStatusListSubscriptionMock,
+  useOpsxChangeListHygieneWarningsSubscription: () => ({ data: [] }),
 }))
 
 interface TestViewTransition {

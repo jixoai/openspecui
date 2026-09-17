@@ -1,5 +1,6 @@
 /**
  * Orthogonal intents (created 2026-07-23 Asia/Shanghai):
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — mock the new hygiene-warnings hook (update-openspec-cli-1131 Slice 2).
  * 1. Prove ChangeList immediately commits a reactive snapshot when native View Transitions are unavailable.
  * 2. Preserve id-keyed DOM identity through the real local continuity helper and runtime fallback.
  *
@@ -40,6 +41,7 @@ vi.mock('@/lib/use-subscription', () => ({
 
 vi.mock('@/lib/use-opsx', () => ({
   useOpsxStatusListSubscription: useOpsxStatusListSubscriptionMock,
+  useOpsxChangeListHygieneWarningsSubscription: () => ({ data: [] }),
 }))
 
 vi.mock('@/lib/view-transitions/navigation', () => ({

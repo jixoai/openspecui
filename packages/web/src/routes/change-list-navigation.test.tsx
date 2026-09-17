@@ -1,5 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-08-06 Asia/Shanghai):
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — mock the new hygiene-warnings hook (update-openspec-cli-1131 Slice 2).
  * 1. Prove ChangeList click B crosses the real VTLink, detail preparation, and navigation coordinator.
  * 2. Assert one resolved Change-detail route with the exact collision-safe handoff.
  * 3. Stabilize only transport and native-transition runtime edges for an in-memory Router fixture.
@@ -96,6 +97,7 @@ vi.mock('@/lib/use-opsx', () => ({
   useOpsxStatusListSubscription: useOpsxStatusListSubscriptionMock,
   getOpsxStatusSubscriptionCacheKey: (input: { change?: string; schema?: string }) =>
     input.change === undefined ? undefined : `opsx.subscribeStatus:${input.change}:${input.schema}`,
+  useOpsxChangeListHygieneWarningsSubscription: () => ({ data: [] }),
 }))
 
 vi.mock('@/lib/nav-controller', () => ({
