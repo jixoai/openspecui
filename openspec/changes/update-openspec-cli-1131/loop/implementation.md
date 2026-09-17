@@ -69,3 +69,9 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
   PEEKS the projection (`read()`; `ready`/current data only, never requesting the Work): search adds
   no CLI computation of its own and degrades to full local indexing when the projection is not
   current — strictly aligned with the degradation law. Commit `1f462f6c`.
+- PR CI round 2 triage: the ChangeList continuity/navigation suites mock the whole `@/lib/use-opsx`
+  module and lacked the new `useOpsxChangeListHygieneWarningsSubscription` export (the route import
+  broke the vi.mock factory). Fixed the three mocks; then ran the FULL web unit project locally
+  (192 files / 1210 tests green) instead of the narrower local subset that had hidden this class.
+  Windows round 2 also showed a `scripts/package-manager-shim.test.mjs` 5s timeout — untouched by
+  this branch; treated as a runner flake pending round-3 evidence.
