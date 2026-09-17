@@ -384,6 +384,57 @@ describe('Dashboard', () => {
     expect(screen.queryByRole('heading', { name: 'Specifications' })).not.toBeInTheDocument()
   })
 
+  it('falls back to the change id for generic proposal headings on compact Kanban cards', () => {
+    const overview = createOverviewData()
+    const genericActiveChanges = [
+      {
+        id: 'generic-titled-change',
+        name: 'Proposal',
+        trackedTaskProgress: { total: 2, completed: 1, phase: 'in-progress' },
+        updatedAt: 2,
+      },
+    ]
+    const genericRecentArchives = [
+      {
+        id: `${new Date().toISOString().slice(0, 10)}-generic-archive`,
+        name: 'Proposal',
+        trackedTaskProgress: { total: 0, completed: 0, phase: 'no-tasks' },
+        documentChecklistSummary: { groups: [], total: 0, completed: 0, remaining: 0 },
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]
+    staticModeMock.mockReturnValue(false)
+    dashboardOverviewMock.mockReturnValue({
+      data: overview,
+      isLoading: false,
+      error: null,
+      regions: {
+        summary: {
+          data: {
+            summary: overview.summary,
+            specifications: overview.specifications,
+            activeChanges: genericActiveChanges,
+            recentArchives: genericRecentArchives,
+            trackedTaskPhaseCounts: { 'no-tasks': 0, 'in-progress': 1, complete: 0 },
+          },
+          isLoading: false,
+          isUpdating: false,
+          error: null,
+        },
+        trends: { data: undefined, isLoading: true, isUpdating: false, error: null },
+        git: { data: undefined, isLoading: true, isUpdating: false, error: null },
+      },
+    })
+
+    render(<Dashboard />)
+
+    const kanban = screen.getByTestId('readonly-kanban')
+    expect(kanban.textContent).toContain('generic-titled-change')
+    expect(kanban.textContent).toContain('-generic-archive')
+    expect(kanban.textContent).not.toContain('Proposal')
+  })
+
   it('renders CLI Apply progress in Dashboard Active Changes without using tracked counts', () => {
     staticModeMock.mockReturnValue(false)
     dashboardOverviewMock.mockReturnValue({

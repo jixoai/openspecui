@@ -1,19 +1,23 @@
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-18 Asia/Shanghai):
  * 1. Compose live Changes and Archives as independent objective Kanban regions.
  * 2. Bind live commands to shared Change Operators and current projection authority.
  * 3. Render static Board through the shared readonly presentation and archive range policy.
  * 4. Bound the live route to the shell block-size and contain competing page overflow.
+ * 5. Normalize card titles through the shared changeDisplayTitle fallback.
  *
  * Contributor request (2026-07-18): add a Kanban-style Change view.
  * Owner decision (2026-07-28): implement objective OPSX lanes and shared Operator ownership.
  * Owner correction (2026-07-28): prevent competing horizontal scrollbars on narrow `/board`.
+ * Original request (2026-09-18): owner walkthrough Case 5 — every Kanban card showed the
+ * generic scaffold heading "Proposal"; Board never received the display-title fallback.
  */
 import { InteractiveKanban } from '@/components/kanban/interactive-kanban'
 import { countActiveKanbanPhases, filterKanbanArchives } from '@/components/kanban/kanban-model'
 import { ReadonlyKanban } from '@/components/kanban/readonly-kanban'
 import { ChangeListSkeleton } from '@/components/realtime'
 import { Select, type SelectOption } from '@/components/select'
+import { changeDisplayTitle } from '@/lib/change-display-title'
 import { isStaticMode } from '@/lib/static-mode'
 import { useChangeOperatorLauncher } from '@/lib/use-change-operator-launcher'
 import { useOpsxStatusListSubscription } from '@/lib/use-opsx'
@@ -36,9 +40,23 @@ export function Board() {
   const statusState = useOpsxStatusListSubscription(!staticMode)
   const [range, setRange] = useState<DashboardArchiveRange>('30d')
 
-  const activeItems = changesState.data ?? []
+  // Generic scaffold headings ("Proposal") carry no identity; cards, tooltips, and the
+  // Apply/Archive launchers all receive the shared display-title fallback so every Kanban
+  // surface shows the same title the Changes list shows for the same Change.
+  const activeItems = useMemo(
+    () =>
+      (changesState.data ?? []).map((change) => ({
+        ...change,
+        name: changeDisplayTitle(change.id, change.name),
+      })),
+    [changesState.data]
+  )
   const archivedItems = useMemo(
-    () => filterKanbanArchives(archivesState.data ?? [], range),
+    () =>
+      filterKanbanArchives(archivesState.data ?? [], range).map((archive) => ({
+        ...archive,
+        name: changeDisplayTitle(archive.id, archive.name),
+      })),
     [archivesState.data, range]
   )
   const activeCurrent =

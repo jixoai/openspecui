@@ -8,6 +8,8 @@
  *
  * Original request (2026-07-16): "接下来，你来接手后续工作"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-09-18): owner walkthrough Case 5 — the compact Kanban cards kept the
+ * generic scaffold heading "Proposal"; normalize active/archive card names once at the route.
  * Derived requirement (2026-07-19): Checkpoint 6.11 preserves Git handoff and action provenance.
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
@@ -378,7 +380,25 @@ export function Dashboard() {
     }
   }, [gitAutoRefreshDeadlineAt, gitAutoRefreshPreset, staticMode])
 
-  const activeChanges = summaryProjection?.activeChanges ?? []
+  // Generic scaffold headings ("Proposal") carry no identity; normalize once here so the
+  // compact Kanban cards, the Active Changes rows, and any launcher payloads share the same
+  // display title (changeDisplayTitle is idempotent for the rows that apply it again).
+  const activeChanges = useMemo(
+    () =>
+      (summaryProjection?.activeChanges ?? []).map((change) => ({
+        ...change,
+        name: changeDisplayTitle(change.id, change.name),
+      })),
+    [summaryProjection?.activeChanges]
+  )
+  const kanbanArchivedItems = useMemo(
+    () =>
+      (summaryProjection?.recentArchives ?? []).map((archive) => ({
+        ...archive,
+        name: changeDisplayTitle(archive.id, archive.name),
+      })),
+    [summaryProjection?.recentArchives]
+  )
   const activeChangeIdSet = useMemo(
     () => new Set(activeChanges.map((change) => change.id)),
     [activeChanges]
@@ -520,7 +540,7 @@ export function Dashboard() {
         variant="compact"
         pending={summaryPending}
         activeItems={activeChanges}
-        archivedItems={summaryProjection?.recentArchives ?? []}
+        archivedItems={kanbanArchivedItems}
         activeCounts={
           summaryProjection?.trackedTaskPhaseCounts ?? {
             'no-tasks': 0,

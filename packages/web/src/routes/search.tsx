@@ -6,9 +6,12 @@
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
+ * Original request (2026-09-18): owner walkthrough follow-up — change/archive result cards showed
+ * the generic scaffold heading "Proposal"; apply the shared display-title fallback.
  */
 import { usePopAreaConfigContext, usePopAreaLifecycleContext } from '@/components/layout/pop-area'
 import { SpecListSkeleton } from '@/components/realtime'
+import { changeDisplayTitle } from '@/lib/change-display-title'
 import { navController } from '@/lib/nav-controller'
 import { useSearch } from '@/lib/use-search'
 import { vtNavController } from '@/lib/view-transitions/navigation'
@@ -180,6 +183,13 @@ export function SearchRoute() {
         <ul className="border-border divide-border min-h-0 w-full min-w-0 flex-1 divide-y overflow-y-auto rounded-md border">
           {data.map((hit) => {
             const Icon = kindIcon(hit.kind)
+            // Change/archive hits index the document's first heading; a generic scaffold
+            // heading ("Proposal") carries no identity, so the card falls back to the
+            // entity id from the document id — the same title every other surface shows.
+            const displayTitle =
+              hit.kind === 'change' || hit.kind === 'archive'
+                ? changeDisplayTitle(hit.documentId.slice(hit.kind.length + 1), hit.title)
+                : hit.title
             return (
               <li key={hit.documentId} className="min-w-0">
                 <button
@@ -195,7 +205,7 @@ export function SearchRoute() {
                     <div className="flex min-w-0 items-center gap-2">
                       <Icon className="text-muted-foreground h-4 w-4 shrink-0" />
                       <span className="line-clamp-2 break-words text-sm font-medium">
-                        {renderHighlightedText(hit.title, highlightTerms)}
+                        {renderHighlightedText(displayTitle, highlightTerms)}
                       </span>
                     </div>
                     <span className="text-muted-foreground shrink-0 text-[11px] uppercase">
