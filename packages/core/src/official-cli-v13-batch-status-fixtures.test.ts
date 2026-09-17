@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.0 `status --all --json` batch envelope against a
+ * 1. Execute the pinned OpenSpec 1.13.1 `status --all --json` batch envelope against a
  *    real fixture project: healthy-entry field parity, in-place failure entries, and
  *    the empty-set message shape.
  * 2. Prove partial failure keeps stdout one complete valid JSON document while the

@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.0 `show <change> --json --diff` contract against
+ * 1. Execute the pinned OpenSpec 1.13.1 `show <change> --json --diff` contract against
  *    a real fixture project: MODIFIED deltas carry the unified diff body.
  * 2. Prove the diff stays CLI-owned evidence (`@@` hunks, `-`/`+` lines, no warning on
  *    a clean modification; the exact upstream near-miss header warning when names

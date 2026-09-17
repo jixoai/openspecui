@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.0 Apply readiness contract (`instructions apply
+ * 1. Execute the pinned OpenSpec 1.13.1 Apply readiness contract (`instructions apply
  *    --json`) against a real fixture repo: the blocked-state build-order closure and
  *    the ready-state no-delta-specs advisory.
  * 2. Prove `missingPrerequisites` is additive readiness evidence, never a new gate:
@@ -10,7 +10,7 @@
  * 3. Prove the ready-state `warnings` advisory names the objective downstream fact
  *    (`openspec validate` fails on the change) plus both remedies (write the delta
  *    specs / declare `skip_specs: true`), matching the Verified CLI observations in
- *    `references/openspec-1.13.0-report.md`.
+ *    `references/openspec-1.13.1-report.md`.
  * 4. Prove upstream conditional spreading: `warnings` is absent (not `[]`) while
  *    blocked, and `missingArtifacts` is absent while ready.
  *

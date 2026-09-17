@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.0 CLI against machine `defaultStore` root
+ * 1. Execute the pinned OpenSpec 1.13.1 CLI against machine `defaultStore` root
  *    selection.
  * 2. Prove effective, absent, and stale fallback outcomes preserve upstream provenance
  *    and fixes on the v13 single-series window.

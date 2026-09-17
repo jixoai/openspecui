@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.0 SourceCraft Code Assistant delivery contract
+ * 1. Execute the pinned OpenSpec 1.13.1 SourceCraft Code Assistant delivery contract
  *    against an isolated machine environment: 6 skills + 6 commands under the default
  *    core profile with the physical `.codeassistant` layout.
  * 2. Prove init anchors empty directories with `.gitkeep`, restores missing anchors on
