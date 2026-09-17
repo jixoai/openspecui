@@ -121,9 +121,17 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 
 ## CP5 — Gates and delivery (implementation)
 
-- [ ] `pnpm --filter @openspecui/core exec tsc --noEmit` green after each core slice.
-- [ ] Focused suites per slice green; broad gates `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`,
-      `pnpm test:ci`, `pnpm test:browser:ci` green (or scoped subset justified in PR notes).
-- [ ] Changed-file header audit complete (every changed TS/TSX file, tests included).
-- [ ] Codex implementation review approved; score recorded.
+- [x] `pnpm --filter @openspecui/core exec tsc --noEmit` green after each core slice.
+- [x] Focused suites per slice green; broad gates: `pnpm format:check` green; `pnpm lint:ci` green
+      (0 errors, 6 pre-existing warnings); `pnpm typecheck` green (all lanes, 0 errors);
+      `pnpm test:ci` 778/780 + 13 skipped — one real failure fixed (fifth pin point,
+      `opsx-kernel-schemas-root.fixtures.test.ts` local `PINNED_BINS` key + lane registration,
+      re-run green), one environmental (`path-realpath.test.ts`: shell `TMPDIR=/var/...` prefix vs
+      macOS realpath `/private/var`; passes with normalized TMPDIR; branch diff over reactive-fs empty;
+      Linux CI unaffected) — both triages recorded in the implementation log and PR notes;
+      `pnpm test:browser:ci` green after installing the missing Playwright
+      `chromium_headless_shell-1208` (environmental, first-run failure only).
+- [x] Changed-file header audit complete (every changed TS/TSX file, tests included; tsconfig lane
+      JSONs match existing lane style with no comment headers).
+- [ ] Codex Round-C implementation review approved; score recorded.
 - [ ] PR open from `target/openspec-cli-1131-patch`; Owner walkthrough boundary stated in PR notes.
