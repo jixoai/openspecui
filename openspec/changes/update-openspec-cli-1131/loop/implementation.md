@@ -60,3 +60,12 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
     empty. Linux CI has no such prefix. Recorded for PR notes.
 - test:browser:ci first run failed environmentally: Playwright `chromium_headless_shell-1208` was not
   installed in the local cache; installed via `pnpm exec playwright install chromium` and re-run.
+- PR CI round 1 triage (2026-09-18): Fast/Windows failed on the cold-start integration assertions
+  (hardcoded `version: '1.13.0'` — the SIXTH rotation point, only reachable in CI's broader file set;
+  local test:ci runs 82 files vs CI's 102); Browser Gate was a pure cascade (shard `needs` Fast Gate).
+  Windows-only search-router failure was a REAL integration defect: the search wiring forced the
+  `opsx-change-list` CLI Work on every collection (`getCurrent`), putting a cold CLI computation on
+  the first-emission path — reproduced locally on macOS after which the fix was designed. Search now
+  PEEKS the projection (`read()`; `ready`/current data only, never requesting the Work): search adds
+  no CLI computation of its own and degrades to full local indexing when the projection is not
+  current — strictly aligned with the degradation law. Commit `1f462f6c`.
