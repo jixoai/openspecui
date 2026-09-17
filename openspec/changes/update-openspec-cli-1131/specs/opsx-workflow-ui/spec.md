@@ -10,15 +10,20 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 
 ### Requirement: Change List Hygiene Warning Projection
 
-The `opsx-change-list` projection SHALL keep its `entries` actionable-only: an entry the CLI marked with
-`nested` is excluded at the kernel projection boundary, and downstream services (changes projection,
-dashboard summary, Kanban inputs) SHALL inherit that filtering rather than re-implement it. The projection
-SHALL carry the CLI's top-level change-list `warnings` through to the Web transport as typed facts, and
-the Changes page SHALL render them as direct-plane evidence: a visible warning region naming the
-namespace directory, the nested change names, and the upstream message verbatim, with CLI-owned
-provenance. Dashboard SHALL remain actionable-changes-only and SHALL NOT render hygiene warnings. A
-namespaced directory SHALL NOT appear as a change row, a `Tasks 0/0` summary, or a change-detail
-navigation target on any surface.
+The `opsx-change-list` projection SHALL keep its `entries` and compat `value` actionable-only: an entry
+the CLI marked with `nested` is excluded at the kernel projection boundary, and the projection SHALL
+carry the CLI's top-level change-list `warnings` as the single authoritative derivation of the
+nested-name set. Change-row builders keep their own id sources and SHALL subtract that set where change
+inventories are built: the Changes projection, the Dashboard summary inputs (Kanban inherits), search
+change documents, and the Store content projection's independent `list --json` decode. The Changes page
+SHALL render the warnings as direct-plane evidence: a visible warning region naming the namespace
+directory, the nested change names, and the upstream message verbatim, with CLI-owned provenance and a
+generic fallback for unknown warning codes. Dashboard SHALL remain actionable-changes-only and SHALL NOT
+render hygiene warnings. A namespaced directory SHALL NOT appear as a change row, a CLI task summary, a
+search change document, a Store content change entry, or a change-detail navigation target on any
+surface. When the CLI change list is unavailable, surfaces SHALL degrade to their existing behavior —
+rows from local listings remain visible with absent summaries — and row visibility SHALL NOT become
+CLI-gated.
 
 #### Scenario: Warnings survive the projection chain
 
@@ -28,13 +33,22 @@ navigation target on any surface.
 - **THEN** the warning SHALL be visible on the direct plane with the directory name and verbatim message
 - **AND** the namespaced directory SHALL NOT appear among the actionable change rows
 
-#### Scenario: Kernel filtering is the single truth
+#### Scenario: One nested-name set, subtracted at every row source
 
-- **GIVEN** a change list where an entry carries `nested: ["area/alpha"]`
-- **WHEN** the kernel projection is built
-- **THEN** that entry SHALL be excluded from the actionable `entries`
-- **AND** the changes projection, dashboard summary, and Kanban inputs SHALL consume the filtered
-  projection without implementing a second filter
+- **GIVEN** a change list where an entry carries `nested: ["area/alpha"]` while the local directory
+  listing also contains `area`
+- **WHEN** the kernel projection is built and change inventories are assembled
+- **THEN** the entry SHALL be excluded from the actionable `entries` and compat `value`
+- **AND** the Changes projection, Dashboard summary inputs, search change documents, and Store content
+  changes SHALL subtract the warnings-derived nested-name set from their own id sources
+- **AND** no surface SHALL implement a second, divergent derivation of which directories are namespaced
+
+#### Scenario: Row visibility degrades, never gates, on CLI loss
+
+- **GIVEN** a namespaced directory exists and the CLI change-list projection is unavailable
+- **WHEN** Changes, Dashboard, search, and Store content render
+- **THEN** surfaces SHALL keep their existing behavior (local rows visible, CLI summaries absent)
+- **AND** no surface SHALL require the CLI projection to show locally listed changes
 
 #### Scenario: Dashboard stays actionable-only
 

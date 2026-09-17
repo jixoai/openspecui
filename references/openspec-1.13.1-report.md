@@ -41,7 +41,7 @@ Reference repository     references/openspec
 Pinned tag               v1.13.1
 Pinned commit            634c557bd0470eec37861b46172c3f503d283c1b
 Previous pin             v1.13.0 / 9d4e5974e5c0d9a09b9c6c1e1eb0975e80ec4461
-Upstream delta           40 commits, src +3402/-499 across 65 files (plus tests/docs)
+Upstream delta           38 commits, src +3402/-499 across 65 files (plus tests/docs)
 ```
 
 Sources inspected: the full `v1.13.0..v1.13.1` source diff of `references/openspec`
@@ -63,9 +63,17 @@ Commit `09a999b` (#1849, `src/core/list.ts`, contract `docs/agent-contract.md` �
 ```
 
 - A directory under `changes/` that only wraps nested change directories is **still listed**
-  with full regular fields (tasks 0/0 -> `status: "no-tasks"`) plus `nested: string[]`; its
-  `status` is meaningless. The contract says: "Do not treat such an entry as a change;
-  report the message and leave the directories alone."
+  with full regular fields plus `nested: string[]`; its `status` is meaningless. The contract says:
+  "Do not treat such an entry as a change; report the message and leave the directories alone." The
+  fields are computed by the same code path as real changes (`list.ts` runs
+  `getTaskProgressForChange` on the namespace dir), so the typical 0/0 -> `no-tasks` shape is the
+  common case, not a guarantee — a namespace root that happens to contain a `tasks.md` reports its
+  counts; fixture construction must not rely on 0/0.
+- Row-source fact (Round-A review B1): OpenSpecUI's change **row ids** do not come from the CLI list
+  at all — `changes-projection-service.ts` builds rows from `adapter.listChanges()` (local directory
+  listing) and joins CLI entries only for task summaries; Dashboard/Kanban/search use the local
+  `listChangesWithMeta()`; Store content decodes `list --json` through a second independent schema
+  (`store-content-projection.ts`). Filtering CLI entries alone therefore removes summaries, not rows.
 - Top-level `warnings` is omitted when empty (never `[]`).
 - Companion behaviors: `status --change`/`instructions --change`/`show`/`validate` report
   errors for namespaced ids; `archive` refuses them; `status --all` emits a
@@ -93,11 +101,14 @@ Semantics (each bullet is a dimension where the old reading dropped lines):
 
 - every CommonMark list marker — `-`, `*`, `+`, ordered `1.`/`1)` up to nine digits;
 - leading indentation counts (nested sub-tasks);
-- marker inside the box: any **single** non-`]`/non-whitespace token (`[ ]`, `[x]`, `[~]`,
-  `[1]`, …) or a whitespace-only box (`[]`, `[ x]`, `[  ]`);
+- marker inside the box: any **single** non-`]`/non-whitespace character (`[ ]`, `[x]`, `[~]`,
+  `[1]`, …), optionally padded with whitespace (`[ x]` captures marker `x`), or a
+  whitespace-only box (`[]`, `[  ]`); a **multi-token** marker (`[WIP]`) never matches — the
+  upstream-accepted residue that keeps link labels out;
 - closing `]` must **not** be followed by `(` or `[` (keeps `- [Some doc](./doc.md)` and
   reference links out of the counts; whitespace-only boxes keep counting regardless);
-- done iff the marker lowercases to `x`; every other marker (and none) reads not-done;
+- done iff the marker lowercases to `x` (`[x]`, `[X]`, `[ x]` are done); every other marker
+  (and none) reads not-done;
 - unanchored at the end (CRLF files keep parsing).
 
 Upstream rationale (source comment): any line this parser drops is a task `openspec
@@ -190,8 +201,8 @@ the pinned-fixture positive matrix should exercise the new classes.
 | --- | --- | --- |
 | pinned fixture | `packages/core/package.json` (`openspec-cli-113` npm alias), `packages/core/src/__tests__/official-cli-v13-fixtures.ts` | rotate alias + `PINNED_OPENSPEC_V13_VERSIONS` to `1.13.1`; regenerate lockfile; re-run matrix |
 | change-list contract | `packages/core/src/cli-contracts/workflow.ts` | type `nested?: string[]` on entries; type top-level `warnings[]` |
-| change-list projection | `packages/core/src/planning-cli-projection.ts`, `packages/core/src/opsx-kernel.ts` | keep nested entries out of the actionable projection; project `warnings` instead of dropping |
-| change-list consumers | `packages/server/src/planning-root-service.ts`, `changes-projection-service.ts`, `dashboard-summary.ts` | namespaced directories never index as actionable changes |
+| change-list projection | `packages/core/src/planning-cli-projection.ts`, `packages/core/src/opsx-kernel.ts` | keep nested entries out of the actionable projection (`entries` and compat `value`); project `warnings` as the single source of the nested-name set |
+| change-list consumers | `packages/server/src/planning-root-service.ts`, `changes-projection-service.ts`, `dashboard-summary.ts`, `search-documents.ts`, `store-content-projection-service.ts` | row builders subtract the warnings-derived nested-name set from their own id sources; namespaced directories never index as actionable changes |
 | changes surface | `packages/web/src/routes/change-list.tsx` (+ dashboard row) | render `nested_change_directory` warnings as direct-plane evidence; no fake `Tasks 0/0` rows |
 | task reading | `packages/core/src/task-progress.ts` | mirror the CLI task-line semantics for `trackedTaskProgress`, `documentChecklistSummary`, `toggleMarkdownTask` write-back |
 | validate findings | `packages/core/src/cli-contracts/workflow.ts` (decode), `packages/web/src/components/validation-findings-evidence.tsx` (render) | none (shape-compatible); pinned-fixture positive coverage for P4 classes |

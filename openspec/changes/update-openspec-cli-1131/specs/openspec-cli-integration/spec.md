@@ -38,8 +38,8 @@ OpenSpecUI SHALL NOT offer change-detail navigation, task summaries, or workflow
 
 - **GIVEN** a decoded entry carries `nested`
 - **WHEN** any surface or service consumes the change list
-- **THEN** the entry SHALL NOT become an actionable change row, CLI task summary, Kanban input, or
-  change-detail navigation target
+- **THEN** the entry SHALL NOT become an actionable change row, CLI task summary, Kanban input, search
+  change document, Store content change entry, or change-detail navigation target
 - **AND** the namespaced directories SHALL be left untouched (no read, write, or repair attempt beyond
   presenting the warning)
 

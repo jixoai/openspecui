@@ -28,7 +28,7 @@ Rotate the OpenSpecUI 13 line to the OpenSpec CLI 1.13.1 patch release **inside 
 `>=1.13.0 <1.14.0` window**:
 
 ```text
-OpenSpec CLI v1.13.1 (40 commits, src +3402/-499)
+OpenSpec CLI v1.13.1 (38 commits, src +3402/-499)
   ├── P1  list --json nested entries + top-level warnings   -> contract + projection + surface
   ├── P2  widened task-line reading                          -> local parser parity + toggle parity
   ├── P3  schema validate valid-with-issues semantics        -> fixture evidence only (no consumer)
@@ -70,9 +70,15 @@ report, docs pin references, and a changeset for an OpenSpecUI 13.x release.
 2. **Single pinned positive fixture.** `openspec-cli-113` alias rotates to `1.13.1`; no second `1.13.0`
    executable fixture is retained (one-pinned-per-series pattern; every 1.13.1 change is additive-optional,
    so 1.13.0 owns no rejection case the retained 1.12.0 boundary fixture does not).
-3. **Nested entries are filtered at the kernel, warnings ride the projection.** `fetchChangeListProjection`
-   keeps entries actionable-only (entries with `nested` are excluded there) and adds `warnings` to the
-   `opsx-change-list` projection; server consumers inherit the filtering instead of each re-filtering.
+3. **The kernel projection owns one authoritative nested-name set; row builders subtract it.**
+   `fetchChangeListProjection` keeps `entries` and the compat `value` actionable-only (entries carrying
+   `nested` are excluded) and projects top-level `warnings` — the single derivation of the nested-name
+   set. Change-row builders keep their own id sources (local directory listings) and subtract the set
+   where they already join CLI data: Changes projection, Dashboard summary, search change documents,
+   and the Store content projection's independent `list --json` decode. When the CLI list is
+   unavailable, surfaces degrade to today's behavior (rows stay, summaries absent) — row visibility
+   never becomes CLI-gated. (Round-A B1: filtering CLI entries alone removes summaries, not rows,
+   because row ids come from local listings.)
 4. **Warnings surface on the Changes page direct plane** (amber evidence region naming the directory and
    upstream message); Dashboard stays actionable-changes-only. Namespaced directories get no change-detail
    route entry (upstream reads now fail on them).

@@ -17,7 +17,12 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
       (`634c557bd0470eec37861b46172c3f503d283c1b`).
 - [x] `references/openspec-1.13.1-report.md` written with source-diff evidence.
 - [x] Change artifacts (specs deltas + loop docs) written.
-- [ ] Codex change review approved (Round-A blockers folded; Round-B recorded here with score).
+- [x] Round-A change review (2026-09-17): 6.5/10 REVISE — 3 blockers (B1 kernel-filter/row-source
+      mismatch; B2 `[ x]`/`[WIP]` test expectations contradicted the pattern; B3 commit count 40->38).
+      All folded into report/intake/research-plan/spec deltas this round. Codex channel was down (local
+      proxy 502); super-thinker executed Round-A per the RemixCode fallback; Codex Round-B pending proxy
+      recovery.
+- [ ] Codex Round-B review approved (score recorded here).
 
 ## CP1 — Pin rotation (implementation)
 
@@ -32,23 +37,29 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 
 ## CP2 — Change-list nested/warnings (implementation)
 
-- [ ] Contract: `nested?: string[]` on entries; top-level `warnings?` typed
-      (`nested_change_directory`); absent-when-empty preserved; `workflow.test.ts` green with new cases.
-- [ ] Kernel projection: entries with `nested` excluded from actionable `entries`; `warnings` projected;
-      `planning-cli-projection.test.ts` + `opsx-kernel-cli-projection.test.ts` green; red recorded
-      (warnings dropped + nested actionable today).
-- [ ] Server inheritance: changes/dashboard projections prove a namespaced directory never renders as a
-      change row or CLI task summary; no second filter implementation.
-- [ ] Web: Changes page amber warnings region, verbatim upstream message, no row/no `Tasks 0/0`/no detail
-      link for namespaced directories; TestingLibrary red recorded before the fix.
+- [ ] Contract: `nested?: string[]` on entries; top-level `warnings?` typed (`code: z.string()` per
+      Round-A N2); absent-when-empty preserved; `workflow.test.ts` green with new cases.
+- [ ] Kernel projection: entries with `nested` excluded from actionable `entries` AND compat `value`;
+      `warnings` projected; `planning-cli-projection.test.ts` + `opsx-kernel-cli-projection.test.ts`
+      green; red recorded (warnings dropped + nested actionable today).
+- [ ] Nested-name set subtraction at every row source (Round-A B1): Changes projection, Dashboard
+      summary inputs, search change documents, Store content projection — namespaced directory never
+      renders as a change row, CLI task summary, search document, or Store content entry; no second
+      divergent derivation.
+- [ ] Degradation contract: CLI list unavailable -> local rows remain visible with absent summaries
+      (row visibility never CLI-gated); regression test recorded.
+- [ ] Web: Changes page amber warnings region, verbatim upstream message, unknown-code fallback, no
+      row/no `Tasks 0/0`/no detail link for namespaced directories; TestingLibrary red recorded.
 - [ ] Spec deltas applied (`openspec-cli-integration`, `opsx-workflow-ui`).
 
 ## CP3 — Task-line reading parity (implementation)
 
 - [ ] `task-progress.ts` pattern mirrors the CLI semantics (markers, ordered, indentation, single-token
-      markers, whitespace-only boxes, link guard, CRLF, no `$` anchor); done iff `x`/`X`.
+      markers incl. padded `[ x]`=done, whitespace-only boxes, link guard, multi-token `[WIP]` excluded,
+      CRLF, no `$` anchor); done iff `x`/`X`.
 - [ ] `toggleMarkdownTask` operates on widened forms writing canonical `[x]`/`[ ]`.
-- [ ] New unit cases green (documented in research plan); existing narrow-syntax cases unchanged.
+- [ ] New unit cases green (Round-A B2-corrected list in research plan); existing narrow-syntax cases
+      unchanged; `parser` + `tracked-task-mutation` gates green (Round-A N1).
 - [ ] Divergence regression: `+`-marker tasks no longer produce a false tracked-task-mismatch badge.
 - [ ] CLI-progress authority tests stay green (local reading never redefines CLI denominators).
 

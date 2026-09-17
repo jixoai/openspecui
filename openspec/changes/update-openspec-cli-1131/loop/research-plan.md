@@ -58,33 +58,57 @@ identical); `list --json` gains no fields on fixtures without namespace folders 
 
 ### Slice 2 — Change-list `nested`/`warnings` contract, projection, and surface
 
+Round-A B1 folded: change-row ids come from local directory listings (`adapter.listChanges()` /
+`listChangesWithMeta()`), not from the CLI list; the Store content panel decodes `list --json` through a
+second independent schema; search indexes the local listing. Filtering CLI `entries` alone therefore
+removes task summaries, not rows. The design is: **one authoritative nested-name set derived from the
+kernel projection's `warnings`; every row builder subtracts it from its own id source.**
+
 Owners (one batch; files disjoint from Slice 3):
 
 - `packages/core/src/cli-contracts/workflow.ts` — `CliChangeListEntrySchema` gains
   `nested: z.array(z.string()).optional()`; `CliChangeListSchema` gains
   `warnings: z.array(CliChangeListWarningSchema).optional()` with
-  `{code: z.literal('nested_change_directory'), name: z.string(), nested: z.array(z.string()), message:
-  z.string()}`. Absent-when-empty is preserved (optional, no defaults) per the typed-CLI-contract law.
+  `{code: z.string(), name: z.string(), nested: z.array(z.string()), message: z.string()}`.
+  `code` is `z.string()` (not a literal) because the upstream contract says "Today the only code is
+  `nested_change_directory`" — an in-window patch may add codes, and a literal would fail the whole
+  decode; the UI treats unknown codes as generic hygiene warnings (Round-A N2). Absent-when-empty is
+  preserved (optional, no defaults) per the typed-CLI-contract law.
 - `packages/core/src/planning-cli-projection.ts` — `opsx-change-list` projection payload gains optional
-  `warnings`; `entries` remain the actionable-only change set (kernel filters).
+  `warnings`; `entries` remain the actionable-only change set.
 - `packages/core/src/opsx-kernel.ts` (`fetchChangeListProjection`) — exclude entries carrying `nested`
-  from `entries`; project top-level `warnings` through.
-- `packages/server/src/planning-root-service.ts`, `changes-projection-service.ts`, `dashboard-summary.ts`
-  — inherit kernel filtering; add/extend tests proving a namespaced directory never becomes an actionable
-  change row or CLI task summary on any surface.
-- `packages/web/src/routes/change-list.tsx` — amber direct-plane warnings region (code-known label,
-  directory name, nested names, upstream message verbatim); no row, no `Tasks 0/0`, no detail-route link
-  for namespaced directories.
+  from `entries` AND from the compat `value` name array (both stay the actionable set); project
+  top-level `warnings` through.
+- `packages/server/src/planning-root-service.ts` — `readCliChangeListEntriesFor` (or its caller) also
+  exposes the warnings-derived nested-name set alongside the entries Map it already returns.
+- `packages/server/src/changes-projection-service.ts` — when building rows from
+  `adapter.listChanges()`, subtract the nested-name set (it already joins CLI entries there);
+  degradation: no CLI projection -> today's behavior (row kept, summary absent).
+- `packages/server/src/dashboard-summary.ts` — subtract the nested-name set from its local listing
+  before building Active Changes inputs (Kanban inherits via the same inputs).
+- `packages/server/src/search-documents.ts` — change-document enumeration must not index namespaced
+  directories when the nested-name set is available (consume the changes projection or accept the set
+  via its options); degradation identical.
+- `packages/core/src/store-content-projection.ts` (+ server service) — the independent Store content
+  `list --json` decode excludes entries carrying `nested` from its projected change list.
+- `packages/web/src/routes/change-list.tsx` — amber direct-plane warnings region (known-code label,
+  directory name, nested names, upstream message verbatim, generic fallback for unknown codes); no row,
+  no `Tasks 0/0`, no detail-route link for namespaced directories.
 
-Red (structural, today): a payload `{changes:[{name:'area', completedTasks:0, totalTasks:0, lastModified,
-status:'no-tasks', nested:['area/alpha']}], warnings:[{code:'nested_change_directory', name:'area',
-nested:['area/alpha'], message:'...'}], root:null}` decodes today but (a) projection drops `warnings`
-(assert), (b) `area` flows into actionable entries and renders a normal row (assert), (c) the Changes page
-has no warnings surface (TestingLibrary red). Green: all three invert; dashboard/kanban unchanged by the
-same kernel fact.
+Red (structural, today): a fixture repository with `changes/area/alpha/` — (a) CLI payload decode keeps
+`warnings` but the projection drops it (assert); (b) `area` renders as a normal Changes row from the
+local listing (TestingLibrary red); (c) `area` is indexed by search and present in Store content
+changes (service-level red); (d) no warnings surface exists. Green: all invert. Degradation red: with
+the CLI projection unavailable, rows remain (assert the contract is preserved).
+
+Fixture construction constraint (Round-A N3): the namespace root must not contain a `tasks.md` — the
+upstream `list.ts` computes task fields for namespace dirs through the same code path, so 0/0 is the
+typical shape, not a guarantee.
 
 Spec deltas: `openspec-cli-integration` ADD `Change List Nested Directory Contract`;
-`opsx-workflow-ui` ADD `Change List Hygiene Warning Projection`.
+`opsx-workflow-ui` ADD `Change List Hygiene Warning Projection` (surfaces enumerated: change rows,
+CLI task summaries, Kanban inputs, change-detail navigation, search documents, Store content
+projection).
 
 ### Slice 3 — Task-line reading parity
 
@@ -97,10 +121,13 @@ Owners (one batch; files disjoint from Slice 2):
   `[~]` `[]` `[1]` …), whitespace-only boxes, closing `]` not followed by `(`/`[`, done iff marker
   lowercases to `x`, CRLF-tolerant (no `$` anchor). `toggleMarkdownTask` write-back operates on the widened
   forms and writes canonical `[x]`/`[ ]` while preserving marker/indent/description bytes.
-- `packages/core/src/task-progress.test.ts` (or nearest existing test owner) — cases: `+ [ ] a`,
-  `1. [ ] a`, `1) [x] a`, `  - [~] a` (indented, not-done), `* [x]done` (done), `[]` and `[ x]`
-  (not-done), `- [doc](./d.md)` excluded, `- [WIP] note` counted not-done (documented upstream trade),
-  CRLF line counted, empty description counted; toggle on `+ [ ] a` -> `+ [x] a`, on `1. [~] a` ->
+- `packages/core/src/task-progress.test.ts` (or nearest existing test owner) — cases verified against
+  the upstream pattern by node execution (Round-A B2 corrections applied): `+ [ ] a` (not-done),
+  `1. [ ] a` (not-done), `1) [x] a` (done), `  - [~] a` (indented, not-done), `* [x]done` (done),
+  `[ x] a` — padded box captures marker `x`, **done**; `[]` and `[  ]` — whitespace-only, not-done;
+  `- [1] a` (single-token marker, not-done — the documented over-count trade); `- [WIP] note` —
+  **multi-token marker, never a task** (upstream-accepted residue); `- [doc](./d.md)` excluded;
+  CRLF line counted; empty description counted; toggle on `+ [ ] a` -> `+ [x] a`, on `1. [~] a` ->
   `1. [x] a`, done->undone writes `[ ]`.
 - Divergence consumers (`createApplyInstructionProgress`) inherit parity: a change whose tasks use `+`
   markers no longer produces a false tracked-task-mismatch badge. Add the regression case at
@@ -133,7 +160,8 @@ Owners:
 
 - **Lockfile churn**: the alias bump rewrites `pnpm-lock.yaml`; install happens once in Slice 1 before any
   parallel batch starts (known monorepo hazard: parallel installs corrupt the store).
-- **Over-counting optics**: `- [WIP]`/`- [1]` now count as unfinished tasks locally and in CLI counts.
+- **Over-counting optics**: single-token non-task markers such as `- [1] a` now count as unfinished
+  tasks locally and in CLI counts.
   Upstream accepts this as loud-and-correctable; OpenSpecUI mirrors rather than forks the semantics
   (documented in the parity requirement's scenario).
 - **Fixture flakiness on version identity**: only the two files in Slice 1 own version strings; every
@@ -150,7 +178,9 @@ Focused (per slice, `pnpm --filter <pkg> exec vitest run <files>` — exec direc
 2. Slice 2: `cli-contracts/workflow.test.ts`, `planning-cli-projection.test.ts`,
    `opsx-kernel-cli-projection.test.ts`, `changes-projection-service.test.ts`,
    `dashboard-summary` owner tests, `change-list` web tests.
-3. Slice 3: `task-progress` tests, `opsx-types`/divergence tests, `change-view` evidence tests.
+3. Slice 3: `task-progress` tests, `parser` shared-parse tests, server `tracked-task-mutation` tests
+   (Round-A N1: `parseMarkdownTasks` and `toggleMarkdownTask` are shared-function changes),
+   `opsx-types`/divergence tests, `change-view` evidence tests.
 4. `pnpm --filter @openspecui/core exec tsc --noEmit` after each core-touching slice.
 
 Broad (integrator): `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`,
