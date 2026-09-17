@@ -26,14 +26,19 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 
 ## CP1 — Pin rotation (implementation)
 
-- [ ] `packages/core/package.json` alias `openspec-cli-113` -> `@fission-ai/openspec@1.13.1`;
-      lockfile regenerated; workspace install clean.
-- [ ] `PINNED_OPENSPEC_V13_VERSIONS = ['1.13.1']`; fixture identity assertions green against the
-      1.13.1 executable across all `official-cli-v13-*.test.ts`.
-- [ ] `scripts/prepare-openspec-reference.mjs` `EXPECTED_COMMIT` =
-      `634c557bd0470eec37861b46172c3f503d283c1b`; header intent updated.
-- [ ] `CLAUDE.md` session pointer reads `references/openspec-1.13.1-report.md`.
-- [ ] Red recorded: identity assertion against the stale `1.13.0` constant.
+- [x] `packages/core/package.json` alias `openspec-cli-113` -> `@fission-ai/openspec@1.13.1`;
+      lockfile regenerated (5-line delta); workspace install clean.
+- [x] `PINNED_OPENSPEC_V13_VERSIONS = ['1.13.1']`; fixture identity assertions green against the
+      1.13.1 executable across all 9 `official-cli-v13-*.test.ts` (29/29, same count as the recorded
+      1.13.0 baseline — executable proof the patch is behavior-compatible with every pinned assertion).
+- [x] `scripts/prepare-openspec-reference.mjs` `EXPECTED_COMMIT` =
+      `634c557bd0470eec37861b46172c3f503d283c1b`; header intent updated; script ran clean and built the
+      reference dist.
+- [x] `CLAUDE.md` session pointer reads `references/openspec-1.13.1-report.md` (1.13.0 report moved to
+      the historical list).
+- [x] Red recorded: with the alias bumped and constants stale, all 4 workflow-fixture identity
+      assertions failed `expected '1.13.1' to be '1.13.0'`; green after the constants rotation (commit
+      `c0dacb0e`).
 
 ## CP2 — Change-list nested/warnings (implementation)
 

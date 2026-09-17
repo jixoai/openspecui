@@ -14,7 +14,7 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 | --- | --- | --- | --- |
 | CP0 | worktree + pin + report + change artifacts | done | submodule `v1.13.1` @ `634c557`; report + this change |
 | CP0-R1 | Round-A review + blocker fold | done | super-thinker 6.5/10 REVISE -> B1/B2/B3 folded (see checkpoints) |
-| 1 | fixture alias + identity constants + reference guard + CLAUDE pointer | pending | — |
+| 1 | fixture alias + identity constants + reference guard + CLAUDE pointer | done | red `expected '1.13.1' to be '1.13.0'` -> 29/29 green @ 1.13.1; commit `c0dacb0e` |
 | 2 | change-list nested/warnings contract + projection + Changes surface | pending | — |
 | 3 | task-line reading parity + toggle parity | pending | — |
 | 4 | fixture-matrix extension + docs + changeset | pending | — |
