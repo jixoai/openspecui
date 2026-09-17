@@ -8,6 +8,8 @@
     "src/official-cli-v13-show-diff-fixtures.test.ts",
     "src/official-cli-v13-workflow-fixtures.test.ts",
     "src/official-cli-v13-apply-readiness-fixtures.test.ts",
+    "src/official-cli-v13-nested-change-fixtures.test.ts",
+    "src/official-cli-v13-task-reading-fixtures.test.ts",
     "src/official-cli-v12-boundary-fixtures.test.ts",
     "src/opsx-types.test.ts"
   ],

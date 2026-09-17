@@ -16,6 +16,11 @@
  *    closure preserved verbatim even in the ready state, `warnings` appears only when
  *    upstream spreads it, both stay optional with no empty-array default, and neither
  *    changes `state`/`progress`/`tasks`/`missingArtifacts` facts.
+ * 7. Lock the OpenSpec 1.13.1 decode regression named by Round-B N5: the patch's new
+ *    error codes (`store_remove_contains_registered_store`, `invalid_item`) ride the
+ *    existing generic diagnostic carriers as open strings, and a non-zero exit keeps
+ *    structured stdout/stderr as process evidence instead of being downgraded to a
+ *    contract failure.
 
  * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
@@ -23,6 +28,7 @@
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — generic diagnostics decode-regression evidence (update-openspec-cli-1131 Slice 4).
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'
@@ -43,6 +49,7 @@ import {
   isCliSchemasFailure,
 } from './schema-resolution.js'
 import { CliShowChangeDiffSchema, CliShowChangeDiffSuccessSchema } from './show-diff.js'
+import { CliStoreCleanupSchema } from './store.js'
 import {
   CliApplyInstructionsSuccessSchema,
   CliArchiveSchema,
@@ -1131,5 +1138,101 @@ describe('OpenSpec 1.13.1 change-list CLI contract', () => {
 
     expect(parsed.warnings?.[0]?.code).toBe('future_hygiene_code')
     expect(parsed.warnings?.[0]?.message).toBe('A hygiene fact OpenSpecUI has never seen.')
+  })
+})
+
+describe('OpenSpec 1.13.1 generic diagnostics decode regression', () => {
+  // Round-B N5: the 1.13.1 patch adds error codes that ride the existing generic
+  // diagnostics carriers — `store_remove_contains_registered_store` (#1880, store remove
+  // refuses when the target contains another registered store) and `invalid_item` (#1835,
+  // `validate --type <id>` rejects path-separator ids). No schema change is involved, and
+  // these cases lock that property: the codes survive decode as open strings, and the
+  // non-zero exits keep their structured stdout/stderr evidence instead of being
+  // downgraded to a contract failure.
+  //
+  // Verified upstream shapes at the v1.13.1 pin (634c557): assertNoRegisteredStoreInside
+  // (src/core/store/operations.ts) throws a StoreError carrying code, target 'store.root',
+  // and a fix hint; `store remove` failure handling (src/commands/store.ts remove ->
+  // handleFailure -> emitFailure) prints the cleanup failure payload with that diagnostic
+  // appended to `status` and sets exit 1. `validate <id> --type change` with a
+  // path-separator id prints `{ status: [{ severity: 'error', code: 'invalid_item',
+  // message }] }` (src/commands/validate.ts folderStyleNameProblem path) and exits 1.
+  const storeRemoveFailure = {
+    store: null,
+    registry: null,
+    files: null,
+    status: [
+      {
+        severity: 'error',
+        code: 'store_remove_contains_registered_store',
+        message:
+          "Store remove refuses to delete /stores/shared: it contains another registered store: 'inner' (/stores/shared/inner).",
+        target: 'store.root',
+        fix: 'Unregister or remove that store first (openspec store unregister inner), or run "openspec store unregister shared" to forget \'shared\' without deleting files.',
+      },
+    ],
+  }
+
+  it('decodes the store_remove_contains_registered_store cleanup failure with the code preserved verbatim', () => {
+    const parsed = CliStoreCleanupSchema.parse(storeRemoveFailure)
+
+    expect(parsed.store).toBeNull()
+    expect(parsed.registry).toBeNull()
+    expect(parsed.files).toBeNull()
+    const diagnostic = parsed.status[0]
+    expect(diagnostic).toMatchObject({
+      severity: 'error',
+      code: 'store_remove_contains_registered_store',
+      target: 'store.root',
+    })
+    // The fix hint rides the shared optional member untouched.
+    expect(diagnostic?.fix).toContain('openspec store unregister inner')
+  })
+
+  it('decodes the invalid_item validate status-array failure through the shared diagnostic envelope', () => {
+    const invalidItem = {
+      status: [
+        {
+          severity: 'error',
+          code: 'invalid_item',
+          message: 'Change name must not contain path separators',
+        },
+      ],
+    }
+
+    const parsed = CliDiagnosticFailureSchema.parse(invalidItem)
+    expect(parsed.status[0]).toMatchObject({ severity: 'error', code: 'invalid_item' })
+    expect(parsed.status[0]?.message).toBe('Change name must not contain path separators')
+
+    // The same document reaches the validate result union's failure branch, never a
+    // report document, so surfaces that forward user ids keep objective evidence.
+    const asValidate = CliValidateSchema.parse(invalidItem)
+    expect('items' in asValidate).toBe(false)
+  })
+
+  it('keeps a non-zero exit with structured stdout/stderr as process evidence, not a decode failure', () => {
+    const stdout = JSON.stringify(storeRemoveFailure)
+    const stderr = [
+      "Error: Store remove refuses to delete /stores/shared: it contains another registered store: 'inner' (/stores/shared/inner).",
+      'Fix: Unregister or remove that store first (openspec store unregister inner), or run "openspec store unregister shared" to forget \'shared\' without deleting files.',
+    ].join('\n')
+    const parsed = parseCliCommandResult(
+      { success: false, stdout, stderr, exitCode: 1 } satisfies CliResult,
+      CliStoreCleanupSchema
+    )
+
+    // A code OpenSpecUI has never modeled must never become a contract failure: decode
+    // succeeds and every process fact stays a separate structured member.
+    expect(parsed.contractError).toBeUndefined()
+    expect(parsed.exitCode).toBe(1)
+    expect(parsed.stdout).toBe(stdout)
+    expect(parsed.stderr).toBe(stderr)
+    expect(parsed.data?.status[0]?.code).toBe('store_remove_contains_registered_store')
+    // Diagnostics are lifted from the payload so the generic renderer can surface the
+    // unknown code as-is.
+    expect(parsed.diagnostics[0]).toMatchObject({
+      severity: 'error',
+      code: 'store_remove_contains_registered_store',
+    })
   })
 })
