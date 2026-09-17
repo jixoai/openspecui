@@ -21,6 +21,12 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 
 ## Decisions taken during implementation
 
+- 2026-09-17 Slice 1 execution found two pin points the plan's owner list missed, both rotated in follow-up
+  commits (`b825c87c`, `6eefdc10`): the reference-commit regression pin
+  (`upstream-contract-regression.test.ts:96` — its red `expected 634c557 to be 9d4e5974` was the guard
+  working as designed) and two `PINNED_OPENSPEC_COMMIT` constants
+  (`root-context-cold-start.integration.test.ts`, `w2-project-binding-playwright.ts`, found by repo-wide
+  hash grep). CHANGELOG/AGENTS.md mentions are frozen history or Slice 4 docs work.
 - 2026-09-17 Round-A (super-thinker substitute; Codex proxy `BNUI-01deiMac.local:20002` returning 502):
   - B1 folded: kernel `entries`-only filtering cannot remove change rows because row ids come from local
     directory listings (`adapter.listChanges()`/`listChangesWithMeta()`), and Store content + search are
