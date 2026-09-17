@@ -58,20 +58,30 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 
 ## CP2 — Change-list nested/warnings (implementation)
 
-- [ ] Contract: `nested?: string[]` on entries; top-level `warnings?` typed (`code: z.string()` per
-      Round-A N2); absent-when-empty preserved; `workflow.test.ts` green with new cases.
-- [ ] Kernel projection: entries with `nested` excluded from actionable `entries` AND compat `value`;
-      `warnings` projected; `planning-cli-projection.test.ts` + `opsx-kernel-cli-projection.test.ts`
-      green; red recorded (warnings dropped + nested actionable today).
-- [ ] Nested-name set subtraction at every row source (Round-A B1): Changes projection, Dashboard
-      summary inputs, search change documents, Store content projection — namespaced directory never
-      renders as a change row, CLI task summary, search document, or Store content entry; no second
-      divergent derivation.
-- [ ] Degradation contract: CLI list unavailable -> local rows remain visible with absent summaries
-      (row visibility never CLI-gated); regression test recorded.
-- [ ] Web: Changes page amber warnings region, verbatim upstream message, unknown-code fallback, no
-      row/no `Tasks 0/0`/no detail link for namespaced directories; TestingLibrary red recorded.
-- [ ] Spec deltas applied (`openspec-cli-integration`, `opsx-workflow-ui`).
+- [x] Contract: `nested?: string[]` on entries; top-level `warnings?` typed (`code: z.string()` per
+      Round-A N2); absent-when-empty preserved; `workflow.test.ts` green (+3 cases; the contract-layer
+      red fixed point is the type boundary — the `.passthrough()` family decodes today, exactly as the
+      Round-B N1 analysis predicted).
+- [x] Kernel projection: entries with `nested` excluded from actionable `entries` AND compat `value`;
+      `warnings` projected; required `namespaces: string[]` carries the single structural derivation
+      (`deriveCliChangeListFacts`); core projection/kernel suites green (red recorded: `namespaces`
+      stripped + `area` actionable before).
+- [x] Namespace-set subtraction at every row source (Round-A B1 + Round-B N2/N3): Changes projection
+      (namespace dirs never read), Dashboard summary inputs, search change documents, Store content
+      projection — plus the integrator extended the `change.listWithMeta`/`change.subscribe` transports
+      through the same projection fact (public API consistency; same red/green family). Collision and
+      no-warnings-still-filters / warnings-without-entry-excludes-nothing boundary cases green.
+- [x] Degradation contract: missing CLI projection -> empty facts -> today's behavior; asserted in the
+      service tests.
+- [x] Web: Changes page amber warnings region (`role=note`), verbatim upstream message, unknown-code
+      fallback, no row/no `Tasks 0/0`/no detail link; TestingLibrary red recorded before the fix.
+      Static loader returns `[]` (no fabricated cleanliness).
+- [x] Spec deltas applied (`openspec-cli-integration`, `opsx-workflow-ui`); change validates clean.
+- Integrator follow-ups folded into the Slice 2 commit: `official-cli-v12-boundary-fixtures.test.ts`
+  version-identity args rotated to 1.13.1 (pre-existing Slice 1 gap, stash-isolated by the implementing
+  agent; 2/2 green against the real executables) and the router transport subtraction above.
+- Green matrix at integration: core 72/72 (+29/29 task/parser from Slice 3), server 35/35 focused +
+  107/107 router, web 21/21; server full typecheck green.
 
 ## CP3 — Task-line reading parity (implementation)
 
