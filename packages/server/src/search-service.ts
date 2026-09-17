@@ -4,10 +4,13 @@
  * 2. Rebuild from processed owned documents plus direct Referenced Spec metadata.
  * 3. Dispose scheduled and worker resources with the owning Planning root.
  * 4. Keep document dependencies caller-local while serializing provider snapshots.
+ * 5. Consume the CLI-derived namespace-name set (OpenSpec 1.13.1) when collecting change
+ *    documents; an unavailable set keeps indexing the full local listing (degradation).
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  * Derived requirement (2026-07-19): Warmup and overlapping subscribers cannot steal Search freshness or dependencies.
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import type { OpenSpecAdapter, OpenSpecWatcher } from '@openspecui/core'
 import type { ReferencedSpecCatalogEntry } from '@openspecui/core/spec-catalog'
@@ -47,7 +50,13 @@ export class SearchService {
     private resolveEntityReadOptions?: EntityReadOptionsResolver,
     private getReferencedSpecs: () =>
       | readonly ReferencedSpecCatalogEntry[]
-      | Promise<readonly ReferencedSpecCatalogEntry[]> = () => []
+      | Promise<readonly ReferencedSpecCatalogEntry[]> = () => [],
+    /**
+     * OpenSpec 1.13.1: the CLI-derived namespace-name set for the current planning root.
+     * Resolves empty (never rejects) when the CLI change list is unavailable so search
+     * keeps indexing the full local listing instead of gating on the CLI projection.
+     */
+    private getNamespaceNames: () => readonly string[] | Promise<readonly string[]> = () => []
   ) {
     this.provider = provider
     this.watcher = watcher
@@ -145,13 +154,17 @@ export class SearchService {
   }
 
   private async collectCurrentDocuments() {
-    const referencedSpecs = await this.getReferencedSpecs()
+    const [referencedSpecs, namespaceNames] = await Promise.all([
+      this.getReferencedSpecs(),
+      this.getNamespaceNames(),
+    ])
     return ProjectSearchDocumentSchema.array().parse(
       await collectSearchDocuments(
         this.adapter,
         this.documentService,
         this.resolveEntityReadOptions,
-        referencedSpecs
+        referencedSpecs,
+        { namespaceNames: new Set(namespaceNames) }
       )
     )
   }

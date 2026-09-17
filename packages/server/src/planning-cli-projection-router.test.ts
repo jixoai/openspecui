@@ -8,6 +8,7 @@
  * Original request (2026-07-26): "操作成功底层是要推送变更的，然后让多端基于订阅拉取更新。"
  * Owner architecture clarification (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"
  * Original request (2026-08-06): "Windows compatibility and adaptation, including the core and peripheral scripts."
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import {
   CliContextSchema,
@@ -98,6 +99,7 @@ describe('public Planning CLI projection Router', () => {
       .spyOn(OpsxKernel.prototype, 'readChangeListProjection')
       .mockResolvedValue({
         value: ['cli-owned'],
+        namespaces: [],
         entries: [
           {
             name: 'cli-owned',

@@ -8,6 +8,7 @@
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
  * Mutation (6.14): removing/changing the explicit Store selector makes cross-Store data unable to settle.
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import {
   closeAllWatchers,
@@ -319,6 +320,66 @@ describe('StoreContentProjectionService (6.4-6.12)', () => {
       observers.forEach((observer) => observer.unsubscribe())
     } finally {
       subscriptions.forEach((subscription) => subscription.unsubscribe())
+      fixture.runtime.clear()
+    }
+  })
+
+  it('excludes structurally-nested entries from the projected Store active-Change list (OpenSpec 1.13.1)', async () => {
+    // The independent Store `list --json` decode must never project a namespace folder as a
+    // Store change entry; the CLI's top-level warnings stay unprojected display-free facts.
+    const fixture = createFixture(async () =>
+      cliResult({
+        changes: [
+          {
+            name: 'area',
+            completedTasks: 0,
+            totalTasks: 0,
+            lastModified: '2026-09-17T00:00:00.000Z',
+            status: 'no-tasks',
+            nested: ['area/alpha', 'area/beta'],
+          },
+          {
+            name: 'reshape',
+            completedTasks: 1,
+            totalTasks: 4,
+            lastModified: '2026-09-17T00:00:00.000Z',
+            status: 'in-progress',
+          },
+        ],
+        warnings: [
+          {
+            code: 'nested_change_directory',
+            name: 'area',
+            nested: ['area/alpha', 'area/beta'],
+            message:
+              'openspec/changes/area is not a change; it wraps nested change directories area/alpha and area/beta.',
+          },
+        ],
+      })
+    )
+    const ready = createDeferred<void>()
+    const sub = fixture.service.subscribeContent(CHANGES_ID, (notice) => {
+      if (notice.state === 'ready') ready.resolve()
+    })
+    try {
+      await ready.promise
+      expect(fixture.service.readContent(CHANGES_ID)).toMatchObject({
+        state: 'ready',
+        data: {
+          available: true,
+          storeId: 'team',
+          changes: [
+            {
+              name: 'reshape',
+              completedTasks: 1,
+              totalTasks: 4,
+              status: 'in-progress',
+            },
+          ],
+        },
+      })
+    } finally {
+      sub.unsubscribe()
       fixture.runtime.clear()
     }
   })

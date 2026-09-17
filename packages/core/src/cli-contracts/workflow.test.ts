@@ -22,6 +22,7 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'
@@ -45,12 +46,14 @@ import { CliShowChangeDiffSchema, CliShowChangeDiffSuccessSchema } from './show-
 import {
   CliApplyInstructionsSuccessSchema,
   CliArchiveSchema,
+  CliChangeListSchema,
   CliValidateFindingsResultSchema,
   CliValidateFindingsSchema,
   CliValidateReportSchema,
   CliValidateSchema,
   CliWorkflowStatusSuccessSchema,
   isCliValidateFindings,
+  type CliChangeListWarning,
 } from './workflow.js'
 
 const root = { path: '/repo', source: 'nearest' as const }
@@ -1033,5 +1036,100 @@ describe('OpenSpec 1.10 init --language argv passthrough', () => {
 
     expect(execute.mock.calls[0]?.[0]).toEqual(['init', '--tools', 'none'])
     expect(executeStream.mock.calls[0]?.[0]).toEqual(['init', '--tools', 'none'])
+  })
+})
+
+describe('OpenSpec 1.13.1 change-list CLI contract', () => {
+  // Verified upstream shape: references/openspec/src/core/list.ts (pinned v1.13.1, 634c557)
+  // emits `nested` on namespace-folder entries and a top-level `warnings` array whose only
+  // current code is `nested_change_directory`; warnings are omitted entirely when empty.
+  const namespaceWarning = {
+    code: 'nested_change_directory',
+    name: 'area',
+    nested: ['area/alpha', 'area/beta'],
+    message:
+      'openspec/changes/area is not a change; it wraps nested change directories area/alpha and area/beta. Move them up one level or archive them.',
+  }
+
+  function namespacedChangeListPayload() {
+    return {
+      changes: [
+        {
+          name: 'area',
+          completedTasks: 0,
+          totalTasks: 0,
+          lastModified: '2026-09-17T00:00:00.000Z',
+          status: 'no-tasks' as const,
+          nested: ['area/alpha', 'area/beta'],
+        },
+        {
+          name: 'real-change',
+          completedTasks: 2,
+          totalTasks: 5,
+          lastModified: '2026-09-17T00:00:00.000Z',
+          status: 'in-progress' as const,
+        },
+      ],
+      warnings: [namespaceWarning],
+      root,
+      status: [],
+    }
+  }
+
+  it('decodes a namespaced directory entry and the top-level warnings as typed facts', () => {
+    const parsed = CliChangeListSchema.parse(namespacedChangeListPayload())
+
+    expect(parsed.changes).toHaveLength(2)
+    expect(parsed.changes[0]?.nested).toEqual(['area/alpha', 'area/beta'])
+    // The warning message stays verbatim upstream evidence; `nested` names are exact.
+    expect(parsed.warnings).toEqual([namespaceWarning])
+    expect(parsed.warnings?.[0]?.message).toBe(namespaceWarning.message)
+    expect(parsed.warnings?.[0]?.code).toBe('nested_change_directory')
+    // Typed member: the warning is a modeled contract fact, not passthrough residue.
+    const typedWarning: CliChangeListWarning | undefined = parsed.warnings?.[0]
+    expect(typedWarning?.nested).toEqual(['area/alpha', 'area/beta'])
+  })
+
+  it('keeps both members absent when the repository has no namespace folders', () => {
+    const parsed = CliChangeListSchema.parse({
+      changes: [
+        {
+          name: 'plain-change',
+          completedTasks: 1,
+          totalTasks: 1,
+          lastModified: '2026-09-17T00:00:00.000Z',
+          status: 'complete',
+        },
+      ],
+      root,
+      status: [],
+    })
+
+    // Absent-when-empty is the upstream law: never null, never a synthesized empty array.
+    expect(parsed.warnings).toBeUndefined()
+    expect('warnings' in parsed).toBe(false)
+    expect(parsed.changes[0]?.nested).toBeUndefined()
+    expect('nested' in (parsed.changes[0] as object)).toBe(false)
+  })
+
+  it('decodes an unknown future warning code as an open string without failing the document', () => {
+    // Round-A N2: the only current code is `nested_change_directory`, but an in-window patch
+    // may add codes; a literal would fail the whole decode and turn evidence into an error.
+    const parsed = CliChangeListSchema.parse({
+      changes: [],
+      warnings: [
+        {
+          code: 'future_hygiene_code',
+          name: 'other',
+          nested: ['other/gamma'],
+          message: 'A hygiene fact OpenSpecUI has never seen.',
+        },
+      ],
+      root,
+      status: [],
+    })
+
+    expect(parsed.warnings?.[0]?.code).toBe('future_hygiene_code')
+    expect(parsed.warnings?.[0]?.message).toBe('A hygiene fact OpenSpecUI has never seen.')
   })
 })

@@ -26,6 +26,7 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
 */
 import {
   acquireWatcherRoot,
@@ -657,6 +658,7 @@ const createMockContext = (
     readStatusProjection: vi.fn(),
     readChangeListProjection: vi.fn().mockResolvedValue({
       value: ['add-caching'],
+      namespaces: [],
       evidence: {
         success: true,
         stdout: '{"changes":[{"name":"add-caching"}]}',

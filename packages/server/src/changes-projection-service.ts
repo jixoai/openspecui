@@ -4,15 +4,19 @@
  * 2. Emit bounded rows and explicit progress before later rows settle.
  * 3. Preserve completed rows and row-level errors while a batch continues.
  * 4. Bind cached work to Planning-root generation and reactive filesystem invalidation.
+ * 5. Subtract the CLI's structural namespace-name set from the local listing (OpenSpec
+ *    1.13.1) so namespace folders never become rows; CLI loss keeps today's row-retention
+ *    behavior instead of gating row visibility.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import type {
   ChangeMeta,
   ChangeProjectionBatch,
   ChangeProjectionData,
   ChangeProjectionRowError,
-  CliChangeListEntry,
+  CliChangeListFacts,
 } from '@openspecui/core'
 import { Buffer } from 'node:buffer'
 import {
@@ -25,22 +29,26 @@ import {
 } from './projection-work/index.js'
 
 /**
- * CLI-reported task facts for the list, keyed by Change id. Sourced once from the
- * `openspec list` projection — the CLI is the task-count authority, and UI-side file
- * arithmetic must never backfill a missing entry.
+ * CLI-reported task facts for the list, keyed by Change id, plus the structural
+ * namespace-name set (OpenSpec 1.13.1). Sourced once from the `openspec list` projection —
+ * the CLI is the task-count authority, UI-side file arithmetic must never backfill a
+ * missing entry, and the namespace set is the kernel's single structural derivation
+ * (never re-derived from warning message text here).
  */
-export type CliTaskSummaryIndex = Map<string, CliChangeListEntry>
+export type CliTaskSummaryIndex = CliChangeListFacts
 
 /** Minimal adapter boundary needed by the progressive list; workflow facts stay out of this projection. */
 export interface ChangeProjectionAdapter {
   listChanges(): Promise<string[]>
   readChangeMeta(id: string): Promise<ChangeMeta>
   /**
-   * Read the CLI-owned Change-list entries when the planning CLI projection is available.
-   * Implementations return an empty index (never a rejection) when the CLI list is not
-   * observable, so the progressive list stays file-driven and rows simply carry null.
+   * Read the CLI-owned Change-list facts (actionable entries plus the structural
+   * namespace-name set) when the planning CLI projection is available. Implementations
+   * return empty facts (never a rejection) when the CLI list is not observable, so the
+   * progressive list stays file-driven, rows simply carry null summaries, and locally
+   * listed rows — including namespace directories — remain visible (degradation contract).
    */
-  readCliChangeListEntries?(): Promise<CliTaskSummaryIndex>
+  readCliChangeListFacts?(): Promise<CliChangeListFacts>
 }
 
 /** Complete Planning-root provenance used for one active Change-list Work identity. */
@@ -171,20 +179,24 @@ export class ChangesProjectionService implements ChangesProjectionServiceContrac
         context.reportStage('root-ready')
         const ids = await this.options.adapter.listChanges()
         // Join the CLI's own task counts once per load; a missing CLI list leaves every
-        // row null rather than fabricating counts from local checkbox arithmetic.
-        const cliEntries =
-          (await this.options.adapter.readCliChangeListEntries?.()) ??
-          new Map<string, CliChangeListEntry>()
+        // row null rather than fabricating counts from local checkbox arithmetic. The same
+        // read carries the structural namespace-name set: OpenSpec 1.13.1 namespace folders
+        // are subtracted from the row inventory here (the single subtraction point for this
+        // projection), while an unavailable CLI list subtracts nothing — rows stay visible.
+        const cliFacts =
+          (await this.options.adapter.readCliChangeListFacts?.()) ??
+          ({ entries: new Map(), namespaceNames: new Set() } satisfies CliChangeListFacts)
+        const rowIds = ids.filter((id) => !cliFacts.namespaceNames.has(id))
         const rows: ChangeMeta[] = []
         const errors: ChangeProjectionRowError[] = []
-        const total = ids.length
+        const total = rowIds.length
 
-        for (const [index, id] of ids.entries()) {
+        for (const [index, id] of rowIds.entries()) {
           if (context.signal.aborted)
             throw new DOMException('Change projection was cancelled.', 'AbortError')
           try {
             const meta = await this.options.adapter.readChangeMeta(id)
-            const entry = cliEntries.get(id)
+            const entry = cliFacts.entries.get(id)
             const row: ChangeMeta = entry
               ? {
                   ...meta,

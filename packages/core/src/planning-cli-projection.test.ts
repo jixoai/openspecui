@@ -4,8 +4,13 @@
  *    Apply `warnings` and `missingPrerequisites` members through the shared
  *    `ApplyInstructionsProjectionSchema` value without any projection-specific branch:
  *    the planning projection neither drops nor synthesizes them.
+ * 2. Pin that the `opsx-change-list` projection keeps `entries`/`value` actionable-only,
+ *    carries the structural namespace-name set derived at the kernel boundary, and
+ *    passes the CLI's top-level change-list `warnings` through as display evidence
+ *    (absent when the CLI omitted them, never a synthesized empty array).
  *
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import { describe, expect, it } from 'vitest'
 import { PlanningCliProjectionDataSchema } from './planning-cli-projection.js'
@@ -89,5 +94,70 @@ describe('PlanningCliProjectionDataSchema opsx-apply-instructions passthrough', 
     if (parsed.kind !== 'opsx-apply-instructions') throw new Error('expected apply projection')
     expect(parsed.value.warnings).toBeUndefined()
     expect(parsed.value.missingPrerequisites).toBeUndefined()
+  })
+})
+
+describe('PlanningCliProjectionDataSchema opsx-change-list namespace/warnings', () => {
+  const changeListEvidence = {
+    command: 'list',
+    success: true,
+    stdout: '{}',
+    stderr: '',
+    exitCode: 0,
+    payload: {},
+    diagnostics: [],
+    selector: {},
+    root: { path: '/repo', source: 'nearest' },
+  } as const
+
+  const nestedWarning = {
+    code: 'nested_change_directory',
+    name: 'area',
+    nested: ['area/alpha', 'area/beta'],
+    message:
+      'openspec/changes/area is not a change; it wraps nested change directories area/alpha and area/beta.',
+  }
+
+  function changeListPayload() {
+    return {
+      kind: 'opsx-change-list' as const,
+      // Kernel-filtered actionable-only members: the namespace entry never appears here.
+      value: ['real-change'],
+      entries: [
+        {
+          name: 'real-change',
+          completedTasks: 2,
+          totalTasks: 5,
+          lastModified: '2026-09-17T00:00:00.000Z',
+          status: 'in-progress' as const,
+        },
+      ],
+      namespaces: ['area'],
+      warnings: [nestedWarning],
+      evidence: changeListEvidence,
+    }
+  }
+
+  it('carries the structural namespace set and verbatim warnings beside actionable entries', () => {
+    const parsed = PlanningCliProjectionDataSchema.parse(changeListPayload())
+
+    if (parsed.kind !== 'opsx-change-list') throw new Error('expected change-list projection')
+    expect(parsed.value).toEqual(['real-change'])
+    expect(parsed.entries.map((entry) => entry.name)).toEqual(['real-change'])
+    expect(parsed.namespaces).toEqual(['area'])
+    expect(parsed.warnings).toEqual([nestedWarning])
+    expect(parsed.warnings?.[0]?.message).toBe(nestedWarning.message)
+  })
+
+  it('keeps warnings absent rather than synthesized when the CLI omitted them', () => {
+    const { warnings, ...payloadWithoutWarnings } = changeListPayload()
+    void warnings
+    const parsed = PlanningCliProjectionDataSchema.parse(payloadWithoutWarnings)
+
+    if (parsed.kind !== 'opsx-change-list') throw new Error('expected change-list projection')
+    expect(parsed.warnings).toBeUndefined()
+    expect('warnings' in parsed).toBe(false)
+    // The namespace set stays the structural fact even without display evidence.
+    expect(parsed.namespaces).toEqual(['area'])
   })
 })

@@ -18,13 +18,15 @@
  * Original request (2026-07-31): "把所有write-lock打印上时间日志和来源堆栈，使用otel来进行trace。"
  * Owner diagnosis (2026-07-31): readonly cache misses must merge before lock admission, and slow async work must remain outside write locks.
  * Full-gate correction (2026-07-31): imperative snapshots cannot become reactive replay authority before dependency-tracked validation.
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import {
   CliExecutor,
+  deriveCliChangeListFacts,
   getRootContextCliSelector,
   OpenSpecAdapter,
   OpsxKernel,
-  type CliChangeListEntry,
+  type CliChangeListFacts,
   type CliStreamHandle,
   type ConfigManager,
   type ObservationRootOwner,
@@ -192,19 +194,28 @@ export interface PlanningRootServiceManagerOptions {
 }
 
 /** Serialized deep owner for one replaceable Planning-root service record. */
-/** Read CLI Change-list task facts once per call; failures degrade to an empty index. */
-function readCliChangeListEntriesFor(
+/**
+ * Read the CLI-owned Change-list facts once per call: actionable entries keyed by name plus
+ * the structural namespace-name set (OpenSpec 1.13.1), both derived once at the kernel
+ * change-list projection boundary. Failures degrade to empty facts so row builders keep
+ * today's behavior (local rows visible, CLI summaries absent).
+ */
+function readCliChangeListFactsFor(
   service: PlanningCliProjectionService
-): () => Promise<Map<string, CliChangeListEntry>> {
+): () => Promise<CliChangeListFacts> {
   return async () => {
     try {
       const data = await service.getCurrent({ kind: 'opsx-change-list' })
-      if (data.kind !== 'opsx-change-list') return new Map()
-      return new Map(data.entries.map((entry) => [entry.name, entry]))
+      if (data.kind !== 'opsx-change-list') return emptyCliChangeListFacts()
+      return deriveCliChangeListFacts(data)
     } catch {
-      return new Map()
+      return emptyCliChangeListFacts()
     }
   }
+}
+
+function emptyCliChangeListFacts(): CliChangeListFacts {
+  return { entries: new Map(), namespaceNames: new Set() }
 }
 
 export class PlanningRootServiceManager implements PlanningRootServiceResolver {
@@ -290,6 +301,19 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
           contracts: this.options.cliExecutor.contracts,
         })
         return catalog.entries.filter((entry) => entry.source === 'referenced')
+      },
+      // OpenSpec 1.13.1: search subtracts the kernel-derived namespace-name set; a missing
+      // CLI list resolves empty so search keeps indexing the full local listing.
+      async () => {
+        try {
+          const data = await planningCliProjectionService.getCurrent({
+            kind: 'opsx-change-list',
+          })
+          if (data.kind !== 'opsx-change-list') return []
+          return data.namespaces
+        } catch {
+          return []
+        }
       }
     )
     const dashboardOverviewService = new DashboardOverviewService((reason) =>
@@ -316,7 +340,7 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         loadSummary: () =>
           loadDashboardSummary({
             adapter,
-            readCliChangeListEntries: readCliChangeListEntriesFor(planningCliProjectionService),
+            readCliChangeListFacts: readCliChangeListFactsFor(planningCliProjectionService),
           }),
         loadTrends: () =>
           loadDashboardTrends({ adapter, configManager: this.options.configManager }),
@@ -350,21 +374,13 @@ export class PlanningRootServiceManager implements PlanningRootServiceResolver {
         generation: gitBindingToken,
       },
       // The CLI list projection is the task-count authority for list rows; it is read once
-      // per projection load and a missing CLI list leaves rows null, never backfilled.
+      // per projection load and a missing CLI list leaves rows null, never backfilled. The
+      // same facts carry the structural namespace-name set (OpenSpec 1.13.1) subtracted
+      // from the local listing inside the projection; CLI loss subtracts nothing.
       adapter: {
         listChanges: () => adapter.listChanges(),
         readChangeMeta: (id: string) => adapter.readChangeMeta(id),
-        readCliChangeListEntries: async () => {
-          try {
-            const data = await planningCliProjectionService.getCurrent({
-              kind: 'opsx-change-list',
-            })
-            if (data.kind !== 'opsx-change-list') return new Map()
-            return new Map(data.entries.map((entry) => [entry.name, entry]))
-          } catch {
-            return new Map()
-          }
-        },
+        readCliChangeListFacts: readCliChangeListFactsFor(planningCliProjectionService),
       },
     })
     const filePreviewService = new FilePreviewService(projectDir, this.options.previewAssetsDir)

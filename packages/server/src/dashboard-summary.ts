@@ -4,13 +4,17 @@
  * 2. Keep Summary independent from Git, trend configuration, and OPSX workflow work.
  * 3. Preserve exact tracked-task facts while selecting bounded recent lists.
  * 4. Derive objective Kanban phase counts and recent archives from the same Adapter read.
+ * 5. Subtract the CLI's structural namespace-name set from the local Change listing
+ *    (OpenSpec 1.13.1) before building Active Changes inputs so Dashboard and Kanban stay
+ *    actionable-only; an unavailable CLI list keeps every locally listed row (degradation).
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-28): replace Dashboard Workflow Progress with ReadonlyKanban.
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import type {
   ArchiveMeta,
-  CliChangeListEntry,
+  CliChangeListFacts,
   DashboardSummaryProjection,
   OpenSpecAdapter,
   SpecMeta,
@@ -33,25 +37,38 @@ export interface DashboardPlanningFacts {
 export interface DashboardSummaryLoaderContext {
   adapter: OpenSpecAdapter
   /**
-   * CLI-reported Change-list task facts when the planning CLI projection is observable.
-   * Optional: without it rows carry a null cliTaskSummary, never a UI-side recomputation.
+   * CLI-owned Change-list facts (actionable entries plus the structural namespace-name set,
+   * OpenSpec 1.13.1) when the planning CLI projection is observable. Optional: without it
+   * rows carry a null cliTaskSummary, never a UI-side recomputation, and no namespace
+   * directory is subtracted — locally listed rows remain (degradation contract).
    */
-  readCliChangeListEntries?: () => Promise<Map<string, CliChangeListEntry>>
+  readCliChangeListFacts?: () => Promise<CliChangeListFacts>
 }
+
+const emptyCliChangeListFacts = (): CliChangeListFacts => ({
+  entries: new Map(),
+  namespaceNames: new Set(),
+})
 
 /** Read the objective files behind Dashboard Summary without invoking Git or workflow commands. */
 export async function loadDashboardPlanningFacts(
   ctx: DashboardSummaryLoaderContext
 ): Promise<DashboardPlanningFacts> {
-  const [specMetas, changeMetas, archiveMetas, cliEntries] = await Promise.all([
+  const [specMetas, changeMetas, archiveMetas, cliFacts] = await Promise.all([
     ctx.adapter.listSpecsWithMeta(),
     ctx.adapter.listChangesWithMeta(),
     ctx.adapter.listArchivedChangesWithMeta(),
-    ctx.readCliChangeListEntries?.().catch(() => new Map<string, CliChangeListEntry>()) ??
-      Promise.resolve(new Map<string, CliChangeListEntry>()),
+    ctx.readCliChangeListFacts?.().catch(emptyCliChangeListFacts) ??
+      Promise.resolve(emptyCliChangeListFacts()),
   ])
-  const allActiveChanges = changeMetas.map((changeMeta) => {
-    const entry = cliEntries.get(changeMeta.id)
+  // Subtract the kernel-derived namespace-name set once, here: Active Changes and every
+  // Kanban input downstream consume this same actionable inventory, never a second
+  // divergent derivation of which directories are namespaced.
+  const actionableChangeMetas = changeMetas.filter(
+    (changeMeta) => !cliFacts.namespaceNames.has(changeMeta.id)
+  )
+  const allActiveChanges = actionableChangeMetas.map((changeMeta) => {
+    const entry = cliFacts.entries.get(changeMeta.id)
     return {
       id: changeMeta.id,
       name: changeMeta.name ?? changeMeta.id,

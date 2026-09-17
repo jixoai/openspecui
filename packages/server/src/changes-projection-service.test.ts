@@ -4,10 +4,13 @@
  * 2. Prove row failures preserve completed rows and explicit progress.
  * 3. Prove a changed Planning-root generation cannot replay prior Change rows.
  * 4. Prove one-shot Change queries retire their listener before later invalidation.
+ * 5. Prove the CLI's structural namespace-name set subtracts namespace directories from
+ *    local-listing rows while CLI loss degrades to today's row-retention behavior.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
-import type { ChangeMeta } from '@openspecui/core'
+import type { ChangeMeta, CliChangeListFacts } from '@openspecui/core'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ChangesProjectionService,
@@ -200,6 +203,103 @@ describe('ChangesProjectionService', () => {
 
     serviceA.dispose()
     serviceB.dispose()
+    runtime.clear()
+  })
+
+  it('subtracts the CLI structural namespace-name set from local-listing rows', async () => {
+    const runtime = createServerProjectionWorkRuntime()
+    const owner = createChangesProjectionWorkOwner(runtime)
+    const facts: CliChangeListFacts = {
+      entries: new Map([
+        [
+          'real-change',
+          {
+            name: 'real-change',
+            completedTasks: 2,
+            totalTasks: 5,
+            lastModified: '2026-09-17T00:00:00.000Z',
+            status: 'in-progress',
+          },
+        ],
+      ]),
+      namespaceNames: new Set(['area']),
+    }
+    const adapter: ChangeProjectionAdapter = {
+      listChanges: vi.fn(async () => ['area', 'real-change']),
+      readChangeMeta: vi.fn((id: string) => Promise.resolve(createChange(id, 1))),
+      readCliChangeListFacts: vi.fn(async () => facts),
+    }
+    const service = createService({ owner, adapter })
+    const result = await service.getCurrent()
+
+    // The namespace directory has no row at all: no detail route, no Tasks 0/0.
+    expect(result.rows.map((row) => row.id)).toEqual(['real-change'])
+    expect(result.rows[0]?.cliTaskSummary).toEqual({
+      completedTasks: 2,
+      totalTasks: 5,
+      status: 'in-progress',
+    })
+
+    service.dispose()
+    runtime.clear()
+  })
+
+  it('keeps local rows on CLI-list loss instead of gating row visibility', async () => {
+    const runtime = createServerProjectionWorkRuntime()
+    const owner = createChangesProjectionWorkOwner(runtime)
+    const adapter: ChangeProjectionAdapter = {
+      listChanges: vi.fn(async () => ['area', 'real-change']),
+      readChangeMeta: vi.fn((id: string) => Promise.resolve(createChange(id, 1))),
+      // No readCliChangeListFacts: the planning CLI projection is unavailable, so there is
+      // no namespace set to subtract and rows keep today's behavior with null summaries.
+    }
+    const service = createService({ owner, adapter })
+    const result = await service.getCurrent()
+
+    expect(result.rows.map((row) => row.id).sort()).toEqual(['area', 'real-change'])
+    expect(result.rows.every((row) => row.cliTaskSummary === null)).toBe(true)
+
+    service.dispose()
+    runtime.clear()
+  })
+
+  it('binds a real Change its own CLI summary when only a warning name collides (Round-B N3)', async () => {
+    const runtime = createServerProjectionWorkRuntime()
+    const owner = createChangesProjectionWorkOwner(runtime)
+    // `area` is a real change the CLI listed with its own counts; the hygiene warning that
+    // mentions `area` has no structurally-nested entry behind it, so nothing is subtracted
+    // and the join must use the real change's own facts, never a namespace 0/0.
+    const facts: CliChangeListFacts = {
+      entries: new Map([
+        [
+          'area',
+          {
+            name: 'area',
+            completedTasks: 2,
+            totalTasks: 5,
+            lastModified: '2026-09-17T00:00:00.000Z',
+            status: 'in-progress',
+          },
+        ],
+      ]),
+      namespaceNames: new Set(),
+    }
+    const adapter: ChangeProjectionAdapter = {
+      listChanges: vi.fn(async () => ['area']),
+      readChangeMeta: vi.fn(async () => createChange('area', 1)),
+      readCliChangeListFacts: vi.fn(async () => facts),
+    }
+    const service = createService({ owner, adapter })
+    const result = await service.getCurrent()
+
+    expect(result.rows.map((row) => row.id)).toEqual(['area'])
+    expect(result.rows[0]?.cliTaskSummary).toEqual({
+      completedTasks: 2,
+      totalTasks: 5,
+      status: 'in-progress',
+    })
+
+    service.dispose()
     runtime.clear()
   })
 })

@@ -5,9 +5,13 @@
  * 3. Keep Specs and active Changes regions independent for load/refresh/error/recovery (6.7).
  * 4. Key Projection Work by composite (envUri, Store id, kind) identity; reject stale/cross-Store completion (6.8).
  * 5. Reuse Store-root observation invalidation and data-free Push -> Pull transport (6.9).
+ * 6. Exclude structurally-nested entries from the projected Store active-Change list
+ *    (OpenSpec 1.13.1): this independent `list --json` decode never presents a namespace
+ *    folder as a Store change; top-level warnings stay unprojected.
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西。"
  * Spec: hosted-environment-delivery › "Environment-Scoped Store Content Projection".
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  *
  * This service mirrors `store-projection-service.ts` but projects typed Spec/active-Change lists for one selected
  * composite identity. It is demand-driven: only a subscribed Store Detail starts work (6.12).
@@ -249,7 +253,9 @@ export class StoreContentProjectionService {
     if (classification.kind === 'ok') {
       return {
         available: true,
-        changes: classification.data.changes,
+        // OpenSpec 1.13.1: an entry carrying `nested` is a namespace folder, not a Store
+        // change — its status/task counts are meaningless, so it never projects here.
+        changes: classification.data.changes.filter((entry) => entry.nested === undefined),
         storeId,
         ...(cliVersion ? { cliVersion } : {}),
       }
