@@ -22,17 +22,23 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
       All folded into report/intake/research-plan/spec deltas this round. Codex channel was down (local
       proxy 502); super-thinker executed Round-A per the RemixCode fallback; Codex Round-B pending proxy
       recovery.
-- [x] Codex Round-B review (2026-09-17, gpt-5.6-terra via herdr, 12m29s): **no blockers —
-      implementation freeze lifted** ("抽样交叉验证未发现证据报告与 pinned 上游源码相冲突的事实性论断").
-      Six non-blocking suggestions N1-N6 folded this round: N2 adopted (namespace-name set is structural
-      from `entries[].nested` presence + `name`; warnings are display-only; no message-text parsing);
-      N3 adopted (collision/multi-nested red cases); N4 adopted (pin+manifest+lockfile same-commit
-      baseline asserted — satisfied by `c0dacb0e`; later slices forbid install commands); N5 adopted
-      (decode-regression evidence in Slice 4); N6 adopted (Slice 3 brief already writes canonical
-      `[x]`/`[ ]` — read-alignment vs write-normalization split kept explicit); N1 corrected — the
-      schema family IS `.passthrough()` (verified `workflow.ts:36-53`); its red case (tolerate-then-strip
-      vs model-and-project) was adopted into Slice 2. Sections 3-4 (quality prose + score) restated
-      separately; recorded below when received.
+- [x] Codex Round-B review (2026-09-17, gpt-5.6-terra via herdr, 12m29s): **6.5/10 REVISE** — its
+      section-1 "no blockers" applied to factual accuracy only ("未发现证据报告与 pinned 上游源码相冲突
+      的事实性论断"); its sections 3-4 kept the plan below freeze standard with four conditions, all now
+      resolved: (1) precisely define the namespace filter set — resolved by the Round-B N2 structural
+      fold (`entries[].nested` presence + `name`; warnings display-only; both boundary red cases
+      specified); (2) spec degradation contradiction ("never appear on any surface" vs "local rows remain
+      on CLI loss") — fixed by qualifying the never-appear guarantees with CLI-projection availability
+      and naming the degraded namespace-row behavior explicitly; (3) landable data interfaces + red/green
+      tests per consumer — carried by the Slice 2 owner list and red-case enumeration (implementation
+      in flight); (4) P5 config output-shape claim — corrected after source verification
+      (`refuseUnreadableConfig` emits plain stderr + exit 1, no JSON envelope). Also folded: N1 (schema
+      family IS `.passthrough()`, verified `workflow.ts:36-53`; its tolerate-then-strip red case
+      adopted), N3 (collision/multi-nested red cases), N4 (pin+manifest+lockfile same-commit baseline —
+      satisfied by `c0dacb0e`; later slices forbid installs), N5 (decode-regression evidence in Slice 4),
+      N6 (read-alignment vs write-normalization split kept explicit in Slice 3).
+      Slice 2/3 dispatch proceeded on the conditions being resolved in the same round; Round-C reviews
+      the landed implementation against these conditions.
 
 ## CP1 — Pin rotation (implementation)
 

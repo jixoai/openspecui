@@ -161,9 +161,12 @@ the pinned-fixture positive matrix should exercise the new classes.
 
 ### P5. Behavior fixes observable through existing envelopes (no shape change)
 
-- `605d9e7` (#1876): unparseable global config — `config set/unset/profile` now exit 1
-  instead of silently rewriting the file; `config list` normalizes. New refusal, same
-  status-array shape.
+- `605d9e7` (#1876): unparseable global config — `config set/unset/profile` now refuse with
+  **plain stderr text** (`Error: <path> could not be parsed, so it was left unchanged.` + a fix hint)
+  and `process.exitCode = 1` instead of silently rewriting the file; there is **no JSON envelope** on
+  this refusal path (`src/commands/config.ts` `refuseUnreadableConfig`), so no status-array shape is
+  involved. `config list` normalizes a non-object root instead of crashing. (Round-B correction: an
+  earlier draft wrongly claimed a status-array payload.)
 - `9f8dec5` (#1880): `store remove` refuses when the target contains another registered
   store — new error code `store_remove_contains_registered_store` (added to
   `docs/agent-contract.md`), same failure payload shape.
@@ -202,7 +205,7 @@ the pinned-fixture positive matrix should exercise the new classes.
 | pinned fixture | `packages/core/package.json` (`openspec-cli-113` npm alias), `packages/core/src/__tests__/official-cli-v13-fixtures.ts` | rotate alias + `PINNED_OPENSPEC_V13_VERSIONS` to `1.13.1`; regenerate lockfile; re-run matrix |
 | change-list contract | `packages/core/src/cli-contracts/workflow.ts` | type `nested?: string[]` on entries; type top-level `warnings[]` |
 | change-list projection | `packages/core/src/planning-cli-projection.ts`, `packages/core/src/opsx-kernel.ts` | keep nested entries out of the actionable projection (`entries` and compat `value`); project `warnings` as the single source of the nested-name set |
-| change-list consumers | `packages/server/src/planning-root-service.ts`, `changes-projection-service.ts`, `dashboard-summary.ts`, `search-documents.ts`, `store-content-projection-service.ts` | row builders subtract the warnings-derived nested-name set from their own id sources; namespaced directories never index as actionable changes |
+| change-list consumers | `packages/server/src/planning-root-service.ts`, `changes-projection-service.ts`, `dashboard-summary.ts`, `search-documents.ts`, `store-content-projection-service.ts` | row builders subtract the structurally-derived namespace-name set (entry `name`s carrying `nested`) from their own id sources while the CLI projection is available; warnings are display evidence only |
 | changes surface | `packages/web/src/routes/change-list.tsx` (+ dashboard row) | render `nested_change_directory` warnings as direct-plane evidence; no fake `Tasks 0/0` rows |
 | task reading | `packages/core/src/task-progress.ts` | mirror the CLI task-line semantics for `trackedTaskProgress`, `documentChecklistSummary`, `toggleMarkdownTask` write-back |
 | validate findings | `packages/core/src/cli-contracts/workflow.ts` (decode), `packages/web/src/components/validation-findings-evidence.tsx` (render) | none (shape-compatible); pinned-fixture positive coverage for P4 classes |

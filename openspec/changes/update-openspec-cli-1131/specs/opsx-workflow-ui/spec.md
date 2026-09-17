@@ -20,11 +20,12 @@ change documents, and the Store content projection's independent `list --json` d
 SHALL render the warnings as direct-plane evidence: a visible warning region naming the namespace
 directory, the nested change names, and the upstream message verbatim, with CLI-owned provenance and a
 generic fallback for unknown warning codes. Dashboard SHALL remain actionable-changes-only and SHALL NOT
-render hygiene warnings. A namespaced directory SHALL NOT appear as a change row, a CLI task summary, a
-search change document, a Store content change entry, or a change-detail navigation target on any
-surface. When the CLI change list is unavailable, surfaces SHALL degrade to their existing behavior —
-rows from local listings remain visible with absent summaries — and row visibility SHALL NOT become
-CLI-gated.
+render hygiene warnings. While the CLI change-list projection is available, a namespaced directory
+SHALL NOT appear as a change row, a CLI task summary, a search change document, a Store content change
+entry, or a change-detail navigation target on any surface. When the CLI change list is unavailable,
+surfaces SHALL degrade to their existing behavior — rows from local listings remain visible with
+absent summaries, including a namespace directory row, because the classification fact is CLI-owned —
+and row visibility SHALL NOT become CLI-gated.
 
 #### Scenario: Warnings survive the projection chain
 
