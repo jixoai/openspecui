@@ -42,4 +42,17 @@ Original request (2026-09-17): "Openspec 1.13.1 释放了，你更新一下，�
 
 ## Loopback triggers
 
-- Codex proxy recovery -> submit Round-B review of the folded plan (background watcher armed).
+- Codex proxy recovery -> submit Round-B review of the folded plan (background watcher armed). — resolved:
+  the Owner fixed the proxy; Codex executed Round-B and Round-C is planned after the gates.
+- test:ci triage (2026-09-17): 2 of 793 failed.
+  - `opsx-kernel-schemas-root.fixtures.test.ts` — a fifth pin point the rotation missed: a local
+    `PINNED_BINS` map keyed `'1.13.0'` made `PINNED_BINS[version]` undefined and crashed `writeConfig`
+    on `undefined.trim()`. The file sat in no typecheck lane (main tsconfig excludes `**/*.test.ts`),
+    so the `Record<PinnedOpenspecV13Version,...>` guard was invisible — registered into
+    `tsconfig.workflow-contract-tests.json` per the typed-test-evidence law; fixed and green.
+  - `reactive-fs/path-realpath.test.ts` — environmental, not ours: deterministic under this shell's
+    `TMPDIR=/var/...` prefix (macOS realpath canonicalizes to `/private/var`), passes with the
+    normalized `/private/var` TMPDIR, and `git diff main..HEAD -- packages/core/src/reactive-fs/` is
+    empty. Linux CI has no such prefix. Recorded for PR notes.
+- test:browser:ci first run failed environmentally: Playwright `chromium_headless_shell-1208` was not
+  installed in the local cache; installed via `pnpm exec playwright install chromium` and re-run.
