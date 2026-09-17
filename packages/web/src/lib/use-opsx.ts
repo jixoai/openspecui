@@ -5,10 +5,14 @@
  * 3. Keep browser cache identity equal to the typed CLI selector across prefetch and route remounts.
  * 4. Keep optional Change, Schema, and artifact selectors from issuing unrelated projection work.
  * 5. Expose Status, Config Bundle, Status List, and Archive Instructions authority to mutation surfaces.
+ * 6. Expose the OpenSpec 1.13.1 change-list hygiene warnings as display evidence: the
+ *    payload member is passthrough verbatim, static publication fabricates none, and the
+ *    warnings never gate row visibility or mutation authority.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-28): live Kanban operations require current Status projection authority.
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  *
  * Compromise: these OPSX hooks remain in one physical module because routes already consume this public
  * adapter surface; splitting every entity hook during the loading fix would create unrelated import churn.
@@ -19,6 +23,7 @@ import type {
   ArtifactInstructions,
   ChangeFile,
   ChangeStatus,
+  CliChangeListWarning,
   SchemaDetail,
   SchemaInfo,
   SchemaResolution,
@@ -326,6 +331,30 @@ export function useOpsxChangeListSubscription(): SubscriptionState<string[]> {
     },
     staticLoader: StaticProvider.getOpsxChangeList,
     cacheKey: 'opsx.changeList',
+  })
+}
+
+/**
+ * OpenSpec 1.13.1 change-list hygiene warnings (e.g. `nested_change_directory`).
+ *
+ * Display evidence only: the CLI's verbatim warning array rides beside the actionable
+ * change list; it never gates row visibility or mutation authority. Static publication
+ * carries no CLI lifecycle evidence, so the static loader resolves no warnings — an empty
+ * list there is absence of evidence, not a fabricated clean bill of health.
+ */
+export function useOpsxChangeListHygieneWarningsSubscription(): CliProjectionSubscriptionState<
+  CliChangeListWarning[]
+> {
+  return useCliProjectionSubscription<CliChangeListWarning[]>({
+    selector: { kind: 'opsx-change-list' },
+    selectData(data: PlanningCliProjectionData) {
+      if (data.kind !== 'opsx-change-list') {
+        throw new Error(`Expected opsx-change-list projection, received ${data.kind}.`)
+      }
+      return data.warnings ?? []
+    },
+    staticLoader: async () => [],
+    cacheKey: 'opsx.changeListHygieneWarnings',
   })
 }
 

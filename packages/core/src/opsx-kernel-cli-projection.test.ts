@@ -20,6 +20,7 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import { readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
@@ -97,6 +98,202 @@ console.log(JSON.stringify({
         diagnostics: [],
       })
       expect(projection.evidence.stdout).toContain('"cli-owned"')
+    } finally {
+      kernel.dispose()
+    }
+  })
+})
+
+describe('OpsxKernel change-list namespace projection (OpenSpec 1.13.1)', () => {
+  const areaWarning = {
+    code: 'nested_change_directory',
+    name: 'area',
+    nested: ['area/alpha', 'area/beta'],
+    message:
+      'openspec/changes/area is not a change; it wraps nested change directories area/alpha and area/beta.',
+  }
+
+  /**
+   * Fake `openspec list --json` executable over a physical fixture. The namespace root has
+   * no tasks.md (Round-A N3): upstream computes task fields through the same code path, so
+   * 0/0 is the typical shape, never a guarantee the projection may rely on.
+   */
+  async function createNamespaceKernel(changes: unknown[], warnings?: unknown[]) {
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-opsx-list-nested-'))
+    tempDirs.push(projectDir)
+    await mkdir(join(projectDir, 'openspec', 'changes', 'area', 'alpha'), { recursive: true })
+    await mkdir(join(projectDir, 'openspec', 'changes', 'real-change'), { recursive: true })
+
+    const cliPath = join(projectDir, 'fake-openspec.mjs')
+    await writeFile(
+      cliPath,
+      `
+const args = process.argv.slice(2)
+if (args.includes('--version')) {
+  console.log('1.13.1')
+  process.exit(0)
+}
+if (args[0] !== 'list' || !args.includes('--json')) process.exit(2)
+const document = ${JSON.stringify({
+        changes,
+        ...(warnings ? { warnings } : {}),
+        root: { path: process.cwd(), source: 'nearest' },
+        status: [],
+      })}
+console.log(JSON.stringify(document))
+`.trimStart(),
+      'utf8'
+    )
+    const config = new ConfigManager(projectDir)
+    await config.writeConfig({ cli: { command: process.execPath, args: [cliPath] } })
+    const kernel = new OpsxKernel(
+      projectDir,
+      new CliExecutor(config, projectDir),
+      new RuntimeInvalidationIndex(),
+      {}
+    )
+    return kernel
+  }
+
+  it('excludes structurally-nested entries from value/entries and projects warnings verbatim', async () => {
+    const kernel = await createNamespaceKernel(
+      [
+        {
+          name: 'area',
+          completedTasks: 0,
+          totalTasks: 0,
+          lastModified: '2026-09-17T00:00:00.000Z',
+          status: 'no-tasks',
+          nested: ['area/alpha', 'area/beta'],
+        },
+        {
+          name: 'real-change',
+          completedTasks: 2,
+          totalTasks: 5,
+          lastModified: '2026-09-17T00:00:00.000Z',
+          status: 'in-progress',
+        },
+      ],
+      [areaWarning]
+    )
+
+    try {
+      const projection = await kernel.readChangeListProjection()
+
+      // The kernel projection boundary keeps `entries` AND the compat `value` actionable-only.
+      expect(projection.value).toEqual(['real-change'])
+      expect(projection.entries.map((entry) => entry.name)).toEqual(['real-change'])
+      // The structural namespace-name set is the single derivation of directory identity.
+      expect(projection.namespaces).toEqual(['area'])
+      // Warnings ride along as display evidence with the message verbatim.
+      expect(projection.warnings).toEqual([areaWarning])
+    } finally {
+      kernel.dispose()
+    }
+  })
+
+  it('filters a nested entry even when top-level warnings are absent', async () => {
+    const kernel = await createNamespaceKernel([
+      {
+        name: 'area',
+        completedTasks: 0,
+        totalTasks: 0,
+        lastModified: '2026-09-17T00:00:00.000Z',
+        status: 'no-tasks',
+        nested: ['area/alpha'],
+      },
+      {
+        name: 'real-change',
+        completedTasks: 1,
+        totalTasks: 1,
+        lastModified: '2026-09-17T00:00:00.000Z',
+        status: 'complete',
+      },
+    ])
+
+    try {
+      const projection = await kernel.readChangeListProjection()
+
+      expect(projection.value).toEqual(['real-change'])
+      expect(projection.namespaces).toEqual(['area'])
+      // Absent-when-empty is preserved: no synthesized empty warnings array.
+      expect(projection.warnings).toBeUndefined()
+    } finally {
+      kernel.dispose()
+    }
+  })
+
+  it('keeps every actionable entry when warnings carry no structurally-nested match', async () => {
+    // The warning message text is display evidence only; directory identity never comes
+    // from parsing it, so a warning without a structural nested entry excludes nothing.
+    const kernel = await createNamespaceKernel(
+      [
+        {
+          name: 'real-change',
+          completedTasks: 2,
+          totalTasks: 5,
+          lastModified: '2026-09-17T00:00:00.000Z',
+          status: 'in-progress',
+        },
+      ],
+      [
+        {
+          code: 'nested_change_directory',
+          name: 'ghost-directory',
+          nested: ['ghost-directory/alpha'],
+          message: 'A warning about a directory the entries never marked as nested.',
+        },
+      ]
+    )
+
+    try {
+      const projection = await kernel.readChangeListProjection()
+
+      expect(projection.value).toEqual(['real-change'])
+      expect(projection.namespaces).toEqual([])
+      expect(projection.warnings).toHaveLength(1)
+    } finally {
+      kernel.dispose()
+    }
+  })
+
+  it('never binds a namespace 0/0 summary onto an actionable same-name entry (Round-B N3)', async () => {
+    // Mixed hand-authored evidence: a nested entry and an actionable entry share the name
+    // `area`. The actionable set is the entries Map's only content, so any join sees the
+    // real change's own 2/5 facts — the namespace 0/0 can never leak through the join.
+    const kernel = await createNamespaceKernel(
+      [
+        {
+          name: 'area',
+          completedTasks: 0,
+          totalTasks: 0,
+          lastModified: '2026-09-17T00:00:00.000Z',
+          status: 'no-tasks',
+          nested: ['area/alpha'],
+        },
+        {
+          name: 'area',
+          completedTasks: 2,
+          totalTasks: 5,
+          lastModified: '2026-09-17T00:00:00.000Z',
+          status: 'in-progress',
+        },
+      ],
+      [areaWarning]
+    )
+
+    try {
+      const projection = await kernel.readChangeListProjection()
+
+      expect(projection.namespaces).toEqual(['area'])
+      expect(projection.entries).toHaveLength(1)
+      expect(projection.entries[0]).toMatchObject({
+        name: 'area',
+        completedTasks: 2,
+        totalTasks: 5,
+        status: 'in-progress',
+      })
+      expect(projection.entries[0]?.nested).toBeUndefined()
     } finally {
       kernel.dispose()
     }
@@ -1007,9 +1204,9 @@ process.exit(1)
     // An unparseable version keeps the same refusal: no capability, no argv.
     const unparseable = await prepareFindingsKernel('unparseable')
     try {
-      await expect(
-        unparseable.kernel.readValidationFindingsProjection('changes')
-      ).resolves.toEqual({ kind: 'unavailable', capability: 'findingsReport' })
+      await expect(unparseable.kernel.readValidationFindingsProjection('changes')).resolves.toEqual(
+        { kind: 'unavailable', capability: 'findingsReport' }
+      )
       expect(unparseable.readInvocations()).toEqual([['--version'], ['--version']])
     } finally {
       await unparseable.dispose()

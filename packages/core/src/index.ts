@@ -15,6 +15,7 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 /**
  * @openspecui/core
@@ -660,6 +661,7 @@ export {
   CliArchiveSchema,
   CliArtifactInstructionsSchema,
   CliChangeListSchema,
+  CliChangeListWarningSchema,
   CliCommandTransportSchema,
   CliContextSchema,
   CliDiagnosticFailureSchema,
@@ -694,6 +696,7 @@ export {
   type CliBatchStatusEntry,
   type CliChangeList,
   type CliChangeListEntry,
+  type CliChangeListWarning,
   type CliCommandResult,
   type CliContext,
   type CliDiagnostic,
@@ -771,6 +774,8 @@ export {
   PlanningCliProjectionDataSchema,
   PlanningCliProjectionSelectorSchema,
   PlanningCliProjectionStateSchema,
+  deriveCliChangeListFacts,
+  type CliChangeListFacts,
   type EnvironmentGlobalFileProjectionData,
   type EnvironmentGlobalFileProjectionState,
   type EnvironmentGlobalProjectionData,

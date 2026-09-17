@@ -17,6 +17,8 @@
  * Original request (2026-09-03): "openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作。"
  * Original request (2026-09-12): rotate the reference pin from v1.12.0 (e062b957) to the released
  * v1.13.0 tag (9d4e5974) for the OpenSpecUI 13 adaptation line.
+ * Original request (2026-09-17): rotate the reference pin from v1.13.0 (9d4e5974) to the released
+ * v1.13.1 patch tag (634c557) inside the unchanged v13 window (in-window patch rotation).
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -26,7 +28,7 @@ import { resolvePnpmInvocation } from './lib/pnpm-invocation.mjs'
 
 const REPOSITORY_ROOT = process.cwd()
 const REFERENCE_PATH = resolve(REPOSITORY_ROOT, 'references/openspec')
-const EXPECTED_COMMIT = '9d4e5974e5c0d9a09b9c6c1e1eb0975e80ec4461'
+const EXPECTED_COMMIT = '634c557bd0470eec37861b46172c3f503d283c1b'
 const CLI_DIST_PATH = resolve(REFERENCE_PATH, 'dist/cli/index.js')
 
 function run(command, args, options = {}) {

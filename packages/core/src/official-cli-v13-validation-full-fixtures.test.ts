@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.0 full bulk `validate --json` report: schema
+ * 1. Execute the pinned OpenSpec 1.13.1 full bulk `validate --json` report: schema
  *    compatibility with the 1.11/1.12 envelope plus the merge-conflict INFO issues.
  * 2. Prove `--report full` stays the explicit default and strict escalation plus the
  *    human next-steps footer behavior are unchanged.

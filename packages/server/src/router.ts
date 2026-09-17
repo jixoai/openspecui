@@ -8,6 +8,11 @@
  *   OpenSpecUI 13 line (>=1.13.0 <1.14.0), including the 1.12+ findings report transport.
  * 6. Install the supported OpenSpec CLI series through the global install stream (issue #258).
  * 7. Serve the capability-gated CLI MODIFIED-delta diff evidence for the Change Evidence tab.
+ * 8. Subtract the CLI-owned namespace set from change-list transports (1.13.1 nested directories).
+ *
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — `listChangesWithCliTaskSummary` filters
+ * `namespaces` from the `opsx-change-list` projection so `change.listWithMeta`/`change.subscribe`
+ * never hand out namespace rows (update-openspec-cli-1131 Slice 2).
  *
  * Compromise: tRPC router inference currently requires one composition module; splitting its
  * established 2,600-line registration surface is outside the OpenSpec 1.6 contract slice.
@@ -1704,31 +1709,36 @@ async function listChangesWithCliTaskSummary(
   ctx: Context,
   adapter: OpenSpecAdapter
 ): Promise<ChangeMeta[]> {
-  const [rows, cliList] = await Promise.all([
+  const [rows, cliFacts] = await Promise.all([
     adapter.listChangesWithMeta(),
     runPlanningRootRead(ctx, ({ planningCliProjectionService }) =>
       planningCliProjectionService.getCurrent({ kind: 'opsx-change-list' })
     ).then(
-      (data): Map<string, CliChangeListEntry> =>
+      (data): { entries: Map<string, CliChangeListEntry>; namespaces: Set<string> } =>
         data.kind === 'opsx-change-list'
-          ? new Map(data.entries.map((entry) => [entry.name, entry]))
-          : new Map(),
-      () => new Map<string, CliChangeListEntry>()
+          ? {
+              entries: new Map(data.entries.map((entry) => [entry.name, entry])),
+              namespaces: new Set(data.namespaces),
+            }
+          : { entries: new Map(), namespaces: new Set<string>() },
+      () => ({ entries: new Map<string, CliChangeListEntry>(), namespaces: new Set<string>() })
     ),
   ])
-  return rows.map((row) => {
-    const entry = cliList.get(row.id)
-    return entry
-      ? {
-          ...row,
-          cliTaskSummary: {
-            completedTasks: entry.completedTasks,
-            totalTasks: entry.totalTasks,
-            status: entry.status,
-          },
-        }
-      : row
-  })
+  return rows
+    .filter((row) => !cliFacts.namespaces.has(row.id))
+    .map((row) => {
+      const entry = cliFacts.entries.get(row.id)
+      return entry
+        ? {
+            ...row,
+            cliTaskSummary: {
+              completedTasks: entry.completedTasks,
+              totalTasks: entry.totalTasks,
+              status: entry.status,
+            },
+          }
+        : row
+    })
 }
 
 export const changeRouter = router({

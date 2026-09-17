@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.0 workflow contract end to end: skipped Status,
+ * 1. Execute the pinned OpenSpec 1.13.1 workflow contract end to end: skipped Status,
  *    tasks/Apply/Archive Instructions on one real skip-specs change.
  * 2. Prove explicit planning completion (`isPlanningComplete`) stays protocol truth while
  *    `isComplete` remains retained alias evidence, and Apply `progress` stays authoritative

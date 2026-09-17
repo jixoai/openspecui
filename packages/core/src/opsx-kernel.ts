@@ -13,12 +13,17 @@
  *    routes argv composition through the executor's gated `validateFindings` method, decodes
  *    through its own result schema, and never replaces the full validate report as the
  *    validation truth source.
+ * 8. Keep the OpenSpec 1.13.1 change-list projection actionable-only: entries carrying
+ *    `nested` are namespace folders and are excluded from `entries` and the compat `value`
+ *    at this boundary, the structural namespace-name set is derived once here, and the CLI's
+ *    top-level `warnings` ride through as display evidence (absent when the CLI omitted them).
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
@@ -33,6 +38,7 @@ import {
   isCliValidateFindings,
   type CliBatchStatusEntry,
   type CliChangeListEntry,
+  type CliChangeListWarning,
   type CliCommandResult,
   type CliDiagnosticFailure,
   type CliRootSelector,
@@ -1154,15 +1160,29 @@ export class OpsxKernel {
   private async fetchChangeListProjection(): Promise<{
     value: string[]
     entries: CliChangeListEntry[]
+    namespaces: string[]
+    warnings?: CliChangeListWarning[]
     evidence: CliProjectionCommandEvidence
   }> {
     // The directory inventory is an invalidation dependency only. OpenSpec CLI owns the list value.
     await this.fetchChangeIds()
     const result = await this.cliExecutor.contracts.listChanges(this.rootSelector)
     const data = requireCommandData('openspec list', result, CliChangeListSchema)
+    // OpenSpec 1.13.1 structural namespace split (single derivation point): an entry
+    // carrying `nested` is a namespace folder, not an actionable change — its status and
+    // task counts are meaningless even when upstream computed them. Both `entries` and the
+    // compat `value` stay the actionable set, `namespaces` carries the folder names for
+    // row-builder subtraction, and top-level `warnings` pass through as display evidence
+    // (kept absent when the CLI omitted them). Nested entries filter even when `warnings`
+    // are absent, and warnings without a structurally-nested entry exclude nothing.
+    const actionable = data.changes.filter((entry) => entry.nested === undefined)
     return {
-      value: data.changes.map(({ name }) => name),
-      entries: data.changes,
+      value: actionable.map(({ name }) => name),
+      entries: actionable,
+      namespaces: data.changes
+        .filter((entry) => entry.nested !== undefined)
+        .map((entry) => entry.name),
+      ...(data.warnings ? { warnings: data.warnings } : {}),
       evidence: toCliProjectionCommandEvidence(result),
     }
   }
@@ -1549,11 +1569,16 @@ export class OpsxKernel {
   /**
    * Execute CLI-owned Change enumeration with file dependencies owned by the caller's Work
    * generation. `entries` carries the CLI's own per-Change task counts and phase so list
-   * surfaces can show CLI-reported progress without UI-side file arithmetic.
+   * surfaces can show CLI-reported progress without UI-side file arithmetic. OpenSpec 1.13.1:
+   * structurally-nested namespace entries are excluded from `entries`/`value` here, and
+   * `namespaces` plus the CLI's top-level `warnings` ride alongside for row subtraction and
+   * hygiene display.
    */
   readChangeListProjection(): Promise<{
     value: string[]
     entries: CliChangeListEntry[]
+    namespaces: string[]
+    warnings?: CliChangeListWarning[]
     evidence: CliProjectionCommandEvidence
   }> {
     return this.fetchChangeListProjection()

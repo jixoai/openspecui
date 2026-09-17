@@ -4,10 +4,14 @@
  * 2. Preserve compound identity for read-only Referenced Specs.
  * 3. Share recursive Spec display paths across live and static search.
  * 4. Apply processed document reads without flattening entity provenance.
+ * 5. Subtract the CLI's structural namespace-name set (OpenSpec 1.13.1) from the Change
+ *    enumeration when available; without a set the enumeration keeps indexing the local
+ *    listing (degradation — search is never CLI-gated).
  *
  * Original request (2026-07-15): "Referenced Specs are navigable and searchable but visibly read-only."
  * Derived requirement (2026-07-18): Checkpoint 6.10 scopes Search to the active root or direct Referenced Specs.
  * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import type { OpenSpecAdapter, OpsxEntityReadOptions, OpsxEntityStage } from '@openspecui/core'
 import {
@@ -32,12 +36,24 @@ function joinParts(parts: Array<string | undefined>): string {
     .join('\n\n')
 }
 
+/** Options for search document collection. */
+export interface CollectSearchDocumentsOptions {
+  /**
+   * The CLI's structural namespace-name set (OpenSpec 1.13.1), derived once at the kernel
+   * change-list projection boundary. Names in the set are namespace folders and are not
+   * indexed as change documents; when absent (CLI list unavailable) the enumeration keeps
+   * today's local-listing behavior.
+   */
+  namespaceNames?: ReadonlySet<string>
+}
+
 /** Collect the complete search index projection owned by one Planning-root service record. */
 export async function collectSearchDocuments(
   adapter: OpenSpecAdapter,
   documentService?: DocumentService,
   resolveEntityReadOptions?: EntityReadOptionsResolver,
-  referencedSpecs: readonly ReferencedSpecCatalogEntry[] = []
+  referencedSpecs: readonly ReferencedSpecCatalogEntry[] = [],
+  options: CollectSearchDocumentsOptions = {}
 ): Promise<ProjectSearchDocument[]> {
   const docs: ProjectSearchDocument[] = []
 
@@ -76,6 +92,9 @@ export async function collectSearchDocuments(
 
   const changes = await adapter.listChangesWithMeta()
   for (const change of changes) {
+    // OpenSpec 1.13.1: a namespace folder in the kernel-derived set is never a searchable
+    // change document; the set is subtracted here, never re-derived from warning text.
+    if (options.namespaceNames?.has(change.id)) continue
     const raw = documentService
       ? await documentService.readChangeRaw(change.id, 'search', 'processed')
       : await adapter.readChangeRaw(change.id)

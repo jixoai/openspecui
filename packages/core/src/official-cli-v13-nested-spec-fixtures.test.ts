@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.0 CLI against a recursive owned Spec identity.
+ * 1. Execute the pinned OpenSpec 1.13.1 CLI against a recursive owned Spec identity.
  * 2. Prove list and show preserve every identity segment and requirement content on
  *    the v13 single-series window.
  * 3. Carry over the admitted-line nested Spec contract proven for 1.10-1.12.

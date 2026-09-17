@@ -3,11 +3,14 @@
  * 1. Publish browser-safe lenient Spec/active-Change entry schemas for Store-content projection.
  * 2. Define the additive Store-content compatibility fact and demand-driven content kind.
  * 3. Keep this entry free of Node runtime dependencies for hosted browser consumers.
+ * 4. Model the OpenSpec 1.13.1 `nested` member on Store active-Change entries so the
+ *    server-side content projection can exclude namespace folders from its projected list.
  *
  * Original request (2026-07-30): "Stores 完全可以融入 `Environment Center` 这个东西，就跟 Config 和 Context 的关系一样。"
  * Derived boundary (2026-07-30): Store UI identity is `(backend-issued envUri, Store id)`; Store Detail
  *   shows readonly content summaries sourced from typed `list --specs|--changes --store <id>`.
  * Spec: hosted-environment-delivery › "Environment-Scoped Store Content Projection".
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  *
  * Capability visibility is a compatibility fact, not authorization. A backend that omits
  * `stores.content.inspect` simply does not advertise the content projection; the App renders the
@@ -32,6 +35,12 @@ export const StoreContentChangeEntrySchema = z
     totalTasks: z.number(),
     lastModified: z.string(),
     status: z.enum(['no-tasks', 'complete', 'in-progress']),
+    /**
+     * OpenSpec 1.13.1: present exactly when the entry is a namespace folder wrapping the
+     * named nested change directories; the content projection excludes such entries from
+     * its projected change list instead of presenting them as Store changes.
+     */
+    nested: z.array(z.string()).optional(),
   })
   .passthrough()
 

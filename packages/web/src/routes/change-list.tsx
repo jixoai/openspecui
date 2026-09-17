@@ -5,6 +5,8 @@
  * 3. Preserve ChangeList row continuity and stale display together with collision-safe detail navigation.
  * 4. Keep the advanced New Change command reachable from the page header.
  * 5. Defer aggregate workflow Status until a primary Change row is renderable; preserve explicit failures.
+ * 6. Render OpenSpec 1.13.1 change-list hygiene warnings on the direct plane without ever
+ *    turning a namespace directory into a row, task summary, or detail navigation target.
  *
  * Original request (2026-07-23): "现在页面数据的加载数据非常慢（比如dashboard页面、changes页面都要等待非常久，页面刷新后，似乎后台没有缓存一样，也要加载很久。"
  * Original request (2026-07-23): "List mutations and route changes preserve physical continuity through existing motion/View Transition patterns."
@@ -16,6 +18,7 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-09-12): Owner walkthrough: unify the Change display title — generic
  *   "# Proposal" headings fall back to the change id on every surface.
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import { ChangeRow, ChangeRowChevron } from '@/components/change-row'
 import {
@@ -30,17 +33,61 @@ import {
   inferTrackedArtifactStatus,
 } from '@/lib/change-workflow-phase'
 import { formatRelativeTime } from '@/lib/format-time'
-import { useOpsxStatusListSubscription } from '@/lib/use-opsx'
+import {
+  useOpsxChangeListHygieneWarningsSubscription,
+  useOpsxStatusListSubscription,
+} from '@/lib/use-opsx'
 import { useChangesSubscription } from '@/lib/use-subscription'
 import { VTLink, vtNavController } from '@/lib/view-transitions/navigation'
 import { getSharedElementBinding } from '@/lib/view-transitions/shared-elements'
 import { useChangeListContinuity } from '@/routes/change-list-continuity'
-import type { ChangeStatus } from '@openspecui/core'
-import { AlertCircle, GitBranch, Plus, Sparkles } from 'lucide-react'
+import type { ChangeStatus, CliChangeListWarning } from '@openspecui/core'
+import { AlertCircle, AlertTriangle, GitBranch, Plus, Sparkles } from 'lucide-react'
 import { useRef } from 'react'
 
 function buildStatusMap(statuses: ChangeStatus[] | undefined): Map<string, ChangeStatus> {
   return new Map((statuses ?? []).map((status) => [status.changeName, status]))
+}
+
+/** Known OpenSpec 1.13.1 warning codes; every other code renders the generic fallback. */
+const CHANGE_LIST_WARNING_CODE_LABELS: Record<string, string> = {
+  nested_change_directory: 'Nested change directory',
+}
+
+function changeListWarningLabel(code: string): string {
+  return CHANGE_LIST_WARNING_CODE_LABELS[code] ?? 'Change list hygiene warning'
+}
+
+/**
+ * OpenSpec 1.13.1 hygiene warnings on the direct plane: the namespace directory, its
+ * nested change names, and the upstream message verbatim. Display evidence only — no row,
+ * no task summary, no detail-route link, and no read/write/repair attempt on the wrapped
+ * directories (the CLI owns that message; OpenSpecUI only surfaces it).
+ */
+function ChangeListHygieneWarnings({ warnings }: { warnings: CliChangeListWarning[] }) {
+  if (warnings.length === 0) return null
+  return (
+    <div
+      data-change-list-warnings
+      role="note"
+      className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
+    >
+      {warnings.map((warning) => (
+        <div key={`${warning.code}:${warning.name}`} className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <div className="min-w-0">
+            <span className="font-medium">{changeListWarningLabel(warning.code)}</span>
+            <span className="text-muted-foreground"> · </span>
+            <span className="break-all font-mono text-xs">{warning.name}</span>
+            <div className="text-muted-foreground text-xs">
+              wraps <span className="break-all font-mono">{warning.nested.join(', ')}</span>
+            </div>
+            <p className="mt-1 break-words text-xs">{warning.message}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function ChangeList() {
@@ -60,6 +107,7 @@ export function ChangeList() {
   } = useOpsxStatusListSubscription((changes?.length ?? 0) > 0)
   const displayedChanges = useChangeListContinuity(changes, listRef)
   const statusMap = buildStatusMap(statuses)
+  const { data: hygieneWarnings } = useOpsxChangeListHygieneWarningsSubscription()
 
   const hasCurrentEmptyChanges = changes?.length === 0 && !changesError && !isUpdating
   const showChangesFrame = (changes?.length ?? 0) > 0 || hasCurrentEmptyChanges
@@ -118,6 +166,8 @@ export function ChangeList() {
         </VTLink>
         .
       </p>
+
+      <ChangeListHygieneWarnings warnings={hygieneWarnings ?? []} />
 
       {changesError ? (
         <div

@@ -11,6 +11,7 @@
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-26): "public Pull retains full CliProjection failure evidence."
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import {
   CliProjectionCommandError,
@@ -127,6 +128,7 @@ function createFixture(
   readChangeListProjection: PlanningCliProjectionServiceOptions['kernel']['readChangeListProjection'] = async () => ({
     value: [],
     entries: [],
+    namespaces: [],
     evidence: createCommandEvidence(),
   }),
   overrides: Partial<
@@ -344,6 +346,7 @@ describe('PlanningCliProjectionService', () => {
             status: 'in-progress' as const,
           },
         ],
+        namespaces: [],
         evidence,
       })
     )

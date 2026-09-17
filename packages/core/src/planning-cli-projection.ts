@@ -4,12 +4,18 @@
  * 2. Define the runtime-environment Environment Global projection contract.
  * 3. Publish browser-safe lifecycle Pull schemas without importing Node-owned Core modules.
  * 4. Keep projection data discriminated across Status and Artifact/Apply/Archive Instructions.
+ * 5. Model the OpenSpec 1.13.1 change-list namespace facts beside the actionable set:
+ *    `entries`/`value` stay actionable-only, `namespaces` is the single structural
+ *    namespace-name set for row builders, and `warnings` is passthrough display evidence
+ *    (absent when the CLI omitted it, never a synthesized empty array).
  *
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import { z } from 'zod'
 import type { CliJsonValue } from './cli-contracts/command-result.js'
 import { CliDiagnosticSchema } from './cli-contracts/common.js'
+import { CliChangeListWarningSchema, type CliChangeListEntry } from './cli-contracts/workflow.js'
 import {
   CliProjectionCommandEvidenceSchema,
   createCliProjectionStateSchema,
@@ -79,6 +85,15 @@ export const PlanningCliProjectionDataSchema = z.discriminatedUnion('kind', [
         status: z.enum(['no-tasks', 'complete', 'in-progress']),
       })
     ),
+    /**
+     * The structural namespace-name set (OpenSpec 1.13.1): the `name` of every CLI entry
+     * that carried `nested`. This is the single derivation of which directories are
+     * namespace folders; row builders subtract it and never re-derive directory identity
+     * from warning message text.
+     */
+    namespaces: z.array(z.string()),
+    /** CLI top-level change-list hygiene warnings; absent when the CLI omitted them. */
+    warnings: z.array(CliChangeListWarningSchema).optional(),
     evidence: CliProjectionCommandEvidenceSchema,
   }),
   z.object({
@@ -126,6 +141,31 @@ export const PlanningCliProjectionStateSchema = createCliProjectionStateSchema(
 )
 
 export type PlanningCliProjectionState = z.infer<typeof PlanningCliProjectionStateSchema>
+
+/**
+ * CLI-owned change-list row facts for inventory builders (OpenSpec 1.13.1).
+ *
+ * `entries` is the actionable set keyed by change name — structurally-nested entries are
+ * already excluded at the kernel projection boundary, so a namespace entry can never
+ * contribute a task summary through a name join. `namespaceNames` is that same structural
+ * derivation (names of CLI entries carrying `nested`) for row subtraction; warning message
+ * text is display evidence only and never contributes to either member.
+ */
+export interface CliChangeListFacts {
+  readonly entries: ReadonlyMap<string, CliChangeListEntry>
+  readonly namespaceNames: ReadonlySet<string>
+}
+
+/** Build the shared change-list row facts from one `opsx-change-list` projection payload. */
+export function deriveCliChangeListFacts(payload: {
+  entries: readonly CliChangeListEntry[]
+  namespaces?: readonly string[]
+}): CliChangeListFacts {
+  return {
+    entries: new Map(payload.entries.map((entry) => [entry.name, entry])),
+    namespaceNames: new Set(payload.namespaces ?? []),
+  }
+}
 
 const CliJsonValueSchema: z.ZodType<CliJsonValue> = z.lazy(() =>
   z.union([

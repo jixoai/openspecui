@@ -5,6 +5,9 @@
  * 3. Prove typed OpenSpec 1.7 Status and completed tracked tasks converge on workflow completion.
  * 4. Prove the page-level New command remains available with active Changes.
  * 5. Distinguish main Change-subscription terminal errors and stale refresh from Loading and empty truth.
+ * 6. Prove the OpenSpec 1.13.1 change-list hygiene warnings render on the direct plane with
+ *    the namespace directory, nested names, and verbatim upstream message — and that a
+ *    namespaced directory gains no row, no Tasks summary, and no detail-route link.
  *
  * Original request (2026-07-15): "0/0 means no-tasks, never complete."
  * Original request (2026-07-21): "Changes页面的右上角没有 New,你要不要快速补一个"
@@ -13,6 +16,7 @@
  * Original request (2026-08-01): OpenSpecUI 7 uses exact artifact dependency fixtures.
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
@@ -21,6 +25,7 @@ import { ChangeList } from './change-list'
 
 const useChangesSubscriptionMock = vi.hoisted(() => vi.fn())
 const useOpsxStatusListSubscriptionMock = vi.hoisted(() => vi.fn())
+const useOpsxChangeListHygieneWarningsSubscriptionMock = vi.hoisted(() => vi.fn())
 const navControllerMock = vi.hoisted(() => ({
   activatePop: vi.fn(),
 }))
@@ -31,6 +36,7 @@ vi.mock('@/lib/use-subscription', () => ({
 
 vi.mock('@/lib/use-opsx', () => ({
   useOpsxStatusListSubscription: useOpsxStatusListSubscriptionMock,
+  useOpsxChangeListHygieneWarningsSubscription: useOpsxChangeListHygieneWarningsSubscriptionMock,
 }))
 
 vi.mock('@/lib/view-transitions/navigation', () => ({
@@ -84,6 +90,12 @@ describe('ChangeList', () => {
   beforeEach(() => {
     useChangesSubscriptionMock.mockReset()
     useOpsxStatusListSubscriptionMock.mockReset()
+    useOpsxChangeListHygieneWarningsSubscriptionMock.mockReset()
+    useOpsxChangeListHygieneWarningsSubscriptionMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    })
     navControllerMock.activatePop.mockReset()
   })
 
@@ -621,5 +633,101 @@ describe('ChangeList', () => {
     expect(screen.queryByText('2/2')).toBeNull()
     expect(screen.queryByText('100% task completion')).toBeNull()
     expect(screen.queryByText(/archive-ready|ready to archive/i)).toBeNull()
+  })
+
+  it('renders nested-change-directory hygiene warnings on the direct plane without a namespace row', () => {
+    const warningMessage =
+      'openspec/changes/area is not a change; it wraps nested change directories area/alpha and area/beta.'
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'real-change',
+          name: 'Real Change',
+          trackedTaskProgress: { total: 2, completed: 1, phase: 'in-progress' },
+          updatedAt: Date.now(),
+        },
+      ],
+      isLoading: false,
+      error: null,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+    useOpsxChangeListHygieneWarningsSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          code: 'nested_change_directory',
+          name: 'area',
+          nested: ['area/alpha', 'area/beta'],
+          message: warningMessage,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    })
+
+    const { container } = render(<ChangeList />)
+
+    // Amber direct-plane region: known code label, directory name, nested names, verbatim message.
+    const warningRegion = container.querySelector('[data-change-list-warnings]')
+    expect(warningRegion).not.toBeNull()
+    expect(screen.getByText('Nested change directory')).toBeTruthy()
+    expect(screen.getByText('area')).toBeTruthy()
+    expect(screen.getByText('area/alpha, area/beta')).toBeTruthy()
+    expect(screen.getByText(warningMessage)).toBeTruthy()
+    // No row, no Tasks 0/0, no detail-route entry for the namespaced directory.
+    expect(screen.queryByText('Tasks 0/0')).toBeNull()
+    expect(container.querySelector('a[href="/changes/area"]')).toBeNull()
+    expect(container.querySelector('a[href="/changes/real-change"]')).toBeTruthy()
+  })
+
+  it('falls back to a generic label for an unknown future warning code', () => {
+    useChangesSubscriptionMock.mockReturnValue({ data: [], isLoading: false, error: null })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+    useOpsxChangeListHygieneWarningsSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          code: 'future_hygiene_code',
+          name: 'other',
+          nested: ['other/gamma'],
+          message: 'A hygiene fact OpenSpecUI has never seen.',
+        },
+      ],
+      isLoading: false,
+      error: null,
+    })
+
+    const { container } = render(<ChangeList />)
+
+    const warningRegion = container.querySelector('[data-change-list-warnings]')
+    expect(warningRegion).not.toBeNull()
+    expect(screen.getByText('Change list hygiene warning')).toBeTruthy()
+    expect(screen.queryByText('Nested change directory')).toBeNull()
+    expect(screen.getByText('other/gamma')).toBeTruthy()
+    expect(screen.getByText('A hygiene fact OpenSpecUI has never seen.')).toBeTruthy()
+  })
+
+  it('renders no hygiene warning region when the CLI reported none', () => {
+    useChangesSubscriptionMock.mockReturnValue({ data: [], isLoading: false, error: null })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+    useOpsxChangeListHygieneWarningsSubscriptionMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    })
+
+    const { container } = render(<ChangeList />)
+
+    expect(container.querySelector('[data-change-list-warnings]')).toBeNull()
   })
 })

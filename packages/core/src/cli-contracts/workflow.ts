@@ -17,6 +17,10 @@
  *    present even when ready) and `warnings` (no-delta-specs advisory) as additive optional
  *    success members that never gain default empty arrays, never alter `state`/`progress`/
  *    `tasks`/`missingArtifacts` semantics, and stay verbatim CLI evidence.
+ * 9. Type the OpenSpec 1.13.1 change-list `nested` entry member and top-level `warnings`
+ *    array as additive optional facts (absent when empty, never null): an entry carrying
+ *    `nested` is a namespace folder, not an actionable change; `code` stays an open string
+ *    because an in-window patch may add codes beyond `nested_change_directory`.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
@@ -24,6 +28,7 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  */
 import { z } from 'zod'
 import {
@@ -33,6 +38,23 @@ import {
   CliRootSchema,
 } from './common.js'
 
+/**
+ * One top-level change-list hygiene warning (OpenSpec 1.13.1 `list --json`).
+ *
+ * `code` is an open string, not a literal: the upstream contract documents
+ * `nested_change_directory` as the only current code while reserving room for more, so an
+ * in-window patch adding a code must survive decode as evidence instead of failing the
+ * whole document. The whole array is absent when empty (never `null`, never `[]`).
+ */
+export const CliChangeListWarningSchema = z
+  .object({
+    code: z.string(),
+    name: z.string(),
+    nested: z.array(z.string()),
+    message: z.string(),
+  })
+  .passthrough()
+
 const CliChangeListEntrySchema = z
   .object({
     name: z.string(),
@@ -40,6 +62,12 @@ const CliChangeListEntrySchema = z
     totalTasks: z.number(),
     lastModified: z.string(),
     status: z.enum(['no-tasks', 'complete', 'in-progress']),
+    /**
+     * OpenSpec 1.13.1: present exactly when the entry is a namespace folder wrapping the
+     * named nested change directories. Status and task counts are meaningless for such an
+     * entry ("do not treat such an entry as a change"); absent when the entry is a change.
+     */
+    nested: z.array(z.string()).optional(),
   })
   .passthrough()
 
@@ -47,6 +75,8 @@ const CliChangeListEntrySchema = z
 export const CliChangeListSchema = z
   .object({
     changes: z.array(CliChangeListEntrySchema),
+    /** Top-level hygiene warnings; absent when empty, never synthesized. */
+    warnings: z.array(CliChangeListWarningSchema).optional(),
     root: CliRootSchema.nullable(),
     status: z.array(CliDiagnosticSchema).optional(),
   })
@@ -475,6 +505,9 @@ export const CliArchiveSchema = z
 
 /** One CLI-reported Change row: task counts and phase straight from `openspec list`. */
 export type CliChangeListEntry = z.infer<typeof CliChangeListEntrySchema>
+
+/** One top-level change-list hygiene warning from `openspec list` (OpenSpec 1.13.1). */
+export type CliChangeListWarning = z.infer<typeof CliChangeListWarningSchema>
 
 export type CliChangeList = z.infer<typeof CliChangeListSchema>
 export type CliSpecList = z.infer<typeof CliSpecListSchema>

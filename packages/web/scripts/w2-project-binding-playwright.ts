@@ -18,6 +18,7 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作。"
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — in-window patch rotation moved the pin to v1.13.1.
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -35,7 +36,7 @@ const TSX_CLI = join(REPO_ROOT, 'packages/web/node_modules/tsx/dist/cli.mjs')
 const VITE_CLI = join(REPO_ROOT, 'packages/web/node_modules/vite/bin/vite.js')
 const PINNED_OPENSPEC_ROOT = join(REPO_ROOT, 'references/openspec')
 const PINNED_OPENSPEC_BIN = join(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
-const PINNED_OPENSPEC_COMMIT = '9d4e5974e5c0d9a09b9c6c1e1eb0975e80ec4461'
+const PINNED_OPENSPEC_COMMIT = '634c557bd0470eec37861b46172c3f503d283c1b'
 const BACKEND_PORT = 14_236
 const WEB_PORT = 14_237
 const STARTUP_TIMEOUT_MS = 30_000

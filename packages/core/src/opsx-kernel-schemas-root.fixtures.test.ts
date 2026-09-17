@@ -11,6 +11,10 @@
  * Original request (2026-09-12): rotate the admitted-line proof from the retired 1.12.0
  * executable to 1.13.0 — the Batch A window rotation left this suite driving a
  * below-admitted line whose kernel capability gates no longer forward the selector.
+ * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — in-window patch rotation moved the
+ * local PINNED_BINS key to 1.13.1; the stale key made `PINNED_BINS[version]` undefined and crashed
+ * `writeConfig` on `undefined.trim()`, caught by `test:ci` (the file was in no typecheck lane —
+ * it is now registered in tsconfig.workflow-contract-tests.json per the typed-test-evidence law).
  */
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -31,7 +35,7 @@ import { OpsxKernel } from './opsx-kernel.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
 const PINNED_BINS = {
-  '1.13.0': resolve(import.meta.dirname, '../node_modules/openspec-cli-113/bin/openspec.js'),
+  '1.13.1': resolve(import.meta.dirname, '../node_modules/openspec-cli-113/bin/openspec.js'),
 } satisfies Record<PinnedOpenspecV13Version, string>
 
 const tempDirs: string[] = []
