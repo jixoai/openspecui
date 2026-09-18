@@ -1,5 +1,12 @@
 # @openspecui/web
 
+## 13.0.1
+
+### Patch Changes
+
+- f57cc67: Rotate the pinned OpenSpec CLI executable from 1.13.0 to 1.13.1 inside the unchanged v13 window (>=1.13.0 <1.14.0), and project the two 1.13.1 contract additions: change-list namespace directories (`nested` entries plus top-level hygiene `warnings`) are excluded from every actionable change inventory — Changes, Dashboard, search, Store content, and the change-list transports — with the warnings rendered as direct-plane evidence on the Changes page, and the local task-line reading plus toggle write-back now mirror the CLI's widened checkbox semantics (all CommonMark and ordered markers, indented sub-tasks, single-token markers, CRLF tolerance) so Kanban phases, CLI task counts, and divergence evidence stay aligned.
+- 3460b9d: Walkthrough UX fixes for the 1.13.1 acceptance instance: Board and Dashboard compact Kanban cards (and the Apply/Archive launchers) no longer show the generic scaffold heading "Proposal" — every Kanban surface now applies the shared change-display-title fallback; Search result cards for change/archive hits do the same; and the markdown reading view renders task lines with the CLI 1.13.1 widened semantics (single-token/padded/whitespace-only checkbox markers under any list marker, indented sub-tasks) so the Change Detail tasks view shows exactly the checkboxes the CLI counts, with multi-token labels and link bullets staying plain text.
+
 ## 13.0.0
 
 ### Major Changes
