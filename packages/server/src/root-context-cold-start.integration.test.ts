@@ -265,12 +265,12 @@ describe('pinned OpenSpec 1.13 Root Context cold start', () => {
       expect(httpState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.13.1' },
+        cli: { available: true, version: '1.13.2' },
       })
       expect(wsState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.13.1' },
+        cli: { available: true, version: '1.13.2' },
       })
       expect(wsStates).toContain('ready')
       expect(wsNotices.every((notice) => !Object.hasOwn(Object(notice), 'data'))).toBe(true)
