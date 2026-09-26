@@ -49,6 +49,22 @@ NOT gate apply state, CLI progress authority, or any action unlock.
 - **AND** the local tracked-task divergence projection SHALL compare against that aggregated truth
   without redefining the CLI denominators (2026-08-18 law)
 
+#### Scenario: Tracking configured with zero matched files stays configured
+
+- **GIVEN** a 1.13.2 payload whose schema sets a non-null `apply.tracks` that matches zero concrete
+  files
+- **WHEN** the payload is decoded
+- **THEN** `taskTrackingConfigured` SHALL be `true` with empty `tasks`
+- **AND** the projection SHALL NOT recode the fact as no-tracking (`false`) or as missing evidence
+
+#### Scenario: Unreadable tracking evidence keeps all_done unreachable
+
+- **GIVEN** a 1.13.2 payload whose `apply.tracks` matches one unreadable and one readable file, the
+  readable file holding only complete tasks
+- **WHEN** the payload is decoded and projected
+- **THEN** the projected `state` SHALL NOT be `all_done` (the CLI's own state, whatever it resolved to,
+  is carried verbatim) and `unavailableTrackingFiles` SHALL name the unreadable path with its reason
+
 ### Requirement: Agent Registry Kilo Command Path Rotation
 
 The Agent delivery registry snapshot for the `'1.13'` series SHALL carry Kilo Code's command delivery
@@ -80,7 +96,9 @@ The local `isGlobPattern` mirror SHALL recognize the same glob syntax the pinned
 recognizes: the original wildcard characters (`*`, `?`, `[`), brace expansions containing `,` or `..`,
 and extglob groups, after POSIX separator normalization. The mirror exists solely to keep
 dependency-watch granularity aligned (directory-tree watch for glob outputs, single-file watch for
-literal outputs); it SHALL NOT fork the upstream semantics.
+literal outputs); it SHALL NOT fork the upstream semantics. This parity is a watcher-granularity fact
+only: the tracked-task file matcher (`opsxPathMatchesPattern`) stays wildcard-class, and OpenSpecUI
+SHALL document brace/extglob task tracking as a boundary rather than a silent divergence.
 
 #### Scenario: Brace and extglob outputs are watched as globs
 

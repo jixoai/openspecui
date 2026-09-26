@@ -17,7 +17,17 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
       (`db2309783547a14e150dbcbfc19120e4028446c3`).
 - [x] `references/openspec-1.13.2-report.md` written with source-diff evidence.
 - [x] Change artifacts (specs deltas + loop docs) written.
-- [ ] Codex change review approved (Round-A blockers folded; Round-B recorded here with score).
+- [x] Codex Round-A change review completed 2026-09-26 (score 6/10; upstream facts and owner map
+      fully confirmed; 2 P1 blockers + 7 P2 suggestions).
+- [x] Round-A P1-1 folded: `taskTrackingConfigured === false` joins the `hasDirectStatus` mount
+      condition and `ApplyProgressNotice` input (research-plan Slice 2, intake decision 5).
+- [x] Round-A P1-2 folded: former Slice 4 (isGlobPattern) merged into Slice 2 — one owner/batch holds
+      `opsx-types.ts`; slices renumbered (fixture matrix is Slice 4).
+- [x] Round-A P2 folds: Kilo cleanup allowlist wording corrected; `tool-init-state` runtime cleanup
+      boundary tests added (Slice 3); zero-files-matched fixture + unavailable-never-all_done
+      falsifiable scenario added; glob-parity scope note (`opsxPathMatchesPattern` stays
+      wildcard-class); Slice 4 gains explicit red/green command points.
+- [ ] Codex Round-B change review approved (revised documents; score recorded here).
 
 ## CP1 — Pin rotation (implementation)
 
@@ -39,7 +49,11 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
       `ApplyInstructionsProjectionSchema` as verbatim evidence; never gate apply state or progress.
 - [ ] Web: `ApplyProgressNotice` renders unavailable-tracking evidence (amber, path + verbatim reason)
       and the `taskTrackingConfigured === false` no-tracking note; `hasDirectStatus` mounts for
-      non-empty `unavailableTrackingFiles`; TestingLibrary red recorded before the fix.
+      non-empty `unavailableTrackingFiles` AND for `taskTrackingConfigured === false` (Round-A B1);
+      TestingLibrary red recorded before the fix, including the member-only-`false` mounting case.
+- [ ] Glob-recognition parity (merged into this slice's batch): `isGlobPattern` recognizes brace
+      expansions and extglobs (POSIX-normalized), upstream-verbatim; recognition unit cases green;
+      existing wildcard/literal cases unchanged (superset only).
 - [ ] Spec deltas applied (`openspec-cli-integration`, `opsx-workflow-ui`).
 
 ## CP3 — Kilo Code registry path rotation (implementation)
@@ -48,24 +62,22 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
       `.kilocode/workflows/opsx-{workflow}.md`; cleanup patterns cover both old-folder generations and
       do not touch the live `.kilo/command/` folder.
 - [ ] Registry tests rotated; projection/router tests green (consumers verified registry-driven).
+- [ ] `tool-init-state` cleanup-boundary tests: `.kilocode/workflows/opsx-*.md` handled as legacy
+      command path (ambiguity-skipped as pattern, retired via `legacyCommandWorkflows`); `.kilo/command/`
+      never appears in any cleanup result (Round-A fold).
 - [ ] Pinned-fixture assertion: the 1.13.2 executable generates `.kilo/command/opsx-<id>.md`.
 
-## CP4 — Artifact-glob recognition parity (implementation)
+## CP4 — Fixture matrix, docs, changeset (implementation)
 
-- [ ] `isGlobPattern` recognizes brace expansions and extglobs (POSIX-normalized), upstream-verbatim.
-- [ ] Unit cases green (brace, extglob, backslash, literal guards); existing wildcard/literal cases
-      unchanged (superset only).
-
-## CP5 — Fixture matrix, docs, changeset (implementation)
-
-- [ ] Apply-readiness fixtures: glob-tracked aggregation + `taskTrackingConfigured: true`; unreadable
-      tracking evidence covered at minimum by contract tests.
+- [ ] Apply-readiness fixtures: glob-tracked aggregation + `taskTrackingConfigured: true`; the
+      zero-files-matched case stays `true` with empty `tasks`; unreadable tracking evidence covered at
+      minimum by contract tests (executable unreadable case where the harness allows chmod on POSIX).
 - [ ] Validation fixtures: message-text expectations updated only where 1.13.2 texts fire.
 - [ ] `AGENTS.md` evidence-map pin line updated to 1.13.2 (`db23097`); README audited for explicit
       `1.13.1` runtime claims (expected none).
 - [ ] `.changeset/*.md` for the `openspecui` patch release.
 
-## CP6 — Review, walkthrough, delivery
+## CP5 — Review, walkthrough, delivery
 
 - [ ] Codex implementation review (score recorded; blockers folded and re-verified).
 - [ ] Vision-subagent ego-browser E2E walkthrough of the Change Detail apply evidence plane

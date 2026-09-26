@@ -93,6 +93,9 @@ OpenSpecUI 13.x release.
 5. **Apply tracking evidence surfaces beside `warnings`/`missingPrerequisites`** in the existing
    `ApplyProgressNotice` direct status region (amber evidence naming each unavailable path + verbatim
    reason; no state redefinition, no fabricated 0/0 semantics when `taskTrackingConfigured === false`).
+   Round-A fold (B1): the direct-status mount condition extends to BOTH `unavailableTrackingFiles`
+   non-empty AND `taskTrackingConfigured === false` — a member-only-`false` payload must mount the
+   region, otherwise the no-tracking requirement is unreachable.
 6. **Glob recognition parity ports the upstream helper verbatim** (extglob regex + brace-expansion
    scanner + POSIX normalization) because the mirror exists to keep dependency-watch granularity aligned
    with the CLI's own notion of "is this output a glob".

@@ -15,3 +15,21 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
   `references/openspec-1.13.2-report.md` (P1 apply tracking evidence, P2 Kilo path, P3 glob
   recognition, P4 validation texts, P5/P6 non-obligations).
 - Awaiting Codex Round-A change review before implementation freeze.
+
+## 2026-09-26 — Codex Round-A change review (folded)
+
+- Reviewer: codex-reviewer-1132 (gpt-5.6-terra, xhigh), 30m21s, against HEAD `fcaeb511` (clean tree).
+- Verdict: planning 6/10 — upstream facts (P1-P6) and the OpenSpecUI owner map FULLY confirmed; 2 P1
+  blockers, 7 P2 suggestions; implementation not yet authorized.
+- P1-1: `taskTrackingConfigured === false` had no route into the direct-status mount — folded into
+  research-plan Slice 2 (`hasDirectStatus` condition + `ApplyProgressNotice` input + route tests) and
+  intake decision 5.
+- P1-2: Slice 2 and former Slice 4 both held `opsx-types.ts` — merged into one owner/batch (Slice 2),
+  slices renumbered, verification strategy updated.
+- P2 folds: Kilo cleanup is an exact allowlist upstream (wildcards here are projection evidence);
+  `tool-init-state` runtime cleanup boundary tests (ambiguity skip + `.kilo/command/` never
+  cleanup-owned); zero-files-matched fixture; unavailable-never-all_done falsifiable spec scenario;
+  glob-parity scope note (`opsxPathMatchesPattern` stays wildcard-class — fixture scope `*`-only);
+  Slice 4 explicit red/green command points; upstream `docs/agent-contract.md` lag recorded as
+  upstream doc drift (not our obligation).
+- Next: Round-B re-review of the revised documents.

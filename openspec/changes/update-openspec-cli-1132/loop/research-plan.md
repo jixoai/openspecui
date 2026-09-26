@@ -30,7 +30,7 @@ references below are verbatim from `references/openspec/src/commands/workflow/sh
   and workflow-template rework (P5) are CLI-owned with no OpenSpecUI mirror.
 - Divergence parity risk assessed: the local `trackedTaskProgress` already resolves tracked globs by
   pattern-matching (`opsxPathMatchesPattern`), so the upstream switch from one literal tracks path to
-  glob aggregation should not move local counts; the fixture matrix proves it (Slice 5), no code change
+  glob aggregation should not move local counts; the fixture matrix proves it (Slice 4), no code change
   expected.
 
 ## Decision & Plan
@@ -68,9 +68,10 @@ agent-delivery fixtures assert Kilo writes `.kilo/command/opsx-*.md`; validation
 rephrased MODIFIED-scenario balance text and the TBD/TODO case rules (only where those fixtures
 construct such content).
 
-### Slice 2 — Apply tracking-evidence contract, projection, and surface
+### Slice 2 — Apply tracking-evidence contract, projection, surface, and glob-recognition parity
 
-Owners (one batch; files disjoint from Slices 3-4):
+Owners (one batch; files disjoint from Slice 3; Round-A B2 folded — this slice and the former Slice 4
+both edit `opsx-types.ts`, so they are ONE owner/batch and no two agents ever hold that file):
 
 - `packages/core/src/cli-contracts/workflow.ts` — `CliApplyInstructionsSuccessSchema` gains
   `taskTrackingConfigured: z.boolean().optional()` (upstream always emits from 1.13.2, but the window
@@ -81,24 +82,36 @@ Owners (one batch; files disjoint from Slices 3-4):
 - `packages/core/src/opsx-types.ts` — `ApplyInstructionsInputSchema` and
   `ApplyInstructionsProjectionSchema` gain the same two optional members as verbatim evidence; the
   transform already spreads `...instructions`, so projection needs no extra wiring. They never gate
-  apply state or CLI progress authority.
+  apply state or CLI progress authority. SAME BATCH, SAME FILE: `isGlobPattern` ports the upstream
+  widening verbatim (POSIX separator normalization first, then the original wildcards `*`/`?`/`[` plus
+  the extglob regex `/[!*+?@]\([^(]*\)/u` and the brace-expansion scanner — a `{…}` group containing
+  `,` or `..`). Scope note (Round-A P2): this parity is **watcher-granularity only**;
+  `opsxPathMatchesPattern` (tracked-task file matching, `opsx-entity.ts`) stays wildcard-class and the
+  fixture scope for glob-tracked aggregation is limited to `*`-class patterns — brace/extglob task
+  tracking is a documented boundary, not a silent divergence (future change if upstream adopts it).
 - `packages/web/src/routes/change-view.tsx` — `hasDirectStatus` additionally mounts when
   `unavailableTrackingFiles` is non-empty (partial-unreadable case: state may already be `ready`; the
-  CLI instruction text carries the evidence but the typed region keeps it scannable).
-- `packages/web/src/components/apply-progress-notice.tsx` — render the unavailable-tracking evidence as
-  an amber region beside the existing `warnings`/`missingPrerequisites` treatment: one line per
-  `{path, reason}` with the reason verbatim; and a compact note when
-  `taskTrackingConfigured === false` that the schema tracks no tasks (so empty `tasks` is not missing
-  evidence). Absent members render nothing (no fabricated 0/0 semantics).
+  CLI instruction text carries the evidence but the typed region keeps it scannable) AND when
+  `applyInstructions?.taskTrackingConfigured === false` (Round-A B1 folded: without this the
+  no-tracking requirement is unreachable — a member-only-`false` payload mounts nothing today).
+- `packages/web/src/components/apply-progress-notice.tsx` — receives `taskTrackingConfigured` and
+  `unavailableTrackingFiles`; renders the unavailable-tracking evidence as an amber region beside the
+  existing `warnings`/`missingPrerequisites` treatment: one line per `{path, reason}` with the reason
+  verbatim; and a compact note when `taskTrackingConfigured === false` that the schema tracks no tasks
+  (so empty `tasks` is not missing evidence). Absent members render nothing (no fabricated 0/0
+  semantics).
 
 Red (structural, today): a decode fixture payload carrying both members (a) succeeds `safeParse` on the
 `.passthrough()` CLI schema but is dropped by the strict `ApplyInstructionsInputSchema` (assert the
 projection omits them); (b) the Web `ApplyProgressNotice` has no evidence region for unavailable
 tracking files (TestingLibrary red); (c) `taskTrackingConfigured === false` fixtures still describe
-empty tasks as if tracking were configured. Green: all invert; 1.13.0/1.13.1-shaped payloads (members
-absent) decode and project identically to today (regression guard).
+empty tasks as if tracking were configured AND mount no status region; (d) brace/extglob outputs are
+watched as literal single files (unit red on the widened recognition cases). Green: all invert;
+1.13.0/1.13.1-shaped payloads (members absent) decode and project identically to today (regression
+guard); existing wildcard/literal recognition cases unchanged (superset only).
 
-Spec deltas: `openspec-cli-integration` ADD `Apply Task Tracking Evidence Contract`;
+Spec deltas: `openspec-cli-integration` ADD `Apply Task Tracking Evidence Contract` (including the
+unavailable≠all_done falsifiable scenario) + `Artifact Glob Recognition Parity`;
 `opsx-workflow-ui` ADD `Apply Tracking Evidence Surface`.
 
 ### Slice 3 — Kilo Code registry path rotation
@@ -107,12 +120,21 @@ Owners (one batch; files disjoint from Slice 2):
 
 - `packages/core/src/agent-delivery-registry.ts` — Kilo Code entry:
   `command('.kilo/command/opsx-{workflow}.md', plainMarkdown, { legacyPathTemplates: ['.kilocode/workflows/opsx-{workflow}.md'] })`;
-  `cleanup: projectCleanup('.kilocode/workflows/opsx-*.md', '.kilocode/workflows/openspec-*.md')`
-  (upstream `LEGACY_KILOCODE_COMMAND_FILES` covers both generations in the old folder; the new
-  `.kilo/command/` folder is the live delivery target, not cleanup-owned). Header intent line updated.
+  `cleanup: projectCleanup('.kilocode/workflows/opsx-*.md', '.kilocode/workflows/openspec-*.md')`.
+  Wording correction (Round-A P2): upstream `LEGACY_KILOCODE_COMMAND_FILES` is an exact allowlist
+  (every workflow's `opsx-<id>.md` plus the three legacy `openspec-*.md` files), NOT a wildcard
+  deletion algorithm — OpenSpecUI's wildcard patterns are projection evidence covering the same two
+  generations of the old folder. The new `.kilo/command/` folder is the live delivery target and is
+  never cleanup-owned. Header intent line updated.
 - `packages/core/src/agent-delivery-registry.test.ts` — the snapshot assertions rotate
   (`.kilo/command/opsx-{workflow}.md` current; `.kilocode/workflows/opsx-{workflow}.md` legacy; cleanup
   patterns both generations).
+- `packages/core/src/tool-init-state.test.ts` (Round-A P2 fold — the runtime cleanup consumer):
+  `isAmbiguousProjectCleanupPattern` skips cleanup patterns colliding with a current/legacy command
+  pathTemplate, and `collectLegacyWorkflows` retires those workflows per-artifact instead. Tests must
+  prove, for the rotated Kilo entry, that (a) `.kilocode/workflows/opsx-*.md` is treated as the legacy
+  command path (ambiguity-skipped as a pattern, handled as `legacyCommandWorkflows`), and (b)
+  `.kilo/command/` never appears in any cleanup result.
 
 Red (today): the registry test asserts `.kilocode/workflows/opsx-{workflow}.md` as the current command
 path — the rotation inverts that fixed point; upstream `docs/supported-tools.md` and the pinned
@@ -122,35 +144,19 @@ verify by grep before claiming).
 
 Spec delta: `openspec-cli-integration` ADD `Agent Registry Kilo Command Path Rotation`.
 
-### Slice 4 — Artifact-glob recognition parity
-
-Owners (one batch; single file plus tests):
-
-- `packages/core/src/opsx-types.ts` — `isGlobPattern` ports the upstream widening verbatim: POSIX
-  separator normalization first, then the original wildcards (`*`, `?`, `[`) plus the extglob regex
-  `/[!*+?@]\([^(]*\)/u` and the brace-expansion scanner (a `{…}` group containing `,` or `..`). Used
-  only by `touchArtifactOutputDeps` for dependency-watch granularity.
-- `packages/core/src/opsx-types.test.ts` (or the nearest existing owner) — cases: `docs/{api,cli}.md`
-  and `specs/**/{spec,info}.md` are globs; `!(a|b).md`, `+(x).md` are globs; `C:\path` backslash
-  normalization; literal `report[1].md`-shaped strings stay literal only when they genuinely contain no
-  wildcard syntax (bracket without valid class stays a glob per the original rule — keep upstream
-  semantics, do not fork).
-
-Red (today): brace/extglob outputs are watched as literal single files (unit red on the recognition
-cases). Green: widened recognition; existing wildcard/literal cases unchanged (superset).
-
-Spec delta: `openspec-cli-integration` ADD `Artifact Glob Recognition Parity`.
-
-### Slice 5 — Fixture-matrix extension, docs, changeset (after Slices 1-4)
+### Slice 4 — Fixture-matrix extension, docs, changeset (after Slices 1-3)
 
 Owners:
 
-- `packages/core/src/official-cli-v13-apply-readiness-fixtures.test.ts` — executable-evidence additions:
-  a fixture change whose `apply.tracks` matches multiple files (glob) asserts aggregated
-  `tasks`/`progress` and `taskTrackingConfigured: true`; where the harness can cheaply make a matched
-  file unreadable (chmod 000 on POSIX), assert `unavailableTrackingFiles` with the absolute path and
-  the `blocked` state — otherwise record the unreadable case as contract-test evidence (Slice 2 red
-  fixtures) and keep the executable matrix to the positive shape.
+- `packages/core/src/official-cli-v13-apply-readiness-fixtures.test.ts` — executable-evidence additions
+  (Round-A P2 folds marked): a fixture change whose `apply.tracks` matches multiple files (glob,
+  `*`-class only per the Slice 2 scope note) asserts aggregated `tasks`/`progress` and
+  `taskTrackingConfigured: true`; a fixture change whose `apply.tracks` matches **zero** files asserts
+  `taskTrackingConfigured: true` with empty `tasks` (tracking configured but nothing matched is not
+  no-tracking); where the harness can cheaply make a matched file unreadable (chmod 000 on POSIX),
+  assert `unavailableTrackingFiles` with the absolute path and the `blocked` state — otherwise record
+  the unreadable case as contract-test evidence (Slice 2 red fixtures) and keep the executable matrix
+  to the positive shape.
 - `packages/core/src/official-cli-v13-agent-delivery-fixtures.test.ts` — assert the pinned 1.13.2
   executable generates `.kilo/command/opsx-<id>.md` for `kilocode` (and that legacy cleanup offers the
   `.kilocode/workflows/` generations where the fixture harness already exercises cleanup).
@@ -161,6 +167,13 @@ Owners:
   README audit: grep for explicit `1.13.1` runtime claims (expected none — tables are range-scoped).
 - `.changeset/*.md` — `openspecui` patch bump note summarizing the rotation, apply tracking evidence,
   Kilo path rotation, and glob parity.
+
+Red/green fixed points for this slice (Round-A P2 fold — deliverables alone are not gates): Red = with
+Slices 1-3 merged but this slice absent, the new executable-evidence cases fail against the 1.13.2
+binary (glob aggregation case and zero-match case do not exist; Kilo path case still expects the old
+`.kilocode/workflows/` generation). Green commands:
+`pnpm --filter @openspecui/core exec vitest run src/official-cli-v13-apply-readiness-fixtures.test.ts src/official-cli-v13-agent-delivery-fixtures.test.ts src/official-cli-v13-validation-findings-fixtures.test.ts src/official-cli-v13-validation-full-fixtures.test.ts` —
+all green with the new cases included and no prior assertion relaxed.
 
 ## Risks and Mitigations
 
@@ -174,8 +187,8 @@ Owners:
 - **Fixture flakiness on version identity**: only the two files in Slice 1 own version strings; every
   other `1.13.1` in tests is contract-decode data and must be audited (grep in review) rather than
   blanket-replaced.
-- **Parallel subagent resource discipline**: Slice 1 completes (install) before Slices 2-4 dispatch;
-  fixture-matrix and broad gates run serially in Slice 5 (single-owned) to avoid dist/target contention
+- **Parallel subagent resource discipline**: Slice 1 completes (install) before Slices 2-3 dispatch;
+  fixture-matrix and broad gates run serially in Slice 4 (single-owned) to avoid dist/target contention
   (2026-09-14 law).
 
 ## Verification Strategy
@@ -184,12 +197,12 @@ Focused (per slice, `pnpm --filter <pkg> exec vitest run <files>` — exec direc
 
 1. Slice 1: `packages/core/src/__tests__/official-cli-v13-fixtures.ts` identity lane + all
    `official-cli-v13-*.test.ts`.
-2. Slice 2: `cli-contracts/workflow.test.ts` (apply cases), `opsx-types.test.ts`,
-   `opsx-kernel-cli-projection.test.ts`, web `apply-progress-notice.test.tsx` + `change-view.test.tsx`.
-3. Slice 3: `agent-delivery-registry.test.ts`, `agent-delivery-projection-service.test.ts`,
-   `agent-integrations-router.test.ts`.
-4. Slice 4: `opsx-types.test.ts` recognition cases; kernel dependency-watch tests if any assert literal
-   vs glob watching.
+2. Slice 2: `cli-contracts/workflow.test.ts` (apply cases), `opsx-types.test.ts` (apply members +
+   recognition cases), `opsx-kernel-cli-projection.test.ts`, web `apply-progress-notice.test.tsx` +
+   `change-view.test.tsx`; kernel dependency-watch tests if any assert literal vs glob watching.
+3. Slice 3: `agent-delivery-registry.test.ts`, `tool-init-state.test.ts` (cleanup boundary),
+   `agent-delivery-projection-service.test.ts`, `agent-integrations-router.test.ts`.
+4. Slice 4: the four `official-cli-v13-*` fixture files named above (single serial owner).
 5. `pnpm --filter @openspecui/core exec tsc --noEmit` after each core-touching slice.
 
 Broad (integrator, serial): `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`,
