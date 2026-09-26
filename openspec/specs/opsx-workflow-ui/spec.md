@@ -665,3 +665,37 @@ and row visibility SHALL NOT become CLI-gated.
 - **WHEN** the user inspects the warning region
 - **THEN** no change-detail route entry for `area` SHALL exist
 - **AND** OpenSpecUI SHALL NOT attempt to read, write, or repair the nested directories
+
+### Requirement: Apply Tracking Evidence Surface
+
+The Change Detail Apply status region SHALL surface the OpenSpec 1.13.2 Apply task-tracking evidence on
+the direct plane: when `unavailableTrackingFiles` is non-empty, the region SHALL mount and render one
+amber evidence line per entry with the file path and the upstream reason verbatim; when
+`taskTrackingConfigured` is `false`, the region SHALL state that the schema tracks no tasks so empty
+`tasks` are not missing evidence. Absent members SHALL render nothing (no fabricated `0/0` semantics, no
+"tracking unavailable" claim for pre-1.13.2 CLIs). The evidence SHALL NOT redefine the Apply state,
+progress, or unlock presentation owned by the CLI payload.
+
+#### Scenario: Unreadable tracking files render as direct evidence
+
+- **GIVEN** a Change Detail whose apply instructions carry
+  `unavailableTrackingFiles: [{path: "/abs/x/tasks.md", reason: "EACCES: permission denied"}]`
+- **WHEN** the detail renders
+- **THEN** the Apply status region SHALL be mounted showing the path and the reason verbatim in an amber
+  evidence treatment beside the existing warnings/build-order evidence
+- **AND** the Apply state chip SHALL still reflect the payload's own `state`
+
+#### Scenario: No-tracking schemas are not missing evidence
+
+- **GIVEN** a Change Detail whose apply instructions carry `taskTrackingConfigured: false` and empty
+  `tasks`
+- **WHEN** the detail renders
+- **THEN** the status region SHALL state that the schema tracks no tasks
+- **AND** SHALL NOT present the empty task list as blocked or incomplete work
+
+#### Scenario: Absent members render nothing extra
+
+- **GIVEN** apply instructions decoded from a 1.13.0/1.13.1 payload (neither member present)
+- **WHEN** the detail renders
+- **THEN** the status region SHALL be exactly what the member-less payload implies today (regression
+  guard)
