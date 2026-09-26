@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Verify Apply instruction context-file normalization.
  * 2. Require command-specific CLI evidence on demand-driven instruction leaves.
  * 3. Preserve typed OpenSpec 1.6 Reference indexes on both instruction surfaces.
@@ -7,13 +7,22 @@
  * 5. Preserve the OpenSpec 1.13 Apply `warnings` and `missingPrerequisites` fields
  *    verbatim through the projection schema without defaulting them to empty arrays
  *    and without letting them alter state/progress semantics.
+ * 6. Preserve the OpenSpec 1.13.2 Apply tracking-evidence members (`taskTrackingConfigured`,
+ *    `unavailableTrackingFiles`) verbatim through the projection with absent-when-
+ *    upstream-absent semantics (never a synthesized `false`/`[]`) and no gating effect
+ *    on `state`/`applyInstructionProgress`.
+ * 7. Lock `isGlobPattern` to the upstream artifact-graph recognition parity ported from
+ *    OpenSpec 1.13.2 (`references/openspec/src/core/artifact-graph/outputs.ts`): original
+ *    wildcards plus brace expansions and extglob groups after POSIX normalization, while
+ *    literal filenames stay literal — watcher-granularity only.
  *
  * Original request (2026-07-15): "Preserve CLI-provided paths, action context, References, and diagnostics end to end."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence projection + glob-recognition parity (update-openspec-cli-1132 Slice 2).
  */
 import { describe, expect, it } from 'vitest'
-import { ApplyInstructionsSchema, ArtifactInstructionsSchema } from './opsx-types.js'
+import { ApplyInstructionsSchema, ArtifactInstructionsSchema, isGlobPattern } from './opsx-types.js'
 
 const referenceIndex = [
   {
@@ -210,6 +219,59 @@ describe('ApplyInstructionsSchema', () => {
     expect('warnings' in parsed).toBe(false)
     expect('missingPrerequisites' in parsed).toBe(false)
   })
+
+  it('preserves OpenSpec 1.13.2 tracking evidence verbatim without gating', () => {
+    // 1.13.2 `instructions apply --json` with one unreadable matched tracking file:
+    // the upstream state chain excludes `all_done` while evidence is unavailable, so
+    // a still-readable workload settles at `ready`; the members are evidence only and
+    // must not touch the local progress authority.
+    const unavailableTrackingFiles = [
+      {
+        path: '/repo/openspec/changes/add-example/tasks.md',
+        reason: "EACCES: permission denied, open '/repo/openspec/changes/add-example/tasks.md'",
+      },
+    ]
+    const parsed = ApplyInstructionsSchema.parse({
+      ...baseApplyInstructions,
+      contextFiles: {},
+      taskTrackingConfigured: true,
+      unavailableTrackingFiles,
+    })
+
+    expect(parsed.taskTrackingConfigured).toBe(true)
+    expect(parsed.unavailableTrackingFiles).toEqual(unavailableTrackingFiles)
+    expect(parsed.unavailableTrackingFiles?.[0]?.path).toBe(
+      '/repo/openspec/changes/add-example/tasks.md'
+    )
+    expect(parsed.unavailableTrackingFiles?.[0]?.reason).toContain('EACCES')
+    // No gating: the payload's own state and the derived progress stay exactly what
+    // they were without the members.
+    expect(parsed.state).toBe('ready')
+    expect(parsed.applyInstructionProgress).toMatchObject({
+      source: 'openspec-instructions-apply',
+      total: 1,
+      complete: 0,
+      remaining: 1,
+      state: 'ready',
+      divergence: null,
+    })
+  })
+
+  it('keeps both tracking members absent on pre-1.13.2 payloads without synthesizing', () => {
+    // 1.13.0/1.13.1 payloads (also admitted by the compat window) never emit the
+    // members: the projection must keep them absent — a synthesized `false` would
+    // recode "unknown CLI" as "schema tracks no tasks", and an empty array would
+    // fabricate a "everything readable" claim.
+    const parsed = ApplyInstructionsSchema.parse({
+      ...baseApplyInstructions,
+      contextFiles: {},
+    })
+
+    expect(parsed.taskTrackingConfigured).toBeUndefined()
+    expect('taskTrackingConfigured' in parsed).toBe(false)
+    expect(parsed.unavailableTrackingFiles).toBeUndefined()
+    expect('unavailableTrackingFiles' in parsed).toBe(false)
+  })
 })
 
 describe('ArtifactInstructionsSchema', () => {
@@ -285,5 +347,44 @@ describe('ArtifactInstructionsSchema', () => {
     })
 
     expect(parsed.dependencies[0]).toMatchObject({ id: 'specs', done: true, skipped: true })
+  })
+})
+
+describe('isGlobPattern (OpenSpec 1.13.2 artifact-graph parity)', () => {
+  it('keeps recognizing the original wildcard characters as globs', () => {
+    expect(isGlobPattern('specs/**/*.md')).toBe(true)
+    expect(isGlobPattern('docs/?eadme.md')).toBe(true)
+    expect(isGlobPattern('report[1].md')).toBe(true)
+  })
+
+  it('recognizes brace expansions containing a comma after upstream 1.13.2', () => {
+    expect(isGlobPattern('docs/{api,cli}.md')).toBe(true)
+    expect(isGlobPattern('specs/**/{spec,info}.md')).toBe(true)
+    // `{a..b}` numeric/alpha ranges use the `..` separator, not `,`.
+    expect(isGlobPattern('docs/chapter{1..9}.md')).toBe(true)
+  })
+
+  it('recognizes extglob groups after upstream 1.13.2', () => {
+    expect(isGlobPattern('!(a|b).md')).toBe(true)
+    expect(isGlobPattern('+(x).md')).toBe(true)
+    expect(isGlobPattern('@(proposal|design).md')).toBe(true)
+  })
+
+  it('normalizes Windows separators before recognizing widened syntax', () => {
+    // Upstream normalizes with `toPosixPath` (replace all `\\` with `/`) first, so a
+    // Windows-authored output path with a brace expansion is still glob-watched.
+    expect(isGlobPattern('C:\\docs\\{a,b}.md')).toBe(true)
+  })
+
+  it('keeps literal output filenames literal', () => {
+    expect(isGlobPattern('README.md')).toBe(false)
+    expect(isGlobPattern('docs/guide.md')).toBe(false)
+    expect(isGlobPattern('C:\\docs\\guide.md')).toBe(false)
+    // Parentheses without an extglob prefix char stay literal.
+    expect(isGlobPattern('notes(v2).md')).toBe(false)
+    // A brace group without `,` or `..` has no expansion to watch.
+    expect(isGlobPattern('{notes}.md')).toBe(false)
+    // An unmatched closer never invents an opening (empty-stack semantics).
+    expect(isGlobPattern('a,b}.md')).toBe(false)
   })
 })

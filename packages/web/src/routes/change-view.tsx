@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Render schema-aware change artifacts and source files while retaining terminal status errors.
  * 2. Dispatch change workflows through routed compose/verify surfaces and the shared Operator launcher.
  * 3. Lock every change workflow action behind current Root Context and Status projection authority.
@@ -7,6 +7,9 @@
  * 5. Keep compact Change facts in subtitle badges while routing complete CLI evidence through a dedicated tab.
  * 6. Mount the container-responsive list-detail Evidence workspace as the sole Evidence tab surface.
  * 7. Mount OpenSpec 1.13 Apply warnings and the build-order chain on the direct status plane.
+ * 8. Mount OpenSpec 1.13.2 Apply tracking evidence on the same plane: unreadable tracking
+ *    files and no-tracking schemas (`taskTrackingConfigured === false`) mount the status
+ *    region and reach the notice, while absent members keep the pre-1.13.2 presentation.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
@@ -24,6 +27,7 @@
  *   headings fall back to the change id) and collapse Apply readiness guidance into one summary row.
  *   — the status region gains the OpenSpec 1.13 Apply `warnings` and `missingPrerequisites`
  *   direct-plane evidence beside the existing divergence notice.
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence direct-plane mounting (update-openspec-cli-1132 Slice 2).
  */
 import { ApplyProgressNotice } from '@/components/apply-progress-notice'
 import {
@@ -36,11 +40,11 @@ import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
 import { OperationInputsDialogAction } from '@/components/opsx/operation-inputs'
 import { OpsxEntityDetailView } from '@/components/opsx/opsx-entity-detail-view'
 import { RootActionNotice } from '@/components/root-action-notice'
+import { changeDisplayTitle } from '@/lib/change-display-title'
 import { buildOpsxComposeHref, type OpsxComposeActionId } from '@/lib/opsx-compose'
 import { useChangeOperatorLauncher } from '@/lib/use-change-operator-launcher'
 import { useOpsxApplyInstructionsSubscription, useOpsxStatusSubscription } from '@/lib/use-opsx'
 import { useChangeFilesSubscription, useChangesSubscription } from '@/lib/use-subscription'
-import { changeDisplayTitle } from '@/lib/change-display-title'
 import { vtNavController } from '@/lib/view-transitions/navigation'
 import { readSharedElementHandoffState } from '@/lib/view-transitions/shared-elements'
 import { useLocation, useParams } from '@tanstack/react-router'
@@ -156,7 +160,13 @@ export function ChangeView() {
     // failure and the build-order chain is next-step evidence, so either presence mounts
     // the status region even while the Apply state is already `ready`.
     (applyInstructions?.warnings?.length ?? 0) > 0 ||
-    (applyInstructions?.missingPrerequisites?.length ?? 0) > 0
+    (applyInstructions?.missingPrerequisites?.length ?? 0) > 0 ||
+    // OpenSpec 1.13.2 tracking evidence: unreadable tracking files keep their evidence
+    // scannable even when the CLI state already settled, and a schema that tracks no
+    // tasks must reach this plane — otherwise the member-only-`false` payload mounts
+    // nothing while presenting its empty task list.
+    (applyInstructions?.unavailableTrackingFiles?.length ?? 0) > 0 ||
+    applyInstructions?.taskTrackingConfigured === false
 
   return (
     <OpsxEntityDetailView
@@ -263,6 +273,8 @@ export function ChangeView() {
                 applyInstructionProgress={applyInstructions.applyInstructionProgress}
                 warnings={applyInstructions.warnings}
                 missingPrerequisites={applyInstructions.missingPrerequisites}
+                taskTrackingConfigured={applyInstructions.taskTrackingConfigured}
+                unavailableTrackingFiles={applyInstructions.unavailableTrackingFiles}
               />
             ) : null}
           </div>

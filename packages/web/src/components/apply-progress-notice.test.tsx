@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Prove Apply/tracked divergence remains direct and source-attributed.
  * 2. Prove compact source counts retain keyboard-reachable explanations.
  * 3. Prove agreement renders one subtitle badge and never a separate block.
@@ -9,6 +9,11 @@
  *    expansion away on the same direct plane — never Tooltip-only, never undiscoverable.
  * 6. Prove missingPrerequisites renders as a readable build-order chain distinct from blockers.
  * 7. Prove absent 1.13 fields degrade to the existing presentation with no synthesized state.
+ * 8. Prove the OpenSpec 1.13.2 tracking evidence stays direct and verbatim: unreadable
+ *    tracking files render one amber evidence line per `{path, reason}`, a
+ *    `taskTrackingConfigured: false` schema renders the compact no-tracking note (empty
+ *    tasks are not missing evidence), and absent members render nothing extra — never a
+ *    fabricated 0/0 or "tracking unavailable" claim for pre-1.13.2 CLIs.
  *
  * Original request (2026-07-15): "与 tracked glob 进度分歧时各自归因展示。"
  * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
@@ -16,6 +21,7 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-12): Owner walkthrough: collapse the always-expanded warning/build-order
  *   blocks into one summary row; the page must not be consumed by advisory guidance.
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence surface (update-openspec-cli-1132 Slice 2).
  */
 import type { ApplyInstructionProgress } from '@openspecui/core'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -184,5 +190,71 @@ describe('ApplyProgressNotice OpenSpec 1.13 evidence', () => {
         name: 'Apply readiness guidance from openspec instructions apply',
       })
     ).toBeNull()
+  })
+})
+
+describe('ApplyProgressNotice OpenSpec 1.13.2 tracking evidence', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('renders unreadable tracking files as one verbatim amber evidence line each', () => {
+    render(
+      <ApplyProgressNotice
+        applyInstructionProgress={progress(false)}
+        taskTrackingConfigured={true}
+        unavailableTrackingFiles={[
+          {
+            path: '/planning/openspec/changes/extract-terminal-view-webcomponent/tasks.md',
+            reason:
+              "EACCES: permission denied, open '/planning/openspec/changes/extract-terminal-view-webcomponent/tasks.md'",
+          },
+        ]}
+      />
+    )
+
+    // Amber direct-plane region with the same status semantics as the warnings area;
+    // the absolute path and the upstream reason stay verbatim.
+    const region = screen.getByRole('status', {
+      name: 'Apply tracking evidence unavailable from openspec instructions apply',
+    })
+    expect(region).toBeVisible()
+    expect(
+      screen.getByText('/planning/openspec/changes/extract-terminal-view-webcomponent/tasks.md')
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        "EACCES: permission denied, open '/planning/openspec/changes/extract-terminal-view-webcomponent/tasks.md'"
+      )
+    ).toBeVisible()
+    // Evidence region, never a blocker alert.
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('states that no-tracking schemas make an empty task list expected', () => {
+    render(
+      <ApplyProgressNotice
+        applyInstructionProgress={progress(false)}
+        taskTrackingConfigured={false}
+      />
+    )
+
+    const note = screen.getByRole('status', {
+      name: 'Apply task tracking not configured',
+    })
+    expect(note).toBeVisible()
+    expect(note).toHaveTextContent(/tracks no tasks/i)
+    expect(note).toHaveTextContent(/empty task list is not missing evidence/i)
+    expect(note).toHaveTextContent('openspec instructions apply')
+    // A configured-absent schema is informational, never a blocker alert.
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('renders nothing extra when both tracking members are absent', () => {
+    const { container } = render(<ApplyProgressNotice applyInstructionProgress={progress(false)} />)
+
+    // Pre-1.13.2 CLIs emit neither member: no fabricated 0/0, no "tracking
+    // unavailable" claim — the notice stays exactly what it was before.
+    expect(container).toBeEmptyDOMElement()
   })
 })

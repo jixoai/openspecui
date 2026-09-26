@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Publish runtime schemas for final Projection Work payloads, including transformed Apply progress.
  * 2. Keep isPlanningComplete as the authoritative planning fact over any local tracked alias.
  * 3. Carry CLI status evidence, diagnostics, and per-artifact requires as typed facts.
@@ -8,10 +8,18 @@
  * 6. Project the OpenSpec 1.13 Apply `warnings` and `missingPrerequisites` fields through the
  *    input and final projection schemas verbatim: optional everywhere, never defaulted to
  *    empty arrays, and never allowed to alter state/progress/tasks semantics.
+ * 7. Project the OpenSpec 1.13.2 Apply tracking-evidence members (`taskTrackingConfigured`,
+ *    `unavailableTrackingFiles`) the same way: absent-when-upstream-absent (never a
+ *    synthesized `false` or empty array), verbatim evidence, never apply gating.
+ * 8. Keep `isGlobPattern` a verbatim parity port of the pinned CLI's artifact-graph
+ *    recognition (OpenSpec 1.13.2, references/openspec/src/core/artifact-graph/outputs.ts):
+ *    original wildcards plus extglob groups and brace expansions after POSIX separator
+ *    normalization — watcher-granularity only, so dependency watching never forks upstream.
  *
  * Original request (2026-07-15): "为内核载荷建立强类型。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence projection + glob-recognition watcher parity (update-openspec-cli-1132 Slice 2).
  */
 import { z } from 'zod'
 import type { CliJsonValue } from './cli-contracts/command-result.js'
@@ -31,9 +39,43 @@ import {
 } from './cli-contracts/workflow.js'
 import { createApplyInstructionProgress } from './task-progress.js'
 
+/**
+ * Recognizes artifact globs while preserving literal output filenames — a verbatim
+ * parity port of the pinned CLI's artifact-graph recognition (OpenSpec 1.13.2,
+ * references/openspec/src/core/artifact-graph/outputs.ts, including its
+ * `toPosixPath` normalization, extglob regex, and brace-expansion scanner with
+ * unmatched-closer/empty-stack semantics). Watcher-granularity only.
+ */
+const EXTGLOB_RE = /[!*+?@]\([^(]*\)/u
+const BRACE_EXPANSION_SEPARATORS_RE = /,|\.\./u
+
+function hasBraceExpansion(pattern: string): boolean {
+  const openings: number[] = []
+  for (let index = 0; index < pattern.length; index += 1) {
+    if (pattern[index] === '{') openings.push(index)
+    if (pattern[index] !== '}') continue
+    const opening = openings.pop()
+    if (
+      opening !== undefined &&
+      BRACE_EXPANSION_SEPARATORS_RE.test(pattern.slice(opening, index))
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Check if an outputPath contains glob pattern characters */
 export function isGlobPattern(pattern: string): boolean {
-  return pattern.includes('*') || pattern.includes('?') || pattern.includes('[')
+  // Keep the original wildcard rules and recognize brace expansions and extglobs.
+  const normalized = pattern.replace(/\\/g, '/')
+  return (
+    normalized.includes('*') ||
+    normalized.includes('?') ||
+    normalized.includes('[') ||
+    EXTGLOB_RE.test(normalized) ||
+    hasBraceExpansion(normalized)
+  )
 }
 
 /** Runtime schema for one JSON value retained from a CLI Status stdout document. */
@@ -161,6 +203,13 @@ const ApplyInstructionsInputSchema = z.object({
   // optional here with no default; verbatim evidence, never apply gating.
   missingPrerequisites: z.array(z.string()).optional(),
   warnings: z.array(z.string()).optional(),
+  // OpenSpec 1.13.2 additive members: emitted from 1.13.2 only (the window still
+  // admits 1.13.0/1.13.1 which never emit them); verbatim evidence, never apply
+  // gating and never inputs to createApplyInstructionProgress. Absence means
+  // "unknown (pre-1.13.2 CLI)" for the boolean and "everything readable" for the
+  // array — neither may be synthesized as `false`/`[]`.
+  taskTrackingConfigured: z.boolean().optional(),
+  unavailableTrackingFiles: z.array(z.object({ path: z.string(), reason: z.string() })).optional(),
   instruction: z.string(),
   references: z.array(CliReferenceIndexEntrySchema).optional(),
   context: z.string().optional(),
@@ -206,6 +255,13 @@ export const ApplyInstructionsProjectionSchema = z.object({
   // optional here with no default; verbatim evidence, never apply gating.
   missingPrerequisites: z.array(z.string()).optional(),
   warnings: z.array(z.string()).optional(),
+  // OpenSpec 1.13.2 additive members: emitted from 1.13.2 only (the window still
+  // admits 1.13.0/1.13.1 which never emit them); verbatim evidence, never apply
+  // gating and never inputs to createApplyInstructionProgress. Absence means
+  // "unknown (pre-1.13.2 CLI)" for the boolean and "everything readable" for the
+  // array — neither may be synthesized as `false`/`[]`.
+  taskTrackingConfigured: z.boolean().optional(),
+  unavailableTrackingFiles: z.array(z.object({ path: z.string(), reason: z.string() })).optional(),
   instruction: z.string(),
   references: z.array(CliReferenceIndexEntrySchema).optional(),
   context: z.string().optional(),
