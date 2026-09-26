@@ -116,3 +116,15 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
   changeset typo expglob -> extglob.
 - Not folded (recorded as accepted): in-window decode fixtures keep `1.13.1` literals by design
   (cli-health-gate proves older admitted patches pass the gate).
+
+## 2026-09-26 — Codex Round-D approval (9.0/10)
+
+- Round-D verified every Round-C fold in dbfe805c (W2 version/SHA consistency, AGENTS.md law
+  rotation, viewer parity tests, note wording, changeset spelling) and re-ran the three web suites
+  (45 tests green). Verdict: APPROVED for full gates and PR; score 7.5 -> 9.0.
+- The "uncommitted working-tree change" it observed (two-line type guard in
+  official-cli-v13-validation-findings-fixtures.test.ts) was the union-narrowing fix the full
+  typecheck gate surfaced after Round-C; committed separately as 58f1cd48 with the
+  transpile-vs-typecheck-lane explanation and the affected suite re-green (6/6).
+- Gate status at this point: format:check PASS, lint:ci PASS (0 errors), typecheck PASS (all
+  lanes, after 58f1cd48); test:ci running; browser:ci queued.
