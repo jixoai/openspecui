@@ -60,10 +60,11 @@ NOT gate apply state, CLI progress authority, or any action unlock.
 #### Scenario: Unreadable tracking evidence keeps all_done unreachable
 
 - **GIVEN** a 1.13.2 payload whose `apply.tracks` matches one unreadable and one readable file, the
-  readable file holding only complete tasks
+  readable file holding only complete tasks, and whose CLI-resolved `state` is `ready` (the upstream
+  state chain excludes `all_done` while any matched file is unreadable)
 - **WHEN** the payload is decoded and projected
-- **THEN** the projected `state` SHALL NOT be `all_done` (the CLI's own state, whatever it resolved to,
-  is carried verbatim) and `unavailableTrackingFiles` SHALL name the unreadable path with its reason
+- **THEN** the projected `state` SHALL be the payload's `ready` verbatim (not rewritten, not
+  `all_done`) and `unavailableTrackingFiles` SHALL name the unreadable path with its reason
 
 ### Requirement: Agent Registry Kilo Command Path Rotation
 
@@ -81,7 +82,14 @@ artifacts; the registry is delivery/inventory evidence mirrored from the pinned 
 - **THEN** the Kilo Code command artifact SHALL carry pathTemplate `.kilo/command/opsx-{workflow}.md`
   with plain-markdown content and `legacyPathTemplates` containing
   `.kilocode/workflows/opsx-{workflow}.md`
-- **AND** its cleanup projection SHALL list exactly the two old-folder generations
+- **AND** the registry's raw cleanup patterns SHALL list exactly the two legacy generations of the old
+  folder (`.kilocode/workflows/opsx-*.md`, `.kilocode/workflows/openspec-*.md`) — distinct from the
+  runtime cleanup projection: the legacy `opsx-*` generation is ambiguity-skipped as a pattern and
+  retired through `legacyCommandWorkflows` per-artifact, while the `openspec-*` wildcard enumerates
+  matches as evidence per the registry's inherited wildcard-projection convention (upstream's own
+  cleanup is an exact allowlist; a user file matching the wildcard is still collected as evidence —
+  a documented projection divergence, and OpenSpecUI executes no deletion itself), and `.kilo/command/`
+  never appears in any cleanup pattern or runtime result
 
 #### Scenario: Pinned executable generates the new path
 

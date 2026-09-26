@@ -33,3 +33,17 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
   Slice 4 explicit red/green command points; upstream `docs/agent-contract.md` lag recorded as
   upstream doc drift (not our obligation).
 - Next: Round-B re-review of the revised documents.
+
+## 2026-09-26 — Codex Round-B approval (8.5/10) + residual P2 folds
+
+- Round-B verdict: APPROVED. Both P1 blockers closed; all Round-A P2 folds verified in place; score
+  6/10 -> 8.5/10. Implementation authorized.
+- Residual P2 folds applied (non-blocking, documentation precision):
+  - intake decision 4 rewritten: raw cleanup patterns cover only the two old-folder generations;
+    `.kilo/command/` never appears; runtime `legacyCommandWorkflows` routing noted.
+  - cli-integration spec Kilo scenario now distinguishes raw registry patterns from the runtime
+    cleanup projection and documents the inherited wildcard-vs-upstream-allowlist evidence divergence
+    (verified against `collectProjectCleanup` runtime behavior: wildcard matches are collected as
+    evidence; OpenSpecUI executes no deletion).
+  - Unreadable-tracking spec scenario pins the CLI-resolved `state: "ready"` so the projection
+    assertion is self-contained.

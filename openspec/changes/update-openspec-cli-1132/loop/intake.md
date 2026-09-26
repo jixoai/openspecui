@@ -86,10 +86,14 @@ OpenSpecUI 13.x release.
    `unavailableTrackingFiles` absent-when-empty per the upstream contract. Neither gates anything.
 4. **Kilo registry rotation via legacyPathTemplates, not a per-patch snapshot.** The snapshot carries
    `.kilo/command/opsx-{workflow}.md` as the current path; `.kilocode/workflows/opsx-{workflow}.md`
-   becomes `legacyPathTemplates` evidence; cleanup patterns cover both generations (`.kilo/command/opsx-*.md`
-   is upstream-cleanable only through the legacy `.kilocode` list — the new folder is the live delivery
-   target, so OpenSpecUI cleanup patterns stay limited to what upstream's legacy-cleanup owns:
-   `.kilocode/workflows/opsx-*.md` and `.kilocode/workflows/openspec-*.md`).
+   becomes `legacyPathTemplates` evidence. The registry's raw cleanup patterns cover only the two
+   legacy generations of the old folder — `.kilocode/workflows/opsx-*.md` and
+   `.kilocode/workflows/openspec-*.md` — mirroring what upstream's exact-allowlist legacy-cleanup owns;
+   the new `.kilo/command/` folder is the live delivery target and never appears in cleanup patterns
+   or runtime cleanup results (Round-B fold: the runtime `tool-init-state` consumer additionally
+   routes the legacy `opsx-*` generation through `legacyCommandWorkflows` per-artifact retirement via
+   the ambiguity filter, so tests assert both the raw-pattern boundary and the runtime result
+   boundary).
 5. **Apply tracking evidence surfaces beside `warnings`/`missingPrerequisites`** in the existing
    `ApplyProgressNotice` direct status region (amber evidence naming each unavailable path + verbatim
    reason; no state redefinition, no fabricated 0/0 semantics when `taskTrackingConfigured === false`).
