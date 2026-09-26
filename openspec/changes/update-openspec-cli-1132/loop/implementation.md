@@ -74,3 +74,29 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
   clean (zero explicit 1.13.1 runtime claims); changeset for four packages. Self-check reds run and
   reverted (kilo path rollback, aggregation count).
 - Combined verification: core 155 + web 41 + fixture matrix 23 tests green; core/web tsc clean.
+
+## 2026-09-26 — Vision-subagent ego-browser E2E walkthrough (CP5, preparation evidence)
+
+- Agent: vision subagent with ego-browser against the real server (worktree build, isolated
+  HOME/XDG, scratch project /tmp/openspecui-1132-walkthrough, port 4173, PATH pinned to the
+  worktree's openspec-cli-113 bin after an initial system-openspec 1.4.1 mismatch dialog).
+- Precheck against the pinned 1.13.2 binary: walk-glob `taskTrackingConfigured:true`, no
+  unavailable key, progress 2/5; walk-blocked one unavailable entry (verbatim /private/tmp
+  realpath + EACCES reason), progress 1/2, state ready; walk-untracked `false`, empty tasks.
+- All five scenarios PASS: changes list (aggregated 2/5 row), walk-glob detail (aggregated
+  badge + two matched files, no fabricated status region), walk-blocked detail (full-width
+  amber region, verbatim path/reason including the /private/tmp prefix, CSS-verified amber
+  tokens, 420px no-horizontal-overflow), walk-untracked detail (muted "tracks no tasks" note,
+  no blocked semantics, no fabricated 0/0 progress claim), regression smoke (board four lanes,
+  config overview, 0 console errors across 7 routes with a self-tested CDP hook).
+- Black-image defense executed on all 9 screenshots (unique colors 486-1099, non-black >98.8%).
+- Three P3 observations recorded for the Owner's final walkthrough: 0/0 badge wording beside
+  the no-tracking note (list row + header badge), board cards showing bare 1/2 counts, and
+  unavailable evidence living only on the Change Detail direct plane (spec-scoped).
+- Processes reaped (pids recorded, port verified free, chmod 000 -> 600 restored); artifacts
+  kept under /tmp/openspecui-1132-walkthrough/ for Owner review.
+- Friction feedback (writeback blocked by sandbox on the skill file; recorded here for the
+  Owner): ego-browser `page.events()` does not buffer console events — console collection
+  needs a CDP `Page.addScriptToEvaluateOnNewDocument` hook with a self-test; walkthrough
+  recipes must pin PATH to the worktree's pinned CLI bin to avoid the system-openspec
+  version-mismatch dialog.
