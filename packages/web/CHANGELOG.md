@@ -1,5 +1,12 @@
 # @openspecui/web
 
+## 13.0.2
+
+### Patch Changes
+
+- 027a716: Clarify no-tracking task counts after the Owner walkthrough of the 1.13.2 rotation: the Change Detail apply badge keeps the CLI-owned 0/0 numbers while lowering visual weight and appending the "schema tracks no tasks" qualification to its accessible name and tooltip (strictly on `taskTrackingConfigured === false`, never for absent members), and Changes rows with the CLI `no-tasks` status and zero totals render a muted "No tasks" whose tooltip keeps the upstream ambiguity (unconfigured `apply.tracks` vs an empty tracked list) instead of a bare `Tasks 0/0`. Board cards intentionally stay unchanged.
+- cdc4254: Rotate the pinned OpenSpec CLI fixture to 1.13.2 inside the unchanged v13 window (`>=1.13.0 <1.14.0`), and project the two 1.13.2 contract facts end-to-end: `instructions apply --json` tracking evidence (`taskTrackingConfigured` plus `unavailableTrackingFiles`, absent-when-empty, never gating apply state) now renders as non-gating evidence on the Change Detail status region with glob-tracked aggregation proven against the executed executable, the Kilo Code Agent delivery path rotates to `.kilo/command/opsx-<id>.md` with two-generation legacy cleanup of the old `.kilocode/workflows/` folder, and artifact-glob recognition widens to brace/extglob patterns for dependency-watching parity (wildcard-class task matching stays a documented boundary).
+
 ## 13.0.1
 
 ### Patch Changes
