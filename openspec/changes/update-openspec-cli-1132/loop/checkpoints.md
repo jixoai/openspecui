@@ -27,55 +27,55 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
       boundary tests added (Slice 3); zero-files-matched fixture + unavailable-never-all_done
       falsifiable scenario added; glob-parity scope note (`opsxPathMatchesPattern` stays
       wildcard-class); Slice 4 gains explicit red/green command points.
-- [ ] Codex Round-B change review approved (revised documents; score recorded here).
+- [x] Codex Round-B change review approved (revised documents; score recorded here).
 
-## CP1 — Pin rotation (implementation)
+## CP1 — Pin rotation (implementation) — DONE (82b78539)
 
-- [ ] `packages/core/package.json` alias `openspec-cli-113` -> `@fission-ai/openspec@1.13.2`;
+- [x] `packages/core/package.json` alias `openspec-cli-113` -> `@fission-ai/openspec@1.13.2`;
       lockfile regenerated; workspace install clean (single install before parallel batches).
-- [ ] `PINNED_OPENSPEC_V13_VERSIONS = ['1.13.2']`; fixture identity assertions green against the
+- [x] `PINNED_OPENSPEC_V13_VERSIONS = ['1.13.2']`; fixture identity assertions green against the
       1.13.2 executable across all `official-cli-v13-*.test.ts`.
-- [ ] `scripts/prepare-openspec-reference.mjs` `EXPECTED_COMMIT` =
+- [x] `scripts/prepare-openspec-reference.mjs` `EXPECTED_COMMIT` =
       `db2309783547a14e150dbcbfc19120e4028446c3`; header intent updated.
-- [ ] `CLAUDE.md` session pointer reads `references/openspec-1.13.2-report.md`.
-- [ ] Red recorded: identity assertion against the stale `1.13.1` constant.
+- [x] `CLAUDE.md` session pointer reads `references/openspec-1.13.2-report.md`.
+- [x] Red recorded: identity assertion against the stale `1.13.1` constant.
 
-## CP2 — Apply tracking-evidence contract + surface (implementation)
+## CP2 — Apply tracking-evidence contract + surface (implementation) — DONE (3114132b)
 
-- [ ] Contract: `taskTrackingConfigured?: boolean` + `unavailableTrackingFiles?: {path, reason}[]`
+- [x] Contract: `taskTrackingConfigured?: boolean` + `unavailableTrackingFiles?: {path, reason}[]`
       typed on `CliApplyInstructionsSuccessSchema`; absent-when-empty preserved; 1.13.0/1.13.1-shaped
       payloads (members absent) decode identically to today.
-- [ ] Projection: both members carried through `ApplyInstructionsInputSchema` /
+- [x] Projection: both members carried through `ApplyInstructionsInputSchema` /
       `ApplyInstructionsProjectionSchema` as verbatim evidence; never gate apply state or progress.
-- [ ] Web: `ApplyProgressNotice` renders unavailable-tracking evidence (amber, path + verbatim reason)
+- [x] Web: `ApplyProgressNotice` renders unavailable-tracking evidence (amber, path + verbatim reason)
       and the `taskTrackingConfigured === false` no-tracking note; `hasDirectStatus` mounts for
       non-empty `unavailableTrackingFiles` AND for `taskTrackingConfigured === false` (Round-A B1);
       TestingLibrary red recorded before the fix, including the member-only-`false` mounting case.
-- [ ] Glob-recognition parity (merged into this slice's batch): `isGlobPattern` recognizes brace
+- [x] Glob-recognition parity (merged into this slice's batch): `isGlobPattern` recognizes brace
       expansions and extglobs (POSIX-normalized), upstream-verbatim; recognition unit cases green;
       existing wildcard/literal cases unchanged (superset only).
-- [ ] Spec deltas applied (`openspec-cli-integration`, `opsx-workflow-ui`).
+- [x] Spec deltas applied (`openspec-cli-integration`, `opsx-workflow-ui`).
 
-## CP3 — Kilo Code registry path rotation (implementation)
+## CP3 — Kilo Code registry path rotation (implementation) — DONE (ec3c09bb)
 
-- [ ] Registry entry: current path `.kilo/command/opsx-{workflow}.md`; legacyPathTemplates carries
+- [x] Registry entry: current path `.kilo/command/opsx-{workflow}.md`; legacyPathTemplates carries
       `.kilocode/workflows/opsx-{workflow}.md`; cleanup patterns cover both old-folder generations and
       do not touch the live `.kilo/command/` folder.
-- [ ] Registry tests rotated; projection/router tests green (consumers verified registry-driven).
-- [ ] `tool-init-state` cleanup-boundary tests: `.kilocode/workflows/opsx-*.md` handled as legacy
+- [x] Registry tests rotated; projection/router tests green (consumers verified registry-driven).
+- [x] `tool-init-state` cleanup-boundary tests: `.kilocode/workflows/opsx-*.md` handled as legacy
       command path (ambiguity-skipped as pattern, retired via `legacyCommandWorkflows`); `.kilo/command/`
       never appears in any cleanup result (Round-A fold).
-- [ ] Pinned-fixture assertion: the 1.13.2 executable generates `.kilo/command/opsx-<id>.md`.
+- [x] Pinned-fixture assertion: the 1.13.2 executable generates `.kilo/command/opsx-<id>.md`.
 
-## CP4 — Fixture matrix, docs, changeset (implementation)
+## CP4 — Fixture matrix, docs, changeset (implementation) — DONE (cdc4254b)
 
-- [ ] Apply-readiness fixtures: glob-tracked aggregation + `taskTrackingConfigured: true`; the
+- [x] Apply-readiness fixtures: glob-tracked aggregation + `taskTrackingConfigured: true`; the
       zero-files-matched case stays `true` with empty `tasks`; unreadable tracking evidence covered at
       minimum by contract tests (executable unreadable case where the harness allows chmod on POSIX).
-- [ ] Validation fixtures: message-text expectations updated only where 1.13.2 texts fire.
-- [ ] `AGENTS.md` evidence-map pin line updated to 1.13.2 (`db23097`); README audited for explicit
+- [x] Validation fixtures: message-text expectations updated only where 1.13.2 texts fire.
+- [x] `AGENTS.md` evidence-map pin line updated to 1.13.2 (`db23097`); README audited for explicit
       `1.13.1` runtime claims (expected none).
-- [ ] `.changeset/*.md` for the `openspecui` patch release.
+- [x] `.changeset/*.md` for the `openspecui` patch release.
 
 ## CP5 — Review, walkthrough, delivery
 
@@ -87,4 +87,4 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
 - [ ] PR opened from `target/openspec-cli-1132-patch`, CI green, merged per Manager Mode; change
       archived after merge; herdr resources released; worktree retained for follow-up iterations until
       the Owner's final cleanup instruction.
-- [ ] Owner final browser walkthrough boundary unchanged (2026-07-20 law).
+- [x] Owner final browser walkthrough boundary unchanged (2026-07-20 law).
