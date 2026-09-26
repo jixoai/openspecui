@@ -4,6 +4,9 @@
  * 2. Exercise directory-link setup on Windows without requiring file-symlink privileges.
  *
  * Original request (2026-08-05): Continue the Windows adaptation and fix equivalent failures together.
+ * Original request (2026-09-26): local-gate unblock for update-openspec-cli-1132 — the descendant
+ * expectation must anchor on the realpath of targetRoot, because os.tmpdir() is not
+ * realpath-normalized on every macOS host (/var vs /private/var); pre-existing env flake, fixed here.
  */
 import { mkdtemp, realpath, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -32,7 +35,8 @@ describe('resolveRealPathThroughExistingAncestor', () => {
       join(symlinkRoot, 'missing', 'child.txt')
     )
 
+    const targetRootReal = await realpath(targetRoot)
     await expect(realpath(targetRoot)).resolves.toBe(dirname(dirname(resolved)))
-    expect(resolved).toBe(join(targetRoot, 'missing', 'child.txt'))
+    expect(resolved).toBe(join(targetRootReal, 'missing', 'child.txt'))
   })
 })
