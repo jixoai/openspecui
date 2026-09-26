@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Prove the Kernel forwards the selected Root's Store selector to schemas on the
  *    admitted OpenSpec line (the v13 single-series window: 1.13 resolves schemas
  *    through the selected Root).
@@ -15,6 +15,8 @@
  * local PINNED_BINS key to 1.13.1; the stale key made `PINNED_BINS[version]` undefined and crashed
  * `writeConfig` on `undefined.trim()`, caught by `test:ci` (the file was in no typecheck lane —
  * it is now registered in tsconfig.workflow-contract-tests.json per the typed-test-evidence law).
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — in-window patch rotation moved the
+ * local PINNED_BINS key to 1.13.2 together with the v13 helper's pinned constant.
  */
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -35,7 +37,7 @@ import { OpsxKernel } from './opsx-kernel.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
 const PINNED_BINS = {
-  '1.13.1': resolve(import.meta.dirname, '../node_modules/openspec-cli-113/bin/openspec.js'),
+  '1.13.2': resolve(import.meta.dirname, '../node_modules/openspec-cli-113/bin/openspec.js'),
 } satisfies Record<PinnedOpenspecV13Version, string>
 
 const tempDirs: string[] = []
