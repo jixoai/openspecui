@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Execute one deterministic same-origin Project Binding A-to-B acceptance flow.
- * 2. Pin the OpenSpec 1.12 executable, Store registry scope, and disposable roots.
+ * 2. Pin the OpenSpec 1.13 executable, Store registry scope, and disposable roots.
  * 3. Assert desktop/mobile layout and browser error hygiene with bounded process-tree cleanup.
  * 4. Resolve repository, temporary, and isolated home paths through native Windows APIs.
  * 5. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
@@ -18,6 +18,7 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作。"
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — pin + version assertion rotate to v1.13.2 (update-openspec-cli-1132).
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — in-window patch rotation moved the pin to v1.13.1.
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — in-window patch rotation moved the pin to v1.13.2.
  */
@@ -129,7 +130,7 @@ async function assertPinnedCli(env: NodeJS.ProcessEnv): Promise<void> {
     throw new Error(`Pinned OpenSpec SHA mismatch: ${stdout.trim()}`)
   }
   const version = await runPinnedCli(['--version'], REPO_ROOT, env)
-  if (version.exitCode !== 0 || version.stdout.trim() !== '1.12.0') {
+  if (version.exitCode !== 0 || version.stdout.trim() !== '1.13.2') {
     throw new Error(`Pinned OpenSpec version check failed: ${version.stdout}\n${version.stderr}`)
   }
 }

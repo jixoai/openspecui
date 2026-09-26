@@ -224,8 +224,8 @@ export function ApplyProgressNotice({
         >
           <Info className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0">
-            Schema tracks no tasks (empty <span className="font-mono">apply.tracks</span>) — an
-            empty task list is not missing evidence — {APPLY_COMMAND_ATTRIBUTION}
+            Schema tracks no tasks (no <span className="font-mono">apply.tracks</span> configured) —
+            an empty task list is not missing evidence — {APPLY_COMMAND_ATTRIBUTION}
           </span>
         </div>
       ) : null}

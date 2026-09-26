@@ -100,3 +100,19 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
   needs a CDP `Page.addScriptToEvaluateOnNewDocument` hook with a self-test; walkthrough
   recipes must pin PATH to the worktree's pinned CLI bin to avoid the system-openspec
   version-mismatch dialog.
+
+## 2026-09-26 — Codex Round-C implementation review (7.5/10) + folds
+
+- Reviewer ran the required focused suites plus a destructive spot-check (temporarily removed the
+  member-only-false mount condition, saw the red, restored, re-green). No leftover tree changes.
+- P1 fixed: `packages/web/scripts/w2-project-binding-playwright.ts` version assertion stayed
+  `1.12.0` while its SHA constant rotated — assertion + header now `1.13.2`; the script's pinned
+  bin is the submodule source (`references/openspec/bin/openspec.js`, `--version` = 1.13.2
+  verified). Root cause of the miss: the Slice-1 grep audit pattern `1\.13\.1` could not catch a
+  stale older literal.
+- P2 folds: AGENTS.md pinned-clean-build law examples rotated to v13/v1.13.2/db23097; web
+  artifact-output-viewer gained direct brace/extglob/Windows parity cases (10/10 green); the
+  no-tracking note wording now says "no apply.tracks configured" (was "empty apply.tracks");
+  changeset typo expglob -> extglob.
+- Not folded (recorded as accepted): in-window decode fixtures keep `1.13.1` literals by design
+  (cli-health-gate proves older admitted patches pass the gate).
