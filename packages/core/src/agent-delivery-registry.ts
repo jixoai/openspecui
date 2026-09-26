@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Preserve the complete pinned OpenSpec 1.13 Agent delivery registry in one typed physical owner.
  * 2. Co-locate capability, command artifact, invocation, alias, setup, cleanup, and migration metadata.
  * 3. Model current/legacy project roots, user-global skill roots, detection paths, and IDE restart facts.
@@ -9,12 +9,17 @@
  *    metadata only; physical arbitration stays owned by the official CLI and the Server projection.
  * 6. Select the official inventory for the admitted CLI line ('1.13') only; retired minors
  *    ('1.10'/'1.11'/'1.12') stay typed as provenance history and select no inventory.
+ * 7. Carry Kilo Code's 1.13.2 command-path rotation as a physical fact: `.kilo/command/` is the
+ *    live delivery target, the former `.kilocode/workflows/opsx-{workflow}.md` path is legacy
+ *    evidence, and cleanup covers exactly the old folder's two generations — never `.kilo/command/`.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-26): Slice 3 of the 1.13.2 patch rotation — mirror upstream
+ *    kilocode adapter/legacy-cleanup facts (command path `.kilo/command/opsx-<id>.md`).
  */
 import { parseOpenSpecCliVersion } from './openspec-compat.js'
 
@@ -623,8 +628,13 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     requiresIdeRestart: true,
     requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
-    command: command('.kilocode/workflows/opsx-{workflow}.md', plainMarkdown),
-    cleanup: projectCleanup('.kilocode/workflows/openspec-*.md'),
+    // 1.13.2 rotated Kilo's command delivery from `.kilocode/workflows/` to `.kilo/command/`;
+    // the old folder stays legacy evidence and cleanup owns both of its generations only —
+    // the live `.kilo/command/` folder is never cleanup-owned.
+    command: command('.kilo/command/opsx-{workflow}.md', plainMarkdown, {
+      legacyPathTemplates: ['.kilocode/workflows/opsx-{workflow}.md'],
+    }),
+    cleanup: projectCleanup('.kilocode/workflows/opsx-*.md', '.kilocode/workflows/openspec-*.md'),
   },
   {
     name: 'Kimi Code',

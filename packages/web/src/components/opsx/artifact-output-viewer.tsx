@@ -1,10 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Render single-file and glob artifact output from the current OPSX projection.
  * 2. Preserve schema-provided artifact fallbacks and document translation configuration.
  * 3. Distinguish initial output admission, missing output, and intentionally skipped non-output.
+ * 4. Classify artifact outputs with the widened OpenSpec 1.13.2 glob syntax (brace/extglob),
+ *    mirroring the core `isGlobPattern` owner verbatim (subpath unification is recorded debt).
  *
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — brace/extglob outputs render as glob content (update-openspec-cli-1132 Slice 2 fold).
  */
 import { MarkdownViewer } from '@/components/markdown-viewer'
 import { DetailPanelSkeleton } from '@/components/realtime'
@@ -20,8 +23,31 @@ import type { ReactNode } from 'react'
 import { OpsxArtifactDocumentShell } from './artifact-document-shell'
 import { MarkdownFilesContent, fileCountLabel } from './opsx-markdown-files-viewer'
 
+const EXTGLOB_RE = /[!*+?@]\([^(]*\)/u
+const BRACE_EXPANSION_SEPARATORS_RE = /,|\.\./u
+
+function hasBraceExpansion(pattern: string): boolean {
+  const openings: number[] = []
+  for (let index = 0; index < pattern.length; index += 1) {
+    if (pattern[index] === '{') openings.push(index)
+    if (pattern[index] !== '}') continue
+    const opening = openings.pop()
+    if (opening !== undefined && BRACE_EXPANSION_SEPARATORS_RE.test(pattern.slice(opening, index))) {
+      return true
+    }
+  }
+  return false
+}
+
 function isGlobPattern(pattern: string): boolean {
-  return pattern.includes('*') || pattern.includes('?') || pattern.includes('[')
+  const normalized = pattern.replaceAll('\\', '/')
+  return (
+    normalized.includes('*') ||
+    normalized.includes('?') ||
+    normalized.includes('[') ||
+    EXTGLOB_RE.test(normalized) ||
+    hasBraceExpansion(normalized)
+  )
 }
 
 export interface ArtifactOutputDescriptor {

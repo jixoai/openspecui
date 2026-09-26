@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.1 SourceCraft Code Assistant delivery contract
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.13 SourceCraft Code Assistant delivery contract
  *    against an isolated machine environment: 6 skills + 6 commands under the default
  *    core profile with the physical `.codeassistant` layout.
  * 2. Prove init anchors empty directories with `.gitkeep`, restores missing anchors on
@@ -10,8 +10,17 @@
  *    its content (upstream `ensureDirectoryAnchor` writes with the `wx` flag and
  *    tolerates EEXIST; this suite asserts that observable behavior only).
  * 4. Prove the shared IDE restart hint wording: qoder prints it, codeassistant does not.
+ * 5. (2026-09-26, update-openspec-cli-1132 Slice 4) Prove the 1.13.2 Kilo Code command
+ *    path rotation on the executed executable: commands deliver as plain markdown
+ *    (no frontmatter) under `.kilo/command/opsx-<id>.md` while skills stay in
+ *    `.kilocode/skills/`, the restart hint prints, and no legacy `.kilocode/workflows/`
+ *    directory is created, per `references/openspec-1.13.2-report.md` P2. Legacy
+ *    two-generation cleanup stays projection evidence (`agent-delivery-registry` /
+ *    `tool-init-state` tests); this harness exercises fresh init only.
  *
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — in-window patch rotation 1.13.1 -> 1.13.2,
+ * Kilo command-path executable matrix (update-openspec-cli-1132 Slice 4).
  */
 import { access, lstat, mkdir, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -221,6 +230,52 @@ describe('pinned OpenSpec 1.13 Agent delivery fixtures', () => {
       expect(result.exitCode, result.stdout + '\n' + result.stderr).toBe(0)
       // One shared module owns the wording for init and update.
       expect(result.stdout).toContain('Restart your IDE to refresh commands.')
+    }, 60_000)
+
+    it(`delivers plain-markdown commands to .kilo/command while skills stay in .kilocode on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-kilocode`)
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      await expectPinnedVersion(version, project, env)
+
+      const result = await runPinnedOpenspec(
+        version,
+        ['init', project, '--tools', 'kilocode'],
+        project,
+        env
+      )
+      expect(result.exitCode, result.stdout + '\n' + result.stderr).toBe(0)
+      // The summary line still names the skills dir (.kilocode); commands moved.
+      expect(result.stdout).toContain('6 skills and 6 commands in .kilocode/')
+      // Kilo is IDE-resident: the restart hint prints.
+      expect(result.stdout).toContain('Restart your IDE to refresh commands.')
+
+      // 1.13.2 command path: .kilo/command/opsx-<id>.md, one per core workflow.
+      const commandFiles = await readdir(join(project, '.kilo', 'command'))
+      expect([...commandFiles].sort()).toEqual(
+        CORE_PROFILE_COMMANDS.map((command) => `${command}.md`)
+      )
+      for (const command of CORE_PROFILE_COMMANDS) {
+        const commandPath = join(project, '.kilo', 'command', `${command}.md`)
+        const content = await readFile(commandPath, 'utf8')
+        // The Kilo adapter writes plain markdown: no YAML frontmatter, unlike
+        // the .codeassistant commands above.
+        expect(content.startsWith('---\n'), commandPath).toBe(false)
+        expect(content.trim().length, commandPath).toBeGreaterThan(0)
+      }
+
+      // Skills keep the physical .kilocode/skills layout.
+      const skillDirs = await readdir(join(project, '.kilocode', 'skills'))
+      expect([...skillDirs].sort()).toEqual([...CORE_PROFILE_SKILLS])
+      for (const skill of CORE_PROFILE_SKILLS) {
+        expect(await pathExists(join(project, '.kilocode', 'skills', skill, 'SKILL.md'))).toBe(true)
+      }
+
+      // Fresh delivery never creates the retired legacy command folder; its
+      // two generations stay cleanup-owned projection evidence only.
+      expect(await pathExists(join(project, '.kilocode', 'workflows'))).toBe(false)
     }, 60_000)
   }
 })

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Separate HTTP server readiness from pinned OpenSpec CLI root resolution.
  * 2. Exercise lifecycle-only WebSocket Push followed by typed HTTP Root Projection Pull.
  * 3. Preserve pinned CLI runner start/exit timing for timeout classification.
@@ -16,6 +16,7 @@
  * Original request (2026-09-03): "openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作。" — the pin moved to v1.12.0.
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。" — the pin moved to v1.13.0.
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — in-window patch rotation moved the pin to v1.13.1.
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — in-window patch rotation moved the pin to v1.13.2.
  */
 import {
   ConfigManager,
@@ -39,7 +40,7 @@ import type { AppRouter, RunningServer } from './server.js'
 import { startServer } from './server.js'
 
 const execFileAsync = promisify(execFile)
-const PINNED_OPENSPEC_COMMIT = '634c557bd0470eec37861b46172c3f503d283c1b'
+const PINNED_OPENSPEC_COMMIT = 'db2309783547a14e150dbcbfc19120e4028446c3'
 const PINNED_OPENSPEC_ROOT = resolve(import.meta.dirname, '../../../references/openspec')
 const CLI_BIN = resolve(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
 
@@ -264,12 +265,12 @@ describe('pinned OpenSpec 1.13 Root Context cold start', () => {
       expect(httpState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.13.1' },
+        cli: { available: true, version: '1.13.2' },
       })
       expect(wsState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.13.1' },
+        cli: { available: true, version: '1.13.2' },
       })
       expect(wsStates).toContain('ready')
       expect(wsNotices.every((notice) => !Object.hasOwn(Object(notice), 'data'))).toBe(true)

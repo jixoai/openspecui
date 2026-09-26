@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Verify change detail fallbacks and schema-driven artifact rendering.
  * 2. Verify retained errors and non-current authority lock actions without entering the Header.
  * 3. Verify Apply inputs remain separate and open from a Header Action Dialog.
@@ -8,6 +8,10 @@
  *    keyboard-reachable rows, crowded drill/back, and unfabricated row chips.
  * 6. Verify OpenSpec 1.13 Apply warnings and the build-order chain stay on the direct
  *    status plane, and absent fields keep the pre-1.13 presentation unchanged.
+ * 7. Verify the OpenSpec 1.13.2 tracking evidence stays on the direct status plane:
+ *    unreadable tracking files mount the region with verbatim path/reason, a
+ *    `taskTrackingConfigured: false` schema mounts it with the no-tracking note, and
+ *    member-less payloads keep the pre-1.13.2 presentation exactly.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
@@ -17,6 +21,7 @@
  * Original request (2026-08-28): "使用移动端的 list-detail 思维……分成两栏，左侧 list，右侧详情。这种结构替代手风琴会更好"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence direct-plane mounting (update-openspec-cli-1132 Slice 2).
  */
 import type { RootActionState } from '@/lib/use-root-action-state'
 import type { ChangeStatus } from '@openspecui/core'
@@ -685,6 +690,110 @@ describe('ChangeView', () => {
     expect(screen.getByRole('dialog', { name: 'Apply inputs' })).toBeVisible()
     expect(screen.getByText('Preserve the project-specific deployment boundary.')).toBeVisible()
     expect(screen.getByText('Implement tasks in order.')).toBeVisible()
+  })
+
+  it('keeps unavailable Apply tracking evidence on the direct status plane', () => {
+    statusMock.mockReturnValue({
+      data: {
+        changeName: 'Extract Terminal View Webcomponent',
+        schemaName: 'opsx-collab-pr-loop',
+        isPlanningComplete: false,
+        applyRequires: [],
+        artifacts: [
+          { id: 'implementation', outputPath: 'implementation.md', status: 'ready', requires: [] },
+        ],
+        provenance: { kind: 'static' },
+      },
+      isLoading: false,
+      error: null,
+    })
+    // 1.13.2 partial-unreadable case: one matched tracking file is unreadable while the
+    // CLI settled the change at `ready` — the typed region keeps that evidence scannable
+    // beside the payload's own state.
+    applyInstructionsMock.mockReturnValue({
+      data: {
+        state: 'ready',
+        taskTrackingConfigured: true,
+        unavailableTrackingFiles: [
+          {
+            path: '/planning/openspec/changes/extract-terminal-view-webcomponent/tasks.md',
+            reason:
+              "EACCES: permission denied, open '/planning/openspec/changes/extract-terminal-view-webcomponent/tasks.md'",
+          },
+        ],
+        applyInstructionProgress: {
+          source: 'openspec-instructions-apply',
+          total: 2,
+          complete: 1,
+          remaining: 1,
+          state: 'ready',
+          divergence: null,
+        },
+      },
+    })
+
+    render(<ChangeView />)
+
+    const region = screen.getByTestId('opsx-detail-status-region')
+    expect(
+      within(region).getByText(
+        '/planning/openspec/changes/extract-terminal-view-webcomponent/tasks.md'
+      )
+    ).toBeVisible()
+    expect(
+      within(region).getByText(
+        "EACCES: permission denied, open '/planning/openspec/changes/extract-terminal-view-webcomponent/tasks.md'"
+      )
+    ).toBeVisible()
+    expect(
+      within(region).getByRole('status', {
+        name: 'Apply tracking evidence unavailable from openspec instructions apply',
+      })
+    ).toBeVisible()
+    // The payload's own state stays the only state authority.
+    expect(within(region).queryByRole('alert')).toBeNull()
+  })
+
+  it('mounts the status region when the schema tracks no tasks', () => {
+    statusMock.mockReturnValue({
+      data: {
+        changeName: 'Extract Terminal View Webcomponent',
+        schemaName: 'opsx-collab-pr-loop',
+        isPlanningComplete: false,
+        applyRequires: [],
+        artifacts: [
+          { id: 'implementation', outputPath: 'implementation.md', status: 'ready', requires: [] },
+        ],
+        provenance: { kind: 'static' },
+      },
+      isLoading: false,
+      error: null,
+    })
+    // Member-only-false payload: without this mount condition the no-tracking fact is
+    // unreachable — nothing else in the document mounts the region today.
+    applyInstructionsMock.mockReturnValue({
+      data: {
+        state: 'ready',
+        taskTrackingConfigured: false,
+        applyInstructionProgress: {
+          source: 'openspec-instructions-apply',
+          total: 0,
+          complete: 0,
+          remaining: 0,
+          state: 'ready',
+          divergence: null,
+        },
+      },
+    })
+
+    render(<ChangeView />)
+
+    const region = screen.getByTestId('opsx-detail-status-region')
+    const note = within(region).getByRole('status', { name: 'Apply task tracking not configured' })
+    expect(note).toBeVisible()
+    expect(note).toHaveTextContent(/tracks no tasks/i)
+    // An empty task list under a no-tracking schema is never presented as blocked work.
+    expect(within(region).queryByRole('alert')).toBeNull()
   })
 
   it('routes static Change evidence into its dedicated tab', () => {

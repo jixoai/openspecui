@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Prove the executable identity of both pinned fixture lines: the v13 helper's
- *    1.13.1 bin and the retained v12 helper's 1.12.0 boundary bin.
+ *    1.13.2 bin and the retained v12 helper's 1.12.0 boundary bin.
  * 2. Record the apply-readiness projection boundary: the retained 1.12.0 executable
  *    answers `instructions apply --json` without the 1.13 `missingPrerequisites`
  *    build-order closure and without the ready-state `warnings` advisory, so the
@@ -12,11 +12,18 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — in-window patch rotation moved the v13
  * boundary executable to 1.13.1 (version-identity arguments follow the pinned constant).
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — in-window patch rotation moved the v13
+ * boundary executable to 1.13.2 (version-identity arguments follow the pinned constant).
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import {
+  expectPinnedVersion as expectPinnedV12Version,
+  pinnedFixtureEnv as pinnedV12FixtureEnv,
+  runPinnedOpenspec as runPinnedV12Openspec,
+} from './__tests__/official-cli-v12-fixtures.js'
 import {
   createPinnedFixtureRoot,
   parsePinnedSuccessJson as parsePinnedV13SuccessJson,
@@ -24,11 +31,6 @@ import {
   removePinnedFixtureRoot,
   runPinnedOpenspec as runPinnedV13Openspec,
 } from './__tests__/official-cli-v13-fixtures.js'
-import {
-  expectPinnedVersion as expectPinnedV12Version,
-  pinnedFixtureEnv as pinnedV12FixtureEnv,
-  runPinnedOpenspec as runPinnedV12Openspec,
-} from './__tests__/official-cli-v12-fixtures.js'
 import { CliApplyInstructionsSuccessSchema } from './cli-contracts/workflow.js'
 
 describe('pinned OpenSpec 1.13 boundary fixtures', () => {
@@ -47,9 +49,9 @@ describe('pinned OpenSpec 1.13 boundary fixtures', () => {
     await mkdir(project, { recursive: true })
 
     // The provenance guard: each bins-map entry must print its own exact version.
-    const v13 = await runPinnedV13Openspec('1.13.1', ['--version'], project, v13Env)
+    const v13 = await runPinnedV13Openspec('1.13.2', ['--version'], project, v13Env)
     expect(v13.exitCode, v13.stdout + '\n' + v13.stderr).toBe(0)
-    expect(v13.stdout.trim()).toBe('1.13.1')
+    expect(v13.stdout.trim()).toBe('1.13.2')
 
     await expectPinnedV12Version('1.12.0', project, v12Env)
   }, 60_000)
@@ -65,7 +67,7 @@ describe('pinned OpenSpec 1.13 boundary fixtures', () => {
     // without delta specs is the 1.13 ready-with-warning scenario.
     for (const env of [v13Env, v12Env]) {
       const initialized = await runPinnedV13Openspec(
-        '1.13.1',
+        '1.13.2',
         ['init', project, '--tools=none'],
         project,
         env
@@ -73,7 +75,7 @@ describe('pinned OpenSpec 1.13 boundary fixtures', () => {
       expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
     }
     const created = await runPinnedV13Openspec(
-      '1.13.1',
+      '1.13.2',
       ['new', 'change', 'no-specs-but-tasks'],
       project,
       v13Env
@@ -89,9 +91,9 @@ describe('pinned OpenSpec 1.13 boundary fixtures', () => {
       ['# Tasks', '', '- [x] Finish the analysis', '- [ ] Implement it', ''].join('\n')
     )
 
-    // The admitted 1.13.1 line projects the readiness evidence fields.
+    // The admitted 1.13.2 line projects the readiness evidence fields.
     const v13Result = await runPinnedV13Openspec(
-      '1.13.1',
+      '1.13.2',
       ['instructions', 'apply', '--change', 'no-specs-but-tasks', '--json'],
       project,
       v13Env

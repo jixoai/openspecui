@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Model camelCase workflow JSON independently from Store-family JSON.
  * 2. Preserve strict, archived, and bulk Validate plus Archive outcomes, including failure payloads.
  * 3. Preserve multiline requirement bodies from `show --json`.
@@ -21,14 +21,20 @@
  *    array as additive optional facts (absent when empty, never null): an entry carrying
  *    `nested` is a namespace folder, not an actionable change; `code` stays an open string
  *    because an in-window patch may add codes beyond `nested_change_directory`.
+ * 10. Type the OpenSpec 1.13.2 Apply tracking-evidence members (`taskTrackingConfigured`
+ *    boolean, `unavailableTrackingFiles` `{path, reason}[]`) as additive optional success
+ *    members: 1.13.2 always emits the boolean while 1.13.0/1.13.1 (still admitted) emit
+ *    neither, so absence stays "unknown" and is never synthesized; the array is
+ *    absent-when-everything-is-readable and both stay verbatim evidence.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
- * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — Apply tracking-evidence decode contract (update-openspec-cli-1132 Slice 2).
  */
 import { z } from 'zod'
 import {
@@ -298,6 +304,16 @@ export const CliApplyInstructionsSuccessSchema = z
     // optional here with no default; evidence only, never apply gating.
     missingPrerequisites: z.array(z.string()).optional(),
     warnings: z.array(z.string()).optional(),
+    // OpenSpec 1.13.2 additive members: emitted from 1.13.2 only (the window still
+    // admits 1.13.0/1.13.1 which never emit them); evidence only, never apply gating.
+    // `taskTrackingConfigured` is always a boolean when emitted (true even when the
+    // schema's `apply.tracks` matches zero files) and absence means "unknown CLI",
+    // never a synthesized `false`; `unavailableTrackingFiles` is spread only when a
+    // matched tracking file was unreadable, so it is never an empty array here.
+    taskTrackingConfigured: z.boolean().optional(),
+    unavailableTrackingFiles: z
+      .array(z.object({ path: z.string(), reason: z.string() }))
+      .optional(),
     instruction: z.string(),
     references: z.array(CliReferenceIndexEntrySchema).optional(),
     context: z.string().optional(),

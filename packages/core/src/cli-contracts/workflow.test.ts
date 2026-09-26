@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Lock OpenSpec 1.8/1.9 Status artifact status, dependency arrays, and planning completion.
  * 2. Lock Apply and Archive operation-instruction payloads at the CLI contract boundary.
  * 3. Lock the `schemas --json` success/failure sum type and archived Validate report decoding.
@@ -21,6 +21,12 @@
  *    existing generic diagnostic carriers as open strings, and a non-zero exit keeps
  *    structured stdout/stderr as process evidence instead of being downgraded to a
  *    contract failure.
+ * 8. Lock the OpenSpec 1.13.2 Apply tracking-evidence members: `taskTrackingConfigured`
+ *    is always a boolean when the 1.13.2 executable emits it (true even with zero
+ *    matched files), `unavailableTrackingFiles` carries absolute path + verbatim
+ *    reason and is absent when every matched file is readable, and 1.13.0/1.13.1
+ *    payloads (also admitted by the window) decode with both members absent — never
+ *    a synthesized `false` or empty array.
 
  * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
@@ -29,6 +35,7 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — generic diagnostics decode-regression evidence (update-openspec-cli-1131 Slice 4).
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — Apply tracking-evidence decode contract (update-openspec-cli-1132 Slice 2).
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'
@@ -934,6 +941,77 @@ describe('OpenSpec 1.13 apply instructions CLI contract', () => {
     expect(parsed.missingPrerequisites).toBeUndefined()
     expect(parsed.warnings).toBeUndefined()
     expect(parsed.tasks).toHaveLength(1)
+  })
+})
+
+describe('OpenSpec 1.13.2 apply tracking evidence CLI contract', () => {
+  it('decodes both tracking members as typed facts with verbatim path and reason', () => {
+    // Upstream generateApplyInstructions (1.13.2): `taskTrackingConfigured:
+    // tracksFile !== null` is always emitted, while `unavailableTrackingFiles` is
+    // conditionally spread only when at least one matched tracking file could not
+    // be read, each entry carrying the absolute path plus the errno-prefixed reason.
+    const unavailableTrackingFiles = [
+      {
+        path: '/private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks/tasks.md',
+        reason:
+          "EACCES: permission denied, open '/private/tmp/os113-slice2.SykHfF/openspec/changes/no-specs-but-tasks/tasks.md'",
+      },
+    ]
+    const parsed = CliApplyInstructionsSuccessSchema.parse({
+      ...executedApplyReady113,
+      taskTrackingConfigured: true,
+      unavailableTrackingFiles,
+    })
+
+    expect(parsed.taskTrackingConfigured).toBe(true)
+    expect(parsed.unavailableTrackingFiles).toEqual(unavailableTrackingFiles)
+    // Typed-fact guard: the members must exist on the decoded type (boolean | undefined
+    // and the {path, reason} array), not merely ride the passthrough index signature.
+    const configured: boolean | undefined = parsed.taskTrackingConfigured
+    const unavailable: Array<{ path: string; reason: string }> | undefined =
+      parsed.unavailableTrackingFiles
+    expect([configured, unavailable]).toEqual([true, unavailableTrackingFiles])
+    // The tracking members never rewrite the payload's own state/progress facts.
+    expect(parsed.state).toBe('ready')
+    expect(parsed.progress).toEqual({ total: 2, complete: 1, remaining: 1 })
+  })
+
+  it('keeps both members absent on 1.13.0/1.13.1 payloads without synthesizing', () => {
+    // The admission window still admits 1.13.0/1.13.1 executables which never emit
+    // either member: absence must survive decode as absence, because "unknown
+    // (pre-1.13.2 CLI)" is a distinct fact from "schema tracks no tasks" and from
+    // "every matched file was readable".
+    const parsed = CliApplyInstructionsSuccessSchema.parse(executedApplyReady113)
+
+    expect(parsed.taskTrackingConfigured).toBeUndefined()
+    expect('taskTrackingConfigured' in parsed).toBe(false)
+    expect(parsed.unavailableTrackingFiles).toBeUndefined()
+    expect('unavailableTrackingFiles' in parsed).toBe(false)
+  })
+
+  it('decodes tracking-configured-with-zero-matches and no-tracking booleans verbatim', () => {
+    // `apply.tracks` set but matching zero concrete files: tracking IS configured,
+    // the task list is legitimately empty, and no file was unreadable.
+    const zeroMatch = CliApplyInstructionsSuccessSchema.parse({
+      ...executedApplyReady113,
+      tasks: [],
+      progress: { total: 0, complete: 0, remaining: 0 },
+      taskTrackingConfigured: true,
+    })
+
+    expect(zeroMatch.taskTrackingConfigured).toBe(true)
+    expect(zeroMatch.tasks).toEqual([])
+    expect(zeroMatch.unavailableTrackingFiles).toBeUndefined()
+    expect('unavailableTrackingFiles' in zeroMatch).toBe(false)
+
+    // Schema without `apply.tracks`: the emitted `false` is upstream truth, not a
+    // decode default — an explicit false and an absent member stay distinguishable.
+    const noTracking = CliApplyInstructionsSuccessSchema.parse({
+      ...executedApplyReady113,
+      taskTrackingConfigured: false,
+    })
+
+    expect(noTracking.taskTrackingConfigured).toBe(false)
   })
 })
 

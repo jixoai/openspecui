@@ -3,8 +3,11 @@
  * 1. Verify live and archived artifact output uses the shared document viewer contract.
  * 2. Verify spec glob rendering preserves OpenSpec semantic headings.
  * 3. Prove intentionally skipped artifacts never subscribe to or advertise physical output.
+ * 4. Prove the widened OpenSpec 1.13.2 glob syntax (brace/extglob/Windows separators) classifies
+ *    artifact outputs as glob content, mirroring the core recognition owner.
  *
  * Original request (2026-08-01): adapt OpenSpec 1.7 skipped artifacts without fabricating files.
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — viewer glob-recognition parity (update-openspec-cli-1132).
  */
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -236,5 +239,47 @@ The system SHALL let users sign in.
     })
     expect(requirementLikeHeading.getAttribute('data-openspec-kind')).toBeNull()
     expect(document.querySelectorAll('aside.toc-root')).toHaveLength(1)
+  })
+})
+
+describe('OpenSpec 1.13.2 widened glob recognition parity', () => {
+  beforeEach(() => {
+    artifactOutputMock.mockReset()
+    globArtifactFilesMock.mockReset()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it.each([
+    ['brace expansion', 'docs/{api,cli}.md'],
+    ['extglob group', '!(notes|scratch).md'],
+    ['windows separators normalized before matching', 'docs\\{api,cli}.md'],
+  ])('classifies %s outputs as glob content', (_label, outputPath) => {
+    globArtifactFilesMock.mockReturnValue({ data: [], isLoading: false })
+
+    render(
+      <ArtifactOutputViewer
+        changeId="add-auth"
+        artifact={{ id: 'docs', outputPath, status: 'done' }}
+      />
+    )
+
+    expect(globArtifactFilesMock).toHaveBeenCalledWith('add-auth', outputPath)
+    expect(artifactOutputMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps literal outputs on the single-file reading path', () => {
+    artifactOutputMock.mockReturnValue({ data: '# Guide', isLoading: false })
+
+    render(
+      <ArtifactOutputViewer
+        changeId="add-auth"
+        artifact={{ id: 'docs', outputPath: 'docs/guide.md', status: 'done' }}
+      />
+    )
+
+    expect(globArtifactFilesMock).not.toHaveBeenCalled()
   })
 })

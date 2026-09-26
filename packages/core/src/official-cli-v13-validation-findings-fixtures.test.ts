@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.1 `validate --report findings --json` contract
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.13 `validate --report findings --json` contract
  *    against real fixture projects: the populated findings document, empty-scope
  *    documents, and the typed request-error envelope.
  * 2. Prove the merge-conflict INFO class stays verdict-neutral (`valid: true`, exit 0)
@@ -8,8 +8,16 @@
  * 3. Prove the findings transport preserves the full-run exit rule: a failing fixture
  *    exits 1 while stdout stays one complete JSON document and `summary` keeps the
  *    full-run totals.
+ * 4. (2026-09-26, update-openspec-cli-1132 Slice 4) Prove the 1.13.2 purpose-marker
+ *    case rules on the executed executable: a shouted `TODO` opening reports whatever
+ *    follows, while a lowercase prose opener (`Todo el …`) stays quiet.
+ * 5. (2026-09-26) Prove the 1.13.2 MODIFIED scenario balance suffix: the drop error
+ *    also describes what the block adds (`It adds 1 scenario not in the current
+ *    spec: …`), per `references/openspec-1.13.2-report.md` P4.
  *
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — in-window patch rotation 1.13.1 -> 1.13.2,
+ * validation message-content executable matrix (update-openspec-cli-1132 Slice 4).
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -120,6 +128,40 @@ async function createFailingChange(
       '',
       '### Requirement: Broken rule',
       'The system SHALL fail validation.',
+      '',
+    ].join('\n')
+  )
+}
+
+/** One main spec carrying a Purpose body and one requirement with scenarios. */
+async function writeMainSpec(
+  project: string,
+  capability: string,
+  purpose: string,
+  scenarioNames: readonly string[]
+): Promise<void> {
+  const specDir = join(project, 'openspec', 'specs', capability)
+  await mkdir(specDir, { recursive: true })
+  const scenarios = scenarioNames.flatMap((name) => [
+    '',
+    `#### Scenario: ${name}`,
+    '- **WHEN** the system runs',
+    '- **THEN** the scenario holds',
+  ])
+  await writeFile(
+    join(specDir, 'spec.md'),
+    [
+      `# ${capability} Specification`,
+      '',
+      '## Purpose',
+      '',
+      purpose,
+      '',
+      '## Requirements',
+      '',
+      `### Requirement: ${capability} rules`,
+      `The system SHALL uphold the ${capability} contract.`,
+      ...scenarios,
       '',
     ].join('\n')
   )
@@ -316,6 +358,144 @@ describe('pinned OpenSpec 1.13 validation findings fixtures', () => {
       const advisory = findings.itemFindings.find((item) => item.id === 'info-change')
       expect(advisory?.valid).toBe(true)
       expect(advisory?.issues[0]?.level).toBe('INFO')
+    }, 60_000)
+
+    it(`reports a shouted TODO purpose but not a lowercase prose opener on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(
+        `cli-${version.replace(/\./g, '')}-purpose-case-rules`
+      )
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      await initProject(version, project, env)
+      // Shouted capitals stay a marker whatever follows (no punctuation needed).
+      await writeMainSpec(
+        project,
+        'todo-shouted',
+        'TODO write this later after the migration lands and the team agrees.',
+        ['Marker reported']
+      )
+      // A lowercase `todo`/`tbd` opener is ordinary prose (Spanish/Portuguese
+      // sentence openers) unless punctuation or the line end says otherwise.
+      await writeMainSpec(
+        project,
+        'todo-lowercase',
+        'Todo el sistema de exportación conserva sus garantías de integridad.',
+        ['Prose opener ignored']
+      )
+
+      const result = await runPinnedOpenspec(
+        version,
+        ['validate', '--specs', '--report', 'findings', '--json'],
+        project,
+        env
+      )
+      expectPinnedJsonDiscipline(result)
+      const findings = parsePinnedSuccessJson(result, (payload) =>
+        CliValidateFindingsResultSchema.parse(payload)
+      )
+      expect(isCliValidateFindings(findings)).toBe(true)
+      if (!isCliValidateFindings(findings)) return
+
+      expect(findings.report).toMatchObject({ scope: 'specs', returnedItems: 1, totalItems: 2 })
+      // The findings document returns only items carrying issues, so the quiet
+      // prose spec stays absent while the shouted marker returns.
+      expect(findings.itemFindings).toHaveLength(1)
+      const shouted = findings.itemFindings[0]
+      expect(shouted.id).toBe('todo-shouted')
+      expect(shouted.issues).toHaveLength(1)
+      expect(shouted.issues[0]).toMatchObject({
+        level: 'WARNING',
+        path: 'overview',
+        message: expect.stringContaining('still a placeholder'),
+      })
+      // The placeholder WARNING never fails the item on its own.
+      expect(shouted.valid).toBe(true)
+      // Summary keeps the full-run totals over both specs.
+      expect(findings.summary.totals).toEqual({ items: 2, passed: 2, failed: 0 })
+    }, 60_000)
+
+    it(`describes both the dropped and the added scenarios in the MODIFIED balance suffix on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(
+        `cli-${version.replace(/\./g, '')}-modified-balance`
+      )
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      await initProject(version, project, env)
+      await writeMainSpec(project, 'billing', 'Describes how billing totals are computed.', [
+        'Recompute on correction',
+        'Regional surcharge',
+      ])
+
+      const created = await runPinnedOpenspec(
+        version,
+        ['new', 'change', 'modify-billing'],
+        project,
+        env
+      )
+      expect(created.exitCode, created.stdout + '\n' + created.stderr).toBe(0)
+      const changeDir = join(project, 'openspec', 'changes', 'modify-billing')
+      await writeFile(
+        join(changeDir, 'proposal.md'),
+        [
+          '## Why',
+          'modify-billing updates the billing contract.',
+          '',
+          '## What Changes',
+          '- Modify the billing totals requirement.',
+          '',
+        ].join('\n')
+      )
+      await mkdir(join(changeDir, 'specs', 'billing'), { recursive: true })
+      await writeFile(
+        join(changeDir, 'specs', 'billing', 'spec.md'),
+        [
+          '## MODIFIED Requirements',
+          '',
+          '### Requirement: billing rules',
+          'The system SHALL compute billing totals accurately with audit evidence.',
+          '',
+          '#### Scenario: Recompute on correction',
+          '- **WHEN** an invoice correction arrives',
+          '- **THEN** totals are recomputed from the raw ledger',
+          '',
+          '#### Scenario: Audit trail',
+          '- **WHEN** totals are recomputed',
+          '- **THEN** an audit record is written',
+          '',
+        ].join('\n')
+      )
+
+      const result = await runPinnedOpenspec(
+        version,
+        ['validate', '--changes', '--report', 'findings', '--json'],
+        project,
+        env
+      )
+      // The dropped scenario is a real ERROR: the full-run exit rule keeps exit 1.
+      expect(result.exitCode).toBe(1)
+      expectPinnedJsonDiscipline(result)
+      const findings = parsePinnedJson(result, (payload) =>
+        CliValidateFindingsSchema.parse(payload)
+      )
+      expect(findings.summary.totals).toEqual({ items: 1, passed: 0, failed: 1 })
+      const item = findings.itemFindings[0]
+      expect(item?.id).toBe('modify-billing')
+      expect(item?.valid).toBe(false)
+      // 1.13.2 balance suffix: one message names both halves of the diff — the
+      // scenario the current spec still has and the one the block adds.
+      expect(item?.issues[0]).toMatchObject({ level: 'ERROR', path: 'billing/spec.md' })
+      const message = item?.issues[0]?.message ?? ''
+      expect(message).toContain(
+        'omits scenario(s) the current spec still has: "Regional surcharge"'
+      )
+      expect(message).toContain(
+        'The modified block has 2 scenarios; the current spec has 2 scenarios.'
+      )
+      expect(message).toContain('It adds 1 scenario not in the current spec: "Audit trail"')
     }, 60_000)
   }
 })

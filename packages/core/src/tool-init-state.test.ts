@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
  * 1. Preserve Tool initialization projection semantics across delivery modes and physical scopes.
  * 2. Bound Tool artifact observation fanout at directory-inventory scale across recomputes.
  * 3. Project OpenSpec 1.13 capability, generated-version, migration, cleanup, global-root, and unavailable states.
@@ -7,6 +7,11 @@
  *    tolerating only the OpenCode generator-owned provided-arguments injection line.
  * 5. Judge generated-by staleness series-aware: only the admitted 1.13.x line is current;
  *    retired 1.12.x/1.11.x/1.10.x and older generators are stale.
+ * 6. Pin the rotated Kilo Code entry's runtime cleanup boundary: the legacy
+ *    `.kilocode/workflows/opsx-*` generation is ambiguity-skipped as a pattern and retired
+ *    per workflow artifact, the `openspec-*` wildcard enumerates matches as evidence
+ *    (documented divergence from upstream's exact allowlist, including user files), and the
+ *    live `.kilo/command/` folder never appears in any cleanup result.
  *
  * Original request (2026-07-25): "格式问题？md文件有什么格式问题，直接快速处理掉，然后继续工作"
  * Repeated fixed point (2026-07-26): clean CI runs 30163937799 and 30165778790 missed the same Launch update creation emission.
@@ -17,11 +22,13 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-26): Slice 3 of the 1.13.2 patch rotation — characterize the
+ *    runtime cleanup boundary of Kilo's rotated command path at the public projection entry.
  * Note: openspec-cli-112 generator fixtures below are historical/boundary evidence for staleness and
  * legacy-compat classification; positive v13 acceptance lives in the official-cli-v13 suite.
  */
 import { mkdir, writeFile } from 'fs/promises'
-import { dirname, join, resolve } from 'path'
+import { dirname, join, resolve, sep } from 'path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir } from './__tests__/test-utils.js'
 import {
@@ -488,6 +495,71 @@ describe('getToolInitStates', () => {
     expect(state?.presentExpectedCommandCount).toBe(1)
     expect(state?.missingCommandWorkflows).toEqual([])
     expect(state?.legacyCommandWorkflows).toEqual(['explore'])
+  })
+
+  it('retires legacy Kilo workflow commands per artifact instead of wildcard cleanup paths', async () => {
+    // 1.13.2 rotated Kilo's commands to `.kilo/command/`; a leftover legacy-generation
+    // `opsx-*.md` file must surface as per-workflow legacy evidence (retired by the CLI's
+    // exact allowlist), never as a wildcard cleanup path.
+    await writeArtifact(join(tempDir, '.kilocode', 'workflows', 'opsx-explore.md'))
+
+    const states = await getToolInitStates(tempDir, {
+      delivery: 'commands',
+      workflows: ['explore'],
+    })
+    const state = states.find((entry) => entry.toolId === 'kilocode')
+
+    expect(state?.legacyCommandWorkflows).toEqual(['explore'])
+    expect(state?.missingCommandWorkflows).toEqual([])
+    // The `.kilocode/workflows/opsx-*.md` cleanup pattern is ambiguity-skipped because it
+    // collides with the entry's legacy command pathTemplate, so no path is collected.
+    expect(state?.cleanup).toBeUndefined()
+  })
+
+  it('never marks the live .kilo/command folder as Kilo cleanup-owned', async () => {
+    await writeArtifact(join(tempDir, '.kilo', 'command', 'opsx-explore.md'))
+    await writeArtifact(join(tempDir, '.kilocode', 'workflows', 'opsx-apply.md'))
+    await writeArtifact(join(tempDir, '.kilocode', 'workflows', 'openspec-proposal.md'))
+
+    const states = await getToolInitStates(tempDir, {
+      delivery: 'commands',
+      workflows: ['explore'],
+    })
+    const state = states.find((entry) => entry.toolId === 'kilocode')
+
+    expect(state?.legacyCommandWorkflows).toEqual(['apply'])
+    // Cleanup owns only the legacy folder: the wildcard-matched openspec-* file is the sole
+    // collected path; the legacy opsx-* generation stays per-artifact evidence and the live
+    // `.kilo/command/opsx-explore.md` file never appears in any tool's cleanup result.
+    expect(state?.cleanup?.paths).toEqual([
+      resolve(tempDir, '.kilocode/workflows/openspec-proposal.md'),
+    ])
+    for (const entry of states) {
+      expect(
+        entry.cleanup?.paths.some((path) => path.includes(`${sep}.kilo${sep}command${sep}`)) ??
+          false
+      ).toBe(false)
+    }
+  })
+
+  it('collects wildcard-matching user files in the legacy Kilo folder as projection evidence (characterization)', async () => {
+    // Upstream's own Kilo cleanup is an exact allowlist and would never touch a user's
+    // `openspec-custom.md`; the registry's inherited wildcard-projection convention still
+    // enumerates it as cleanup evidence. OpenSpecUI deletes nothing itself — this pins the
+    // documented projection divergence at the public boundary.
+    await writeArtifact(join(tempDir, '.kilocode', 'workflows', 'openspec-custom.md'))
+
+    const states = await getToolInitStates(tempDir, {
+      delivery: 'commands',
+      workflows: ['explore'],
+    })
+    const state = states.find((entry) => entry.toolId === 'kilocode')
+
+    expect(state?.cleanup).toMatchObject({
+      required: true,
+      kind: 'project-artifacts',
+      paths: [resolve(tempDir, '.kilocode/workflows/openspec-custom.md')],
+    })
   })
 
   it('treats the OpenCode provided-arguments injection line as generator-owned equivalence', async () => {
