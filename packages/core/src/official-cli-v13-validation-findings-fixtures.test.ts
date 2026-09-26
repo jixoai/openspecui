@@ -395,6 +395,8 @@ describe('pinned OpenSpec 1.13 validation findings fixtures', () => {
       const findings = parsePinnedSuccessJson(result, (payload) =>
         CliValidateFindingsResultSchema.parse(payload)
       )
+      expect(isCliValidateFindings(findings)).toBe(true)
+      if (!isCliValidateFindings(findings)) return
 
       expect(findings.report).toMatchObject({ scope: 'specs', returnedItems: 1, totalItems: 2 })
       // The findings document returns only items carrying issues, so the quiet
