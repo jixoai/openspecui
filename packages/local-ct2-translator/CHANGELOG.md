@@ -1,5 +1,12 @@
 # @openspecui/local-ct2-translator
 
+## 13.0.2
+
+### Patch Changes
+
+- Updated dependencies [cdc4254]
+  - @openspecui/core@13.0.2
+
 ## 13.0.1
 
 ### Patch Changes
