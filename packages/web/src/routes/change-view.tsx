@@ -28,6 +28,7 @@
  *   — the status region gains the OpenSpec 1.13 Apply `warnings` and `missingPrerequisites`
  *   direct-plane evidence beside the existing divergence notice.
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence direct-plane mounting (update-openspec-cli-1132 Slice 2).
+ * Original request (2026-09-27): Owner walkthrough P3 adjudication — badge receives taskTrackingConfigured.
  */
 import { ApplyProgressNotice } from '@/components/apply-progress-notice'
 import {
@@ -182,6 +183,7 @@ export function ChangeView() {
             status={status}
             referenceEvidence={referenceEvidence}
             applyInstructionProgress={applyInstructions?.applyInstructionProgress ?? null}
+            taskTrackingConfigured={applyInstructions?.taskTrackingConfigured}
             statusRefreshing={
               statusCurrent
                 ? null

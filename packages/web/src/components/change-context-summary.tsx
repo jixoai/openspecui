@@ -9,6 +9,7 @@
  * Owner correction (2026-08-03): unify Change scan Tooltips in the subtitle and keep failures below the Header.
  * Original request (2026-08-15): Owner walkthrough: merge Apply progress into the subtitle badge row.
  * Original request (2026-08-15): 刷新/解析中的 lifecycle 锁收敛为副标题行内的 shiny 徽章 + Tooltip。
+ * Original request (2026-09-27): Owner walkthrough P3 adjudication — taskTrackingConfigured passthrough to the apply badge.
  */
 import { ApplyProgressBadge } from '@/components/apply-progress-notice'
 import { InformationBadge } from '@/components/information-disclosure'
@@ -71,6 +72,7 @@ export function ChangeContextSummary({
   status,
   referenceEvidence,
   applyInstructionProgress,
+  taskTrackingConfigured,
   statusRefreshing = null,
   rootChecking = null,
 }: {
@@ -78,6 +80,7 @@ export function ChangeContextSummary({
   referenceEvidence: ChangeReferenceEvidence
   /** Apply instruction progress; the CLI's own count is the implementation progress authority. */
   applyInstructionProgress?: ApplyInstructionProgress | null
+  taskTrackingConfigured?: boolean
   /** Non-current Change Status authority; actions stay read-only while refreshing. */
   statusRefreshing?: LifecycleBadgeFact | null
   /** Root Context still resolving/refreshing; root-dependent actions stay locked. */
@@ -108,7 +111,10 @@ export function ChangeContextSummary({
         {doneCount}/{totalCount} artifacts
       </InformationBadge>
       {applyInstructionProgress ? (
-        <ApplyProgressBadge applyInstructionProgress={applyInstructionProgress} />
+        <ApplyProgressBadge
+          applyInstructionProgress={applyInstructionProgress}
+          taskTrackingConfigured={taskTrackingConfigured}
+        />
       ) : null}
       {provenance.kind === 'static' ? (
         <InformationBadge

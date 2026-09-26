@@ -159,6 +159,43 @@ describe('ChangeList', () => {
     expect(screen.queryByText('Loading workflow status…')).toBeNull()
   })
 
+  it('renders No tasks for the CLI no-tasks status with zero totals, keeping the ambiguity', () => {
+    useChangesSubscriptionMock.mockReturnValue({
+      data: [
+        {
+          id: 'untracked-schema-change',
+          name: 'untracked-schema-change',
+          trackedTaskProgress: { total: 0, completed: 0, phase: 'no-tasks' },
+          cliTaskSummary: { completedTasks: 0, totalTasks: 0, status: 'no-tasks' },
+          updatedAt: Date.now() - 60_000,
+        },
+        {
+          id: 'tracked-empty-history',
+          name: 'tracked-empty-history',
+          trackedTaskProgress: { total: 0, completed: 0, phase: 'no-tasks' },
+          cliTaskSummary: { completedTasks: 0, totalTasks: 0, status: 'in-progress' },
+          updatedAt: Date.now() - 60_000,
+        },
+      ],
+      isLoading: false,
+    })
+    useOpsxStatusListSubscriptionMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+    })
+
+    render(<ChangeList />)
+
+    // no-tasks + zero totals -> the CLI's typed "no task work" fact, muted, never Tasks 0/0.
+    const noTasks = screen.getByText('No tasks')
+    expect(noTasks.getAttribute('title')).toBe(
+      'The OpenSpec CLI reports no tasks for this Change (no apply.tracks, or an empty tracked task list).'
+    )
+    // Exactly one literal count remains — the in-progress row; the no-tasks row carries none.
+    expect(screen.getAllByText(/Tasks 0\/0/)).toHaveLength(1)
+  })
+
   it('admits aggregate workflow Status only after the first Change row is renderable', () => {
     useChangesSubscriptionMock.mockReturnValue({
       data: undefined,

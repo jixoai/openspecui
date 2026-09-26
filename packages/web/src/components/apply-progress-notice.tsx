@@ -17,6 +17,9 @@
  *    warnings area, a compact note when the schema tracks no tasks (empty tasks are not
  *    missing evidence), and nothing extra when both members are absent — absence is
  *    "unknown (pre-1.13.2 CLI)", never a fabricated 0/0 or unavailable claim.
+ * 9. Degrade, never hide, the subtitle badge's CLI numbers when the schema tracks no tasks:
+ *    `taskTrackingConfigured === false` lowers the badge's visual weight and appends the
+ *    qualification to its accessible name and tooltip; the numbers stay CLI-owned verbatim.
  *
  * Original request (2026-07-15): "与 tracked glob 进度分歧时各自归因展示。"
  * Original request (2026-07-28): supporting 6.x evidence should use Badge + Tooltip or Accordion.
@@ -26,6 +29,8 @@
  * Original request (2026-09-12): Owner walkthrough: the always-expanded warning/build-order blocks
  *   consumed the page; collapse them behind one summary row while keeping direct-plane discovery.
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence surface (update-openspec-cli-1132 Slice 2).
+ * Original request (2026-09-27): Owner walkthrough P3 adjudication — badge/list no-tracking count
+ *   presentation (clarify-no-tracking-task-counts).
  */
 import { InformationBadge } from '@/components/information-disclosure'
 import type { ApplyInstructionProgress } from '@openspecui/core'
@@ -40,14 +45,26 @@ import { Fragment, useState } from 'react'
  */
 export function ApplyProgressBadge({
   applyInstructionProgress,
+  taskTrackingConfigured,
 }: {
   applyInstructionProgress: ApplyInstructionProgress
+  taskTrackingConfigured?: boolean
 }) {
   const { complete, total, remaining } = applyInstructionProgress
+  // Strictly `=== false`: absent means "unknown (pre-1.13.2 CLI)" and keeps today's badge
+  // unqualified; the CLI-owned numbers themselves never change.
+  const untracked = taskTrackingConfigured === false
   return (
     <InformationBadge
-      ariaLabel={`Apply instructions progress ${complete} of ${total}`}
-      tooltip={`Progress reported by openspec instructions apply — ${complete} of ${total} tasks applied, ${remaining} remaining.`}
+      ariaLabel={`Apply instructions progress ${complete} of ${total}${
+        untracked ? '; schema tracks no tasks' : ''
+      }`}
+      tooltip={
+        untracked
+          ? `Progress reported by openspec instructions apply — ${complete} of ${total} tasks applied, ${remaining} remaining. The schema sets no apply.tracks, so 0 of 0 is not incomplete work.`
+          : `Progress reported by openspec instructions apply — ${complete} of ${total} tasks applied, ${remaining} remaining.`
+      }
+      className={untracked ? 'opacity-75' : undefined}
     >
       Apply {complete}/{total}
     </InformationBadge>
