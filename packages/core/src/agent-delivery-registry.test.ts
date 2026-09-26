@@ -10,6 +10,9 @@
  *    lines select nothing — and declare the three-valued shared-root owner candidate set exactly
  *    as the pinned upstream source does.
  * 5. Provide explicit mutation-resistance evidence for every load-bearing registry dimension.
+ * 6. Pin Kilo Code's 1.13.2 command-path rotation: `.kilo/command/opsx-{workflow}.md` is the
+ *    current template, `.kilocode/workflows/opsx-{workflow}.md` is legacy evidence, and cleanup
+ *    lists exactly the old folder's two generations (never `.kilo/command/`).
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Review correction (2026-08-02): checked mutation fixtures must not bypass fabricated-state nullability.
@@ -17,6 +20,8 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-09-26): Slice 3 of the 1.13.2 patch rotation — the kilocode snapshot
+ *    row and dedicated legacy/cleanup assertions rotate with the pinned adapter facts.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -235,7 +240,7 @@ const OFFICIAL_REGISTRY = [
     'Kilo Code',
     '.kilocode',
     'adapter-backed',
-    '.kilocode/workflows/opsx-{workflow}.md',
+    '.kilo/command/opsx-{workflow}.md',
     'markdown',
     'flat',
     '/',
@@ -438,6 +443,23 @@ function assertPinnedRegistry(registry: readonly ToolConfig[]): void {
       }),
     })
   )
+  // 1.13.2 (in-series patch): Kilo Code's command delivery rotated to `.kilo/command/`
+  // while skills stay under `.kilocode`. The former command path is legacy evidence and
+  // cleanup covers exactly the old folder's two generations — never the live folder.
+  expect(registryEntry(registry, 'kilocode')).toEqual(
+    expect.objectContaining({
+      skillsDir: '.kilocode',
+      requiresIdeRestart: true,
+      command: expect.objectContaining({
+        pathTemplate: '.kilo/command/opsx-{workflow}.md',
+        legacyPathTemplates: ['.kilocode/workflows/opsx-{workflow}.md'],
+      }),
+    })
+  )
+  expect(registryEntry(registry, 'kilocode')?.cleanup).toEqual({
+    kind: 'project-patterns',
+    patterns: ['.kilocode/workflows/opsx-*.md', '.kilocode/workflows/openspec-*.md'],
+  })
   expect(registryEntry(registry, 'minimax-code')).toEqual(
     expect.objectContaining({
       available: true,
