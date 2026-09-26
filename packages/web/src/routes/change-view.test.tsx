@@ -794,6 +794,11 @@ describe('ChangeView', () => {
     expect(note).toHaveTextContent(/tracks no tasks/i)
     // An empty task list under a no-tracking schema is never presented as blocked work.
     expect(within(region).queryByRole('alert')).toBeNull()
+    // The subtitle badge degrades the same fact without hiding the CLI numbers.
+    const badge = screen.getByRole('note', {
+      name: 'Apply instructions progress 0 of 0; schema tracks no tasks',
+    })
+    expect(badge).toHaveTextContent('Apply 0/0')
   })
 
   it('routes static Change evidence into its dedicated tab', () => {

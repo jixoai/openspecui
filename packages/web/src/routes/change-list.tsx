@@ -19,6 +19,7 @@
  * Original request (2026-09-12): Owner walkthrough: unify the Change display title — generic
  *   "# Proposal" headings fall back to the change id on every surface.
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
+ * Original request (2026-09-27): Owner walkthrough P3 adjudication — No tasks presentation for the CLI no-tasks status.
  */
 import { ChangeRow, ChangeRowChevron } from '@/components/change-row'
 import {
@@ -234,10 +235,24 @@ export function ChangeList() {
                 cliTaskSummary && cliTaskSummary.totalTasks > 0
                   ? cliTaskSummary.completedTasks / cliTaskSummary.totalTasks
                   : null
+              // `no-tasks` with zero totals is the CLI's typed fact that this Change has no
+              // task work; the list cannot distinguish unconfigured apply.tracks from an empty
+              // tracked list, so the tooltip keeps that ambiguity instead of asserting either.
+              const cliNoTasks =
+                cliTaskSummary?.status === 'no-tasks' && cliTaskSummary.totalTasks === 0
               const cliTaskEvidence = cliTaskSummary ? (
-                <span title="Task counts reported by the OpenSpec CLI for this Change.">
-                  Tasks {cliTaskSummary.completedTasks}/{cliTaskSummary.totalTasks}
-                </span>
+                cliNoTasks ? (
+                  <span
+                    className="text-muted-foreground"
+                    title="The OpenSpec CLI reports no tasks for this Change (no apply.tracks, or an empty tracked task list)."
+                  >
+                    No tasks
+                  </span>
+                ) : (
+                  <span title="Task counts reported by the OpenSpec CLI for this Change.">
+                    Tasks {cliTaskSummary.completedTasks}/{cliTaskSummary.totalTasks}
+                  </span>
+                )
               ) : null
               const sharedDescriptor = { family: 'changes', entityId: change.id } as const
               return (

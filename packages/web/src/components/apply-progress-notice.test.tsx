@@ -66,6 +66,38 @@ describe('ApplyProgressBadge', () => {
       )
     ).toBeTruthy()
   })
+
+  it('degrades, never hides, the CLI numbers when the schema tracks no tasks', async () => {
+    render(
+      <ApplyProgressBadge
+        applyInstructionProgress={{ ...progress(false), complete: 0, total: 0, remaining: 0 }}
+        taskTrackingConfigured={false}
+      />
+    )
+
+    // The numbers stay CLI-owned verbatim; only weight and qualification change.
+    const badge = screen.getByRole('note', {
+      name: 'Apply instructions progress 0 of 0; schema tracks no tasks',
+    })
+    expect(badge).toHaveTextContent('Apply 0/0')
+    expect(badge.className).toContain('opacity-75')
+    fireEvent.focus(badge)
+    expect(
+      await screen.findByText(/schema sets no apply\.tracks, so 0 of 0 is not incomplete work/)
+    ).toBeTruthy()
+  })
+
+  it('keeps the badge unqualified when the tracking member is absent', () => {
+    render(
+      <ApplyProgressBadge
+        applyInstructionProgress={{ ...progress(false), complete: 0, total: 0, remaining: 0 }}
+        taskTrackingConfigured={undefined}
+      />
+    )
+
+    const badge = screen.getByRole('note', { name: 'Apply instructions progress 0 of 0' })
+    expect(badge).not.toHaveClass('opacity-75')
+  })
 })
 
 describe('ApplyProgressNotice', () => {
