@@ -83,8 +83,10 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
 - [x] Vision-subagent ego-browser E2E walkthrough of the Change Detail apply evidence plane
       (preparation evidence; isolated instance/HOME per the self-walkthrough discipline) —
       PASS on all five scenarios, 2026-09-26 (see implementation log).
-- [ ] Broad gates green: `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`,
-      `pnpm test:browser:ci`.
+- [x] Broad gates green: `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`
+      (1224+174 tests), `pnpm test:browser:ci` (40 tests) — 2026-09-26; two gate-time unblocks
+      recorded in the implementation log (union narrowing 58f1cd48; realpath env flake 301c94f1,
+      fails on main too on unnormalized-TMPDIR hosts).
 - [ ] PR opened from `target/openspec-cli-1132-patch`, CI green, merged per Manager Mode; change
       archived after merge; herdr resources released; worktree retained for follow-up iterations until
       the Owner's final cleanup instruction.

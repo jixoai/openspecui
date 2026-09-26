@@ -128,3 +128,13 @@ Original request (2026-09-26): "Openspec 1.13.2 释放了，更新本地引用�
   transpile-vs-typecheck-lane explanation and the affected suite re-green (6/6).
 - Gate status at this point: format:check PASS, lint:ci PASS (0 errors), typecheck PASS (all
   lanes, after 58f1cd48); test:ci running; browser:ci queued.
+
+## 2026-09-26 — Broad gates complete
+
+- format:check PASS · lint:ci PASS (0 errors, 6 pre-existing warnings) · typecheck PASS (all
+  lanes) · test:ci PASS (1224 + 174 tests) · test:browser:ci PASS (40 tests, after installing
+  the missing playwright chromium-headless-shell v1208 binary — environment setup, not a code
+  change).
+- Gate-time unblocks: 58f1cd48 (union narrowing caught by the workflow-contract typecheck lane)
+  and 301c94f1 (pre-existing realpath/TMPDIR env flake reproduced on main, expectation anchored
+  on realpath(targetRoot)).
