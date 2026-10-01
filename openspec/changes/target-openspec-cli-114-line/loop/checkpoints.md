@@ -11,8 +11,9 @@ Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，�
 ## CP0 — Planning
 
 - [x] Worktree + submodule pin `94ca9c1e` + evidence report + change artifacts.
-- [ ] Codex change review: no blocking findings (≥8/10 target).
-- [ ] CP0 committed.
+- [x] Codex change review: five rounds 6.2 → 7.4 → 7.8 → 8.1 → **9.1/10 GO** (blockers B1-B7, B1-B4, C1-C2,
+      and the lost-write catch all folded; reports /tmp/v14-change-review-round-{a..e}.md).
+- [x] CP0 committed (7e218935 + review-fold commits through bc633fb9).
 
 ## CP1 — Window and contracts (Slices 1-2)
 

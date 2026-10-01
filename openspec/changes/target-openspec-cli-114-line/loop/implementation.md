@@ -105,4 +105,12 @@ global correction log). Re-applied with write-first verification (protocol tree 
 line, the stale `list --json` tree row is gone, the list paragraph reads as a complete sentence); the
 fixture owner-map alias fix from Round-C had landed and is confirmed.
 
-Pending: Round-E narrow re-review of exactly these two report passages.
+### Round-E review disposition (herdr v14-change-reviewer, gpt-5.6-terra xhigh, 2026-10-02) — 9.1/10, GO
+
+Worked 1m 27s (narrow). Both re-applied fixes verified in the actual `bc633fb9` diff (not the disposition's
+self-description): the stale tree row is gone, the carry-forward line is unique, the list paragraph is a
+complete sentence, and the Round-D record matches the real changes. No blockers, no new non-blocking notes.
+**Verdict: GO — implementation may start under the CP/slice evidence rules.**
+
+Review arc: Round-A 6.2 REVISE (7 blockers) → B 7.4 (4) → C 7.8 (2) → D 8.1 (1, caught our lost write) →
+E 9.1 GO.
