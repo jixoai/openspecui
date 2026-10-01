@@ -27,7 +27,17 @@
  *    reason and is absent when every matched file is readable, and 1.13.0/1.13.1
  *    payloads (also admitted by the window) decode with both members absent — never
  *    a synthesized `false` or empty array.
-
+ * 9. Lock the OpenSpec 1.14 typed-contract delta (references/openspec-1.14.0-report.md,
+ *    Verified CLI observations): apply tasks gain `sourcePath` (absolute) and `line`
+ *    (1-based) as optional members so older in-flight payloads keep decoding; the show
+ *    Spec document gains requirement/scenario `name` members preserved by CLI value
+ *    (non-string names rejected, old snapshots without names still decode); Status
+ *    gains the top-level `warnings` advisory array (single success and batch healthy
+ *    entries) verbatim with absent-when-upstream-absent semantics; the change list
+ *    gains the per-entry `archived` boolean from `list --archived`/`--all`; and the
+ *    new `openspec version --json` envelope decodes with `schemaVersion: 1`, install
+ *    facts, and a passthrough `update` member that only `--check` emits.
+ *
  * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
@@ -36,6 +46,7 @@
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — generic diagnostics decode-regression evidence (update-openspec-cli-1131 Slice 4).
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — Apply tracking-evidence decode contract (update-openspec-cli-1132 Slice 2).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line).
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'
@@ -61,10 +72,12 @@ import {
   CliApplyInstructionsSuccessSchema,
   CliArchiveSchema,
   CliChangeListSchema,
+  CliShowSpecSchema,
   CliValidateFindingsResultSchema,
   CliValidateFindingsSchema,
   CliValidateReportSchema,
   CliValidateSchema,
+  CliVersionSchema,
   CliWorkflowStatusSuccessSchema,
   isCliValidateFindings,
   type CliChangeListWarning,
@@ -303,9 +316,12 @@ describe('OpenSpec 1.8/1.9 workflow CLI contracts', () => {
   })
 })
 
-// Admitted-line capabilities under the OpenSpecUI 13 single-series window: stable 1.13.x
-// derives the 1.11-introduced batch/diff and 1.12 findings transports; the retired
-// 1.10/1.11/1.12 lines derive none and prove capability-boundary rejections only.
+// Admitted-line capabilities under the OpenSpecUI 14 single-series window (Slice 1
+// rotation): stable 1.14.x derives the 1.11-introduced batch/diff and 1.12 findings
+// transports; every retired line (1.13/1.12/1.11/1.10) derives none and proves
+// capability-boundary rejections only. Literal expectation rotation is Slice 6's
+// cross-package pass; this file's fixtures rotate with the landed compat constants.
+const capabilities114 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.14.0'))
 const capabilities113 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.13.0'))
 const capabilities112 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.12.0'))
 const capabilities111 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.11.0'))
@@ -808,7 +824,7 @@ describe('OpenSpec 1.12 validate findings contract executor', () => {
   it('composes the findings argv only through the capability-gated findings method', async () => {
     const findings = await contracts.validateFindings({
       target: { kind: 'scope', scope: 'all' },
-      capabilities: capabilities113,
+      capabilities: capabilities114,
     })
 
     expect(findings.kind).toBe('executed')
@@ -825,12 +841,18 @@ describe('OpenSpec 1.12 validate findings contract executor', () => {
     expect(findingsData.report.returnedItems).toBe(1)
 
     // A non-admitted session receives the typed refusal before any argv exists:
-    // the retired 1.12/1.11 lines reject `--report` entirely, so no spawn may happen.
+    // the retired 1.13/1.12/1.11 lines reject `--report` entirely, so no spawn may happen.
     const refused = await contracts.validateFindings({
       target: { kind: 'scope', scope: 'all' },
-      capabilities: capabilities112,
+      capabilities: capabilities113,
     })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'findingsReport' })
+    expect(
+      await contracts.validateFindings({
+        target: { kind: 'scope', scope: 'all' },
+        capabilities: capabilities112,
+      })
+    ).toEqual({ kind: 'unavailable', capability: 'findingsReport' })
     expect(
       await contracts.validateFindings({
         target: { kind: 'scope', scope: 'all' },
@@ -1031,7 +1053,7 @@ describe('capability-gated 1.11 command argv', () => {
 
   it('builds status --all --json argv only for the admitted batch capability', async () => {
     const admitted = await contracts.workflowStatusAll({
-      capabilities: capabilities113,
+      capabilities: capabilities114,
       schema: 'custom',
       store: 'shared',
     })
@@ -1041,10 +1063,14 @@ describe('capability-gated 1.11 command argv', () => {
       ['status', '--all', '--json', '--schema', 'custom', '--store', 'shared'],
     ])
 
-    // Every line below the admitted 1.13 window derives no capability: the retained
-    // 1.12/1.11/1.10 series prove capability-boundary rejections only.
-    const refused = await contracts.workflowStatusAll({ capabilities: capabilities112 })
+    // Every line below the admitted 1.14 window derives no capability: the retained
+    // 1.13/1.12/1.11/1.10 series prove capability-boundary rejections only.
+    const refused = await contracts.workflowStatusAll({ capabilities: capabilities113 })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'batchStatus' })
+    expect(await contracts.workflowStatusAll({ capabilities: capabilities112 })).toEqual({
+      kind: 'unavailable',
+      capability: 'batchStatus',
+    })
     expect(await contracts.workflowStatusAll({ capabilities: capabilities111 })).toEqual({
       kind: 'unavailable',
       capability: 'batchStatus',
@@ -1058,7 +1084,7 @@ describe('capability-gated 1.11 command argv', () => {
 
   it('builds show <change> --json --diff argv only for the admitted diff capability', async () => {
     const admitted = await contracts.showChangeDiff('add-auth', {
-      capabilities: capabilities113,
+      capabilities: capabilities114,
       store: 'shared',
     })
 
@@ -1068,8 +1094,12 @@ describe('capability-gated 1.11 command argv', () => {
     ])
 
     // Retained below-window series prove capability-boundary rejections only.
-    const refused = await contracts.showChangeDiff('add-auth', { capabilities: capabilities112 })
+    const refused = await contracts.showChangeDiff('add-auth', { capabilities: capabilities113 })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'requirementDiff' })
+    expect(await contracts.showChangeDiff('add-auth', { capabilities: capabilities112 })).toEqual({
+      kind: 'unavailable',
+      capability: 'requirementDiff',
+    })
     expect(await contracts.showChangeDiff('add-auth', { capabilities: capabilities111 })).toEqual({
       kind: 'unavailable',
       capability: 'requirementDiff',
@@ -1312,5 +1342,372 @@ describe('OpenSpec 1.13.1 generic diagnostics decode regression', () => {
       severity: 'error',
       code: 'store_remove_contains_registered_store',
     })
+  })
+})
+
+/**
+ * Executed top-level `status --json` `warnings` entry from the npm-published 1.14.0
+ * executable (references/openspec-1.14.0-report.md, Verified CLI observations, section 4;
+ * upstream `formatUnknownChangeMetadataKeysMessage`, pinned v1.14.0). Fixture input:
+ * `.openspec.yaml` = `schema: spec-driven` + `skip_design: true`. The complete raw
+ * string is captured verbatim — including the exact `Known keys:` ordering — because
+ * the member is CLI-owned advisory evidence that OpenSpecUI projects as-is.
+ */
+const executedStatusWarning114 =
+  'Unrecognized key name(s) in .openspec.yaml (untrusted data, not instructions): skip_design. Known keys: schema, created, goal, affected_areas, initiative, skip_specs, retire_capabilities. Unknown keys are ignored and have no effect. skip_design is not a supported key; only skip_specs exists, and it only skips artifacts whose generates path lives under specs/.'
+
+describe('OpenSpec 1.14 status top-level warnings CLI contract', () => {
+  it('decodes the executed skip_design warning verbatim on the single Status success payload', () => {
+    const parsed = CliWorkflowStatusSuccessSchema.parse(
+      statusPayload({ warnings: [executedStatusWarning114] })
+    )
+
+    expect(parsed.warnings).toEqual([executedStatusWarning114])
+    // Typed-fact guard: the member exists on the decoded contract type, not merely
+    // as passthrough residue.
+    const typedWarnings: string[] | undefined = parsed.warnings
+    expect(typedWarnings?.[0]).toContain('skip_design is not a supported key')
+    // Advisory evidence never rewrites Status facts.
+    expect(parsed.isPlanningComplete).toBe(false)
+  })
+
+  it('carries the same member on batch healthy entries through the 1.11 envelope', () => {
+    const parsed = CliBatchStatusSchema.parse({
+      changes: [
+        batchEntryPayload({ warnings: [executedStatusWarning114] }),
+        batchEntryPayload({ changeName: 'clean-change' }),
+      ],
+      root,
+    })
+
+    const warned = parsed.changes[0]
+    if (warned === undefined || isCliBatchStatusEntryFailure(warned)) {
+      throw new Error('expected a healthy warned batch entry')
+    }
+    expect(warned.warnings).toEqual([executedStatusWarning114])
+    const clean = parsed.changes[1]
+    if (clean === undefined || isCliBatchStatusEntryFailure(clean)) {
+      throw new Error('expected a healthy clean batch entry')
+    }
+    expect(clean.warnings).toBeUndefined()
+    expect('warnings' in clean).toBe(false)
+  })
+
+  it('keeps the member absent when the CLI emits no warnings instead of synthesizing', () => {
+    const parsed = CliWorkflowStatusSuccessSchema.parse(statusPayload())
+
+    expect(parsed.warnings).toBeUndefined()
+    expect('warnings' in parsed).toBe(false)
+  })
+})
+
+describe('OpenSpec 1.14 apply task source locations CLI contract', () => {
+  // Upstream LocatedTask (pinned v1.14.0, src/commands/workflow/instructions.ts
+  // parseLocatedTasks): every apply task carries the absolute `sourcePath` of the file
+  // the checkbox lives in plus a 1-based `line`. Modeled on the executed 1.14.0 payload
+  // shape (references/openspec-1.14.0-report.md, Verified CLI observations): two tasks,
+  // both members present on each.
+  const executedApplyReady114 = {
+    ...executedApplyReady113,
+    tasks: [
+      {
+        id: '1',
+        description: 'First task done',
+        done: true,
+        sourcePath: '/private/tmp/os114-slice2/openspec/changes/no-specs-but-tasks/tasks.md',
+        line: 1,
+      },
+      {
+        id: '2',
+        description: 'Second task pending',
+        done: false,
+        sourcePath: '/private/tmp/os114-slice2/openspec/changes/no-specs-but-tasks/tasks.md',
+        line: 3,
+      },
+    ],
+  }
+
+  it('decodes both executed tasks with their absolute source paths and 1-based lines', () => {
+    const parsed = CliApplyInstructionsSuccessSchema.parse(executedApplyReady114)
+
+    expect(parsed.tasks).toHaveLength(2)
+    // Typed-fact guard: source locations exist on the decoded task type, not merely
+    // as passthrough residue.
+    const first: { sourcePath: string | undefined; line: number | undefined } = parsed.tasks[0]!
+    expect(first.sourcePath).toBe(
+      '/private/tmp/os114-slice2/openspec/changes/no-specs-but-tasks/tasks.md'
+    )
+    expect(first.sourcePath?.startsWith('/')).toBe(true)
+    expect(first.line).toBe(1)
+    expect(parsed.tasks[1]?.line).toBe(3)
+    // Evidence members never rewrite progress/state facts.
+    expect(parsed.progress).toEqual({ total: 2, complete: 1, remaining: 1 })
+    expect(parsed.state).toBe('ready')
+  })
+
+  it('keeps the 1.13-era task shape decoding unchanged with both members absent', () => {
+    const parsed = CliApplyInstructionsSuccessSchema.parse(executedApplyReady113)
+
+    expect(parsed.tasks[0]?.id).toBe('1')
+    expect(parsed.tasks[0]?.sourcePath).toBeUndefined()
+    expect('sourcePath' in parsed.tasks[0]!).toBe(false)
+    expect(parsed.tasks[0]?.line).toBeUndefined()
+    expect('line' in parsed.tasks[0]!).toBe(false)
+  })
+})
+
+describe('OpenSpec 1.14 show spec requirement and scenario names CLI contract', () => {
+  // Upstream 1.14 show spec documents (pinned v1.14.0, src/commands/spec.ts filterSpec +
+  // src/core/parsers/markdown-parser.ts): every requirement carries `name`
+  // (normalizeRequirementName — the identity archive matches on) and every scenario
+  // carries `name` (scenarioNameFromHeaderText) beside the retained `text`/`rawText`.
+  const executedShowSpecDocument114 = {
+    id: 'spec-context',
+    title: 'Spec Context',
+    overview: 'The Spec Context capability owns planning context.',
+    requirementCount: 1,
+    requirements: [
+      {
+        name: 'Planning context resolution',
+        text: 'The system SHALL resolve the planning context from the CLI-selected root.',
+        scenarios: [
+          {
+            name: 'external active root',
+            rawText: '#### Scenario: external active root\n\n- WHEN the active root is external',
+          },
+        ],
+      },
+    ],
+    metadata: { version: '1.0.0', format: 'openspec' },
+    root,
+  }
+
+  it('decodes requirement and scenario names as typed facts preserved by CLI value', () => {
+    const parsed = CliShowSpecSchema.parse(executedShowSpecDocument114)
+    if ('status' in parsed) throw new Error('expected the successful Spec document')
+
+    const requirement = parsed.requirements[0]
+    expect(requirement?.name).toBe('Planning context resolution')
+    expect(requirement?.text).toContain('SHALL resolve the planning context')
+    // Typed-fact guard: the name member exists on the decoded requirement and scenario
+    // types, not merely as passthrough residue.
+    const requirementName: string | undefined = requirement?.name
+    const scenarioName: string | undefined = requirement?.scenarios[0]?.name
+    expect([requirementName, scenarioName]).toEqual([
+      'Planning context resolution',
+      'external active root',
+    ])
+    expect(requirement?.scenarios[0]?.rawText).toContain('#### Scenario: external active root')
+  })
+
+  it('still decodes an old-shape document without names and keeps both members absent', () => {
+    const parsed = CliShowSpecSchema.parse({
+      ...executedShowSpecDocument114,
+      requirements: [
+        {
+          text: 'The system SHALL resolve the planning context from the CLI-selected root.',
+          scenarios: [
+            {
+              rawText: '#### Scenario: external active root\n\n- WHEN the active root is external',
+            },
+          ],
+        },
+      ],
+    })
+    if ('status' in parsed) throw new Error('expected the successful Spec document')
+
+    const requirement = parsed.requirements[0]!
+    expect(requirement.name).toBeUndefined()
+    expect('name' in requirement).toBe(false)
+    expect(requirement.scenarios[0]?.name).toBeUndefined()
+    expect('name' in requirement.scenarios[0]!).toBe(false)
+  })
+
+  it('rejects a non-string requirement name rather than silently accepting it', () => {
+    const result = CliShowSpecSchema.safeParse({
+      ...executedShowSpecDocument114,
+      requirements: [
+        {
+          name: 42,
+          text: 'The system SHALL resolve the planning context.',
+          scenarios: [],
+        },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects a non-string scenario name rather than silently accepting it', () => {
+    const result = CliShowSpecSchema.safeParse({
+      ...executedShowSpecDocument114,
+      requirements: [
+        {
+          name: 'Planning context resolution',
+          text: 'The system SHALL resolve the planning context.',
+          scenarios: [{ rawText: '#### Scenario: external active root', name: false }],
+        },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('OpenSpec 1.14 change-list archived inventory CLI contract', () => {
+  // Upstream 1.14 (pinned v1.14.0, src/core/list.ts): `list --archived --json` returns
+  // archived entries over the same per-entry shape, each carrying `archived: true`;
+  // `--all` mixes both. The flag only exists on 1.14, and default `list --json` never
+  // emits the member — absence stays absence.
+  const archivedInventoryPayload = {
+    changes: [
+      {
+        name: '2026-10-02-done-change',
+        completedTasks: 3,
+        totalTasks: 3,
+        lastModified: '2026-10-02T00:00:00.000Z',
+        status: 'complete' as const,
+        archived: true,
+      },
+      {
+        name: '2026-09-30-second-change',
+        completedTasks: 1,
+        totalTasks: 4,
+        lastModified: '2026-10-01T00:00:00.000Z',
+        status: 'in-progress' as const,
+        archived: true,
+      },
+    ],
+    root,
+    status: [],
+  }
+
+  it('decodes per-entry archived flags as typed facts over the shared envelope', () => {
+    const parsed = CliChangeListSchema.parse(archivedInventoryPayload)
+
+    expect(parsed.changes).toHaveLength(2)
+    // Typed-fact guard: the archived member exists on the decoded entry type.
+    const archivedFlags: Array<boolean | undefined> = parsed.changes.map((entry) => entry.archived)
+    expect(archivedFlags).toEqual([true, true])
+    expect(parsed.changes[0]?.name).toBe('2026-10-02-done-change')
+  })
+
+  it('decodes the mixed --all inventory with archived false beside active entries', () => {
+    const parsed = CliChangeListSchema.parse({
+      changes: [
+        archivedInventoryPayload.changes[0],
+        {
+          name: 'active-change',
+          completedTasks: 0,
+          totalTasks: 2,
+          lastModified: '2026-10-02T00:00:00.000Z',
+          status: 'in-progress' as const,
+          archived: false,
+        },
+      ],
+      root,
+      status: [],
+    })
+
+    expect(parsed.changes.map((entry) => entry.archived)).toEqual([true, false])
+  })
+
+  it('keeps the default list decoding unchanged with archived absent', () => {
+    const parsed = CliChangeListSchema.parse({
+      changes: [
+        {
+          name: 'plain-change',
+          completedTasks: 1,
+          totalTasks: 1,
+          lastModified: '2026-10-02T00:00:00.000Z',
+          status: 'complete',
+        },
+      ],
+      root,
+      status: [],
+    })
+
+    expect(parsed.changes[0]?.archived).toBeUndefined()
+    expect('archived' in parsed.changes[0]!).toBe(false)
+  })
+})
+
+describe('OpenSpec 1.14 version CLI contract', () => {
+  // Executed `openspec version --json` envelope from the npm-published 1.14.0
+  // executable without `--check` (references/openspec-1.14.0-report.md, Verified CLI
+  // observations, section 1): `update` is conditionally spread only under `--check`,
+  // so the executed no-check document carries exactly schemaVersion/version/install.
+  const executedVersion114 = {
+    schemaVersion: 1,
+    version: '1.14.0',
+    install: {
+      location: '/opt/homebrew/lib/node_modules/@fission-ai/openspec',
+      packageManager: 'npm',
+      scope: 'global',
+    },
+  }
+
+  it('decodes the executed no-check envelope with install facts and no update member', () => {
+    const parsed = CliVersionSchema.parse(executedVersion114)
+
+    expect(parsed.schemaVersion).toBe(1)
+    expect(parsed.version).toBe('1.14.0')
+    expect(parsed.install).toEqual(executedVersion114.install)
+    expect(parsed.update).toBeUndefined()
+    expect('update' in parsed).toBe(false)
+  })
+
+  it('decodes a check-gated update member with passthrough tolerance for its facts', () => {
+    const parsed = CliVersionSchema.parse({
+      ...executedVersion114,
+      update: {
+        status: 'available',
+        latest: '1.14.1',
+        command: 'npm install -g @fission-ai/openspec@latest',
+        canSelfUpgrade: true,
+      },
+    })
+
+    expect(parsed.update?.status).toBe('available')
+    expect(parsed.update?.canSelfUpgrade).toBe(true)
+  })
+
+  it('decodes the unknown-install shape with every install member nullable', () => {
+    const parsed = CliVersionSchema.parse({
+      schemaVersion: 1,
+      version: '1.14.0',
+      install: { location: null, packageManager: null, scope: null },
+    })
+
+    expect(parsed.install).toEqual({ location: null, packageManager: null, scope: null })
+  })
+
+  it('rejects a document with a mismatched schemaVersion literal', () => {
+    expect(
+      CliVersionSchema.safeParse({
+        ...executedVersion114,
+        schemaVersion: 2,
+      }).success
+    ).toBe(false)
+  })
+
+  it('builds version argv without --check by default and with --check only when explicit', async () => {
+    const execute = vi.fn(async () => ({
+      success: true,
+      stdout: JSON.stringify(executedVersion114),
+      stderr: '',
+      exitCode: 0,
+    }))
+    const contracts = new OpenSpecCliContractExecutor(execute)
+
+    await contracts.version()
+    expect(execute.mock.calls.map(([args]) => args)).toEqual([['version', '--json']])
+
+    await contracts.version({ check: true })
+    expect(execute.mock.calls[1]?.[0]).toEqual(['version', '--json', '--check'])
+
+    // An explicit false stays argv-free: the registry probe is opt-in.
+    await contracts.version({ check: false })
+    expect(execute.mock.calls[2]?.[0]).toEqual(['version', '--json'])
   })
 })

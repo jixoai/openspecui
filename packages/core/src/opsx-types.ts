@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Publish runtime schemas for final Projection Work payloads, including transformed Apply progress.
  * 2. Keep isPlanningComplete as the authoritative planning fact over any local tracked alias.
  * 3. Carry CLI status evidence, diagnostics, and per-artifact requires as typed facts.
@@ -15,11 +15,20 @@
  *    recognition (OpenSpec 1.13.2, references/openspec/src/core/artifact-graph/outputs.ts):
  *    original wildcards plus extglob groups and brace expansions after POSIX separator
  *    normalization — watcher-granularity only, so dependency watching never forks upstream.
+ * 9. Project the OpenSpec 1.14 Apply task source locations (`sourcePath` absolute,
+ *    `line` 1-based) through the shared ApplyTaskSchema verbatim: optional, never
+ *    re-derived, absent-when-upstream-absent, never inputs to progress authority.
+ * 10. Project the OpenSpec 1.14 Status top-level `warnings` advisory array through the
+ *    retained ChangeStatusSchema: verbatim CLI evidence (unrecognized `.openspec.yaml`
+ *    keys), optional with no empty-array default, never a gate on planning facts — and
+ *    explicitly copied through the Kernel's projectWorkflowStatus rebuild so decode-time
+ *    passthrough retention is not lost there.
  *
  * Original request (2026-07-15): "为内核载荷建立强类型。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence projection + glob-recognition watcher parity (update-openspec-cli-1132 Slice 2).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line).
  */
 import { z } from 'zod'
 import type { CliJsonValue } from './cli-contracts/command-result.js'
@@ -145,6 +154,14 @@ export const ChangeStatusSchema = z.object({
   isPlanningComplete: z.boolean(),
   applyRequires: z.array(z.string()),
   artifacts: z.array(ArtifactStatusSchema),
+  /**
+   * OpenSpec 1.14 top-level advisory warnings (unrecognized `.openspec.yaml` keys).
+   * Verbatim CLI evidence, absent when the CLI omitted it — never a synthesized empty
+   * array and never a gate on planning facts or actions. The Kernel's
+   * `projectWorkflowStatus` rebuild copies this member explicitly because the
+   * decode-side `.passthrough()` retention does not survive the object rebuild.
+   */
+  warnings: z.array(z.string()).optional(),
   provenance: z.discriminatedUnion('kind', [
     z.object({
       kind: z.literal('cli'),
@@ -176,6 +193,14 @@ export const ApplyTaskSchema = z.object({
   id: z.string(),
   description: z.string(),
   done: z.boolean(),
+  /**
+   * OpenSpec 1.14 LocatedTask source locations: the absolute `sourcePath` of the file
+   * the checkbox lives in plus its 1-based `line`. Optional because older payloads may
+   * lack them; verbatim CLI evidence, never re-derived or second-guessed, and never an
+   * input to `createApplyInstructionProgress`.
+   */
+  sourcePath: z.string().optional(),
+  line: z.number().optional(),
 })
 
 export type ApplyTask = z.infer<typeof ApplyTaskSchema>

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Maintain reactive CLI-backed projections and their direct typed Projection Work readers.
  * 2. Share and release per-entity streams through one planning-root kernel lifecycle.
  * 3. Keep OpenSpec configuration ownership outside the workflow cache while tracking both YAML filename variants.
@@ -17,6 +17,10 @@
  *    `nested` are namespace folders and are excluded from `entries` and the compat `value`
  *    at this boundary, the structural namespace-name set is derived once here, and the CLI's
  *    top-level `warnings` ride through as display evidence (absent when the CLI omitted them).
+ * 9. Copy the OpenSpec 1.14 top-level Status `warnings` advisory array through the shared
+ *    `projectWorkflowStatus` rebuild (single serial and batch transports): the member is
+ *    verbatim CLI evidence that decode-side `.passthrough()` retention alone would strip
+ *    at this explicit object rebuild; absent stays absent and it never gates planning facts.
  *
  * Original request (2026-07-15): "Planning-root adapters and services consume the CLI-resolved root."
  * Original request (2026-07-31): "系统性地进行修复，因为List页面也有类似的问题。所有可能其它页面都有类似的问题。"
@@ -24,6 +28,7 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — Status warnings kernel copy (target-openspec-cli-114-line Slice 2).
  */
 import { join, matchesGlob, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
@@ -363,6 +368,11 @@ function projectWorkflowStatus(
     isPlanningComplete: data.isPlanningComplete,
     applyRequires: data.applyRequires,
     artifacts: data.artifacts,
+    // OpenSpec 1.14 top-level advisory warnings (unrecognized `.openspec.yaml` keys):
+    // copied explicitly because the decode-side `.passthrough()` retention is stripped
+    // by this object rebuild. Absent stays absent — never a synthesized empty array —
+    // and the member never gates planning facts.
+    ...(data.warnings !== undefined ? { warnings: data.warnings } : {}),
     provenance: {
       kind: 'cli',
       planningHome: data.planningHome,

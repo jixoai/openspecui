@@ -17,16 +17,18 @@ Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，�
 
 ## CP1 — Window and contracts (Slices 1-2)
 
-- [ ] Compat window rotated; boundary red recorded (stable 1.13.x → unsupported); mirrors + tests green.
-- [ ] Apply-task source locations, status warnings (through the kernel `projectWorkflowStatus` rebuild on
+- [x] Compat window rotated; boundary red recorded (stable 1.13.x → unsupported); mirrors + tests green.
+- [x] Apply-task source locations, status warnings (through the kernel `projectWorkflowStatus` rebuild on
       single AND batch paths — decode passthrough is stripped there today), the new list `archived` member,
       show spec names, and the version envelope typed through contract + projection chains; kernel-rebuild
       red recorded verbatim-end-to-end; focused suites green; core typecheck.
 
 ## CP2 — Registry (Slice 3)
 
-- [ ] +10 registry entries, kilo root, IBM Bob label, series `'1.14'`, generator `1.14.0`; staleness red
-      recorded; registry/state/server suites green.
+- [x] +10 registry entries, kilo root, IBM Bob label, series `'1.14'`, generator `1.14.0`; staleness red
+      recorded; registry/state/server suites green. Integrator widened
+      `SHARED_AGENTS_SKILLS_OWNER_CANDIDATES` to the five upstream 1.14 writers
+      (codex/zed/agents/amp/gsd; antigravity stays commands-only) — see implementation.md Batch A.
 
 ## CP3 — Web + fixtures (Slices 4-5)
 

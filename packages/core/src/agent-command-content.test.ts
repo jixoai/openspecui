@@ -14,6 +14,9 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ *    — registry Slice 3: the 1.12 runner now reports the four 1.14 adapters
+ *    (atomcode/codestudio/easycode/gigacode) as version-scoped unavailable evidence.
  */
 
 import { resolve } from 'node:path'
@@ -71,8 +74,20 @@ describe('loadOpenSpecAgentCommandContents', () => {
     expect(catalog?.opencode?.explore).toContain(OPENCODE_PROVIDED_ARGUMENTS_LINE)
     expect(catalog?.codex).toBeUndefined()
     expect(catalog?.['minimax-code']).toBeUndefined()
-    // The 1.12 runner ships every registry adapter, so nothing is version-unavailable.
-    expect(result?.unavailableTools).toEqual({})
+    // The 1.12 runner ships every adapter the 1.12 registry declared; the four
+    // adapter-backed tools OpenSpec 1.14 introduced (atomcode, codestudio, easycode,
+    // gigacode) are isolated as version-scoped unavailable evidence, exactly like
+    // codeassistant on the retired 1.11 runner below.
+    expect(result?.unavailableTools).toEqual({
+      atomcode:
+        'Command adapter first ships with OpenSpec CLI 1.14; this runner does not declare it.',
+      codestudio:
+        'Command adapter first ships with OpenSpec CLI 1.14; this runner does not declare it.',
+      easycode:
+        'Command adapter first ships with OpenSpec CLI 1.14; this runner does not declare it.',
+      gigacode:
+        'Command adapter first ships with OpenSpec CLI 1.14; this runner does not declare it.',
+    })
   })
 
   it('retired 1.11: isolates the missing codeassistant adapter without erasing other evidence', async () => {

@@ -114,3 +114,52 @@ complete sentence, and the Round-D record matches the real changes. No blockers,
 
 Review arc: Round-A 6.2 REVISE (7 blockers) → B 7.4 (4) → C 7.8 (2) → D 8.1 (1, caught our lost write) →
 E 9.1 GO.
+
+## Batch A implementation record (2026-10-02)
+
+### Slice 1 — Compat window and mirrors (CP1)
+
+Production: `packages/core/src/openspec-compat.ts` (MAJOR 14, series `'1.14'`, `>=1.14.0 <1.15.0`,
+NEXT_SERIES `'1.15.0'`, tag `'v1.14.*'`), `scripts/diagnose-cli-runner.mjs` + `scripts/setup-example.ts`
+mirrors rotated with their tests. Red evidence was recorded by the slice agent before the constant flip
+(6 failure sites: compat classification, boundary labels, mirror series assertions). Green:
+`openspec-compat.test.ts` inside the core run below; scripts mirror inside `pnpm test:root`
+(20 files / 75 passed | 12 skipped, includes `diagnose-cli-runner.test.mjs` parity cases).
+
+### Slice 2 — CLI contract chain and kernel warnings (CP1)
+
+Production: `cli-contracts/workflow.ts` (`CliApplyTaskSchema` + `sourcePath`/`line`;
+`CliSpecRequirementSchema` + scenario `name`; `CliWorkflowStatusFieldsSchema` `warnings` shared by
+single and batch entry shapes, batch stays entry-level only; change-list entry `archived`; new
+`CliVersionSchema`), `cli-contracts/executor.ts`, `opsx-types.ts`, and the Round-A B2 owner fix in
+`opsx-kernel.ts`: `projectWorkflowStatus` now carries
+`...(data.warnings !== undefined ? { warnings: data.warnings } : {})` through its explicit
+`ChangeStatusSchema.parse({...})` rebuild — decode `.passthrough()` is stripped at that rebuild, so the
+copy is required on BOTH the single and the shared batch path. Red evidence: new
+`opsx-kernel-status-warnings.test.ts` captured the warnings loss through the real kernel rebuild before
+the fix (verbatim single + batch payloads). Green: core focused run —
+`pnpm --filter @openspecui/core exec vitest run src/openspec-compat.test.ts src/cli-contracts/workflow.test.ts src/opsx-types.test.ts src/opsx-kernel-status-warnings.test.ts src/planning-cli-projection.test.ts src/agent-command-content.test.ts`
+→ 6 files / 114 passed; `pnpm --filter @openspecui/core exec tsc --noEmit` → 0 errors.
+
+### Slice 3 — Agent registry rotation (CP2)
+
+Production: `agent-delivery-registry.ts` (series `'1.14'`, +10 entries: amp, atomcode, codestudio, dsh,
+easycode, gigacode, grok, veai, warp, IBM Bob; gsd shares the `.agents` root with amp), `tool-init-state.ts`
++ tests. Integrator decision on the slice agent's escalation: `SHARED_AGENTS_SKILLS_OWNER_CANDIDATES`
+widens from three to five values `['codex','zed','agents','amp','gsd']` — upstream 1.14 arbitration pool
+counts five `.agents` skills writers and the reviewed spec delta already says so; antigravity stays
+commands-only (adapter-backed). The slice agent had conservatively kept the three-valued tuple and
+deferred; the registry + its test were updated together in the integrator pass. Green:
+`vitest run src/agent-delivery-registry.test.ts src/tool-init-state.test.ts src/agent-command-content.test.ts`
+→ 93 passed.
+
+### Batch A integrator pass (2026-10-02)
+
+- Fixed one stale assertion the slice rotation missed: `packages/server/src/tool-subscription-router.test.ts`
+  global install expectation `@fission-ai/openspec@1.13` → `@fission-ai/openspec@1.14` (production constant
+  had already rotated; the assertion failed once, then passed: file 5/5).
+- Server focused suites: `agent-delivery-projection-service` + `agent-integrations-router` + `tool-subscription-router`
+  → 22 + 5 passed across two runs (the split is the fixed assertion file re-run).
+- `pnpm --filter @openspecui/server run typecheck` (10 tsconfig lanes) → 0 errors.
+- Note for future rounds: multi-package `pnpm --filter A --filter B exec tsc` produces spurious TS6059
+  rootDir errors in this repo; per-package invocations are authoritative.
