@@ -78,7 +78,7 @@ checkbox markers `{x}`-style counted); `openspec view` TUI shows workflow status
   +-- openspec version [--check] [--json]  (new command; schemaVersion 1 envelope)
   +-- instructions apply --json: tasks gain sourcePath + line (always present)
   +-- list --archived / --all: archived inventory over the same JSON envelope; per-entry archived flag
-  +-- list --json: nested namespace-folder findings + top-level warnings array (nested_change_directory)
+  +-- (1.13.1 carry-forward, fixtures migrate only: list --json nested findings + warnings array)
   +-- status --json: top-level warnings (unrecognized .openspec.yaml keys)
   +-- status actionContext.allowedEditRoots: store-backed changes add the declaring repo
   +-- show --json: requirement/scenario name members (typed on CliSpecRequirementSchema + scenarios;
@@ -106,8 +106,9 @@ checkbox lives in"; OpenSpecUI must not re-derive or second-guess them.
 `list --archived --json` returns archived entries with the same per-entry shape plus `archived: true`;
 `--all` mixes both. OpenSpecUI's **Archive list keeps its reactive-filesystem adapter as the projection
 owner** this line; switching the archive inventory to the CLI transport is a separate architectural change
-(out of scope, recorded below). The typed `list` contract gains the one new member `archived?` (`nested?`/list-`warnings?` are 1.13.1 members whose fixtures migrate); the
-top-level `warnings` array so the CLI evidence is never lossy when consumed.
+(out of scope, recorded below). The typed `list` contract gains the one new member `archived?` so the CLI
+evidence is never lossy when consumed; `nested?` and the top-level `warnings` array are 1.13.1 members whose
+fixtures merely migrate this line.
 
 ### 4. Status warnings are direct-plane advisory evidence
 

@@ -95,4 +95,14 @@ adopted:
    single source of truth (archived is the one new list member; alias retained for its two historical
    consumers); the broken parallel sentence at the list section fixed; residual audit re-run.
 
-Pending: Round-D narrow re-review (documentation only).
+### Round-D review disposition (herdr v14-change-reviewer, gpt-5.6-terra xhigh, 2026-10-02) — 8.1/10, REVISE
+
+Worked 3m 57s (narrow). C1 confirmed closed. C2 partially closed — and the reviewer caught a real
+integration error on our side: the Round-C correction script aborted on a later assertion before its
+`write()`, so the protocol-tree carry-forward line and the list-sentence rewrite never landed even though
+the Round-C disposition claimed them (batch-edit write-after-all-assertions failure; lesson already in the
+global correction log). Re-applied with write-first verification (protocol tree gains the carry-forward
+line, the stale `list --json` tree row is gone, the list paragraph reads as a complete sentence); the
+fixture owner-map alias fix from Round-C had landed and is confirmed.
+
+Pending: Round-E narrow re-review of exactly these two report passages.
