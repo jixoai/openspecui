@@ -14,6 +14,10 @@ Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，�
 OpenSpecUI 14 SHALL classify stable OpenSpec CLI `>=1.14.0 <1.15.0` as supported, current, and recommended.
 OpenSpec CLI `<1.14.0` (including the whole 1.13.x window that OpenSpecUI 13 admitted, and every older line),
 every prerelease, `>=1.15.0`, and an unparseable version SHALL be incompatible and blocked by default.
+
+Scenario titles below are inherited scenario identity: an "Accept ..." title names that line's historical
+admission era, while every scenario body states the OpenSpecUI 14 classification (retired and blocked).
+Bodies are the normative text; a separate spec-hygiene change may verify a title-rename mechanism later.
 When an incompatible executable is available, the mismatch Dialog MAY expose `Skip version check`; that action
 SHALL bypass only the current Web page runtime's admission gate and SHALL NOT change the detected version,
 compatibility evidence, CLI payloads, downstream errors, or product support claim.

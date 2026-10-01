@@ -32,8 +32,10 @@ Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，�
 - [ ] Status warnings direct-plane summary row; web focused tests green.
 - [ ] Pin guards rotated; `openspec-cli-114` alias with lockfile+shim evidence; full v14 positive matrix —
       11 migrated suites + `v14-version-report` + `v14-change-list-inventory` (13 files) — green with
-      `--version` provenance; 1.13.2 boundary suite proves the just-retired line rejected (v12 boundary/alias
-      retired with proof); store edit-roots both branches asserted executably; mutation red recorded.
+      `--version` provenance; the 1.13.2 boundary suite proves the just-retired line rejected (identity +
+      unsupported classification + 1.14-only members absent; v12 boundary suite and v12 helper retired with
+      proof while the `openspec-cli-112` alias stays for its two historical consumers); store edit-roots
+      both branches asserted executably; mutation red recorded.
 
 ## CP4 — Alignment (Slice 6)
 

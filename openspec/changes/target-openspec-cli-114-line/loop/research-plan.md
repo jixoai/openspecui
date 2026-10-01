@@ -116,11 +116,16 @@ entries `archived:false/true`; nested regression kept in `nested-change`'s count
 evidence lives in the `show-diff` counterpart (scope widened to the `show` suite) — it runs BOTH
 `show <change> --json --diff` (existing) and `show <spec> --type spec --json` name assertions (new).
 
-Boundary (Round-A B4): the **1.13.2 executable (`openspec-cli-113` alias) proves the v14 gate rejects the
-just-retired line** — `official-cli-v12-boundary-fixtures.test.ts` is replaced by
-`official-cli-v13-boundary-fixtures.test.ts` (1.13.2 identity + below-admitted classification + the v13-only
-fields absent); the v12 boundary suite, `openspec-cli-112` alias, and the v12 helper retire (deletion proof
-`git diff --name-status` + orphan scan). Store edit-roots (Round-A B3): inside the `default-store`
+Boundary (Round-A B4, Round-B B1/B2): the **1.13.2 executable (`openspec-cli-113` alias) proves the v14
+gate rejects the just-retired line** — `official-cli-v12-boundary-fixtures.test.ts` is replaced by
+`official-cli-v13-boundary-fixtures.test.ts` asserting: `--version` = 1.13.2 identity, the unsupported
+classification against the v14 gate, and that the **1.14-only members are absent from 1.13.2 output**
+(task `sourcePath`/`line`, list `archived`, show names, status `warnings`) — it never claims v13-era members
+(taskTrackingConfigured etc.) are absent, they are 1.13.2's own. The v12 boundary suite and the v12 fixture
+helper retire (deletion proof `git diff --name-status` + orphan scan); **the `openspec-cli-112` npm alias
+stays installed** — `tool-init-state.test.ts` and `agent-command-content.test.ts` consume it as historical
+generator evidence outside this matrix (Round-B B2); pre-delete check `rg -n 'openspec-cli-112'
+packages/core/src` must show only those two historical consumers. Store edit-roots (Round-A B3): inside the `default-store`
 counterpart (the suite that already builds a registered store), two executable scenarios assert the
 declaring-project branch (`[implementationRoot, projectRoot]` order + the declaring-repo constraint) and the
 no-declaring-project branch (`[projectRoot]` + ask-the-user constraint), beside the existing non-store

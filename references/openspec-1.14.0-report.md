@@ -106,7 +106,7 @@ checkbox lives in"; OpenSpecUI must not re-derive or second-guess them.
 `list --archived --json` returns archived entries with the same per-entry shape plus `archived: true`;
 `--all` mixes both. OpenSpecUI's **Archive list keeps its reactive-filesystem adapter as the projection
 owner** this line; switching the archive inventory to the CLI transport is a separate architectural change
-(out of scope, recorded below). The typed `list` contract nonetheless gains `archived?`, `nested?`, and the
+(out of scope, recorded below). The typed `list` contract gains the one new member `archived?` (`nested?`/list-`warnings?` are 1.13.1 members whose fixtures migrate); the
 top-level `warnings` array so the CLI evidence is never lossy when consumed.
 
 ### 4. Status warnings are direct-plane advisory evidence
@@ -142,7 +142,8 @@ root count is allowed.
 | Surface | Primary production owner | v14 change |
 | --- | --- | --- |
 | compatibility gate | `packages/core/src/openspec-compat.ts` (+test, `scripts/diagnose-cli-runner.mjs`(+test), `scripts/setup-example.ts`) | v14 ranges, NEXT_SERIES 1.15.0, mirrors |
-| workflow JSON contracts | `packages/core/src/cli-contracts/workflow.ts` (+test) | apply task `sourcePath`/`line`; status top-level `warnings`; list `archived`/`nested`/`warnings`; version envelope contract |
+| workflow JSON contracts | `packages/core/src/cli-contracts/workflow.ts` (+test) | apply task `sourcePath`/`line`; status top-level `warnings`; the new list member `archived` (nested/warnings are 1.13.1 regression fixtures); version envelope contract |
+| show-spec names | `cli-contracts/workflow.ts` `CliSpecRequirementSchema` (+scenario) → Spec Catalog projection → server show-spec transport | requirement/scenario `name` members typed and preserved by CLI value |
 | projection schemas | `packages/core/src/opsx-types.ts` (+test), `planning-cli-projection.ts` | same members through input/projection chains |
 | Agent registry/state | `packages/core/src/agent-delivery-registry.ts`, `tool-init-state.ts` (+tests, server projection/router tests) | +10 entries, kilo dir, IBM Bob label, series `'1.14'`, generator `1.14.0` |
 | Web evidence | change-view / evidence surfaces (+tests) | status `warnings` projected as direct-plane advisory (v13 summary-row pattern) |
@@ -155,7 +156,7 @@ root count is allowed.
 In scope: the v14 admission window; typed contracts for version/list/status/apply-task/show-name members
 and their projection (status warnings must survive the kernel `projectWorkflowStatus` rebuild — single and
 batch paths — or they are lost after decode); the ten-entry registry rotation with shared-root scenario updates; status `warnings` direct-plane
-presentation following the v13 summary-row law; pinned fixture rotation with 1.13.0 boundary negatives;
+presentation following the v13 summary-row law; pinned fixture rotation with the just-retired 1.13.2 executable as the boundary negative;
 README/AGENTS/Changeset major preparation.
 
 Out of scope (follow-ups, not silently absorbed):

@@ -59,3 +59,27 @@ Non-blocking corrections adopted: `nested`/list-`warnings` reclassified as 1.13.
 new list member is `archived`); 1132 baseline verified accurate by the reviewer (no overlap).
 
 Pending: Round-B re-review.
+
+### Round-B review disposition (herdr v14-change-reviewer, gpt-5.6-terra xhigh, 2026-10-02) — 7.4/10, REVISE
+
+Worked 12m 27s. Round-A B2/B3/B7 confirmed closed; four residual blockers, all documentation-consistency
+class, adopted:
+
+1. **B1 boundary text self-contradiction** — the "v13-only fields absent" assertion was semantically wrong
+   (1.13.2 IS a v13 CLI and legitimately emits taskTrackingConfigured etc.). Rewritten everywhere: the
+   boundary asserts 1.13.2 identity + unsupported classification + **1.14-only members absent** (task
+   sourcePath/line, list archived, show names, status warnings), never v13-era absence. Residual 1.13.0
+   wordings in intake/report synced to 1.13.2.
+2. **B2 v12 alias has live consumers** — `tool-init-state.test.ts` and `agent-command-content.test.ts`
+   resolve `openspec-cli-112` as historical generator evidence. Retirement narrowed to the v12 boundary
+   suite + v12 helper; the npm alias stays; pre-delete rg check named in the plan.
+3. **B3 spec-hygiene disposition honesty** — the Round-A note overstated ("verified" nothing). This change
+   records the inherited title/body contradiction as known legacy, annotates the affected scenario BODIES
+   with an explicit "Historical title retained for scenario identity; this line is retired and blocked in
+   OpenSpecUI 14" first line (bodies are normative and editable today), and proposes the rename-mechanism
+   verification as a separate Owner-gated change. v14 merge does not block on it; the Owner may veto.
+4. **B4 report/intake count drift** — owner map gains the show-names row; list row says "the one new member
+   archived (nested/warnings are 1.13.1 regression fixtures)"; intake decision 1 "five"→"six"; decision 2
+   rewritten to name this line's new members vs migrated ones.
+
+Pending: Round-C re-review.
