@@ -148,7 +148,7 @@ root count is allowed.
 | Agent registry/state | `packages/core/src/agent-delivery-registry.ts`, `tool-init-state.ts` (+tests, server projection/router tests) | +10 entries, kilo dir, IBM Bob label, series `'1.14'`, generator `1.14.0` |
 | Web evidence | change-view / evidence surfaces (+tests) | status `warnings` projected as direct-plane advisory (v13 summary-row pattern) |
 | reference pin | `scripts/prepare-openspec-reference.mjs`, `upstream-contract-regression.test.ts`, `w2-project-binding-playwright.ts` | pin `94ca9c1e` |
-| fixtures | `packages/core/package.json` alias + `__tests__/official-cli-v14-fixtures.ts` + suite rotation | positive line 1.14.0; boundary = the just-retired 1.13.2 executable (`openspec-cli-113` alias) proving the v14 gate rejects the line it revoked; the retired `openspec-cli-112` and the v12 boundary suite are retired with their helper |
+| fixtures | `packages/core/package.json` alias + `__tests__/official-cli-v14-fixtures.ts` + suite rotation | positive line 1.14.0; boundary = the just-retired 1.13.2 executable (`openspec-cli-113` alias) proving the v14 gate rejects the line it revoked; the v12 boundary suite and its helper retire, while the `openspec-cli-112` npm alias stays for its two historical generator test consumers |
 | release | Changesets + README law (repo en/zh + CLI package) | major v14 |
 
 ## Scope boundary

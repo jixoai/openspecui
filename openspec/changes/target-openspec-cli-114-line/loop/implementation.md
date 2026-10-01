@@ -74,12 +74,25 @@ class, adopted:
    resolve `openspec-cli-112` as historical generator evidence. Retirement narrowed to the v12 boundary
    suite + v12 helper; the npm alias stays; pre-delete rg check named in the plan.
 3. **B3 spec-hygiene disposition honesty** — the Round-A note overstated ("verified" nothing). This change
-   records the inherited title/body contradiction as known legacy, annotates the affected scenario BODIES
-   with an explicit "Historical title retained for scenario identity; this line is retired and blocked in
-   OpenSpecUI 14" first line (bodies are normative and editable today), and proposes the rename-mechanism
-   verification as a separate Owner-gated change. v14 merge does not block on it; the Owner may veto.
+   adds a REQUIREMENT-LEVEL identity note in the delta spec intro (titles name historical admission eras;
+   bodies are the normative text and already state retired/blocked for every affected scenario); the
+   inherited scenario bodies themselves are unchanged. The rename-mechanism verification stays a separate
+   Owner-gated proposal and is NOT a precondition of this change; the Owner may veto.
 4. **B4 report/intake count drift** — owner map gains the show-names row; list row says "the one new member
    archived (nested/warnings are 1.13.1 regression fixtures)"; intake decision 1 "five"→"six"; decision 2
    rewritten to name this line's new members vs migrated ones.
 
-Pending: Round-C re-review.
+### Round-C review disposition (herdr v14-change-reviewer, gpt-5.6-terra xhigh, 2026-10-02) — 7.8/10, REVISE
+
+Worked 6m 15s. Boundary/alias/count fixes confirmed closed; two residuals, both factual-record corrections,
+adopted:
+
+1. **C1** — the Round-B disposition log claimed per-scenario body annotations that were never made (the
+   actual change was the requirement-level identity note). Disposition text corrected to describe the real
+   diff; inherited bodies unchanged; rename mechanism stays Owner-gated and non-blocking.
+2. **C2** — report drift: the Protocol delta tree still listed `nested`/list-`warnings` as 1.14 additions
+   and the fixture owner map still said the `openspec-cli-112` alias retires. Both rewritten to the
+   single source of truth (archived is the one new list member; alias retained for its two historical
+   consumers); the broken parallel sentence at the list section fixed; residual audit re-run.
+
+Pending: Round-D narrow re-review (documentation only).
