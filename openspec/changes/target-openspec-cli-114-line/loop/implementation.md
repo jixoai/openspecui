@@ -242,3 +242,16 @@ spawns — 7 real failures (exactly the gate-leak the file promises to fail loud
 green 85/85. Lesson recorded: capability-gated tests with hand-written version fixtures rotate with
 the window even when they consume no pinned alias; `test:ci`'s `pnpm -r` recursion stops at the
 first failing package, so a core failure masks server/web — full re-run required after any fix.
+
+### Full-gate final state (2026-10-02)
+
+- `pnpm format:check` — pass. `pnpm lint:ci` — 0 errors (6 pre-existing warnings).
+- `pnpm typecheck` — all packages pass.
+- `pnpm test:ci` — green after the two hand-written-fixture rotations (root scripts 20+2 skipped,
+  cli 2, core 84+1 skipped, server 100+2 skipped, web 195, app 68, xterm 7).
+- `pnpm test:browser:ci` — run 2 hit a load-sensitive xterm storybook flake
+  (`virtual-trackpad-tab` Pixi canvas null on a parallel browser run); isolated rerun of that file
+  passed, and run 3 of the full browser gate passed clean (exit 0, all suites). Pre-existing
+  flake disclosed, not papered over.
+- SSG static minimal set (`entry-client-static` + `static-data-provider.opsx`) — pass (no
+  static-surface changes in this line beyond shared projections).
