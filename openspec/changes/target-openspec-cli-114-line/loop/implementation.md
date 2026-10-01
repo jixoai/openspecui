@@ -224,3 +224,21 @@ Cross-slice check after three parallel agents shared one worktree: core 18 files
 including the cross-slice fixpoint: Slice 4's reported `change-view.test.tsx` 24/25 failure (admitted
 fixture 1.13.0 rejected by the rotated window) is closed by Slice 6's literal rotation, now 25/25 —
 server 4 files green, core+web typecheck clean, no orphan references, lockfile scoped to the new alias.
+
+### Slice 7 delivery prep + full-gate residue (2026-10-02)
+
+Delivery docs: `.changeset/openspec-114-line-adaptation.md` (major ×4); repository README en/zh v14
+rows + v13 archived snapshots (`README-1.13.0.md` / `README-zh-1.13.0.md`) + 1.14 feature prose +
+`@1.14` upgrade command; CLI package README scoped to the v14 line (release README law); CLAUDE.md
+session pointer to `openspec-1.14.0-report.md`; AGENTS.md v14 architecture decision + submodule pin
+line (v14 `94ca9c1e`, v1.13.2 `db23097` into historical pins).
+
+Full-gate residue caught by `pnpm test:ci`: `opsx-kernel-cli-projection.test.ts` was outside every
+slice list (hand-written fake CLI, not the pinned fixture matrix). Its admitted/retired fixture
+versions still modeled the v13 window (`'1.12.0' | '1.13.0'`), so the rotated compat gate derived
+all-false batch/findings capabilities and the batch status transport fell back to per-change serial
+spawns — 7 real failures (exactly the gate-leak the file promises to fail loudly). Rotated to
+`'1.13.0' | '1.14.0'` (types, call sites, fake guards `startsWith('1.14')`, prose, header); file
+green 85/85. Lesson recorded: capability-gated tests with hand-written version fixtures rotate with
+the window even when they consume no pinned alias; `test:ci`'s `pnpm -r` recursion stops at the
+first failing package, so a core failure masks server/web — full re-run required after any fix.
