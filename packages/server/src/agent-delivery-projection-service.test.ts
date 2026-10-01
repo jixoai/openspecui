@@ -5,10 +5,11 @@
  * 3. Prove explicit refresh and dispose own deterministic replacement and retirement boundaries.
  * 4. Prove version-selected inventories including unavailable-CLI sessions.
  * 5. Keep the initial real-registry reactive wait ahead of shared CI runners.
- * 6. Lock the admitted 1.13 series snapshot: every 1.12/1.11 physical fact carries forward,
- *    Zed stays skills-only, Antigravity keeps its `.agents` root plus `.agent` legacy-migration
- *    evidence, codeassistant joins with `.codeassistant`, and retired sessions
- *    (1.10/1.11/1.12/1.9) select none.
+ * 6. Lock the admitted 1.14 series snapshot: every 1.13/1.12/1.11 physical fact carries
+ *    forward, Zed stays skills-only, Antigravity keeps its `.agents` root plus `.agent`
+ *    legacy-migration evidence, codeassistant joins with `.codeassistant`, the ten 1.14
+ *    entries join the admitted inventory, and retired sessions (1.10/1.11/1.12/1.13/1.9)
+ *    select none.
  *
  * Original request (2026-08-01): "新增 Agent delivery projection service 及 checked tests。"
 
@@ -17,8 +18,9 @@
  *   snapshot out ~1 in 2 full-suite runs (same class the opsx-kernel reactive budget was raised
  *   for on 2026-08-14); local quiet-machine runs stay green, so the wait budget is the defect.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
- * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  */
 
 import {
@@ -44,7 +46,7 @@ import type { ProjectionWorkSubscription } from './projection-work/index.js'
 
 const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
 const cliExecutor = {
-  checkAvailability: async () => ({ available: true, version: '1.13.0' }),
+  checkAvailability: async () => ({ available: true, version: '1.14.0' }),
 }
 const cliCommandAuthority = {
   getCliCommand: async () => ['not-an-importable-openspec-runner'],
@@ -159,7 +161,7 @@ async function writeGeneratedSkill(
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.13.0\n---\n`,
+    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.14.0\n---\n`,
     'utf8'
   )
   return path
@@ -221,7 +223,7 @@ describe('AgentDeliveryProjectionService', () => {
         delivery: 'skills',
         workflows: ['update'],
       })
-      expect(current.registry).toHaveLength(40)
+      expect(current.registry).toHaveLength(50)
       expect(current.registry.find((tool) => tool.value === 'agents')).toMatchObject({
         available: true,
         skillsDir: '.agents',
@@ -251,9 +253,10 @@ describe('AgentDeliveryProjectionService', () => {
         aliases: ['windsurf'],
         migrations: [{ from: '.windsurf', to: '.devin', needsConsent: true }],
       })
-      // The admitted 1.13 line projects Zed beside the shared root and Antigravity's
+      // The admitted 1.14 line projects Zed beside the shared root and Antigravity's
       // migrated `.agents` root with its legacy `.agent` evidence; codeassistant joins
-      // as the SourceCraft Code Assistant target introduced on the 1.12 line.
+      // as the SourceCraft Code Assistant target introduced on the 1.12 line, and the
+      // shared-root readers amp and gsd join with the 1.14 entries.
       expect(current.registry.find((tool) => tool.value === 'zed')).toMatchObject({
         skillsDir: '.agents',
         detectionPaths: ['.zed', '.agents/skills'],
@@ -268,7 +271,7 @@ describe('AgentDeliveryProjectionService', () => {
         command: { pathTemplate: '.agents/workflows/opsx-{workflow}.md' },
       })
       // codeassistant entered the inventory on the 1.12 line and carries forward on the
-      // admitted 1.13 line: SourceCraft roots, adapter-backed capability, and no
+      // admitted 1.14 line: SourceCraft roots, adapter-backed capability, and no
       // IDE-restart fact.
       expect(current.registry.find((tool) => tool.value === 'codeassistant')).toMatchObject({
         available: true,
@@ -279,9 +282,31 @@ describe('AgentDeliveryProjectionService', () => {
       expect(
         current.registry.find((tool) => tool.value === 'codeassistant')?.requiresIdeRestart
       ).toBeUndefined()
+      // The 1.14 entries project on the admitted line: shared-root amp/gsd, the
+      // skills-invocable warp target, and the codestudio adapter with its restart fact.
+      expect(current.registry.find((tool) => tool.value === 'amp')).toMatchObject({
+        skillsDir: '.agents',
+        detectionPaths: ['.amp', '.agents/skills'],
+        capability: 'none',
+      })
+      expect(current.registry.find((tool) => tool.value === 'gsd')).toMatchObject({
+        skillsDir: '.agents',
+        detectionPaths: ['.gsd'],
+        capability: 'skills-invocable',
+      })
+      expect(current.registry.find((tool) => tool.value === 'warp')).toMatchObject({
+        skillsDir: '.warp',
+        detectionPaths: ['.warp', 'WARP.md'],
+        capability: 'skills-invocable',
+      })
+      expect(current.registry.find((tool) => tool.value === 'codestudio')).toMatchObject({
+        skillsDir: '.codestudio',
+        requiresIdeRestart: true,
+        command: { pathTemplate: '.codestudio/prompts/opsx-{workflow}.prompt.md' },
+      })
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.13.0',
+        generatedByVersion: '1.14.0',
         installedSkillWorkflows: ['update'],
       })
 
@@ -323,7 +348,7 @@ describe('AgentDeliveryProjectionService', () => {
     try {
       const current = await service.getCurrent()
 
-      expect(current.registry).toHaveLength(40)
+      expect(current.registry).toHaveLength(50)
       expect(findToolState(current, 'claude')?.status).toBe('uninitialized')
       expect(getCliCommand).not.toHaveBeenCalled()
     } finally {
@@ -355,7 +380,7 @@ describe('AgentDeliveryProjectionService', () => {
 
     try {
       const current = await service.getCurrent()
-      // No live CLI means no admitted inventory: the pinned 1.13.0 generator version must not
+      // No live CLI means no admitted inventory: the pinned 1.14.0 generator version must not
       // fabricate one.
       expect(current.registry).toEqual([])
       expect(current.states).toEqual([])
@@ -425,6 +450,40 @@ describe('AgentDeliveryProjectionService', () => {
       // session must not inherit an admitted inventory, and the service projection
       // agrees exactly with the Core series selector over the same detected version.
       expect(selectAgentDeliveryRegistry('1.12.0')).toEqual([])
+      expect(current.registry).toEqual([])
+      expect(current.states).toEqual([])
+    } finally {
+      await service.dispose()
+      await rm(projectDir, { recursive: true, force: true })
+    }
+  })
+
+  it('selects an empty inventory for a retired 1.13 session and matches the Core selector', async () => {
+    clearCache()
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-113-'))
+    const environment = new EnvironmentAuthorityFixture(
+      environmentProjection({ delivery: 'skills', workflows: ['update'] })
+    )
+    const observationEnvironment = new ReactiveObservationEnvironment()
+    const service = new AgentDeliveryProjectionService({
+      projectDir,
+      environmentGlobalProjectionService: environment,
+      observationEnvironment,
+      cliExecutor: {
+        ...cliExecutor,
+        checkAvailability: async () => ({ available: true, version: '1.13.2' }),
+      },
+      cliCommandAuthority,
+    })
+
+    try {
+      await writeGeneratedSkill(projectDir, 'update')
+      const current = await service.getCurrent()
+
+      // The v13 window retired with the v14 single-series admission: a bypassed 1.13
+      // session must not inherit an admitted inventory, and the service projection
+      // agrees exactly with the Core series selector over the same detected version.
+      expect(selectAgentDeliveryRegistry('1.13.2')).toEqual([])
       expect(current.registry).toEqual([])
       expect(current.states).toEqual([])
     } finally {

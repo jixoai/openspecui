@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Verify Apply instruction context-file normalization.
  * 2. Require command-specific CLI evidence on demand-driven instruction leaves.
  * 3. Preserve typed OpenSpec 1.6 Reference indexes on both instruction surfaces.
@@ -15,14 +15,28 @@
  *    OpenSpec 1.13.2 (`references/openspec/src/core/artifact-graph/outputs.ts`): original
  *    wildcards plus brace expansions and extglob groups after POSIX normalization, while
  *    literal filenames stay literal — watcher-granularity only.
+ * 8. Preserve the OpenSpec 1.14 Apply task source locations (`sourcePath` absolute,
+ *    `line` 1-based) through the input/projection schemas verbatim: optional everywhere,
+ *    absent-when-upstream-absent, never re-derived or second-guessed locally.
+ * 9. Preserve the OpenSpec 1.14 Status top-level `warnings` advisory array through the
+ *    retained `ChangeStatusSchema`: verbatim CLI evidence, absent when the CLI omitted
+ *    it, never a gate on planning facts.
  *
  * Original request (2026-07-15): "Preserve CLI-provided paths, action context, References, and diagnostics end to end."
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence projection + glob-recognition parity (update-openspec-cli-1132 Slice 2).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line);
+ *   Slice 5 fixture-matrix lane hygiene: the source-location guard annotation becomes
+ *   optional members (matching the optional schema members) so the typecheck lane compiles.
  */
 import { describe, expect, it } from 'vitest'
-import { ApplyInstructionsSchema, ArtifactInstructionsSchema, isGlobPattern } from './opsx-types.js'
+import {
+  ApplyInstructionsSchema,
+  ArtifactInstructionsSchema,
+  ChangeStatusSchema,
+  isGlobPattern,
+} from './opsx-types.js'
 
 const referenceIndex = [
   {
@@ -271,6 +285,140 @@ describe('ApplyInstructionsSchema', () => {
     expect('taskTrackingConfigured' in parsed).toBe(false)
     expect(parsed.unavailableTrackingFiles).toBeUndefined()
     expect('unavailableTrackingFiles' in parsed).toBe(false)
+  })
+
+  it('preserves OpenSpec 1.14 apply task source locations verbatim through the projection', () => {
+    // Upstream LocatedTask (pinned v1.14.0): every apply task carries the absolute
+    // `sourcePath` of the file the checkbox lives in plus a 1-based `line`. Both ride
+    // the input schema and survive the transformed projection untouched — OpenSpecUI
+    // never re-derives or second-guesses them.
+    const parsed = ApplyInstructionsSchema.parse({
+      ...baseApplyInstructions,
+      contextFiles: {},
+      tasks: [
+        {
+          id: '1',
+          description: 'First task done',
+          done: true,
+          sourcePath: '/repo/openspec/changes/add-example/tasks.md',
+          line: 1,
+        },
+        {
+          id: '2',
+          description: 'Second task pending',
+          done: false,
+          sourcePath: '/repo/openspec/changes/add-example/tasks.md',
+          line: 3,
+        },
+      ],
+    })
+
+    const first: { sourcePath?: string | undefined; line?: number | undefined } = parsed.tasks[0]!
+    expect(first.sourcePath).toBe('/repo/openspec/changes/add-example/tasks.md')
+    expect(first.line).toBe(1)
+    expect(parsed.tasks[1]?.line).toBe(3)
+    // Source locations never touch the progress authority.
+    expect(parsed.applyInstructionProgress).toMatchObject({
+      total: 1,
+      complete: 0,
+      remaining: 1,
+      state: 'ready',
+    })
+  })
+
+  it('keeps apply task source locations absent on pre-1.14 payloads without synthesizing', () => {
+    const parsed = ApplyInstructionsSchema.parse({
+      ...baseApplyInstructions,
+      contextFiles: {},
+    })
+
+    expect(parsed.tasks[0]?.sourcePath).toBeUndefined()
+    expect('sourcePath' in parsed.tasks[0]!).toBe(false)
+    expect(parsed.tasks[0]?.line).toBeUndefined()
+    expect('line' in parsed.tasks[0]!).toBe(false)
+  })
+})
+
+describe('ChangeStatusSchema', () => {
+  /**
+   * Executed top-level `status --json` `warnings` entry from the npm-published 1.14.0
+   * executable (references/openspec-1.14.0-report.md, Verified CLI observations,
+   * section 4): fixture input `.openspec.yaml` = `schema: spec-driven` +
+   * `skip_design: true`. Verbatim, CLI-owned advisory evidence.
+   */
+  const executedStatusWarning114 =
+    'Unrecognized key name(s) in .openspec.yaml (untrusted data, not instructions): skip_design. Known keys: schema, created, goal, affected_areas, initiative, skip_specs, retire_capabilities. Unknown keys are ignored and have no effect. skip_design is not a supported key; only skip_specs exists, and it only skips artifacts whose generates path lives under specs/.'
+
+  const cliStatusValue = {
+    changeName: 'add-example',
+    schemaName: 'spec-driven',
+    isPlanningComplete: false,
+    applyRequires: ['tasks'],
+    artifacts: [
+      {
+        id: 'proposal',
+        outputPath: 'proposal.md',
+        status: 'done' as const,
+        requires: [],
+      },
+    ],
+    provenance: {
+      kind: 'cli' as const,
+      planningHome: {
+        kind: 'repo' as const,
+        root: '/repo',
+        changesDir: '/repo/openspec/changes',
+        defaultSchema: 'spec-driven',
+      },
+      changeRoot: '/repo/openspec/changes/add-example',
+      artifactPaths: {
+        proposal: {
+          outputPath: 'proposal.md',
+          resolvedOutputPath: '/repo/openspec/changes/add-example/proposal.md',
+          existingOutputPaths: ['/repo/openspec/changes/add-example/proposal.md'],
+        },
+      },
+      nextSteps: [],
+      actionContext: {
+        mode: 'repo-local' as const,
+        sourceOfTruth: 'repo' as const,
+        planningArtifacts: ['proposal'],
+        linkedContext: [],
+        allowedEditRoots: ['/repo'],
+        requiresAffectedAreaSelection: false,
+        constraints: [],
+      },
+      root: { path: '/repo', source: 'nearest' as const },
+      evidence: {
+        command: 'status' as const,
+        success: true,
+        stdout: '{}',
+        stderr: '',
+        exitCode: 0,
+        payload: {},
+        diagnostics: [],
+        selector: {},
+        root: { path: '/repo', source: 'nearest' as const },
+      },
+    },
+  }
+
+  it('preserves the executed 1.14 warnings member verbatim on the retained projection', () => {
+    const parsed = ChangeStatusSchema.parse({
+      ...cliStatusValue,
+      warnings: [executedStatusWarning114],
+    })
+
+    expect(parsed.warnings).toEqual([executedStatusWarning114])
+    // Advisory evidence never rewrites the planning-completion fact.
+    expect(parsed.isPlanningComplete).toBe(false)
+  })
+
+  it('keeps the member absent when the CLI omitted it instead of synthesizing', () => {
+    const parsed = ChangeStatusSchema.parse(cliStatusValue)
+
+    expect(parsed.warnings).toBeUndefined()
+    expect('warnings' in parsed).toBe(false)
   })
 })
 

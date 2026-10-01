@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Model camelCase workflow JSON independently from Store-family JSON.
  * 2. Preserve strict, archived, and bulk Validate plus Archive outcomes, including failure payloads.
  * 3. Preserve multiline requirement bodies from `show --json`.
@@ -26,6 +26,17 @@
  *    members: 1.13.2 always emits the boolean while 1.13.0/1.13.1 (still admitted) emit
  *    neither, so absence stays "unknown" and is never synthesized; the array is
  *    absent-when-everything-is-readable and both stay verbatim evidence.
+ * 11. Type the OpenSpec 1.14 members (references/openspec-1.14.0-report.md, Verified CLI
+ *    observations) as additive optional facts: apply task `sourcePath` (absolute) +
+ *    `line` (1-based, upstream LocatedTask) — older in-flight payloads may lack them and
+ *    OpenSpecUI never re-derives them; show-Spec requirement/scenario `name` members
+ *    (upstream normalizeRequirementName/scenarioNameFromHeaderText) preserved by CLI
+ *    value with old snapshots still decoding; Status top-level `warnings` advisory array
+ *    on the single success payload and every batch healthy entry (same fields schema),
+ *    verbatim CLI evidence that never gates anything; change-list per-entry `archived`
+ *    boolean from `list --archived`/`--all` (default list never emits it); and the new
+ *    `openspec version --json` envelope (`schemaVersion: 1` literal, `version`,
+ *    `install`, check-gated passthrough `update`).
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
@@ -35,6 +46,7 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — Apply tracking-evidence decode contract (update-openspec-cli-1132 Slice 2).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line).
  */
 import { z } from 'zod'
 import {
@@ -74,6 +86,13 @@ const CliChangeListEntrySchema = z
      * entry ("do not treat such an entry as a change"); absent when the entry is a change.
      */
     nested: z.array(z.string()).optional(),
+    /**
+     * OpenSpec 1.14: present only on `list --archived` / `list --all` documents, marking
+     * the entry as archive inventory (`true`, or `false` beside active entries under
+     * `--all`). The default `list --json` never emits it, so absence carries no
+     * information and is never synthesized.
+     */
+    archived: z.boolean().optional(),
   })
   .passthrough()
 
@@ -134,11 +153,21 @@ export const CliTemplateEntrySchema = z
 
 export const CliTemplatesSchema = z.record(CliTemplateEntrySchema)
 
-/** One requirement body shared by Spec documents and Change deltas. */
+/**
+ * One requirement body shared by Spec documents and Change deltas.
+ *
+ * OpenSpec 1.14 adds `name` on requirements and scenarios (upstream
+ * `normalizeRequirementName` / `scenarioNameFromHeaderText`): the requirement name is
+ * the identity archive matches on. Optional because old snapshots and in-window
+ * payloads may lack it; preserved strictly by CLI value, never re-derived locally.
+ */
 export const CliSpecRequirementSchema = z
   .object({
+    name: z.string().optional(),
     text: z.string(),
-    scenarios: z.array(z.object({ rawText: z.string() }).passthrough()),
+    scenarios: z.array(
+      z.object({ name: z.string().optional(), rawText: z.string() }).passthrough()
+    ),
   })
   .passthrough()
 
@@ -228,6 +257,14 @@ export const CliWorkflowStatusFieldsSchema = z
     nextSteps: z.array(z.string()),
     actionContext: CliActionContextSchema,
     artifacts: z.array(CliStatusArtifactSchema),
+    /**
+     * OpenSpec 1.14 top-level advisory warnings (unrecognized `.openspec.yaml` keys,
+     * upstream `formatUnknownChangeMetadataKeysMessage`). Verbatim CLI evidence, spread
+     * only when non-empty upstream, so absence stays absence; advisory only — never a
+     * gate on planning facts or actions. Shared by the single success payload and every
+     * batch healthy entry (the same fields schema).
+     */
+    warnings: z.array(z.string()).optional(),
   })
   .passthrough()
 
@@ -286,6 +323,15 @@ const CliApplyTaskSchema = z
     id: z.string(),
     description: z.string(),
     done: z.boolean(),
+    /**
+     * OpenSpec 1.14 LocatedTask source locations: the absolute `sourcePath` of the file
+     * the checkbox lives in plus its 1-based `line`. Always present on 1.14 output, but
+     * optional here because older in-flight payloads and retained snapshots may lack
+     * them; verbatim CLI evidence ("which file the checkbox lives in") that OpenSpecUI
+     * never re-derives or second-guesses.
+     */
+    sourcePath: z.string().optional(),
+    line: z.number().optional(),
   })
   .passthrough()
 
@@ -519,6 +565,40 @@ export const CliArchiveSchema = z
   })
   .passthrough()
 
+/**
+ * Typed result of the OpenSpec 1.14 `openspec version --json` command.
+ *
+ * Upstream (pinned v1.14.0, src/cli/index.ts + src/core/version-check.ts) always emits
+ * `schemaVersion: 1`, the running `version`, and the resolved `install` facts (every
+ * install member nullable — an unresolvable install reports all-null, never a guess).
+ * `update` is conditionally spread only under `--check` (a registry probe honoring
+ * CI/no-network and DO_NOT_TRACK opt-outs), so it is optional with no default and its
+ * facts stay passthrough evidence; the probe is opt-in and OpenSpecUI composes no
+ * capability gate for this admitted-window command.
+ */
+export const CliVersionSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    version: z.string(),
+    install: z
+      .object({
+        location: z.string().nullable(),
+        packageManager: z.enum(['npm', 'pnpm', 'bun', 'yarn', 'volta']).nullable(),
+        scope: z.enum(['global', 'project', 'temporary', 'source']).nullable(),
+      })
+      .passthrough(),
+    update: z
+      .object({
+        status: z.enum(['disabled', 'offline', 'available', 'current']),
+        latest: z.string().nullable(),
+        command: z.string().nullable(),
+        canSelfUpgrade: z.boolean(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough()
+
 /** One CLI-reported Change row: task counts and phase straight from `openspec list`. */
 export type CliChangeListEntry = z.infer<typeof CliChangeListEntrySchema>
 
@@ -547,3 +627,4 @@ export type CliValidateSummary = z.infer<typeof CliValidateSummarySchema>
 export type CliValidateFindings = z.infer<typeof CliValidateFindingsSchema>
 export type CliValidateFindingsResult = z.infer<typeof CliValidateFindingsResultSchema>
 export type CliArchive = z.infer<typeof CliArchiveSchema>
+export type CliVersion = z.infer<typeof CliVersionSchema>

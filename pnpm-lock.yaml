@@ -312,6 +312,9 @@ importers:
       openspec-cli-113:
         specifier: npm:@fission-ai/openspec@1.13.2
         version: '@fission-ai/openspec@1.13.2(@types/node@22.19.1)'
+      openspec-cli-114:
+        specifier: npm:@fission-ai/openspec@1.14.0
+        version: '@fission-ai/openspec@1.14.0(@types/node@22.19.1)'
       openspec-cli-14:
         specifier: npm:@fission-ai/openspec@1.4.0
         version: '@fission-ai/openspec@1.4.0(@types/node@22.19.1)'
@@ -1657,6 +1660,11 @@ packages:
 
   '@fission-ai/openspec@1.13.2':
     resolution: {integrity: sha512-HzBaN9C1/ET+tgm/pxbWQYY4Kf+X9/1MSVEGQ8ZT3g4ZpdHn6v82CHkN+zmt9qv98Ghw0MDpmURasjJD2f90bg==}
+    engines: {node: '>=20.19.0'}
+    hasBin: true
+
+  '@fission-ai/openspec@1.14.0':
+    resolution: {integrity: sha512-V+zitRK918I6B3EIcYL3gVYoPoPgzknSxE1zL0zUQdbd4NsO5kbrxU5jVceuNNEznD94pbRPCvpCDIa6BeEaPA==}
     engines: {node: '>=20.19.0'}
     hasBin: true
 
@@ -8924,6 +8932,21 @@ snapshots:
       - '@types/node'
 
   '@fission-ai/openspec@1.13.2(@types/node@22.19.1)':
+    dependencies:
+      '@inquirer/core': 12.0.1(@types/node@22.19.1)
+      '@inquirer/prompts': 8.7.0(@types/node@22.19.1)
+      chalk: 5.6.2
+      commander: 14.0.3
+      cross-spawn: 7.0.6
+      diff: 9.0.0
+      fast-glob: 3.3.3
+      ora: 9.4.1
+      yaml: 2.9.0
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - '@types/node'
+
+  '@fission-ai/openspec@1.14.0(@types/node@22.19.1)':
     dependencies:
       '@inquirer/core': 12.0.1(@types/node@22.19.1)
       '@inquirer/prompts': 8.7.0(@types/node@22.19.1)

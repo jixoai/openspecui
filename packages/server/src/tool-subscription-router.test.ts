@@ -15,11 +15,13 @@
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  *
- *   The pinned fallback spec, generated-by expectations, and the versioned install-series
- *   assertion follow the v13 1.13 series from the shared compat constants.
+ *   The pinned fallback spec and generated-by expectations follow the v14 1.14 series;
+ *   the versioned install-series assertion tracks the shared compat constants (rotated
+ *   with the compat window, Slice 6 ownership).
  * Original request (2026-08-28, issue #258): the global install stream installs the admitted
  *   versioned series instead of an unversioned spec the admission gate can block.
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  */
 import {
   clearCache,
@@ -80,7 +82,7 @@ async function writeArtifact(filePath: string, content = '# external fixture\n')
 
 async function writeGeneratedSkill(filePath: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.13.0"\n---\n', 'utf8')
+  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.14.0"\n---\n', 'utf8')
 }
 
 async function prepareCachedRunnerReplacement(
@@ -169,7 +171,7 @@ async function createRouterFixture(
   const releaseLaunchObservation = await server.observationEnvironment.acquireRoot(launchRoot)
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.13.0',
+    version: '1.14.0',
   })
   const environment = {
     kind: 'environment-global',
@@ -454,7 +456,7 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
         expect(findToolState(initialized, 'claude')).toMatchObject({
           status: 'initialized',
           readiness: 'initialized',
-          generatedByVersion: '1.13.0',
+          generatedByVersion: '1.14.0',
           issues: [],
         })
 
@@ -671,7 +673,7 @@ describe(
         await expect(Promise.all(runnerAtExit)).resolves.toMatchObject([{ version: 'runner-b' }])
         expect(events).toEqual([{ type: 'exit', exitCode: 0 }])
         expect(executeCommandStream).toHaveBeenCalledWith(
-          ['npm', 'install', '-g', '@fission-ai/openspec@1.13'],
+          ['npm', 'install', '-g', '@fission-ai/openspec@1.14'],
           expect.any(Function)
         )
       } finally {

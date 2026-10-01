@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Build root-aware read and workflow command argv.
  * 2. Build Store inspection and mutation argv through the official CLI surface.
  * 3. Build strict validate/archive argv without implicit recovery behavior.
@@ -11,11 +11,15 @@
  *    entirely), decode findings through their own result schema, and answer a
  *    non-admitted session with a typed refusal before any argv is composed; the CLI
  *    owns every remaining request-combination rejection.
+ * 7. Own the OpenSpec 1.14 `openspec version --json` argv: `--check` (a registry probe)
+ *    composes only when explicitly requested — the admitted-window command needs no
+ *    capability gate, and the update UX stays out of scope.
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — version command contract (target-openspec-cli-114-line Slice 2).
  */
 import type { z } from 'zod'
 import type { CliResult } from '../cli-executor.js'
@@ -50,6 +54,7 @@ import {
   CliTemplatesSchema,
   CliValidateFindingsResultSchema,
   CliValidateSchema,
+  CliVersionSchema,
   CliWorkflowStatusSchema,
   type CliApplyInstructions,
   type CliArchive,
@@ -62,6 +67,7 @@ import {
   type CliTemplates,
   type CliValidate,
   type CliValidateFindingsResult,
+  type CliVersion,
   type CliWorkflowStatus,
 } from './workflow.js'
 
@@ -175,6 +181,20 @@ export class OpenSpecCliContractExecutor {
   private withWorkflowOptions(args: string[], options: CliWorkflowOptions = {}): string[] {
     if (options.schema !== undefined) args.push('--schema', options.schema)
     return this.withRoot(args, options)
+  }
+
+  /**
+   * Read the installed OpenSpec version envelope (OpenSpec 1.14 command family).
+   *
+   * `--check` performs a registry probe (CI/no-network and DO_NOT_TRACK opt-outs
+   * upstream) and composes only when explicitly requested, because the probe is an
+   * opt-in update check, never part of ordinary version evidence. No capability gate:
+   * every CLI admitted by the single-series window declares the command.
+   */
+  async version(options: { check?: boolean } = {}): Promise<CliCommandResult<CliVersion>> {
+    const args = ['version', '--json']
+    if (options.check) args.push('--check')
+    return this.execute(args, CliVersionSchema)
   }
 
   /** List changes in the CLI-selected planning root. */

@@ -1,14 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
- * 1. Preserve the complete pinned OpenSpec 1.13 Agent delivery registry in one typed physical owner.
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * 1. Preserve the complete pinned OpenSpec 1.14 Agent delivery registry in one typed physical owner.
  * 2. Co-locate capability, command artifact, invocation, alias, setup, cleanup, and migration metadata.
  * 3. Model current/legacy project roots, user-global skill roots, detection paths, and IDE restart facts.
  * 4. Keep the per-series override mechanism available for future widened windows while the
- *    admitted window is the single '1.13' line (every 1.12/1.11 physical fact carries forward).
+ *    admitted window is the single '1.14' line (every 1.13/1.12 physical fact carries forward).
  * 5. Declare the shared `.agents` skills-root owner candidate set and its arbitration order as
  *    metadata only; physical arbitration stays owned by the official CLI and the Server projection.
- * 6. Select the official inventory for the admitted CLI line ('1.13') only; retired minors
- *    ('1.10'/'1.11'/'1.12') stay typed as provenance history and select no inventory.
+ * 6. Select the official inventory for the admitted CLI line ('1.14') only; retired minors
+ *    ('1.10'/'1.11'/'1.12'/'1.13') stay typed as provenance history and select no inventory.
  * 7. Carry Kilo Code's 1.13.2 command-path rotation as a physical fact: `.kilo/command/` is the
  *    live delivery target, the former `.kilocode/workflows/opsx-{workflow}.md` path is legacy
  *    evidence, and cleanup covers exactly the old folder's two generations — never `.kilo/command/`.
@@ -20,6 +20,10 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-26): Slice 3 of the 1.13.2 patch rotation — mirror upstream
  *    kilocode adapter/legacy-cleanup facts (command path `.kilo/command/opsx-<id>.md`).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ *    — Slice 3 rotates the series to '1.14' and lands the ten 1.14 entries (amp, atomcode,
+ *    codestudio, dsh, easycode, gigacode, grok, gsd, veai, warp); the Kilo directory rotation
+ *    already landed with the 1132 change and is not repeated here.
  */
 import { parseOpenSpecCliVersion } from './openspec-compat.js'
 
@@ -110,22 +114,22 @@ export interface AIToolOption {
 }
 
 /** Official OpenSpec CLI lines with distinct Agent inventories admitted by this release line. */
-export type AgentCliSeries = '1.13'
+export type AgentCliSeries = '1.14'
 
 /**
  * Historical provenance lines for registry facts that predate or retire out of the
  * admitted window (`minCliSeries`, `requiresIdeRestartSince`, and on-disk
  * `generatedBy` stamps typed at their consumers). Selection math treats them as
- * ordered history: a provenance line below the admitted line never gates a v13
- * inventory, and retired admitted lines ('1.10'/'1.11'/'1.12') select no inventory
- * at all.
+ * ordered history: a provenance line below the admitted line never gates a v14
+ * inventory, and retired admitted lines ('1.10'/'1.11'/'1.12'/'1.13') select no
+ * inventory at all.
  */
-export type AgentProvenanceCliSeries = '1.9' | '1.10' | '1.11' | '1.12' | AgentCliSeries
+export type AgentProvenanceCliSeries = '1.9' | '1.10' | '1.11' | '1.12' | '1.13' | AgentCliSeries
 
 /**
  * Per-series divergence applied when one admitted CLI line pins a different physical
  * reality than the newest line. The base registry always mirrors the newest admitted
- * line (1.13); an override replaces the listed fields for an older admitted line
+ * line (1.14); an override replaces the listed fields for an older admitted line
  * when a future release widens the window again. A field explicitly set to
  * `undefined` clears the newest-line value.
  */
@@ -150,6 +154,8 @@ function agentCliSeriesOrder(series: AgentProvenanceCliSeries): number {
       return 12
     case '1.13':
       return 13
+    case '1.14':
+      return 14
   }
 }
 
@@ -167,26 +173,34 @@ export const SHARED_SKILLS_TARGET_MARKER = '.openspec-target'
  * service — never by this registry — and follows: the `.openspec-target` marker, then
  * the owner inferred from generated invocation syntax, then `agents` when current skills
  * already exist, then the `codex` fallback. Antigravity joined the shared root in
- * 1.11 (carried forward on 1.12/1.13) but is adapter-backed and is excluded from
+ * 1.11 (carried forward on 1.12/1.13/1.14) but is adapter-backed and is excluded from
  * skills-writer candidacy; its own `.agents/workflows` commands root is unaffected
- * by that exclusion.
+ * by that exclusion. OpenSpec 1.14 adds two more shared-root readers: `amp`
+ * (detection `.amp` / `.agents/skills`) and `gsd` (detection `.gsd`) both deliver
+ * skills into `.agents` — the shared root now hosts codex, antigravity, amp, gsd,
+ * zed, the vendor-neutral target, and since OpenSpec 1.14 the amp and gsd skills writers,
+ * while upstream arbitration stays marker- and inference-driven across that whole group
+ * (antigravity stays commands-only at the shared root and never joins the pool).
  */
-export const SHARED_AGENTS_SKILLS_OWNER_CANDIDATES: readonly ['codex', 'zed', 'agents'] = [
+export const SHARED_AGENTS_SKILLS_OWNER_CANDIDATES: readonly [
   'codex',
   'zed',
   'agents',
-]
+  'amp',
+  'gsd',
+] = ['codex', 'zed', 'agents', 'amp', 'gsd']
 
 /**
  * Select the official Agent delivery inventory for one CLI version string.
  *
- * Only a stable, admitted version — stable 1.13.x on this single-series line —
- * selects an inventory. Unsupported forms (prereleases, >=1.14, below-range lines
- * including the retired 1.10/1.11/1.12 v11/v12 windows and 1.8/1.9) and unparseable
- * output select none: a page-level version bypass must not manufacture an admitted
- * inventory for a CLI the release line refuses to admit. The returned snapshot
- * carries the 1.13 physical reality (which inherits every 1.12/1.11 root fact;
- * 1.13 adds no new Agent tool).
+ * Only a stable, admitted version — stable 1.14.x on this single-series line —
+ * selects an inventory. Unsupported forms (prereleases, >=1.15, below-range lines
+ * including the retired 1.10/1.11/1.12/1.13 v11–v13 windows and 1.8/1.9) and
+ * unparseable output select none: a page-level version bypass must not manufacture
+ * an admitted inventory for a CLI the release line refuses to admit. The returned
+ * snapshot carries the 1.14 physical reality (which inherits every 1.13/1.12 root
+ * fact; 1.14 adds ten Agent tools — amp, atomcode, codestudio, dsh, easycode,
+ * gigacode, grok, gsd, veai, warp).
  */
 export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConfig[] {
   const series = parseOpenSpecCliSeries(cliVersion)
@@ -219,16 +233,16 @@ export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConf
  *
  * Delegates to the single compat version parser so the same stdout that classifies a session
  * also selects its inventory — two parsers must never disagree at this boundary. Returns
- * '1.13' only for stable 1.13.x, and null for every non-admitted form: prereleases,
- * >=1.14, retired below-range lines (including the 1.12 v12 window, the 1.10/1.11 v11
- * window, and 1.9.x), or unparseable output. Retired minors stay typed as
- * `AgentProvenanceCliSeries` history for registry facts and on-disk stamps; they never
- * select an inventory here.
+ * '1.14' only for stable 1.14.x, and null for every non-admitted form: prereleases,
+ * >=1.15, retired below-range lines (including the 1.13 v13 window, the 1.12 v12
+ * window, the 1.10/1.11 v11 window, and 1.9.x), or unparseable output. Retired minors
+ * stay typed as `AgentProvenanceCliSeries` history for registry facts and on-disk
+ * stamps; they never select an inventory here.
  */
 export function parseOpenSpecCliSeries(cliVersion: string | null): AgentCliSeries | null {
   const version = parseOpenSpecCliVersion(cliVersion ?? undefined)
   if (!version || version.prerelease !== null) return null
-  if (version.major === 1 && version.minor === 13) return '1.13'
+  if (version.major === 1 && version.minor === 14) return '1.14'
   return null
 }
 
@@ -300,9 +314,10 @@ const projectCleanup = (...patterns: string[]): AgentProjectCleanup => ({
 })
 
 /**
- * Complete OpenSpec 1.13 Agent delivery registry in official order (the newest admitted
- * line; 1.13 adds no new Agent tool, so the 1.12 physical inventory carries forward
- * unchanged, itself inheriting every 1.11 root fact).
+ * Complete OpenSpec 1.14 Agent delivery registry in official order (the newest admitted
+ * line). 1.14 adds ten Agent tools — amp, atomcode, codestudio, dsh, easycode, gigacode,
+ * grok, gsd, veai, warp — and rebrands Bob Shell to IBM Bob; every 1.13/1.12/1.11
+ * physical fact (including Kilo's `.kilo/command/` rotation) carries forward unchanged.
  */
 export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
   {
@@ -320,8 +335,23 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     cleanup: projectCleanup('.amazonq/prompts/openspec-*.md'),
   },
   {
+    // Amp enters with OpenSpec 1.14 and reads the shared `.agents` skills root (see
+    // `SHARED_AGENTS_SKILLS_OWNER_CANDIDATES`): detection keys off `.amp` and
+    // `.agents/skills` — like zed — rather than the bare shared root. It ships no
+    // command adapter, carries no restart fact, and no legacy roots.
+    name: 'Amp',
+    value: 'amp',
+    minCliSeries: '1.14',
+    available: true,
+    successLabel: 'Amp',
+    skillsDir: '.agents',
+    detectionPaths: ['.amp', '.agents/skills'],
+    capability: 'none',
+    command: null,
+  },
+  {
     // OpenSpec 1.11 moved Antigravity workspace skills and workflows from `.agent`
-    // to the shared `.agents` root, and 1.12/1.13 keep that physical reality. Detection
+    // to the shared `.agents` root, and 1.12/1.13/1.14 keep that physical reality. Detection
     // keys off `.agent` and `.agents/workflows` rather than the bare shared root;
     // the legacy root migrates only after the replacement is generated so divergent
     // files are kept and reported. Antigravity itself never writes the shared skills
@@ -348,6 +378,23 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     ],
   },
   {
+    // AtomCode enters with OpenSpec 1.14. Its adapter writes `.atomcode/commands/opsx-<id>.md`
+    // with literal `name`/`description`/`args` frontmatter (args is `none` or `optional`;
+    // AtomCode's parser reads these unquoted), and injects a `**Provided arguments**:
+    // $ARGUMENTS` block only for workflows declaring an `**Input**` contract.
+    name: 'AtomCode',
+    value: 'atomcode',
+    minCliSeries: '1.14',
+    available: true,
+    successLabel: 'AtomCode',
+    skillsDir: '.atomcode',
+    capability: 'adapter-backed',
+    command: command(
+      '.atomcode/commands/opsx-{workflow}.md',
+      yamlMarkdown('name', 'description', 'args')
+    ),
+  },
+  {
     name: 'Auggie (Augment CLI)',
     value: 'auggie',
     available: true,
@@ -361,10 +408,11 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     cleanup: projectCleanup('.augment/commands/openspec-*.md'),
   },
   {
-    name: 'Bob Shell',
+    // OpenSpec 1.14 rebranded Bob Shell to IBM Bob; id and physical roots stay `bob`/`.bob`.
+    name: 'IBM Bob',
     value: 'bob',
     available: true,
-    successLabel: 'Bob Shell',
+    successLabel: 'IBM Bob',
     skillsDir: '.bob',
     capability: 'adapter-backed',
     command: command(
@@ -441,6 +489,18 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     ],
   },
   {
+    // DeepSeek Harness enters with OpenSpec 1.14: skills-only under the default `.dsh`
+    // detection root, no command adapter, no restart fact.
+    name: 'DeepSeek Harness',
+    value: 'dsh',
+    minCliSeries: '1.14',
+    available: true,
+    successLabel: 'DeepSeek Harness',
+    skillsDir: '.dsh',
+    capability: 'none',
+    command: null,
+  },
+  {
     name: 'Devin Desktop (formerly Windsurf)',
     value: 'devin',
     available: true,
@@ -479,6 +539,21 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
       yamlMarkdown('name', 'description', 'argument-hint')
     ),
     cleanup: projectCleanup('.codebuddy/commands/openspec'),
+  },
+  {
+    // Code Studio (Syncfusion) enters with OpenSpec 1.14 following its .prompt.md
+    // specification: description-only YAML commands under `.codestudio/prompts/`,
+    // loaded through an IDE/editor process that must restart.
+    name: 'Code Studio',
+    value: 'codestudio',
+    minCliSeries: '1.14',
+    available: true,
+    successLabel: 'Code Studio',
+    skillsDir: '.codestudio',
+    requiresIdeRestart: true,
+    requiresIdeRestartSince: '1.14',
+    capability: 'adapter-backed',
+    command: command('.codestudio/prompts/opsx-{workflow}.prompt.md', yamlMarkdown('description')),
   },
   {
     name: 'Continue',
@@ -539,6 +614,19 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     cleanup: projectCleanup('.cursor/commands/openspec-*.md'),
   },
   {
+    // EasyCode enters with OpenSpec 1.14 with the Gemini-shaped TOML command format
+    // (description basic string + prompt multiline string) namespaced under
+    // `.easycode/commands/opsx/<id>.toml`.
+    name: 'EasyCode',
+    value: 'easycode',
+    minCliSeries: '1.14',
+    available: true,
+    successLabel: 'EasyCode',
+    skillsDir: '.easycode',
+    capability: 'adapter-backed',
+    command: command('.easycode/commands/opsx/{workflow}.toml', tomlCommand),
+  },
+  {
     name: 'Factory Droid',
     value: 'factory',
     available: true,
@@ -562,6 +650,18 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     cleanup: projectCleanup('.gemini/commands/openspec'),
   },
   {
+    // GigaCode enters with OpenSpec 1.14: description-frontmatter markdown commands
+    // under `.gigacode/commands/opsx-<id>.md`.
+    name: 'GigaCode',
+    value: 'gigacode',
+    minCliSeries: '1.14',
+    available: true,
+    successLabel: 'GigaCode',
+    skillsDir: '.gigacode',
+    capability: 'adapter-backed',
+    command: command('.gigacode/commands/opsx-{workflow}.md', yamlMarkdown('description')),
+  },
+  {
     name: 'GitHub Copilot',
     value: 'github-copilot',
     available: true,
@@ -581,6 +681,33 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     capability: 'adapter-backed',
     command: command('.github/prompts/opsx-{workflow}.prompt.md', yamlMarkdown('description')),
     cleanup: projectCleanup('.github/prompts/openspec-*.prompt.md'),
+  },
+  {
+    // Grok Build enters with OpenSpec 1.14: skills-only under the default `.grok`
+    // detection root, no command adapter, no restart fact.
+    name: 'Grok Build',
+    value: 'grok',
+    minCliSeries: '1.14',
+    available: true,
+    successLabel: 'Grok Build',
+    skillsDir: '.grok',
+    capability: 'none',
+    command: null,
+  },
+  {
+    // GSD enters with OpenSpec 1.14 and shares the `.agents` skills root (like Amp):
+    // detection keys off its own `.gsd` marker. It references skills in natural
+    // language (upstream `NATURAL_LANGUAGE_SKILL_TOOLS`, like rovodev) and ships no
+    // command files.
+    name: 'GSD',
+    value: 'gsd',
+    minCliSeries: '1.14',
+    available: true,
+    successLabel: 'GSD',
+    skillsDir: '.agents',
+    detectionPaths: ['.gsd'],
+    capability: 'skills-invocable',
+    command: null,
   },
   {
     name: 'Hermes Agent',
@@ -796,6 +923,32 @@ export const AGENT_DELIVERY_REGISTRY: ToolConfig[] = [
     requiresIdeRestartSince: '1.9',
     capability: 'adapter-backed',
     command: command('.trae/commands/opsx-{workflow}.md', yamlMarkdown('name', 'description')),
+  },
+  {
+    // Veai enters with OpenSpec 1.14: skills-only under the default `.veai` detection
+    // root, no command adapter, no restart fact.
+    name: 'Veai',
+    value: 'veai',
+    minCliSeries: '1.14',
+    available: true,
+    successLabel: 'Veai',
+    skillsDir: '.veai',
+    capability: 'none',
+    command: null,
+  },
+  {
+    // Warp enters with OpenSpec 1.14: detection keys off `.warp` and `WARP.md`, and
+    // upstream classifies warp beside codex as skills-invocable — skills are its
+    // OpenSpec surface; it ships no command adapter and needs no IDE restart.
+    name: 'Warp',
+    value: 'warp',
+    minCliSeries: '1.14',
+    available: true,
+    successLabel: 'Warp',
+    skillsDir: '.warp',
+    detectionPaths: ['.warp', 'WARP.md'],
+    capability: 'skills-invocable',
+    command: null,
   },
   {
     // Zed Agent reads the shared `.agents` skills root and ships from OpenSpec 1.10.

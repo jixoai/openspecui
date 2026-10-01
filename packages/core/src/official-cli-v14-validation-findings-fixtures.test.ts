@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13 `validate --report findings --json` contract
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.14 `validate --report findings --json` contract
  *    against real fixture projects: the populated findings document, empty-scope
  *    documents, and the typed request-error envelope.
  * 2. Prove the merge-conflict INFO class stays verdict-neutral (`valid: true`, exit 0)
@@ -8,22 +8,21 @@
  * 3. Prove the findings transport preserves the full-run exit rule: a failing fixture
  *    exits 1 while stdout stays one complete JSON document and `summary` keeps the
  *    full-run totals.
- * 4. (2026-09-26, update-openspec-cli-1132 Slice 4) Prove the 1.13.2 purpose-marker
- *    case rules on the executed executable: a shouted `TODO` opening reports whatever
- *    follows, while a lowercase prose opener (`Todo el …`) stays quiet.
- * 5. (2026-09-26) Prove the 1.13.2 MODIFIED scenario balance suffix: the drop error
- *    also describes what the block adds (`It adds 1 scenario not in the current
- *    spec: …`), per `references/openspec-1.13.2-report.md` P4.
+ * 4. Prove the purpose-marker case rules on the executed executable: a shouted `TODO`
+ *    opening reports whatever follows, while a lowercase prose opener (`Todo el …`)
+ *    stays quiet.
+ * 5. Prove the MODIFIED scenario balance suffix: the drop error also describes what
+ *    the block adds (`It adds 1 scenario not in the current spec: …`). The 1.14 line
+ *    ships ~20 validate/parser fixes without changing these message surfaces; this
+ *    suite carries them onto the v14 window as regression fixtures.
  *
- * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
- * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — in-window patch rotation 1.13.1 -> 1.13.2,
- * validation message-content executable matrix (update-openspec-cli-1132 Slice 4).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V13_VERSIONS,
+  PINNED_OPENSPEC_V14_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -32,8 +31,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV13Version,
-} from './__tests__/official-cli-v13-fixtures.js'
+  type PinnedOpenspecV14Version,
+} from './__tests__/official-cli-v14-fixtures.js'
 import { CliDiagnosticFailureSchema } from './cli-contracts/common.js'
 import {
   CliValidateFindingsResultSchema,
@@ -48,7 +47,7 @@ const REPORT_REQUEST_FIX =
   'without an item name. Do not combine archived and active scopes.'
 
 async function initProject(
-  version: PinnedOpenspecV13Version,
+  version: PinnedOpenspecV14Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -63,7 +62,7 @@ async function initProject(
 
 /** A change whose delta MODIFIES requirements of a spec that does not exist. */
 async function createModifiedAgainstMissingSpecChange(
-  version: PinnedOpenspecV13Version,
+  version: PinnedOpenspecV14Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -101,7 +100,7 @@ async function createModifiedAgainstMissingSpecChange(
 
 /** A loadable change that fails validation through an ERROR issue. */
 async function createFailingChange(
-  version: PinnedOpenspecV13Version,
+  version: PinnedOpenspecV14Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -167,7 +166,7 @@ async function writeMainSpec(
   )
 }
 
-describe('pinned OpenSpec 1.13 validation findings fixtures', () => {
+describe('pinned OpenSpec 1.14 validation findings fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -175,7 +174,7 @@ describe('pinned OpenSpec 1.13 validation findings fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V13_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
     it(`returns a populated findings document whose merge-conflict INFO stays verdict-neutral on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(
         `cli-${version.replace(/\./g, '')}-findings-populated`

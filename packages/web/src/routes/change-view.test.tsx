@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Verify change detail fallbacks and schema-driven artifact rendering.
  * 2. Verify retained errors and non-current authority lock actions without entering the Header.
  * 3. Verify Apply inputs remain separate and open from a Header Action Dialog.
@@ -22,6 +22,7 @@
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence direct-plane mounting (update-openspec-cli-1132 Slice 2).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  */
 import type { RootActionState } from '@/lib/use-root-action-state'
 import type { ChangeStatus } from '@openspecui/core'
@@ -1037,10 +1038,10 @@ describe('ChangeView', () => {
         launchProject: { path: '/tmp/project' },
         planningRoot: { path: '/tmp/project', source: 'nearest', healthy: true, status: [] },
         storeId: null,
-        // Admitted-line CLI for the v13 window (>=1.13.0 <1.14.0): the diff-evidence
-        // capability gate only fetches on the admitted series, so a retired 1.12 fixture
+        // Admitted-line CLI for the v14 window (>=1.14.0 <1.15.0): the diff-evidence
+        // capability gate only fetches on the admitted series, so a retired 1.13 fixture
         // would leave the transport untouched and time out this test.
-        cli: { available: true, version: '1.13.0' },
+        cli: { available: true, version: '1.14.0' },
       },
     })
     statusMock.mockReturnValue({

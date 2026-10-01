@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13 SourceCraft Code Assistant delivery contract
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.14 SourceCraft Code Assistant delivery contract
  *    against an isolated machine environment: 6 skills + 6 commands under the default
  *    core profile with the physical `.codeassistant` layout.
  * 2. Prove init anchors empty directories with `.gitkeep`, restores missing anchors on
@@ -10,17 +10,15 @@
  *    its content (upstream `ensureDirectoryAnchor` writes with the `wx` flag and
  *    tolerates EEXIST; this suite asserts that observable behavior only).
  * 4. Prove the shared IDE restart hint wording: qoder prints it, codeassistant does not.
- * 5. (2026-09-26, update-openspec-cli-1132 Slice 4) Prove the 1.13.2 Kilo Code command
- *    path rotation on the executed executable: commands deliver as plain markdown
- *    (no frontmatter) under `.kilo/command/opsx-<id>.md` while skills stay in
- *    `.kilocode/skills/`, the restart hint prints, and no legacy `.kilocode/workflows/`
- *    directory is created, per `references/openspec-1.13.2-report.md` P2. Legacy
- *    two-generation cleanup stays projection evidence (`agent-delivery-registry` /
- *    `tool-init-state` tests); this harness exercises fresh init only.
+ * 5. Prove the Kilo Code command path on the executed executable: commands deliver as
+ *    plain markdown (no frontmatter) under `.kilo/command/opsx-<id>.md` while skills
+ *    stay in `.kilocode/skills/`, the restart hint prints, and no legacy
+ *    `.kilocode/workflows/` directory is created. Legacy two-generation cleanup stays
+ *    projection evidence (`agent-delivery-registry` / `tool-init-state` tests); this
+ *    harness exercises fresh init only. The 1.14 registry grows to 50 tools without
+ *    changing these per-tool physical layouts.
  *
- * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
- * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — in-window patch rotation 1.13.1 -> 1.13.2,
- * Kilo command-path executable matrix (update-openspec-cli-1132 Slice 4).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  */
 import { access, lstat, mkdir, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -28,11 +26,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   createPinnedFixtureRoot,
   expectPinnedVersion,
-  PINNED_OPENSPEC_V13_VERSIONS,
+  PINNED_OPENSPEC_V14_VERSIONS,
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v13-fixtures.js'
+} from './__tests__/official-cli-v14-fixtures.js'
 
 /** The default core profile selects exactly these six workflows. */
 const CORE_PROFILE_SKILLS = [
@@ -62,7 +60,7 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-describe('pinned OpenSpec 1.13 Agent delivery fixtures', () => {
+describe('pinned OpenSpec 1.14 Agent delivery fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -70,7 +68,7 @@ describe('pinned OpenSpec 1.13 Agent delivery fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V13_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
     it(`delivers six skills and six commands to .codeassistant under the default core profile on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-codeassistant`)
       const project = join(fixtureRoot, 'project')

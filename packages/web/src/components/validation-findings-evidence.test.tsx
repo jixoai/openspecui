@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
- * 1. Present the typed 1.12+ findings document (admitted 1.13 line): INFO as a distinct
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * 1. Present the typed 1.12+ findings document (admitted 1.14 line): INFO as a distinct
  *    informational class, `returnedItems` beside preserved full-run totals, CLI provenance,
  *    filtered labeling.
  * 2. Attribute findings to their owning change: the current change's entries are the
@@ -17,6 +17,7 @@
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Owner walkthrough correction (2026-09-04): findings must attribute their owning change; the Evidence detail panel styling follows the vision review.
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -47,7 +48,7 @@ const rootActionStateMock = vi.hoisted(() => ({
     message: '',
     evidence: [],
     context: {
-      cli: { available: true, version: '1.13.0' },
+      cli: { available: true, version: '1.14.0' },
     },
     observedAt: 1,
   },
@@ -123,7 +124,7 @@ describe('ValidationFindingsEvidence', () => {
       message: '',
       evidence: [],
       context: {
-        cli: { available: true, version: '1.13.0' },
+        cli: { available: true, version: '1.14.0' },
       },
       observedAt: 1,
     }
@@ -405,7 +406,7 @@ describe('ValidationFindingsEvidence', () => {
   it('offers no findings action on a retired CLI session', () => {
     rootActionStateMock.state = {
       ...rootActionStateMock.state,
-      context: { cli: { available: true, version: '1.12.0' } },
+      context: { cli: { available: true, version: '1.13.0' } },
     }
     render(<ValidationFindingsEvidence changeId="test-change" />)
 
@@ -413,7 +414,7 @@ describe('ValidationFindingsEvidence', () => {
     expect(
       screen.getByText(/Validation findings require the admitted OpenSpec CLI line/)
     ).toBeVisible()
-    expect(screen.getByText(/detected 1\.12\.0/)).toBeVisible()
+    expect(screen.getByText(/detected 1\.13\.0/)).toBeVisible()
     expect(
       screen.queryByRole('button', { name: 'Load validation findings' })
     ).not.toBeInTheDocument()
@@ -472,7 +473,7 @@ describe('ValidationFindingsEvidence', () => {
     const retiredChip = vi.fn()
     rootActionStateMock.state = {
       ...rootActionStateMock.state,
-      context: { cli: { available: true, version: '1.12.0' } },
+      context: { cli: { available: true, version: '1.13.0' } },
     }
     render(<ValidationFindingsEvidence changeId="test-change" onChip={retiredChip} />)
     expect(retiredChip).toHaveBeenLastCalledWith({ label: 'unavailable', tone: 'unavailable' })

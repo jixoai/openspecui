@@ -1,10 +1,12 @@
 /**
- * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.1 CLI against a recursive owned Spec identity.
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.14.0 CLI against a recursive owned Spec identity.
  * 2. Prove list and show preserve every identity segment and requirement content on
- *    the v13 single-series window.
- * 3. Carry over the admitted-line nested Spec contract proven for 1.10-1.12.
+ *    the v14 single-series window, now including the 1.14 requirement/scenario name
+ *    members on the nested show payload.
+ * 3. Carry over the admitted-line nested Spec contract proven for 1.10-1.13.
  *
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
@@ -13,7 +15,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V13_VERSIONS,
+  PINNED_OPENSPEC_V14_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -21,10 +23,10 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v13-fixtures.js'
+} from './__tests__/official-cli-v14-fixtures.js'
 import { CliShowSpecSchema, CliSpecListSchema } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.13 nested Spec fixtures', () => {
+describe('pinned OpenSpec 1.14 nested Spec fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -32,7 +34,7 @@ describe('pinned OpenSpec 1.13 nested Spec fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V13_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
     it(`lists and shows platform/auth as one complete Spec identity on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-nested-spec`)
       const project = join(fixtureRoot, 'project')
@@ -95,7 +97,17 @@ describe('pinned OpenSpec 1.13 nested Spec fixtures', () => {
         requirementCount: 1,
         requirements: [
           {
+            // 1.14 name members: the nested identity carries them like any other
+            // Spec, requirement and scenario alike.
+            name: 'Nested authentication',
             text: 'The platform SHALL preserve recursive Spec identity.',
+            scenarios: [
+              {
+                name: 'Show nested Spec',
+                rawText:
+                  '- **WHEN** the nested Spec is listed and shown\n- **THEN** every identity segment is preserved',
+              },
+            ],
           },
         ],
       })

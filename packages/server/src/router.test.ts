@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Prove public Router owner boundaries and dedicated Planning-root stream settlement.
  * 2. Prove strict Archive identity, generation, validation, diagnostics, and Store selection publicly.
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
@@ -27,6 +27,7 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
 */
 import {
   acquireWatcherRoot,
@@ -3211,7 +3212,7 @@ apply:
           status: [],
         },
         storeId: 'shared',
-        cli: { available: true, version: '1.13.0' },
+        cli: { available: true, version: '1.14.0' },
       }
       const caller = appRouter.createCaller(context)
 

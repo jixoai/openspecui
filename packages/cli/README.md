@@ -1,6 +1,6 @@
 <!--
-Orthogonal intents (updated 2026-09-04 Asia/Shanghai):
-1. Document the npm-facing surface of the current openspecui release line (v12) only.
+Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+1. Document the npm-facing surface of the current openspecui release line (v14) only.
 2. Keep commands, compatibility, and hooks aligned with the repository README facts.
 3. Leave full version history and legacy archives to the repository README.
 
@@ -8,21 +8,22 @@ Original request (2026-08-19): "现在我们需要为 openspecui 这个 npm 包�
 Owner release law (2026-08-19): every release that updates the repository README must also update this package README.
 Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
 Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
 -->
 
 # OpenSpecUI
 
 A visual interface for [OpenSpec](https://openspec.dev) — the visual projection and operator for spec-driven development with AI agents.
 
-OpenSpecUI 13 gives OpenSpec projects a reactive dashboard, an objective change workflow, a config workbench, real terminals, and static export — while the OpenSpec CLI stays the source of truth for every workflow fact.
+OpenSpecUI 14 gives OpenSpec projects a reactive dashboard, an objective change workflow, a config workbench, real terminals, and static export — while the OpenSpec CLI stays the source of truth for every workflow fact.
 
 ## Requirements
 
-- **OpenSpec CLI**: `>=1.13.0 <1.14.0` — the stable 1.13 line is current and recommended (single-series window). Older lines (including the 1.12.x OpenSpecUI 12 window), prereleases, and `>=1.14.0` are blocked by default.
+- **OpenSpec CLI**: `>=1.14.0 <1.15.0` — the stable 1.14 line is current and recommended (single-series window). Older lines (including the 1.13.x OpenSpecUI 13 window), prereleases, and `>=1.15.0` are blocked by default.
 - **Node.js**: `>= 20.19.0`
 
 ```bash
-npm install -g @fission-ai/openspec@1.13
+npm install -g @fission-ai/openspec@1.14
 ```
 
 ## Quick start
@@ -84,10 +85,10 @@ URL-valued App mode is not supported: the daemon always serves the App shell bun
 ## What's inside
 
 - **OPSX change workflow** — kanban lanes over tracked task phases with Continue / Fast-forward / Apply / Verify / Archive operators driven by live CLI evidence; admitted sessions load the whole change status list in one `status --all` spawn
-- **Change evidence** — MODIFIED deltas can present the CLI's own requirement diff and warning evidence (`show --diff`) beside the local delta projection, plus validation findings reports (`validate --report findings`) with informational merge-conflict findings
+- **Change evidence** — MODIFIED deltas can present the CLI's own requirement diff and warning evidence (`show --diff`) beside the local delta projection, validation findings reports (`validate --report findings`) with informational merge-conflict findings, `status` advisory warnings as a collapsed direct-plane summary row, Apply task `sourcePath`/`line` source locations, spec requirement/scenario names from `show --type spec`, and per-entry `archived` inventory facts from `list --archived`/`--all`
 - **Dashboard** — active changes with CLI-owned applying progress and a curated Code Git snapshot
 - **Config workbench** — route-backed owners for project binding, active root, environment globals, and schemas, plus an adaptive setup guide and `init --language` on the admitted CLI line
-- **Agent delivery** — the CLI-owned registry projects per-version agent commands and skills, including SourceCraft Code Assistant (from 1.12, `.codeassistant`), Zed, and the Antigravity `.agent` → `.agents` migration
+- **Agent delivery** — the CLI-owned registry projects per-version agent commands and skills across fifty tools on the 1.14 series, including the ten 1.14 additions (amp and gsd on the shared `.agents` skills root, IBM Bob, and more), SourceCraft Code Assistant (from 1.12, `.codeassistant`), Zed, and the Antigravity `.agent` → `.agents` migration
 - **Terminals** — multi-tab PTY sessions (xterm and ghostty-web) with direct agent send
 - **Git view** — commits, patches, and worktrees with explicit code/planning scope
 - **Search** — reactive in live mode, worker-backed in static exports

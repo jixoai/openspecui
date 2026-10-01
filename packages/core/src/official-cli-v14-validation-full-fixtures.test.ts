@@ -1,12 +1,13 @@
 /**
- * Orthogonal intents (created 2026-09-12 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13.1 full bulk `validate --json` report: schema
- *    compatibility with the 1.11/1.12 envelope plus the merge-conflict INFO issues.
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.14.0 full bulk `validate --json` report: schema
+ *    compatibility with the 1.11-1.13 envelope plus the merge-conflict INFO issues.
  * 2. Prove `--report full` stays the explicit default and strict escalation plus the
  *    human next-steps footer behavior are unchanged.
- * 3. Carry over the admitted-line contracts the v11/v12 validation matrix proved:
+ * 3. Carry over the admitted-line contracts the v11-v13 validation matrix proved:
  *    schemas success/selected-Root failure envelopes and archived task validation.
  *
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
@@ -15,7 +16,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V13_VERSIONS,
+  PINNED_OPENSPEC_V14_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -24,8 +25,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV13Version,
-} from './__tests__/official-cli-v13-fixtures.js'
+  type PinnedOpenspecV14Version,
+} from './__tests__/official-cli-v14-fixtures.js'
 import {
   CliSchemasFailureSchema,
   CliSchemasSuccessSchema,
@@ -38,7 +39,7 @@ import {
 } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV13Version,
+  version: PinnedOpenspecV14Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -53,7 +54,7 @@ async function initProject(
 
 /** A change whose delta MODIFIES requirements of a spec that does not exist. */
 async function createModifiedAgainstMissingSpecChange(
-  version: PinnedOpenspecV13Version,
+  version: PinnedOpenspecV14Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -91,7 +92,7 @@ async function createModifiedAgainstMissingSpecChange(
 
 /** A loadable change that fails validation through an ERROR issue. */
 async function createFailingChange(
-  version: PinnedOpenspecV13Version,
+  version: PinnedOpenspecV14Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -124,7 +125,7 @@ async function createFailingChange(
 }
 
 async function createChangeWithTasks(
-  version: PinnedOpenspecV13Version,
+  version: PinnedOpenspecV14Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string,
@@ -158,7 +159,7 @@ async function writePlaceholderSpec(project: string): Promise<void> {
   )
 }
 
-describe('pinned OpenSpec 1.13 full validation report fixtures', () => {
+describe('pinned OpenSpec 1.14 full validation report fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -166,7 +167,7 @@ describe('pinned OpenSpec 1.13 full validation report fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V13_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
     it(`keeps the full bulk report schema-compatible and carries the merge-conflict INFO beside real errors on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-validate-full`)
       const project = join(fixtureRoot, 'project')
