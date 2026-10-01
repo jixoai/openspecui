@@ -290,3 +290,14 @@ warning strings. The Owner walkthrough boundary is unchanged.
 
 Verification: projection suite + kernel warnings suite + service suite green; core tsc clean;
 kernel mutation fully restored (`git diff` empty on opsx-kernel.ts).
+
+### Round-G narrow re-check (herdr v14-change-reviewer, 2026-10-02, commit e133e58a) — 9.2/10, APPROVE
+
+F-B1 closed (shared PlanningCliProjectionDataSchema retains `entries[].archived` with the three-state
+law; Server reuses the same schema — no second mirror; reviewer independently re-ran the projection +
+kernel suites). F-B2 closed (real-kernel transport suite proves the verbatim warning on single and
+batch Server outputs; mutation-red record consistent; no kernel residue). F-B3 closed (governance
+current-line facts rotated; rg audit clean; Core tsc independently green). No blockers; disposition
+APPROVE — deliverable. Report appended to /tmp/v14-implementation-review.md (Round-G section).
+
+Review arc: planning A-E 6.2 → 7.4 → 7.8 → 8.1 → 9.1 GO; implementation F 7.8 REVISE → G 9.2 APPROVE.
