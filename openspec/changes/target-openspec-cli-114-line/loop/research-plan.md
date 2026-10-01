@@ -13,6 +13,14 @@ Evidence: `references/openspec-1.14.0-report.md` (pinned `v1.14.0` @ `94ca9c1e`;
 
 ## Spec hygiene
 
+**Known legacy (recorded, not silently kept):** several inherited scenario titles read "Accept <retired
+line>" while their bodies (correctly) specify blocked-by-default for OpenSpecUI 14. Titles are scenario
+identity that archive refuses to drop, and the validator offers no verified rename path today; renaming
+them speculatively risks archive rejection. Disposition: bodies remain the normative text; this change
+proposes a separate spec-hygiene change to verify a rename/retirement process on an isolated copy before
+touching live specs (Owner decision). New scenarios added by this change never carry a title whose meaning
+their body contradicts.
+
 Scenario titles are current-spec identity (archive refuses drops); bodies carry v14 semantics. Historical
 titles ("Zed is a 1.10-line skills-only target", "SourceCraft enters at 1.12") describe introduction facts;
 `minCliSeries` values never rotate while `AgentCliSeries` does.
@@ -25,26 +33,39 @@ and `scripts/setup-example.ts` mirrors with boundary assertions (1.13 rejected /
 Red: constants-first run against current assertions (record 5+ failures incl. stable 1.13.x → unsupported).
 Green: compat + diagnose focused tests; core typecheck.
 
-## Slice 2 — Typed contracts through the full projection chains
+## Slice 2 — Typed contracts through the full projection chains (Round-A B1/B2 hardened)
 
-Owners (complete chains, v13-B1 lesson):
+Owners (complete chains, v13-B1 lesson; every "projection" claim names the physical copy site):
 
 - Apply tasks: `cli-contracts/workflow.ts` `CliApplyTaskSchema` + `opsx-types.ts` `ApplyTaskSchema` gain
   optional `sourcePath`/`line`; contract tests pin the executed 1.14 payload (both members present, absolute
   path, 1-based line) plus an older-shape payload without them.
-- Status warnings: `CliWorkflowStatusSuccessSchema` (batch + single, whichever owns the envelope) and the
-  opsx status input/projection schemas gain optional top-level `warnings: string[]`; tests pin the executed
-  `skip_design` warning verbatim.
-- List members: the change-list CLI contract gains per-entry optional `archived`/`nested` and an optional
-  top-level `warnings` array (`nested_change_directory` finding); executed `--archived`/`--all` documents as
-  fixtures.
+- Status warnings — **full chain including the kernel rebuild**: `CliWorkflowStatusSuccessSchema` (single) and
+  the batch envelope schema gain optional top-level `warnings: string[]`; `opsx-types.ts` status
+  input/projection schemas likewise; and `packages/core/src/opsx-kernel.ts` `projectWorkflowStatus` (the
+  explicit `ChangeStatusSchema.parse({...})` object rebuild used by BOTH the single and batch status paths)
+  MUST copy `data.warnings` through — decode-time `.passthrough()` is stripped there today (Round-A B2).
+  Server transport (`planning-cli-projection-service`/router status procedures) carries the member by
+  schema, pinned by test. Red: a real 1.14 status payload (the executed `skip_design` warning, full string
+  in the report) driven through the Kernel single AND batch paths, asserting the verbatim string at the
+  Server-visible projection output — fails today; absent member stays absent (UI synthesizes nothing).
+- List members: the change-list CLI contract gains the ONE new member `archived` (per-entry optional);
+  `nested` and top-level `warnings` are 1.13.1 members already covered by the existing nested-directory
+  contract — v14 only migrates their fixtures (no second ownership).
+- Show spec names (Round-A B1): `cli-contracts/workflow.ts` `CliSpecRequirementSchema` and its scenario
+  schema gain optional `name`; the Spec Catalog chain (`CliShowSpecDocument` consumers, server spec
+  transports) preserves both names by CLI value. Tests: a real 1.14 `show <spec> --type spec --json`
+  document asserts requirement and scenario names; an old-shape document without names still parses with
+  the members absent; a non-string `name` is rejected rather than silently accepted.
 - Version command: a new typed contract for `{schemaVersion:1, version, install, update?}` with an executor
   method (`version({check})`); no capability flag (admitted-window invariant).
-- Store edit roots: no schema change (same array shape); fixture expectations rotate to
-  `[implementationRoot, projectRoot]` semantics in Slice 6 fixtures only.
+- Store edit roots: no schema change (same array shape) — BOTH branches are executable-fixture obligations
+  in Slice 5 (declaring-project branch `[implementationRoot, projectRoot]`; no-declaring-project branch
+  `[projectRoot]` with the ask-the-user constraint; plus the non-store control).
 
-Red: schema-drop reds per surface (parse executed payload through the projection schema asserting the member
-survives; fails today). Green: the three contract files + opsx-types tests; core typecheck.
+Red: schema-drop reds per surface (parse executed payloads through the projection schema asserting the
+member survives; fails today) plus the kernel-rebuild red above. Green: contract + opsx-types + kernel
+focused tests; core typecheck.
 
 ## Slice 3 — Agent registry rotation (largest slice)
 
@@ -78,20 +99,38 @@ Red: component test asserting the row before the render change. Green: focused w
 Owners: `scripts/prepare-openspec-reference.mjs` EXPECTED_COMMIT → `94ca9c1e...`;
 `upstream-contract-regression.test.ts` pin rotation; `packages/web/scripts/w2-project-binding-playwright.ts`
 pin; `packages/core/package.json` alias `"openspec-cli-114": "npm:@fission-ai/openspec@1.14.0"` (integrator
-lockfile); `__tests__/official-cli-v14-fixtures.ts` helper. **Full positive matrix migrates to v14** — the
-twelve v13 suites (workflow, default-store, nested-spec, show-diff, validation-full, validation-findings,
-batch-status, agent-delivery, apply-readiness, nested-change, task-reading, plus any apply-tracking suite
-from the 1132 line) get v14 counterparts, with apply-readiness extended to assert task
-`sourcePath`/`line`, **plus two new suites**: `v14-version-report` (no-check envelope only, per no-network
-fixture discipline) and `v14-change-list-inventory` (`--archived`/`--all` archived flag, nested warnings
-shape). Boundary: rotate `official-cli-v12-boundary-fixtures.test.ts` role text to the v14 gate (1.12.0
-stays the retired executable — 1.13.2 remains the admitted-line provenance through the v13 suites' archive);
-retire the v13 positive suites with their counterparts (deletion proof: `git diff --name-status` + orphan
-scan; the v13 helper is deleted unless the boundary suite still consumes it — it consumes v12). Mutation
-red: bins-map → wrong alias fails `--version` identity.
+lockfile); `__tests__/official-cli-v14-fixtures.ts` helper.
 
-Red: alias-resolution failure before install; pin-guard failure before rotation.
-Green: joint v14 gate + boundary + upstream-contract-regression; core typecheck; lockfile diff + shim check.
+**File-level matrix (Round-A B5 — counts resolve to exactly this list):**
+
+Migrate (11 existing `official-cli-v13-*.test.ts`, each becoming its v14 counterpart on the 1.14.0
+executable with `--version` provenance; `apply-readiness` KEEPS the 1132 tracking cases —
+`taskTrackingConfigured`/`unavailableTrackingFiles` — as regression, not re-implementation — and additionally
+asserts task `sourcePath`/`line`): `agent-delivery`, `apply-readiness`, `batch-status`, `default-store`,
+`nested-change`, `nested-spec`, `show-diff`, `task-reading`, `validation-findings`, `validation-full`,
+`workflow`.
+
+New (2): `v14-version-report` (no-check envelope only, per no-network fixture discipline) and
+`v14-change-list-inventory` (`--archived` and `--all`: archived entries `archived:true`, mixed `--all`
+entries `archived:false/true`; nested regression kept in `nested-change`'s counterpart). Show-name contract
+evidence lives in the `show-diff` counterpart (scope widened to the `show` suite) — it runs BOTH
+`show <change> --json --diff` (existing) and `show <spec> --type spec --json` name assertions (new).
+
+Boundary (Round-A B4): the **1.13.2 executable (`openspec-cli-113` alias) proves the v14 gate rejects the
+just-retired line** — `official-cli-v12-boundary-fixtures.test.ts` is replaced by
+`official-cli-v13-boundary-fixtures.test.ts` (1.13.2 identity + below-admitted classification + the v13-only
+fields absent); the v12 boundary suite, `openspec-cli-112` alias, and the v12 helper retire (deletion proof
+`git diff --name-status` + orphan scan). Store edit-roots (Round-A B3): inside the `default-store`
+counterpart (the suite that already builds a registered store), two executable scenarios assert the
+declaring-project branch (`[implementationRoot, projectRoot]` order + the declaring-repo constraint) and the
+no-declaring-project branch (`[projectRoot]` + ask-the-user constraint), beside the existing non-store
+control.
+
+Red: alias-resolution failure before install; pin-guard failure before rotation; boundary suite fails while
+the gate still admits 1.13 (record the ordering honestly — boundary lands after Slice 1).
+Green: joint v14 gate (13 files) + boundary + upstream-contract-regression; core typecheck; lockfile diff +
+shim check. Mutation red: bins-map → wrong alias fails `--version` identity.
+
 
 ## Slice 6 — Cross-package alignment (four owner groups)
 

@@ -17,8 +17,10 @@ Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，�
 ## CP1 — Window and contracts (Slices 1-2)
 
 - [ ] Compat window rotated; boundary red recorded (stable 1.13.x → unsupported); mirrors + tests green.
-- [ ] Apply-task source locations, status warnings, list archived/nested/warnings, version envelope typed
-      through contract + projection schemas; reds recorded; focused suites green; core typecheck.
+- [ ] Apply-task source locations, status warnings (through the kernel `projectWorkflowStatus` rebuild on
+      single AND batch paths — decode passthrough is stripped there today), the new list `archived` member,
+      show spec names, and the version envelope typed through contract + projection chains; kernel-rebuild
+      red recorded verbatim-end-to-end; focused suites green; core typecheck.
 
 ## CP2 — Registry (Slice 3)
 
@@ -28,9 +30,10 @@ Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，�
 ## CP3 — Web + fixtures (Slices 4-5)
 
 - [ ] Status warnings direct-plane summary row; web focused tests green.
-- [ ] Pin guards rotated; `openspec-cli-114` alias with lockfile+shim evidence; full v14 positive matrix
-      (9 migrated + version-report + change-list-inventory) green with `--version` provenance; v12 boundary
-      retained; retired v13 positives deleted with proof; mutation red recorded.
+- [ ] Pin guards rotated; `openspec-cli-114` alias with lockfile+shim evidence; full v14 positive matrix —
+      11 migrated suites + `v14-version-report` + `v14-change-list-inventory` (13 files) — green with
+      `--version` provenance; 1.13.2 boundary suite proves the just-retired line rejected (v12 boundary/alias
+      retired with proof); store edit-roots both branches asserted executably; mutation red recorded.
 
 ## CP4 — Alignment (Slice 6)
 

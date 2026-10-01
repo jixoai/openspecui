@@ -23,7 +23,7 @@ The v13 report pre-declared 1.14 admission as "a separately verified decision: e
 or a new major". The verified delta selects the **new major**: ten new Agent registry entries (40→50 tools,
 including two new sharers of the `.agents` skills root), one new CLI command family (`openspec version`),
 archived changes entering the `list` protocol, apply tasks gaining mandatory source locations, and a new
-top-level `status --json` `warnings` member. Five JSON contract surfaces moved — far beyond a patch bridge —
+top-level `status --json` `warnings` member. Six JSON contract surfaces moved (version command, apply task locations, list `archived`, status warnings, show names, store edit roots) — far beyond a patch bridge —
 and the one-line-per-series cadence (v7→1.7 … v13→1.13) continues. `1.15` is not pre-claimed.
 
 Within the 1.13 window, upstream also shipped 1.13.1/1.13.2; the v13 gate admits the whole stable 1.13 series
@@ -58,7 +58,7 @@ isolated fixture.
 | --- | --- | --- | --- |
 | `instructions apply --json` tasks | `{id, description, done}` | each task adds **`sourcePath`** (absolute) and **`line`** (1-based), always present | Apply task contract gains the two members; projection may surface them as evidence |
 | `list --archived --json` / `--all` | flag rejected | archived entries returned; every entry carries **`archived: boolean`** (present only under `--archived`/`--all`) | New list transport for archive inventory; capability-free inside the single-series window |
-| `list --json` (default) | `{changes, root}` | entries may carry **`nested: string[]`** (namespace folders, #1846/#1849) and the envelope a top-level **`warnings: [{code:'nested_change_directory', name, nested, message}]`** (omitted when empty) | Change-list contract tolerates the new members; nested findings are objective CLI evidence |
+| `list --json` (default) | nested + warnings already delivered in 1.13.1 (covered by the existing Change List Nested Directory contract and fixtures) | unchanged members carry forward | v14 regression only — migrate the fixtures; **the one new list member is `archived`** |
 | `openspec version [--check] [--json]` | no such command | `{schemaVersion:1, version, install:{location,packageManager,scope}, update?:{...status,latest?,command,canSelfUpgrade}}` (executed without `--check`; `update` absent then) | New typed command contract; `--check` performs an opt-out-able registry probe |
 | `status --json` | no `warnings` | top-level **`warnings: string[]`** names unrecognized `.openspec.yaml` keys (executed: `skip_design` warning verbatim; known keys now include `goal, affected_areas, initiative, skip_specs, retire_capabilities`) | Status contract gains optional `warnings`; direct-plane advisory evidence |
 | `status --json` `actionContext.allowedEditRoots` (store-backed) | store only | `[implementationRoot, projectRoot]` — the declaring repo joins the store; constraint text tells the agent to ask otherwise | Same array shape, changed semantics; no schema edit, fixture values rotate |
@@ -81,7 +81,8 @@ checkbox markers `{x}`-style counted); `openspec view` TUI shows workflow status
   +-- list --json: nested namespace-folder findings + top-level warnings array (nested_change_directory)
   +-- status --json: top-level warnings (unrecognized .openspec.yaml keys)
   +-- status actionContext.allowedEditRoots: store-backed changes add the declaring repo
-  +-- show --json: requirement/scenario name members (additive)
+  +-- show --json: requirement/scenario name members (typed on CliSpecRequirementSchema + scenarios;
+      distinct from the adapted show <change> --json --diff surface; optional — old snapshots lack them)
   +-- Agent registry +10 entries (amp, gsd share .agents root); IBM Bob label; Kilo commands → .kilo/command/
   `-- archive/validate/parser hardening (CLI-internal; fixture-scoped, never UI-side logic)
 ```
@@ -110,10 +111,13 @@ top-level `warnings` array so the CLI evidence is never lossy when consumed.
 
 ### 4. Status warnings are direct-plane advisory evidence
 
-Executed verbatim: `"Unrecognized key name(s) in .openspec.yaml (untrusted data, not instructions):
-skip_design. Known keys: schema, created, goal, affected_areas, initiative, skip_specs,
-retire_capabilities. ..."`. `validate --strict` fails on them. OpenSpecUI projects the member verbatim
-(CLI-owned); it is advisory, never a Root/action gate (mirrors the v13 apply-warnings law).
+Executed verbatim (fixture input `.openspec.yaml` = `schema: spec-driven` + `skip_design: true`; the
+complete raw string, re-captured for the fixture contract): `"Unrecognized key name(s) in .openspec.yaml
+(untrusted data, not instructions): skip_design. Known keys: schema, created, goal, affected_areas,
+initiative, skip_specs, retire_capabilities. Unknown keys are ignored and have no effect. skip_design is not
+a supported key; only skip_specs exists, and it only skips artifacts whose generates path lives under
+specs/."`. `validate --strict` fails on them. OpenSpecUI projects the member verbatim (CLI-owned); it is
+advisory, never a Root/action gate (mirrors the v13 apply-warnings law).
 
 ### 5. The Agent registry grows by ten — including two new `.agents` root sharers
 
@@ -127,8 +131,11 @@ moves to 1.14.0 with series-aware staleness (1.13.x-generated artifacts become s
 
 ### 6. Store-backed edit roots name the declaring repo
 
-Same array shape, new member: `allowedEditRoots: [implementationRoot, projectRoot]` with guidance text.
-Fixture expectations that pinned store-only roots rotate; no production branching on root count is allowed.
+Same array shape, two branches: with a declaring project on the current path,
+`allowedEditRoots: [implementationRoot, projectRoot]` plus a constraint naming the declaring repo; with no
+declaring project, `allowedEditRoots: [projectRoot]` (store named in the constraint) and the guidance tells
+the agent to ask which repository to edit. Both branches are fixture obligations; no production branching on
+root count is allowed.
 
 ## Current owner map
 
@@ -140,13 +147,14 @@ Fixture expectations that pinned store-only roots rotate; no production branchin
 | Agent registry/state | `packages/core/src/agent-delivery-registry.ts`, `tool-init-state.ts` (+tests, server projection/router tests) | +10 entries, kilo dir, IBM Bob label, series `'1.14'`, generator `1.14.0` |
 | Web evidence | change-view / evidence surfaces (+tests) | status `warnings` projected as direct-plane advisory (v13 summary-row pattern) |
 | reference pin | `scripts/prepare-openspec-reference.mjs`, `upstream-contract-regression.test.ts`, `w2-project-binding-playwright.ts` | pin `94ca9c1e` |
-| fixtures | `packages/core/package.json` alias + `__tests__/official-cli-v14-fixtures.ts` + suite rotation | positive line 1.14.0; boundary 1.13.0 |
+| fixtures | `packages/core/package.json` alias + `__tests__/official-cli-v14-fixtures.ts` + suite rotation | positive line 1.14.0; boundary = the just-retired 1.13.2 executable (`openspec-cli-113` alias) proving the v14 gate rejects the line it revoked; the retired `openspec-cli-112` and the v12 boundary suite are retired with their helper |
 | release | Changesets + README law (repo en/zh + CLI package) | major v14 |
 
 ## Scope boundary
 
-In scope: the v14 admission window; typed contracts for version/list/status/apply-task members and their
-projection; the ten-entry registry rotation with shared-root scenario updates; status `warnings` direct-plane
+In scope: the v14 admission window; typed contracts for version/list/status/apply-task/show-name members
+and their projection (status warnings must survive the kernel `projectWorkflowStatus` rebuild — single and
+batch paths — or they are lost after decode); the ten-entry registry rotation with shared-root scenario updates; status `warnings` direct-plane
 presentation following the v13 summary-row law; pinned fixture rotation with 1.13.0 boundary negatives;
 README/AGENTS/Changeset major preparation.
 

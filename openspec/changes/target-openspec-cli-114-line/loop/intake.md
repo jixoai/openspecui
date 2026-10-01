@@ -12,8 +12,9 @@ Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，�
 ## Objective Scope
 
 Ship OpenSpecUI 14 for OpenSpec CLI 1.14.x: pinned reference `v1.14.0` (`94ca9c1e`), evidence report, v14
-admission window, typed contracts for the five moved JSON surfaces (version command, apply task source
-locations, list archived/nested/warnings, status warnings, store edit roots), the ten-entry Agent registry
+admission window, typed contracts for the six moved JSON surfaces (version command, apply task source
+locations, the new list `archived` member — nested/list-warnings are 1.13.1 regression items that only
+migrate fixtures, status warnings, show spec requirement/scenario names, store edit roots), the ten-entry Agent registry
 rotation (shared `.agents` root now also `amp`/`gsd`; Kilo commands → `.kilo/command/`; IBM Bob label),
 generator staleness to 1.14.0, the full pinned fixture matrix with 1.13.0 boundary negatives, and README /
 AGENTS / Changeset major preparation.
@@ -34,10 +35,11 @@ AGENTS / Changeset major preparation.
    product decision.
 5. **Status `warnings` render on the direct plane following the v13 summary-row law** (one collapsible
    summary row, verbatim expansion, CLI attribution) — advisory, never a gate.
-6. **Fixture rotation:** `openspec-cli-114` positive line; retained `openspec-cli-112` stays as the
-   below-admitted boundary executable (proving rejections against the v14 gate); `openspec-cli-113` alias is
-   retained for provenance but not required as a second boundary line (v13 suites already prove the 1.13
-   line; the boundary class needs one retired executable — 1.12.0 keeps that role, cheapest reuse).
+6. **Fixture rotation:** `openspec-cli-114` positive line; the **just-retired 1.13.2 executable
+   (`openspec-cli-113` alias) becomes the below-admitted boundary line** proving the v14 gate rejects the
+   series it revoked (Round-A B4: a two-generations-old 1.12.0 proves only that "an old version is
+   rejected", not the v13 boundary). The v12 boundary suite and `openspec-cli-112` alias retire with their
+   helper; compat unit tests still cover 1.13.0/1.13.2 rejection and 1.14.0 acceptance directly.
 
 ## Constraints
 

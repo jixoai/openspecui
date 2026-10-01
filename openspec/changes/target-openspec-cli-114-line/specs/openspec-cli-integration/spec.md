@@ -152,11 +152,11 @@ explicit consumer requests it, and no UI surface is obligated by this contract.
 
 ### Requirement: Change List Inventory Contract
 
-The CLI change-list contract SHALL preserve the OpenSpec 1.14 inventory members: per-entry optional
-`archived` (present only under `--archived`/`--all`) and `nested` (namespace-folder findings), and an
-optional top-level `warnings` array (`nested_change_directory` findings). OpenSpecUI's Archive list SHALL
-keep its reactive-filesystem projection owner; the CLI members are typed evidence, not a mandated data-source
-switch.
+The CLI change-list contract SHALL carry the OpenSpec 1.14 per-entry optional `archived` member (present
+only under `--archived`/`--all`). The 1.13.1 `nested` and top-level `warnings` members stay covered by the
+existing Change List Nested Directory contract; this line only migrates their fixtures. OpenSpecUI's Archive
+list SHALL keep its reactive-filesystem projection owner; the CLI members are typed evidence, not a mandated
+data-source switch.
 
 #### Scenario: Archived entries decode with the archived flag
 
@@ -214,3 +214,44 @@ locations; they are CLI-owned evidence for which file and line each checkbox liv
 - **WHEN** the payload crosses the typed contract
 - **THEN** parsing SHALL succeed with both members absent
 - **AND** no default location SHALL be fabricated
+
+
+### Requirement: Spec Requirement Names Contract
+
+The `show <spec> --type spec --json` contract SHALL carry the OpenSpec 1.14 optional `name` member on each
+requirement and each scenario, preserved by CLI value through the spec-document contract and the Spec
+Catalog projection chain. This surface is distinct from `show <change> --json --diff`.
+
+#### Scenario: Names decode on a 1.14 spec document
+
+- **GIVEN** an admitted 1.14 CLI returns a spec document whose requirements and scenarios carry names
+- **WHEN** the payload crosses the typed contract and its projection chain
+- **THEN** requirement names and scenario names SHALL be preserved by CLI value with provenance
+
+#### Scenario: Older documents still parse without names
+
+- **GIVEN** a spec document whose members lack `name`
+- **WHEN** the payload crosses the typed contract
+- **THEN** parsing SHALL succeed with the members absent
+- **AND** a non-string `name` SHALL be rejected rather than silently accepted as typed evidence
+
+### Requirement: Status Action Context Edit Roots Contract
+
+Store-backed `status --json` `actionContext.allowedEditRoots` SHALL be preserved exactly as the CLI reports
+it in both branches: with a declaring project on the current path, the array lists the implementation root
+and the project root with the declaring-repo constraint; without one, the array lists the project root with
+the constraint telling the agent to ask which repository to edit. OpenSpecUI SHALL NOT branch production
+logic on the root count.
+
+#### Scenario: Declaring project joins the edit roots
+
+- **GIVEN** a store-backed change whose store is declared by a project on the current path
+- **WHEN** status is projected
+- **THEN** `allowedEditRoots` SHALL preserve the CLI-reported roots and constraint verbatim
+
+#### Scenario: No declaring project asks the user
+
+- **GIVEN** a store-backed change with no declaring project on the current path
+- **WHEN** status is projected
+- **THEN** `allowedEditRoots` SHALL preserve the CLI-reported single root and the ask-the-user constraint
+- **AND** OpenSpecUI SHALL NOT synthesize an implementation root
