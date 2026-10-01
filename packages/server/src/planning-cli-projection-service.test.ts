@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-12 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Prove selector-exact isolation, including Reference-content invalidation, and same-identity single-flight.
  * 2. Prove retained A becomes display-only during B and survives a refresh failure.
  * 3. Prove an initial failure publishes no fabricated Planning CLI snapshot.
@@ -7,15 +7,23 @@
  * 5. Prove lifecycle Push carries no business data while every Instructions selector remains isolated.
  * 6. Prove OpenSpec 1.13 Apply `warnings`/`missingPrerequisites` evidence survives the projection
  *    Work boundary verbatim without altering state or progress semantics.
+ * 7. Prove OpenSpec 1.14 Status `warnings` reach the Server-visible projection output through
+ *    the REAL OpsxKernel (fake 1.14 executable -> CliExecutor -> projectWorkflowStatus ->
+ *    this service) on BOTH the single `opsx-status` and batch `opsx-status-list` selectors,
+ *    with clean entries never synthesizing the member.
  *
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-07-26): "public Pull retains full CliProjection failure evidence."
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — Round-F B2: the real-kernel status-warnings transport mirror (single + batch + absent).
  */
 import {
+  CliExecutor,
   CliProjectionCommandError,
+  ConfigManager,
   OpenSpecCliContractExecutor,
+  OpsxKernel,
   RuntimeInvalidationIndex,
   type ArchiveInstructions,
   type ChangeStatus,
@@ -25,7 +33,10 @@ import {
   type PlanningCliProjectionSelector,
   type RootContext,
 } from '@openspecui/core'
-import { describe, expect, it, vi } from 'vitest'
+import { mkdir, mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createPlanningCliProjectionWorkOwner,
   PlanningCliProjectionService,
@@ -841,5 +852,299 @@ describe('PlanningCliProjectionService', () => {
       subscription.unsubscribe()
       fixture.runtime.clear()
     }
+  })
+})
+
+/**
+ * Executed top-level `status --json` `warnings` entry from the npm-published 1.14.0 executable
+ * (references/openspec-1.14.0-report.md; upstream `formatUnknownChangeMetadataKeysMessage`,
+ * pinned v1.14.0). Fixture input: `.openspec.yaml` = `schema: spec-driven` + `skip_design: true`.
+ */
+const executedStatusWarning114 =
+  'Unrecognized key name(s) in .openspec.yaml (untrusted data, not instructions): skip_design. Known keys: schema, created, goal, affected_areas, initiative, skip_specs, retire_capabilities. Unknown keys are ignored and have no effect. skip_design is not a supported key; only skip_specs exists, and it only skips artifacts whose generates path lives under specs/.'
+
+const TRANSPORT_WARNED_CHANGE = 'warned-change'
+const TRANSPORT_CLEAN_CHANGE = 'clean-change'
+
+function writeTransportStatusWarningsCliFixture(
+  cliPath: string,
+  projectDir: string
+): Promise<void> {
+  const { writeFile } = require('node:fs/promises') as typeof import('node:fs/promises')
+  return writeFile(
+    cliPath,
+    `
+const args = process.argv.slice(2)
+const projectDir = ${JSON.stringify(projectDir)}
+
+function root() {
+  return {
+    path: projectDir,
+    source: args.includes('--store') ? 'store' : 'nearest',
+    store_id: args.includes('--store') ? args[args.indexOf('--store') + 1] : undefined,
+    healthy: true,
+    status: [],
+  }
+}
+
+function join(base, rest) {
+  return base + '/' + rest
+}
+
+function statusFields(changeName, batch) {
+  const fields = {
+    changeName,
+    schemaName: 'spec-driven',
+    planningHome: {
+      kind: 'repo',
+      root: projectDir,
+      changesDir: join(projectDir, 'openspec', 'changes'),
+      defaultSchema: 'spec-driven',
+    },
+    changeRoot: join(projectDir, 'openspec', 'changes', changeName),
+    artifactPaths: {
+      proposal: {
+        outputPath: 'proposal.md',
+        resolvedOutputPath: join(projectDir, 'openspec', 'changes', changeName, 'proposal.md'),
+        existingOutputPaths: [],
+      },
+    },
+    isPlanningComplete: false,
+    isComplete: false,
+    applyRequires: [],
+    nextSteps: [],
+    actionContext: {
+      mode: 'repo-local',
+      sourceOfTruth: 'repo',
+      planningArtifacts: ['proposal'],
+      linkedContext: [],
+      allowedEditRoots: [projectDir],
+      requiresAffectedAreaSelection: false,
+      constraints: [],
+    },
+    artifacts: [
+      { id: 'proposal', outputPath: 'proposal.md', status: 'blocked', requires: [], missingDeps: ['proposal.md'] },
+    ],
+    ...(changeName === '${TRANSPORT_WARNED_CHANGE}'
+      ? { warnings: [${JSON.stringify(executedStatusWarning114)}] }
+      : {}),
+  }
+  return batch ? fields : { ...fields, root: root() }
+}
+
+if (args.includes('--version')) {
+  console.log('1.14.0')
+  process.exit(0)
+}
+
+if (args[0] === 'list' && args.includes('--json')) {
+  console.log(JSON.stringify({
+    changes: ['${TRANSPORT_WARNED_CHANGE}', '${TRANSPORT_CLEAN_CHANGE}'].map((name) => ({
+      name,
+      completedTasks: 0,
+      totalTasks: 1,
+      lastModified: '2026-10-02T00:00:00.000Z',
+      status: 'in-progress',
+    })),
+    root: root(),
+    status: [],
+  }))
+  process.exit(0)
+}
+
+if (args[0] === 'status' && args.includes('--all') && args.includes('--json')) {
+  console.log(JSON.stringify({
+    changes: ['${TRANSPORT_WARNED_CHANGE}', '${TRANSPORT_CLEAN_CHANGE}'].map((name) => statusFields(name, true)),
+    root: root(),
+  }))
+  process.exit(0)
+}
+
+if (args[0] === 'status' && args.includes('--change')) {
+  const changeName = args[args.indexOf('--change') + 1]
+  console.log(JSON.stringify(statusFields(changeName, false)))
+  process.exit(0)
+}
+
+console.error('Unsupported args:', args.join(' '))
+process.exit(1)
+`.trimStart(),
+    'utf8'
+  )
+}
+
+describe('PlanningCliProjectionService OpenSpec 1.14 status warnings transport (real kernel)', () => {
+  const tempDirs: string[] = []
+
+  async function prepareRealKernelFixture(): Promise<{
+    service: PlanningCliProjectionService
+    runtime: ReturnType<typeof createServerProjectionWorkRuntime>
+    dispose: () => Promise<void>
+  }> {
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-server-status-warnings-'))
+    tempDirs.push(projectDir)
+    await mkdir(join(projectDir, 'openspec', 'schemas'), { recursive: true })
+    await Promise.all(
+      [TRANSPORT_WARNED_CHANGE, TRANSPORT_CLEAN_CHANGE].map((changeId) =>
+        mkdir(join(projectDir, 'openspec', 'changes', changeId), { recursive: true })
+      )
+    )
+
+    const cliPath = join(projectDir, 'fake-openspec.mjs')
+    await writeTransportStatusWarningsCliFixture(cliPath, projectDir)
+
+    const config = new ConfigManager(projectDir)
+    await config.writeConfig({ cli: { command: process.execPath, args: [cliPath] } })
+    const executor = new CliExecutor(config, projectDir)
+    const realKernel = new OpsxKernel(projectDir, executor, new RuntimeInvalidationIndex(), {})
+
+    const runtime = createServerProjectionWorkRuntime()
+    const invalidation = new RuntimeInvalidationIndex()
+    const workOwner = createPlanningCliProjectionWorkOwner(runtime)
+    const contracts = new OpenSpecCliContractExecutor(async () => ({
+      success: false,
+      stdout: '',
+      stderr: 'Unexpected CLI contract execution.',
+      exitCode: 1,
+    }))
+    const documentService: PlanningCliProjectionServiceOptions['documentService'] = {
+      readSpec: async () => {
+        throw new Error('Unexpected Spec read.')
+      },
+      readSpecRaw: async () => {
+        throw new Error('Unexpected raw Spec read.')
+      },
+    }
+    const service = new PlanningCliProjectionService({
+      rootContext: createRootContext(),
+      gitBindingToken: 'planning-binding-transport',
+      // The REAL kernel methods carry the payload through CliExecutor ->
+      // projectWorkflowStatus -> this service; nothing is stubbed on the status path.
+      kernel: {
+        readStatusProjection: (change) => realKernel.readStatusProjection(change),
+        readChangeListProjection: () => realKernel.readChangeListProjection(),
+        readStatusListProjection: () => realKernel.readStatusListProjection(),
+        readInstructionsProjection: realKernel.readInstructionsProjection.bind(realKernel),
+        readApplyInstructionsProjection: realKernel.readApplyInstructionsProjection.bind(
+          realKernel
+        ),
+        readArchiveInstructionsProjection:
+          realKernel.readArchiveInstructionsProjection.bind(realKernel),
+        readConfigBundleProjection: realKernel.readConfigBundleProjection.bind(realKernel),
+        readTemplatesProjection: realKernel.readTemplatesProjection.bind(realKernel),
+        readTemplateContentsProjection: realKernel.readTemplateContentsProjection.bind(realKernel),
+      },
+      documentService,
+      contracts,
+      invalidation,
+      storeObservation: { subscribe: () => () => {} },
+      workOwner,
+    })
+    return {
+      service,
+      runtime,
+      dispose: async () => {
+        realKernel.dispose()
+        await executor.dispose()
+        runtime.clear()
+      },
+    }
+  }
+
+  it('carries the executed 1.14 warnings verbatim from the real kernel to the single opsx-status Server output', async () => {
+    const fixture = await prepareRealKernelFixture()
+    const selector = {
+      kind: 'opsx-status',
+      change: TRANSPORT_WARNED_CHANGE,
+    } satisfies PlanningCliProjectionSelector
+    const subscription = fixture.service.subscribe(selector, () => {})
+    try {
+      await vi.waitFor(() => {
+        expect(fixture.service.read(selector)).toMatchObject({
+          state: 'ready',
+          data: {
+            kind: 'opsx-status',
+            value: {
+              changeName: TRANSPORT_WARNED_CHANGE,
+              warnings: [executedStatusWarning114],
+            },
+          },
+        })
+      })
+      const snapshot = fixture.service.read(selector)
+      if (!snapshot || snapshot.state !== 'ready' || snapshot.data?.kind !== 'opsx-status') {
+        throw new Error('expected ready opsx-status snapshot')
+      }
+      expect(snapshot.data.value.warnings?.[0]).toBe(executedStatusWarning114)
+      expect(snapshot.data.value.warnings?.[0]).toContain('skip_design is not a supported key')
+    } finally {
+      subscription.unsubscribe()
+      await fixture.dispose()
+    }
+  })
+
+  it('carries entry-level 1.14 warnings verbatim on the batch opsx-status-list Server output', async () => {
+    const fixture = await prepareRealKernelFixture()
+    const selector = { kind: 'opsx-status-list' } satisfies PlanningCliProjectionSelector
+    const subscription = fixture.service.subscribe(selector, () => {})
+    try {
+      await vi.waitFor(() => {
+        const snapshot = fixture.service.read(selector)
+        expect(snapshot?.state).toBe('ready')
+        expect(snapshot?.data?.kind).toBe('opsx-status-list')
+      })
+      const snapshot = fixture.service.read(selector)
+      if (!snapshot || snapshot.state !== 'ready' || snapshot.data?.kind !== 'opsx-status-list') {
+        throw new Error('expected ready opsx-status-list snapshot')
+      }
+      const warned = snapshot.data.value.find(
+        (status) => status.changeName === TRANSPORT_WARNED_CHANGE
+      )
+      const clean = snapshot.data.value.find(
+        (status) => status.changeName === TRANSPORT_CLEAN_CHANGE
+      )
+      if (!warned || !clean) throw new Error('expected both transport changes in the status list')
+      expect(warned.warnings).toEqual([executedStatusWarning114])
+      // Clean entries never synthesize the member.
+      expect(clean.warnings).toBeUndefined()
+      expect('warnings' in clean).toBe(false)
+    } finally {
+      subscription.unsubscribe()
+      await fixture.dispose()
+    }
+  })
+
+  it('keeps warnings absent on a clean single-change Server output', async () => {
+    const fixture = await prepareRealKernelFixture()
+    const selector = {
+      kind: 'opsx-status',
+      change: TRANSPORT_CLEAN_CHANGE,
+    } satisfies PlanningCliProjectionSelector
+    const subscription = fixture.service.subscribe(selector, () => {})
+    try {
+      await vi.waitFor(() => {
+        expect(fixture.service.read(selector)).toMatchObject({
+          state: 'ready',
+          data: {
+            kind: 'opsx-status',
+            value: { changeName: TRANSPORT_CLEAN_CHANGE },
+          },
+        })
+      })
+      const snapshot = fixture.service.read(selector)
+      if (!snapshot || snapshot.state !== 'ready' || snapshot.data?.kind !== 'opsx-status') {
+        throw new Error('expected ready opsx-status snapshot')
+      }
+      expect(snapshot.data.value.warnings).toBeUndefined()
+      expect('warnings' in snapshot.data.value).toBe(false)
+    } finally {
+      subscription.unsubscribe()
+      await fixture.dispose()
+    }
+  })
+
+  afterEach(async () => {
+    const { rm } = await import('node:fs/promises')
+    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
   })
 })

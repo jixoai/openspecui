@@ -17,7 +17,8 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line).
- */
+  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — per-entry `archived` three-state projection assertions (true / mixed --all / default absent).
+*/
 import { describe, expect, it } from 'vitest'
 import { PlanningCliProjectionDataSchema } from './planning-cli-projection.js'
 
@@ -305,5 +306,51 @@ describe('PlanningCliProjectionDataSchema opsx-change-list namespace/warnings', 
     expect('warnings' in parsed).toBe(false)
     // The namespace set stays the structural fact even without display evidence.
     expect(parsed.namespaces).toEqual(['area'])
+  })
+
+  it('preserves the OpenSpec 1.14 per-entry archived fact on the shared projection', () => {
+    // `list --archived` payload: the archived entry carries `archived: true`.
+    const payload = changeListPayload()
+    payload.entries[0]!.archived = true
+    const parsed = PlanningCliProjectionDataSchema.parse(payload)
+
+    if (parsed.kind !== 'opsx-change-list') throw new Error('expected change-list projection')
+    expect(parsed.entries[0]?.archived).toBe(true)
+  })
+
+  it('preserves mixed archived false/true facts from a list --all payload', () => {
+    const payload = changeListPayload()
+    payload.entries.push(
+      {
+        name: 'shipped-change',
+        completedTasks: 3,
+        totalTasks: 3,
+        lastModified: '2026-09-30T00:00:00.000Z',
+        status: 'complete' as const,
+        archived: false,
+      },
+      {
+        name: 'archived-change',
+        completedTasks: 1,
+        totalTasks: 1,
+        lastModified: '2026-08-30T00:00:00.000Z',
+        status: 'complete' as const,
+        archived: true,
+      }
+    )
+    payload.value = ['real-change', 'shipped-change', 'archived-change']
+    const parsed = PlanningCliProjectionDataSchema.parse(payload)
+
+    if (parsed.kind !== 'opsx-change-list') throw new Error('expected change-list projection')
+    expect(parsed.entries.map((entry) => entry.archived)).toEqual([undefined, false, true])
+  })
+
+  it('keeps archived absent and unsynthesized on the default active-only list', () => {
+    // The default `list --json` payload carries no `archived` member at all.
+    const parsed = PlanningCliProjectionDataSchema.parse(changeListPayload())
+
+    if (parsed.kind !== 'opsx-change-list') throw new Error('expected change-list projection')
+    expect(parsed.entries[0]?.archived).toBeUndefined()
+    expect('archived' in (parsed.entries[0] as Record<string, unknown>)).toBe(false)
   })
 })

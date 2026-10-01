@@ -152,7 +152,7 @@ Red/green per group, recorded separately.
 
 ## Slice 7 — Release preparation (integrator)
 
-Changeset (major: core/server/web/openspecui); README law (repo en/zh `@^13` row + archived 1.13 copies +
+Changeset (major: core/server/web/openspecui); README law (repo en/zh `@^14` row + archived 1.13 copies +
 CLI package README scoped to v14); CLAUDE.md pointer to the 1.14 report; AGENTS.md architecture decision +
 submodule pin line. Full gates: format/lint/typecheck/browser + per-package test runs (explicit list, not
 recursive-only); disclose pre-existing flakes honestly (path-realpath, load-sensitive startup timing).

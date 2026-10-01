@@ -49,7 +49,8 @@ Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，�
 - [x] Changeset major; README law (repo en/zh + CLI package); CLAUDE.md pointer; AGENTS.md decision.
 - [x] Full gates (format/lint/typecheck/browser + explicit per-package tests); pre-existing flakes disclosed
       (xterm storybook Pixi flake isolated-rerun clean, full browser gate green on re-run).
-- [ ] PR opened; CI green; Codex final review disposition recorded.
+- [x] PR opened (#297); CI green; Codex final review disposition recorded (Round-F 7.8 REVISE →
+      F-B1/F-B2/F-B3 fixed with mutation red evidence; awaiting Round-G narrow re-check).
 - [ ] Owner acceptance walkthrough (Owner-only).
 - [ ] Archive/release — Owner decision.
 - [ ] GitHub issues handled with objective links.

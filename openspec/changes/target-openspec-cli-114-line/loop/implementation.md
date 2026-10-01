@@ -255,3 +255,38 @@ first failing package, so a core failure masks server/web — full re-run requir
   flake disclosed, not papered over.
 - SSG static minimal set (`entry-client-static` + `static-data-provider.opsx`) — pass (no
   static-surface changes in this line beyond shared projections).
+
+### Round-F implementation review disposition + fixes (2026-10-02)
+
+Codex Round-F (herdr v14-change-reviewer, report /tmp/v14-implementation-review.md): **7.8/10 REVISE**,
+three blockers — all accepted and fixed in the worktree:
+
+- **F-B1 `archived` lost at the Planning projection boundary (real bug, independently reproduced by
+  the reviewer).** The `opsx-change-list` entry schema in `planning-cli-projection.ts` listed only
+  five members, so `PlanningCliProjectionDataSchema.parse` stripped the CLI-contract `archived` fact.
+  Fixed by adding `archived: z.boolean().optional()` with the absent-when-default law documented,
+  plus three projection assertions (true from `--archived`, mixed false/true from `--all`, absent
+  and unsynthesized on the default active-only list). The Server service reuses the same core schema
+  (no independent mirror), so the boundary parse now retains the member; the Round-F B2 transport
+  suite below exercises the real Server parse path.
+- **F-B2 Server-visible status-warnings transport evidence missing.** research-plan Slice 2 promised
+  real-payload → kernel → Server-visible output on single AND batch paths, but only Core kernel and
+  Web component tests existed. Added a real-kernel describe in
+  `planning-cli-projection-service.test.ts`: fake 1.14 executable → real `CliExecutor` → real
+  `OpsxKernel` (`projectWorkflowStatus` included) → real `PlanningCliProjectionService` — asserting
+  the verbatim executed `skip_design` warning on single `opsx-status` and batch `opsx-status-list`
+  Server reads, and absent-without-synthesis on clean entries. Mutation red proven: removing the
+  kernel `warnings` copy fails the two warning-presence tests (2 failed | 1 passed — the absent case
+  legitimately passes without the copy); restored, all green.
+- **F-B3 governance drift.** Release README law "(v12 today…)" → v14 window; Pinned CLI clean-build
+  law current pin → v14 `v1.14.0` / full SHA `94ca9c1eb15d1b49c06c988419b75c3d95f8b2b5`; research-plan
+  README row `@^13` → `@^14`. rg audit: no `v12 today` / current-line `v13: v1.13.2` remains in
+  active governance text.
+
+Non-blocking notes taken for record (not blocking delivery): schema refinements for `line`/
+`sourcePath`, spec title "three-valued" wording in the config-center delta heading, a Server
+`spec.document` show-name forward test, and `StatusWarningsNotice` key stability under duplicate
+warning strings. The Owner walkthrough boundary is unchanged.
+
+Verification: projection suite + kernel warnings suite + service suite green; core tsc clean;
+kernel mutation fully restored (`git diff` empty on opsx-kernel.ts).

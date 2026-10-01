@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Define selector-exact Planning-root CLI Projection Work contracts.
  * 2. Define the runtime-environment Environment Global projection contract.
  * 3. Publish browser-safe lifecycle Pull schemas without importing Node-owned Core modules.
@@ -8,9 +8,13 @@
  *    `entries`/`value` stay actionable-only, `namespaces` is the single structural
  *    namespace-name set for row builders, and `warnings` is passthrough display evidence
  *    (absent when the CLI omitted it, never a synthesized empty array).
+ * 6. Carry the OpenSpec 1.14 per-entry `archived` inventory fact as optional typed evidence
+ *    (true from `--archived`, mixed false/true from `--all`, absent on the default list —
+ *    never synthesized), so the shared Planning projection is not lossy at its boundary.
  *
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — the entry schema gains the optional 1.14 `archived` fact.
  */
 import { z } from 'zod'
 import type { CliJsonValue } from './cli-contracts/command-result.js'
@@ -83,6 +87,12 @@ export const PlanningCliProjectionDataSchema = z.discriminatedUnion('kind', [
         totalTasks: z.number(),
         lastModified: z.string(),
         status: z.enum(['no-tasks', 'complete', 'in-progress']),
+        /**
+         * OpenSpec 1.14 per-entry archive inventory fact: `true` from `list --archived`,
+         * `false`/`true` mixes from `list --all`, and absent on the default active-only
+         * list (and on pre-1.14 CLIs). Preserved as typed evidence; never synthesized.
+         */
+        archived: z.boolean().optional(),
       })
     ),
     /**
