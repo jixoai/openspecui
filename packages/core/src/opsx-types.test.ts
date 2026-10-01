@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Verify Apply instruction context-file normalization.
  * 2. Require command-specific CLI evidence on demand-driven instruction leaves.
  * 3. Preserve typed OpenSpec 1.6 Reference indexes on both instruction surfaces.
@@ -26,7 +26,9 @@
  * Original request (2026-07-23): "OPSX Status 不应等待完整 Kernel warmup，且必须保留 CLI evidence。"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence projection + glob-recognition parity (update-openspec-cli-1132 Slice 2).
- * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line);
+ *   Slice 5 fixture-matrix lane hygiene: the source-location guard annotation becomes
+ *   optional members (matching the optional schema members) so the typecheck lane compiles.
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -311,7 +313,7 @@ describe('ApplyInstructionsSchema', () => {
       ],
     })
 
-    const first: { sourcePath: string | undefined; line: number | undefined } = parsed.tasks[0]!
+    const first: { sourcePath?: string | undefined; line?: number | undefined } = parsed.tasks[0]!
     expect(first.sourcePath).toBe('/repo/openspec/changes/add-example/tasks.md')
     expect(first.line).toBe(1)
     expect(parsed.tasks[1]?.line).toBe(3)

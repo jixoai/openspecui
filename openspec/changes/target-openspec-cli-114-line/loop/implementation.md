@@ -163,3 +163,64 @@ deferred; the registry + its test were updated together in the integrator pass. 
 - `pnpm --filter @openspecui/server run typecheck` (10 tsconfig lanes) → 0 errors.
 - Note for future rounds: multi-package `pnpm --filter A --filter B exec tsc` produces spurious TS6059
   rootDir errors in this repo; per-package invocations are authoritative.
+
+## Batch B implementation record (2026-10-02)
+
+### Slice 4 — Status warnings Web direct plane (CP3)
+
+Production: `packages/web/src/routes/change-view.tsx` (statusRegion mounts the notice;
+`hasDirectStatus` includes warnings presence). New owners:
+`components/status-warnings-notice.tsx` (collapsed summary row `⚠ N status warning(s) — reported by
+openspec status`, `role="status"`, amber advisory tone, in-place verbatim expansion, zero synthesis when
+absent, never gates actions) + component test + route-level test in the dedicated
+`routes/change-view-status-warnings.test.tsx` (change-view.test.tsx untouched by this slice to avoid
+parallel-write overlap). Parallel implementation reusing the v13 apply-progress summary-row pattern was
+chosen over extracting a shared component (the v13 notice is a compound surface; extraction would
+re-verify its 12 assertions for a thin disclosure shell). Red: pre-render route test failed with the
+status region absent. Green: 3 files / 17 tests + web typecheck.
+
+### Slice 5 — Pin guards + v14 fixture matrix (CP3)
+
+Pin guards rotated with a real red (`upstream-contract-regression` expected the v1.13.2 commit while the
+submodule sat at `94ca9c1e`): `scripts/prepare-openspec-reference.mjs`,
+`upstream-contract-regression.test.ts`, `packages/web/scripts/w2-project-binding-playwright.ts` (pin +
+`--version` 1.13.2→1.14.0). Alias: `openspec-cli-114: npm:@fission-ai/openspec@1.14.0` added
+(shim `--version` = 1.14.0 verified; lockfile +23 lines exactly); **`openspec-cli-112` retained** for its
+two historical consumers. Matrix: new `__tests__/official-cli-v14-fixtures.ts` helper; 11 suites migrated
+with git mv (apply-readiness keeps the 1132 tracking regressions and adds sourcePath/line assertions;
+default-store adds the store edit-roots both-branches scenarios; show suite adds spec
+requirement/scenario names; workflow mixed-tasks strict equality updated to real 1.14 output);
+2 new suites (version-report envelope without network probing; change-list-inventory with
+`--archived`/`--all`/default tri-state); boundary suite `official-cli-v13-boundary-fixtures.test.ts`
+proves the just-retired 1.13.2: identity, unsupported classification, and 1.14-only members absent
+(never asserting v13-era members absent). Retired: v13/v12 helpers + v12 boundary suite with rg orphan
+scan clean. Mutation red recorded (helper bins pointed at 113 → version provenance assertion failed →
+restored, zero residue). Two unplanned but evidenced fixes: `opsx-kernel-schemas-root.fixtures.test.ts`
+migrated off the deleted v13 helper, and Batch A's `workflow.test.ts`/`opsx-types.test.ts` typed-fact
+annotations corrected to optional members so the workflow-contract typecheck lane compiles (both files
+were byte-identical to HEAD, proving pre-existing lane debt outside base `tsc --noEmit` scope).
+Green: 15 files / 52 tests (heavy files also run split); core typecheck incl. all lanes.
+
+Real 1.14-vs-1.13 behavior deltas recorded in the slice report (apply source locations; show names;
+status verbatim warning incl. the full known-keys list; store edit-roots two branches with exact
+constraint strings — declaring-project `[implementationRoot, storeRoot]`, no-declaring `[storeRoot]` +
+ask-user; list archived member; version envelope with pnpm install location).
+
+### Slice 6 — Cross-package alignment (CP4)
+
+Four owner groups, red-first where a real literal rotation happened, "constant-follow" recorded where
+shared constants already carry the window: web compat copy (cli-health-gate suite 9-failed red → 87
+passed across 4 files), server evidence (change-diff 6-failed red → 9/9; findings-router 4-failed → 4/4;
+router admitted fixture → 107/107; cold-start integration pin+version → 1/1), web evidence (19-failed
+red across three files → 49/49), CLI/scripts (worktree-instance-manager 22/22 constant-follow;
+setup-example consumer verified via static mirror equality). `tool-subscription-router.test.ts` needed
+zero changes (Batch A integrator pass had rotated it). 12 files, +94/−82, production untouched;
+"OpenSpec 1.13/1.13.2" prose kept only as upstream provenance in feature-origin notes.
+
+### Batch B integrator verification (2026-10-02)
+
+Cross-slice check after three parallel agents shared one worktree: core 18 files / 91 tests green
+(matrix + boundary + regression + schemas-root + Batch A suites), web 6 files / 65 tests green —
+including the cross-slice fixpoint: Slice 4's reported `change-view.test.tsx` 24/25 failure (admitted
+fixture 1.13.0 rejected by the rotated window) is closed by Slice 6's literal rotation, now 25/25 —
+server 4 files green, core+web typecheck clean, no orphan references, lockfile scoped to the new alias.

@@ -2,7 +2,7 @@
  * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
  * 1. Prove the pinned OpenSpec CLI yields exact Agent command contents through the runtime generator bridge
  *    (the pinned generator fixtures here are HISTORICAL/equivalence evidence — they run retired executable
- *    lines like openspec-cli-112/111 deliberately; positive v13 acceptance lives in official-cli-v13-*).
+ *    lines like openspec-cli-112/111 deliberately; positive v14 acceptance lives in official-cli-v14-*).
  * 2. Prove non-importable runners fail closed instead of fabricating current command evidence.
  * 3. Prove a CLI line without one adapter keeps every unrelated adapter's evidence
  *    (retired 1.11 lacks codeassistant; historical 1.8 lacks Command Code).

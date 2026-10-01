@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.13 Apply readiness contract (`instructions apply
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.14 Apply readiness contract (`instructions apply
  *    --json`) against a real fixture repo: the blocked-state build-order closure and
  *    the ready-state no-delta-specs advisory.
  * 2. Prove `missingPrerequisites` is additive readiness evidence, never a new gate:
@@ -10,32 +10,35 @@
  * 3. Prove the ready-state `warnings` advisory names the objective downstream fact
  *    (`openspec validate` fails on the change) plus both remedies (write the delta
  *    specs / declare `skip_specs: true`), matching the Verified CLI observations in
- *    `references/openspec-1.13.1-report.md`.
+ *    `references/openspec-1.14.0-report.md`.
  * 4. Prove upstream conditional spreading: `warnings` is absent (not `[]`) while
  *    blocked, and `missingArtifacts` is absent while ready.
- * 5. (2026-09-26, update-openspec-cli-1132 Slice 4) Prove the 1.13.2 tracking-evidence
- *    members on the executed executable: every standard-schema payload emits
- *    `taskTrackingConfigured: true` with `unavailableTrackingFiles` absent.
- * 6. (2026-09-26) Prove glob-tracked aggregation through a project-local custom schema
+ * 5. Prove the 1.13.2 tracking-evidence members carried forward on the 1.14 executable:
+ *    every standard-schema payload emits `taskTrackingConfigured: true` with
+ *    `unavailableTrackingFiles` absent.
+ * 6. Prove glob-tracked aggregation through a project-local custom schema
  *    (`*`-class `apply.tracks` over two files): `tasks`/`progress` aggregate across every
  *    matched file; zero matches keep `taskTrackingConfigured: true` with empty `tasks`
  *    (configured-but-unmatched is not no-tracking) and the tracking-file-missing branch.
- * 7. (2026-09-26) Prove matched-but-unreadable tracking files (POSIX chmod 000, non-root
- *    only) surface as `unavailableTrackingFiles` absolute-path + reason evidence, the
+ * 7. Prove matched-but-unreadable tracking files (POSIX chmod 000, non-root only)
+ *    surface as `unavailableTrackingFiles` absolute-path + reason evidence, the
  *    readable file still contributes tasks, `state` stays `ready` while readable tasks
  *    remain (with the not-verified instruction suffix) and blocks with
  *    "No readable task descriptions are available." when none remain — evidence only,
  *    never a synthesized gate, per `references/openspec-1.13.2-report.md` P1.
+ * 8. (2026-10-02, target-openspec-cli-114-line Slice 5) Prove the 1.14 LocatedTask
+ *    members on the executed executable: every task carries an absolute `sourcePath`
+ *    plus its 1-based `line`, including per-file locations across a glob-tracked
+ *    aggregate — verbatim CLI evidence OpenSpecUI never re-derives, per
+ *    `references/openspec-1.14.0-report.md` section 2.
  *
- * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
- * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — in-window patch rotation 1.13.1 -> 1.13.2,
- * tracking-evidence executable matrix (update-openspec-cli-1132 Slice 4).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  */
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V13_VERSIONS,
+  PINNED_OPENSPEC_V14_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -43,12 +46,12 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV13Version,
-} from './__tests__/official-cli-v13-fixtures.js'
+  type PinnedOpenspecV14Version,
+} from './__tests__/official-cli-v14-fixtures.js'
 import { CliApplyInstructionsSuccessSchema } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV13Version,
+  version: PinnedOpenspecV14Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -62,7 +65,7 @@ async function initProject(
 }
 
 async function newChange(
-  version: PinnedOpenspecV13Version,
+  version: PinnedOpenspecV14Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -140,7 +143,7 @@ const RUNS_UNREADABLE_TRACKING_FIXTURE =
   typeof process.getuid === 'function' &&
   process.getuid() !== 0
 
-describe('pinned OpenSpec 1.13 apply readiness fixtures', () => {
+describe('pinned OpenSpec 1.14 apply readiness fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -148,7 +151,7 @@ describe('pinned OpenSpec 1.13 apply readiness fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V13_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
     it(`names the whole prerequisite chain on the blocked state and stays warning-free on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-apply-blocked`)
       const project = join(fixtureRoot, 'project')
@@ -235,6 +238,15 @@ describe('pinned OpenSpec 1.13 apply readiness fixtures', () => {
       // unavailable member stays absent (never `[]`).
       expect(apply.taskTrackingConfigured).toBe(true)
       expect(apply.unavailableTrackingFiles).toBeUndefined()
+
+      // 1.14 LocatedTask evidence: every task names the absolute file its checkbox
+      // lives in plus the 1-based line (tasks.md lines 3 and 4). The payload's
+      // changeDir is the canonical absolute base the CLI itself resolved.
+      const tasksPath = join(apply.changeDir, 'tasks.md')
+      expect(apply.tasks.map((task) => [task.sourcePath, task.line])).toEqual([
+        [tasksPath, 3],
+        [tasksPath, 4],
+      ])
     }, 60_000)
 
     it(`aggregates tasks across every file matched by a wildcard apply.tracks on OpenSpec ${version}`, async () => {
@@ -285,6 +297,16 @@ describe('pinned OpenSpec 1.13 apply readiness fixtures', () => {
         'beta done one',
         'beta open two',
         'beta open three',
+      ])
+      // 1.14 LocatedTask evidence across the aggregate: each task carries the
+      // absolute path of its own matched file plus its 1-based line inside it
+      // (alpha lines 3-4, then beta lines 3-5).
+      expect(apply.tasks.map((task) => [task.sourcePath, task.line])).toEqual([
+        [join(apply.changeDir, 'docs', 'tasks-alpha.md'), 3],
+        [join(apply.changeDir, 'docs', 'tasks-alpha.md'), 4],
+        [join(apply.changeDir, 'docs', 'tasks-beta.md'), 3],
+        [join(apply.changeDir, 'docs', 'tasks-beta.md'), 4],
+        [join(apply.changeDir, 'docs', 'tasks-beta.md'), 5],
       ])
       expect(apply.progress).toEqual({ total: 5, complete: 2, remaining: 3 })
       expect(apply.state).toBe('ready')

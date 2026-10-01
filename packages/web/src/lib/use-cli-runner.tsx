@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Run ordered CLI streams with stable process/loading state across dedicated Root and Agent transports.
  * 2. Preserve stdout, stderr, exit, cancellation, and multiline diagnostics verbatim.
  * 3. Route root-dependent operations through dedicated Server-owned transports.
@@ -16,6 +16,7 @@
  *   Server-owned stream, which installs the admitted series instead of an out-of-range @latest.
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  */
 import '@/styles/terminal-effects.css'
 import type { CliStreamEvent } from '@openspecui/core'

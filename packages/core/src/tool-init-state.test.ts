@@ -27,7 +27,7 @@
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  *    — Slice 3 rotates generated-by currency to the admitted 1.14.x line.
  * Note: openspec-cli-112 generator fixtures below are historical/boundary evidence for staleness and
- * legacy-compat classification; positive v13 acceptance lives in the official-cli-v13 suite.
+ * legacy-compat classification; positive v14 acceptance lives in the official-cli-v14 suite.
  */
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join, resolve, sep } from 'path'

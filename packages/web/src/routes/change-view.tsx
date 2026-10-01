@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Render schema-aware change artifacts and source files while retaining terminal status errors.
  * 2. Dispatch change workflows through routed compose/verify surfaces and the shared Operator launcher.
  * 3. Lock every change workflow action behind current Root Context and Status projection authority.
@@ -10,6 +10,10 @@
  * 8. Mount OpenSpec 1.13.2 Apply tracking evidence on the same plane: unreadable tracking
  *    files and no-tracking schemas (`taskTrackingConfigured === false`) mount the status
  *    region and reach the notice, while absent members keep the pre-1.13.2 presentation.
+ * 9. Mount the OpenSpec 1.14 Status top-level `warnings` advisory (unrecognized
+ *    `.openspec.yaml` keys) on the same plane: the advisory summary row mounts the status
+ *    region on its own, stays amber advisory evidence (`role="status"`), never gates
+ *    actions, and absent members keep the pre-1.14 presentation exactly.
  *
  * Original request (2026-07-15): "Root-dependent actions remain locked until root selection succeeds."
  * Review request (2026-07-23): "代码已经提交，开始review。如果有问题，那么可更新change。"
@@ -29,6 +33,7 @@
  *   direct-plane evidence beside the existing divergence notice.
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — tracking-evidence direct-plane mounting (update-openspec-cli-1132 Slice 2).
  * Original request (2026-09-27): Owner walkthrough P3 adjudication — badge receives taskTrackingConfigured.
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  */
 import { ApplyProgressNotice } from '@/components/apply-progress-notice'
 import {
@@ -41,6 +46,7 @@ import { ChangeCommandBar } from '@/components/opsx/change-command-bar'
 import { OperationInputsDialogAction } from '@/components/opsx/operation-inputs'
 import { OpsxEntityDetailView } from '@/components/opsx/opsx-entity-detail-view'
 import { RootActionNotice } from '@/components/root-action-notice'
+import { StatusWarningsNotice } from '@/components/status-warnings-notice'
 import { changeDisplayTitle } from '@/lib/change-display-title'
 import { buildOpsxComposeHref, type OpsxComposeActionId } from '@/lib/opsx-compose'
 import { useChangeOperatorLauncher } from '@/lib/use-change-operator-launcher'
@@ -167,7 +173,11 @@ export function ChangeView() {
     // tasks must reach this plane — otherwise the member-only-`false` payload mounts
     // nothing while presenting its empty task list.
     (applyInstructions?.unavailableTrackingFiles?.length ?? 0) > 0 ||
-    applyInstructions?.taskTrackingConfigured === false
+    applyInstructions?.taskTrackingConfigured === false ||
+    // OpenSpec 1.14 Status advisory: unrecognized `.openspec.yaml` keys are CLI-owned
+    // verbatim evidence that must stay scannable on the direct plane even when planning
+    // facts, references, and Apply state are all settled — it never gates actions.
+    (status?.warnings?.length ?? 0) > 0
 
   return (
     <OpsxEntityDetailView
@@ -270,6 +280,7 @@ export function ChangeView() {
             ) : null}
             <RootActionNotice state={rootAction} />
             <ChangeReferenceFailureNotice referenceEvidence={referenceEvidence} />
+            <StatusWarningsNotice warnings={status.warnings} />
             {applyInstructions ? (
               <ApplyProgressNotice
                 applyInstructionProgress={applyInstructions.applyInstructionProgress}

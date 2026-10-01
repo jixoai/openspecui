@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-26 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
  * 1. Lock OpenSpec 1.8/1.9 Status artifact status, dependency arrays, and planning completion.
  * 2. Lock Apply and Archive operation-instruction payloads at the CLI contract boundary.
  * 3. Lock the `schemas --json` success/failure sum type and archived Validate report decoding.
@@ -46,7 +46,10 @@
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — generic diagnostics decode-regression evidence (update-openspec-cli-1131 Slice 4).
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — Apply tracking-evidence decode contract (update-openspec-cli-1132 Slice 2).
- * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line).
+ * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line);
+ *   Slice 5 fixture-matrix lane hygiene: the typed-fact guard annotation becomes optional
+ *   members (matching the optional schema members) and the version-command execute mock
+ *   declares its argv parameter so the workflow-contract typecheck lane compiles.
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'
@@ -1432,8 +1435,8 @@ describe('OpenSpec 1.14 apply task source locations CLI contract', () => {
 
     expect(parsed.tasks).toHaveLength(2)
     // Typed-fact guard: source locations exist on the decoded task type, not merely
-    // as passthrough residue.
-    const first: { sourcePath: string | undefined; line: number | undefined } = parsed.tasks[0]!
+    // as passthrough residue (optional members — older payloads may lack them).
+    const first: { sourcePath?: string | undefined; line?: number | undefined } = parsed.tasks[0]!
     expect(first.sourcePath).toBe(
       '/private/tmp/os114-slice2/openspec/changes/no-specs-but-tasks/tasks.md'
     )
@@ -1692,7 +1695,7 @@ describe('OpenSpec 1.14 version CLI contract', () => {
   })
 
   it('builds version argv without --check by default and with --check only when explicit', async () => {
-    const execute = vi.fn(async () => ({
+    const execute = vi.fn(async (_args: string[]) => ({
       success: true,
       stdout: JSON.stringify(executedVersion114),
       stderr: '',

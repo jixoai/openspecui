@@ -32,8 +32,8 @@ Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，�
 
 ## CP3 — Web + fixtures (Slices 4-5)
 
-- [ ] Status warnings direct-plane summary row; web focused tests green.
-- [ ] Pin guards rotated; `openspec-cli-114` alias with lockfile+shim evidence; full v14 positive matrix —
+- [x] Status warnings direct-plane summary row; web focused tests green.
+- [x] Pin guards rotated; `openspec-cli-114` alias with lockfile+shim evidence; full v14 positive matrix —
       11 migrated suites + `v14-version-report` + `v14-change-list-inventory` (13 files) — green with
       `--version` provenance; the 1.13.2 boundary suite proves the just-retired line rejected (identity +
       unsupported classification + 1.14-only members absent; v12 boundary suite and v12 helper retired with
@@ -42,7 +42,7 @@ Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，�
 
 ## CP4 — Alignment (Slice 6)
 
-- [ ] Four owner groups red/green recorded.
+- [x] Four owner groups red/green recorded (constant-follow noted where applicable; production untouched).
 
 ## CP5 — Delivery
 
