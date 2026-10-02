@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/website",
-  "version": "13.0.2",
+  "version": "14.0.0",
   "private": true,
   "type": "module",
   "scripts": {
