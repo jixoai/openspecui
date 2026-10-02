@@ -136,7 +136,6 @@ the gate still admits 1.13 (record the ordering honestly — boundary lands afte
 Green: joint v14 gate (13 files) + boundary + upstream-contract-regression; core typecheck; lockfile diff +
 shim check. Mutation red: bins-map → wrong alias fails `--version` identity.
 
-
 ## Slice 6 — Cross-package alignment (four owner groups)
 
 1. Web compat copy: `cli-health-gate`(+test), settings diagnostics, `use-cli-runner` — ranges/labels derive

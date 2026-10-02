@@ -219,7 +219,6 @@ locations; they are CLI-owned evidence for which file and line each checkbox liv
 - **THEN** parsing SHALL succeed with both members absent
 - **AND** no default location SHALL be fabricated
 
-
 ### Requirement: Spec Requirement Names Contract
 
 The `show <spec> --type spec --json` contract SHALL carry the OpenSpec 1.14 optional `name` member on each
