@@ -145,13 +145,14 @@ the fix (verbatim single + batch payloads). Green: core focused run —
 
 Production: `agent-delivery-registry.ts` (series `'1.14'`, +10 entries: amp, atomcode, codestudio, dsh,
 easycode, gigacode, grok, veai, warp, IBM Bob; gsd shares the `.agents` root with amp), `tool-init-state.ts`
-+ tests. Integrator decision on the slice agent's escalation: `SHARED_AGENTS_SKILLS_OWNER_CANDIDATES`
-widens from three to five values `['codex','zed','agents','amp','gsd']` — upstream 1.14 arbitration pool
-counts five `.agents` skills writers and the reviewed spec delta already says so; antigravity stays
-commands-only (adapter-backed). The slice agent had conservatively kept the three-valued tuple and
-deferred; the registry + its test were updated together in the integrator pass. Green:
-`vitest run src/agent-delivery-registry.test.ts src/tool-init-state.test.ts src/agent-command-content.test.ts`
-→ 93 passed.
+
+- tests. Integrator decision on the slice agent's escalation: `SHARED_AGENTS_SKILLS_OWNER_CANDIDATES`
+  widens from three to five values `['codex','zed','agents','amp','gsd']` — upstream 1.14 arbitration pool
+  counts five `.agents` skills writers and the reviewed spec delta already says so; antigravity stays
+  commands-only (adapter-backed). The slice agent had conservatively kept the three-valued tuple and
+  deferred; the registry + its test were updated together in the integrator pass. Green:
+  `vitest run src/agent-delivery-registry.test.ts src/tool-init-state.test.ts src/agent-command-content.test.ts`
+  → 93 passed.
 
 ### Batch A integrator pass (2026-10-02)
 
