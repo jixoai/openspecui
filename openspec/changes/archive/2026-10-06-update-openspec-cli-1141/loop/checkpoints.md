@@ -71,9 +71,13 @@ Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新�
       4 delivery-discipline blockers (changeset, format, stale AGENTS clean-build pin,
       frozen full-gate evidence) all folded and re-verified; Round-B recorded in the
       implementation log.
-- [ ] PR opened from `target/openspec-cli-1141-patch`, `pr-quality.yml` green (the CI pin guard
-      proves the repaired gitlink against `EXPECTED_COMMIT` for the first time since the
-      regression), merged per Manager Mode; change archived after merge; herdr resources
-      released; worktree retained for follow-up iterations until the Owner's cleanup instruction.
+- [x] PR #300 opened from `target/openspec-cli-1141-patch` (commits `7f484842` rotation +
+      `246789c0` CI settlement budget); all `pr-quality.yml` checks green on the fourth run
+      (the first three runs hit the ubuntu tool-subscription settlement budget — diagnosis
+      and fix recorded in the implementation log; the CI pin guard validated the repaired
+      gitlink against `EXPECTED_COMMIT` for the first time since the regression); merged
+      per Manager Mode as `affa059e`; change archived after merge on
+      `docs/archive-update-openspec-cli-1141`; herdr resources released; worktree retained
+      for follow-up iterations until the Owner's cleanup instruction.
 - [x] Owner final browser walkthrough boundary unchanged (2026-07-20 law); no UI change ships,
       so no additional agent E2E walkthrough is required beyond the existing browser suites.
