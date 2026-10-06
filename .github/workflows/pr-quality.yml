@@ -213,14 +213,14 @@ jobs:
       - name: Run Windows test gate
         if: >-
           !startsWith(github.head_ref, 'chore/release/changeversion-') &&
-          needs.ci-scope.outputs.fast_mode != 'skip'
+          (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
         shell: pwsh
         run: pnpm test:ci
 
       - name: Run Windows typecheck gate
         if: >-
           !startsWith(github.head_ref, 'chore/release/changeversion-') &&
-          needs.ci-scope.outputs.fast_mode != 'skip'
+          (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
         shell: pwsh
         run: pnpm typecheck
 
@@ -231,7 +231,7 @@ jobs:
       - name: Warm pnpm cache for the offline smoke
         if: >-
           !startsWith(github.head_ref, 'chore/release/changeversion-') &&
-          needs.ci-scope.outputs.fast_mode != 'skip'
+          (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
         shell: pwsh
         run: |
           $warm = Join-Path $env:TEMP ("openspecui-warm-" + [guid]::NewGuid().ToString('N'))
@@ -249,7 +249,7 @@ jobs:
       - name: Build and smoke installed Windows CLI
         if: >-
           !startsWith(github.head_ref, 'chore/release/changeversion-') &&
-          needs.ci-scope.outputs.fast_mode != 'skip'
+          (needs.ci-scope.outputs.fast_mode == 'full' || needs.ci-scope.outputs.fast_mode == 'scoped')
         shell: pwsh
         run: |
           pnpm --filter openspecui build
