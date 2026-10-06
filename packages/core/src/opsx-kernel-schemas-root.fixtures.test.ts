@@ -20,6 +20,9 @@
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  *   — window rotation moves the admitted-line proof to the 1.14.0 executable together
  *   with the v14 helper (target-openspec-cli-114-line Slice 5).
+ * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
+ *   — in-window patch rotation moves the local PINNED_BINS key to 1.14.1 together
+ *   with the v14 helper's pinned constant.
  */
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -40,7 +43,7 @@ import { OpsxKernel } from './opsx-kernel.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
 const PINNED_BINS = {
-  '1.14.0': resolve(import.meta.dirname, '../node_modules/openspec-cli-114/bin/openspec.js'),
+  '1.14.1': resolve(import.meta.dirname, '../node_modules/openspec-cli-114/bin/openspec.js'),
 } satisfies Record<PinnedOpenspecV14Version, string>
 
 const tempDirs: string[] = []

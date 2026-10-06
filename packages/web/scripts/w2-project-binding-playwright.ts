@@ -23,6 +23,8 @@
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — in-window patch rotation moved the pin to v1.13.2.
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  *   — pin + version assertion rotate to v1.14.0 (94ca9c1e) for the OpenSpecUI 14 adaptation line.
+ * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
+ *   — in-window patch rotation moves pin + version assertion to v1.14.1 (87c3595).
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -40,7 +42,7 @@ const TSX_CLI = join(REPO_ROOT, 'packages/web/node_modules/tsx/dist/cli.mjs')
 const VITE_CLI = join(REPO_ROOT, 'packages/web/node_modules/vite/bin/vite.js')
 const PINNED_OPENSPEC_ROOT = join(REPO_ROOT, 'references/openspec')
 const PINNED_OPENSPEC_BIN = join(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
-const PINNED_OPENSPEC_COMMIT = '94ca9c1eb15d1b49c06c988419b75c3d95f8b2b5'
+const PINNED_OPENSPEC_COMMIT = '87c3595ace6a2e22957f39ebe5b74c2f2316e0cb'
 const BACKEND_PORT = 14_236
 const WEB_PORT = 14_237
 const STARTUP_TIMEOUT_MS = 30_000
@@ -132,7 +134,7 @@ async function assertPinnedCli(env: NodeJS.ProcessEnv): Promise<void> {
     throw new Error(`Pinned OpenSpec SHA mismatch: ${stdout.trim()}`)
   }
   const version = await runPinnedCli(['--version'], REPO_ROOT, env)
-  if (version.exitCode !== 0 || version.stdout.trim() !== '1.14.0') {
+  if (version.exitCode !== 0 || version.stdout.trim() !== '1.14.1') {
     throw new Error(`Pinned OpenSpec version check failed: ${version.stdout}\n${version.stderr}`)
   }
 }

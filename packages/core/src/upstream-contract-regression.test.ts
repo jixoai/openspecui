@@ -21,6 +21,9 @@
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  *   — rotate the reference pin assertion from v1.13.2 (db230978) to the released v1.14.0 tag
  *   (94ca9c1e) for the OpenSpecUI 14 adaptation line.
+ * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
+ *   — rotate the reference pin assertion from v1.14.0 (94ca9c1e) to the released v1.14.1
+ *   patch tag (87c3595) inside the unchanged v14 window.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -94,13 +97,13 @@ describe('first-party OpenSpec 1.4-1.7 contracts', () => {
     expect(rootInspection).toContain('inspectOptionalPlanningDirectory')
   })
 
-  it('pins the reference checkout to the official v1.14.0 commit', () => {
+  it('pins the reference checkout to the official v1.14.1 commit', () => {
     const commit = execFileSync('git', ['-C', upstreamRoot, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
       windowsHide: true,
     }).trim()
 
-    expect(commit).toBe('94ca9c1eb15d1b49c06c988419b75c3d95f8b2b5')
+    expect(commit).toBe('87c3595ace6a2e22957f39ebe5b74c2f2316e0cb')
   })
 
   it('locks the retained planning-completion, schemas sum type, and archived validation sources', () => {

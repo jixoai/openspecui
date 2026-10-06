@@ -1,12 +1,15 @@
 /**
- * Orthogonal intents (created 2026-10-02 Asia/Shanghai):
- * 1. Run the pinned OpenSpec 1.14.0 npm executable for the v14 fixture matrix (the retired
+ * Orthogonal intents (updated 2026-10-06 Asia/Shanghai):
+ * 1. Run the pinned OpenSpec 1.14.1 npm executable for the v14 fixture matrix (the retired
  *    1.13.2 line stays available through the openspec-cli-113 alias for boundary negatives).
  * 2. Share one isolated fixture environment and hidden-console runner across fixture files.
  * 3. Keep fixture identity explicit so a passing matrix always names its executable line.
  * 4. Assert the 1.14 JSON stream discipline.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
+ *   — rotate the pinned executable from v1.14.0 (94ca9c1e) to the released v1.14.1 patch
+ *   tag (87c3595) inside the unchanged v14 window (in-window patch rotation).
  */
 import { execFile } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -15,12 +18,12 @@ import { join, resolve } from 'node:path'
 import { expect } from 'vitest'
 
 /** OpenSpec CLI line admitted by the OpenSpecUI 14 compatibility law (single-series window). */
-export const PINNED_OPENSPEC_V14_VERSIONS = ['1.14.0'] as const
+export const PINNED_OPENSPEC_V14_VERSIONS = ['1.14.1'] as const
 
 export type PinnedOpenspecV14Version = (typeof PINNED_OPENSPEC_V14_VERSIONS)[number]
 
 const PINNED_V14_BINS = {
-  '1.14.0': resolve(import.meta.dirname, '../../node_modules/openspec-cli-114/bin/openspec.js'),
+  '1.14.1': resolve(import.meta.dirname, '../../node_modules/openspec-cli-114/bin/openspec.js'),
 } satisfies Record<PinnedOpenspecV14Version, string>
 
 export interface CliRunResult {
@@ -79,7 +82,7 @@ export function runPinnedOpenspec(
  *
  * This is the provenance guard: a bins-map entry accidentally pointing at another alias
  * (for example openspec-cli-113) prints a different `--version` string and fails here,
- * so a passing matrix always proves it ran the 1.14.0 line.
+ * so a passing matrix always proves it ran the 1.14.1 line.
  */
 export async function expectPinnedVersion(
   version: PinnedOpenspecV14Version,
