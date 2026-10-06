@@ -1,5 +1,12 @@
 # @openspecui/local-llama-translator
 
+## 14.0.1
+
+### Patch Changes
+
+- Updated dependencies [7f48484]
+  - @openspecui/core@14.0.1
+
 ## 14.0.0
 
 ### Patch Changes
