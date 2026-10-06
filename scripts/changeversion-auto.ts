@@ -1,15 +1,22 @@
 #!/usr/bin/env bun
 /**
- * Orthogonal intents (updated 2026-08-08 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-06 Asia/Shanghai):
  * 1. Generate and deliver a protected changeset version PR.
  * 2. Enter, continue, or exit an explicit Changesets prerelease channel.
  * 3. Wait for the exact merged-head release workflow before reporting completion.
  * 4. Execute release subprocesses through the shell-independent command owner.
  * 5. Hide subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
+ * 6. Never let a drifted `references/openspec` submodule working tree ride the version commit.
  *
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-07-28): "我想先发布一个beta版本"
  * Original request (2026-08-04): "这个项目之前都是在macOS上做到开发，现在我们在Windows，所以开始一系列的适配。"
+ * Original request (2026-10-06): "发布" — the second release commit in a row
+ *   (06dec8b9, then 7322807d) reverted the recorded `references/openspec` gitlink:
+ *   the stash step deliberately ignores the submodule path, but a checkout whose
+ *   submodule working tree still sits on the pre-rotation tag then rides
+ *   `git add -A`. Sync the working tree to the recorded gitlink before staging
+ *   and refuse to commit any staged submodule pointer change.
  */
 
 import { spawnSync } from 'node:child_process'
@@ -361,9 +368,36 @@ function main(options: ChangeversionOptions): void {
     } else {
       releaseBranch = generateBranchName()
       runInheritOrThrow(commandFor('git'), ['switch', '-c', releaseBranch])
+      // The stash decision ignores `references/openspec`, so a submodule working
+      // tree left on a pre-rotation tag would otherwise ride `git add -A` and
+      // revert the recorded gitlink in the version commit (happened twice:
+      // 06dec8b9, 7322807d). Sync it to the recorded gitlink first...
+      runInheritOrThrow(commandFor('git'), [
+        'submodule',
+        'update',
+        '--init',
+        '--force',
+        '--checkout',
+        'references/openspec',
+      ])
       runInheritOrThrow(commandFor('git'), ['add', '-A'])
 
-      const staged = runCapture(commandFor('git'), ['diff', '--cached', '--name-only'])
+      // ...and treat any staged submodule pointer change as a stop condition: a
+      // version commit never legitimately rotates the pin, so refuse instead of
+      // shipping another silent revert.
+      const stagedWithSubmoduleCheck = runCapture(commandFor('git'), [
+        'diff',
+        '--cached',
+        '--name-only',
+      ])
+      if (stagedWithSubmoduleCheck.split('\n').includes('references/openspec')) {
+        throw new Error(
+          '[changeversion] Refusing to commit: staged changes include the references/openspec gitlink. ' +
+            'A version commit must never rotate the pin — commit any intended pin change explicitly first.'
+        )
+      }
+
+      const staged = stagedWithSubmoduleCheck
       if (!staged) {
         console.log('[changeversion] No staged version updates. Nothing to commit.')
         runInheritOrThrow(commandFor('git'), ['switch', MAIN_BRANCH])
