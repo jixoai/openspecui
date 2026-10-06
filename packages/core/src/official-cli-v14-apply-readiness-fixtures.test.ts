@@ -31,8 +31,16 @@
  *    plus its 1-based `line`, including per-file locations across a glob-tracked
  *    aggregate — verbatim CLI evidence OpenSpecUI never re-derives, per
  *    `references/openspec-1.14.0-report.md` section 2.
+ * 9. (2026-10-06, update-openspec-cli-1141) Prove the 1.14.1 completion/archive
+ *    separation on the `all_done` state: every tracked task done keeps the state
+ *    value, while the instruction reports completion and asks for review or
+ *    verification before archiving — the payload never claims the change
+ *    "is ready to be archived", per `references/openspec-1.14.1-report.md`.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
+ *   — in-window patch rotation: the pinned executable moves to 1.14.1 and the new
+ *   all_done guidance semantics join the matrix.
  */
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -469,5 +477,46 @@ describe('pinned OpenSpec 1.14 apply readiness fixtures', () => {
       },
       60_000
     )
+
+    it(`separates tracked-task completion from archive readiness on the all_done state on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(
+        `cli-${version.replace(/\./g, '')}-apply-all-done`
+      )
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      await expectPinnedVersion(version, project, env)
+      await initProject(version, project, env)
+      await newChange(version, project, env, 'all-done')
+      const changeDir = join(project, 'openspec', 'changes', 'all-done')
+      await writeFile(join(changeDir, 'proposal.md'), '# Proposal\n\nAll-done completion smoke.\n')
+      await writeFile(
+        join(changeDir, 'tasks.md'),
+        ['# Tasks', '', '- [x] First step', '- [x] Second step', ''].join('\n')
+      )
+
+      const result = await runPinnedOpenspec(
+        version,
+        ['instructions', 'apply', '--change', 'all-done', '--json'],
+        project,
+        env
+      )
+      expectPinnedJsonDiscipline(result)
+      const apply = parsePinnedSuccessJson(result, (payload) =>
+        CliApplyInstructionsSuccessSchema.parse(payload)
+      )
+
+      // 1.14.1 separates completion from archive readiness: every tracked task is
+      // done, the state value is unchanged, and the instruction asks for review or
+      // verification before archiving instead of declaring archive readiness.
+      expect(apply.state).toBe('all_done')
+      expect(apply.progress).toEqual({ total: 2, complete: 2, remaining: 0 })
+      expect(apply.instruction).toContain('All tracked tasks are complete.')
+      expect(apply.instruction).toContain('before archiving')
+      expect(apply.instruction).not.toContain('ready to be archived')
+      // The retired 1.14.0 phrasing never appears anywhere in the payload.
+      expect(JSON.stringify(apply)).not.toContain('ready to be archived')
+    }, 60_000)
   }
 })

@@ -1,13 +1,20 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 full bulk `validate --json` report: schema
+ * Orthogonal intents (updated 2026-10-06 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.14 full bulk `validate --json` report: schema
  *    compatibility with the 1.11-1.13 envelope plus the merge-conflict INFO issues.
  * 2. Prove `--report full` stays the explicit default and strict escalation plus the
  *    human next-steps footer behavior are unchanged.
  * 3. Carry over the admitted-line contracts the v11-v13 validation matrix proved:
  *    schemas success/selected-Root failure envelopes and archived task validation.
+ * 4. (2026-10-06, update-openspec-cli-1141) Prove the 1.14.1 severity upgrade for an
+ *    overlength (>500 characters) ADDED requirement: a WARNING in the change-scope
+ *    JSON report that leaves non-strict validation green while `--strict` fails,
+ *    per `references/openspec-1.14.1-report.md`.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
+ *   — in-window patch rotation: the pinned executable moves to 1.14.1 and the
+ *   overlength WARNING strict escalation joins the matrix.
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
@@ -154,6 +161,45 @@ async function writePlaceholderSpec(project: string): Promise<void> {
       '#### Scenario: Existing behavior',
       '- **WHEN** billing runs',
       '- **THEN** billing succeeds',
+      '',
+    ].join('\n')
+  )
+}
+
+/**
+ * A change whose ADDED requirement description exceeds 500 characters, the
+ * 1.14.1 boundary where the advisory moved from informational hint to WARNING.
+ */
+async function createOverlengthChange(
+  version: PinnedOpenspecV14Version,
+  project: string,
+  env: NodeJS.ProcessEnv,
+  changeId: string
+): Promise<void> {
+  const created = await runPinnedOpenspec(version, ['new', 'change', changeId], project, env)
+  expect(created.exitCode, created.stdout + '\n' + created.stderr).toBe(0)
+  const changeDir = join(project, 'openspec', 'changes', changeId)
+  await writeFile(
+    join(changeDir, 'proposal.md'),
+    `# Proposal\n\n${changeId} exercises the overlength requirement severity.\n`
+  )
+  await mkdir(join(changeDir, 'specs', 'cap-overlength'), { recursive: true })
+  const longDescription = (
+    'This requirement description is deliberately written to exceed the five hundred ' +
+    'character validation limit so the strict gate can prove the upgraded severity ' +
+    'classification now enforced for overlong ADDED requirements. '
+  ).repeat(3)
+  await writeFile(
+    join(changeDir, 'specs', 'cap-overlength', 'spec.md'),
+    [
+      '## ADDED Requirements',
+      '',
+      '### Requirement: Overlong text',
+      longDescription,
+      '',
+      '#### Scenario: Parses',
+      '- **WHEN** the delta is validated',
+      '- **THEN** the requirement parses',
       '',
     ].join('\n')
   )
@@ -320,6 +366,54 @@ describe('pinned OpenSpec 1.14 full validation report fixtures', () => {
       const strict = await runPinnedOpenspec(
         version,
         ['validate', '--specs', '--json', '--strict'],
+        project,
+        env
+      )
+      expect(strict.exitCode).toBe(1)
+      const strictReport: CliValidateReport = parsePinnedJson(strict, (payload) =>
+        CliValidateReportSchema.parse(payload)
+      )
+      expect(strictReport.items[0]?.valid).toBe(false)
+      expect(strictReport.summary.totals).toMatchObject({ items: 1, passed: 0, failed: 1 })
+    }, 60_000)
+
+    it(`flags an overlength ADDED requirement as a WARNING that only strict validation fails on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(
+        `cli-${version.replace(/\./g, '')}-overlength-added`
+      )
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      await initProject(version, project, env)
+      await createOverlengthChange(version, project, env, 'overlength-change')
+
+      // Non-strict change validation stays green; the overlength advisory is a
+      // WARNING issue carried as evidence, exactly like the placeholder Purpose.
+      const nonStrict = await runPinnedOpenspec(
+        version,
+        ['validate', 'overlength-change', '--json'],
+        project,
+        env
+      )
+      expect(nonStrict.exitCode, nonStrict.stdout + '\n' + nonStrict.stderr).toBe(0)
+      expectPinnedJsonDiscipline(nonStrict)
+      const report: CliValidateReport = parsePinnedJson(nonStrict, (payload) =>
+        CliValidateReportSchema.parse(payload)
+      )
+      expect(report.items[0]?.valid).toBe(true)
+      const overlength = report.items[0]?.issues.find((issue) =>
+        issue.message.includes('very long (>500 characters)')
+      )
+      expect(overlength).toMatchObject({
+        level: 'WARNING',
+        path: 'cap-overlength/spec.md',
+      })
+
+      // 1.14.1 escalates that WARNING under --strict, so CI can enforce the limit.
+      const strict = await runPinnedOpenspec(
+        version,
+        ['validate', 'overlength-change', '--json', '--strict'],
         project,
         env
       )
