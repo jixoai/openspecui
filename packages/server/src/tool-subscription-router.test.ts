@@ -22,6 +22,11 @@
  *   versioned series instead of an unversioned spec the admission gate can block.
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
+ *   — the pinned runner rotates to 1.14.1, whose lazy-load command dispatch slows the
+ *   first execution of each command on CI runners (macOS stays sub-second), pushing
+ *   shared-runner re-emission settlement past the 25-cycle budget on ubuntu; the
+ *   budget multiplier follows the c0ab7f36/c4ed106c precedent for this file.
  */
 import {
   clearCache,
@@ -56,8 +61,11 @@ const REACTIVE_MISSING_PATH_FALLBACK_MS = Number(process.env.CI_TOOL_WAIT_MS ?? 
 // The pinned runner's heavier cold start (its module graph now loads the diff
 // package) pushed shared-runner settlement past the 15-cycle budget this file last
 // used, the same shared-runner wait-budget class c0ab7f36 and c4ed106c raised.
+// 1.14.1's lazy-load dispatch loads each command's implementation on first run,
+// which slowed per-settlement runner invocations on ubuntu CI (sub-second on
+// macOS) past the 25-cycle budget 2-of-3 PR Quality runs (2026-10-06); raised again.
 const PUBLIC_TOOL_SETTLEMENT_BUDGET_MS =
-  REACTIVE_MISSING_PATH_FALLBACK_MS * (process.env.CI ? 25 : 4)
+  REACTIVE_MISSING_PATH_FALLBACK_MS * (process.env.CI ? 40 : 4)
 const PINNED_OPENSPEC_BIN = resolve(
   import.meta.dirname,
   '../../../references/openspec/bin/openspec.js'

@@ -142,4 +142,18 @@ resolved 9d4e5974…` — its own `git submodule update` had reset the submodule
     compact lockfile predates that style and was never gate-checked (the gate only sees
     changed files). Gate compliance wins; the noise is one-time canonicalization, and the
     semantic delta was proven to be exactly the alias rotation (snapshot bodies identical).
-- PR delivery: recorded below as it completes.
+- PR #300 delivery (2026-10-06): Changeset Gate and Windows Portability Gate green on the
+  first run. Fast Gate failed 2-of-3 runs on ubuntu at
+  `tool-subscription-router.test.ts` "preserves commands/update input and re-emits init
+  state after external file changes" (`unexpected Launch explore command creation`,
+  28-30s expiry; run 2 instead failed an unrelated web chip-callback ordering test once).
+  Diagnosis: this fixture executes the pinned runner through
+  `agent-delivery-projection-service` (`loadOpenSpecAgentCommandContents` runs per
+  settlement), and 1.14.1's lazy-load dispatch loads each command's implementation on
+  first run — sub-second on macOS (measured 0.20-0.33s per invocation, and the file
+  passes locally isolated and in both full local `test:ci` runs), but slow enough on
+  loaded ubuntu runners to push re-emission settlement past the 25-cycle CI budget.
+  The file's own header documents this exact wait-budget class with precedents
+  c0ab7f36/c4ed106c; the CI multiplier follows them (25 -> 40, 25s -> 40s budget) with a
+  dated intent line. No assertion or predicate changed. Browser Gate failures were
+  dependency cascades (shards skipped behind Fast Gate).
