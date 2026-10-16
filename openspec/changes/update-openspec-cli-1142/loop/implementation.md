@@ -48,3 +48,14 @@ Original request (2026-10-16): "过了几天了，你看看 openspec 有没有�
   (exactMatch: true). Friction notes recorded: /api/health returns a JSON object (probe must not
   match bare "ok"); ego-browser CDP hooks do not survive page.goto (re-inject per document);
   prefer semantic selectors over ref=; assert lane display names from the a11y snapshot.
+
+## 2026-10-16 — PR CI flake triage (as pre-agreed in the PR notes)
+
+- First CI round: Fast/Windows/Browser gates failed on
+  `tool-subscription-router.test.ts` — `waitForEmission('unexpected Launch explore command
+  creation')` predicate timeout; the browser-shard verify step then failed on the skipped shard.
+- Local rerun of the same file: 5/5 green (the test itself 1.5s). Failed-job rerun with ZERO code
+  changes: full success. Classification per the agreed rule: rotation-sensitive timing surface
+  (the file's CI budgets were tuned twice historically for 1.14.1 lazy-load dispatch); no timeout
+  inflation applied. The 1.14.2 executable-evidence matrix itself was green in the first round
+  (validation/apply fixtures passed inside the same Fast Gate log).
