@@ -39,7 +39,12 @@ Original request (2026-10-16): "过了几天了，你看看 openspec 有没有�
 - [x] Codex Round-C implementation review APPROVED (9.4/10, inline-material mode): no P0/P1;
       Round-B scope-compliance table item-by-item with no overreach; P2 notes folded into the PR
       description (lockfile churn explanation, timing-flake triage rule).
-- [ ] Vision ego-browser walkthrough (preparation evidence).
+- [x] Vision ego-browser walkthrough PASS (all scenarios, 2026-10-16): the 1.14.2 unknown-key
+      warning (with its new x- extension-key sentences) projects verbatim in the Change Detail
+      status panel (programmatic exact match), Evidence/raw payload intact, board/config/dashboard
+      regression clean, 0 console errors with a self-tested CDP hook, black-image defense on all 8
+      screenshots, processes reaped. Two low observations recorded as presentation design (collapsed
+      warnings disclosure; compact/full lane naming variants).
 - [x] Broad gates: format:check PASS, lint:ci PASS (0 errors), typecheck PASS — 2026-10-16;
       test:ci / test:browser:ci pending after the vision walkthrough completes; PR merged; change archived; resources released.
 - [ ] Owner final walkthrough boundary unchanged.

@@ -40,3 +40,11 @@ Original request (2026-10-16): "过了几天了，你看看 openspec 有没有�
   changeset. Gates: 7/7 + 6/6 + 5/5 + tsc green.
 - Codex Round-C (inline-material): APPROVED 9.4/10, no P0/P1, scope-compliance confirmed. Light
   broad gates (format/lint/typecheck) green.
+
+## 2026-10-16 — Vision ego-browser smoke walkthrough
+
+- All scenarios PASS (see checkpoints). Precheck captured the real 1.14.2 warning text (501 chars,
+  both new x- sentences) from the pinned binary; the UI projection matched it programmatically
+  (exactMatch: true). Friction notes recorded: /api/health returns a JSON object (probe must not
+  match bare "ok"); ego-browser CDP hooks do not survive page.goto (re-inject per document);
+  prefer semantic selectors over ref=; assert lane display names from the a11y snapshot.
