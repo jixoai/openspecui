@@ -27,3 +27,16 @@ Original request (2026-10-16): "过了几天了，你看看 openspec 有没有�
   surface list.
 - Folds: 5b7299f0 (research channel) + 0551c1de (Codex residuals: fixture evidence-value order,
   timing-flake PR note).
+
+## 2026-10-16 — Slices 1-2 implemented + Round-C approval
+
+- Slice 1 (2cc57fc5): all ten pin surfaces rotated; red at the exact identity fixed point; 55+1
+  tests green; ZERO assertion changes against the 1.14.2 executable (the zero-production-change
+  triage now has executable proof); active 1.14.1/87c3595 references zero. Lockfile churn is pnpm
+  10.22.0 layout compression (key sets verified identical).
+- Slice 2 (14479403): x-tracker/X-Foo double-surface fixtures with real-binary evidence collection;
+  brace-depth 16-boundary/17-rejection; unapplied-content WARNING; web verbatim re-collection
+  (five version-anchored 1.14.0 mocks intentionally kept); README audit clean; four-package
+  changeset. Gates: 7/7 + 6/6 + 5/5 + tsc green.
+- Codex Round-C (inline-material): APPROVED 9.4/10, no P0/P1, scope-compliance confirmed. Light
+  broad gates (format/lint/typecheck) green.

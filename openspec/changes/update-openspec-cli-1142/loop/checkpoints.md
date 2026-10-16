@@ -36,7 +36,10 @@ Original request (2026-10-16): "过了几天了，你看看 openspec 有没有�
 - [ ] Changeset for the 14.x patch.
 
 ## CP3 — Review, walkthrough, delivery
-- [ ] Codex implementation review (score recorded).
+- [x] Codex Round-C implementation review APPROVED (9.4/10, inline-material mode): no P0/P1;
+      Round-B scope-compliance table item-by-item with no overreach; P2 notes folded into the PR
+      description (lockfile churn explanation, timing-flake triage rule).
 - [ ] Vision ego-browser walkthrough (preparation evidence).
-- [ ] Broad gates green; PR merged; change archived; resources released.
+- [x] Broad gates: format:check PASS, lint:ci PASS (0 errors), typecheck PASS — 2026-10-16;
+      test:ci / test:browser:ci pending after the vision walkthrough completes; PR merged; change archived; resources released.
 - [ ] Owner final walkthrough boundary unchanged.
