@@ -45,6 +45,7 @@ Original request (2026-10-16): "过了几天了，你看看 openspec 有没有�
       regression clean, 0 console errors with a self-tested CDP hook, black-image defense on all 8
       screenshots, processes reaped. Two low observations recorded as presentation design (collapsed
       warnings disclosure; compact/full lane naming variants).
-- [x] Broad gates: format:check PASS, lint:ci PASS (0 errors), typecheck PASS — 2026-10-16;
-      test:ci / test:browser:ci pending after the vision walkthrough completes; PR merged; change archived; resources released.
+- [x] Broad gates ALL GREEN 2026-10-16: format:check PASS, lint:ci PASS (0 errors), typecheck
+      PASS, test:ci PASS (1232 + 174 tests), test:browser:ci PASS (18 + 12 tests). The
+      tool-subscription-router timing surface did not flake.; PR merged; change archived; resources released.
 - [ ] Owner final walkthrough boundary unchanged.
