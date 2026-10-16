@@ -50,9 +50,12 @@ assertion relaxations; message-text updates only where 1.14.2 texts fire.
 ### Slice 2 — Fixture evidence + docs + changeset
 
 Owners:
-- v14 fixture additions where cheap: `.openspec.yaml` with an `x-tracker` key asserts no
-  unknown-key warning (and `X-Foo` still warns); a >16-level brace output pattern asserts the CLI's
-  depth-rejection error where the harness builds one cheaply — otherwise report-level evidence.
+- v14 fixture additions in evidence-value order (Round-B fold of the Codex P3): first the
+  `x-tracker`/`X-Foo` metadata cases (cheap, directly observable 1.14.2 message contract); then the
+  >16-level brace-depth rejection as a low-cost CLI-side fixture (OpenSpecUI does not consume the
+  error structure — evidence only); the unapplied-content WARNING only where an existing fixture
+  constructs such a delta cheaply, otherwise report-level evidence. Workers must not build fixture
+  infrastructure just to prove "no OpenSpecUI change".
 - Round-A fold (verbatim-evidence provenance): `status-warnings-notice.test.tsx` and
   `change-view-status-warnings.test.tsx:161` hardcode the 1.14.1-era unknown-key message (trailing
   `...have no effect.`); 1.14.2 appends the `x-` hint to the same input. Update the strings (or
@@ -67,4 +70,6 @@ Focused: `pnpm --filter @openspecui/core exec vitest run src/official-cli-v1*.te
 src/opsx-kernel-schemas-root.fixtures.test.ts src/upstream-contract-regression.test.ts` +
 server cold-start guard + `tsc --noEmit` (Round-A fold: the widened glob covers the v13-prefixed
 boundary file that the v14-only glob missed). Broad gates serial before PR; vision-subagent ego-browser walkthrough
-prepares the Owner's final walkthrough.
+prepares the Owner's final walkthrough. PR-note observation (both review channels): if
+`tool-subscription-router.test.ts` timing flakes after the rotation, classify it as a
+rotation-sensitive timing surface before touching timeouts (resource-topology-over-timeout law).
