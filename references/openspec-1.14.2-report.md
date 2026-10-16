@@ -33,7 +33,7 @@ Reference repository     references/openspec
 Pinned tag               v1.14.2
 Pinned commit            f80d860fc510ba4f51180c8ddde35b91b32de657
 Previous pin             v1.14.1 / 87c3595ace6a2e22957f39ebe5b74c2f2316e0cb
-Upstream delta           24 commits, src +247/-29 across 13 files (plus tests/docs/website)
+Upstream delta           21 commits, src +247/-29 across 13 files (plus tests/docs/website)
 ```
 
 ## Patch delta by contract relevance
@@ -71,10 +71,11 @@ when a malformed `x-` key (`x-`, `x- foo`, `X-Foo`) is present. Extensions are t
   now emits a WARNING per unapplied-content span ("… is not carried into the main spec by archive.
   Move it into a requirement, or into proposal.md or design.md."). New findings class riding the
   existing `{level, path, line?, message}` shape; the findings surface renders verbatim.
-- #2083 (`validator.ts` + `templates/workflows/verify-change.ts`): REMOVED requirements are checked
-  against their baseline (a REMOVED requirement that already left the baseline stops fabricating a
-  "still implemented" critical), and the verify workflow's glob new-file flow is unblocked. Delivered
-  content + validation semantics; no shape change.
+- #2083 (`templates/workflows/verify-change.ts` + `update-change.ts` + skills docs; validator-side
+  unapplied-content belongs to #2054): REMOVED requirements are checked against their baseline (a
+  REMOVED requirement that already left the baseline stops fabricating a "still implemented"
+  critical), and the verify workflow's glob new-file flow is unblocked. Delivered content; no shape
+  change.
 
 ### P4. CLI-internal robustness and housekeeping (no OpenSpecUI surface)
 

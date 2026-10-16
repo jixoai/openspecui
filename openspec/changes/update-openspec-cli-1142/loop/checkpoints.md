@@ -10,7 +10,13 @@ Original request (2026-10-16): "过了几天了，你看看 openspec 有没有�
 ## CP0 — Planning baseline
 - [x] Worktree + branch + submodule pin `v1.14.2` (`f80d860f`).
 - [x] Evidence report + change artifacts written.
-- [ ] Codex change review approved.
+- [x] Round-A research-channel review (8/10): two missed pin surfaces found and verified —
+      folded into Slice 1 owners (`official-cli-v13-boundary-fixtures.test.ts`,
+      `opsx-kernel-schemas-root.fixtures.test.ts`); focused glob widened; AGENTS.md:568 SHA and
+      verbatim-evidence strings folded into Slice 2; report corrected (21 commits, #2083
+      attribution, scan-complexity wording).
+- [ ] Codex change review approved (inline-material mode: new provider sandbox has no shell/FS
+      access; materials verified by orchestrator and quoted verbatim).
 
 ## CP1 — Pin rotation
 - [ ] Alias + lockfile + PINNED_V14_VERSIONS/bins + EXPECTED_COMMIT + live pin guards + CLAUDE.md.
