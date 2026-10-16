@@ -20,7 +20,10 @@ Original request (2026-10-16): "过了几天了，你看看 openspec 有没有�
       5b7299f0; residual P3 (fixture evidence-value order) and the timing-flake PR note folded.
       Codex explicitly declared it executed nothing (materials-only) and treated
       orchestrator-verified facts as trusted inputs.
-- [ ] Codex Round-B approval on the revised documents (5ca21e3e..HEAD diff).
+- [x] Codex Round-B APPROVED 2026-10-16 (9.2/10, up from 7.5): every Round-A fix verified in
+      place (item-by-item table), no new P0/P1; honest material-trust boundary declared (it
+      executes nothing; the ten-live-surfaces audit is trusted input — if implementation finds a
+      new active literal, code wins over the "ten" assumption). CP1 implementation authorized.
 
 ## CP1 — Pin rotation
 - [ ] Alias + lockfile + PINNED_V14_VERSIONS/bins + EXPECTED_COMMIT + live pin guards + CLAUDE.md.
