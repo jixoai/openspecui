@@ -19,6 +19,7 @@
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — in-window patch rotation moved the pin to v1.13.2.
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — the pin moved to v1.14.0.
  * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本" — in-window patch rotation moved the pin to v1.14.1.
+ * Original request (2026-10-16): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了" — in-window patch rotation moved the pin to v1.14.2.
  */
 import {
   ConfigManager,
@@ -42,7 +43,7 @@ import type { AppRouter, RunningServer } from './server.js'
 import { startServer } from './server.js'
 
 const execFileAsync = promisify(execFile)
-const PINNED_OPENSPEC_COMMIT = '87c3595ace6a2e22957f39ebe5b74c2f2316e0cb'
+const PINNED_OPENSPEC_COMMIT = 'f80d860fc510ba4f51180c8ddde35b91b32de657'
 const PINNED_OPENSPEC_ROOT = resolve(import.meta.dirname, '../../../references/openspec')
 const CLI_BIN = resolve(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
 
@@ -267,12 +268,12 @@ describe('pinned OpenSpec 1.14 Root Context cold start', () => {
       expect(httpState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.14.1' },
+        cli: { available: true, version: '1.14.2' },
       })
       expect(wsState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.14.1' },
+        cli: { available: true, version: '1.14.2' },
       })
       expect(wsStates).toContain('ready')
       expect(wsNotices.every((notice) => !Object.hasOwn(Object(notice), 'data'))).toBe(true)

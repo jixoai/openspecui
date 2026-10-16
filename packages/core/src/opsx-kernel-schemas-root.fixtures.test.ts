@@ -23,6 +23,9 @@
  * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
  *   — in-window patch rotation moves the local PINNED_BINS key to 1.14.1 together
  *   with the v14 helper's pinned constant.
+ * Original request (2026-10-16): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
+ *   — in-window patch rotation moves the local PINNED_BINS key to 1.14.2 together
+ *   with the v14 helper's pinned constant.
  */
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -43,7 +46,7 @@ import { OpsxKernel } from './opsx-kernel.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
 const PINNED_BINS = {
-  '1.14.1': resolve(import.meta.dirname, '../node_modules/openspec-cli-114/bin/openspec.js'),
+  '1.14.2': resolve(import.meta.dirname, '../node_modules/openspec-cli-114/bin/openspec.js'),
 } satisfies Record<PinnedOpenspecV14Version, string>
 
 const tempDirs: string[] = []
