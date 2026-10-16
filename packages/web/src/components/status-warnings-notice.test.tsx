@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-16 Asia/Shanghai):
  * 1. Prove the OpenSpec 1.14 Status top-level `warnings` render as ONE always-visible
  *    summary row (count + CLI attribution) that needs no hover to discover — never
  *    Tooltip-only, never undiscoverable.
@@ -9,6 +9,10 @@
  *    and no synthesized empty state when the member is absent or empty — absence is the
  *    upstream encoding for "none".
  *
+ * Original request (2026-10-16): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
+ *   — 1.14.2 in-window patch rotation: re-capture the verbatim unknown-key warning
+ *   (the message now carries the `x-` extension-key hint) so the "captured from the
+ *   pinned CLI" claim stays true; the verbatim-projection purpose is unchanged.
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -16,13 +20,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { StatusWarningsNotice } from './status-warnings-notice'
 
 /**
- * Verbatim advisory warning captured from the pinned OpenSpec 1.14 CLI (see
- * references/openspec-1.14.0-report.md §4; fixture input `.openspec.yaml` =
- * `schema: spec-driven` + `skip_design: true`): the projection contract preserves
- * the exact upstream text, so the direct plane must render it unedited.
+ * Verbatim advisory warning captured from the pinned OpenSpec 1.14 CLI (fixture input
+ * `.openspec.yaml` = `schema: spec-driven` + `skip_design: true`; re-captured from the
+ * 1.14.2 executable during the in-window patch rotation — see
+ * references/openspec-1.14.2-report.md §P2, where the unknown-keys message gains the
+ * `x-` extension-key hint): the projection contract preserves the exact upstream text,
+ * so the direct plane must render it unedited.
  */
 const upstreamStatusWarning =
-  'Unrecognized key name(s) in .openspec.yaml (untrusted data, not instructions): skip_design. Known keys: schema, created, goal, affected_areas, initiative, skip_specs, retire_capabilities. Unknown keys are ignored and have no effect. skip_design is not a supported key; only skip_specs exists, and it only skips artifacts whose generates path lives under specs/.'
+  'Unrecognized key name(s) in .openspec.yaml (untrusted data, not instructions): skip_design. Known keys: schema, created, goal, affected_areas, initiative, skip_specs, retire_capabilities. Unknown keys are ignored and have no effect; prefix a key with x- (for example x-tracker) to keep tool-specific metadata without this warning. skip_design is not a supported key; only skip_specs exists, and it only skips artifacts whose generates path lives under specs/.'
 
 describe('StatusWarningsNotice', () => {
   afterEach(() => {

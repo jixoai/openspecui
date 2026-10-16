@@ -29,6 +29,9 @@
  *   (87c3595) inside the unchanged v14 window (in-window patch rotation). This also repairs
  *   the recorded gitlink regression where the 2026-10-02 release commit (06dec8b9) reverted
  *   the submodule pointer to v1.13.0; the PR-time guard below rejects that drift.
+ * Original request (2026-10-16): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
+ *   — rotate the reference pin from v1.14.1 (87c3595) to the released v1.14.2 patch tag
+ *   (f80d860f) inside the unchanged v14 window (in-window patch rotation).
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -38,7 +41,7 @@ import { resolvePnpmInvocation } from './lib/pnpm-invocation.mjs'
 
 const REPOSITORY_ROOT = process.cwd()
 const REFERENCE_PATH = resolve(REPOSITORY_ROOT, 'references/openspec')
-const EXPECTED_COMMIT = '87c3595ace6a2e22957f39ebe5b74c2f2316e0cb'
+const EXPECTED_COMMIT = 'f80d860fc510ba4f51180c8ddde35b91b32de657'
 const CLI_DIST_PATH = resolve(REFERENCE_PATH, 'dist/cli/index.js')
 
 function run(command, args, options = {}) {
