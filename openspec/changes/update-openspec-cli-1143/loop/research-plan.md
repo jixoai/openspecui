@@ -18,7 +18,12 @@ subagent; Round-B approval gate).
 
 ### Slice 1 — Pin rotation (serial)
 
-Ten known live surfaces (1.14.2 audited list) + whole-repo grep for strays: alias `@1.14.3`,
+Ten known live surfaces (1.14.2 audited list) + whole-repo grep for strays.
+Codex Round-A folds: baseline = branch point e4894a4b with planning commit 690728ce on top (say so
+in the slice text); the v13-boundary file's three `1.14.2` literals are admitted-line values that
+rotate while its `1.13.2` identity assertions stay verbatim (boundary evidence, never rotated);
+the brace-depth fixtures keep their semantics — `assertBraceNesting` verified alive in the 1.14.3
+outputs.ts (5 references) despite the braces dependency removal. alias `@1.14.3`,
 PINNED_V14 versions/bins, v13-boundary three literals, schemas-root local bins key,
 upstream-contract-regression `c794978f...`, cold-start constant + version literals, w2 SHA +
 version, prepare script EXPECTED_COMMIT, CLAUDE.md pointer (1.14.3 report; 1.14.2 to history),

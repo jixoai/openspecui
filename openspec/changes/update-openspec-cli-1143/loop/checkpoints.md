@@ -9,7 +9,12 @@ Original request (2026-10-24): "过了几天了，你看看 openspec 有没有�
 
 ## CP0 — Planning baseline
 - [x] Worktree + submodule pin `v1.14.3` (`c794978f`); report + change artifacts.
-- [ ] Round-A dual-channel review; Round-B approval.
+- [x] Round-A Codex (inline-material, 7/10): three P1s — all settled by orchestrator verification:
+      (1) baseline wording clarified (e4894a4b = branch point, 690728ce = planning baseline on it);
+      (2) v13-boundary literals semantics pinned down — the three admitted-line `1.14.2` literals
+      rotate, the `1.13.2` identity assertions stay verbatim; (3) brace guard ALIVE in 1.14.3
+      outputs.ts (5 references) — the 1.14.2 depth fixtures keep their semantics.
+- [ ] Round-A research channel; Round-B approval.
 
 ## CP1 — Pin rotation
 - [ ] Ten surfaces + grep audit; red recorded; matrix green (zero relaxations); typechecks.
