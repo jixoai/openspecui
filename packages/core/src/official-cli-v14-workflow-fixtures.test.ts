@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-10-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-24 Asia/Shanghai):
  * 1. Execute the pinned OpenSpec 1.14.0 workflow contract end to end: skipped Status,
  *    tasks/Apply/Archive Instructions on one real skip-specs change.
  * 2. Prove explicit planning completion (`isPlanningComplete`) stays protocol truth while
@@ -15,6 +15,11 @@
  *    artifact pattern nesting brace expansions deeper than 16 levels is rejected through
  *    the typed `change_error` envelope (CLI-side depth guard; OpenSpecUI never expands).
  *
+ * Original request (2026-10-24): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
+ *   — 1.14.3 in-window patch rotation re-run: the 1.14.2 change-metadata contract and the
+ *   >16-level brace-depth rejection survive the fast-glob→tinyglobby engine swap (the CLI's
+ *   16-level depth guard is retained and a 1024-expansion budget guard is added upstream-side;
+ *   assertions unchanged — re-verified, not relaxed).
  * Original request (2026-10-16): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
  *   — 1.14.2 in-window patch rotation fixture evidence: `x-` extension keys, verbatim
  *   warning text re-capture, and the >16-level brace-depth rejection.

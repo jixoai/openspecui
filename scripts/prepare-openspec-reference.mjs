@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Orthogonal intents (updated 2026-10-06 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-24 Asia/Shanghai):
  * 1. Initialize the pinned OpenSpec 1.14 reference submodule for clean CI checkouts.
  * 2. Build the ignored CLI distribution consumed by pinned integration fixtures.
  * 3. Reject submodule drift before any fixture can execute a different upstream revision.
@@ -32,6 +32,9 @@
  * Original request (2026-10-16): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
  *   — rotate the reference pin from v1.14.1 (87c3595) to the released v1.14.2 patch tag
  *   (f80d860f) inside the unchanged v14 window (in-window patch rotation).
+ * Original request (2026-10-24): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
+ *   — rotate the reference pin from v1.14.2 (f80d860f) to the released v1.14.3 patch tag
+ *   (c794978f) inside the unchanged v14 window (in-window patch rotation).
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -41,7 +44,7 @@ import { resolvePnpmInvocation } from './lib/pnpm-invocation.mjs'
 
 const REPOSITORY_ROOT = process.cwd()
 const REFERENCE_PATH = resolve(REPOSITORY_ROOT, 'references/openspec')
-const EXPECTED_COMMIT = 'f80d860fc510ba4f51180c8ddde35b91b32de657'
+const EXPECTED_COMMIT = 'c794978f4f8845ce59693373c9dd882ee776588c'
 const CLI_DIST_PATH = resolve(REFERENCE_PATH, 'dist/cli/index.js')
 
 function run(command, args, options = {}) {
