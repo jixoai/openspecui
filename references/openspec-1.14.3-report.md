@@ -42,31 +42,35 @@ Upstream delta           6 commits, src +442/-98 across 15 files (plus tests/doc
 
 ## Patch delta by contract relevance
 
-### P1. braces removed upstream: fast-glob -> tinyglobby (mirrors unaffected; closes the GHSA story)
+### P1. glob engine swap + guards retained + new expansion budget (mirrors unaffected)
 
 Commit `e33245d2` (#2103): the artifact-glob engine drops `fast-glob` (and transitively `braces`)
-for `tinyglobby` — the dependency that motivated 1.14.2's `assertBraceNesting` depth guard is now
-gone upstream entirely. Our recognition mirrors (`opsx-types.ts` + web viewer copy) consume neither
-library and stay byte-identical upstream-side. Also touches `file-system.ts` (1-line) and
-`completions/completion-provider.ts`. **No production change**; the brace-depth fixture from the
-1.14.2 rotation stays valid as behavior evidence.
+for `tinyglobby`. **`assertBraceNesting`/`MAX_BRACE_NESTING=16` survives in 1.14.3** (definition +
+call site verified in the pinned outputs.ts), and **1.14.3 adds a second guard**:
+`MAX_BRACE_EXPANSIONS=1024` with `assertExpansionBudget` ("Artifact output pattern expands to more
+than 1024 patterns"). Our recognition mirrors (`opsx-types.ts` + web viewer copy) consume neither
+library and are unchanged upstream-side. `file-system.ts` (1-line) and
+`completions/completion-provider.ts` are comment-only changes (library-name strings). **No
+production change**; the 1.14.2 brace-depth fixture keeps its exact semantics (16 accepted /
+17 rejected with the same message). Optional new evidence: a >1024-expansion pattern fixture.
 
-### P2. Glob artifact paths confined inside the change directory (CLI-side; delivered-template text)
+### P2. Glob containment wiring + delivered-template text (attribution corrected per research review)
 
-Commit `276d0150` (#2104, +132-line `src/utils/spec-path-containment.ts`): a new containment module
-(`assertPathWithinAllowingLinkedLeaf`-style checks extended to glob-resolved artifact paths, with
-symlink resolution) plus reworked `propose`/`ff-change` delivered-template wording (choose the
-output path before creating, verify containment after symlink resolution, invoke delegated
-skills only if they can write the chosen path). The validator swaps `assertPathWithin` for the
-new `assertDiscoveredSpecFile`. All CLI-side confinement + agent-facing delivered text; OpenSpecUI
-mirrors neither. **No production change.**
+The runtime confinement wiring (+132-line `src/utils/spec-path-containment.ts`,
+`assertDiscoveredSpecFile` replacing `assertPathWithin` in the validator, and the
+specs-apply/spec-discovery/spec/change hooks pinning `verifiedTarget` against link re-pointing
+during `beforeMutate`) belongs to **`87a69a2b` (#2101)** — see P3. The delivered-template rewording
+(choose the output path before creating, verify containment after symlink resolution, invoke
+delegated skills only if they can write the chosen path) belongs to **`276d0150` (#2104)** and
+covers `propose`/`ff-change` **plus `continue-change`/`explore`**. All CLI-side; OpenSpecUI mirrors
+neither. **No production change.**
 
 ### P3. Remaining behavior fixes inside unchanged shapes (fixture evidence at most)
 
 - `87a69a2b` (#2101): a `spec.md` symlink to a file elsewhere in the project is accepted (extends
   the 1.14.2 linked-leaf allowance to the spec file itself).
-- `5251f2ef` (#2108): validate's spinner no longer floods a zero-width TTY (new
-  `src/utils/interactive.ts` + `canRenderSpinner()`). JSON output untouched.
+- `5251f2ef` (#2108): validate's spinner no longer floods a zero-width TTY (`canRenderSpinner()`
+  added to the existing `src/utils/interactive.ts`). JSON output untouched.
 - `c9a8adef` (#2110): website preview without a server dependency. Upstream-internal.
 
 ## Current owner map
@@ -77,7 +81,8 @@ mirrors neither. **No production change.**
 | live pin guards | `scripts/prepare-openspec-reference.mjs`, `packages/core/src/upstream-contract-regression.test.ts`, `packages/server/src/root-context-cold-start.integration.test.ts`, `packages/web/scripts/w2-project-binding-playwright.ts`, `packages/core/src/official-cli-v13-boundary-fixtures.test.ts`, `packages/core/src/opsx-kernel-schemas-root.fixtures.test.ts` | rotate every live commit constant AND version literal (whole-repo audit per the skill; the two files the 1.14.2 Round-A caught stay in the explicit list) |
 | artifact-glob mirrors | `packages/core/src/opsx-types.ts`, web artifact-output viewer | none (upstream recognition unchanged; braces dependency removed upstream) |
 | docs | `CLAUDE.md` pointer, `AGENTS.md` pin line + clean-build law + new architecture decision | record the new pin |
-| release | `.changeset/*.md`, README audit | four-package patch; README audit for explicit `1.14.2` runtime claims |
+| release | `.changeset/*.md`, README audit | four-package changeset naming (the fixed group propagates to search/translators — expected per `changeset.config.json`); README audit for explicit `1.14.2` runtime claims |
+| verified no-change | `openspec-compat.ts`, status `warnings` (`change-metadata.ts` not in the delta), validate findings texts (`validator.ts` only containment swaps) | none — these three are why the 1.14.2 fixtures stay valid |
 
 ## Release gate
 
