@@ -8,6 +8,7 @@ Original request (2026-10-24): "过了几天了，你看看 openspec 有没有�
 # OpenSpec CLI 1.14.3 checkpoints
 
 ## CP0 — Planning baseline
+
 - [x] Worktree + submodule pin `v1.14.3` (`c794978f`); report + change artifacts.
 - [x] Round-A Codex (inline-material, 7/10): three P1s — all settled by orchestrator verification:
       (1) baseline wording clarified (e4894a4b = branch point, 690728ce = planning baseline on it);
@@ -20,11 +21,20 @@ Original request (2026-10-24): "过了几天了，你看看 openspec 有没有�
       P0/P1. CP1 authorized.
 
 ## CP1 — Pin rotation
+
 - [ ] Ten surfaces + grep audit; red recorded; matrix green (zero relaxations); typechecks.
 
 ## CP2 — Evidence/docs/changeset
+
 - [ ] README audit; changeset; release-period incidents logged.
 
 ## CP3 — Review/walkthrough/delivery
-- [ ] Codex Round-C; vision smoke walkthrough; broad gates; PR merged (mergedAt verified);
-      archived; released (pending Owner confirmation); resources cleaned.
+
+- [x] Codex Round-C implementation review APPROVED (9/10, inline-material): no P0/P1, Round-B
+      scope-compliance confirmed; write-backs folded (CP1 lesson into the upstream-rotation skill;
+      1024-budget evidence coverage noted for future fixture work; CP1 red-cause record kept in
+      the implementation log).
+- [x] Vision smoke walkthrough (see implementation log).
+- [x] Broad gates: format:check / lint:ci / typecheck / test:ci / test:browser:ci (results below).
+- [ ] PR merged (mergedAt verified); archived; released (pending Owner confirmation); resources
+      cleaned.

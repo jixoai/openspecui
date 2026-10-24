@@ -24,3 +24,19 @@ Original request (2026-10-24): "过了几天了，你看看 openspec 有没有�
   five sample-literal dispositions, owner-map verified-no-change rows, AGENTS.md history line,
   provenance intent lines, changeset fixed-group wording).
 - Round-B: APPROVED, 9/10. CP1 authorized.
+
+## 2026-10-24 — Slices 1+2 implemented (7b6c618e + 82e922f3) + Round-C approval (9/10)
+
+- CP1 honest deviation: the observation round produced 7 reds, not the planned "all green" — all
+  the same identity-guard failure (expectPinnedVersion expected 1.14.2 / received 1.14.3, i.e. the
+  plan's own pending constant), zero contract failures; unapplied-content already green, brace/x-
+  blocked behind the identity guard. Classified as planned-pending-step reds, rotation completed,
+  rerun as final verdict: all three 1.14.2-era fixtures green. Lesson folded into the
+  upstream-rotation skill (CP1 expectation = identity-guard reds only).
+- Ten surfaces rotated; 16-file/58-test focused matrix green with zero assertion relaxations;
+  1.13.2 boundary identities untouched; audit zeroed. Slice 2: README audit clean, changeset
+  (four-package naming + fixed-group propagation note).
+- Codex Round-C (inline-material): APPROVED 9/10 — no P0/P1; scope compliance confirmed; PR gated
+  on full gates (as planned). Write-backs: CP1 lesson -> skill; 1024-budget fixture coverage ->
+  noted for future (upstream tests cover it; no direct repo fixture this round); CP1 red-cause
+  record -> this log.
