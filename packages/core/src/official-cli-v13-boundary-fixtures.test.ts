@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-10-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-24 Asia/Shanghai):
  * 1. Prove the executable identity of the retired boundary line: the retained
  *    `openspec-cli-113` npm alias (1.13.2, the line the v14 gate revoked) and the
- *    admitted v14 helper's 1.14.2 bin.
+ *    admitted v14 helper's 1.14.3 bin.
  * 2. Prove the production v14 gate classifies 1.13.2 as `unsupported` (the v13 window
  *    is below-admitted), so the single-series window cannot silently re-admit it.
  * 3. Record the 1.14-only protocol members as absent on the 1.13.2 executable over
@@ -18,6 +18,9 @@
  *   retired boundary executable stays 1.13.2 through openspec-cli-113.
  * Original request (2026-10-16): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
  *   — in-window patch rotation moves the admitted-line literals to 1.14.2; the
+ *   retired boundary executable stays 1.13.2 through openspec-cli-113.
+ * Original request (2026-10-24): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
+ *   — in-window patch rotation moves the admitted-line literals to 1.14.3; the
  *   retired boundary executable stays 1.13.2 through openspec-cli-113.
  */
 import { execFile } from 'node:child_process'
@@ -87,12 +90,12 @@ describe('pinned OpenSpec 1.13 boundary fixtures', () => {
     await mkdir(project, { recursive: true })
 
     // The provenance guard for the retired line: the alias bin must print its own
-    // exact 1.13.2 identity, never the admitted 1.14.2 string.
+    // exact 1.13.2 identity, never the admitted 1.14.3 string.
     const retired = await runRetiredV13Openspec(['--version'], project, env)
     expect(retired.exitCode, retired.stdout + '\n' + retired.stderr).toBe(0)
     expect(retired.stdout.trim()).toBe('1.13.2')
 
-    await expectPinnedV14Version('1.14.2', project, env)
+    await expectPinnedV14Version('1.14.3', project, env)
   }, 60_000)
 
   it('classifies the retired 1.13.2 line as unsupported under the v14 gate', () => {
@@ -110,7 +113,7 @@ describe('pinned OpenSpec 1.13 boundary fixtures', () => {
 
     // One fixture repo feeds both executables; the admitted line initializes it.
     const initialized = await runPinnedV14Openspec(
-      '1.14.2',
+      '1.14.3',
       ['init', project, '--tools=none'],
       project,
       env
@@ -120,7 +123,7 @@ describe('pinned OpenSpec 1.13 boundary fixtures', () => {
     // A ready change with two checkbox lines: 1.14 attaches the LocatedTask
     // members, the retired line must answer without them.
     const created = await runPinnedV14Openspec(
-      '1.14.2',
+      '1.14.3',
       ['new', 'change', 'located-tasks'],
       project,
       env

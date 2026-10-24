@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-10-16 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-24 Asia/Shanghai):
  * 1. Execute the pinned OpenSpec 1.14 `validate --report findings --json` contract
  *    against real fixture projects: the populated findings document, empty-scope
  *    documents, and the typed request-error envelope.
@@ -19,6 +19,10 @@
  *    outside requirement blocks stays advisory (item `valid: true`, exit 0) while the
  *    findings document reports the span with the archive-loss message.
  *
+ * Original request (2026-10-24): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
+ *   — 1.14.3 in-window patch rotation re-run: the 1.14.2 unapplied-content WARNING contract
+ *   survives (validator delta not in the 1.14.3 change set; assertions unchanged — re-verified,
+ *   not relaxed).
  * Original request (2026-10-16): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
  *   — 1.14.2 in-window patch rotation fixture evidence (upstream #2054).
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-24 Asia/Shanghai):
  * 1. Pin the official OpenSpec v1.4 through v1.14 source contracts used by OpenSpecUI.
  * 2. Prevent a version-gate-only adaptation from masking missing workflow or root behavior.
  * 3. Keep validation, archive, task, batch status, requirement-diff, and init-language
@@ -27,6 +27,9 @@
  * Original request (2026-10-16): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
  *   — rotate the reference pin assertion from v1.14.1 (87c3595) to the released v1.14.2
  *   patch tag (f80d860f) inside the unchanged v14 window.
+ * Original request (2026-10-24): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
+ *   — rotate the reference pin assertion from v1.14.2 (f80d860f) to the released v1.14.3
+ *   patch tag (c794978f) inside the unchanged v14 window.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -100,13 +103,13 @@ describe('first-party OpenSpec 1.4-1.7 contracts', () => {
     expect(rootInspection).toContain('inspectOptionalPlanningDirectory')
   })
 
-  it('pins the reference checkout to the official v1.14.2 commit', () => {
+  it('pins the reference checkout to the official v1.14.3 commit', () => {
     const commit = execFileSync('git', ['-C', upstreamRoot, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
       windowsHide: true,
     }).trim()
 
-    expect(commit).toBe('f80d860fc510ba4f51180c8ddde35b91b32de657')
+    expect(commit).toBe('c794978f4f8845ce59693373c9dd882ee776588c')
   })
 
   it('locks the retained planning-completion, schemas sum type, and archived validation sources', () => {
