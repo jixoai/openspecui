@@ -35,6 +35,8 @@ Original request (2026-10-24): "过了几天了，你看看 openspec 有没有�
       1024-budget evidence coverage noted for future fixture work; CP1 red-cause record kept in
       the implementation log).
 - [x] Vision smoke walkthrough (see implementation log).
-- [x] Broad gates: format:check / lint:ci / typecheck / test:ci / test:browser:ci (results below).
+- [x] Broad gates ALL GREEN 2026-10-24: format:check PASS, lint:ci PASS (0 errors), typecheck
+      PASS, test:ci PASS (1232 + 174), test:browser:ci PASS. tool-subscription-router did not flake
+      this round.
 - [ ] PR merged (mergedAt verified); archived; released (pending Owner confirmation); resources
       cleaned.

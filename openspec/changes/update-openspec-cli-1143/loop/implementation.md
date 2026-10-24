@@ -40,3 +40,8 @@ Original request (2026-10-24): "过了几天了，你看看 openspec 有没有�
   on full gates (as planned). Write-backs: CP1 lesson -> skill; 1024-budget fixture coverage ->
   noted for future (upstream tests cover it; no direct repo fixture this round); CP1 red-cause
   record -> this log.
+
+## 2026-10-24 — Broad gates complete
+
+- All five gates green (test:ci 1232+174; browser:ci clean; the timing-sensitive surface did not
+  flake). format:check caught one prettier miss in the checkpoints edit — fixed before commit.
