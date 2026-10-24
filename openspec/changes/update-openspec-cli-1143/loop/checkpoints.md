@@ -14,7 +14,10 @@ Original request (2026-10-24): "过了几天了，你看看 openspec 有没有�
       (2) v13-boundary literals semantics pinned down — the three admitted-line `1.14.2` literals
       rotate, the `1.13.2` identity assertions stay verbatim; (3) brace guard ALIVE in 1.14.3
       outputs.ts (5 references) — the 1.14.2 depth fixtures keep their semantics.
-- [ ] Round-A research channel; Round-B approval.
+- [x] Round-A research channel (7/10): two P1s (P2 commit mis-attribution; missed 1024
+      expansion-budget guard) + eight non-blockers, all folded in 127fc2fb.
+- [x] Round-B APPROVED 2026-10-24 (9/10): item-by-item verification table all in place, no new
+      P0/P1. CP1 authorized.
 
 ## CP1 — Pin rotation
 - [ ] Ten surfaces + grep audit; red recorded; matrix green (zero relaxations); typechecks.
