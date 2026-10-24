@@ -34,9 +34,16 @@ Original request (2026-10-24): "过了几天了，你看看 openspec 有没有�
       scope-compliance confirmed; write-backs folded (CP1 lesson into the upstream-rotation skill;
       1024-budget evidence coverage noted for future fixture work; CP1 red-cause record kept in
       the implementation log).
-- [x] Vision smoke walkthrough (see implementation log).
+- [x] Vision smoke walkthrough PASS (all scenarios): the 1.14.x unknown-key warning projects
+      verbatim (501-char programmatic exact match), Evidence/raw payload intact, board/config/
+      dashboard regression clean, 0 console errors with self-tested CDP hooks, black-image defense
+      on 8 screenshots, processes reaped. Two P3 observations recorded (dashboard archive-dir link
+      listing; "Exit unknown" honest presentation) — both pre-existing behaviors, not rotation
+      regressions.
 - [x] Broad gates ALL GREEN 2026-10-24: format:check PASS, lint:ci PASS (0 errors), typecheck
-      PASS, test:ci PASS (1232 + 174), test:browser:ci PASS. tool-subscription-router did not flake
-      this round.
+      PASS, test:ci PASS (1232 + 174), test:browser:ci PASS (10 + 18 + 12). tool-subscription-router
+      did not flake this round. (Playwright chromium binaries had vanished from the local cache —
+      environment, not code; reinstalled from the official source after the npmmirror CDN 404'd on
+      the cft path.)
 - [ ] PR merged (mergedAt verified); archived; released (pending Owner confirmation); resources
       cleaned.

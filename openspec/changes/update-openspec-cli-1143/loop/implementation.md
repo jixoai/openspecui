@@ -45,3 +45,10 @@ Original request (2026-10-24): "过了几天了，你看看 openspec 有没有�
 
 - All five gates green (test:ci 1232+174; browser:ci clean; the timing-sensitive surface did not
   flake). format:check caught one prettier miss in the checkpoints edit — fixed before commit.
+
+## 2026-10-24 — Vision walkthrough PASS + broad gates complete
+
+- Vision ego-browser smoke: all scenarios PASS (see checkpoints). Environment note: the playwright
+  browser cache had been wiped between sessions; npmmirror CDN 404s on the cft path, the official
+  source worked (slow but steady).
+- Broad gates all green (details in checkpoints).
