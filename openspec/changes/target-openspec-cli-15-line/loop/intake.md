@@ -32,11 +32,20 @@ v14 `version --check` precedent; standalone-aware update display (B2) deferred l
    `official-cli-v14-*` → `official-cli-v15-*` with a new helper); `openspec-cli-114` stays
    `1.14.3` and becomes the below-admitted boundary (version unchanged — it is already the last
    1.14 patch); `openspec-cli-113` retires (sole consumer was the old boundary suite);
-   `openspec-cli-112`/`111` stay (historical generator-evidence consumers).
+   `openspec-cli-112`/`111` stay (historical generator-evidence consumers). The v14 helper is
+   KEPT for the boundary suite.
+3b. **Agent registry + generator staleness series rotation** (Round-A research P0-1 fold): the
+   registry/tool-init-state production line rotates to the `'1.15'` series and the 1.15.0 pinned
+   generator baseline — pure series rotation, every physical fact carried forward (upstream
+   AI_TOOLS byte-identical, no new/removed tools). The 1.14 line becomes history; retired-line
+   sessions project no v15 inventory. Spec deltas include the four MODIFIED window-level
+   requirements per the v14 precedent (cli-integration window, config-center inventory RENAME,
+   workflow-ui fixtures, projection-contract-truth generator evidence) plus the Kilo-scenario
+   113-fixture reference update.
 4. **Boundary suite asserts:** 1.14.3 identity, v15-gate unsupported classification, and
    1.15-only surfaces absent (`update --dry-run` → unknown option, `install` → unknown command;
    both verified against the real 1.14.3 binary). Never asserts 1.14-era members absent.
-5. **CP1 observation order** per the skill: alias+helper first, observe the 1.14.2-era-surviving
+5. **CP1 observation order** per the skill: alias+helper first, observe the 1.14.3-era-surviving
    fixtures before touching any assertion literal; identity-guard reds are the plan's own pending
    step, not upstream regressions.
 6. **tool-subscription-router.test.ts:684** derives its npm spec from
