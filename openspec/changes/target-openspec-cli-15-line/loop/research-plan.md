@@ -12,8 +12,13 @@ src 28 files +1617/-344; command/registry/validation/list/show/parsers cores byt
 
 ### CP0 — Planning baseline (done)
 
-Worktree `update-openspec-cli-15-line` off `origin/main` (`3f1c7ca7`); submodule pinned `v1.15.0`;
-report + intake committed. Round-A dual-channel (Codex inline-material + research) gates Round-B.
+Worktree `update-openspec-cli-15-line` off `origin/main` (`3f1c7ca7` = branch point);
+submodule pinned `v1.15.0`; report + intake committed. **Planning baseline = `df541f25`** (the
+planning commit on top of the branch point — Codex Round-A P1-1 fold). Review per the
+upstream-rotation skill: per-slice focused review must pass BEFORE broad gates (repository
+focused-review law — Codex Round-A P1-2 fold: Round-C is the implementation review and happens
+after focused gates per slice but before the final broad run is treated as delivery evidence;
+slice green gates are the per-slice focused review). Round-A dual-channel gates Round-B.
 
 ### Slice 1 — Window + scope contract (serial; core only)
 
@@ -24,7 +29,12 @@ report + intake committed. Round-A dual-channel (Codex inline-material + researc
   `'standalone'` (comment: 1.15 standalone distribution; absent on older CLIs, tolerated as an
   additional legal value).
 - `openspec-compat.test.ts`: all hardcoded literals rotate + the 1.15 classification cases
-  (accept 1.15.0, reject 1.14.3, reject 1.16.0-alpha, `openspec 1.15.0` string form).
+  (accept 1.15.0, reject 1.14.3, reject the stable upper bound `1.16.0` explicitly — not only the
+  prerelease — reject `1.16.0-alpha`, accept `openspec 1.15.0` string form).
+- `workflow-contract` lane gains an explicit unit regression (Codex Round-A P1-3 fold): decode a
+  `version --json` payload with `install.scope: 'standalone'` through `CliVersionSchema` — red on
+  the old closed enum, green after the enum gains the value; the real-binary fixture path alone
+  does not cover this value.
 - Red: compat tests fail against the old constants before the edit (record).
 - Green: `pnpm --filter @openspecui/core run typecheck` + compat test + workflow-contract lane.
 
