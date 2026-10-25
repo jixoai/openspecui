@@ -80,8 +80,9 @@ install scope，OpenSpecUI 将它与四个历史值并列解码，而不是让�
 注册表轮换到 1.15 系列，1.14 物理事实全部前向继承（本线 upstream 没有新增或移除工具），pin 生成器
 基线移至 1.15.0。`status` 咨询级 warnings、Apply 就绪指引、校验 findings、批量状态、requirement
 diff 证据与 `init --language` 在已接受的 1.15 线上继续可用。新增的 `update --dry-run`/`--json`
-表面与 `openspec install` 命令在本发布中仍由 CLI 自己拥有；standalone CLI 安装请使用
-`openspec install` / `openspec update` 管理——不要自行把安装切换到另一种方式。
+表面与 `openspec install` 命令在本发布中仍由 CLI 自己拥有；standalone CLI 安装的安装与升级都用
+`openspec install`——它是 standalone 的升级命令，会在原位重装二进制（`openspec update` 仍是项目
+指令文件更新器）。不要自行把安装切换到另一种方式。
 
 升级 CLI：
 
@@ -92,7 +93,7 @@ npm install -g @fission-ai/openspec@1.15
 standalone 安装则跟随 CLI 自己的发行命令：
 
 ```bash
-openspec update
+openspec install
 ```
 
 ## 常见流程

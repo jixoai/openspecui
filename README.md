@@ -88,8 +88,10 @@ of failing the whole envelope. The Agent delivery registry rotates to the 1.15 s
 pinned generator baseline moves to 1.15.0. Status advisory warnings, Apply readiness guidance,
 validation findings, batch status, requirement diff evidence, and `init --language` continue on the
 admitted 1.15 line. The new `update --dry-run`/`--json` surfaces and the `openspec install` command
-remain CLI-owned this release; standalone CLI installs are managed with `openspec install` /
-`openspec update` — never switch an install to a different method on your own.
+remain CLI-owned this release; standalone CLI installs are installed and upgraded with
+`openspec install` — the standalone upgrade command, which reinstalls the binary in place
+(`openspec update` remains the project instruction-file updater). Never switch an install to a
+different method on your own.
 
 Upgrade CLI:
 
@@ -100,7 +102,7 @@ npm install -g @fission-ai/openspec@1.15
 Standalone CLI installs instead follow the CLI's own distribution commands:
 
 ```bash
-openspec update
+openspec install
 ```
 
 ## Common Flows

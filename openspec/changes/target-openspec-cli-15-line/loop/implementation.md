@@ -54,3 +54,10 @@ Original request (2026-10-25): "开工"
   pin regression 54 green; boundary + rotated core suites 185 green; server rotated suites 187
   green; web rotated suites 75 green; core/server/web typechecks green; prettier clean on the
   explicit file set (one Slice-3 residue formatting fix folded into the set, noted).
+- Round-C correction (2026-10-25, Codex P1-2 upheld): the standalone update guidance
+  "`openspec install` / `openspec update`" was wrong — upstream `src/core/version-check.ts`
+  `standaloneUpgradeCommand()` returns `openspec install` (reinstalls the standalone binary in
+  place), while `openspec update` remains the project instruction-file updater whose self-upgrade
+  offers are package-manager commands. Corrected README.md, README-zh.md, the changeset, and the
+  AGENTS.md decision paragraph (the research-plan line keeps its original wording as planning
+  history; this record is the correction of authority).
