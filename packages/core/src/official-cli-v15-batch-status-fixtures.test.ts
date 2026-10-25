@@ -8,6 +8,10 @@
  * 3. Carry over the admitted-line batch status contract proven for 1.11-1.13 onto the
  *    v14 single-series window; the retired 1.13.2 executable stays in the boundary suite.
  *
+ * Original request (2026-10-25): "开工"
+ *   — target-openspec-cli-15-line Slice 3 moves this suite to the v15 line: imports and
+ *   identity literals rotate to the pinned 1.15.0 executable (openspec-cli-115 / v15
+ *   helper); the historical v14-era intents above are retained verbatim.
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
@@ -16,7 +20,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -25,8 +29,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import {
   CliBatchStatusSchema,
   isCliBatchStatusEntryFailure,
@@ -35,7 +39,7 @@ import {
 import { CliWorkflowStatusSuccessSchema } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -48,7 +52,7 @@ async function initProject(
   expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
 }
 
-describe('pinned OpenSpec 1.14 batch status fixtures', () => {
+describe('pinned OpenSpec 1.15 batch status fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -56,7 +60,7 @@ describe('pinned OpenSpec 1.14 batch status fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`returns healthy entries with single-change Status fields and one envelope root on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-batch-healthy`)
       const project = join(fixtureRoot, 'project')

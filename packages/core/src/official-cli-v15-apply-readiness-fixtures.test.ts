@@ -37,6 +37,10 @@
  *    verification before archiving — the payload never claims the change
  *    "is ready to be archived", per `references/openspec-1.14.1-report.md`.
  *
+ * Original request (2026-10-25): "开工"
+ *   — target-openspec-cli-15-line Slice 3 moves this suite to the v15 line: imports and
+ *   identity literals rotate to the pinned 1.15.0 executable (openspec-cli-115 / v15
+ *   helper); the historical v14-era intents above are retained verbatim.
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
  *   — in-window patch rotation: the pinned executable moves to 1.14.1 and the new
@@ -46,7 +50,7 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -54,12 +58,12 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import { CliApplyInstructionsSuccessSchema } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -73,7 +77,7 @@ async function initProject(
 }
 
 async function newChange(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -151,7 +155,7 @@ const RUNS_UNREADABLE_TRACKING_FIXTURE =
   typeof process.getuid === 'function' &&
   process.getuid() !== 0
 
-describe('pinned OpenSpec 1.14 apply readiness fixtures', () => {
+describe('pinned OpenSpec 1.15 apply readiness fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -159,7 +163,7 @@ describe('pinned OpenSpec 1.14 apply readiness fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`names the whole prerequisite chain on the blocked state and stays warning-free on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-apply-blocked`)
       const project = join(fixtureRoot, 'project')

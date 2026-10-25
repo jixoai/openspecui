@@ -11,6 +11,10 @@
  *    JSON report that leaves non-strict validation green while `--strict` fails,
  *    per `references/openspec-1.14.1-report.md`.
  *
+ * Original request (2026-10-25): "开工"
+ *   — target-openspec-cli-15-line Slice 3 moves this suite to the v15 line: imports and
+ *   identity literals rotate to the pinned 1.15.0 executable (openspec-cli-115 / v15
+ *   helper); the historical v14-era intents above are retained verbatim.
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
  *   — in-window patch rotation: the pinned executable moves to 1.14.1 and the
@@ -23,7 +27,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -32,8 +36,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import {
   CliSchemasFailureSchema,
   CliSchemasSuccessSchema,
@@ -46,7 +50,7 @@ import {
 } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -61,7 +65,7 @@ async function initProject(
 
 /** A change whose delta MODIFIES requirements of a spec that does not exist. */
 async function createModifiedAgainstMissingSpecChange(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -99,7 +103,7 @@ async function createModifiedAgainstMissingSpecChange(
 
 /** A loadable change that fails validation through an ERROR issue. */
 async function createFailingChange(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -132,7 +136,7 @@ async function createFailingChange(
 }
 
 async function createChangeWithTasks(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string,
@@ -171,7 +175,7 @@ async function writePlaceholderSpec(project: string): Promise<void> {
  * 1.14.1 boundary where the advisory moved from informational hint to WARNING.
  */
 async function createOverlengthChange(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -205,7 +209,7 @@ async function createOverlengthChange(
   )
 }
 
-describe('pinned OpenSpec 1.14 full validation report fixtures', () => {
+describe('pinned OpenSpec 1.15 full validation report fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -213,7 +217,7 @@ describe('pinned OpenSpec 1.14 full validation report fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`keeps the full bulk report schema-compatible and carries the merge-conflict INFO beside real errors on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-validate-full`)
       const project = join(fixtureRoot, 'project')

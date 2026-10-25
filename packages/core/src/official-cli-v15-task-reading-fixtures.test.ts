@@ -8,6 +8,10 @@
  *    identically — executable parity evidence for the task-line reading law, carried
  *    onto the v14 single-series window (1.14 keeps `{x}`-style markers counted).
  *
+ * Original request (2026-10-25): "开工"
+ *   — target-openspec-cli-15-line Slice 3 moves this suite to the v15 line: imports and
+ *   identity literals rotate to the pinned 1.15.0 executable (openspec-cli-115 / v15
+ *   helper); the historical v14-era intents above are retained verbatim.
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — task-count parity fixture evidence (update-openspec-cli-1131 Slice 4).
@@ -16,7 +20,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -24,8 +28,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import { CliChangeListSchema } from './cli-contracts/workflow.js'
 import { parseMarkdownTasks } from './task-progress.js'
 
@@ -59,7 +63,7 @@ const WIDENED_TASKS_MARKDOWN = [
 ].join('\n')
 
 async function initProject(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -72,7 +76,7 @@ async function initProject(
   expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
 }
 
-describe('pinned OpenSpec 1.14 task-line reading fixtures', () => {
+describe('pinned OpenSpec 1.15 task-line reading fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -80,7 +84,7 @@ describe('pinned OpenSpec 1.14 task-line reading fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`counts widened task lines exactly like the local parser on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-task-reading`)
       const project = join(fixtureRoot, 'project')

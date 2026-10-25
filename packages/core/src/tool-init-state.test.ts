@@ -29,7 +29,7 @@
  * Original request (2026-10-25): "开工" — Slice 2 rotates the currency line and every
  * sample generator stamp to 1.15.x; 1.14.x joins the below-admitted stale set.
  * Note: openspec-cli-112 generator fixtures below are historical/boundary evidence for staleness and
- * legacy-compat classification; positive v14 acceptance lives in the official-cli-v14 suite.
+ * legacy-compat classification; positive v15 acceptance lives in the official-cli-v15 suite.
  */
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join, resolve, sep } from 'path'
@@ -391,7 +391,14 @@ describe('getToolInitStates', () => {
   it('flags below-admitted generator versions stale inside an admitted session', async () => {
     // The retired 1.10/1.11/1.12/1.13/1.14 v11–v14 windows are below-admitted: trees those lines
     // generated must read stale under a 1.15 session, exactly like older 1.9-era trees.
-    for (const belowAdmitted of ['1.14.2', '1.13.2', '1.12.0', '1.11.0', '1.10.2', '1.9.0'] as const) {
+    for (const belowAdmitted of [
+      '1.14.2',
+      '1.13.2',
+      '1.12.0',
+      '1.11.0',
+      '1.10.2',
+      '1.9.0',
+    ] as const) {
       await writeGeneratedSkill(
         join(tempDir, '.claude', 'skills', 'openspec-explore', 'SKILL.md'),
         belowAdmitted

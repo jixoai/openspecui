@@ -8,13 +8,17 @@
  *    and this suite never performs network access, per
  *    `references/openspec-1.14.0-report.md` section 1.
  *
+ * Original request (2026-10-25): "开工"
+ *   — target-openspec-cli-15-line Slice 3 moves this suite to the v15 line: imports and
+ *   identity literals rotate to the pinned 1.15.0 executable (openspec-cli-115 / v15
+ *   helper); the historical v14-era intents above are retained verbatim.
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  */
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -22,10 +26,10 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v14-fixtures.js'
+} from './__tests__/official-cli-v15-fixtures.js'
 import { CliVersionSchema } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.14 version report fixtures', () => {
+describe('pinned OpenSpec 1.15 version report fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -33,9 +37,11 @@ describe('pinned OpenSpec 1.14 version report fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`reports the install envelope without the check-gated update member on OpenSpec ${version}`, async () => {
-      fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-version-report`)
+      fixtureRoot = await createPinnedFixtureRoot(
+        `cli-${version.replace(/\./g, '')}-version-report`
+      )
       const project = join(fixtureRoot, 'project')
       const env = pinnedFixtureEnv(fixtureRoot)
       await mkdir(project, { recursive: true })
