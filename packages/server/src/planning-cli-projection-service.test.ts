@@ -17,6 +17,9 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — Round-F B2: the real-kernel status-warnings transport mirror (single + batch + absent).
+ * 2026-10-25 (target-openspec-cli-15-line Slice 4): the transport-mirror fake session
+ * version rotates to the admitted 1.15.0 line; the executed warning payload keeps its
+ * 1.14.0 capture provenance (shapes unchanged upstream).
  */
 import {
   CliExecutor,
@@ -933,7 +936,7 @@ function statusFields(changeName, batch) {
 }
 
 if (args.includes('--version')) {
-  console.log('1.14.0')
+  console.log('1.15.0')
   process.exit(0)
 }
 
@@ -1025,9 +1028,8 @@ describe('PlanningCliProjectionService OpenSpec 1.14 status warnings transport (
         readChangeListProjection: () => realKernel.readChangeListProjection(),
         readStatusListProjection: () => realKernel.readStatusListProjection(),
         readInstructionsProjection: realKernel.readInstructionsProjection.bind(realKernel),
-        readApplyInstructionsProjection: realKernel.readApplyInstructionsProjection.bind(
-          realKernel
-        ),
+        readApplyInstructionsProjection:
+          realKernel.readApplyInstructionsProjection.bind(realKernel),
         readArchiveInstructionsProjection:
           realKernel.readArchiveInstructionsProjection.bind(realKernel),
         readConfigBundleProjection: realKernel.readConfigBundleProjection.bind(realKernel),

@@ -27,6 +27,9 @@
  *   first execution of each command on CI runners (macOS stays sub-second), pushing
  *   shared-runner re-emission settlement past the 25-cycle budget on ubuntu; the
  *   budget multiplier follows the c0ab7f36/c4ed106c precedent for this file.
+ * 2026-10-25 (target-openspec-cli-15-line Slice 4): admitted-session/generator-version
+ * samples rotate to the 1.15.0 line, and the pinned-install argv expectation derives
+ * from OPENSPEC_CLI_TARGET_SERIES instead of a hardcoded `@1.14` literal.
  */
 import {
   clearCache,
@@ -41,6 +44,7 @@ import {
   type EnvironmentGlobalProjectionData,
   type ToolInitState,
 } from '@openspecui/core'
+import { OPENSPEC_CLI_TARGET_SERIES } from '@openspecui/core/openspec-compat'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -90,7 +94,7 @@ async function writeArtifact(filePath: string, content = '# external fixture\n')
 
 async function writeGeneratedSkill(filePath: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.14.0"\n---\n', 'utf8')
+  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.15.0"\n---\n', 'utf8')
 }
 
 async function prepareCachedRunnerReplacement(
@@ -179,7 +183,7 @@ async function createRouterFixture(
   const releaseLaunchObservation = await server.observationEnvironment.acquireRoot(launchRoot)
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.14.0',
+    version: '1.15.0',
   })
   const environment = {
     kind: 'environment-global',
@@ -464,7 +468,7 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
         expect(findToolState(initialized, 'claude')).toMatchObject({
           status: 'initialized',
           readiness: 'initialized',
-          generatedByVersion: '1.14.0',
+          generatedByVersion: '1.15.0',
           issues: [],
         })
 
@@ -681,7 +685,7 @@ describe(
         await expect(Promise.all(runnerAtExit)).resolves.toMatchObject([{ version: 'runner-b' }])
         expect(events).toEqual([{ type: 'exit', exitCode: 0 }])
         expect(executeCommandStream).toHaveBeenCalledWith(
-          ['npm', 'install', '-g', '@fission-ai/openspec@1.14'],
+          ['npm', 'install', '-g', `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`],
           expect.any(Function)
         )
       } finally {

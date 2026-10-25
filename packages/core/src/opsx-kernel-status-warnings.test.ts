@@ -10,6 +10,9 @@
  *    `warnings` never gains a synthesized empty array.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line).
+ * 2026-10-25 (target-openspec-cli-15-line Slice 4): the fake session version rotates to
+ * the admitted 1.15.0 line so the batch transport stays genuinely exercised; the executed
+ * warning payload keeps its 1.14.0 capture provenance (shapes unchanged upstream).
  */
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -41,9 +44,9 @@ const WARNED_CHANGE = 'warned-change'
 const CLEAN_CHANGE = 'clean-change'
 
 /**
- * Fake 1.14 CLI fixture for the Status warnings projection.
+ * Fake 1.15 CLI fixture for the Status warnings projection.
  *
- * `--version` reports the admitted 1.14.0 line so the session derives the batch
+ * `--version` reports the admitted 1.15.0 line so the session derives the batch
  * capability. `status --change warned-change` and its batch healthy entry both carry
  * the executed top-level `warnings` array; `clean-change` never does, proving the
  * absent-member law on the same envelope.
@@ -111,7 +114,7 @@ function join(base, rest) {
 }
 
 if (args.includes('--version')) {
-  console.log('1.14.0')
+  console.log('1.15.0')
   process.exit(0)
 }
 

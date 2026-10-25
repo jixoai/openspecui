@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
 1. 说明当前 OpenSpec 兼容线与项目工作流。
 2. 说明 serve、App daemon、Direct Web 与静态导出命令。
 3. 说明项目 Hooks，同时保持 OpenSpec CLI 的事实权威。
@@ -9,6 +9,7 @@ Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
 原始需求（2026-08-15）："v9的适配需要同时适配 1.8和1.9。"
 原始需求（2026-08-28）："直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
 原始需求（2026-10-02）："Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+原始需求（2026-10-25）："开工" —— OpenSpecUI 15 线，适配 OpenSpec CLI 1.15.x（standalone 发行线）。
 -->
 
 # OpenSpec UI
@@ -21,7 +22,8 @@ OpenSpecUI 是 OpenSpec 工作流的 Web 界面（动态模式 + 静态导出）
 
 | OpenSpecUI         | OpenSpec CLI 线                                      |
 | ------------------ | ---------------------------------------------------- |
-| `@latest` / `@^14` | 当前 + 已支持：`>=1.14.0 <1.15.0`                    |
+| `@latest` / `@^15` | 当前 + 已支持：`>=1.15.0 <1.16.0`                    |
+| `@^14`（历史）     | 当前 + 已支持：`>=1.14.0 <1.15.0`                    |
 | `@^13`（历史）     | 当前 + 已支持：`>=1.13.0 <1.14.0`                    |
 | `@^12`（历史）     | 当前 + 已支持：`>=1.12.0 <1.13.0`                    |
 | `@^11`（历史）     | 当前：`>=1.11.0 <1.12.0`；已支持：`>=1.10.0 <1.12.0` |
@@ -34,12 +36,13 @@ OpenSpecUI 是 OpenSpec 工作流的 Web 界面（动态模式 + 静态导出）
 | `@^2`              | `>=1.2.0 <1.3.0`                                     |
 | `@^1`              | `>=1.0.0 <1.2.0`                                     |
 
-OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 14 以单系列线适配 OpenSpec
-CLI 1.14.x：稳定版 1.14.x 是当前推荐线；`1.15` 不做预先承诺——发布后另行验证决定（14.x 扩窗或新
-major）。OpenSpecUI 13 保留为历史 1.13.x 产品线，OpenSpecUI 12 保留为历史 1.12.x 产品线。
+OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 15 以单系列线适配 OpenSpec
+CLI 1.15.x：稳定版 1.15.x 是当前推荐线；`1.16` 不做预先承诺——发布后另行验证决定（15.x 扩窗或新
+major）。OpenSpecUI 14 保留为历史 1.14.x 产品线，OpenSpecUI 13 保留为历史 1.13.x 产品线。
 
 历史文档：
 
+- 1.14：[`README-zh-1.14.0.md`](./README-zh-1.14.0.md)
 - 1.13：[`README-zh-1.13.0.md`](./README-zh-1.13.0.md)
 - 1.12：[`README-zh-1.12.0.md`](./README-zh-1.12.0.md)
 - 1.11：[`README-zh-1.11.0.md`](./README-zh-1.11.0.md)
@@ -67,24 +70,29 @@ openspecui
 
 ## OpenSpec CLI 兼容性
 
-- OpenSpecUI 14 接受稳定版 OpenSpec CLI `>=1.14.0 <1.15.0`，并推荐 1.14 线。
-- 稳定版 1.14.x 会被识别为当前线；这是单系列窗口。
-- OpenSpec CLI 1.13.x（OpenSpecUI 13 窗口）、更旧的 CLI 线、CLI `>=1.15.0` 以及所有预发布版均不受 OpenSpecUI 14 支持，并会被默认阻断。
+- OpenSpecUI 15 接受稳定版 OpenSpec CLI `>=1.15.0 <1.16.0`，并推荐 1.15 线。
+- 稳定版 1.15.x 会被识别为当前线；这是单系列窗口。
+- OpenSpec CLI 1.14.x（OpenSpecUI 14 窗口）、更旧的 CLI 线、CLI `>=1.16.0` 以及所有预发布版均不受 OpenSpecUI 15 支持，并会被默认阻断。
 - 若不兼容的 CLI 可执行文件仍然存在，版本不匹配对话框会提供 **Skip version check**。该绕过只在当前页面运行期有效，刷新或重新打开后清除，也不构成兼容性承诺。
 
-OpenSpecUI 14 新增：`status` 咨询级 warnings 以折叠摘要条呈现在 Change Detail 直接平面（就地展开逐字
-原文，不 gate 任何操作）；Apply 任务证据携带 CLI 拥有的 `sourcePath`/`line` 源位置；`show --type spec
---json` 投影 requirement/scenario 名称；`list --archived`/`--all` 投影逐条目的 `archived` 事实；`version`
-命令的类型化 envelope 解码不做网络探测；store-backed status 的 action context 投影 1.14
-`allowedEditRoots` 双分支语义（声明项目在场或缺席）。Agent 交付注册表轮换到 1.14 系列——新增十个工具，
-含共享 `.agents` skills 根的 amp 与 gsd（五写入方仲裁）以及 IBM 的 Bob——1.13 物理事实全部前向继承，
-pin 生成器基线移至 1.14.0。Apply 就绪指引、校验 findings、批量状态、requirement diff 证据与
-`init --language` 在已接受的 1.14 线上继续可用。
+OpenSpecUI 15 适配 standalone 发行线：`openspec version --json` 现在可能报告新的 `standalone`
+install scope，OpenSpecUI 将它与四个历史值并列解码，而不是让整个 envelope 解码失败。Agent 交付
+注册表轮换到 1.15 系列，1.14 物理事实全部前向继承（本线 upstream 没有新增或移除工具），pin 生成器
+基线移至 1.15.0。`status` 咨询级 warnings、Apply 就绪指引、校验 findings、批量状态、requirement
+diff 证据与 `init --language` 在已接受的 1.15 线上继续可用。新增的 `update --dry-run`/`--json`
+表面与 `openspec install` 命令在本发布中仍由 CLI 自己拥有；standalone CLI 安装请使用
+`openspec install` / `openspec update` 管理——不要自行把安装切换到另一种方式。
 
 升级 CLI：
 
 ```bash
-npm install -g @fission-ai/openspec@1.14
+npm install -g @fission-ai/openspec@1.15
+```
+
+standalone 安装则跟随 CLI 自己的发行命令：
+
+```bash
+openspec update
 ```
 
 ## 常见流程

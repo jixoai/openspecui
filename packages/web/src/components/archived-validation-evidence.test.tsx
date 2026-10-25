@@ -14,6 +14,7 @@
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * 2026-10-25 (target-openspec-cli-15-line Slice 4): the admitted-session fixture sample rotates to 1.15.0 per the v15 window.
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -44,7 +45,7 @@ const rootActionStateMock = vi.hoisted(() => ({
     message: '',
     evidence: [],
     context: {
-      cli: { available: true, version: '1.14.0' },
+      cli: { available: true, version: '1.15.0' },
     },
     observedAt: 1,
   },
@@ -108,7 +109,7 @@ describe('ArchivedValidationEvidence', () => {
       message: '',
       evidence: [],
       context: {
-        cli: { available: true, version: '1.14.0' },
+        cli: { available: true, version: '1.15.0' },
       },
       observedAt: 1,
     }

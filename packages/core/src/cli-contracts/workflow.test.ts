@@ -50,6 +50,9 @@
  *   Slice 5 fixture-matrix lane hygiene: the typed-fact guard annotation becomes optional
  *   members (matching the optional schema members) and the version-command execute mock
  *   declares its argv parameter so the workflow-contract typecheck lane compiles.
+ * 2026-10-25 (target-openspec-cli-15-line Slice 4): the capability-transport fixture set
+ * rotates to the admitted 1.15 line (admitted 1.15.0; first below-window refusal 1.14.0);
+ * the older retained series keep proving capability-boundary rejections only.
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'
@@ -319,13 +322,12 @@ describe('OpenSpec 1.8/1.9 workflow CLI contracts', () => {
   })
 })
 
-// Admitted-line capabilities under the OpenSpecUI 14 single-series window (Slice 1
-// rotation): stable 1.14.x derives the 1.11-introduced batch/diff and 1.12 findings
-// transports; every retired line (1.13/1.12/1.11/1.10) derives none and proves
-// capability-boundary rejections only. Literal expectation rotation is Slice 6's
-// cross-package pass; this file's fixtures rotate with the landed compat constants.
+// Admitted-line capabilities under the OpenSpecUI 15 single-series window (Slice 4
+// rotation): stable 1.15.x derives the 1.11-introduced batch/diff and 1.12 findings
+// transports; every retired line (1.14/1.13/1.12/1.11/1.10) derives none and proves
+// capability-boundary rejections only.
+const capabilities115 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.15.0'))
 const capabilities114 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.14.0'))
-const capabilities113 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.13.0'))
 const capabilities112 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.12.0'))
 const capabilities111 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.11.0'))
 const capabilities110 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.10.0'))
@@ -827,7 +829,7 @@ describe('OpenSpec 1.12 validate findings contract executor', () => {
   it('composes the findings argv only through the capability-gated findings method', async () => {
     const findings = await contracts.validateFindings({
       target: { kind: 'scope', scope: 'all' },
-      capabilities: capabilities114,
+      capabilities: capabilities115,
     })
 
     expect(findings.kind).toBe('executed')
@@ -844,10 +846,10 @@ describe('OpenSpec 1.12 validate findings contract executor', () => {
     expect(findingsData.report.returnedItems).toBe(1)
 
     // A non-admitted session receives the typed refusal before any argv exists:
-    // the retired 1.13/1.12/1.11 lines reject `--report` entirely, so no spawn may happen.
+    // the retired 1.14/1.13/1.12/1.11 lines reject `--report` entirely, so no spawn may happen.
     const refused = await contracts.validateFindings({
       target: { kind: 'scope', scope: 'all' },
-      capabilities: capabilities113,
+      capabilities: capabilities114,
     })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'findingsReport' })
     expect(
@@ -1056,7 +1058,7 @@ describe('capability-gated 1.11 command argv', () => {
 
   it('builds status --all --json argv only for the admitted batch capability', async () => {
     const admitted = await contracts.workflowStatusAll({
-      capabilities: capabilities114,
+      capabilities: capabilities115,
       schema: 'custom',
       store: 'shared',
     })
@@ -1066,9 +1068,9 @@ describe('capability-gated 1.11 command argv', () => {
       ['status', '--all', '--json', '--schema', 'custom', '--store', 'shared'],
     ])
 
-    // Every line below the admitted 1.14 window derives no capability: the retained
-    // 1.13/1.12/1.11/1.10 series prove capability-boundary rejections only.
-    const refused = await contracts.workflowStatusAll({ capabilities: capabilities113 })
+    // Every line below the admitted 1.15 window derives no capability: the retained
+    // 1.14/1.13/1.12/1.11/1.10 series prove capability-boundary rejections only.
+    const refused = await contracts.workflowStatusAll({ capabilities: capabilities114 })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'batchStatus' })
     expect(await contracts.workflowStatusAll({ capabilities: capabilities112 })).toEqual({
       kind: 'unavailable',
@@ -1087,7 +1089,7 @@ describe('capability-gated 1.11 command argv', () => {
 
   it('builds show <change> --json --diff argv only for the admitted diff capability', async () => {
     const admitted = await contracts.showChangeDiff('add-auth', {
-      capabilities: capabilities114,
+      capabilities: capabilities115,
       store: 'shared',
     })
 
@@ -1097,7 +1099,7 @@ describe('capability-gated 1.11 command argv', () => {
     ])
 
     // Retained below-window series prove capability-boundary rejections only.
-    const refused = await contracts.showChangeDiff('add-auth', { capabilities: capabilities113 })
+    const refused = await contracts.showChangeDiff('add-auth', { capabilities: capabilities114 })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'requirementDiff' })
     expect(await contracts.showChangeDiff('add-auth', { capabilities: capabilities112 })).toEqual({
       kind: 'unavailable',
