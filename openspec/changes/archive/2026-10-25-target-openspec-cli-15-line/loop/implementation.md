@@ -61,3 +61,10 @@ Original request (2026-10-25): "开工"
   offers are package-manager commands. Corrected README.md, README-zh.md, the changeset, and the
   AGENTS.md decision paragraph (the research-plan line keeps its original wording as planning
   history; this record is the correction of authority).
+- Spec sync completed at archive time (2026-10-25): the four delta capabilities were applied to the
+  main specs inline (openspec-cli-integration, opsx-config-center, opsx-workflow-ui,
+  projection-contract-truth). Deviation note: the opsx-config-center delta under-carried the
+  established full-scenario rotation format (13/14-line deltas re-carried every scenario with
+  rotated admission-GIVENs); the sync operator completed that rotation (admission-GIVENs
+  1.14.x -> 1.15.x) so main matches the precedent format, with the retired-line GIVEN and
+  entry-line boundaries intentionally preserved. `openspec validate --specs`: 20/20 valid.
