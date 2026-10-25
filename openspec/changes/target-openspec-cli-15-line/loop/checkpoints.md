@@ -9,7 +9,13 @@ Original request (2026-10-25): "开工"
 
 ## CP0 — Planning baseline
 - [x] Worktree + submodule pin `v1.15.0` (`8e0288df`); report + intake written.
-- [ ] Round-A dual-channel review; Round-B approval.
+- [x] Round-A dual-channel: Codex inline-material 7/10 (3 P1s folded c0fa0963) + research 5/10
+      (2 P0s — the missing agent-registry/generator-staleness production line and ADDED-only spec
+      deltas — plus 5 P1s, folded 32063495; the two channels' findings were complementary).
+- [x] Round-B: initially NOT approved (report owner map lagged the registry/staleness fold);
+      fixed in 1640b57f → APPROVED 9/10. Implementation authorized (five slices: compat/scope +
+      mirrors; registry series; fixture rotation + boundary; cross-package alignment + guards +
+      docs + major changeset).
 
 ## CP1 — Window + scope contract
 - [ ] Compat constants rotated; scope enum gains 'standalone'; compat tests green; red recorded.
