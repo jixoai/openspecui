@@ -1,9 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-10-24 Asia/Shanghai):
- * 1. Run the pinned OpenSpec 1.14.3 npm executable for the v14 fixture matrix (the retired
- *    1.13.2 line stays available through the openspec-cli-113 alias for boundary negatives).
+ * Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
+ * 1. Run the pinned OpenSpec 1.14.3 npm executable — boundary-only service for the v15
+ *    line: the kept `openspec-cli-114` alias is the just-retired below-admitted
+ *    executable behind `official-cli-v14-boundary-fixtures.test.ts`, not a positive
+ *    matrix (the positive matrix moved to the v15 helper and `openspec-cli-115`).
  * 2. Share one isolated fixture environment and hidden-console runner across fixture files.
- * 3. Keep fixture identity explicit so a passing matrix always names its executable line.
+ * 3. Keep fixture identity explicit so a passing boundary always names its executable line.
  * 4. Assert the 1.14 JSON stream discipline.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
@@ -16,6 +18,9 @@
  * Original request (2026-10-24): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
  *   — rotate the pinned executable from v1.14.2 (f80d860f) to the released v1.14.3 patch
  *   tag (c794978f) inside the unchanged v14 window (in-window patch rotation).
+ * Original request (2026-10-25): "开工"
+ *   — the v15 window rotation keeps this helper at 1.14.3 as the boundary service; the
+ *   retired 1.13.2 line (openspec-cli-113) leaves the alias set with its boundary suite.
  */
 import { execFile } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -87,8 +92,9 @@ export function runPinnedOpenspec(
  * Assert the executable line identity before any contract assertion uses it.
  *
  * This is the provenance guard: a bins-map entry accidentally pointing at another alias
- * (for example openspec-cli-113) prints a different `--version` string and fails here,
- * so a passing matrix always proves it ran the 1.14.3 line.
+ * (for example openspec-cli-115, the admitted positive line) prints a different
+ * `--version` string and fails here, so a passing boundary always proves it ran the
+ * 1.14.3 line.
  */
 export async function expectPinnedVersion(
   version: PinnedOpenspecV14Version,

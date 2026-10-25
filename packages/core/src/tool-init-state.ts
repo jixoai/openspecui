@@ -1,13 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Project the unified OpenSpec 1.14 Agent registry into exact skill and command artifact state.
+ * Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
+ * 1. Project the unified OpenSpec 1.15 Agent registry into exact skill and command artifact state.
  * 2. Report partial, stale-version, cleanup-needed, migration-required, and unavailable states from physical evidence.
  * 3. Observe user-global skill roots (e.g. MiniMax Code) without ever cleaning or migrating them here.
  * 4. Preserve bounded reactive directory observation and fresh one-shot cache invalidation.
  * 5. Expose Codex managed-global-prompt observation without treating those prompts as current commands.
- * 6. Judge generated-by staleness series-aware: only the admitted line (stable 1.14.x) is
- *    current; below-admitted generators (1.13.x, 1.12.x, 1.11.x, 1.10.x, and older) and
- *    unparseable stamps are stale.
+ * 6. Judge generated-by staleness series-aware: only the admitted line (stable 1.15.x) is
+ *    current; below-admitted generators (1.14.x, 1.13.x, 1.12.x, 1.11.x, 1.10.x, and
+ *    older) and unparseable stamps are stale.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
@@ -15,6 +15,8 @@
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * Original request (2026-10-25): "开工" — Slice 2 rotates the generator stamp to 1.15.0
+ * and the replacement label to the 1.15 line (no upstream tool changes).
  */
 
 import { homedir } from 'node:os'
@@ -54,7 +56,7 @@ export type ToolInitReadiness = 'unavailable' | 'uninitialized' | 'partial' | 'i
 export type ToolInitIssue = 'stale-version' | 'cleanup-needed' | 'migration-required'
 
 /** Pinned source version used when a runtime CLI version is not supplied by the Server owner. */
-export const PINNED_AGENT_GENERATOR_VERSION = '1.14.0'
+export const PINNED_AGENT_GENERATOR_VERSION = '1.15.0'
 
 /** Physical delivery scope of one tool's skills inventory. */
 export type ToolSkillsScope =
@@ -423,7 +425,7 @@ async function areExpectedCommandContentsCurrent(
 /**
  * Series-aware generator currency.
  *
- * Artifacts whose `generatedBy` stamp names the admitted line (stable 1.14.x) are
+ * Artifacts whose `generatedBy` stamp names the admitted line (stable 1.15.x) are
  * current; every below-admitted generator (the retired 1.10.x/1.11.x/1.12.x/1.13.x
  * windows and older) plus unparseable or future stamps is stale. The pinned constant never
  * feeds this comparison — it is fallback display only and never fabricates a
@@ -533,7 +535,7 @@ async function collectCleanup(
           : 'project-artifacts',
     paths,
     workflows,
-    replacementLabel: globalCleanup?.replacementLabel ?? 'OpenSpec 1.14 Agent delivery',
+    replacementLabel: globalCleanup?.replacementLabel ?? 'OpenSpec 1.15 Agent delivery',
   }
 }
 

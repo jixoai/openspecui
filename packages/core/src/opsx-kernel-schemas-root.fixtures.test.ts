@@ -29,18 +29,23 @@
  * Original request (2026-10-24): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了"
  *   — in-window patch rotation moves the local PINNED_BINS key to 1.14.3 together
  *   with the v14 helper's pinned constant.
+ * Original request (2026-10-25): "开工"
+ *   — target-openspec-cli-15-line Slice 3 moves this 14th helper consumer to the v15
+ *   line: imports and the local PINNED_BINS key rotate to the pinned 1.15.0
+ *   executable (openspec-cli-115) through the v15 helper; the 1.14.3 bin stays with
+ *   the boundary suite.
  */
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import { cleanupTempDir } from './__tests__/test-utils.js'
 import { CliExecutor } from './cli-executor.js'
 import { CliProjectionCommandError } from './cli-projection.js'
@@ -49,8 +54,8 @@ import { OpsxKernel } from './opsx-kernel.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
 const PINNED_BINS = {
-  '1.14.3': resolve(import.meta.dirname, '../node_modules/openspec-cli-114/bin/openspec.js'),
-} satisfies Record<PinnedOpenspecV14Version, string>
+  '1.15.0': resolve(import.meta.dirname, '../node_modules/openspec-cli-115/bin/openspec.js'),
+} satisfies Record<PinnedOpenspecV15Version, string>
 
 const tempDirs: string[] = []
 
@@ -66,7 +71,7 @@ describe('OpsxKernel schemas selected-Root forwarding', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`forwards the Store selector to schemas on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(
         `kernel-schemas-root-${version.replace(/\./g, '')}`

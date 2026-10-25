@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
  * 1. Model camelCase workflow JSON independently from Store-family JSON.
  * 2. Preserve strict, archived, and bulk Validate plus Archive outcomes, including failure payloads.
  * 3. Preserve multiline requirement bodies from `show --json`.
@@ -47,6 +47,8 @@
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — Apply tracking-evidence decode contract (update-openspec-cli-1132 Slice 2).
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line).
+ * Original request (2026-10-25): "开工" — install.scope gains 'standalone' (OpenSpec 1.15
+ * standalone distribution) (target-openspec-cli-15-line Slice 1).
  */
 import { z } from 'zod'
 import {
@@ -584,7 +586,10 @@ export const CliVersionSchema = z
       .object({
         location: z.string().nullable(),
         packageManager: z.enum(['npm', 'pnpm', 'bun', 'yarn', 'volta']).nullable(),
-        scope: z.enum(['global', 'project', 'temporary', 'source']).nullable(),
+        // OpenSpec 1.15 adds the standalone distribution scope: `openspec version` may
+        // report `scope: 'standalone'` for the standalone binary install, so the closed
+        // enum admits it beside the four historical values.
+        scope: z.enum(['global', 'project', 'temporary', 'source', 'standalone']).nullable(),
       })
       .passthrough(),
     update: z

@@ -15,6 +15,10 @@
  *    contrast keeps its single-root constraint. Same array shape, changed semantics —
  *    per `references/openspec-1.14.0-report.md` section 6.
  *
+ * Original request (2026-10-25): "开工"
+ *   — target-openspec-cli-15-line Slice 3 moves this suite to the v15 line: imports and
+ *   identity literals rotate to the pinned 1.15.0 executable (openspec-cli-115 / v15
+ *   helper); the historical v14-era intents above are retained verbatim.
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
@@ -25,7 +29,7 @@ import { mkdir, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   parsePinnedJson,
@@ -33,12 +37,12 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v14-fixtures.js'
+} from './__tests__/official-cli-v15-fixtures.js'
 import { CliDiagnosticFailureSchema } from './cli-contracts/common.js'
 import { CliContextSchema, CliDoctorSchema } from './cli-contracts/store.js'
 import { CliWorkflowStatusSuccessSchema } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.14 defaultStore fixtures', () => {
+describe('pinned OpenSpec 1.15 defaultStore fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -46,7 +50,7 @@ describe('pinned OpenSpec 1.14 defaultStore fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`reports global_default only when the configured Store is selected effectively on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-default-store`)
       const storeRoot = join(fixtureRoot, 'team-context')

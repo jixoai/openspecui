@@ -21,6 +21,8 @@
  * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本" — in-window patch rotation moved the pin to v1.14.1.
  * Original request (2026-10-16): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了" — in-window patch rotation moved the pin to v1.14.2.
  * Original request (2026-10-24): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了" — in-window patch rotation moved the pin to v1.14.3.
+ * 2026-10-25 (target-openspec-cli-15-line Slice 4): the pin rotates to v1.15.0 (8e0288df)
+ * opening the OpenSpecUI 15 line; pinned cold-start evidence reports the 1.15.0 CLI.
  */
 import {
   ConfigManager,
@@ -44,7 +46,7 @@ import type { AppRouter, RunningServer } from './server.js'
 import { startServer } from './server.js'
 
 const execFileAsync = promisify(execFile)
-const PINNED_OPENSPEC_COMMIT = 'c794978f4f8845ce59693373c9dd882ee776588c'
+const PINNED_OPENSPEC_COMMIT = '8e0288df12d401b0e183e2f47254d22528c1dffb'
 const PINNED_OPENSPEC_ROOT = resolve(import.meta.dirname, '../../../references/openspec')
 const CLI_BIN = resolve(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
 
@@ -173,7 +175,7 @@ function rootStateReady(state: RootContextResolvedState): RootContextResolvedSta
   return state
 }
 
-describe('pinned OpenSpec 1.14 Root Context cold start', () => {
+describe('pinned OpenSpec 1.15 Root Context cold start', () => {
   afterEach(async () => {
     for (const client of wsClients.splice(0)) client.close()
     await Promise.all(runningServers.splice(0).map((server) => server.close()))
@@ -269,12 +271,12 @@ describe('pinned OpenSpec 1.14 Root Context cold start', () => {
       expect(httpState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.14.3' },
+        cli: { available: true, version: '1.15.0' },
       })
       expect(wsState.data).toMatchObject({
         planningRoot: { path: planningRootPath, source: 'declared', store_id: 'plan-a' },
         storeId: 'plan-a',
-        cli: { available: true, version: '1.14.3' },
+        cli: { available: true, version: '1.15.0' },
       })
       expect(wsStates).toContain('ready')
       expect(wsNotices.every((notice) => !Object.hasOwn(Object(notice), 'data'))).toBe(true)
