@@ -1714,3 +1714,21 @@ describe('OpenSpec 1.14 version CLI contract', () => {
     expect(execute.mock.calls[2]?.[0]).toEqual(['version', '--json'])
   })
 })
+
+describe('OpenSpec 1.15 install scope contract', () => {
+  it('decodes the 1.15 standalone install scope beside the four historical scopes', () => {
+    // references/openspec-1.15.0-report.md: the 1.15 line adds the standalone
+    // distribution, so `install.scope` admits 'standalone' beside the historical
+    // global/project/temporary/source values (closed enum; every install member stays
+    // nullable on the enclosing object).
+    for (const scope of ['global', 'project', 'temporary', 'source', 'standalone'] as const) {
+      const parsed = CliVersionSchema.parse({
+        schemaVersion: 1,
+        version: '1.15.0',
+        install: { location: null, packageManager: null, scope },
+      })
+
+      expect(parsed.install.scope).toBe(scope)
+    }
+  })
+})

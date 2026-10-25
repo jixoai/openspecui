@@ -1,13 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
  * 1. Prove parsing of real OpenSpec CLI version output.
- * 2. Prove OpenSpecUI 14 admits only the single 1.14 series and recommends that line.
- * 3. Prove older lines (including the retired 1.13 v13 window, the 1.12 v12 window, and the
- *    1.10/1.11 v11 window), the future 1.15 series, prereleases, and unknown CLI versions
- *    remain blocked by default.
- * 4. Prove per-command capabilities follow the admitted series law: the 1.14 target series
- *    grants every capability including the findings report, and a bypassed unsupported
- *    version manufactures no command surface.
+ * 2. Prove OpenSpecUI 15 admits only the single 1.15 series and recommends that line.
+ * 3. Prove older lines (including the retired 1.14 v14 window, the 1.13 v13 window, the
+ *    1.12 v12 window, and the 1.10/1.11 v11 window), the future 1.16 series, prereleases,
+ *    and unknown CLI versions remain blocked by default.
+ * 4. Prove per-command capabilities follow the admitted series law: the 1.15 target
+ *    series grants every capability including the findings report, and a bypassed
+ *    unsupported version manufactures no command surface.
  *
  * Original request (2026-07-31): "目前这个版本先给它支持1.7.*，因为基本兼容。"
  * Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
@@ -17,6 +17,9 @@
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * Original request (2026-10-25): "开工" — rotate the compat classification law to the
+ * OpenSpecUI 15 window (>=1.15.0 <1.16.0; stable 1.16.0 upper bound stays blocked)
+ * (target-openspec-cli-15-line Slice 1).
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -34,9 +37,9 @@ import {
 
 describe('openspec CLI compatibility law', () => {
   it('parses versions from raw CLI output', () => {
-    expect(parseOpenSpecCliVersion('1.14.0')).toEqual({
+    expect(parseOpenSpecCliVersion('1.15.0')).toEqual({
       major: 1,
-      minor: 14,
+      minor: 15,
       patch: 0,
       prerelease: null,
     })
@@ -46,28 +49,28 @@ describe('openspec CLI compatibility law', () => {
       patch: 0,
       prerelease: null,
     })
-    expect(parseOpenSpecCliVersion('openspec 1.14.0-rc.1')).toEqual({
+    expect(parseOpenSpecCliVersion('openspec 1.15.0-rc.1')).toEqual({
       major: 1,
-      minor: 14,
+      minor: 15,
       patch: 0,
       prerelease: 'rc.1',
     })
   })
 
-  it('anchors the OpenSpecUI 14 single-series range constants verbatim', () => {
-    expect(OPENSPECUI_TARGET_MAJOR).toBe(14)
-    expect(OPENSPEC_CLI_TARGET_SERIES).toBe('1.14')
-    expect([...OPENSPEC_CLI_SUPPORTED_SERIES]).toEqual(['1.14'])
-    expect(OPENSPEC_CLI_ACCEPTED_RANGE).toBe('>=1.14.0 <1.15.0')
-    expect(OPENSPEC_CLI_RECOMMENDED_RANGE).toBe('>=1.14.0 <1.15.0')
-    // The next-series boundary keeps >=1.15.0 blocked; only a separate verified decision
-    // may widen this single-series window.
-    expect(OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION).toBe('1.15.0')
-    expect(OPENSPEC_CLI_REFERENCE_TAG_PATTERN).toBe('v1.14.*')
+  it('anchors the OpenSpecUI 15 single-series range constants verbatim', () => {
+    expect(OPENSPECUI_TARGET_MAJOR).toBe(15)
+    expect(OPENSPEC_CLI_TARGET_SERIES).toBe('1.15')
+    expect([...OPENSPEC_CLI_SUPPORTED_SERIES]).toEqual(['1.15'])
+    expect(OPENSPEC_CLI_ACCEPTED_RANGE).toBe('>=1.15.0 <1.16.0')
+    expect(OPENSPEC_CLI_RECOMMENDED_RANGE).toBe('>=1.15.0 <1.16.0')
+    // The next-series boundary keeps >=1.16.0 blocked; only a separate verified
+    // decision may widen this single-series window.
+    expect(OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION).toBe('1.16.0')
+    expect(OPENSPEC_CLI_REFERENCE_TAG_PATTERN).toBe('v1.15.*')
   })
 
-  it('classifies the 1.14 line as the current recommended OpenSpecUI 14 target line', () => {
-    for (const version of ['1.14.0', '1.14.1', 'openspec 1.14.2']) {
+  it('classifies the 1.15 line as the current recommended OpenSpecUI 15 target line', () => {
+    for (const version of ['1.15.0', '1.15.1', 'openspec 1.15.2']) {
       expect(classifyOpenSpecCliVersion(version)).toMatchObject({
         status: 'current',
         supported: true,
@@ -77,8 +80,8 @@ describe('openspec CLI compatibility law', () => {
     }
   })
 
-  it('blocks the retired 1.13 v13 window with actionable v14 range copy', () => {
-    for (const version of ['1.13.0', '1.13.1', '1.13.2']) {
+  it('blocks the retired 1.13/1.14 windows with actionable v15 range copy', () => {
+    for (const version of ['1.13.0', '1.13.2', '1.14.0', '1.14.3']) {
       const compatibility = classifyOpenSpecCliVersion(version)
       expect(compatibility).toMatchObject({
         status: 'unsupported',
@@ -86,14 +89,21 @@ describe('openspec CLI compatibility law', () => {
         recommended: false,
         blocksCoreInteractions: true,
       })
-      expect(compatibility.message).toContain('>=1.14.0 <1.15.0')
+      expect(compatibility.message).toContain('>=1.15.0 <1.16.0')
       expect(compatibility.message).toContain(OPENSPEC_CLI_RECOMMENDED_RANGE)
     }
   })
 
-  it('blocks versions below the OpenSpecUI 14 accepted range', () => {
-    // 1.9.x was the v9 release line's target; 1.10/1.11 were the v11 window; 1.12 was the
-    // v12 window; 1.13 was the v13 window; v14 blocks every older line by default.
+  it('blocks versions below the OpenSpecUI 15 accepted range', () => {
+    // 1.9.x was the v9 release line's target; 1.10/1.11 were the v11 window; 1.12 the
+    // v12 window; 1.13 the v13 window; 1.14 the v14 window; v15 blocks every older
+    // line by default.
+    expect(classifyOpenSpecCliVersion('1.14.3')).toMatchObject({
+      status: 'unsupported',
+      supported: false,
+      recommended: false,
+      blocksCoreInteractions: true,
+    })
     expect(classifyOpenSpecCliVersion('1.13.0')).toMatchObject({
       status: 'unsupported',
       supported: false,
@@ -157,8 +167,9 @@ describe('openspec CLI compatibility law', () => {
       supported: false,
       blocksCoreInteractions: true,
     })
-    // The next-series boundary: 1.15.0 is outside the accepted range and not pre-claimed.
-    expect(classifyOpenSpecCliVersion('1.15.0')).toMatchObject({
+    // The stable next-series boundary: 1.16.0 is outside the accepted range and not
+    // pre-claimed — blocked as a stable release, not only as an alpha.
+    expect(classifyOpenSpecCliVersion('1.16.0')).toMatchObject({
       status: 'unsupported',
       supported: false,
       recommended: false,
@@ -172,16 +183,21 @@ describe('openspec CLI compatibility law', () => {
   })
 
   it('blocks every prerelease, including prereleases inside the accepted range', () => {
-    expect(classifyOpenSpecCliVersion('1.14.0-rc.1')).toMatchObject({
+    expect(classifyOpenSpecCliVersion('1.15.0-rc.1')).toMatchObject({
       status: 'unsupported',
       supported: false,
       recommended: false,
       blocksCoreInteractions: true,
     })
-    expect(classifyOpenSpecCliVersion('1.14.1-beta.2')).toMatchObject({
+    expect(classifyOpenSpecCliVersion('1.15.1-beta.2')).toMatchObject({
       status: 'unsupported',
       supported: false,
       recommended: false,
+      blocksCoreInteractions: true,
+    })
+    expect(classifyOpenSpecCliVersion('1.16.0-alpha')).toMatchObject({
+      status: 'unsupported',
+      supported: false,
       blocksCoreInteractions: true,
     })
     expect(classifyOpenSpecCliVersion('1.13.0-rc.1')).toMatchObject({
@@ -192,7 +208,7 @@ describe('openspec CLI compatibility law', () => {
   })
 
   it('names the accepted and recommended ranges in mismatch evidence', () => {
-    const message = classifyOpenSpecCliVersion('1.13.0').message
+    const message = classifyOpenSpecCliVersion('1.14.3').message
     expect(message).toContain(OPENSPEC_CLI_ACCEPTED_RANGE)
     expect(message).toContain(OPENSPEC_CLI_RECOMMENDED_RANGE)
     expect(message).toContain(`${OPENSPECUI_TARGET_MAJOR}.x`)
@@ -213,8 +229,8 @@ describe('openspec CLI compatibility law', () => {
 })
 
 describe('deriveOpenSpecCliCapabilities admission boundary', () => {
-  it('grants every capability, including the findings report, to the admitted 1.14 series', () => {
-    expect(deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.14.0'))).toEqual({
+  it('grants every capability, including the findings report, to the admitted 1.15 series', () => {
+    expect(deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.15.0'))).toEqual({
       schemasRootSelector: true,
       archivedValidation: true,
       initLanguage: true,
@@ -222,7 +238,7 @@ describe('deriveOpenSpecCliCapabilities admission boundary', () => {
       requirementDiff: true,
       findingsReport: true,
     })
-    expect(deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.14.5'))).toEqual({
+    expect(deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.15.5'))).toEqual({
       schemasRootSelector: true,
       archivedValidation: true,
       initLanguage: true,
@@ -234,16 +250,18 @@ describe('deriveOpenSpecCliCapabilities admission boundary', () => {
 
   it('grants no capabilities to bypassed unsupported or unparseable versions', () => {
     for (const raw of [
-      '1.14.0-rc.1',
-      '1.14.1-beta.2',
-      '1.13.0',
+      '1.16.0-alpha',
+      '1.15.0-rc.1',
+      '1.16.0',
+      '1.14.3',
+      '1.14.0',
       '1.13.2',
+      '1.13.0',
       '1.12.0',
       '1.11.0',
       '1.10.0',
       '1.10.5',
       '1.9.0',
-      '1.15.0',
       '2.0.0',
       'garbage',
       undefined,
