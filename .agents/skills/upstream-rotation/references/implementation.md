@@ -64,8 +64,11 @@ CLAUDE.md 指针 / AGENTS.md pin 行 + clean-build 法则内嵌 SHA + 新架构�
 **README 对法则**：凡触碰根 README.md 的发布必须同 PR 更新 packages/cli/README.md（轮换时
 至少跑 "README audit clean" 并记录结论）。
 
-**红例**：alias 先改 → 单次 install → 常量未改时跑任一 identity 载体（helper 非 test 文件，
-vitest 不认，用导入它的 boundary/test 文件）→ 记录 expected old / received new。
+**红例与 CP1 观测预期（2026-10-24 实证教训）**：alias 先改 → 单次 install → 常量未改时，
+CP1 的三个 1.14.2-era fixture 会跑出**仅 identity 守卫红**（expectPinnedVersion 在契约断言之前
+拦截，"全绿"预测在顺序上不可能成立）——预期写法应为"仅 identity 守卫红，零契约断言失败"；
+轮换常量后重跑同 fixture 为最终裁决。红因分类纪律：identity 红 = 计划自己的待办步骤，不是
+上游回归；真正的上游回归红要在轮换完成后仍残留才成立。
 
 fixture 矩阵纪律：只允许对齐新事实，**绝不放松断言强度**；新用例先真实 CLI 取证再写断言
 （mkdtemp 临时项目跑一次，把 stdout 记下来；macOS 是 `mktemp -d` 无 mkdtemp 命令）。
