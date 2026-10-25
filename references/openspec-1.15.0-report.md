@@ -129,6 +129,8 @@ constant). The old v13 boundary suite is rewritten (role red), not patched.
 | Surface | Primary production owner | v1.15.0 obligation |
 | --- | --- | --- |
 | compat window | `packages/core/src/openspec-compat.ts` (+ `openspec-compat.test.ts` literals) | A1: full constant rotation to `'1.15'` / `>=1.15.0 <1.16.0` / `v1.15.*` |
+| agent registry series | `packages/core/src/agent-delivery-registry.ts` (+ registry/projection/router tests) | series rotation to `'1.15'`: every physical fact carried forward (upstream AI_TOOLS byte-identical, no new/removed tools); retired-line sessions project no v15 inventory; registry tests that assert the 1.15 gap (`selectAgentDeliveryRegistry('1.15.0') → []`) are rewritten as the rotation's observation |
+| generator staleness | `packages/core/src/tool-init-state.ts` (+ init-state tests) | pinned generator baseline rotates to `1.15.0`; replacement label and fallback follow; historical generated-version evidence retained |
 | version contract | `packages/core/src/cli-contracts/workflow.ts` | A2: `install.scope` enum gains `'standalone'` |
 | pinned fixture | `packages/core/package.json`, `__tests__/official-cli-v15-fixtures.ts` (new helper), 13 renamed `official-cli-v15-*.test.ts` | A3 |
 | boundary suite | `official-cli-v14-boundary-fixtures.test.ts` (rewritten from v13-boundary) | A4: 1.14.3 identity, v15-gate rejection, 1.15-only surfaces absent (`update --dry-run` unknown option, `install` unknown command); never asserts 1.14-era members absent |
@@ -136,6 +138,7 @@ constant). The old v13 boundary suite is rewritten (role red), not patched.
 | tool subscription | `packages/server/src/tool-subscription-router.test.ts:684` | A6: derive from `OPENSPEC_CLI_TARGET_SERIES` (preferred) or `@1.15` |
 | docs/release | CLAUDE.md pointer, AGENTS.md pin + clean-build law + 2026-10-25 decision, README audit, settings.tsx "unpublished 1.15" comment + `1.15.x` fallback semantics, changeset (major) | A7 |
 | optional (deferred) | dry-run preview (B1), standalone-aware update display (B2), feedback entry (B3) | product decisions, not this line |
+| spec deltas | `openspec/changes/target-openspec-cli-15-line/specs/` | four MODIFIED window-level requirements (cli-integration window, config-center inventory RENAME, workflow-ui fixtures, projection-contract-truth generator evidence) + the Kilo-scenario 113-fixture update + the standalone-scope ADD — per the v14-line precedent |
 
 ## Release gate
 
