@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-08-03 Asia/Shanghai):
+Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
 1. Specify CLI discovery, execution, workflow mapping, error projection, config access, and Store fault tolerance.
 
 Compromise: these six tightly coupled CLI-integration concerns remain in one capability spec because splitting them would break the established public capability identity during the OpenSpecUI 7 / OpenSpec CLI 1.7 adaptation.
@@ -9,6 +9,7 @@ Original request (2026-07-31): "开始发布6.1.0；目前这个版本先给它�
 Owner clarification (2026-07-31): "6.* 本身就是适配 1.6.*；对于 1.7 只是兼容而已。"
 Original request (2026-07-15): "sync、update 的完整交付链。"
 Original request (2026-08-01): "openspec@v1.7.* 已经发布，我们开始 openspecui@v7.* 的适配计划。"
+Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — admission rotates to the v15 window with the 1.14 era scenario.
 -->
 
 # openspec-cli-integration Specification
@@ -21,12 +22,12 @@ Define how OpenSpecUI integrates with the OpenSpec CLI to execute OPSX workflows
 
 ### Requirement: CLI Discovery and Version Enforcement
 
-OpenSpecUI 14 SHALL classify stable OpenSpec CLI `>=1.14.0 <1.15.0` as supported, current, and recommended.
-OpenSpec CLI `<1.14.0` (including the whole 1.13.x window that OpenSpecUI 13 admitted, and every older line),
-every prerelease, `>=1.15.0`, and an unparseable version SHALL be incompatible and blocked by default.
+OpenSpecUI 15 SHALL classify stable OpenSpec CLI `>=1.15.0 <1.16.0` as supported, current, and recommended.
+OpenSpec CLI `<1.15.0` (including the whole 1.14.x window that OpenSpecUI 14 admitted, and every older line),
+every prerelease, `>=1.16.0`, and an unparseable version SHALL be incompatible and blocked by default.
 
 Scenario titles below are inherited scenario identity: an "Accept ..." title names that line's historical
-admission era, while every scenario body states the OpenSpecUI 14 classification (retired and blocked).
+admission era, while every scenario body states the OpenSpecUI 15 classification (retired and blocked).
 Bodies are the normative text; a separate spec-hygiene change may verify a title-rename mechanism later.
 When an incompatible executable is available, the mismatch Dialog MAY expose `Skip version check`; that action
 SHALL bypass only the current Web page runtime's admission gate and SHALL NOT change the detected version,
@@ -34,87 +35,94 @@ compatibility evidence, CLI payloads, downstream errors, or product support clai
 
 #### Scenario: Accept the current 1.13 line
 
-- **GIVEN** OpenSpecUI 14 detects a stable OpenSpec CLI 1.13.x executable that OpenSpecUI 13 admitted
+- **GIVEN** OpenSpecUI 15 detects a stable OpenSpec CLI 1.13.x executable that OpenSpecUI 13 admitted
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.13 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v14 accepted and recommended ranges `>=1.14.0 <1.15.0`
+- **AND** the mismatch evidence SHALL name the v15 accepted and recommended ranges `>=1.15.0 <1.16.0`
+
+#### Scenario: Accept the current 1.14 line
+
+- **GIVEN** OpenSpecUI 15 detects a stable OpenSpec CLI 1.14.x executable that OpenSpecUI 14 admitted
+- **WHEN** admission is evaluated
+- **THEN** the retired 1.14 line SHALL be blocked by default
+- **AND** the mismatch evidence SHALL name the v15 accepted and recommended ranges `>=1.15.0 <1.16.0`
 
 #### Scenario: Block unsupported version forms
 
-- **GIVEN** OpenSpecUI 14 detects CLI 1.14.0-rc.1, 1.15.0, or an unparseable version
+- **GIVEN** OpenSpecUI 15 detects CLI 1.15.0-rc.1, 1.16.0, or an unparseable version
 - **WHEN** admission is evaluated
 - **THEN** the mismatch Dialog SHALL block normal interactions
 - **AND** the mismatch evidence SHALL name the accepted and recommended ranges
 
 #### Scenario: Retire the v12 admission window
 
-- **GIVEN** OpenSpecUI 14 detects a stable OpenSpec CLI 1.12.x executable that OpenSpecUI 12 admitted
+- **GIVEN** OpenSpecUI 15 detects a stable OpenSpec CLI 1.12.x executable that OpenSpecUI 12 admitted
 - **WHEN** admission is evaluated
 - **THEN** the retired line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v14 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v15 accepted and recommended ranges
 
 #### Scenario: Accept the current 1.12 line
 
-- **GIVEN** OpenSpecUI 14 detects a stable OpenSpec CLI 1.12.x executable that OpenSpecUI 12 admitted as its
+- **GIVEN** OpenSpecUI 15 detects a stable OpenSpec CLI 1.12.x executable that OpenSpecUI 12 admitted as its
   current and recommended line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.12 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v14 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v15 accepted and recommended ranges
 
 #### Scenario: Retire the v11 admission window
 
-- **GIVEN** OpenSpecUI 14 detects a stable OpenSpec CLI 1.10.x or 1.11.x executable that OpenSpecUI 11
+- **GIVEN** OpenSpecUI 15 detects a stable OpenSpec CLI 1.10.x or 1.11.x executable that OpenSpecUI 11
   admitted
 - **WHEN** admission is evaluated
 - **THEN** the retired line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v14 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v15 accepted and recommended ranges
 
 #### Scenario: Accept the supported non-current 1.10 line
 
-- **GIVEN** OpenSpecUI 14 detects a stable OpenSpec CLI 1.10.x executable that OpenSpecUI 11 admitted as its
+- **GIVEN** OpenSpecUI 15 detects a stable OpenSpec CLI 1.10.x executable that OpenSpecUI 11 admitted as its
   supported non-current line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.10 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v14 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v15 accepted and recommended ranges
 
 #### Scenario: Accept the current 1.11 line
 
-- **GIVEN** OpenSpecUI 14 detects a stable OpenSpec CLI 1.11.x executable that OpenSpecUI 11 admitted as its
+- **GIVEN** OpenSpecUI 15 detects a stable OpenSpec CLI 1.11.x executable that OpenSpecUI 11 admitted as its
   current and recommended line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.11 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v14 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v15 accepted and recommended ranges
 
 #### Scenario: Accept the supported non-current 1.8 line
 
-- **GIVEN** OpenSpecUI 14 detects a stable OpenSpec CLI 1.8.x executable that OpenSpecUI 9 admitted as its
+- **GIVEN** OpenSpecUI 15 detects a stable OpenSpec CLI 1.8.x executable that OpenSpecUI 9 admitted as its
   supported non-current line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.8 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v14 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v15 accepted and recommended ranges
 
 #### Scenario: Accept the current 1.9 line
 
-- **GIVEN** OpenSpecUI 14 detects a stable OpenSpec CLI 1.9.x executable that OpenSpecUI 9 admitted as its
+- **GIVEN** OpenSpecUI 15 detects a stable OpenSpec CLI 1.9.x executable that OpenSpecUI 9 admitted as its
   current and recommended line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.9 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v14 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v15 accepted and recommended ranges
 
 #### Scenario: Accept the adapted 1.7 line
 
-- **GIVEN** OpenSpecUI 14 detects a stable OpenSpec CLI 1.7.x executable that OpenSpecUI 7 admitted as its
+- **GIVEN** OpenSpecUI 15 detects a stable OpenSpec CLI 1.7.x executable that OpenSpecUI 7 admitted as its
   adapted line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.7 line SHALL remain blocked by default
-- **AND** the mismatch evidence SHALL name the v14 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v15 accepted and recommended ranges
 
 #### Scenario: Block OpenSpec CLI 1.6
 
-- **GIVEN** OpenSpecUI 14 detects an available OpenSpec CLI 1.6.x executable
+- **GIVEN** OpenSpecUI 15 detects an available OpenSpec CLI 1.6.x executable
 - **WHEN** admission is evaluated
 - **THEN** the mismatch Dialog SHALL block normal interactions
-- **AND** SHALL identify the v14 accepted and recommended ranges
+- **AND** SHALL identify the v15 accepted and recommended ranges
 
 #### Scenario: Bypass only the current page runtime
 
@@ -826,14 +834,14 @@ SHALL document brace/extglob task tracking as a boundary rather than a silent di
 
 ### Requirement: Version Report Command Contract
 
-OpenSpecUI 14 SHALL decode `openspec version --json` as a typed CLI contract: a `schemaVersion: 1` envelope
+OpenSpecUI 15 SHALL decode `openspec version --json` as a typed CLI contract: a `schemaVersion: 1` envelope
 carrying the installed `version` and `install` facts (location, packageManager, scope), with the `update`
 member conditionally present only under `--check`. The executor SHALL NOT run the registry probe unless an
 explicit consumer requests it, and no UI surface is obligated by this contract.
 
 #### Scenario: Decode the no-check envelope
 
-- **GIVEN** `openspec version --json` runs without `--check` on an admitted 1.14 CLI
+- **GIVEN** `openspec version --json` runs without `--check` on an admitted 1.15 CLI
 - **WHEN** the output crosses the typed contract
 - **THEN** `schemaVersion`, `version`, and `install` SHALL be preserved as typed facts
 - **AND** no `update` member SHALL be synthesized
@@ -874,7 +882,7 @@ data-source switch.
 
 ### Requirement: Status Advisory Warnings Contract
 
-OpenSpecUI 14 SHALL decode the OpenSpec 1.14 `status --json` top-level `warnings` member (unrecognized
+OpenSpecUI 15 SHALL decode the OpenSpec 1.14 `status --json` top-level `warnings` member (unrecognized
 `.openspec.yaml` key advisories) as optional typed evidence preserved verbatim with CLI ownership. Warnings
 SHALL NOT gate Root readiness, action availability, or Apply state.
 
@@ -899,7 +907,7 @@ locations; they are CLI-owned evidence for which file and line each checkbox liv
 
 #### Scenario: Located tasks decode with both members
 
-- **GIVEN** `instructions apply --json` on an admitted 1.14 CLI returns located tasks
+- **GIVEN** `instructions apply --json` on an admitted 1.15 CLI returns located tasks
 - **WHEN** the payload crosses the typed contract and its projection chain
 - **THEN** each task SHALL preserve `sourcePath` and `line` with CLI provenance
 
@@ -918,7 +926,7 @@ Catalog projection chain. This surface is distinct from `show <change> --json --
 
 #### Scenario: Names decode on a 1.14 spec document
 
-- **GIVEN** an admitted 1.14 CLI returns a spec document whose requirements and scenarios carry names
+- **GIVEN** an admitted 1.15 CLI returns a spec document whose requirements and scenarios carry names
 - **WHEN** the payload crosses the typed contract and its projection chain
 - **THEN** requirement names and scenario names SHALL be preserved by CLI value with provenance
 

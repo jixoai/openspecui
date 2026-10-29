@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
 1. Document the current OpenSpec compatibility and project workflow.
 2. Document serve, App-daemon, Direct Web, and static-export commands.
 3. Document project hooks without hiding OpenSpec CLI authority.
@@ -10,6 +10,7 @@ Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
 Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
 Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
 Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新"
 -->
 
 # OpenSpec UI
@@ -22,7 +23,8 @@ OpenSpecUI is a web interface for OpenSpec workflows (live mode + static export)
 
 | OpenSpecUI         | OpenSpec CLI line                                          |
 | ------------------ | ---------------------------------------------------------- |
-| `@latest` / `@^14` | current + supported: `>=1.14.0 <1.15.0`                    |
+| `@latest` / `@^15` | current + supported: `>=1.15.0 <1.16.0`                    |
+| `@^14` (legacy)    | current + supported: `>=1.14.0 <1.15.0`                    |
 | `@^13` (legacy)    | current + supported: `>=1.13.0 <1.14.0`                    |
 | `@^12` (legacy)    | current + supported: `>=1.12.0 <1.13.0`                    |
 | `@^11` (legacy)    | current: `>=1.11.0 <1.12.0`; supported: `>=1.10.0 <1.12.0` |
@@ -35,14 +37,15 @@ OpenSpecUI is a web interface for OpenSpec workflows (live mode + static export)
 | `@^2`              | `>=1.2.0 <1.3.0`                                           |
 | `@^1`              | `>=1.0.0 <1.2.0`                                           |
 
-OpenSpecUI major versions ordinarily track OpenSpec CLI minor lines. OpenSpecUI 14 adapts OpenSpec
-CLI 1.14.x as a single-series line: stable 1.14.x is current and recommended, and `1.15` is not
-pre-claimed — when it ships, admission is a separately verified decision (a 14.x window widening or
-a new major). OpenSpecUI 13 remains the historical 1.13.x product line, OpenSpecUI 12 the historical
-1.12.x line.
+OpenSpecUI major versions ordinarily track OpenSpec CLI minor lines. OpenSpecUI 15 adapts OpenSpec
+CLI 1.15.x as a single-series line: stable 1.15.x is current and recommended, and `1.16` is not
+pre-claimed — when it ships, admission is a separately verified decision (a 15.x window widening or
+a new major). OpenSpecUI 14 remains the historical 1.14.x product line, OpenSpecUI 13 the historical
+1.13.x line.
 
 Legacy docs:
 
+- 1.14: [`README-1.14.0.md`](./README-1.14.0.md)
 - 1.13: [`README-1.13.0.md`](./README-1.13.0.md)
 - 1.12: [`README-1.12.0.md`](./README-1.12.0.md)
 - 1.11: [`README-1.11.0.md`](./README-1.11.0.md)
@@ -70,30 +73,29 @@ Direct Project Web defaults to `http://localhost:3100` when that presentation is
 
 ## OpenSpec CLI Compatibility
 
-- OpenSpecUI 14 accepts stable OpenSpec CLI `>=1.14.0 <1.15.0` and recommends the 1.14 line.
-- Stable 1.14.x is identified as the current line; this is a single-series window.
-- OpenSpec CLI 1.13.x (the OpenSpecUI 13 window), older lines, CLI `>=1.15.0`, and every
-  prerelease are unsupported by OpenSpecUI 14 and blocked by default.
+- OpenSpecUI 15 accepts stable OpenSpec CLI `>=1.15.0 <1.16.0` and recommends the 1.15 line.
+- Stable 1.15.x is identified as the current line; this is a single-series window.
+- OpenSpec CLI 1.14.x (the OpenSpecUI 14 window), older lines, CLI `>=1.16.0`, and every
+  prerelease are unsupported by OpenSpecUI 15 and blocked by default.
 - If an incompatible CLI executable is available, the mismatch Dialog offers **Skip version check**.
   This bypass is held only by the current page runtime, clears on refresh/reopen, and does not
   create a compatibility promise.
 
-OpenSpecUI 14 adds: `status` advisory warnings render on the Change Detail direct plane as a collapsed
-summary row with in-place verbatim text (never gating actions); Apply task evidence carries CLI-owned
-`sourcePath`/`line` source locations; `show --type spec --json` projects requirement/scenario names;
-`list --archived`/`--all` project the per-entry `archived` fact; the `version` command's typed
-envelope is decoded without network probing; and store-backed status action context projects the
-1.14 `allowedEditRoots` two-branch semantics (declaring project present or absent). The Agent
-delivery registry rotates to the 1.14 series — ten new tools including amp and gsd on the shared
-`.agents` skills root (five-writer arbitration) and IBM's Bob — with every 1.13 physical fact
-carried forward, and the pinned generator baseline moves to 1.14.0. Apply readiness guidance,
+OpenSpecUI 15 adds the `update --dry-run --json` plan as typed evidence: the Config Agents Update
+and Repair flows preview the CLI-owned plan (add/update/delete artifact changes, non-interactive
+consent notes, and per-tool would-fail rows) before the real run, gated by the new `updateDryRun`
+capability; the `version` envelope's `install.scope` decodes the new `standalone` member (the
+npm package consumption is unchanged). The Agent delivery registry rotates to the 1.15 series as a
+constants-only change — upstream added no tools, so every 1.14 physical fact (including the ten
+1.14-line entries and the five-writer shared `.agents` skills root) carries forward, and the pinned
+generator baseline moves to 1.15.0. Status advisory warnings, Apply task source locations,
 validation findings, batch status, requirement diff evidence, and `init --language` continue on the
-admitted 1.14 line.
+admitted 1.15 line.
 
 Upgrade CLI:
 
 ```bash
-npm install -g @fission-ai/openspec@1.14
+npm install -g @fission-ai/openspec@1.15
 ```
 
 ## Common Flows
