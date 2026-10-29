@@ -32,17 +32,19 @@ report is that separately verified admission decision, based on the full source
 diff below.
 
 One-hop rotation: upstream shipped two v14-window patches (1.14.2 on 2026-10-15,
-1.14.3 on 2026-10-17) before 1.15.0. This line **skips separate 1.14.2/1.14.3
-rotation releases** but does not skip any 1.14.x protocol obligation: the v15
-pin (v1.15.0) contains every 1.14.2/1.14.3 commit, the boundary fixture is the
-newest retired-line patch (1.14.3), and the 1.14.2/1.14.3 deltas are inventoried
+1.14.3 on 2026-10-17) before 1.15.0. The v14 line shipped its own 1.14.2 rotation on main (OpenSpecUI 14.0.2,
+`references/openspec-1.14.2-report.md`) while this line was in flight; this line
+**skips a separate 1.14.3 rotation release** but does not skip any 1.14.x protocol
+obligation: the v15 pin (v1.15.0) contains every 1.14.2/1.14.3 commit, the boundary
+fixture is the newest retired-line patch (1.14.3), the 1.14.2 fixture evidence ports
+onto the 1.15.0 executable unchanged, and the 1.14.2/1.14.3 deltas are inventoried
 below with their own projection obligations. (Same shape as the v9 line's
 "skips a separate v8 release, but does not skip any 1.8 protocol obligation".)
 
 Vetoable in review: shipping without a separate v14-line 1.14.3 patch rotation
-first. The v14 line is retired upstream the day 1.15.0 exists; a double release
-would publish two OpenSpecUI majors within one week with no consumer-facing
-delta between them.
+first. The v14 line is retired upstream the day 1.15.0 exists; 1.14.2 already
+shipped as 14.0.2, so a further 14.1.x patch for 1.14.3 would publish another
+release with no consumer-facing delta before the v15 major.
 
 ## Evidence baseline
 
@@ -52,7 +54,10 @@ Package                  @fission-ai/openspec
 Reference repository     references/openspec
 Pinned tag               v1.15.0
 Pinned commit            8e0288df12d401b0e183e2f47254d22528c1dffb
-Previous pin             v1.14.1 / 87c3595ace6a2e22957f39ebe5b74c2f2316e0cb
+Previous pin             v1.14.2 / f80d860fc510ba4f51180c8ddde35b91b32de657
+                         (the v14 line shipped its own 1.14.2 rotation as
+                         OpenSpecUI 14.0.2 while this line was in flight;
+                         1.14.1 / 87c3595 preceded it)
 npm timeline             1.14.2 2026-10-15, 1.14.3 2026-10-17, 1.15.0 2026-10-24
 Upstream delta           v1.14.1..v1.15.0: 40 commits total
                          (21 in 1.14.2, 6 in 1.14.3, 13 in 1.15.0)

@@ -134,3 +134,25 @@ and honesty laws all verified against upstream source). Findings and resolution:
   (a0bef65f). PR #315 opened with the evidence summary.
 - Residual watch item for CI: none known; the worktree-local better-sqlite3 ABI repair
   is environment-only and touches nothing committed.
+
+### main reconciliation (2026-10-29 night, post-CI-round-2)
+
+While this branch was in flight, main landed PR #304 (the v14 line's own 1.14.2
+rotation, pin v1.14.2/f80d860f), PR #306 (changeversion release → packages at
+14.0.2), PR #305 (1142 archive), and PR #307 (skill doc). Merge reconciliation:
+
+- gitlink stays v1.15.0; pin guards stay on 8e0288df; core package.json keeps the
+  14.0.2 release version + the v15 alias table (114→1.14.3 boundary, 115 positive).
+- Their three 1.14.2 fixture proofs (unapplied-content WARNING positive;
+  `x-` extension keys admitted with malformed `X-` advisory; >16-level brace-depth
+  typed rejection) port onto the v15 validation-findings/workflow fixtures and pass
+  against the 1.15.0 executable (13/13) — the obligations ride the v15 pin.
+- Their v14-helper rotation edits die with the helper (deleted, zero consumers);
+  their upstream-contract change was pin-commit-only (no new anchors to port).
+- AGENTS.md keeps both decisions (2026-10-16 + 2026-10-29); the v15 decision's
+  skip narrative corrected to the real sequence (1.14.2 shipped as 14.0.2; only
+  1.14.3 skipped); pin bullet historical chain gains v1.14.2.
+- Evidence report "Previous pin" corrected to v1.14.2/f80d860f with the parallel
+  line noted; frozen-lockfile install green after regeneration.
+- Their recorded tool-subscription-router CI flake (d4458314) was a pre-existing
+  triage note, no code interaction with this branch's changes.
