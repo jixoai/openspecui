@@ -1,20 +1,24 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
  * 1. Own the live Agent policy draft and present current registry, readiness, drift, cleanup, and migration evidence.
  * 2. Own Agent selection plus cancellable Init, Update, and Repair command execution with global pending locks.
  * 3. Promote loading and failed authority directly without publishing this surface to static mode.
  * 4. Participate in shared Config navigation and publish existing Agent lifecycle facts to the Guide.
  * 5. Render version-scoped command-surface unavailability evidence.
+ * 6. Fetch the 1.15-gated dry-run plan preview when Update/Repair opens and hand it to the
+ *    command Dialog as read-only evidence; unavailability never gates the real mutation.
  *
  * Original request (2026-08-01): move Agent delivery into a Config secondary page and keep Settings read-only.
  * Review correction (2026-08-02): replacement inventory Push must not discard an unsaved Agent policy draft.
  * Owner visual direction (2026-08-02): use compact box-radius geometry for semantic status and issue labels.
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — update plan preview evidence (target-openspec-cli-115-line).
  */
 import {
   AgentIntegrationsCommandDialog,
   type AgentCommandKind,
+  type AgentUpdatePlanPreview,
 } from '@/components/config/agent-integrations-command-dialog'
 import { AgentIntegrationsHeader } from '@/components/config/agent-integrations-header'
 import { useConfigGuideAnchor } from '@/components/config/config-guide'
@@ -320,6 +324,8 @@ export function ConfigAgents() {
   const [policyPending, setPolicyPending] = useState(false)
   const [policyError, setPolicyError] = useState<string | null>(null)
   const [commandKind, setCommandKind] = useState<AgentCommandKind | null>(null)
+  const [planPreview, setPlanPreview] = useState<AgentUpdatePlanPreview | null>(null)
+  const planPreviewGenerationRef = useRef(0)
   const previousRunnerStatusRef = useRef(runner.status)
 
   const draftPolicy = useMemo<AgentDeliveryPolicy>(
@@ -456,13 +462,47 @@ export function ConfigAgents() {
       runner.commands.replaceAll([commandTransport(kind, selectedTools)])
       previousRunnerStatusRef.current = 'idle'
       setCommandKind(kind)
+      if (kind !== 'update' && kind !== 'repair') {
+        setPlanPreview(null)
+        return
+      }
+      // The 1.15 dry-run preview is read-only evidence for the dialog; it never gates the
+      // real mutation below, and its unavailability stays a muted line, not an error.
+      const generation = ++planPreviewGenerationRef.current
+      setPlanPreview({ kind: 'loading' })
+      void trpcClient.agentIntegrations.updatePlanPreview
+        .query({ force: kind === 'repair' })
+        .then((result) => {
+          // A late response from a closed dialog must never repaint the newer one.
+          if (planPreviewGenerationRef.current !== generation) return
+          setPlanPreview(
+            result.kind === 'unavailable'
+              ? { kind: 'unavailable', reason: result.reason }
+              : {
+                  kind: 'executed',
+                  plan: result.plan,
+                  exitCode: result.exitCode,
+                  diagnostics: result.diagnostics,
+                  contractError: result.contractError,
+                }
+          )
+        })
+        .catch((cause: unknown) => {
+          if (planPreviewGenerationRef.current !== generation) return
+          setPlanPreview({
+            kind: 'unavailable',
+            reason: cause instanceof Error ? cause.message : String(cause),
+          })
+        })
     },
     [runner, selectedTools]
   )
 
   const closeCommand = useCallback(() => {
     if (runner.status === 'running') return
+    planPreviewGenerationRef.current += 1
     setCommandKind(null)
+    setPlanPreview(null)
   }, [runner.status])
 
   return (
@@ -736,6 +776,7 @@ export function ConfigAgents() {
           status={runner.status}
           hasStarted={runner.hasStarted}
           lines={runner.lines}
+          planPreview={planPreview}
           onRun={() => void runner.commands.runAll()}
           onCancel={runner.cancel}
           onClose={closeCommand}

@@ -79,6 +79,7 @@ import {
   CliArchiveSchema,
   CliChangeListSchema,
   CliShowSpecSchema,
+  CliUpdatePlanSchema,
   CliValidateFindingsResultSchema,
   CliValidateFindingsSchema,
   CliValidateReportSchema,
@@ -1732,5 +1733,131 @@ describe('OpenSpec 1.15 install scope contract', () => {
 
       expect(parsed.install.scope).toBe(scope)
     }
+  })
+})
+
+const executedUpdatePlan115 = {
+  changes: [
+    { path: '.claude/skills/openspec-explore/SKILL.md', action: 'update', tool: 'claude' },
+    { path: '.kimi-code/skills/openspec-propose/SKILL.md', action: 'delete', tool: 'kimi-code' },
+    { path: '~/.minimax/skills/openspec-propose/SKILL.md', action: 'add', tool: 'minimax-code' },
+  ],
+  notes: [
+    {
+      code: 'legacy-tool-directories',
+      message:
+        'Moves out of a renamed tool directory are listed as a non-interactive update makes them. At a terminal, update asks first, and declining leaves those files where they are.',
+    },
+  ],
+  failures: [{ tool: 'github-copilot', error: 'cloud sync unreachable' }],
+} as const
+
+describe('OpenSpec 1.15 update dry-run UpdatePlan CLI contract', () => {
+  it('decodes a full plan with add/update/delete changes, notes, and per-tool failures', () => {
+    const parsed = CliUpdatePlanSchema.parse(executedUpdatePlan115)
+    expect(parsed.changes.map((change) => change.action)).toEqual(['update', 'delete', 'add'])
+    expect(parsed.changes[2]?.path).toBe('~/.minimax/skills/openspec-propose/SKILL.md')
+    expect(parsed.notes[0]?.code).toBe('legacy-tool-directories')
+    expect(parsed.failures[0]?.tool).toBe('github-copilot')
+  })
+
+  it('keeps the three keys always present and always arrays, never sparse', () => {
+    const empty = CliUpdatePlanSchema.parse({ changes: [], notes: [], failures: [] })
+    expect(empty).toEqual({ changes: [], notes: [], failures: [] })
+    expect(CliUpdatePlanSchema.safeParse({ changes: [], notes: [] }).success).toBe(false)
+    expect(CliUpdatePlanSchema.safeParse({ changes: [], failures: [] }).success).toBe(false)
+    expect(CliUpdatePlanSchema.safeParse({ notes: [], failures: [] }).success).toBe(false)
+  })
+
+  it('rejects actions and note codes outside the closed unions', () => {
+    expect(
+      CliUpdatePlanSchema.safeParse({
+        changes: [{ path: 'a.md', action: 'rename', tool: 'claude' }],
+        notes: [],
+        failures: [],
+      }).success
+    ).toBe(false)
+    expect(
+      CliUpdatePlanSchema.safeParse({
+        changes: [],
+        notes: [{ code: 'unknown-note', message: 'x' }],
+        failures: [],
+      }).success
+    ).toBe(false)
+  })
+
+  it('decodes the command-failure envelope through the same schema while exit carries the failure', () => {
+    const result = parseCliCommandResult(
+      {
+        success: false,
+        stdout: JSON.stringify({
+          changes: [],
+          notes: [],
+          failures: [],
+          status: [
+            {
+              severity: 'error',
+              code: 'update_error',
+              message: "No OpenSpec directory found. Run 'openspec init' first.",
+            },
+          ],
+        }),
+        stderr: '',
+        exitCode: 1,
+      },
+      CliUpdatePlanSchema
+    )
+    expect(result.exitCode).toBe(1)
+    expect(result.success).toBe(false)
+    expect(result.data).toMatchObject({ changes: [], notes: [], failures: [] })
+    expect(result.diagnostics).toEqual([
+      {
+        severity: 'error',
+        code: 'update_error',
+        message: "No OpenSpec directory found. Run 'openspec init' first.",
+      },
+    ])
+    expect(result.contractError).toBeUndefined()
+  })
+
+  it('keeps non-empty failures a successful plan: exit 0 is the plan truth', async () => {
+    const execute = vi.fn(async (_args: string[]) => ({
+      success: true,
+      stdout: JSON.stringify(executedUpdatePlan115),
+      stderr: '',
+      exitCode: 0,
+    }))
+    const contracts = new OpenSpecCliContractExecutor(execute)
+
+    const gated = await contracts.updatePlan({ capabilities: capabilities115 })
+    expect(gated.kind).toBe('executed')
+    if (gated.kind !== 'executed') return
+    expect(gated.result.exitCode).toBe(0)
+    expect(gated.result.success).toBe(true)
+    expect(gated.result.data?.failures).toHaveLength(1)
+    expect(gated.result.diagnostics).toEqual([])
+  })
+
+  it('builds the dry-run argv only for the admitted updateDryRun capability', async () => {
+    const execute = vi.fn(async (_args: string[]) => ({
+      success: true,
+      stdout: JSON.stringify({ changes: [], notes: [], failures: [] }),
+      stderr: '',
+      exitCode: 0,
+    }))
+    const contracts = new OpenSpecCliContractExecutor(execute)
+
+    const refused = await contracts.updatePlan({
+      capabilities: deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.14.3')),
+    })
+    expect(refused).toEqual({ kind: 'unavailable', capability: 'updateDryRun' })
+    expect(execute).not.toHaveBeenCalled()
+
+    const admitted = await contracts.updatePlan({ capabilities: capabilities115 })
+    expect(admitted.kind).toBe('executed')
+    expect(execute.mock.calls[0]?.[0]).toEqual(['update', '--dry-run', '--json'])
+
+    await contracts.updatePlan({ capabilities: capabilities115, force: true })
+    expect(execute.mock.calls[1]?.[0]).toEqual(['update', '--dry-run', '--json', '--force'])
   })
 })

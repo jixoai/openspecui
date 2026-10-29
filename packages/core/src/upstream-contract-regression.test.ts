@@ -114,6 +114,25 @@ describe('first-party OpenSpec 1.4-1.7 contracts', () => {
     expect(commit).toBe('8e0288df12d401b0e183e2f47254d22528c1dffb')
   })
 
+  it('locks the 1.15 update dry-run UpdatePlan contract sources', () => {
+    const updatePlan = readPinned('src/core/update-plan.ts')
+    const cliIndex = readPinned('src/cli/index.ts')
+
+    // Three-key plan: always present, always arrays, closed action/note unions.
+    expect(updatePlan).toContain("export type UpdatePlanAction = 'add' | 'update' | 'delete'")
+    expect(updatePlan).toContain(
+      "export type UpdatePlanNoteCode = 'legacy-tool-directories' | 'legacy-artifacts'"
+    )
+    expect(updatePlan).toContain('changes: UpdatePlanChange[]')
+    expect(updatePlan).toContain('notes: UpdatePlanNote[]')
+    expect(updatePlan).toContain('failures: UpdatePlanFailure[]')
+
+    // The --json contract is dry-run-only and fails with the shared status envelope.
+    expect(cliIndex).toContain('--json is only available with --dry-run.')
+    expect(cliIndex).toContain("fallbackCode: 'update_error'")
+    expect(cliIndex).toContain('payload: { changes: [], notes: [], failures: [] }')
+  })
+
   it('locks the retained planning-completion, schemas sum type, and archived validation sources', () => {
     const instructionLoader = readPinned('src/core/artifact-graph/instruction-loader.ts')
     const schemas = readPinned('src/commands/workflow/schemas.ts')

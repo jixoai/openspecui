@@ -229,7 +229,7 @@ describe('openspec CLI compatibility law', () => {
 })
 
 describe('deriveOpenSpecCliCapabilities admission boundary', () => {
-  it('grants every capability, including the findings report, to the admitted 1.15 series', () => {
+  it('grants every capability, including the findings report and update dry run, to the admitted 1.15 series', () => {
     expect(deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.15.0'))).toEqual({
       schemasRootSelector: true,
       archivedValidation: true,
@@ -237,6 +237,7 @@ describe('deriveOpenSpecCliCapabilities admission boundary', () => {
       batchStatus: true,
       requirementDiff: true,
       findingsReport: true,
+      updateDryRun: true,
     })
     expect(deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.15.5'))).toEqual({
       schemasRootSelector: true,
@@ -245,6 +246,7 @@ describe('deriveOpenSpecCliCapabilities admission boundary', () => {
       batchStatus: true,
       requirementDiff: true,
       findingsReport: true,
+      updateDryRun: true,
     })
   })
 
@@ -273,6 +275,7 @@ describe('deriveOpenSpecCliCapabilities admission boundary', () => {
         batchStatus: false,
         requirementDiff: false,
         findingsReport: false,
+        updateDryRun: false,
       })
     }
     expect(deriveOpenSpecCliCapabilities(null)).toEqual({
@@ -282,6 +285,7 @@ describe('deriveOpenSpecCliCapabilities admission boundary', () => {
       batchStatus: false,
       requirementDiff: false,
       findingsReport: false,
+      updateDryRun: false,
     })
   })
 })

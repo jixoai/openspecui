@@ -604,6 +604,61 @@ export const CliVersionSchema = z
   })
   .passthrough()
 
+/**
+ * One planned artifact write/remove from the OpenSpec 1.15 `update --dry-run` plan.
+ *
+ * `path` is a display form, not a filesystem promise: project-relative POSIX inside the
+ * project, `~/…`-folded under home, absolute POSIX elsewhere. `tool` is the configured
+ * tool id, or the reserved `'openspec'` for OpenSpec-owned files (global config, legacy
+ * cleanup). There is no rename action: a legacy directory move plans as a `delete`+`add`
+ * pair under the same tool.
+ */
+export const CliUpdatePlanChangeSchema = z
+  .object({
+    path: z.string(),
+    action: z.enum(['add', 'update', 'delete']),
+    tool: z.string(),
+  })
+  .passthrough()
+
+/** One non-interactive-consent advisory from the dry-run plan (closed two-code enum). */
+export const CliUpdatePlanNoteSchema = z
+  .object({
+    code: z.enum(['legacy-tool-directories', 'legacy-artifacts']),
+    message: z.string(),
+  })
+  .passthrough()
+
+/** One per-tool planning failure; the plan stops where the real update would throw. */
+export const CliUpdatePlanFailureSchema = z
+  .object({
+    tool: z.string(),
+    error: z.string(),
+  })
+  .passthrough()
+
+/**
+ * Typed result of the OpenSpec 1.15 `openspec update --dry-run --json` command.
+ *
+ * Upstream (pinned v1.15.0, src/core/update-plan.ts) runs the plan and the real update
+ * through one code path (an UpdateFileOps write seam over a FileView read seam), so the
+ * plan is CLI-owned evidence about what a non-interactive real update would do — never a
+ * local prediction. All three keys are always present and always arrays (an empty plan
+ * prints all three, never a sparse object) and `changes` sorts by `path.localeCompare`.
+ * `failures` are data, not errors: one broken tool lists its failure while the rest of
+ * the plan still appears, and the command still exits 0. Failure of the command itself
+ * crosses the shared agent status envelope — empty plan keys plus `status[]` carrying
+ * `code: 'update_error'` and exit 1 — which this schema keeps decoding (passthrough)
+ * while the executor's exit/`success` facts carry the failure truth.
+ */
+export const CliUpdatePlanSchema = z
+  .object({
+    changes: z.array(CliUpdatePlanChangeSchema),
+    notes: z.array(CliUpdatePlanNoteSchema),
+    failures: z.array(CliUpdatePlanFailureSchema),
+  })
+  .passthrough()
+
 /** One CLI-reported Change row: task counts and phase straight from `openspec list`. */
 export type CliChangeListEntry = z.infer<typeof CliChangeListEntrySchema>
 
@@ -633,3 +688,7 @@ export type CliValidateFindings = z.infer<typeof CliValidateFindingsSchema>
 export type CliValidateFindingsResult = z.infer<typeof CliValidateFindingsResultSchema>
 export type CliArchive = z.infer<typeof CliArchiveSchema>
 export type CliVersion = z.infer<typeof CliVersionSchema>
+export type CliUpdatePlanChange = z.infer<typeof CliUpdatePlanChangeSchema>
+export type CliUpdatePlanNote = z.infer<typeof CliUpdatePlanNoteSchema>
+export type CliUpdatePlanFailure = z.infer<typeof CliUpdatePlanFailureSchema>
+export type CliUpdatePlan = z.infer<typeof CliUpdatePlanSchema>
