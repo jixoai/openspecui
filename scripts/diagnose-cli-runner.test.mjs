@@ -17,6 +17,7 @@
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — the pinned series assertion rotates to 1.15.
  */
 import { spawnSync } from 'node:child_process'
 import {
@@ -67,7 +68,7 @@ describe('CLI runner diagnostic candidate parity', () => {
 
     // The rotated mirror builds its fallback spec from the admitted series only; a stale
     // 1.13 mirror spec must not survive the constants rotation.
-    expect(OPENSPEC_CLI_TARGET_SERIES).toBe('1.14')
+    expect(OPENSPEC_CLI_TARGET_SERIES).toBe('1.15')
     expect(source).toContain(
       'const OPENSPEC_CLI_FALLBACK_SPEC = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`'
     )
