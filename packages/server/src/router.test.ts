@@ -3212,7 +3212,7 @@ apply:
           status: [],
         },
         storeId: 'shared',
-        cli: { available: true, version: '1.14.0' },
+        cli: { available: true, version: '1.15.0' },
       }
       const caller = appRouter.createCaller(context)
 

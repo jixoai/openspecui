@@ -92,14 +92,14 @@ function depsFixture(
 }
 
 describe('readChangeDiffEvidence', () => {
-  it('projects MODIFIED delta diff and warning with CLI provenance for an admitted 1.14 session', async () => {
+  it('projects MODIFIED delta diff and warning with CLI provenance for an admitted 1.15 session', async () => {
     const deps = depsFixture({
       kind: 'executed',
       result: commandResultFixture(successPayload()),
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.14.0' }),
+      rootContextFixture({ version: '1.15.0' }),
       'add-search'
     )
 
@@ -136,7 +136,7 @@ describe('readChangeDiffEvidence', () => {
     const projection = await readChangeDiffEvidence(
       deps,
       rootContextFixture({
-        version: '1.14.1',
+        version: '1.15.1',
         planningRoot: { path: '/store/repo', source: 'store' },
         storeId: 'team-store',
       }),
@@ -207,7 +207,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.14.0', planningRoot: null }),
+      rootContextFixture({ version: '1.15.0', planningRoot: null }),
       'add-search'
     )
 
@@ -219,14 +219,14 @@ describe('readChangeDiffEvidence', () => {
     const deps = depsFixture({ kind: 'unavailable', capability: 'requirementDiff' })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.14.0' }),
+      rootContextFixture({ version: '1.15.0' }),
       'add-search'
     )
 
     expect(projection).toEqual({
       kind: 'unavailable',
       reason: 'capability',
-      detectedVersion: '1.14.0',
+      detectedVersion: '1.15.0',
     })
   })
 
@@ -240,7 +240,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.14.0' }),
+      rootContextFixture({ version: '1.15.0' }),
       'missing-change'
     )
 
@@ -265,7 +265,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       drift,
-      rootContextFixture({ version: '1.14.0' }),
+      rootContextFixture({ version: '1.15.0' }),
       'add-search'
     )
 
@@ -287,7 +287,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.14.0' }),
+      rootContextFixture({ version: '1.15.0' }),
       'add-search'
     )
 

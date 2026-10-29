@@ -5,7 +5,7 @@
  * 3. Revalidate the shared Root Context Work through readonly refresh after explicit repair.
  * 4. Recommend installing the admitted CLI series, never an out-of-range `@latest` (issue #258).
  * 5. Derive all mismatch dialog copy from the shared compatibility constants so the v14
- *    admitted single-series 1.14 window never forks from packages/core.
+ *    admitted single-series 1.15 window never forks from packages/core.
  *
  * Original request (2026-07-15): "CLI 1.6 compatibility gate."
  * Original request (2026-07-26): "最终计算结果本质是来自于 OpenSpec CLI 所提供的内容。"

@@ -46,7 +46,7 @@ import type { ProjectionWorkSubscription } from './projection-work/index.js'
 
 const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
 const cliExecutor = {
-  checkAvailability: async () => ({ available: true, version: '1.14.0' }),
+  checkAvailability: async () => ({ available: true, version: '1.15.0' }),
 }
 const cliCommandAuthority = {
   getCliCommand: async () => ['not-an-importable-openspec-runner'],
@@ -161,7 +161,7 @@ async function writeGeneratedSkill(
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.14.0\n---\n`,
+    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.15.0\n---\n`,
     'utf8'
   )
   return path
@@ -306,7 +306,7 @@ describe('AgentDeliveryProjectionService', () => {
       })
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.14.0',
+        generatedByVersion: '1.15.0',
         installedSkillWorkflows: ['update'],
       })
 

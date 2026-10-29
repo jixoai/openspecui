@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-09-03 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
  * 1. Register lease-scoped planning-root document, OPSX Status/Instructions, Dashboard, readonly refresh, and archive procedures.
  * 2. Register CLI, Root Context, Agent delivery, configuration, Store, and terminal-result projections.
  * 3. Register binding-safe Git, Dashboard Summary v2, terminal, system, notification, and recovery procedures.
@@ -9,6 +9,8 @@
  * 6. Install the supported OpenSpec CLI series through the global install stream (issue #258).
  * 7. Serve the capability-gated CLI MODIFIED-delta diff evidence for the Change Evidence tab.
  * 8. Subtract the CLI-owned namespace set from change-list transports (1.13.1 nested directories).
+ * 9. Serve the 1.15-gated `update --dry-run` plan preview as typed read evidence beside the
+ *    unchanged real update/repair mutation streams (target-openspec-cli-115-line).
  *
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — `listChangesWithCliTaskSummary` filters
  * `namespaces` from the `opsx-change-list` projection so `change.listWithMeta`/`change.subscribe`
@@ -47,6 +49,7 @@
  *   Evidence tab gains the 1.11-gated `show --diff` projection without touching existing procedures.
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — update dry-run plan preview transport.
 
  */
 import type {
@@ -2515,6 +2518,59 @@ export const agentIntegrationsRouter = router({
       ctx.environmentGlobalProjectionService.refreshFile()
       return ctx.agentDeliveryProjectionService.refresh()
     }),
+
+  /**
+   * Preview what the real Agent update would change, without writing (OpenSpec 1.15+).
+   *
+   * The dry-run plan is CLI-owned evidence decoded through the typed UpdatePlan contract:
+   * `changes`/`notes`/`failures` are always arrays, per-tool `failures` are plan data
+   * beside a still-zero exit code, and a failed command crosses the shared status
+   * envelope (`update_error`, exit 1) which surfaces as diagnostics beside a null plan.
+   * A non-admitted or unobserved CLI learns the capability is unavailable before any
+   * process spawns — never by watching the CLI reject an unknown option. The real
+   * `updateStream`/`repairStream` mutations are unchanged; this preview never gates them.
+   */
+  updatePlanPreview: publicProcedure
+    .input(z.object({ force: z.boolean().optional() }).optional())
+    .query(({ ctx, input }) =>
+      runPlanningRootRead(ctx, ({ rootContext }) => {
+        // The Root Context is the single CLI availability/version projection: a
+        // non-admitted or unobserved CLI learns the capability is unavailable here,
+        // before any process spawns — never by watching the CLI reject an unknown option.
+        const cli = rootContext.cli
+        const capabilities = deriveOpenSpecCliCapabilities(
+          cli.available ? parseOpenSpecCliVersion(cli.version) : null
+        )
+        if (!capabilities.updateDryRun) {
+          return {
+            kind: 'unavailable' as const,
+            reason: `The update plan preview requires the admitted OpenSpec CLI line (accepted ${OPENSPEC_CLI_ACCEPTED_RANGE} declares the update dry-run capability).`,
+          }
+        }
+        return ctx.cliExecutor.contracts
+          .updatePlan({
+            capabilities: { updateDryRun: capabilities.updateDryRun },
+            force: input?.force,
+          })
+          .then((gated) => {
+            if (gated.kind !== 'executed') {
+              return {
+                kind: 'unavailable' as const,
+                reason: `The update plan preview requires the admitted OpenSpec CLI line (accepted ${OPENSPEC_CLI_ACCEPTED_RANGE} declares the update dry-run capability).`,
+              }
+            }
+            const result = gated.result
+            return {
+              kind: 'executed' as const,
+              plan: result.data,
+              exitCode: result.exitCode,
+              diagnostics: result.diagnostics,
+              stderr: result.stderr,
+              contractError: result.contractError ?? null,
+            }
+          })
+      })
+    ),
 
   /** Initialize or add selected Agents in the launch project using authoritative profile policy. */
   initStream: publicProcedure

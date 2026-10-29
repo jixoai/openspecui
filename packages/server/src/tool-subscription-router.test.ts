@@ -90,7 +90,7 @@ async function writeArtifact(filePath: string, content = '# external fixture\n')
 
 async function writeGeneratedSkill(filePath: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.14.0"\n---\n', 'utf8')
+  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.15.0"\n---\n', 'utf8')
 }
 
 async function prepareCachedRunnerReplacement(
@@ -179,7 +179,7 @@ async function createRouterFixture(
   const releaseLaunchObservation = await server.observationEnvironment.acquireRoot(launchRoot)
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.14.0',
+    version: '1.15.0',
   })
   const environment = {
     kind: 'environment-global',
@@ -464,7 +464,7 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
         expect(findToolState(initialized, 'claude')).toMatchObject({
           status: 'initialized',
           readiness: 'initialized',
-          generatedByVersion: '1.14.0',
+          generatedByVersion: '1.15.0',
           issues: [],
         })
 
@@ -681,7 +681,7 @@ describe(
         await expect(Promise.all(runnerAtExit)).resolves.toMatchObject([{ version: 'runner-b' }])
         expect(events).toEqual([{ type: 'exit', exitCode: 0 }])
         expect(executeCommandStream).toHaveBeenCalledWith(
-          ['npm', 'install', '-g', '@fission-ai/openspec@1.14'],
+          ['npm', 'install', '-g', '@fission-ai/openspec@1.15'],
           expect.any(Function)
         )
       } finally {

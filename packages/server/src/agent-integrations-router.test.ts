@@ -106,7 +106,7 @@ async function createFixture() {
   })
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.14.0',
+    version: '1.15.0',
   })
   disposals.push(async () => {
     vi.restoreAllMocks()
@@ -154,8 +154,8 @@ describe('agentIntegrationsRouter', () => {
       available: true,
       capability: 'skills-invocable',
     })
-    // The admitted 1.14 line projects the SourceCraft Code Assistant inventory entry
-    // (introduced on the 1.12 line) and the ten 1.14 entries (amp, atomcode, codestudio,
+    // The admitted 1.15 line projects the SourceCraft Code Assistant inventory entry
+    // (introduced on the 1.12 line) and the ten 1.14-line entries (amp, atomcode, codestudio,
     // dsh, easycode, gigacode, grok, gsd, veai, warp).
     expect(projection.registry.find((tool) => tool.value === 'codeassistant')).toMatchObject({
       available: true,
@@ -263,9 +263,9 @@ describe('agentIntegrationsRouter', () => {
     const handle = { settled: terminal.promise, cancel } satisfies CliStreamHandle
     const initStream = vi.spyOn(fixture.server.cliExecutor, 'initStream').mockReturnValue(handle)
     vi.spyOn(fixture.server.agentDeliveryProjectionService, 'getCurrent').mockResolvedValue({
-      // The admitted 1.14 fixture must offer the requested tool: explicit Init tools are
+      // The admitted 1.15 fixture must offer the requested tool: explicit Init tools are
       // validated against the projection registry before any CLI spawn.
-      registry: selectAgentDeliveryRegistry('1.14.0'),
+      registry: selectAgentDeliveryRegistry('1.15.0'),
       policy: { profile: 'custom', delivery: 'commands', workflows: ['verify'] },
       states: [],
     })

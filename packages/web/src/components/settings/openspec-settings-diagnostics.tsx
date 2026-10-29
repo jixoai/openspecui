@@ -3,7 +3,7 @@
  * 1. Summarize read-only Root compatibility, selection, and failed-attempt state with links to Context.
  * 2. Summarize Environment Global profile, delivery, drift, and data scope with a link to Config.
  * 3. Preserve settled diagnostic facts during revalidation and use stable skeleton geometry on admission.
- * 4. Label compatibility from the shared constants so the v14 single-series 1.14 law stays single-sourced.
+ * 4. Label compatibility from the shared constants so the v15 single-series 1.15 law stays single-sourced.
  *
  * Original request (2026-07-20): "Settings diagnostics are read-only."
  * Original request (2026-07-27): "统一修复所有类似的问题（我们也没不多，各个页面都检查一下，特别是app 那边新增的页面）"
