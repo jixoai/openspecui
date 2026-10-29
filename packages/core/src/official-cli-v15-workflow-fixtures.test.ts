@@ -24,12 +24,14 @@ import {
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
+  parsePinnedJson,
   parsePinnedSuccessJson,
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
   type PinnedOpenspecV15Version,
 } from './__tests__/official-cli-v15-fixtures.js'
+import { CliDiagnosticFailureSchema } from './cli-contracts/common.js'
 import {
   CliApplyInstructionsSuccessSchema,
   CliArchiveInstructionsSuccessSchema,
@@ -291,6 +293,169 @@ describe('pinned OpenSpec 1.15 workflow fixtures', () => {
         const result = await runPinnedOpenspec(version, args, project, env)
         expect(result.exitCode, result.stdout + '\n' + result.stderr).toBe(0)
         expectPinnedJsonDiscipline(result)
+      }
+    }, 60_000)
+
+    it(`admits x- extension metadata keys while malformed X- keys keep the advisory on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-metadata-keys`)
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      await expectPinnedVersion(version, project, env)
+      await initProject(version, project, env)
+
+      const created = await runPinnedOpenspec(
+        version,
+        ['new', 'change', 'extension-keys'],
+        project,
+        env
+      )
+      expect(created.exitCode, created.stdout + '\n' + created.stderr).toBe(0)
+      const changeDir = join(project, 'openspec', 'changes', 'extension-keys')
+      await writeFile(join(changeDir, 'proposal.md'), '# Proposal\n\nExtension metadata keys.\n')
+
+      // 1.14.2 (upstream #2063): a top-level key matching /^x-\S+$/ is someone else's
+      // tool metadata (OpenAPI-style), not an unknown key — Status and Instructions
+      // carry no advisory at all.
+      await writeFile(
+        join(changeDir, '.openspec.yaml'),
+        'schema: spec-driven\ncreated: 2026-10-16\nx-tracker: JIRA-123\n'
+      )
+      const extensionStatus = parsePinnedSuccessJson(
+        await runPinnedOpenspec(
+          version,
+          ['status', '--change', 'extension-keys', '--json'],
+          project,
+          env
+        ),
+        (payload) => CliWorkflowStatusSuccessSchema.parse(payload)
+      )
+      expect(extensionStatus.warnings).toBeUndefined()
+      const extensionInstructions = parsePinnedSuccessJson(
+        await runPinnedOpenspec(
+          version,
+          ['instructions', 'proposal', '--change', 'extension-keys', '--json'],
+          project,
+          env
+        ),
+        (payload) => CliArtifactInstructionsSuccessSchema.parse(payload)
+      )
+      expect(extensionInstructions.warnings).toBeUndefined()
+
+      // A capital-X key is malformed (the prefix is lowercase-only), so the unknown-key
+      // advisory stays — now carrying the 1.14.2 hint that names the x- escape hatch.
+      await writeFile(
+        join(changeDir, '.openspec.yaml'),
+        'schema: spec-driven\ncreated: 2026-10-16\nX-Foo: 1\n'
+      )
+      const malformedStatus = parsePinnedSuccessJson(
+        await runPinnedOpenspec(
+          version,
+          ['status', '--change', 'extension-keys', '--json'],
+          project,
+          env
+        ),
+        (payload) => CliWorkflowStatusSuccessSchema.parse(payload)
+      )
+      expect(malformedStatus.warnings).toHaveLength(1)
+      const warning = malformedStatus.warnings?.[0] ?? ''
+      expect(warning).toContain('Unrecognized key name(s) in .openspec.yaml')
+      expect(warning).toContain(': X-Foo.')
+      expect(warning).toContain('Unknown keys are ignored and have no effect')
+      expect(warning).toContain(
+        'prefix a key with x- (for example x-tracker) to keep tool-specific metadata without this warning'
+      )
+      expect(warning).toContain('An x- extension key needs a lowercase x- prefix')
+      // Instructions reports the same advisory verbatim: one shared hygiene read.
+      const malformedInstructions = parsePinnedSuccessJson(
+        await runPinnedOpenspec(
+          version,
+          ['instructions', 'proposal', '--change', 'extension-keys', '--json'],
+          project,
+          env
+        ),
+        (payload) => CliArtifactInstructionsSuccessSchema.parse(payload)
+      )
+      expect(malformedInstructions.warnings).toEqual(malformedStatus.warnings)
+    }, 60_000)
+
+    it(`rejects artifact patterns nesting brace expansions deeper than 16 levels on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-brace-depth`)
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      await expectPinnedVersion(version, project, env)
+      await initProject(version, project, env)
+
+      const initialized = await runPinnedOpenspec(
+        version,
+        ['schema', 'init', 'deep-brace'],
+        project,
+        env
+      )
+      expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
+
+      const created = await runPinnedOpenspec(
+        version,
+        ['new', 'change', 'deep-pattern'],
+        project,
+        env
+      )
+      expect(created.exitCode, created.stdout + '\n' + created.stderr).toBe(0)
+      const changeDir = join(project, 'openspec', 'changes', 'deep-pattern')
+      await writeFile(join(changeDir, 'proposal.md'), '# Proposal\n\nDeep brace pattern.\n')
+      await writeFile(join(changeDir, '.openspec.yaml'), 'schema: deep-brace\n')
+
+      // Only a real brace expansion (comma-separated alternation) reaches the braces
+      // parser, so the depth guard sees nesting, not literal decoration.
+      const schemaPath = join(project, 'openspec', 'schemas', 'deep-brace', 'schema.yaml')
+      const pristineSchema = await readFile(schemaPath, 'utf8')
+      const setProposalPattern = async (opens: number): Promise<void> => {
+        const pattern = `${'{'.repeat(opens)}a,b${'}'.repeat(opens)}`
+        // Always patch the pristine schema text so the second call cannot anchor on
+        // the first call's already-rewritten generates line.
+        await writeFile(
+          schemaPath,
+          pristineSchema.replace('generates: proposal.md', `generates: "${pattern}"`)
+        )
+      }
+
+      // 16 levels is the deepest legal nesting and still answers instructions.
+      await setProposalPattern(16)
+      const boundary = parsePinnedSuccessJson(
+        await runPinnedOpenspec(
+          version,
+          ['instructions', 'proposal', '--change', 'deep-pattern', '--json'],
+          project,
+          env
+        ),
+        (payload) => CliArtifactInstructionsSuccessSchema.parse(payload)
+      )
+      expect(boundary.outputPath).toBe(`${'{'.repeat(16)}a,b${'}'.repeat(16)}`)
+
+      // 17 levels is rejected before the pattern reaches the braces parser
+      // (upstream GHSA-vfj7-8cjw-p6xm guard): Status and Instructions fail through
+      // the typed change_error envelope with the depth message.
+      await setProposalPattern(17)
+      for (const args of [
+        ['status', '--change', 'deep-pattern', '--json'],
+        ['instructions', 'proposal', '--change', 'deep-pattern', '--json'],
+      ]) {
+        const result = await runPinnedOpenspec(version, args, project, env)
+        expect(result.exitCode, `${args.join(' ')}\n${result.stdout}\n${result.stderr}`).toBe(1)
+        expectPinnedJsonDiscipline(result)
+        const failure = parsePinnedJson(result, (payload) =>
+          CliDiagnosticFailureSchema.parse(payload)
+        )
+        expect(failure.status[0]).toMatchObject({
+          severity: 'error',
+          code: 'change_error',
+        })
+        expect(failure.status[0].message).toContain(
+          'Artifact output pattern nests braces more than 16 levels deep:'
+        )
       }
     }, 60_000)
   }

@@ -17,6 +17,9 @@
  *    suite carries them onto the v15 window as regression fixtures.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * 7. Carry the 1.14.2 unapplied-content WARNING forward on the 1.15 executable:
+ *    delta text outside requirement blocks stays advisory (valid: true, exit 0)
+ *    while the findings document reports the span with the archive-loss message.
  * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — positive matrix migrates to the pinned 1.15.0 executable (v15 line).
  */
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -496,6 +499,83 @@ describe('pinned OpenSpec 1.15 validation findings fixtures', () => {
         'The modified block has 2 scenarios; the current spec has 2 scenarios.'
       )
       expect(message).toContain('It adds 1 scenario not in the current spec: "Audit trail"')
+    }, 60_000)
+
+    it(`warns about delta text outside requirement blocks without failing the item on OpenSpec ${version}`, async () => {
+      fixtureRoot = await createPinnedFixtureRoot(
+        `cli-${version.replace(/\./g, '')}-unapplied-content`
+      )
+      const project = join(fixtureRoot, 'project')
+      const env = pinnedFixtureEnv(fixtureRoot)
+      await mkdir(project, { recursive: true })
+
+      await initProject(version, project, env)
+      const created = await runPinnedOpenspec(
+        version,
+        ['new', 'change', 'loose-delta-text'],
+        project,
+        env
+      )
+      expect(created.exitCode, created.stdout + '\n' + created.stderr).toBe(0)
+      const changeDir = join(project, 'openspec', 'changes', 'loose-delta-text')
+      await writeFile(
+        join(changeDir, 'proposal.md'),
+        [
+          '## Why',
+          'loose-delta-text carries text outside requirement blocks.',
+          '',
+          '## What Changes',
+          '- Add one requirement plus loose prose.',
+          '',
+        ].join('\n')
+      )
+      await mkdir(join(changeDir, 'specs', 'loose-notes'), { recursive: true })
+      await writeFile(
+        join(changeDir, 'specs', 'loose-notes', 'spec.md'),
+        [
+          '## ADDED Requirements',
+          '',
+          'This paragraph sits between the section header and the first requirement,',
+          'so archive would drop it silently without the 1.14.2 warning.',
+          '',
+          '### Requirement: Kept behavior',
+          'The system SHALL keep this requirement through archive.',
+          '',
+          '#### Scenario: Lands in the main spec',
+          '- **WHEN** the change is archived',
+          '- **THEN** the requirement reaches the main spec',
+          '',
+        ].join('\n')
+      )
+
+      const result = await runPinnedOpenspec(
+        version,
+        ['validate', '--changes', '--report', 'findings', '--json'],
+        project,
+        env
+      )
+      expectPinnedJsonDiscipline(result)
+      // The unapplied-content finding is advisory: the item stays valid and exits 0.
+      const findings = parsePinnedSuccessJson(result, (payload) =>
+        CliValidateFindingsResultSchema.parse(payload)
+      )
+      expect(isCliValidateFindings(findings)).toBe(true)
+      if (!isCliValidateFindings(findings)) return
+
+      expect(findings.itemFindings).toHaveLength(1)
+      const item = findings.itemFindings[0]
+      expect(item.id).toBe('loose-delta-text')
+      expect(item.valid).toBe(true)
+      expect(item.issues).toHaveLength(1)
+      expect(item.issues[0]).toMatchObject({
+        level: 'WARNING',
+        path: 'loose-notes/spec.md',
+        line: 3,
+      })
+      expect(item.issues[0].message).toContain(
+        'is not carried into the main spec by archive. Move it into a requirement, or into proposal.md or design.md.'
+      )
+      expect(findings.summary.totals).toEqual({ items: 1, passed: 1, failed: 0 })
     }, 60_000)
   }
 })
