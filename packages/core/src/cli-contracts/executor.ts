@@ -52,6 +52,7 @@ import {
   CliShowSpecSchema,
   CliSpecListSchema,
   CliTemplatesSchema,
+  CliUpdatePlanSchema,
   CliValidateFindingsResultSchema,
   CliValidateSchema,
   CliVersionSchema,
@@ -65,6 +66,7 @@ import {
   type CliShowSpec,
   type CliSpecList,
   type CliTemplates,
+  type CliUpdatePlan,
   type CliValidate,
   type CliValidateFindingsResult,
   type CliVersion,
@@ -93,7 +95,10 @@ export interface CliWorkflowOptions extends CliRootSelector {
  */
 export type CliGatedCommandResult<T> =
   | { kind: 'executed'; result: CliCommandResult<T> }
-  | { kind: 'unavailable'; capability: 'batchStatus' | 'requirementDiff' | 'findingsReport' }
+  | {
+      kind: 'unavailable'
+      capability: 'batchStatus' | 'requirementDiff' | 'findingsReport' | 'updateDryRun'
+    }
 
 /** Options for the OpenSpec 1.11 batch Status command. */
 export interface CliWorkflowStatusAllOptions extends CliWorkflowOptions {
@@ -124,6 +129,14 @@ export interface CliValidateFindingsOptions extends CliRootSelector {
 export interface CliShowChangeDiffOptions extends CliRootSelector {
   /** Capabilities of the admitted CLI; `requirementDiff` must be true to construct argv. */
   capabilities: Pick<OpenSpecCliCapabilities, 'requirementDiff'>
+}
+
+/** Options for the OpenSpec 1.15 update dry-run plan command. */
+export interface CliUpdatePlanOptions {
+  /** Capabilities of the admitted CLI; `updateDryRun` must be true to construct argv. */
+  capabilities: Pick<OpenSpecCliCapabilities, 'updateDryRun'>
+  /** Mirror the real update's `--force` semantics: legacy-artifact cleanup enters the plan. */
+  force?: boolean
 }
 
 /** Options for creating a Store through the official CLI. */
@@ -439,6 +452,31 @@ export class OpenSpecCliContractExecutor {
     return {
       kind: 'executed',
       result: await this.execute(this.withRoot(args, options), CliValidateFindingsResultSchema),
+    }
+  }
+
+  /**
+   * Plan what `openspec update` would change without writing (OpenSpec 1.15 only).
+   *
+   * Gated by the `updateDryRun` capability because the retired 1.14 line rejects the
+   * `--dry-run` flag entirely: a non-admitted CLI receives the typed refusal before any
+   * argv exists. The plan decodes through its own result schema; upstream guarantees the
+   * three keys always present. `failures` are plan data, not command failure — the
+   * command still exits 0 — while a failed command crosses the shared status envelope
+   * (`code: 'update_error'`, exit 1) and stays decodable: the executor's exit/success
+   * facts carry that truth, never the parsed plan alone. `update` takes no Root
+   * selector; it operates on the executor's planning-root working directory exactly like
+   * the real update mutation stream.
+   */
+  async updatePlan(options: CliUpdatePlanOptions): Promise<CliGatedCommandResult<CliUpdatePlan>> {
+    if (!options.capabilities.updateDryRun) {
+      return { kind: 'unavailable', capability: 'updateDryRun' }
+    }
+    const args = ['update', '--dry-run', '--json']
+    if (options.force) args.push('--force')
+    return {
+      kind: 'executed',
+      result: await this.execute(args, CliUpdatePlanSchema),
     }
   }
 

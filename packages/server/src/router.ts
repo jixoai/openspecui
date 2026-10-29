@@ -2516,6 +2516,59 @@ export const agentIntegrationsRouter = router({
       return ctx.agentDeliveryProjectionService.refresh()
     }),
 
+  /**
+   * Preview what the real Agent update would change, without writing (OpenSpec 1.15+).
+   *
+   * The dry-run plan is CLI-owned evidence decoded through the typed UpdatePlan contract:
+   * `changes`/`notes`/`failures` are always arrays, per-tool `failures` are plan data
+   * beside a still-zero exit code, and a failed command crosses the shared status
+   * envelope (`update_error`, exit 1) which surfaces as diagnostics beside a null plan.
+   * A non-admitted or unobserved CLI learns the capability is unavailable before any
+   * process spawns — never by watching the CLI reject an unknown option. The real
+   * `updateStream`/`repairStream` mutations are unchanged; this preview never gates them.
+   */
+  updatePlanPreview: publicProcedure
+    .input(z.object({ force: z.boolean().optional() }).optional())
+    .query(({ ctx, input }) =>
+      runPlanningRootRead(ctx, ({ rootContext }) => {
+        // The Root Context is the single CLI availability/version projection: a
+        // non-admitted or unobserved CLI learns the capability is unavailable here,
+        // before any process spawns — never by watching the CLI reject an unknown option.
+        const cli = rootContext.cli
+        const capabilities = deriveOpenSpecCliCapabilities(
+          cli.available ? parseOpenSpecCliVersion(cli.version) : null
+        )
+        if (!capabilities.updateDryRun) {
+          return {
+            kind: 'unavailable' as const,
+            reason: `The update plan preview requires the admitted OpenSpec CLI line (accepted ${OPENSPEC_CLI_ACCEPTED_RANGE} declares the update dry-run capability).`,
+          }
+        }
+        return ctx.cliExecutor.contracts
+          .updatePlan({
+            capabilities: { updateDryRun: capabilities.updateDryRun },
+            force: input?.force,
+          })
+          .then((gated) => {
+            if (gated.kind !== 'executed') {
+              return {
+                kind: 'unavailable' as const,
+                reason: `The update plan preview requires the admitted OpenSpec CLI line (accepted ${OPENSPEC_CLI_ACCEPTED_RANGE} declares the update dry-run capability).`,
+              }
+            }
+            const result = gated.result
+            return {
+              kind: 'executed' as const,
+              plan: result.data,
+              exitCode: result.exitCode,
+              diagnostics: result.diagnostics,
+              stderr: result.stderr,
+              contractError: result.contractError ?? null,
+            }
+          })
+      })
+    ),
+
   /** Initialize or add selected Agents in the launch project using authoritative profile policy. */
   initStream: publicProcedure
     .input(

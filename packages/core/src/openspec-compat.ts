@@ -59,6 +59,8 @@ export interface OpenSpecCliCapabilities {
   requirementDiff: boolean
   /** `openspec validate --report findings --json` exists (OpenSpec 1.12+; the admitted 1.15 line; explicit bulk scope required). */
   findingsReport: boolean
+  /** `openspec update --dry-run --json` plans artifacts without writing (OpenSpec 1.15+; the admitted 1.15 line). */
+  updateDryRun: boolean
 }
 
 /**
@@ -80,6 +82,7 @@ export function deriveOpenSpecCliCapabilities(
       batchStatus: false,
       requirementDiff: false,
       findingsReport: false,
+      updateDryRun: false,
     }
   }
   const onTargetSeries = isSeries(version, OPENSPEC_CLI_TARGET_SERIES)
@@ -90,6 +93,7 @@ export function deriveOpenSpecCliCapabilities(
     batchStatus: onTargetSeries,
     requirementDiff: onTargetSeries,
     findingsReport: onTargetSeries,
+    updateDryRun: onTargetSeries,
   }
 }
 
