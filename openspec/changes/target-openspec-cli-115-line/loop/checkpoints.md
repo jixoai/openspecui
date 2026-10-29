@@ -76,9 +76,9 @@ run src/openspec-compat.test.ts`.
 - [x] `AGENTS.md`: v15 architecture decision after the 2026-10-06 entry; pin
       bullet; clean-build law reference.
 - [x] `.changeset/*.md` major bump for publishable packages.
-- [ ] Local CI-equivalent subset green: `pnpm format:check`, `pnpm lint:ci`,
+- [x] Local CI-equivalent subset green: `pnpm format:check`, `pnpm lint:ci`,
       `pnpm typecheck`, core full suite + scoped `test:ci` lanes.
-- [ ] Old-window grep gate clean (`1.14.0 <1.15.0`, `v1.14.*`, `87c3595`
+- [x] Old-window grep gate clean (`1.14.0 <1.15.0`, `v1.14.*`, `87c3595`
       outside archive/legacy paths).
-- [ ] Adversarial subagent review completed and findings resolved; PR opened
+- [x] Adversarial subagent review completed and findings resolved; PR opened
       with the evidence summary.

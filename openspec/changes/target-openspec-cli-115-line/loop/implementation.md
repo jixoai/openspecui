@@ -122,3 +122,15 @@ and honesty laws all verified against upstream source). Findings and resolution:
 - Environmental repair (no committed change): the worktree's better-sqlite3 native
   binary was fetched for the wrong ABI; the v22 prebuilt restored the translation-cache
   lane locally.
+
+### Delivery (2026-10-29 night)
+
+- Full gates: format:check (70 files), lint:ci (0 errors), typecheck all four packages
+  (all lanes), core 859 passed, server 673 passed + 2 skipped, web unit 1232 passed,
+  dialog browser lane 4/4, prepare script builds at 8e0288df, reference check prints
+  `OK: v1.15.0`.
+- Three-commit delivery on `target-openspec-cli-115-line`: core rotation
+  (1f0648d9), server/web preview + fixture rotation (6f161f91), docs/governance
+  (a0bef65f). PR #315 opened with the evidence summary.
+- Residual watch item for CI: none known; the worktree-local better-sqlite3 ABI repair
+  is environment-only and touches nothing committed.
