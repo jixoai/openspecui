@@ -1,15 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-10-06 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14 full bulk `validate --json` report: schema
- *    compatibility with the 1.11-1.13 envelope plus the merge-conflict INFO issues.
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.15 full bulk `validate --json` report: schema
+ *    compatibility with the 1.11-1.14 envelope plus the merge-conflict INFO issues.
  * 2. Prove `--report full` stays the explicit default and strict escalation plus the
  *    human next-steps footer behavior are unchanged.
- * 3. Carry over the admitted-line contracts the v11-v13 validation matrix proved:
+ * 3. Carry over the admitted-line contracts the v11-v14 validation matrix proved:
  *    schemas success/selected-Root failure envelopes and archived task validation.
- * 4. (2026-10-06, update-openspec-cli-1141) Prove the 1.14.1 severity upgrade for an
- *    overlength (>500 characters) ADDED requirement: a WARNING in the change-scope
- *    JSON report that leaves non-strict validation green while `--strict` fails,
- *    per `references/openspec-1.14.1-report.md`.
+ * 4. (2026-10-06, update-openspec-cli-1141) Prove the overlength (>500 characters)
+ *    ADDED requirement severity upgrade carried into 1.15 from 1.14.1: a WARNING in
+ *    the change-scope JSON report that leaves non-strict validation green while
+ *    `--strict` fails, per `references/openspec-1.14.1-report.md`.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
@@ -18,12 +18,13 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — positive matrix migrates to the pinned 1.15.0 executable (v15 line).
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -32,8 +33,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import {
   CliSchemasFailureSchema,
   CliSchemasSuccessSchema,
@@ -46,7 +47,7 @@ import {
 } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -61,7 +62,7 @@ async function initProject(
 
 /** A change whose delta MODIFIES requirements of a spec that does not exist. */
 async function createModifiedAgainstMissingSpecChange(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -99,7 +100,7 @@ async function createModifiedAgainstMissingSpecChange(
 
 /** A loadable change that fails validation through an ERROR issue. */
 async function createFailingChange(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -132,7 +133,7 @@ async function createFailingChange(
 }
 
 async function createChangeWithTasks(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string,
@@ -171,7 +172,7 @@ async function writePlaceholderSpec(project: string): Promise<void> {
  * 1.14.1 boundary where the advisory moved from informational hint to WARNING.
  */
 async function createOverlengthChange(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -205,7 +206,7 @@ async function createOverlengthChange(
   )
 }
 
-describe('pinned OpenSpec 1.14 full validation report fixtures', () => {
+describe('pinned OpenSpec 1.15 full validation report fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -213,7 +214,7 @@ describe('pinned OpenSpec 1.14 full validation report fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`keeps the full bulk report schema-compatible and carries the merge-conflict INFO beside real errors on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-validate-full`)
       const project = join(fixtureRoot, 'project')
@@ -410,7 +411,8 @@ describe('pinned OpenSpec 1.14 full validation report fixtures', () => {
         path: 'cap-overlength/spec.md',
       })
 
-      // 1.14.1 escalates that WARNING under --strict, so CI can enforce the limit.
+      // The strict escalation carried into 1.15 from 1.14.1 fails the run under
+      // --strict, so CI can enforce the limit.
       const strict = await runPinnedOpenspec(
         version,
         ['validate', 'overlength-change', '--json', '--strict'],

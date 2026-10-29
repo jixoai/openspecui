@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (created 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 change-list archive inventory (`list --archived`
- *    and `list --all`, new in 1.14) against a real fixture project holding one active
- *    and one archived change.
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.15.0 change-list archive inventory (`list --archived`
+ *    and `list --all`, carried into 1.15 from 1.14) against a real fixture project
+ *    holding one active and one archived change.
  * 2. Prove the per-entry `archived` flag discipline: `--archived` returns only archive
  *    inventory with `archived: true`; `--all` mixes both with explicit `false` beside
  *    the active entries; the default `list --json` never emits the member, so absence
@@ -13,12 +13,13 @@
  *    reactive-filesystem adapter this line.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — positive matrix migrates to the pinned 1.15.0 executable (v15 line).
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -26,10 +27,10 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v14-fixtures.js'
+} from './__tests__/official-cli-v15-fixtures.js'
 import { CliChangeListSchema } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.14 change list inventory fixtures', () => {
+describe('pinned OpenSpec 1.15 change list inventory fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -37,7 +38,7 @@ describe('pinned OpenSpec 1.14 change list inventory fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`marks archived inventory and keeps the default list flag-free on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(
         `cli-${version.replace(/\./g, '')}-list-inventory`

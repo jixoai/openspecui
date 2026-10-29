@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 change-list nested-directory contract on a real
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.15.0 change-list nested-directory contract on a real
  *    repository: a namespace-folder entry carries `nested` with 0/0 task fields, a
  *    coexisting flat change carries none, and the top-level `warnings` array reports
  *    code `nested_change_directory` with the upstream message preserved verbatim.
@@ -8,19 +8,20 @@
  *    dedicated ERROR finding (single item and bulk `--all`) instead of the generic
  *    delta-authoring error, while the flat change keeps its ordinary error and the
  *    buried change stays invisible to bulk enumeration.
- * 3. Carry over the 1.13.1 nested/warnings members as v14 regression fixtures onto the
- *    v14 single-series window (the one new 1.14 list member, `archived`, is owned by
+ * 3. Carry over the 1.13.1 nested/warnings members as regression fixtures onto the
+ *    v15 single-series window (the 1.14 list member, `archived`, is owned by
  *    the change-list inventory suite).
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — executable nested/warnings change-list and validate-finding evidence (update-openspec-cli-1131 Slice 4).
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — positive matrix migrates to the pinned 1.15.0 executable (v15 line).
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -29,12 +30,12 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import { CliChangeListSchema, CliValidateReportSchema } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -79,7 +80,7 @@ async function writeNestedFixtureProject(project: string): Promise<void> {
   )
 }
 
-describe('pinned OpenSpec 1.14 nested change directory fixtures', () => {
+describe('pinned OpenSpec 1.15 nested change directory fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -87,7 +88,7 @@ describe('pinned OpenSpec 1.14 nested change directory fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`projects namespace entries and hygiene warnings from list --json on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-nested-list`)
       const project = join(fixtureRoot, 'project')

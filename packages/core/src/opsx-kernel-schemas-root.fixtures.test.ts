@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
  * 1. Prove the Kernel forwards the selected Root's Store selector to schemas on the
- *    admitted OpenSpec line (the v14 single-series window: 1.14 resolves schemas
+ *    admitted OpenSpec line (the v15 single-series window: 1.15 resolves schemas
  *    through the selected Root).
  * 2. Drive the proof through the production OpsxKernel path with the pinned executable.
  *
@@ -23,18 +23,21 @@
  * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
  *   — in-window patch rotation moves the local PINNED_BINS key to 1.14.1 together
  *   with the v14 helper's pinned constant.
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新"
+ *   — positive matrix migrates to the pinned 1.15.0 executable (v15 line); the local
+ *   PINNED_BINS key rotates to 1.15.0 together with the v15 helper's pinned constant.
  */
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import { cleanupTempDir } from './__tests__/test-utils.js'
 import { CliExecutor } from './cli-executor.js'
 import { CliProjectionCommandError } from './cli-projection.js'
@@ -43,8 +46,8 @@ import { OpsxKernel } from './opsx-kernel.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
 const PINNED_BINS = {
-  '1.14.1': resolve(import.meta.dirname, '../node_modules/openspec-cli-114/bin/openspec.js'),
-} satisfies Record<PinnedOpenspecV14Version, string>
+  '1.15.0': resolve(import.meta.dirname, '../node_modules/openspec-cli-115/bin/openspec.js'),
+} satisfies Record<PinnedOpenspecV15Version, string>
 
 const tempDirs: string[] = []
 
@@ -60,7 +63,7 @@ describe('OpsxKernel schemas selected-Root forwarding', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`forwards the Store selector to schemas on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(
         `kernel-schemas-root-${version.replace(/\./g, '')}`

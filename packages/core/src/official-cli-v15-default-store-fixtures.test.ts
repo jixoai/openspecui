@@ -1,31 +1,32 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 CLI against machine `defaultStore` root
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.15.0 CLI against machine `defaultStore` root
  *    selection.
  * 2. Prove effective, absent, and stale fallback outcomes preserve upstream provenance
- *    and fixes on the v14 single-series window.
- * 3. Carry over the admitted-line defaultStore contract proven for 1.10-1.13; hide
+ *    and fixes on the v15 single-series window.
+ * 3. Carry over the admitted-line defaultStore contract proven for 1.10-1.14; hide
  *    fixture subprocess console windows (`windowsHide`) for uniform hidden-console
  *    execution on Windows.
- * 4. (2026-10-02, target-openspec-cli-114-line Slice 5) Prove the 1.14 store-backed
- *    `status` edit-roots dual branch (upstream #2013 `findDeclaringProjectRoot`): with
- *    the declaring project on the current path, `allowedEditRoots` is
- *    `[implementationRoot, projectRoot]` with the declaring-repo constraint; without
- *    one, `[projectRoot]` with the ask-user constraint; the non-store repo-local
- *    contrast keeps its single-root constraint. Same array shape, changed semantics —
- *    per `references/openspec-1.14.0-report.md` section 6.
+ * 4. (2026-10-02, target-openspec-cli-114-line Slice 5) Prove the store-backed
+ *    `status` edit-roots dual branch carried into 1.15 from 1.14 (upstream #2013
+ *    `findDeclaringProjectRoot`): with the declaring project on the current path,
+ *    `allowedEditRoots` is `[implementationRoot, projectRoot]` with the declaring-repo
+ *    constraint; without one, `[projectRoot]` with the ask-user constraint; the
+ *    non-store repo-local contrast keeps its single-root constraint. Same array shape,
+ *    changed semantics — per `references/openspec-1.14.0-report.md` section 6.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-01): adapt OpenSpec 1.7 machine `defaultStore` without fabricating effective Root truth.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — positive matrix migrates to the pinned 1.15.0 executable (v15 line).
  */
 import { mkdir, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   parsePinnedJson,
@@ -33,12 +34,12 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v14-fixtures.js'
+} from './__tests__/official-cli-v15-fixtures.js'
 import { CliDiagnosticFailureSchema } from './cli-contracts/common.js'
 import { CliContextSchema, CliDoctorSchema } from './cli-contracts/store.js'
 import { CliWorkflowStatusSuccessSchema } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.14 defaultStore fixtures', () => {
+describe('pinned OpenSpec 1.15 defaultStore fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -46,7 +47,7 @@ describe('pinned OpenSpec 1.14 defaultStore fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`reports global_default only when the configured Store is selected effectively on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-default-store`)
       const storeRoot = join(fixtureRoot, 'team-context')

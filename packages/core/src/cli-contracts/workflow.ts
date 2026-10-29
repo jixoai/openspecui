@@ -37,6 +37,13 @@
  *    boolean from `list --archived`/`--all` (default list never emits it); and the new
  *    `openspec version --json` envelope (`schemaVersion: 1` literal, `version`,
  *    `install`, check-gated passthrough `update`).
+ * 12. Type the OpenSpec 1.15 `update --dry-run --json` plan (`changes`/`notes`/`failures`,
+ *    three keys always present and always arrays; closed `add|update|delete` action and
+ *    two-code note enums; no rename action — moves plan as delete+add pairs; per-tool
+ *    `failures` are data with exit 0) and the `install.scope` `'standalone'` member as
+ *    verbatim CLI evidence; the command-failure envelope (empty plan keys + `status[]`
+ *    with `code: 'update_error'`, exit 1) stays decodable through the same schema while
+ *    the executor's exit/success facts carry the failure truth.
  *
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
  * Original request (2026-07-26): "展开全面的接口升级和内核升级和测试升级。"
@@ -47,6 +54,7 @@
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  * Original request (2026-09-26): "Openspec 1.13.2 释放了…" — Apply tracking-evidence decode contract (update-openspec-cli-1132 Slice 2).
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — typed contracts Slice 2 (target-openspec-cli-114-line).
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — UpdatePlan + standalone scope typed contracts (target-openspec-cli-115-line).
  */
 import { z } from 'zod'
 import {
@@ -568,13 +576,15 @@ export const CliArchiveSchema = z
 /**
  * Typed result of the OpenSpec 1.14 `openspec version --json` command.
  *
- * Upstream (pinned v1.14.0, src/cli/index.ts + src/core/version-check.ts) always emits
+ * Upstream (pinned v1.15.0, src/cli/index.ts + src/core/version-check.ts) always emits
  * `schemaVersion: 1`, the running `version`, and the resolved `install` facts (every
  * install member nullable — an unresolvable install reports all-null, never a guess).
  * `update` is conditionally spread only under `--check` (a registry probe honoring
  * CI/no-network and DO_NOT_TRACK opt-outs), so it is optional with no default and its
  * facts stay passthrough evidence; the probe is opt-in and OpenSpecUI composes no
- * capability gate for this admitted-window command.
+ * capability gate for this admitted-window command. OpenSpec 1.15 adds the
+ * `'standalone'` scope for the binary distribution; it decodes as typed evidence and
+ * OpenSpecUI projects no install-facts UI from it.
  */
 export const CliVersionSchema = z
   .object({
@@ -584,7 +594,7 @@ export const CliVersionSchema = z
       .object({
         location: z.string().nullable(),
         packageManager: z.enum(['npm', 'pnpm', 'bun', 'yarn', 'volta']).nullable(),
-        scope: z.enum(['global', 'project', 'temporary', 'source']).nullable(),
+        scope: z.enum(['global', 'project', 'temporary', 'source', 'standalone']).nullable(),
       })
       .passthrough(),
     update: z
@@ -596,6 +606,61 @@ export const CliVersionSchema = z
       })
       .passthrough()
       .optional(),
+  })
+  .passthrough()
+
+/**
+ * One planned artifact write/remove from the OpenSpec 1.15 `update --dry-run` plan.
+ *
+ * `path` is a display form, not a filesystem promise: project-relative POSIX inside the
+ * project, `~/…`-folded under home, absolute POSIX elsewhere. `tool` is the configured
+ * tool id, or the reserved `'openspec'` for OpenSpec-owned files (global config, legacy
+ * cleanup). There is no rename action: a legacy directory move plans as a `delete`+`add`
+ * pair under the same tool.
+ */
+export const CliUpdatePlanChangeSchema = z
+  .object({
+    path: z.string(),
+    action: z.enum(['add', 'update', 'delete']),
+    tool: z.string(),
+  })
+  .passthrough()
+
+/** One non-interactive-consent advisory from the dry-run plan (closed two-code enum). */
+export const CliUpdatePlanNoteSchema = z
+  .object({
+    code: z.enum(['legacy-tool-directories', 'legacy-artifacts']),
+    message: z.string(),
+  })
+  .passthrough()
+
+/** One per-tool planning failure; the plan stops where the real update would throw. */
+export const CliUpdatePlanFailureSchema = z
+  .object({
+    tool: z.string(),
+    error: z.string(),
+  })
+  .passthrough()
+
+/**
+ * Typed result of the OpenSpec 1.15 `openspec update --dry-run --json` command.
+ *
+ * Upstream (pinned v1.15.0, src/core/update-plan.ts) runs the plan and the real update
+ * through one code path (an UpdateFileOps write seam over a FileView read seam), so the
+ * plan is CLI-owned evidence about what a non-interactive real update would do — never a
+ * local prediction. All three keys are always present and always arrays (an empty plan
+ * prints all three, never a sparse object) and `changes` sorts by `path.localeCompare`.
+ * `failures` are data, not errors: one broken tool lists its failure while the rest of
+ * the plan still appears, and the command still exits 0. Failure of the command itself
+ * crosses the shared agent status envelope — empty plan keys plus `status[]` carrying
+ * `code: 'update_error'` and exit 1 — which this schema keeps decoding (passthrough)
+ * while the executor's exit/`success` facts carry the failure truth.
+ */
+export const CliUpdatePlanSchema = z
+  .object({
+    changes: z.array(CliUpdatePlanChangeSchema),
+    notes: z.array(CliUpdatePlanNoteSchema),
+    failures: z.array(CliUpdatePlanFailureSchema),
   })
   .passthrough()
 
@@ -628,3 +693,7 @@ export type CliValidateFindings = z.infer<typeof CliValidateFindingsSchema>
 export type CliValidateFindingsResult = z.infer<typeof CliValidateFindingsResultSchema>
 export type CliArchive = z.infer<typeof CliArchiveSchema>
 export type CliVersion = z.infer<typeof CliVersionSchema>
+export type CliUpdatePlanChange = z.infer<typeof CliUpdatePlanChangeSchema>
+export type CliUpdatePlanNote = z.infer<typeof CliUpdatePlanNoteSchema>
+export type CliUpdatePlanFailure = z.infer<typeof CliUpdatePlanFailureSchema>
+export type CliUpdatePlan = z.infer<typeof CliUpdatePlanSchema>

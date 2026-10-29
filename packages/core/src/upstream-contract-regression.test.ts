@@ -24,6 +24,10 @@
  * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
  *   — rotate the reference pin assertion from v1.14.0 (94ca9c1e) to the released v1.14.1
  *   patch tag (87c3595) inside the unchanged v14 window.
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新"
+ *   — rotate the reference pin assertion from v1.14.1 (87c3595) to the released v1.15.0
+ *   minor tag (8e0288df) for the OpenSpecUI 15 line and lock the first-party
+ *   `update --dry-run` UpdatePlan contract sources.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -97,13 +101,32 @@ describe('first-party OpenSpec 1.4-1.7 contracts', () => {
     expect(rootInspection).toContain('inspectOptionalPlanningDirectory')
   })
 
-  it('pins the reference checkout to the official v1.14.1 commit', () => {
+  it('pins the reference checkout to the official v1.15.0 commit', () => {
     const commit = execFileSync('git', ['-C', upstreamRoot, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
       windowsHide: true,
     }).trim()
 
-    expect(commit).toBe('87c3595ace6a2e22957f39ebe5b74c2f2316e0cb')
+    expect(commit).toBe('8e0288df12d401b0e183e2f47254d22528c1dffb')
+  })
+
+  it('locks the 1.15 update dry-run UpdatePlan contract sources', () => {
+    const updatePlan = readPinned('src/core/update-plan.ts')
+    const cliIndex = readPinned('src/cli/index.ts')
+
+    // Three-key plan: always present, always arrays, closed action/note unions.
+    expect(updatePlan).toContain("export type UpdatePlanAction = 'add' | 'update' | 'delete'")
+    expect(updatePlan).toContain(
+      "export type UpdatePlanNoteCode = 'legacy-tool-directories' | 'legacy-artifacts'"
+    )
+    expect(updatePlan).toContain('changes: UpdatePlanChange[]')
+    expect(updatePlan).toContain('notes: UpdatePlanNote[]')
+    expect(updatePlan).toContain('failures: UpdatePlanFailure[]')
+
+    // The --json contract is dry-run-only and fails with the shared status envelope.
+    expect(cliIndex).toContain('--json is only available with --dry-run.')
+    expect(cliIndex).toContain("fallbackCode: 'update_error'")
+    expect(cliIndex).toContain('payload: { changes: [], notes: [], failures: [] }')
   })
 
   it('locks the retained planning-completion, schemas sum type, and archived validation sources', () => {

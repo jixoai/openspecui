@@ -1,25 +1,26 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 workflow contract end to end: skipped Status,
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.15.0 workflow contract end to end: skipped Status,
  *    tasks/Apply/Archive Instructions on one real skip-specs change.
  * 2. Prove explicit planning completion (`isPlanningComplete`) stays protocol truth while
  *    `isComplete` remains retained alias evidence, and Apply `progress` stays authoritative
  *    over the actionable task list (planning/task separation).
  * 3. Prove Apply and Archive operation guidance stays distinct from artifact rules.
  * 4. Prove `init --language` persists the fixed context block and never overwrites config.
- * 5. Prove the 1.14 JSON stream discipline: one stdout document, stderr without
+ * 5. Prove the JSON stream discipline: one stdout document, stderr without
  *    telemetry or completion-tip noise.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
  * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — positive matrix migrates to the pinned 1.15.0 executable (v15 line).
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -27,8 +28,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import {
   CliApplyInstructionsSuccessSchema,
   CliArchiveInstructionsSuccessSchema,
@@ -37,7 +38,7 @@ import {
 } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -50,7 +51,7 @@ async function initProject(
   expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
 }
 
-describe('pinned OpenSpec 1.14 workflow fixtures', () => {
+describe('pinned OpenSpec 1.15 workflow fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -58,7 +59,7 @@ describe('pinned OpenSpec 1.14 workflow fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`executes skipped Status plus Apply and Archive Instructions on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-workflow`)
       const project = join(fixtureRoot, 'project')

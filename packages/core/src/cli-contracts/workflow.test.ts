@@ -37,6 +37,13 @@
  *    gains the per-entry `archived` boolean from `list --archived`/`--all`; and the
  *    new `openspec version --json` envelope decodes with `schemaVersion: 1`, install
  *    facts, and a passthrough `update` member that only `--check` emits.
+ * 10. Lock the OpenSpec 1.15 `update --dry-run --json` UpdatePlan contract: the three
+ *    keys always present and always arrays, closed `add|update|delete` action and
+ *    two-code note enums, no rename action, per-tool `failures` as data beside exit 0,
+ *    and the command-failure envelope (empty plan keys + `status[]` carrying
+ *    `code: 'update_error'`, exit 1) decoding through the same schema while the
+ *    executor's exit/success facts carry the failure truth; the `updateDryRun`
+ *    capability gate composes no argv for a non-admitted session.
  *
  * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
@@ -50,6 +57,7 @@
  *   Slice 5 fixture-matrix lane hygiene: the typed-fact guard annotation becomes optional
  *   members (matching the optional schema members) and the version-command execute mock
  *   declares its argv parameter so the workflow-contract typecheck lane compiles.
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — UpdatePlan contract lock (target-openspec-cli-115-line).
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'
@@ -76,6 +84,7 @@ import {
   CliArchiveSchema,
   CliChangeListSchema,
   CliShowSpecSchema,
+  CliUpdatePlanSchema,
   CliValidateFindingsResultSchema,
   CliValidateFindingsSchema,
   CliValidateReportSchema,
@@ -324,7 +333,7 @@ describe('OpenSpec 1.8/1.9 workflow CLI contracts', () => {
 // transports; every retired line (1.13/1.12/1.11/1.10) derives none and proves
 // capability-boundary rejections only. Literal expectation rotation is Slice 6's
 // cross-package pass; this file's fixtures rotate with the landed compat constants.
-const capabilities114 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.14.0'))
+const capabilities115 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.15.0'))
 const capabilities113 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.13.0'))
 const capabilities112 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.12.0'))
 const capabilities111 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.11.0'))
@@ -827,7 +836,7 @@ describe('OpenSpec 1.12 validate findings contract executor', () => {
   it('composes the findings argv only through the capability-gated findings method', async () => {
     const findings = await contracts.validateFindings({
       target: { kind: 'scope', scope: 'all' },
-      capabilities: capabilities114,
+      capabilities: capabilities115,
     })
 
     expect(findings.kind).toBe('executed')
@@ -1056,7 +1065,7 @@ describe('capability-gated 1.11 command argv', () => {
 
   it('builds status --all --json argv only for the admitted batch capability', async () => {
     const admitted = await contracts.workflowStatusAll({
-      capabilities: capabilities114,
+      capabilities: capabilities115,
       schema: 'custom',
       store: 'shared',
     })
@@ -1066,8 +1075,8 @@ describe('capability-gated 1.11 command argv', () => {
       ['status', '--all', '--json', '--schema', 'custom', '--store', 'shared'],
     ])
 
-    // Every line below the admitted 1.14 window derives no capability: the retained
-    // 1.13/1.12/1.11/1.10 series prove capability-boundary rejections only.
+    // Every line below the admitted 1.15 window derives no capability: the retained
+    // 1.14/1.13/1.12/1.11/1.10 series prove capability-boundary rejections only.
     const refused = await contracts.workflowStatusAll({ capabilities: capabilities113 })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'batchStatus' })
     expect(await contracts.workflowStatusAll({ capabilities: capabilities112 })).toEqual({
@@ -1087,7 +1096,7 @@ describe('capability-gated 1.11 command argv', () => {
 
   it('builds show <change> --json --diff argv only for the admitted diff capability', async () => {
     const admitted = await contracts.showChangeDiff('add-auth', {
-      capabilities: capabilities114,
+      capabilities: capabilities115,
       store: 'shared',
     })
 
@@ -1712,5 +1721,131 @@ describe('OpenSpec 1.14 version CLI contract', () => {
     // An explicit false stays argv-free: the registry probe is opt-in.
     await contracts.version({ check: false })
     expect(execute.mock.calls[2]?.[0]).toEqual(['version', '--json'])
+  })
+})
+
+const executedUpdatePlan115 = {
+  changes: [
+    { path: '.claude/skills/openspec-explore/SKILL.md', action: 'update', tool: 'claude' },
+    { path: '.kimi-code/skills/openspec-propose/SKILL.md', action: 'delete', tool: 'kimi-code' },
+    { path: '~/.minimax/skills/openspec-propose/SKILL.md', action: 'add', tool: 'minimax-code' },
+  ],
+  notes: [
+    {
+      code: 'legacy-tool-directories',
+      message:
+        'Moves out of a renamed tool directory are listed as a non-interactive update makes them. At a terminal, update asks first, and declining leaves those files where they are.',
+    },
+  ],
+  failures: [{ tool: 'github-copilot', error: 'cloud sync unreachable' }],
+} as const
+
+describe('OpenSpec 1.15 update dry-run UpdatePlan CLI contract', () => {
+  it('decodes a full plan with add/update/delete changes, notes, and per-tool failures', () => {
+    const parsed = CliUpdatePlanSchema.parse(executedUpdatePlan115)
+    expect(parsed.changes.map((change) => change.action)).toEqual(['update', 'delete', 'add'])
+    expect(parsed.changes[2]?.path).toBe('~/.minimax/skills/openspec-propose/SKILL.md')
+    expect(parsed.notes[0]?.code).toBe('legacy-tool-directories')
+    expect(parsed.failures[0]?.tool).toBe('github-copilot')
+  })
+
+  it('keeps the three keys always present and always arrays, never sparse', () => {
+    const empty = CliUpdatePlanSchema.parse({ changes: [], notes: [], failures: [] })
+    expect(empty).toEqual({ changes: [], notes: [], failures: [] })
+    expect(CliUpdatePlanSchema.safeParse({ changes: [], notes: [] }).success).toBe(false)
+    expect(CliUpdatePlanSchema.safeParse({ changes: [], failures: [] }).success).toBe(false)
+    expect(CliUpdatePlanSchema.safeParse({ notes: [], failures: [] }).success).toBe(false)
+  })
+
+  it('rejects actions and note codes outside the closed unions', () => {
+    expect(
+      CliUpdatePlanSchema.safeParse({
+        changes: [{ path: 'a.md', action: 'rename', tool: 'claude' }],
+        notes: [],
+        failures: [],
+      }).success
+    ).toBe(false)
+    expect(
+      CliUpdatePlanSchema.safeParse({
+        changes: [],
+        notes: [{ code: 'unknown-note', message: 'x' }],
+        failures: [],
+      }).success
+    ).toBe(false)
+  })
+
+  it('decodes the command-failure envelope through the same schema while exit carries the failure', () => {
+    const result = parseCliCommandResult(
+      {
+        success: false,
+        stdout: JSON.stringify({
+          changes: [],
+          notes: [],
+          failures: [],
+          status: [
+            {
+              severity: 'error',
+              code: 'update_error',
+              message: "No OpenSpec directory found. Run 'openspec init' first.",
+            },
+          ],
+        }),
+        stderr: '',
+        exitCode: 1,
+      },
+      CliUpdatePlanSchema
+    )
+    expect(result.exitCode).toBe(1)
+    expect(result.success).toBe(false)
+    expect(result.data).toMatchObject({ changes: [], notes: [], failures: [] })
+    expect(result.diagnostics).toEqual([
+      {
+        severity: 'error',
+        code: 'update_error',
+        message: "No OpenSpec directory found. Run 'openspec init' first.",
+      },
+    ])
+    expect(result.contractError).toBeUndefined()
+  })
+
+  it('keeps non-empty failures a successful plan: exit 0 is the plan truth', async () => {
+    const execute = vi.fn(async (_args: string[]) => ({
+      success: true,
+      stdout: JSON.stringify(executedUpdatePlan115),
+      stderr: '',
+      exitCode: 0,
+    }))
+    const contracts = new OpenSpecCliContractExecutor(execute)
+
+    const gated = await contracts.updatePlan({ capabilities: capabilities115 })
+    expect(gated.kind).toBe('executed')
+    if (gated.kind !== 'executed') return
+    expect(gated.result.exitCode).toBe(0)
+    expect(gated.result.success).toBe(true)
+    expect(gated.result.data?.failures).toHaveLength(1)
+    expect(gated.result.diagnostics).toEqual([])
+  })
+
+  it('builds the dry-run argv only for the admitted updateDryRun capability', async () => {
+    const execute = vi.fn(async (_args: string[]) => ({
+      success: true,
+      stdout: JSON.stringify({ changes: [], notes: [], failures: [] }),
+      stderr: '',
+      exitCode: 0,
+    }))
+    const contracts = new OpenSpecCliContractExecutor(execute)
+
+    const refused = await contracts.updatePlan({
+      capabilities: deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.14.3')),
+    })
+    expect(refused).toEqual({ kind: 'unavailable', capability: 'updateDryRun' })
+    expect(execute).not.toHaveBeenCalled()
+
+    const admitted = await contracts.updatePlan({ capabilities: capabilities115 })
+    expect(admitted.kind).toBe('executed')
+    expect(execute.mock.calls[0]?.[0]).toEqual(['update', '--dry-run', '--json'])
+
+    await contracts.updatePlan({ capabilities: capabilities115, force: true })
+    expect(execute.mock.calls[1]?.[0]).toEqual(['update', '--dry-run', '--json', '--force'])
   })
 })

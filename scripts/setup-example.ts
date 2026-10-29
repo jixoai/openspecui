@@ -239,8 +239,8 @@ const SAMPLE_AGENTS_MD = `# AI Agent Instructions
 
 // Mirror of packages/core OPENSPEC_CLI_TARGET_SERIES: the example runner must resolve the
 // series this release line admits, never an unversioned @latest the gate can block.
-// Keep in sync with packages/core/src/openspec-compat.ts (OpenSpecUI 14 -> 1.14).
-const OPENSPEC_CLI_TARGET_SERIES = '1.14'
+// Keep in sync with packages/core/src/openspec-compat.ts (OpenSpecUI 15 -> 1.15).
+const OPENSPEC_CLI_TARGET_SERIES = '1.15'
 
 const CONFIG = {
   cli: {

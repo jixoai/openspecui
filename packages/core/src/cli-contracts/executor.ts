@@ -14,12 +14,18 @@
  * 7. Own the OpenSpec 1.14 `openspec version --json` argv: `--check` (a registry probe)
  *    composes only when explicitly requested — the admitted-window command needs no
  *    capability gate, and the update UX stays out of scope.
+ * 8. Own the OpenSpec 1.15 `update --dry-run --json` argv behind the `updateDryRun`
+ *    capability (the retired 1.14 line rejects `--dry-run` entirely), decode the plan
+ *    through its own result schema, and answer a non-admitted session with a typed
+ *    refusal before any argv is composed; the real `update` argv stays outside this
+ *    typed facade (the mutation stream owns it).
  * Original request (2026-07-15): "为不同命令建立强类型适配器，不实现平行解析规则。"
 
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11。"
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — version command contract (target-openspec-cli-114-line Slice 2).
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — gated update dry-run plan contract (target-openspec-cli-115-line).
  */
 import type { z } from 'zod'
 import type { CliResult } from '../cli-executor.js'
@@ -52,6 +58,7 @@ import {
   CliShowSpecSchema,
   CliSpecListSchema,
   CliTemplatesSchema,
+  CliUpdatePlanSchema,
   CliValidateFindingsResultSchema,
   CliValidateSchema,
   CliVersionSchema,
@@ -65,6 +72,7 @@ import {
   type CliShowSpec,
   type CliSpecList,
   type CliTemplates,
+  type CliUpdatePlan,
   type CliValidate,
   type CliValidateFindingsResult,
   type CliVersion,
@@ -93,7 +101,10 @@ export interface CliWorkflowOptions extends CliRootSelector {
  */
 export type CliGatedCommandResult<T> =
   | { kind: 'executed'; result: CliCommandResult<T> }
-  | { kind: 'unavailable'; capability: 'batchStatus' | 'requirementDiff' | 'findingsReport' }
+  | {
+      kind: 'unavailable'
+      capability: 'batchStatus' | 'requirementDiff' | 'findingsReport' | 'updateDryRun'
+    }
 
 /** Options for the OpenSpec 1.11 batch Status command. */
 export interface CliWorkflowStatusAllOptions extends CliWorkflowOptions {
@@ -124,6 +135,14 @@ export interface CliValidateFindingsOptions extends CliRootSelector {
 export interface CliShowChangeDiffOptions extends CliRootSelector {
   /** Capabilities of the admitted CLI; `requirementDiff` must be true to construct argv. */
   capabilities: Pick<OpenSpecCliCapabilities, 'requirementDiff'>
+}
+
+/** Options for the OpenSpec 1.15 update dry-run plan command. */
+export interface CliUpdatePlanOptions {
+  /** Capabilities of the admitted CLI; `updateDryRun` must be true to construct argv. */
+  capabilities: Pick<OpenSpecCliCapabilities, 'updateDryRun'>
+  /** Mirror the real update's `--force` semantics: legacy-artifact cleanup enters the plan. */
+  force?: boolean
 }
 
 /** Options for creating a Store through the official CLI. */
@@ -439,6 +458,31 @@ export class OpenSpecCliContractExecutor {
     return {
       kind: 'executed',
       result: await this.execute(this.withRoot(args, options), CliValidateFindingsResultSchema),
+    }
+  }
+
+  /**
+   * Plan what `openspec update` would change without writing (OpenSpec 1.15 only).
+   *
+   * Gated by the `updateDryRun` capability because the retired 1.14 line rejects the
+   * `--dry-run` flag entirely: a non-admitted CLI receives the typed refusal before any
+   * argv exists. The plan decodes through its own result schema; upstream guarantees the
+   * three keys always present. `failures` are plan data, not command failure — the
+   * command still exits 0 — while a failed command crosses the shared status envelope
+   * (`code: 'update_error'`, exit 1) and stays decodable: the executor's exit/success
+   * facts carry that truth, never the parsed plan alone. `update` takes no Root
+   * selector; it operates on the executor's planning-root working directory exactly like
+   * the real update mutation stream.
+   */
+  async updatePlan(options: CliUpdatePlanOptions): Promise<CliGatedCommandResult<CliUpdatePlan>> {
+    if (!options.capabilities.updateDryRun) {
+      return { kind: 'unavailable', capability: 'updateDryRun' }
+    }
+    const args = ['update', '--dry-run', '--json']
+    if (options.force) args.push('--force')
+    return {
+      kind: 'executed',
+      result: await this.execute(args, CliUpdatePlanSchema),
     }
   }
 

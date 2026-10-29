@@ -22,6 +22,7 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — change-list nested/warnings projection (update-openspec-cli-1131 Slice 2).
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue" — admitted/retired fixture versions rotate with the v14 window.
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — admitted/retired fixture versions rotate with the v15 window (admitted 1.15.0, retired 1.14.0).
  */
 import { readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
@@ -538,9 +539,9 @@ const BATCH_STATUS_CHANGES = ['change-a', 'change-b', 'change-c']
  *
  * Every invocation argv is appended to `cli-invocations.log` so tests assert real spawn
  * argv, not spy calls. `--version` selects the fixture line: 1.14.0 models the admitted
- * OpenSpecUI 14 session (batch capability true), while the retired 1.13.0 models a
+ * OpenSpecUI 15 session (batch capability true), while the retired 1.14.0 models a
  * non-admitted session deriving all-false capabilities. The fake rejects `status --all`
- * and `--report findings` outside the 1.14 line so any gate leak fails loudly here
+ * and `--report findings` outside the 1.15 line so any gate leak fails loudly here
  * (upstream fidelity of the boundary is proven separately by the pinned official-cli
  * fixture matrix). Marker files switch the fixture scenario:
  * - `fail-change-b`: the batch envelope carries a per-change failure entry for change-b
@@ -553,7 +554,7 @@ const BATCH_STATUS_CHANGES = ['change-a', 'change-b', 'change-c']
 function writeBatchStatusCliFixture(
   cliPath: string,
   projectDir: string,
-  version: '1.13.0' | '1.14.0'
+  version: '1.14.0' | '1.15.0'
 ): Promise<void> {
   return writeFile(
     cliPath,
@@ -651,7 +652,7 @@ if (args[0] === 'list' && args.includes('--json')) {
 }
 
 if (args[0] === 'status' && args.includes('--all') && args.includes('--json')) {
-  if (!version.startsWith('1.14')) {
+  if (!version.startsWith('1.15')) {
     console.error('unknown option --all')
     process.exit(2)
   }
@@ -724,7 +725,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
   }
 
   async function prepareBatchKernel(
-    version: '1.13.0' | '1.14.0',
+    version: '1.14.0' | '1.15.0',
     markers: readonly string[] = []
   ): Promise<BatchFixture> {
     const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-opsx-batch-status-'))
@@ -781,8 +782,8 @@ describe('OpsxKernel capability-gated batch status transport', () => {
   }
 
   it('loads the status list with one status --all spawn and per-change projections identical to the serial transport', async () => {
-    const batch = await prepareBatchKernel('1.14.0')
-    const serial = await prepareBatchKernel('1.13.0')
+    const batch = await prepareBatchKernel('1.15.0')
+    const serial = await prepareBatchKernel('1.14.0')
 
     try {
       await batch.kernel.ensureStatusList()
@@ -838,7 +839,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
   })
 
   it('keeps a batch per-change failure entry as that change evidence without failing the status-list Work', async () => {
-    const { kernel, readInvocations, dispose } = await prepareBatchKernel('1.14.0', [
+    const { kernel, readInvocations, dispose } = await prepareBatchKernel('1.15.0', [
       'fail-change-b',
     ])
 
@@ -902,7 +903,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
     // 1.11.0 is inside the retired v11 window: it derives all-false capabilities in the
     // OpenSpecUI 12 single-series admission, so even a bypassed session must keep the
     // serial transport and never receive `--all`.
-    const { kernel, readInvocations, dispose } = await prepareBatchKernel('1.13.0')
+    const { kernel, readInvocations, dispose } = await prepareBatchKernel('1.14.0')
 
     try {
       const work = await kernel.readStatusListProjection()
@@ -923,8 +924,8 @@ describe('OpsxKernel capability-gated batch status transport', () => {
     }
   })
 
-  it('keeps single-change status reads on the per-change transport under admitted 1.14 sessions', async () => {
-    const { kernel, readInvocations, dispose } = await prepareBatchKernel('1.13.0')
+  it('keeps single-change status reads on the per-change transport under admitted 1.15 sessions', async () => {
+    const { kernel, readInvocations, dispose } = await prepareBatchKernel('1.14.0')
 
     try {
       await kernel.ensureStatus('change-a')
@@ -943,7 +944,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
   })
 
   it('routes batch transport and root-selection failures through the existing error paths', async () => {
-    const garbage = await prepareBatchKernel('1.14.0', ['batch-garbage'])
+    const garbage = await prepareBatchKernel('1.15.0', ['batch-garbage'])
     try {
       await expect(garbage.kernel.ensureStatusList()).rejects.toMatchObject({
         name: 'CliProjectionCommandError',
@@ -953,7 +954,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
       await garbage.dispose()
     }
 
-    const rootFailure = await prepareBatchKernel('1.14.0', ['batch-root-failure'])
+    const rootFailure = await prepareBatchKernel('1.15.0', ['batch-root-failure'])
     try {
       await expect(rootFailure.kernel.ensureStatusList()).rejects.toMatchObject({
         name: 'CliProjectionCommandError',
@@ -983,7 +984,7 @@ describe('OpsxKernel capability-gated validate findings transport', () => {
    * Every invocation argv is appended to `cli-invocations.log`. `--version` selects the
    * fixture line: `1.14.0` models the admitted session (findings capability true) while
    * the retired `1.13.0` and an unparseable version string model non-admitted sessions
-   * deriving all-false capabilities. The fake rejects `--report` outside the 1.14 line
+   * deriving all-false capabilities. The fake rejects `--report` outside the 1.15 line
    * so any capability-gate leak fails loudly here; upstream fidelity of the retired-line
    * boundary is proven separately by the pinned official-cli fixture matrix. Marker
    * files switch the scenario:
@@ -993,7 +994,7 @@ describe('OpsxKernel capability-gated validate findings transport', () => {
   function writeFindingsCliFixture(
     cliPath: string,
     projectDir: string,
-    version: '1.13.0' | '1.14.0' | 'unparseable'
+    version: '1.14.0' | '1.15.0' | 'unparseable'
   ): Promise<void> {
     return writeFile(
       cliPath,
@@ -1018,7 +1019,7 @@ if (args.includes('--version')) {
 }
 
 if (args[0] === 'validate' && args.includes('--report')) {
-  if (!version.startsWith('1.14')) {
+  if (!version.startsWith('1.15')) {
     console.error('unknown option --report')
     process.exit(2)
   }
@@ -1095,7 +1096,7 @@ process.exit(1)
   }
 
   async function prepareFindingsKernel(
-    version: '1.13.0' | '1.14.0' | 'unparseable',
+    version: '1.14.0' | '1.15.0' | 'unparseable',
     options: { markers?: readonly string[]; store?: string } = {}
   ): Promise<FindingsFixture> {
     const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-opsx-findings-'))
@@ -1130,8 +1131,8 @@ process.exit(1)
     }
   }
 
-  it('loads findings through one gated spawn on an admitted 1.14 session with the Store selector forwarded', async () => {
-    const { kernel, readInvocations, dispose } = await prepareFindingsKernel('1.14.0', {
+  it('loads findings through one gated spawn on an admitted 1.15 session with the Store selector forwarded', async () => {
+    const { kernel, readInvocations, dispose } = await prepareFindingsKernel('1.15.0', {
       store: 'shared',
     })
 
@@ -1167,7 +1168,7 @@ process.exit(1)
   })
 
   it('maps the archived bulk scope onto the archived validate target', async () => {
-    const { kernel, readInvocations, dispose } = await prepareFindingsKernel('1.14.0')
+    const { kernel, readInvocations, dispose } = await prepareFindingsKernel('1.15.0')
 
     try {
       const projection = await kernel.readValidationFindingsProjection('archived')
@@ -1189,7 +1190,7 @@ process.exit(1)
   it('never composes --report findings argv for a non-admitted session', async () => {
     // The retired 1.11.0 line: even a bypassed session derives all-false capabilities,
     // so the kernel must answer the typed refusal before any validate spawn happens.
-    const retired = await prepareFindingsKernel('1.13.0')
+    const retired = await prepareFindingsKernel('1.14.0')
     try {
       await expect(retired.kernel.readValidationFindingsProjection('all')).resolves.toEqual({
         kind: 'unavailable',
@@ -1215,7 +1216,7 @@ process.exit(1)
   })
 
   it('keeps the CLI request-failure envelope as decoded evidence instead of throwing', async () => {
-    const { kernel, dispose } = await prepareFindingsKernel('1.14.0', {
+    const { kernel, dispose } = await prepareFindingsKernel('1.15.0', {
       markers: ['findings-request-error'],
     })
 
@@ -1241,7 +1242,7 @@ process.exit(1)
   })
 
   it('routes an unparseable findings document through the existing command error path', async () => {
-    const { kernel, dispose } = await prepareFindingsKernel('1.14.0', {
+    const { kernel, dispose } = await prepareFindingsKernel('1.15.0', {
       markers: ['findings-garbage'],
     })
 

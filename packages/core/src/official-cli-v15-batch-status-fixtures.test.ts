@@ -1,22 +1,23 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 `status --all --json` batch envelope against a
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.15.0 `status --all --json` batch envelope against a
  *    real fixture project: healthy-entry field parity, in-place failure entries, and
  *    the empty-set message shape.
  * 2. Prove partial failure keeps stdout one complete valid JSON document while the
  *    process exits 1 (decoding must never consult the exit code).
- * 3. Carry over the admitted-line batch status contract proven for 1.11-1.13 onto the
- *    v14 single-series window; the retired 1.13.2 executable stays in the boundary suite.
+ * 3. Carry over the admitted-line batch status contract proven for 1.11-1.14 onto the
+ *    v15 single-series window; the retired 1.14.3 executable stays in the boundary suite.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — positive matrix migrates to the pinned 1.15.0 executable (v15 line).
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -25,8 +26,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import {
   CliBatchStatusSchema,
   isCliBatchStatusEntryFailure,
@@ -35,7 +36,7 @@ import {
 import { CliWorkflowStatusSuccessSchema } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -48,7 +49,7 @@ async function initProject(
   expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
 }
 
-describe('pinned OpenSpec 1.14 batch status fixtures', () => {
+describe('pinned OpenSpec 1.15 batch status fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -56,7 +57,7 @@ describe('pinned OpenSpec 1.14 batch status fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`returns healthy entries with single-change Status fields and one envelope root on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-batch-healthy`)
       const project = join(fixtureRoot, 'project')

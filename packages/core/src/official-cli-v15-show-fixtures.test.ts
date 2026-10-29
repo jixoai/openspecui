@@ -1,28 +1,31 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 `show` family against a real fixture project:
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.15.0 `show` family against a real fixture project:
  *    `show <change> --json --diff` (MODIFIED deltas carry the unified diff body) and
- *    `show <spec> --type spec --json` (1.14 requirement/scenario name members).
+ *    `show <spec> --type spec --json` (requirement/scenario name members carried into
+ *    1.15 from 1.14).
  * 2. Prove the diff stays CLI-owned evidence (`@@` hunks, `-`/`+` lines, no warning on
  *    a clean modification; the exact upstream near-miss header warning when names
  *    differ in case).
- * 3. Carry over the admitted-line requirement-diff contract proven for 1.11-1.13 onto
- *    the v14 single-series window.
- * 4. (2026-10-02, target-openspec-cli-114-line Slice 5) Prove the 1.14 show-Spec
- *    `name` members on the executed executable: every requirement and scenario carries
- *    its name (upstream normalizeRequirementName/scenarioNameFromHeaderText) beside
+ * 3. Carry over the admitted-line requirement-diff contract proven for 1.11-1.14 onto
+ *    the v15 single-series window.
+ * 4. (2026-10-02, target-openspec-cli-114-line Slice 5) Prove the show-Spec
+ *    `name` members carried into 1.15 from 1.14 on the executed executable: every
+ *    requirement and scenario carries its name (upstream
+ *    normalizeRequirementName/scenarioNameFromHeaderText) beside
  *    the retained text/rawText bodies — the identity archive matches on, per
  *    `references/openspec-1.14.0-report.md` Protocol delta.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — positive matrix migrates to the pinned 1.15.0 executable (v15 line).
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -30,8 +33,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import { CliShowChangeDiffSuccessSchema } from './cli-contracts/show-diff.js'
 import { CliShowSpecDocumentSchema } from './cli-contracts/workflow.js'
 
@@ -51,7 +54,7 @@ const MAIN_SPEC = [
 ].join('\n')
 
 async function initProject(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -65,7 +68,7 @@ async function initProject(
 }
 
 async function createChangeWithDelta(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string,
@@ -89,7 +92,7 @@ async function createChangeWithDelta(
   await writeFile(join(changeDir, 'specs', 'billing', 'spec.md'), delta)
 }
 
-describe('pinned OpenSpec 1.14 show fixtures', () => {
+describe('pinned OpenSpec 1.15 show fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -97,7 +100,7 @@ describe('pinned OpenSpec 1.14 show fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`attaches a unified diff with hunks to a clean MODIFIED delta on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-show-diff`)
       const project = join(fixtureRoot, 'project')
@@ -251,9 +254,10 @@ describe('pinned OpenSpec 1.14 show fixtures', () => {
 
       expect(shown.id).toBe('billing')
       expect(shown.requirementCount).toBe(1)
-      // 1.14 name members: the requirement and each scenario carry their header
-      // name beside the retained text/rawText bodies. The requirement name is
-      // the identity archive matches on — verbatim CLI value, never re-derived.
+      // Name members carried into 1.15 from 1.14: the requirement and each scenario
+      // carry their header name beside the retained text/rawText bodies. The
+      // requirement name is the identity archive matches on — verbatim CLI value,
+      // never re-derived.
       expect(shown.requirements).toEqual([
         {
           name: 'Billing rules',

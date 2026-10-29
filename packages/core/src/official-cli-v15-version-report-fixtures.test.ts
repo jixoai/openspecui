@@ -1,20 +1,22 @@
 /**
- * Orthogonal intents (created 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 `openspec version --json` command (new in
- *    1.14) against the isolated fixture environment: the typed envelope decodes with
- *    `schemaVersion: 1`, the running `version`, and the resolved `install` facts.
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.15.0 `openspec version --json` command (the
+ *    schemaVersion-1 envelope carried into 1.15 from 1.14) against the isolated
+ *    fixture environment: the typed envelope decodes with `schemaVersion: 1`, the
+ *    running `version`, and the resolved `install` facts.
  * 2. Prove the no-probe default: without `--check` the `update` member stays absent
  *    (never null, never a synthesized offline status) — the registry probe is opt-in
  *    and this suite never performs network access, per
  *    `references/openspec-1.14.0-report.md` section 1.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — positive matrix migrates to the pinned 1.15.0 executable (v15 line).
  */
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -22,10 +24,10 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v14-fixtures.js'
+} from './__tests__/official-cli-v15-fixtures.js'
 import { CliVersionSchema } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.14 version report fixtures', () => {
+describe('pinned OpenSpec 1.15 version report fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -33,9 +35,11 @@ describe('pinned OpenSpec 1.14 version report fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`reports the install envelope without the check-gated update member on OpenSpec ${version}`, async () => {
-      fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-version-report`)
+      fixtureRoot = await createPinnedFixtureRoot(
+        `cli-${version.replace(/\./g, '')}-version-report`
+      )
       const project = join(fixtureRoot, 'project')
       const env = pinnedFixtureEnv(fixtureRoot)
       await mkdir(project, { recursive: true })

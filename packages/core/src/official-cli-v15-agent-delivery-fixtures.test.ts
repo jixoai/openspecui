@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14 SourceCraft Code Assistant delivery contract
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.15 SourceCraft Code Assistant delivery contract
  *    against an isolated machine environment: 6 skills + 6 commands under the default
  *    core profile with the physical `.codeassistant` layout.
  * 2. Prove init anchors empty directories with `.gitkeep`, restores missing anchors on
@@ -15,10 +15,11 @@
  *    stay in `.kilocode/skills/`, the restart hint prints, and no legacy
  *    `.kilocode/workflows/` directory is created. Legacy two-generation cleanup stays
  *    projection evidence (`agent-delivery-registry` / `tool-init-state` tests); this
- *    harness exercises fresh init only. The 1.14 registry grows to 50 tools without
- *    changing these per-tool physical layouts.
+ *    harness exercises fresh init only. The 1.15 registry is byte-identical to 1.14
+ *    (zero `AI_TOOLS` diff), so these per-tool physical layouts stay unchanged.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — positive matrix migrates to the pinned 1.15.0 executable (v15 line).
  */
 import { access, lstat, mkdir, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -26,11 +27,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   createPinnedFixtureRoot,
   expectPinnedVersion,
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v14-fixtures.js'
+} from './__tests__/official-cli-v15-fixtures.js'
 
 /** The default core profile selects exactly these six workflows. */
 const CORE_PROFILE_SKILLS = [
@@ -60,7 +61,7 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-describe('pinned OpenSpec 1.14 Agent delivery fixtures', () => {
+describe('pinned OpenSpec 1.15 Agent delivery fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -68,7 +69,7 @@ describe('pinned OpenSpec 1.14 Agent delivery fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`delivers six skills and six commands to .codeassistant under the default core profile on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-codeassistant`)
       const project = join(fixtureRoot, 'project')

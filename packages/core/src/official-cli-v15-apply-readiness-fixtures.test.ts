@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14 Apply readiness contract (`instructions apply
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
+ * 1. Execute the pinned OpenSpec 1.15 Apply readiness contract (`instructions apply
  *    --json`) against a real fixture repo: the blocked-state build-order closure and
  *    the ready-state no-delta-specs advisory.
  * 2. Prove `missingPrerequisites` is additive readiness evidence, never a new gate:
@@ -13,7 +13,7 @@
  *    `references/openspec-1.14.0-report.md`.
  * 4. Prove upstream conditional spreading: `warnings` is absent (not `[]`) while
  *    blocked, and `missingArtifacts` is absent while ready.
- * 5. Prove the 1.13.2 tracking-evidence members carried forward on the 1.14 executable:
+ * 5. Prove the 1.13.2 tracking-evidence members carried forward on the 1.15 executable:
  *    every standard-schema payload emits `taskTrackingConfigured: true` with
  *    `unavailableTrackingFiles` absent.
  * 6. Prove glob-tracked aggregation through a project-local custom schema
@@ -26,27 +26,28 @@
  *    remain (with the not-verified instruction suffix) and blocks with
  *    "No readable task descriptions are available." when none remain — evidence only,
  *    never a synthesized gate, per `references/openspec-1.13.2-report.md` P1.
- * 8. (2026-10-02, target-openspec-cli-114-line Slice 5) Prove the 1.14 LocatedTask
- *    members on the executed executable: every task carries an absolute `sourcePath`
- *    plus its 1-based `line`, including per-file locations across a glob-tracked
- *    aggregate — verbatim CLI evidence OpenSpecUI never re-derives, per
+ * 8. (2026-10-02, target-openspec-cli-114-line Slice 5) Prove the LocatedTask members
+ *    carried into 1.15 from 1.14 on the executed executable: every task carries an
+ *    absolute `sourcePath` plus its 1-based `line`, including per-file locations across
+ *    a glob-tracked aggregate — verbatim CLI evidence OpenSpecUI never re-derives, per
  *    `references/openspec-1.14.0-report.md` section 2.
  * 9. (2026-10-06, update-openspec-cli-1141) Prove the 1.14.1 completion/archive
- *    separation on the `all_done` state: every tracked task done keeps the state
- *    value, while the instruction reports completion and asks for review or
- *    verification before archiving — the payload never claims the change
+ *    separation carried into 1.15 on the `all_done` state: every tracked task done
+ *    keeps the state value, while the instruction reports completion and asks for
+ *    review or verification before archiving — the payload never claims the change
  *    "is ready to be archived", per `references/openspec-1.14.1-report.md`.
  *
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
  *   — in-window patch rotation: the pinned executable moves to 1.14.1 and the new
  *   all_done guidance semantics join the matrix.
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新" — positive matrix migrates to the pinned 1.15.0 executable (v15 line).
  */
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V14_VERSIONS,
+  PINNED_OPENSPEC_V15_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -54,12 +55,12 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV14Version,
-} from './__tests__/official-cli-v14-fixtures.js'
+  type PinnedOpenspecV15Version,
+} from './__tests__/official-cli-v15-fixtures.js'
 import { CliApplyInstructionsSuccessSchema } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -73,7 +74,7 @@ async function initProject(
 }
 
 async function newChange(
-  version: PinnedOpenspecV14Version,
+  version: PinnedOpenspecV15Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -151,7 +152,7 @@ const RUNS_UNREADABLE_TRACKING_FIXTURE =
   typeof process.getuid === 'function' &&
   process.getuid() !== 0
 
-describe('pinned OpenSpec 1.14 apply readiness fixtures', () => {
+describe('pinned OpenSpec 1.15 apply readiness fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -159,7 +160,7 @@ describe('pinned OpenSpec 1.14 apply readiness fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V14_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
     it(`names the whole prerequisite chain on the blocked state and stays warning-free on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-apply-blocked`)
       const project = join(fixtureRoot, 'project')

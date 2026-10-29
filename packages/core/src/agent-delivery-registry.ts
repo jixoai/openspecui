@@ -1,14 +1,14 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Preserve the complete pinned OpenSpec 1.14 Agent delivery registry in one typed physical owner.
+ * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
+ * 1. Preserve the complete pinned OpenSpec 1.15 Agent delivery registry in one typed physical owner.
  * 2. Co-locate capability, command artifact, invocation, alias, setup, cleanup, and migration metadata.
  * 3. Model current/legacy project roots, user-global skill roots, detection paths, and IDE restart facts.
  * 4. Keep the per-series override mechanism available for future widened windows while the
- *    admitted window is the single '1.14' line (every 1.13/1.12 physical fact carries forward).
+ *    admitted window is the single '1.15' line (every 1.14/1.13/1.12 physical fact carries forward).
  * 5. Declare the shared `.agents` skills-root owner candidate set and its arbitration order as
  *    metadata only; physical arbitration stays owned by the official CLI and the Server projection.
- * 6. Select the official inventory for the admitted CLI line ('1.14') only; retired minors
- *    ('1.10'/'1.11'/'1.12'/'1.13') stay typed as provenance history and select no inventory.
+ * 6. Select the official inventory for the admitted CLI line ('1.15') only; retired minors
+ *    ('1.10'/'1.11'/'1.12'/'1.13'/'1.14') stay typed as provenance history and select no inventory.
  * 7. Carry Kilo Code's 1.13.2 command-path rotation as a physical fact: `.kilo/command/` is the
  *    live delivery target, the former `.kilocode/workflows/opsx-{workflow}.md` path is legacy
  *    evidence, and cleanup covers exactly the old folder's two generations — never `.kilo/command/`.
@@ -24,6 +24,10 @@
  *    — Slice 3 rotates the series to '1.14' and lands the ten 1.14 entries (amp, atomcode,
  *    codestudio, dsh, easycode, gigacode, grok, gsd, veai, warp); the Kilo directory rotation
  *    already landed with the 1132 change and is not repeated here.
+ * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新"
+ *    — the 1.15.0 upstream diff leaves src/core/config.ts byte-unchanged (zero tool delta),
+ *    so this rotation is constants-only: series '1.15' admitted, '1.14' retired into the
+ *    provenance union, and every 1.14 physical fact carried forward verbatim.
  */
 import { parseOpenSpecCliVersion } from './openspec-compat.js'
 
@@ -114,22 +118,29 @@ export interface AIToolOption {
 }
 
 /** Official OpenSpec CLI lines with distinct Agent inventories admitted by this release line. */
-export type AgentCliSeries = '1.14'
+export type AgentCliSeries = '1.15'
 
 /**
  * Historical provenance lines for registry facts that predate or retire out of the
  * admitted window (`minCliSeries`, `requiresIdeRestartSince`, and on-disk
  * `generatedBy` stamps typed at their consumers). Selection math treats them as
- * ordered history: a provenance line below the admitted line never gates a v14
- * inventory, and retired admitted lines ('1.10'/'1.11'/'1.12'/'1.13') select no
+ * ordered history: a provenance line below the admitted line never gates a v15
+ * inventory, and retired admitted lines ('1.10'/'1.11'/'1.12'/'1.13'/'1.14') select no
  * inventory at all.
  */
-export type AgentProvenanceCliSeries = '1.9' | '1.10' | '1.11' | '1.12' | '1.13' | AgentCliSeries
+export type AgentProvenanceCliSeries =
+  | '1.9'
+  | '1.10'
+  | '1.11'
+  | '1.12'
+  | '1.13'
+  | '1.14'
+  | AgentCliSeries
 
 /**
  * Per-series divergence applied when one admitted CLI line pins a different physical
  * reality than the newest line. The base registry always mirrors the newest admitted
- * line (1.14); an override replaces the listed fields for an older admitted line
+ * line (1.15); an override replaces the listed fields for an older admitted line
  * when a future release widens the window again. A field explicitly set to
  * `undefined` clears the newest-line value.
  */
@@ -156,6 +167,8 @@ function agentCliSeriesOrder(series: AgentProvenanceCliSeries): number {
       return 13
     case '1.14':
       return 14
+    case '1.15':
+      return 15
   }
 }
 
@@ -233,16 +246,17 @@ export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConf
  *
  * Delegates to the single compat version parser so the same stdout that classifies a session
  * also selects its inventory — two parsers must never disagree at this boundary. Returns
- * '1.14' only for stable 1.14.x, and null for every non-admitted form: prereleases,
- * >=1.15, retired below-range lines (including the 1.13 v13 window, the 1.12 v12
- * window, the 1.10/1.11 v11 window, and 1.9.x), or unparseable output. Retired minors
+ * '1.15' only for stable 1.15.x, and null for every non-admitted form: prereleases,
+ * >=1.16, retired below-range lines (including the 1.14 v14 window, the 1.13 v13
+ * window, the 1.12 v12 window, the 1.10/1.11 v11 window, and 1.9.x), or unparseable
+ * output. Retired minors
  * stay typed as `AgentProvenanceCliSeries` history for registry facts and on-disk
  * stamps; they never select an inventory here.
  */
 export function parseOpenSpecCliSeries(cliVersion: string | null): AgentCliSeries | null {
   const version = parseOpenSpecCliVersion(cliVersion ?? undefined)
   if (!version || version.prerelease !== null) return null
-  if (version.major === 1 && version.minor === 14) return '1.14'
+  if (version.major === 1 && version.minor === 15) return '1.15'
   return null
 }
 
