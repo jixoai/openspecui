@@ -1,17 +1,36 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
  * 1. Cache reactive file, directory, existence, and stat reads.
  * 2. Bind cached reads to shared watcher roots and missing-path fallback checks.
  * 3. Settle overlapping cached projections as one coherent post-mutation snapshot.
  * 4. Release watcher, polling, state, and refresh registrations together.
  * 5. Distinguish expected missing paths from integrity-relevant filesystem read failures.
+ * 6. Record each registration's realpath-normalized path once, so the settlement net matches
+ *    leased roots in one path space with no per-pass filesystem call.
+ * 7. Guard the settlement net pass-side against every publisher of a registration's value: a
+ *    per-registration commit version, checked and committed in one synchronous block, so a pass can
+ *    never publish a value older than a publication that landed after its read began.
+ * 8. Offer one-shot consumers an awaited settle of their input roots (`settlePaths`) that keeps
+ *    every registration alive, so a fresh one-shot read no longer orphans a retained projection in
+ *    the same process.
+ * 9. Give the one-shot settle a `force-commit` conflict mode — bounded re-reads, then a final read
+ *    committed without a version check — so a one-shot consumer can never be served a value older
+ *    than a read that started after its call, while trigger-driven passes keep the `skip` semantics.
  *
  * Original request (2026-07-16): "direct filesystem mutations update reactive state before returning."
  * Original request (2026-08-01): nested Spec discovery must not silently drop unreadable subtrees.
+ * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
+ *   — fix-reactive-fs-settlement S0: one matching space for the settlement net, and only for it.
+ *   — fix-reactive-fs-settlement S3: the pooled pass's read/commit window guard.
+ *   — fix-reactive-fs-settlement S4: settle-then-read for one-shot consumers, without clearCache.
+ *   — fix-reactive-fs-settlement S4/BLK-1 (2026-11-05): the one-shot freshness contract holds only
+ *     when conflicts are answered by later reads; `skip` is not a freshness mode.
  */
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { resolveRealPathThroughExistingAncestor } from './path-realpath.js'
 import { ReactiveState } from './reactive-state.js'
+import { registerSettlementRunner } from './settlement-coordinator.js'
 import { acquireWatcher, isWatcherPoolInitialized } from './watcher-pool.js'
 
 /** 状态缓存：路径 -> ReactiveState */
@@ -19,7 +38,28 @@ const stateCache = new Map<string, ReactiveState<unknown>>()
 
 interface CacheRefreshRegistration {
   kind: 'file' | 'directory' | 'exists' | 'stat'
+  /** Lexical `resolve()`-space path; write settlement keeps matching this field bidirectionally. */
   path: string
+  /**
+   * Realpath-normalized path, resolved once at registration by the same helper the watcher pool
+   * uses. The settlement net compares this field against realpath-tracked leased roots; it is
+   * never a substitute for `path`, so write settlement semantics are unchanged.
+   */
+  normalizedPath: string
+  /**
+   * Per-registration commit version, bumped by **every** publisher of this registration's value:
+   *
+   * 1. `settleReactivePathMutationInternal` (the write-settlement core);
+   * 2. `updateReactiveFileCache` (direct cache publication);
+   * 3. event-driven and missing-path-poll `refresh` commits (all four kinds' commit closures);
+   * 4. other settlement passes' commits (`settleRegisteredReadsUnder`).
+   *
+   * Classes 1, 3 and 4 all commit through the closure returned by `prepareRefresh`, so a single bump
+   * there covers them; class 2 bypasses the closure and bumps explicitly. A pass records this
+   * before reading and re-checks it in the same synchronous block as its commit, so it can detect
+   * any publication that landed after its read began.
+   */
+  commitVersion: number
   prepareRefresh: () => Promise<() => void>
   refresh: () => Promise<void>
 }
@@ -91,6 +131,10 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
       const newValue = await getValue()
       return () => {
         state!.set(newValue)
+        // Publisher classes (1), (3) and (4): every commit through this closure — write settlement,
+        // event-driven and missing-path-poll refresh, and other passes — publishes this
+        // registration's value and therefore advances the version a concurrent pass checks.
+        registration.commitVersion += 1
         if (newValue === null) {
           ensureMissingPathPoll(key, refresh)
         } else {
@@ -102,7 +146,15 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
       const commit = await prepareRefresh()
       commit()
     }
-    refreshCache.set(key, { kind: 'file', path: normalizedPath, prepareRefresh, refresh })
+    const registration: CacheRefreshRegistration = {
+      kind: 'file',
+      path: normalizedPath,
+      normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
+      commitVersion: 0,
+      prepareRefresh,
+      refresh,
+    }
+    refreshCache.set(key, registration)
     if (initialValue === null) {
       ensureMissingPathPoll(key, refresh)
     }
@@ -127,12 +179,19 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
  * 主动更新响应式文件缓存（用于写入后立即推送订阅）
  *
  * 仅当该文件已有缓存状态时生效；不会创建新的监听器。
+ *
+ * Publisher class (2) of `CacheRefreshRegistration.commitVersion`: this publication bypasses the
+ * registration's `prepareRefresh` closure (callers already wrote the file to disk first), so it
+ * bumps the version explicitly — otherwise a settlement pass that read before this publication
+ * could still commit its stale value.
  */
 export function updateReactiveFileCache(filepath: string, content: string | null): void {
   const normalizedPath = resolve(filepath)
   const key = `file:${normalizedPath}`
   const state = stateCache.get(key) as ReactiveState<string | null> | undefined
   state?.set(content)
+  const registration = refreshCache.get(key)
+  if (registration) registration.commitVersion += 1
 }
 
 function containsPath(rootPath: string, candidatePath: string): boolean {
@@ -184,6 +243,203 @@ export async function settleReactivePathMutation(path: string): Promise<void> {
 export async function settleReactiveFileWrite(filepath: string, content: string): Promise<void> {
   await settleReactivePathMutationInternal(filepath, content)
 }
+
+/**
+ * Test-only gate awaited between a settlement pass's read phase and its synchronous commit block.
+ * A publisher interleaved here is how the commit-version guard's contract is asserted without
+ * sleeping: the pass has read, the publisher has committed, and the pass must not publish the value
+ * it read. Nothing in production installs one.
+ */
+let settlementCommitGateForTests: (() => void | Promise<void>) | null = null
+
+export function setSettlementCommitGateForTests(gate: (() => void | Promise<void>) | null): void {
+  settlementCommitGateForTests = gate
+}
+
+/** Conflict policy for one settlement pass; see `settleRegisteredReadsUnder`. */
+export interface SettleRegisteredReadsOptions {
+  /**
+   * `'skip'` (default, trigger-driven passes): drop a conflicting registration and let a later
+   * pass self-heal it. `'force-commit'` (one-shot consumers via `settlePaths`): answer every
+   * conflict with another read, and after a bounded number of attempts read once more and commit
+   * that read unconditionally.
+   */
+  conflictMode?: 'skip' | 'force-commit'
+}
+
+/**
+ * Total read attempts (the first read included) one registration may spend in `force-commit` mode
+ * before the pass falls back to the final forced read. The same number bounds the reader that
+ * detects an in-flight conflict, so no conflict loop is unbounded.
+ */
+const FORCE_COMMIT_MAX_ATTEMPTS = 3
+
+/**
+ * Re-read every registered read whose normalized path lies under one normalized root.
+ *
+ * This is the settlement net's matching primitive. Both sides live in realpath-normalized space
+ * (the root supplied by the caller, each registration's `normalizedPath` recorded once at
+ * registration), so matching is a pure ancestor test with no per-pass filesystem call. Membership
+ * is inclusive of the root itself and strictly ancestor-directed: a registration above the root is
+ * never covered. An empty set performs no read at all.
+ *
+ * Ordering guard (S3, pass-side only): each registration's commit version is recorded before its
+ * read, and a publisher that committed while that read was in flight makes the pass re-read once
+ * (up to `FORCE_COMMIT_MAX_ATTEMPTS` attempts in `force-commit` mode). The final version check and
+ * the commit are one **synchronous** block, so no publication can interleave between them.
+ *
+ * `options.conflictMode` decides what a conflict still present in that block means:
+ *
+ * - `'skip'` (default — arm, attach, and pooled-cadence passes): the registration is dropped from
+ *   this pass, and a later pass is expected to self-heal it. This is the original trigger-pass
+ *   semantics and it is **not** a freshness guarantee: an event/poll publisher's own read can have
+ *   started before this pass (only its commit lands later), so the value this pass declines to
+ *   overwrite can be older than the disk at this instant. One-shot consumers must not use it.
+ * - `'force-commit'` (one-shot consumers, wired by `settlePaths`): the conflict is answered by
+ *   another read. After the bounded attempts are spent, the pass reads once more and commits that
+ *   read **without** a version check. That forced read starts from disk no earlier than every
+ *   conflicting read observed so far, so it is the freshest value reachable at that moment. The
+ *   declared residual still applies: a publisher's own read→commit window can be interleaved by a
+ *   newer pass commit and briefly publish the older value; that self-heals on the next pass and is
+ *   not part of this claim, and neither is a publication landing inside the final read's own window.
+ *
+ * Returns the number of registrations whose refresh actually committed (those skipped by the guard
+ * are excluded).
+ */
+export async function settleRegisteredReadsUnder(
+  normalizedRootPath: string,
+  options: SettleRegisteredReadsOptions = {}
+): Promise<number> {
+  const conflictMode = options.conflictMode ?? 'skip'
+  const registrations = [...refreshCache.values()].filter((registration) =>
+    containsPath(normalizedRootPath, registration.normalizedPath)
+  )
+  if (registrations.length === 0) return 0
+
+  interface SettlementAttempt {
+    registration: CacheRefreshRegistration
+    commit: () => void
+    /** Commit version observed immediately before this attempt's read. */
+    observedVersion: number
+    /** Reads spent on this registration so far, this attempt included. */
+    attempts: number
+  }
+
+  const readOnce = async (
+    registration: CacheRefreshRegistration,
+    attempts: number
+  ): Promise<SettlementAttempt> => {
+    const observedVersion = registration.commitVersion
+    const commit = await registration.prepareRefresh()
+    return { registration, commit, observedVersion, attempts }
+  }
+
+  const maxInlineAttempts = conflictMode === 'force-commit' ? FORCE_COMMIT_MAX_ATTEMPTS : 2
+
+  // Read phase: one read per registration, retried inline while a publisher that committed during
+  // a read keeps making the value read possibly predate it (bounded, so a live publisher stream
+  // cannot pin the pass here).
+  let round = await Promise.all(
+    registrations.map(async (registration) => {
+      let attempt = await readOnce(registration, 1)
+      while (
+        attempt.registration.commitVersion !== attempt.observedVersion &&
+        attempt.attempts < maxInlineAttempts
+      ) {
+        attempt = await readOnce(registration, attempt.attempts + 1)
+      }
+      return attempt
+    })
+  )
+
+  let committed = 0
+  while (round.length > 0) {
+    if (settlementCommitGateForTests) {
+      await settlementCommitGateForTests()
+    }
+
+    const conflicted: SettlementAttempt[] = []
+    // Promise continuations cannot observe a partial snapshot until this synchronous commit ends,
+    // and the version check shares that block with its commit: no publisher can interleave.
+    for (const attempt of round) {
+      if (attempt.registration.commitVersion !== attempt.observedVersion) {
+        conflicted.push(attempt)
+        continue
+      }
+      attempt.commit()
+      committed += 1
+    }
+
+    if (conflictMode === 'skip' || conflicted.length === 0) {
+      // `'skip'`: a conflicting registration is deliberately dropped and retried by a later pass;
+      // the retained value is the publisher's, which this pass must not overwrite with an older
+      // read.
+      break
+    }
+
+    const retries: Array<Promise<SettlementAttempt>> = []
+    for (const attempt of conflicted) {
+      if (attempt.attempts >= FORCE_COMMIT_MAX_ATTEMPTS) {
+        // Attempt budget spent and still conflicted: read once more and commit it unconditionally.
+        // This read begins on disk after every conflicting read observed so far, so it is the
+        // freshest value reachable here; the residual above covers its own publication window.
+        const forcedCommit = await attempt.registration.prepareRefresh()
+        forcedCommit()
+        committed += 1
+        continue
+      }
+      retries.push(readOnce(attempt.registration, attempt.attempts + 1))
+    }
+    round = await Promise.all(retries)
+  }
+  return committed
+}
+
+/**
+ * Re-read every registered read under each given root before a one-shot consumer reads.
+ *
+ * Properties this primitive is defined by (fix-reactive-fs-settlement S4):
+ *
+ * - **Pool- and lease-independent.** It takes no watcher lease and consults no watcher-pool state,
+ *   because a server's first one-shot read can run before any attach has ever acquired a lease.
+ * - **Awaited, with a start-time guarantee.** Once the returned promise resolves, every
+ *   registration under these roots holds a value read from disk at a moment **later than this
+ *   call** — not merely "not older than some publisher already wrote". This holds because the pass
+ *   runs in `force-commit` mode: a conflict is answered by another read, and if the bounded
+ *   attempts are exhausted the pass reads once more and commits that read unconditionally; every
+ *   one of those reads starts after the call (assuming no unbounded external publication stream;
+ *   a publication landing inside the final read's own window can still be newer than the value
+ *   committed). The trigger-driven `'skip'` mode makes no such promise — it drops the conflicting
+ *   registration, whose retained value a preceding event/poll publisher may have read before this
+ *   call — so one-shot consumers must not settle through a default-mode pass.
+ * - **Non-destructive.** It never deletes or releases a registration — this is what lets it replace
+ *   `clearCache` on the one-shot path, so a retained projection observing the same root in this
+ *   process keeps its refreshers instead of being orphaned mid-flight.
+ * - **Normalized once, on the caller side.** Each root crosses
+ *   `resolveRealPathThroughExistingAncestor` exactly once before matching, because S0's primitive
+ *   takes normalized input; `cacheRoots`-shaped `resolve()`-space roots otherwise cover zero reads
+ *   on platforms where `TMPDIR` is a symlinked prefix (macOS `/var` -> `/private/var`). The S0
+ *   boundary applies identically: a later change to the symlink structure of a root's prefix
+ *   leaves the recorded normalization stale and that read uncovered.
+ *
+ * Reads under overlapping roots are covered once per deduplicated normalized root and committed
+ * sequentially; each pass runs in `conflictMode: 'force-commit'` (see its contract above), so the
+ * per-registration commit-version guard answers conflicts with later reads instead of dropping
+ * them. Returns the total number of registrations whose refresh committed.
+ */
+export async function settlePaths(paths: readonly string[]): Promise<number> {
+  const normalizedRoots = new Set(paths.map((path) => resolveRealPathThroughExistingAncestor(path)))
+  let committed = 0
+  for (const root of normalizedRoots) {
+    committed += await settleRegisteredReadsUnder(root, { conflictMode: 'force-commit' })
+  }
+  return committed
+}
+
+// The coordinator owns scheduling but imports nothing from this module; the pass body is injected
+// here instead, so the module graph stays acyclic (`reactive-fs` and `watcher-pool` both point at the
+// coordinator, which points nowhere).
+registerSettlementRunner(settleRegisteredReadsUnder)
 
 /**
  * 响应式读取目录内容
@@ -268,11 +524,21 @@ export async function reactiveReadDir(
       const newValue = await getValue()
       return () => {
         state!.set(newValue)
+        // Publisher classes (1), (3) and (4); see `CacheRefreshRegistration.commitVersion`.
+        registration.commitVersion += 1
       }
     }
     const refresh = async (): Promise<void> => {
       const commit = await prepareRefresh()
       commit()
+    }
+    const registration: CacheRefreshRegistration = {
+      kind: 'directory',
+      path: normalizedPath,
+      normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
+      commitVersion: 0,
+      prepareRefresh,
+      refresh,
     }
     const release = acquireWatcher(normalizedPath, refresh, {
       recursive: true,
@@ -282,12 +548,7 @@ export async function reactiveReadDir(
         releaseCache.delete(key)
       },
     })
-    refreshCache.set(key, {
-      kind: 'directory',
-      path: normalizedPath,
-      prepareRefresh,
-      refresh,
-    })
+    refreshCache.set(key, registration)
     releaseCache.set(key, release)
   }
 
@@ -324,6 +585,8 @@ export async function reactiveExists(path: string): Promise<boolean> {
       const newValue = await getValue()
       return () => {
         state!.set(newValue)
+        // Publisher classes (1), (3) and (4); see `CacheRefreshRegistration.commitVersion`.
+        registration.commitVersion += 1
         if (newValue) {
           stopMissingPathPoll(key)
         } else {
@@ -335,7 +598,15 @@ export async function reactiveExists(path: string): Promise<boolean> {
       const commit = await prepareRefresh()
       commit()
     }
-    refreshCache.set(key, { kind: 'exists', path: normalizedPath, prepareRefresh, refresh })
+    const registration: CacheRefreshRegistration = {
+      kind: 'exists',
+      path: normalizedPath,
+      normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
+      commitVersion: 0,
+      prepareRefresh,
+      refresh,
+    }
+    refreshCache.set(key, registration)
     if (!initialValue) {
       ensureMissingPathPoll(key, refresh)
     }
@@ -411,6 +682,8 @@ export async function reactiveStat(
       const newValue = await getValue()
       return () => {
         state!.set(newValue)
+        // Publisher classes (1), (3) and (4); see `CacheRefreshRegistration.commitVersion`.
+        registration.commitVersion += 1
         if (newValue === null) {
           ensureMissingPathPoll(key, refresh)
         } else {
@@ -422,7 +695,15 @@ export async function reactiveStat(
       const commit = await prepareRefresh()
       commit()
     }
-    refreshCache.set(key, { kind: 'stat', path: normalizedPath, prepareRefresh, refresh })
+    const registration: CacheRefreshRegistration = {
+      kind: 'stat',
+      path: normalizedPath,
+      normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
+      commitVersion: 0,
+      prepareRefresh,
+      refresh,
+    }
+    refreshCache.set(key, registration)
     if (initialValue === null) {
       ensureMissingPathPoll(key, refresh)
     }

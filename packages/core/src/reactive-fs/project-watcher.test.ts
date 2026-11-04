@@ -1,19 +1,21 @@
 /**
- * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
  * 1. Prove watcher-root path-liveness and replacement recovery.
  * 2. Prove explicitly opted-in missing paths accept one coalesced ancestor creation event.
  * 3. Prove recursive event matching follows native path separators.
+ * 4. Prove completed rebuilds are reported separately from the mid-flight runtime status emit.
  *
  * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
  * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
  */
 import { realpathSync } from 'node:fs'
 import { mkdir, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ProjectWatcher } from './project-watcher.js'
+import { ProjectWatcher, type ProjectWatcherRuntimeStatus } from './project-watcher.js'
 
 const tempDirs: string[] = []
 
@@ -226,5 +228,50 @@ describe('ProjectWatcher path liveness', () => {
         reason: 'missing-project-dir',
       },
     })
+  })
+
+  it('reports completed rebuilds separately from mid-flight runtime status', async () => {
+    const root = await createTempRoot()
+    const projectDir = join(root, 'project')
+    await mkdir(projectDir, { recursive: true })
+
+    const watcher = new ProjectWatcher(projectDir)
+    const statuses: ProjectWatcherRuntimeStatus[] = []
+    const reinitialized: ProjectWatcherRuntimeStatus[] = []
+    const releaseStatus = watcher.subscribeRuntimeStatus((status) => statuses.push(status))
+    const releaseReinitialized = watcher.subscribeReinitialized((status) =>
+      reinitialized.push(status)
+    )
+
+    try {
+      await watcher.init()
+      expect(reinitialized).toEqual([])
+
+      statuses.length = 0
+      await (watcher as unknown as { reinitialize(reason: string): Promise<void> }).reinitialize(
+        'manual'
+      )
+
+      // The status stream carries the mid-flight teardown (`reinitializeCount` still 0, observer
+      // not armed) before completion, so the explicit callback cannot be replaced by it.
+      expect(statuses.some((status) => status.reinitializeCount === 0)).toBe(true)
+      expect(reinitialized).toHaveLength(1)
+      expect(reinitialized[0]).toMatchObject({
+        generation: 2,
+        reinitializeCount: 1,
+        lastReinitializeReason: 'manual',
+      })
+
+      // Every completed rebuild reports again; the callback is not one-shot.
+      await (watcher as unknown as { reinitialize(reason: string): Promise<void> }).reinitialize(
+        'manual'
+      )
+      expect(reinitialized).toHaveLength(2)
+      expect(reinitialized[1]).toMatchObject({ generation: 3, reinitializeCount: 2 })
+    } finally {
+      releaseReinitialized()
+      releaseStatus()
+      await watcher.close()
+    }
   })
 })

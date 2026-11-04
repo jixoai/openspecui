@@ -3,7 +3,9 @@
  * 1. Project the unified OpenSpec 1.15 Agent registry into exact skill and command artifact state.
  * 2. Report partial, stale-version, cleanup-needed, migration-required, and unavailable states from physical evidence.
  * 3. Observe user-global skill roots (e.g. MiniMax Code) without ever cleaning or migrating them here.
- * 4. Preserve bounded reactive directory observation and fresh one-shot cache invalidation.
+ * 4. Preserve bounded reactive directory observation and fresh one-shot reads: settle every input
+ *    root this projection depends on before reading, and never delete or release the registrations
+ *    (a retained projection of the same project keeps its refreshers).
  * 5. Expose Codex managed-global-prompt observation without treating those prompts as current commands.
  * 6. Judge generated-by staleness series-aware: only the admitted line (stable 1.15.x) is
  *    current; below-admitted generators (1.14.x, 1.13.x, 1.12.x, 1.11.x, 1.10.x, and
@@ -19,6 +21,9 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — Slice 3 rotates the generator stamp to 1.16.0
  * and the replacement label to the 1.15 line (no upstream tool changes).
+ * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
+ *   — fix-reactive-fs-settlement S4: the one-shot inventory settles its input roots instead of
+ *     deleting cache entries by substring prefix, so a retained projection stays observable.
  */
 
 import { homedir } from 'node:os'
@@ -40,7 +45,7 @@ import {
   OPSX_WORKFLOW_TO_SKILL_DIR as TOOL_WORKFLOW_TO_SKILL_DIR,
   type OpsxWorkflowId,
 } from './opsx-workflows.js'
-import { clearCache, reactiveReadDir, reactiveReadFile } from './reactive-fs/index.js'
+import { reactiveReadDir, reactiveReadFile, settlePaths } from './reactive-fs/index.js'
 
 export { TOOL_WORKFLOW_TO_SKILL_DIR }
 export type ToolWorkflowId = OpsxWorkflowId
@@ -243,7 +248,12 @@ function getCommandArtifacts(
   })
 }
 
-function invalidateToolInitCaches(projectDir: string): void {
+/**
+ * Every `resolve()`-space observation root a one-shot inventory reads through. This is the same set
+ * the removed `clearCache` sweep used to tear down; it is now the settlement net's input, so no
+ * `settlePaths` caller ever has to restate it.
+ */
+function collectToolInitCacheRoots(projectDir: string): Set<string> {
   const cacheRoots = new Set<string>([
     resolve(projectDir),
     getExternalCodexCommandObservationRoot(),
@@ -261,7 +271,7 @@ function invalidateToolInitCaches(projectDir: string): void {
         cacheRoots.add(dirname(legacyPath))
     }
   }
-  for (const root of cacheRoots) clearCache(root)
+  return cacheRoots
 }
 
 async function readArtifactDirectory(dir: string): Promise<ReadonlySet<string>> {
@@ -776,7 +786,11 @@ export async function getToolInitStates(
   projectDir: string,
   options: ToolInitProjectionOptions
 ): Promise<ToolInitState[]> {
-  invalidateToolInitCaches(projectDir)
+  // Freshness is settlement, not retirement: re-read every registration these roots cover before
+  // reading. The primitive is pool- and lease-independent (a server's first one-shot can run before
+  // any attach) and non-destructive, so a retained projection of the same project in this process
+  // keeps its refreshers.
+  await settlePaths([...collectToolInitCacheRoots(projectDir)])
   return projectToolInitStates(projectDir, options)
 }
 

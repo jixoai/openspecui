@@ -1,13 +1,17 @@
 /**
- * Orthogonal intents (updated 2026-08-15 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
  * 1. Combine the complete OpenSpec 1.9 Agent registry with authoritative Environment delivery policy.
  * 2. Expose fresh one-shot physical projections through Core `getToolInitStates`.
  * 3. Retain reactive physical projections through Core `createToolInitStateProjection`.
  * 4. Rebind retained work when Environment policy changes and retire all work on dispose.
  * 5. Observe user-global skill roots (MiniMax Code) beside the project root and Codex prompt root.
+ * 6. Settle its own observation roots once, awaited, before the retained projection's first read —
+ *    the single declared consumer hook of fix-reactive-fs-settlement S1, because every generic
+ *    signal is memoized past this service.
  *
  * Original request (2026-08-01): "新增 Agent delivery projection service 及 checked tests。"
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
+ * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
  */
 
 import {
@@ -18,6 +22,8 @@ import {
   getToolInitStates,
   loadOpenSpecAgentCommandContents,
   normalizeAgentDeliveryPolicy,
+  requestSettlement,
+  resolveRealPathThroughExistingAncestor,
   selectAgentDeliveryRegistry,
   type AgentCommandArtifact,
   type AgentCommandContentFormat,
@@ -453,6 +459,7 @@ export class AgentDeliveryProjectionService {
           await Promise.all(releases.map((release) => release()))
           return
         }
+        await this.settleObservedRoots()
         this.observationReleases = releases
       } catch (cause: unknown) {
         await Promise.all(releases.map((release) => release()))
@@ -461,6 +468,29 @@ export class AgentDeliveryProjectionService {
     })()
     this.observationStartPromise = startPromise
     return startPromise
+  }
+
+  /**
+   * Settle every observation root this service leases, once, before its first projection read.
+   *
+   * This is the single declared consumer hook of fix-reactive-fs-settlement S1 (trigger 4). Both
+   * generic signals are memoized past this service: `observationStartPromise` below means a second
+   * `subscribe` never re-enters the root loop, and `ReactiveObservationEnvironment.acquireRoot`
+   * memoizes repeated logical acquisition so the pool's 0 -> 1 arm trigger cannot fire for either.
+   * Without this hook a retained subscription whose first frame is served from a stale cache would
+   * stay stale until the pooled cadence (S3) — and the first frame is exactly what a user sees.
+   * It is awaited, unlike the arm/attach triggers, because the projection read that follows is
+   * synchronous with this chain; the pass is therefore guaranteed to precede it.
+   */
+  private async settleObservedRoots(): Promise<void> {
+    const observedRoots = [
+      this.options.projectDir,
+      getExternalCodexCommandObservationRoot(),
+      ...getExternalAgentSkillsObservationRoots(),
+    ]
+    await Promise.all(
+      observedRoots.map((root) => requestSettlement(resolveRealPathThroughExistingAncestor(root)))
+    )
   }
 }
 
