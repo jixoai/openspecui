@@ -13,6 +13,11 @@
  * 2026-10-25 (target-openspec-cli-15-line Slice 4): the fake session version rotates to
  * the admitted 1.15.0 line so the batch transport stays genuinely exercised; the executed
  * warning payload keeps its 1.14.0 capture provenance (shapes unchanged upstream).
+ * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
+ *   — update-openspec-cli-16-line Slice 2 rotates the fake session version to the admitted
+ *   1.16.0 line. Leaving it at 1.15.0 would silently downgrade the batch test: the kernel
+ *   would fall back to the serial transport and still pass, proving nothing about the
+ *   capability-gated `status --all` path.
  */
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -44,9 +49,9 @@ const WARNED_CHANGE = 'warned-change'
 const CLEAN_CHANGE = 'clean-change'
 
 /**
- * Fake 1.15 CLI fixture for the Status warnings projection.
+ * Fake 1.16 CLI fixture for the Status warnings projection.
  *
- * `--version` reports the admitted 1.15.0 line so the session derives the batch
+ * `--version` reports the admitted 1.16.0 line so the session derives the batch
  * capability. `status --change warned-change` and its batch healthy entry both carry
  * the executed top-level `warnings` array; `clean-change` never does, proving the
  * absent-member law on the same envelope.
@@ -114,7 +119,7 @@ function join(base, rest) {
 }
 
 if (args.includes('--version')) {
-  console.log('1.15.0')
+  console.log('1.16.0')
   process.exit(0)
 }
 

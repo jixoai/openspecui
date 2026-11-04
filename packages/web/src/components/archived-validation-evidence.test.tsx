@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
  * 1. Present the typed admitted-line archived-validation report with items, issues, totals, and root.
  * 2. Preserve CLI failure evidence without repair or automatic archive actions.
  * 3. Identify the evidence as unavailable in static snapshots instead of fabricating it.
@@ -15,6 +15,9 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * 2026-10-25 (target-openspec-cli-15-line Slice 4): the admitted-session fixture sample rotates to 1.15.0 per the v15 window.
+ * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
+ *   — update-openspec-cli-16-line Slice 2 rotates the admitted-session fixture sample to
+ *   1.16.0 per the v16 window.
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -45,7 +48,7 @@ const rootActionStateMock = vi.hoisted(() => ({
     message: '',
     evidence: [],
     context: {
-      cli: { available: true, version: '1.15.0' },
+      cli: { available: true, version: '1.16.0' },
     },
     observedAt: 1,
   },
@@ -109,7 +112,7 @@ describe('ArchivedValidationEvidence', () => {
       message: '',
       evidence: [],
       context: {
-        cli: { available: true, version: '1.15.0' },
+        cli: { available: true, version: '1.16.0' },
       },
       observedAt: 1,
     }

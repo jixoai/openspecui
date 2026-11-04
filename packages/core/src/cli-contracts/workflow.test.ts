@@ -53,6 +53,11 @@
  * 2026-10-25 (target-openspec-cli-15-line Slice 4): the capability-transport fixture set
  * rotates to the admitted 1.15 line (admitted 1.15.0; first below-window refusal 1.14.0);
  * the older retained series keep proving capability-boundary rejections only.
+ * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
+ *   — update-openspec-cli-16-line Slice 2 rotates the set to the v16 window (admitted
+ *   1.16.0 as `capabilities116`; first below-window refusal 1.15.0); captured 1.14/1.15
+ *   decode payloads keep their own version literals because they are executable evidence,
+ *   not admission facts.
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'
@@ -323,12 +328,12 @@ describe('OpenSpec 1.8/1.9 workflow CLI contracts', () => {
   })
 })
 
-// Admitted-line capabilities under the OpenSpecUI 15 single-series window (Slice 4
-// rotation): stable 1.15.x derives the 1.11-introduced batch/diff and 1.12 findings
-// transports; every retired line (1.14/1.13/1.12/1.11/1.10) derives none and proves
-// capability-boundary rejections only.
+// Admitted-line capabilities under the OpenSpecUI 16 single-series window (Slice 2
+// rotation): stable 1.16.x derives the 1.11-introduced batch/diff, the 1.12 findings,
+// and the 1.15 update-dry-run transports; every retired line (1.15/1.14/1.13/1.12/1.11/
+// 1.10) derives none and proves capability-boundary rejections only.
+const capabilities116 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.16.0'))
 const capabilities115 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.15.0'))
-const capabilities114 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.14.0'))
 const capabilities112 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.12.0'))
 const capabilities111 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.11.0'))
 const capabilities110 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.10.0'))
@@ -830,7 +835,7 @@ describe('OpenSpec 1.12 validate findings contract executor', () => {
   it('composes the findings argv only through the capability-gated findings method', async () => {
     const findings = await contracts.validateFindings({
       target: { kind: 'scope', scope: 'all' },
-      capabilities: capabilities115,
+      capabilities: capabilities116,
     })
 
     expect(findings.kind).toBe('executed')
@@ -847,10 +852,10 @@ describe('OpenSpec 1.12 validate findings contract executor', () => {
     expect(findingsData.report.returnedItems).toBe(1)
 
     // A non-admitted session receives the typed refusal before any argv exists:
-    // the retired 1.14/1.13/1.12/1.11 lines reject `--report` entirely, so no spawn may happen.
+    // the retired 1.15/1.14/1.13/1.12/1.11 lines reject `--report` entirely, so no spawn may happen.
     const refused = await contracts.validateFindings({
       target: { kind: 'scope', scope: 'all' },
-      capabilities: capabilities114,
+      capabilities: capabilities115,
     })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'findingsReport' })
     expect(
@@ -1059,7 +1064,7 @@ describe('capability-gated 1.11 command argv', () => {
 
   it('builds status --all --json argv only for the admitted batch capability', async () => {
     const admitted = await contracts.workflowStatusAll({
-      capabilities: capabilities115,
+      capabilities: capabilities116,
       schema: 'custom',
       store: 'shared',
     })
@@ -1069,9 +1074,9 @@ describe('capability-gated 1.11 command argv', () => {
       ['status', '--all', '--json', '--schema', 'custom', '--store', 'shared'],
     ])
 
-    // Every line below the admitted 1.15 window derives no capability: the retained
-    // 1.14/1.13/1.12/1.11/1.10 series prove capability-boundary rejections only.
-    const refused = await contracts.workflowStatusAll({ capabilities: capabilities114 })
+    // Every line below the admitted 1.16 window derives no capability: the retained
+    // 1.15/1.14/1.13/1.12/1.11/1.10 series prove capability-boundary rejections only.
+    const refused = await contracts.workflowStatusAll({ capabilities: capabilities115 })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'batchStatus' })
     expect(await contracts.workflowStatusAll({ capabilities: capabilities112 })).toEqual({
       kind: 'unavailable',
@@ -1090,7 +1095,7 @@ describe('capability-gated 1.11 command argv', () => {
 
   it('builds show <change> --json --diff argv only for the admitted diff capability', async () => {
     const admitted = await contracts.showChangeDiff('add-auth', {
-      capabilities: capabilities115,
+      capabilities: capabilities116,
       store: 'shared',
     })
 
@@ -1100,7 +1105,7 @@ describe('capability-gated 1.11 command argv', () => {
     ])
 
     // Retained below-window series prove capability-boundary rejections only.
-    const refused = await contracts.showChangeDiff('add-auth', { capabilities: capabilities114 })
+    const refused = await contracts.showChangeDiff('add-auth', { capabilities: capabilities115 })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'requirementDiff' })
     expect(await contracts.showChangeDiff('add-auth', { capabilities: capabilities112 })).toEqual({
       kind: 'unavailable',
@@ -1829,7 +1834,7 @@ describe('OpenSpec 1.15 update dry-run UpdatePlan CLI contract', () => {
     }))
     const contracts = new OpenSpecCliContractExecutor(execute)
 
-    const gated = await contracts.updatePlan({ capabilities: capabilities115 })
+    const gated = await contracts.updatePlan({ capabilities: capabilities116 })
     expect(gated.kind).toBe('executed')
     if (gated.kind !== 'executed') return
     expect(gated.result.exitCode).toBe(0)
@@ -1848,16 +1853,16 @@ describe('OpenSpec 1.15 update dry-run UpdatePlan CLI contract', () => {
     const contracts = new OpenSpecCliContractExecutor(execute)
 
     const refused = await contracts.updatePlan({
-      capabilities: deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.14.3')),
+      capabilities: deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.15.0')),
     })
     expect(refused).toEqual({ kind: 'unavailable', capability: 'updateDryRun' })
     expect(execute).not.toHaveBeenCalled()
 
-    const admitted = await contracts.updatePlan({ capabilities: capabilities115 })
+    const admitted = await contracts.updatePlan({ capabilities: capabilities116 })
     expect(admitted.kind).toBe('executed')
     expect(execute.mock.calls[0]?.[0]).toEqual(['update', '--dry-run', '--json'])
 
-    await contracts.updatePlan({ capabilities: capabilities115, force: true })
+    await contracts.updatePlan({ capabilities: capabilities116, force: true })
     expect(execute.mock.calls[1]?.[0]).toEqual(['update', '--dry-run', '--json', '--force'])
   })
 })

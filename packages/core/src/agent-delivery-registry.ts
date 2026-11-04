@@ -4,10 +4,10 @@
  * 2. Co-locate capability, command artifact, invocation, alias, setup, cleanup, and migration metadata.
  * 3. Model current/legacy project roots, user-global skill roots, detection paths, and IDE restart facts.
  * 4. Keep the per-series override mechanism available for future widened windows while the
- *    admitted window is the single '1.15' line (every 1.14/1.13/1.12 physical fact carries forward).
+ *    admitted window is the single '1.16' line (every 1.15/1.14/1.13/1.12 physical fact carries forward).
  * 5. Declare the shared `.agents` skills-root owner candidate set and its arbitration order as
  *    metadata only; physical arbitration stays owned by the official CLI and the Server projection.
- * 6. Select the official inventory for the admitted CLI line ('1.15') only; retired minors
+ * 6. Select the official inventory for the admitted CLI line ('1.16') only; retired minors
  *    ('1.10'/'1.11'/'1.12'/'1.13'/'1.14') stay typed as provenance history and select no inventory.
  * 7. Carry Kilo Code's 1.13.2 command-path rotation as a physical fact: `.kilo/command/` is the
  *    live delivery target, the former `.kilocode/workflows/opsx-{workflow}.md` path is legacy
@@ -25,6 +25,9 @@
  *    codestudio, dsh, easycode, gigacode, grok, gsd, veai, warp); the Kilo directory rotation
  *    already landed with the 1132 change and is not repeated here.
  * Original request (2026-10-25): "开工" — Slice 2 rotates the registry series to '1.15':
+ * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
+ *   — Slice 3 rotates the registry series to '1.16' (upstream AI_TOOLS is byte-identical, so
+ *   every 1.15 physical fact carries forward and '1.15' joins the provenance union):
  * no new tools upstream in 1.15.0, a pure series rotation with every physical fact
  * (ten 1.14 entries, Kilo command-path rotation, all provenance) carried forward.
  */
@@ -117,7 +120,7 @@ export interface AIToolOption {
 }
 
 /** Official OpenSpec CLI lines with distinct Agent inventories admitted by this release line. */
-export type AgentCliSeries = '1.15'
+export type AgentCliSeries = '1.16'
 
 /**
  * Historical provenance lines for registry facts that predate or retire out of the
@@ -127,12 +130,20 @@ export type AgentCliSeries = '1.15'
  * inventory, and retired admitted lines ('1.10'/'1.11'/'1.12'/'1.13'/'1.14') select no
  * inventory at all.
  */
-export type AgentProvenanceCliSeries = '1.9' | '1.10' | '1.11' | '1.12' | '1.13' | '1.14' | AgentCliSeries
+export type AgentProvenanceCliSeries =
+  | '1.9'
+  | '1.10'
+  | '1.11'
+  | '1.12'
+  | '1.13'
+  | '1.14'
+  | '1.15'
+  | AgentCliSeries
 
 /**
  * Per-series divergence applied when one admitted CLI line pins a different physical
  * reality than the newest line. The base registry always mirrors the newest admitted
- * line (1.15); an override replaces the listed fields for an older admitted line
+ * line (1.16); an override replaces the listed fields for an older admitted line
  * when a future release widens the window again. A field explicitly set to
  * `undefined` clears the newest-line value.
  */
@@ -161,6 +172,8 @@ function agentCliSeriesOrder(series: AgentProvenanceCliSeries): number {
       return 14
     case '1.15':
       return 15
+    case '1.16':
+      return 16
   }
 }
 
@@ -238,8 +251,8 @@ export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConf
  *
  * Delegates to the single compat version parser so the same stdout that classifies a session
  * also selects its inventory — two parsers must never disagree at this boundary. Returns
- * '1.15' only for stable 1.15.x, and null for every non-admitted form: prereleases,
- * >=1.16, retired below-range lines (including the 1.14 v14 window, the 1.13 v13
+ * '1.16' only for stable 1.16.x, and null for every non-admitted form: prereleases,
+ * >=1.17, retired below-range lines (including the 1.15 v15 window, the 1.14 v14 window, the 1.13 v13
  * window, the 1.12 v12 window, the 1.10/1.11 v11 window, and 1.9.x), or unparseable
  * output. Retired minors
  * stay typed as `AgentProvenanceCliSeries` history for registry facts and on-disk
@@ -248,7 +261,7 @@ export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConf
 export function parseOpenSpecCliSeries(cliVersion: string | null): AgentCliSeries | null {
   const version = parseOpenSpecCliVersion(cliVersion ?? undefined)
   if (!version || version.prerelease !== null) return null
-  if (version.major === 1 && version.minor === 15) return '1.15'
+  if (version.major === 1 && version.minor === 16) return '1.16'
   return null
 }
 
