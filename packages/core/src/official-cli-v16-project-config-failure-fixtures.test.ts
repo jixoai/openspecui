@@ -8,11 +8,16 @@
  * 3. Keep the fixture initialized first: without `openspec init` both 1.16.0 and 1.15.0 answer
  *    the identical `invalid_store_pointer`, which would make the discriminator look
  *    non-discriminating.
+ * 4. Trigger `unreadable_config` with a directory where the config file belongs, not with
+ *    POSIX `chmod 000`: Windows has no read bit to deny, so the permission route silently
+ *    produces a different branch there. Upstream gates on `existsSync` + `readFileSync`
+ *    (`resolveConfigFilePath` / `readConfigParseError`), so an unreadable directory *is* a
+ *    read failure on every platform, and the code is chosen by branch rather than errno.
  *
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 4.
  */
-import { chmod, mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -120,19 +125,19 @@ describe('pinned OpenSpec 1.16 project-config failure fixtures', () => {
 
       await initProject(version, project, env)
       const configPath = join(project, 'openspec', 'config.yaml')
-      await chmod(configPath, 0o000)
-      try {
-        const result = await runPinnedOpenspec(version, ['validate', '--json'], project, env)
+      // A directory where the config file belongs: `existsSync` is true and the read fails
+      // on every platform, which is exactly the `kind: 'read'` branch.
+      await rm(configPath, { force: true })
+      await mkdir(configPath)
 
-        expect(result.exitCode).toBe(1)
-        const envelope = parsePinnedJson(result, (payload) =>
-          CliDiagnosticFailureSchema.parse(payload)
-        )
-        expect(envelope.status[0]).toMatchObject({ code: 'unreadable_config' })
-        expect(envelope.status[0]?.message).toContain(configPath)
-      } finally {
-        await chmod(configPath, 0o600)
-      }
+      const result = await runPinnedOpenspec(version, ['validate', '--json'], project, env)
+
+      expect(result.exitCode).toBe(1)
+      const envelope = parsePinnedJson(result, (payload) =>
+        CliDiagnosticFailureSchema.parse(payload)
+      )
+      expect(envelope.status[0]).toMatchObject({ code: 'unreadable_config' })
+      expect(envelope.status[0]?.message).toContain(configPath)
     }, 60_000)
 
     it(`keeps the report and findings shapes on a healthy project on OpenSpec ${version}`, async () => {

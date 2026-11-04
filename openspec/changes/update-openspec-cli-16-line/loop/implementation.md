@@ -116,3 +116,32 @@ Re-run after the fold: `validate --strict` clean (0 issues), archive exit 0 with
 ## Batch 2 — Window + pin rotation
 
 Pending Round-B approval. Red record, rotation, matrix run.
+
+## Batch 4 — First CI round (PR #321)
+
+Three defects surfaced, all in test fixtures rather than production code. Recorded because two of
+them are classes the plan predicted and then under-executed.
+
+1. **A compat mirror the plan named but the rotation missed.** `packages/server/src/tool-subscription-router.test.ts`
+   fed `version: '1.15.0'` as admitted session data, `generatedBy: "1.15.0"` into a generated
+   skill, and expected `generatedByVersion: '1.15.0'`. After the window flip the session is
+   unadmitted, so every subscription projection came back empty and the suite read as
+   "missing tools" — a shape that looks like a production regression and is not one. RB3 had
+   listed this class ("twelve web/server tests feed `version: '1.15.0'` as admitted session data");
+   the executed rotation covered the files it enumerated and skipped this one. All three samples
+   rotate to 1.16.0, and the file header records the failure shape so the next rotation recognises
+   it. Local run: 5/5.
+2. **Windows-only: a POSIX separator assertion.** The boundary discriminator asserted the CLI
+   message contains `openspec/config.yaml`; Windows prints `openspec\config.yaml`. Now
+   `join('openspec', 'config.yaml')`.
+3. **Windows-only: `chmod 0o000` cannot deny reads.** Windows has no read bit, so the
+   `unreadable_config` fixture took a different branch (exit 1, empty stdout). Replaced with a
+   **directory** where the config file belongs: upstream gates on `existsSync` +
+   `readFileSync` (`resolveConfigFilePath` / `readConfigParseError`), so a directory is a `kind:
+'read'` failure on every platform, and the code is chosen by branch rather than errno. This
+   keeps the fixture running on Windows instead of skipping the capability there — the
+   `it.skipIf` pattern used for `chmod`-based tracking fixtures would have removed coverage.
+
+Boundary that remains honest: the directory trigger proves the read-failure **branch**, not a
+permission-denied errno. Upstream's code selection is errno-independent, so what OpenSpecUI decodes
+is identical.

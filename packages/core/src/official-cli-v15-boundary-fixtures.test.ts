@@ -138,7 +138,8 @@ describe('pinned OpenSpec 1.15 boundary fixtures', () => {
     const admittedFailure = CliDiagnosticFailureSchema.parse(admittedPayload)
     expect(admittedFailure.status.map((entry) => entry.code)).toEqual(['unparseable_config'])
     expect(admittedFailure.status[0]?.severity).toBe('error')
-    expect(admittedFailure.status[0]?.message).toContain('openspec/config.yaml')
+    // Separator-neutral: the CLI prints the platform-native config path.
+    expect(admittedFailure.status[0]?.message).toContain(join('openspec', 'config.yaml'))
 
     // 1.15.0: the same repo answers the ordinary report (no config gate) and exits 0.
     const boundary = await runRetiredV15Openspec(['validate', '--all', '--json'], project, env)
