@@ -106,25 +106,39 @@ Owner: subagent, verified by the main agent's diff review.
    verified config-failure discriminator.
 4. Delete `packages/core/src/__tests__/official-cli-v14-fixtures.ts` (its only importer was the
    v14 boundary suite) and remove the `openspec-cli-114` alias.
-5. **Behaviour-assertion tests the gate flip breaks** (folded from Codex Round-A B2 — these were
-   wrongly classified as honesty-only cleanup):
+5. **Expectation-reversal class** (folded from Codex Round-A B2 and widened by research Round-B
+   RB3). The judgment criterion is **not** "does this file look like test data" but **"does any
+   assertion depend on admission/capability truth"**. Anything asserting `[]` / `null` /
+   `unavailable` / "blocked" for `1.16.0`, or feeding `1.15.0` in as an _admitted_ session to
+   `deriveOpenSpecCliCapabilities` / `classifyOpenSpecCliVersion` / `selectAgentDeliveryRegistry`,
+   must be **reversed**, not merely re-literalled:
    - `packages/web/src/components/cli-health-gate.test.tsx` — asserts `1.16.0` is **blocked** and
-     the required range is `>=1.15.0 <1.16.0`; rotate to 1.16 admitted / 1.17 blocked.
-   - `packages/server/src/agent-update-plan-preview-router.test.ts` and
-     `packages/server/src/cli-validate-findings-router.test.ts` — both build "an admitted 1.15
-     session" fixtures; rotate to 1.16.
+     the required range is `>=1.15.0 <1.16.0`; becomes 1.16 admitted / 1.17 blocked.
+   - `packages/server/src/agent-update-plan-preview-router.test.ts`,
+     `packages/server/src/cli-validate-findings-router.test.ts` — "an admitted 1.15 session"
+     fixtures become 1.16.
    - `packages/core/src/opsx-kernel-cli-projection.test.ts` — its fake CLI gates capability by
      `version.startsWith('1.15')`, so a 1.16 fixture takes the wrong branch.
-6. **Remaining literal cleanup** (honesty only, never by relaxing an assertion): the other server
-   and web router/component tests, `opsx-kernel-schemas-root.fixtures.test.ts`'s local
-   `PINNED_BINS` key, `opsx-kernel-status-warnings.test.ts`, `cli-contracts/workflow.test.ts`
-   (only its `pinned v1.15.0` provenance comment; "OpenSpec 1.15 adds …" is history and stays),
-   and `agent-delivery-registry.test.ts`.
+   - `packages/core/src/cli-contracts/workflow.test.ts` — `capabilities115` (a
+     `deriveOpenSpecCliCapabilities('1.15.0')` fixture) feeds six gated-surface tests; after the
+     flip it derives all-false and those branches move from `executed` to `unavailable`. This is
+     NOT a provenance comment.
+   - `packages/web/src/components/{archived-validation-evidence,validation-findings-evidence,change-diff-evidence}.test.tsx`,
+     `packages/web/src/routes/change-view.test.tsx`,
+     `packages/server/src/{router,change-diff-evidence-service,agent-delivery-projection-service,agent-integrations-router,planning-cli-projection-service,tool-subscription-router}.test.ts` —
+     every `version: '1.15.0'` fed in as admitted session data.
+6. **Literal-rotation class** (honesty only, and never by relaxing an assertion): the rest —
+   `opsx-kernel-schemas-root.fixtures.test.ts`'s local `PINNED_BINS` key,
+   `opsx-kernel-status-warnings.test.ts`, and the comment-level mentions in
+   `cli-contracts/workflow.ts:643` ("pinned v1.15.0") and `cli-contracts/executor.ts:459`
+   ("OpenSpec 1.15 only"). Note `tool-init-state.test.ts` carries `'1.15.2'` (with its own
+   `toHaveLength(50)` assertion), which a "rotate `1.15.0`" instruction alone would miss — it is
+   owned by Slice 3.
 
-**Unique file ownership** (Codex non-blocking): `openspec-compat.test.ts` and
-`scripts/diagnose-cli-runner.test.mjs` belong to Slice 1 (they assert the constants);
-`tool-init-state.test.ts` belongs to Slice 3 (it asserts the staleness baseline). Slice 2 owns the
-rest of the fixture matrix.
+**Unique file ownership**: `openspec-compat.test.ts` and `scripts/diagnose-cli-runner.test.mjs` →
+Slice 1 (they assert the constants). `tool-init-state.test.ts` **and**
+`agent-delivery-registry.test.ts` → Slice 3 only (both assert registry/staleness truth; the latter
+must not also sit in this slice's literal list). Slice 2 owns the remainder of the fixture matrix.
 
 **Gate:** full pinned matrix green against 1.16.0 with zero assertion relaxations; boundary
 suite green against the retained 1.15.0 executable;
@@ -206,10 +220,21 @@ rg -n "1\.16|v1\.16|27c05157|openspec-cli-116|PINNED_OPENSPEC_V16" \
   --glob '!**/node_modules/**' --glob '!references/openspec/**' --glob '!**/CHANGELOG.md'
 ```
 
-Hard-empty gates after Slice 1 (bucket 1 only — these must return nothing):
+Hard-empty gates after Slice 1 (bucket 1 only). The first draft's patterns matched history that
+must be kept (file-header prose, CHANGELOGs, `target-openspec-cli-114-line` provenance), so they
+could never reach zero — these four are the verified equivalents (folded from research Round-B
+RB4, current counts in parentheses):
 
 ```bash
-rg -n "v1\.15\." scripts/check-openspec-reference.mjs
-rg -n "openspec-cli-114" packages scripts .agents/skills
-rg -n "OPENSPEC_CLI_TARGET_SERIES.*'1\.15'|OPENSPECUI_TARGET_MAJOR = 15" packages scripts
+rg -n "'v1\.15\.\*'|startsWith\('v1\.15\." scripts/check-openspec-reference.mjs      # (2)
+rg -n '"openspec-cli-114"|node_modules/openspec-cli-114/' packages scripts .agents/skills  # (2)
+rg -n "OPENSPEC_CLI_TARGET_SERIES.*'1\.15'|OPENSPECUI_TARGET_MAJOR = 15" packages scripts   # (6)
+```
+
+Semantic gate after the archive merge (P5), not a literal one — the delta must never describe the
+admitted line as retired:
+
+```bash
+rg -n "admitted 1\.15" openspec/specs        # must be 0 after merge
+rg -n "stable 1\.16\.x after the v16 admission gate" openspec/specs   # must be 0
 ```

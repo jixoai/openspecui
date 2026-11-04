@@ -83,6 +83,34 @@ project and ran the pinned 1.16.0 `archive update-openspec-cli-16-line -y`: exit
 `+3 ~4 -0 →1 renamed`, main specs show the renamed requirement, the 1.16 window, and the 1.16.0
 pinned generator baseline with **no** residual v15 baseline and no scenario loss.
 
+## Batch 1b — Round-B research channel (8.0/10, +1.5) and its fold
+
+The research channel re-ran the archive experiment at HEAD `36551bf4` and reproduced
+`+3 ~4 -0 →1` exactly, then mechanically compared (requirement, scenario) sets before/after
+(97→98, 56→56, 86→92, 15→15; zero losses). It also confirmed the fold landed where claimed. Four
+remaining blockers, all real:
+
+- **RB1 — a semantic bug my generator introduced.** The `opsx-config-center` retired-line scenario
+  originally read `stable 1.14.x after the v15 admission gate` (1.14 was retired under v15). My
+  script's blanket rotation moved it to `stable 1.16.x after the v16 admission gate`, i.e. it
+  described the **admitted** line as retired, contradicting both the requirement text and its
+  sibling scenario. Fixed to `stable 1.15.x after the v16 admission gate`; the generator now
+  asserts both invariants (`stable 1.15.x after …` present, `stable 1.16.x after …` absent).
+- **RB2 — three admitted-line mentions never rotated** (`an admitted 1.15 Agent projection` ×2,
+  `the same 1.14-selected registry`). Rotated to 1.16 / 1.15-selected.
+- **RB3 — the "honesty-only" bucket still held behaviour assertions.** `agent-delivery-registry.test.ts`
+  asserts `selectAgentDeliveryRegistry('1.16.0') => []` (must reverse), `workflow.test.ts`'s
+  `capabilities115` fixture feeds six gated-surface tests, and twelve web/server tests feed
+  `version: '1.15.0'` as admitted session data. `tool-init-state.test.ts` uses `'1.15.2'`, which a
+  "rotate 1.15.0" instruction cannot reach. The bucket criterion is now "does any assertion depend
+  on admission/capability truth", with an explicit reversal-class list.
+- **RB4 — two of the three hard-empty gates could never reach zero** (they matched file-header
+  history, CHANGELOGs, and `target-openspec-cli-114-line` provenance). Replaced with verified
+  patterns plus a post-merge semantic gate.
+
+Re-run after the fold: `validate --strict` clean (0 issues), archive exit 0 with the same totals,
+`rg "admitted 1\.15" openspec/specs` = 0, and no admitted line written as retired.
+
 ## Batch 2 — Window + pin rotation
 
 Pending Round-B approval. Red record, rotation, matrix run.

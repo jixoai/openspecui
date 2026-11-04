@@ -1,9 +1,10 @@
 <!--
 Orthogonal intents (created 2026-11-04 Asia/Shanghai):
 1. Spec delta: Agent delivery inventory series rotation (1.15 -> 1.16; no new upstream tools).
-2. RENAMED/RENAMED-target use the full `### Requirement:` title form the parser requires
-   (a short title silently matches nothing and leaves the MODIFIED block unarchivable).
-3. Scenario titles stay inherited identity so the archive merge replaces them instead of
+2. RENAMED uses the full `### Requirement:` title form the parser requires.
+3. The retired-line scenario names 1.15.x (the line the v16 gate revokes); 1.16.x is admitted
+   and must never be written as retired.
+4. Scenario titles stay inherited identity so the archive merge replaces them instead of
    reporting a lost scenario.
 
 Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
@@ -39,7 +40,7 @@ Scenario titles below are inherited scenario identity: a title that names an old
 
 #### Scenario: A retired-line session projects no v15 inventory
 
-- **GIVEN** the running OpenSpec CLI is stable 1.16.x after the v16 admission gate
+- **GIVEN** the running OpenSpec CLI is stable 1.15.x after the v16 admission gate
 - **WHEN** the Agent inventory is evaluated
 - **THEN** the v16 registry selection SHALL be empty for that session
 - **AND** the UI SHALL NOT present the retired line's snapshot as the current inventory
@@ -154,14 +155,14 @@ Scenario titles below are inherited scenario identity: a title that names an old
 
 #### Scenario: Retained physical state keeps the selected inventory
 
-- **GIVEN** an admitted 1.15 Agent projection observes a filesystem or Environment replacement
+- **GIVEN** an admitted 1.16 Agent projection observes a filesystem or Environment replacement
 - **WHEN** its retained physical states recompute
-- **THEN** the replacement SHALL use the same 1.14-selected registry as the initial projection
+- **THEN** the replacement SHALL use the same 1.15-selected registry as the initial projection
 - **AND** SHALL NOT reintroduce retired-line targets from a process-global registry
 
 #### Scenario: Direct Init uses the projected registry
 
-- **GIVEN** an admitted 1.15 Agent projection includes a tool
+- **GIVEN** an admitted 1.16 Agent projection includes a tool
 - **WHEN** a caller directly requests Init with a tool outside the projected registry in an explicit `tools`
   array
 - **THEN** the Router SHALL reject the tool before a CLI process starts
