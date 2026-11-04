@@ -57,7 +57,9 @@ Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补�
       resolves equals the post-write value, the cadence sits above the assertion window (so a pooled pass
       cannot rescue a fake), and the third half uses **two ordered gates**. Both fakes (join-and-discard;
       exactly-one-trailing) must be shown failing against these assertions (V2).
-- [ ] `settlePaths` awaits the pass that serves it, including a trailing one.
+- [ ] `settlePaths` is an independent awaited pass by design (it reads directly rather than joining an
+      in-flight pass, so a one-shot call can never resolve on a read that predates it); the version guard
+      is what keeps concurrent passes from publishing older data.
 - [ ] Red test: a deterministically stale cached read surfaces disk truth after a forced reinitialize,
       with no new event (the forced-reinitialize seam named: stubbed drop-events error + fake timers, or
       an explicit entry).

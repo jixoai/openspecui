@@ -98,14 +98,16 @@ one, so it is removed rather than documented:
 
 Arm/attach settlement is fire-and-forget except for (4), which its consumer awaits.
 
-Concurrency: **one coordinator per process, shared by every pass producer** (arm, attach, pooled,
-`settlePaths`). Invariants, written so a join-and-discard implementation cannot pass:
+Concurrency: **one coordinator per process governs the trigger-driven passes** (arm, attach, pooled).
+Invariants, written so a join-and-discard implementation cannot pass:
 
 - at most one pass is in flight per root;
 - a request arriving **before the pass begins reading** joins it and is satisfied by it;
 - a request arriving **after the read phase has begun** marks the root dirty and is served by a trailing
   pass; a request arriving during _that_ pass's read phase derives one more pass, and so on;
-- `settlePaths` awaits the pass that serves it, including when that is a trailing pass.
+- `settlePaths` is deliberately **outside** this coordinator: it reads directly, because joining an
+  in-flight pass could satisfy a one-shot call with a read that predates it. The duplicate concurrent
+  read is bounded, and the per-registration version guard keeps either pass from publishing older data.
 
 Cost wording corrected accordingly: a burst confined to one read phase costs at most two passes; requests
 separated by read phases each cost one. There is no unbounded derivative chain, because each request
@@ -304,10 +306,10 @@ Slices:
   closed at the code level (all four triggers reachable, trailing invariants implementable with both
   assertions able to kill the two fakes, publisher enumeration complete and coverable by one change).
   One new blocker, folded: "registered" was undefined while the spec's opening sentence promised
-  convergence for *any* lost event — a class of event-driven consumers (private event-state caches,
+  convergence for _any_ lost event — a class of event-driven consumers (private event-state caches,
   invalidation-triggered CLI re-pulls) is outside the net by construction, and that is now stated with
   the named instance instead of implied. Two wording fixes folded (the convergence scenario now binds the
-  *read* to the bound and excludes consumer latency; the memoized-staleness bound is corrected to the full
+  _read_ to the bound and excludes consumer latency; the memoized-staleness bound is corrected to the full
   bound and extended to the service memo). Non-blocking items folded: CP2 gains the observable quantities
   a trailing test must assert (exact read-phase entries, post-await committed value, cadence above the
   window, two ordered gates); CP3's jitter and exact-delay-multiset assertions can no longer contradict
