@@ -129,11 +129,12 @@ Owner: subagent, verified by the main agent's diff review.
      every `version: '1.15.0'` fed in as admitted session data.
 6. **Literal-rotation class** (honesty only, and never by relaxing an assertion): the rest —
    `opsx-kernel-schemas-root.fixtures.test.ts`'s local `PINNED_BINS` key,
-   `opsx-kernel-status-warnings.test.ts`, and the comment-level mentions in
+   `opsx-kernel-status-warnings.test.ts`, the comment-level mentions in
    `cli-contracts/workflow.ts:643` ("pinned v1.15.0") and `cli-contracts/executor.ts:459`
-   ("OpenSpec 1.15 only"). Note `tool-init-state.test.ts` carries `'1.15.2'` (with its own
-   `toHaveLength(50)` assertion), which a "rotate `1.15.0`" instruction alone would miss — it is
-   owned by Slice 3.
+   ("OpenSpec 1.15 only"), and the live window prose at `routes/settings.tsx:371-375` (which
+   says "under the v15 single-series window … an unpublished 1.16 … the actually-installed
+   1.15.x" and matches none of the literal gates because it carries no `1.15.0`). Note
+   `tool-init-state.test.ts` is owned by Slice 3 and carries `'1.15.2'`, not `'1.15.0'`.
 
 **Unique file ownership**: `openspec-compat.test.ts` and `scripts/diagnose-cli-runner.test.mjs` →
 Slice 1 (they assert the constants). `tool-init-state.test.ts` **and**
@@ -149,7 +150,8 @@ suite green against the retained 1.15.0 executable;
 - `packages/core/src/agent-delivery-registry.ts` (+ its test): series `'1.15'` → `'1.16'`; every
   physical fact carries forward (upstream `AI_TOOLS` byte-identical); header intent updated.
 - `packages/core/src/tool-init-state.ts`: `PINNED_AGENT_GENERATOR_VERSION` → `'1.16.0'`; the
-  `'1.15.0'` literals in its test rotate with it.
+  series-selector assertions in its test carry **`'1.15.2'` and `toHaveLength(50)`**, not a
+  `'1.15.0'` literal, so a "rotate 1.15.0" instruction cannot reach them.
 - Gate: `pnpm --filter @openspecui/core exec vitest run src/agent-delivery-registry.test.ts src/tool-init-state.test.ts`.
 
 ### Slice 4 — New executable proofs (two files, not one)
@@ -222,8 +224,8 @@ rg -n "1\.16|v1\.16|27c05157|openspec-cli-116|PINNED_OPENSPEC_V16" \
 
 Hard-empty gates after Slice 1 (bucket 1 only). The first draft's patterns matched history that
 must be kept (file-header prose, CHANGELOGs, `target-openspec-cli-114-line` provenance), so they
-could never reach zero — these four are the verified equivalents (folded from research Round-B
-RB4, current counts in parentheses):
+could never reach zero. These three are the verified equivalents (folded from research Round-B
+RB4; current counts in parentheses, all must reach 0):
 
 ```bash
 rg -n "'v1\.15\.\*'|startsWith\('v1\.15\." scripts/check-openspec-reference.mjs      # (2)
@@ -231,10 +233,13 @@ rg -n '"openspec-cli-114"|node_modules/openspec-cli-114/' packages scripts .agen
 rg -n "OPENSPEC_CLI_TARGET_SERIES.*'1\.15'|OPENSPECUI_TARGET_MAJOR = 15" packages scripts   # (6)
 ```
 
-Semantic gate after the archive merge (P5), not a literal one — the delta must never describe the
-admitted line as retired:
+Semantic gates after the archive merge (P5), not literal ones. A rotated delta must never
+describe the admitted line as retired, and `admitted X` always pairs with `X-selected` (the
+historical source `41975d57` wrote `admitted 1.8 / 1.8-selected` before that pairing drifted):
 
 ```bash
-rg -n "admitted 1\.15" openspec/specs        # must be 0 after merge
-rg -n "stable 1\.16\.x after the v16 admission gate" openspec/specs   # must be 0
+rg -n "admitted 1\.15" openspec/specs                                  # 0
+rg -n "stable 1\.16\.x after the v16 admission gate" openspec/specs     # 0
+rg -n "1\.15-selected|1\.14-selected" openspec/specs                    # 0
+rg -n "stable 1\.15\.x after the v16 admission gate" openspec/specs     # 1
 ```

@@ -157,7 +157,7 @@ Scenario titles below are inherited scenario identity: a title that names an old
 
 - **GIVEN** an admitted 1.16 Agent projection observes a filesystem or Environment replacement
 - **WHEN** its retained physical states recompute
-- **THEN** the replacement SHALL use the same 1.15-selected registry as the initial projection
+- **THEN** the replacement SHALL use the same 1.16-selected registry as the initial projection
 - **AND** SHALL NOT reintroduce retired-line targets from a process-global registry
 
 #### Scenario: Direct Init uses the projected registry

@@ -94,8 +94,10 @@ remaining blockers, all real:
   originally read `stable 1.14.x after the v15 admission gate` (1.14 was retired under v15). My
   script's blanket rotation moved it to `stable 1.16.x after the v16 admission gate`, i.e. it
   described the **admitted** line as retired, contradicting both the requirement text and its
-  sibling scenario. Fixed to `stable 1.15.x after the v16 admission gate`; the generator now
-  asserts both invariants (`stable 1.15.x after …` present, `stable 1.16.x after …` absent).
+  sibling scenario. Fixed to `stable 1.15.x after the v16 admission gate`; the semantic gate in
+  the research plan now asserts both directions (`stable 1.15.x after …` present,
+  `stable 1.16.x after …` absent). The one-off generator that produced the delta lived in
+  `/tmp` and is not committed — the gates, not a script, are the durable invariant.
 - **RB2 — three admitted-line mentions never rotated** (`an admitted 1.15 Agent projection` ×2,
   `the same 1.14-selected registry`). Rotated to 1.16 / 1.15-selected.
 - **RB3 — the "honesty-only" bucket still held behaviour assertions.** `agent-delivery-registry.test.ts`
