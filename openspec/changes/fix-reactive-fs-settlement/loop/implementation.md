@@ -79,3 +79,31 @@ sentence is narrowed (O5); O3 disappeared with the single-flight change. Non-blo
 commits serialize with our own writes, the matcher uses `containsPath` rather than `pathsOverlap`, the
 cadence env is read at interval start, `closeAllWatchers()` must stop the interval, and the round-1
 citation of "two pool tests" was dropped as imprecise.
+
+### 2026-11-05 — Review round 3 folded (6.5/10 → plan v4)
+
+Round 3 verified that two of round 2's folds were solid (fanout narrowing, arm identity) and that the
+rest were directionally right but textually incomplete in eight places. All eight are folded; none
+changed the design.
+
+- **B1**: the normalized field is a _separate_ field. Moving `registration.path` would have repeated the
+  same class of bug on the write path, whose matcher is `resolve()`-space and deliberately bidirectional
+  (a directory deletion must reach reads under it). The net owns the lease→read matcher; the write path
+  keeps its own.
+- **B2**: single-flight gains a trailing obligation — requests arriving after a pass starts reading are
+  served by one trailing pass instead of being discarded, so a consumer can no longer be left holding a
+  value read before its request.
+- **B3**: `settlePaths(roots)` is defined as pool- and lease-independent, awaited before the one-shot
+  reads, with the existing two-read `tool-init-state` fixture named as its equivalence test.
+- **B4**: trigger 2 is named — acquiring an already-initialized root record (refcount ≥ 1) — and the
+  residual (attachments that skip root acquisition) is delegated to the cadence net.
+- **B5**: the write-ordering claim assumed a serialization that does not exist; an epoch guard replaces
+  it (stale commit re-reads once, then skips), tested with a gated `prepareRefresh`.
+- **B6**: "root lease" is defined (pool `watcherRoots` refcount > 0) — the committed red test uses the
+  pool-level API, so an environment-level definition would have contradicted it.
+- **B7**: the orphan class has three more call sites (the local-model stores' no-argument
+  `clearCache()`); declared out of scope with their consequence stated rather than silently widened.
+- **B8**: `AGENTS.md`'s three touched laws are named and reconciled in CP6.
+
+The CP5 assertion was also unsatisfiable as written (the per-watcher liveness interval exists by
+design), so it now asserts through an exported diagnostic with N ≥ 2 leases.
