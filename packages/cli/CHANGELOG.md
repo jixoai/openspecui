@@ -1,5 +1,15 @@
 # openspecui
 
+## 16.0.0
+
+### Major Changes
+
+- 000df1a: OpenSpecUI 16: adapt to OpenSpec CLI 1.16.x as a new single-series line (`>=1.16.0 <1.17.0`); the previous 1.15 v15 window, prereleases, `>=1.17.0`, and unparseable versions are blocked by default. The command surface is byte-identical (no new command, flag, or capability; `AI_TOOLS` and the command-generation adapters are untouched), so this line carries **zero production projection changes** and is a window rotation plus two new executable proofs. `validate` now answers a bare `{ status: [...] }` envelope at a non-zero exit when `openspec/config.yaml` cannot be read (`unreadable_config`) or is not valid YAML (`unparseable_config`), for item scope, bulk scope and the findings transport alike — the existing validate unions already decode it, so the envelope renders as verbatim evidence while a healthy project keeps the unchanged report and findings shapes. A counted scenario that has a body but no WHEN/GIVEN or no THEN step is now a WARNING inside the existing finding shape, in change deltas and in main specs, that only `--strict` fails on. The Agent delivery registry rotates to the 1.16 series as a constants-only change (upstream added no tools; `'1.15'` joins the provenance union) and the pinned generator baseline moves to 1.16.0 with series-aware staleness. The pinned executable fixture matrix rotates to `@fission-ai/openspec@1.16.0`, the retained 1.15.0 executable proves below-admitted boundary rejections through the project-config failure discriminator, and the 1.14.3 alias retires. Note for npm consumers: the upstream package now requires Node.js `>=22.12.0` (the standalone binary does not use Node); the repository root declares the same floor for contributors and fixtures.
+
+### Patch Changes
+
+- 3d17560: Repair four static-export defects from #319. Content containing `$'`, `` $` ``, `$&` or `$$` no longer corrupts an exported page: the template insertion step now passes replacer functions instead of replacement strings, so the bootstrap JSON is preserved byte-for-byte, and a template that loses a placeholder fails loudly instead of silently dropping content. `--base-path` now reaches emitted references — template attributes, rendered markup and Vite-emitted chunks/fonts — where previously only the router saw it; the rewrite is bounded so snapshot text that merely mentions an asset path is untouched. The SSG CLI loads its server entry through a `file:` URL, so Windows drive-letter paths no longer fail in the ESM loader. Client navigation normalizes a rendered link's href before navigating, so a sub-path deployment no longer doubles the base path (`/docs/docs/specs`).
+
 ## 15.1.0
 
 ### Minor Changes
