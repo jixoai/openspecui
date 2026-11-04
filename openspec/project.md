@@ -36,7 +36,7 @@ Provides a visual interface that makes spec-driven development accessible and ef
 - **Hono** - Web framework
 - **tRPC v11** - Type-safe API layer with WebSocket support
 - **WebSocket (ws)** - Real-time bidirectional communication
-- **Node.js (>=20.19.0)** - Runtime environment
+- **Node.js (>=22.12.0)** - Runtime environment
 - **@parcel/watcher** - Native file system watcher
 
 ### Build & Development
@@ -233,7 +233,7 @@ The entire UI is built around reactive file system updates. When files change on
 
 **Runtime Requirements**:
 
-- Node.js >= 20.19.0 (strictly enforced)
+- Node.js >= 22.12.0 (strictly enforced)
 - pnpm 10.22.0 (strictly enforced via packageManager field)
 - Native module: `@parcel/watcher` must be available at runtime
 
