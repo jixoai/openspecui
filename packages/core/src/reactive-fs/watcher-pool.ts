@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-08-07 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
  * 1. Own a reference-counted dynamic set of physical watcher roots, including missing logical roots
  *    through their nearest existing ancestor.
  * 2. Bind shared path subscriptions to the deepest active containing root.
@@ -7,9 +7,12 @@
  * 4. Expose aggregate and per-root runtime status for server diagnostics.
  * 5. Keep missing-path ancestor settlement explicit in subscription identity and retire every
  *    physical subscription plus cached ProjectWatcher during full teardown.
+ * 6. Settle registered reads after a 0 -> 1 arm and after a completed rebuild, so a projection
+ *    whose events went missing converges without waiting for an unrelated subtree change.
  *
  * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
  * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
+ * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
  */
 import { existsSync } from 'node:fs'
 import { dirname, isAbsolute, relative } from 'node:path'
@@ -21,6 +24,7 @@ import {
   type ProjectWatcherRuntimeStatus,
   type ProjectWatcherRuntimeStatusListener,
 } from './project-watcher.js'
+import { requestSettlement } from './settlement-coordinator.js'
 
 const DEBOUNCE_MS = 100
 
@@ -71,6 +75,8 @@ const physicalWatcherReferences = new Map<
   string,
   { watcher: ProjectWatcher; referenceCount: number }
 >()
+/** One completed-rebuild listener per physical watcher, released with its physical reference. */
+const physicalReinitializedReleases = new Map<string, () => void>()
 const closingPhysicalWatchers = new Map<string, Promise<void>>()
 const subscriptionCache = new Map<string, PathSubscription>()
 const debounceTimers = new Map<string, NodeJS.Timeout>()
@@ -166,6 +172,28 @@ function rebindAllSubscriptions(): void {
   }
 }
 
+/**
+ * Request one settlement pass for a leased logical root.
+ *
+ * Fire-and-forget by design (triggers 1 and 3 of fix-reactive-fs-settlement S1): these are recovery
+ * passes traced to no caller, so folding them into `record.ready` would lengthen every lease
+ * acquisition and would turn a pass failure into a lease failure. The rejection guard is still
+ * required — a caller with nobody to await it must not leak an unhandled rejection.
+ */
+function requestSettlementForRoot(rootPath: string): void {
+  void requestSettlement(rootPath).catch((error) => {
+    console.error(`[watcher-pool] Settlement failed for ${rootPath}:`, error)
+  })
+}
+
+/** Settle every logical root currently bound to one physical watcher (trigger 3). */
+function settleLogicalRootsOfWatcher(watcher: ProjectWatcher): void {
+  for (const [rootPath, record] of watcherRoots) {
+    if (record.watcher !== watcher) continue
+    requestSettlementForRoot(rootPath)
+  }
+}
+
 function createWatcherRoot(rootPath: string): WatcherRootRecord {
   const physicalRootPath = getExistingWatcherRoot(rootPath)
   const existingPhysical = physicalWatcherReferences.get(physicalRootPath)
@@ -174,6 +202,16 @@ function createWatcherRoot(rootPath: string): WatcherRootRecord {
     existingPhysical.referenceCount += 1
   } else {
     physicalWatcherReferences.set(physicalRootPath, { watcher, referenceCount: 1 })
+    // Trigger 3 of fix-reactive-fs-settlement S1: a *completed* rebuild means the native watcher
+    // is armed again but has no backlog, so everything it missed must be re-read through the
+    // settlement net. One listener per physical watcher settles every logical root bound to it,
+    // and it hangs off the physical reference so it cannot outlive the watcher's last user.
+    physicalReinitializedReleases.set(
+      physicalRootPath,
+      watcher.subscribeReinitialized(() => {
+        settleLogicalRootsOfWatcher(watcher)
+      })
+    )
   }
   const record: WatcherRootRecord = {
     rootPath,
@@ -221,6 +259,8 @@ async function releaseWatcherRootReference(record: WatcherRootRecord): Promise<v
     return
   }
   physicalWatcherReferences.delete(record.physicalRootPath)
+  physicalReinitializedReleases.get(record.physicalRootPath)?.()
+  physicalReinitializedReleases.delete(record.physicalRootPath)
 
   const closing = record.watcher.close().finally(() => {
     if (closingWatcherRoots.get(record.rootPath) === closing) {
@@ -246,7 +286,8 @@ export async function acquireWatcherRoot(rootPath: string): Promise<WatcherRootR
     closingPhysicalWatchers.get(physicalRootPath),
   ])
 
-  const record = watcherRoots.get(normalizedRoot) ?? createWatcherRoot(normalizedRoot)
+  const existingRecord = watcherRoots.get(normalizedRoot)
+  const record = existingRecord ?? createWatcherRoot(normalizedRoot)
   record.referenceCount += 1
   emitWatcherRuntimeStatus()
 
@@ -255,6 +296,13 @@ export async function acquireWatcherRoot(rootPath: string): Promise<WatcherRootR
   } catch (error) {
     await releaseWatcherRootReference(record)
     throw error
+  }
+
+  if (!existingRecord) {
+    // Trigger 1 of fix-reactive-fs-settlement S1: the first lease on a root (0 -> 1) settles the
+    // registered reads that root now covers. It is issued after `record.ready` resolves and before
+    // this lease returns, but it is not awaited — see `requestSettlementForRoot`.
+    requestSettlementForRoot(normalizedRoot)
   }
 
   let released = false
@@ -345,6 +393,10 @@ export async function closeAllWatchers(): Promise<void> {
   }
   const physicalWatchers = [...physicalWatcherReferences.values()].map(({ watcher }) => watcher)
   physicalWatcherReferences.clear()
+  for (const releaseReinitialized of physicalReinitializedReleases.values()) {
+    releaseReinitialized()
+  }
+  physicalReinitializedReleases.clear()
   await Promise.all([
     ...physicalWatchers.map((watcher) => watcher.close()),
     ...closingWatcherRoots.values(),

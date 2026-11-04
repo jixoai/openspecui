@@ -17,6 +17,7 @@ import { readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { resolveRealPathThroughExistingAncestor } from './path-realpath.js'
 import { ReactiveState } from './reactive-state.js'
+import { registerSettlementRunner } from './settlement-coordinator.js'
 import { acquireWatcher, isWatcherPoolInitialized } from './watcher-pool.js'
 
 /** 状态缓存：路径 -> ReactiveState */
@@ -227,6 +228,11 @@ export async function settleRegisteredReadsUnder(normalizedRootPath: string): Pr
   for (const commit of commits) commit()
   return registrations.length
 }
+
+// The coordinator owns scheduling but imports nothing from this module; the pass body is injected
+// here instead, so the module graph stays acyclic (`reactive-fs` and `watcher-pool` both point at the
+// coordinator, which points nowhere).
+registerSettlementRunner(settleRegisteredReadsUnder)
 
 /**
  * 响应式读取目录内容

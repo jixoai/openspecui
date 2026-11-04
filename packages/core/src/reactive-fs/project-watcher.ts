@@ -1,13 +1,16 @@
 /**
- * Orthogonal intents (updated 2026-08-04 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
  * 1. Own one physical project watcher and dispatch native-path events to path subscriptions.
  * 2. Recover watcher residency after dropped events, errors, missing roots, or root replacement.
  * 3. Let explicitly opted-in missing paths settle from one coalesced ancestor creation event.
  * 4. Expose deterministic runtime status and teardown for the shared watcher pool.
+ * 5. Expose completed rebuilds separately from runtime status, because the status stream also fires
+ *    mid-flight while the watcher is not armed.
  *
  * Original request (2026-07-15): "响应式内核要观察 data home、Store roots 和 connected project roots。"
  * Remote CI fixed point (2026-07-28): data-home Schema creation may arrive as an ancestor event on Linux.
  * Original request (2026-08-04): "Make pnpm openspecui start and equivalent package scripts work on Windows."
+ * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
  */
 import type { AsyncSubscription, Event } from '@parcel/watcher'
 import { existsSync, lstatSync } from 'node:fs'
@@ -110,6 +113,12 @@ export interface ProjectWatcherRuntimeStatus {
 export type ProjectWatcherRuntimeStatusListener = (status: ProjectWatcherRuntimeStatus) => void
 
 /**
+ * Completed-rebuild listener: fires once `init()` has succeeded again, carrying the status of the
+ * rebuild (new generation, reason, reinitialize count).
+ */
+export type ProjectWatcherReinitializedListener = (status: ProjectWatcherRuntimeStatus) => void
+
+/**
  * 项目监听器
  *
  * 使用 @parcel/watcher 监听项目根目录，
@@ -152,6 +161,7 @@ export class ProjectWatcher {
   }
   private projectResidency: ProjectResidencyStatus = { state: 'active' }
   private runtimeStatusListeners = new Set<ProjectWatcherRuntimeStatusListener>()
+  private reinitializedListeners = new Set<ProjectWatcherReinitializedListener>()
 
   constructor(
     projectDir: string,
@@ -489,6 +499,21 @@ export class ProjectWatcher {
   }
 
   /**
+   * Subscribe to *completed* rebuilds only.
+   *
+   * Deliberately separate from `subscribeRuntimeStatus`: the status stream also fires mid-flight
+   * (when the watcher is torn down and `initialized` has just become false), and work that depends
+   * on the native watcher being armed again must not run at that moment. This fires exactly once
+   * per successful reinitialize, after `init()` resolved.
+   */
+  subscribeReinitialized(listener: ProjectWatcherReinitializedListener): () => void {
+    this.reinitializedListeners.add(listener)
+    return () => {
+      this.reinitializedListeners.delete(listener)
+    }
+  }
+
+  /**
    * 记录重建统计
    */
   private markReinitialized(reason: ProjectWatcherReinitializeReason): void {
@@ -496,6 +521,18 @@ export class ProjectWatcher {
     this.lastReinitializeReason = reason
     this.reinitializeReasonCounts[reason] += 1
     this.emitRuntimeStatus()
+    this.emitReinitialized()
+  }
+
+  private emitReinitialized(): void {
+    const status = this.runtimeStatus
+    for (const listener of this.reinitializedListeners) {
+      try {
+        listener(status)
+      } catch (error) {
+        console.error('[ProjectWatcher] Reinitialized listener failed:', error)
+      }
+    }
   }
 
   private markProjectResidencyActive(): void {

@@ -141,8 +141,8 @@ Round 5 declared the plan **implementable** and verified all four triggers reach
 One new blocker is folded: the spec's opening sentence promised convergence for any lost event while
 "registered" was undefined — a class of consumers whose private state is written only by native watcher
 callbacks (`tool-config`'s `tools:` state is the named instance) is outside the net by construction. The
-requirement now defines *registered read* and names that boundary, rather than implying coverage. Two
-wording fixes folded (the convergence scenario binds the *read* to the bound and excludes consumer
+requirement now defines _registered read_ and names that boundary, rather than implying coverage. Two
+wording fixes folded (the convergence scenario binds the _read_ to the bound and excludes consumer
 latency; the memoized-staleness bound was underestimated and missed the service-level memo), and the
 non-blocking items became CP text: trailing tests must assert exact read-phase entries and the post-await
 committed value with the cadence above the window; the jitter and exact-delay-multiset assertions can no
@@ -159,3 +159,35 @@ count. Mutation checks: switching the matcher to `registration.path` turns the p
 adding an `await stat(root)` turns the zero-filesystem-call test red. The committed red test still fails
 for its intended reason, and its subscribe stub now returns the library's handle shape so teardown stops
 erroring on our own fixture.
+
+### 2026-11-05 — S1 landed (coordinator + four triggers), with V1/V2 evidence
+
+`settlement-coordinator.ts` implements the per-root coordinator (at most one pass in flight; requests
+arriving before the read phase join it; requests after it derive exactly one trailing pass; a request
+during the trailing pass's read phase derives one more; waiters resolve after the pass that serves them
+commits). It holds no timer, takes no lease, never rejects, and exposes a read-phase gate so
+interleavings are constructed rather than slept into.
+
+V2 evidence (fakes run once, then reverted): join-and-discard turns the trailing test red
+(`expected [ 'pass-1', 'trailing-resolved' ] to deeply equal [ 'pass-1', 'pass-2', … ]`) and the
+trailing-of-trailing test red (`settlement pass 2 never began`); exactly-one-trailing turns only the
+third half red (`expected [ 1, 2 ] to deeply equal [ 1, 2, 3 ]`), which is the intended discrimination.
+Trigger mutations (unwiring 1/2/3) each turn the trigger tests red; making the service hook
+fire-and-forget turns V1 red (`expected 1 to be +0`).
+
+V1 evidence (`agent-delivery-projection-service.settlement.test.ts`): with the settle gated at its read
+phase, the projection's first read has not happened (zero CLI-availability calls, zero `readdir` under
+the project dir); after release, the first frame already carries the freshly written skill, and the
+`readdir` call order proves the settle re-read precedes the projection read. A second `subscribe`
+produces no additional settle and no additional root acquisition, while still delivering a first frame.
+
+**Deviation corrected during integration**: the first implementation imported
+`settleRegisteredReadsUnder` directly into the coordinator, closing
+`reactive-fs → watcher-pool → coordinator → reactive-fs`. It argued (and verified) that no
+half-initialized namespace could be observed, but the plan forbids the cycle outright, so the pass body
+is now **injected** (`registerSettlementRunner`, called once by `reactive-fs`): the coordinator imports
+nothing, and the graph is acyclic again. Re-ran the full affected set afterwards: 69 core tests + 13
+server tests green, core typecheck green.
+
+`silent-event-loss.test.ts` is still red by design — it needs the pooled cadence from S3, and none of
+S1's triggers can fire in its timeline (no consumer, no further events, no timer).
