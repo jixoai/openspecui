@@ -170,5 +170,15 @@ Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补�
       excluding consumer recompute latency, and the join/trailing semantics; no claim the design cannot
       honour.
 - [ ] AGENTS decision lines (laws above); changeset for `@openspecui/core` and `@openspecui/server`.
-- [ ] Review round 6 folded; blockers closed with evidence; scores recorded (rounds 1-5: 6, 7, 6.5, 7.0, 8.0).
-- [ ] Full local gates, PR green, archive, release, residue audit per the repository workflow.
+- [x] Review round 6 (diff review, 7.5/10) folded; its two merge blockers closed in `6c6fba08`
+      (`force-commit` freshness mode with bounded attempts; the CP5 timer-contract assertion with its
+      mutation). Scores: plan rounds 6 → 7 → 6.5 → 7.0 → 8.0, diff round 7.5.
+- [x] Full local gates, PR green (`#326`, merged `18b08c04`; Windows gate 18m21s, Fast Gate 10m57s),
+      archive (`#327`, `c219b4ba`), release 16.1.0 (`#328`, `2b230fd8`).
+- [x] The 45 s cadence was falsified by the first PR run and shortened to 20 s (`e616305b`): the failing
+      stage waits 40 s, so a 45 s period could never reach a consumer-visible window.
+- [x] Release facts: main head `2b230fd8`; `@openspecui/{core,search,server,web}@16.1.0` peeled to it;
+      GitHub Release `openspecui 16.1.0` (Latest); npm resolves 16.1.0 and `latest` moved for all four;
+      the version commit left `references/openspec` at `27c05157`.
+- [ ] Residue audit report lives with the session report (worktree, branches, `/tmp`, processes). The
+      local `.git/config` hooksPath was removed for the release commit and restored immediately after.
