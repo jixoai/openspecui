@@ -16,6 +16,8 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-10-25): "开工" — Slice 2 rotates the generator stamp to 1.15.0
+ * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
+ *   — Slice 3 rotates the generator stamp to 1.16.0
  * and the replacement label to the 1.15 line (no upstream tool changes).
  */
 
@@ -56,7 +58,7 @@ export type ToolInitReadiness = 'unavailable' | 'uninitialized' | 'partial' | 'i
 export type ToolInitIssue = 'stale-version' | 'cleanup-needed' | 'migration-required'
 
 /** Pinned source version used when a runtime CLI version is not supplied by the Server owner. */
-export const PINNED_AGENT_GENERATOR_VERSION = '1.15.0'
+export const PINNED_AGENT_GENERATOR_VERSION = '1.16.0'
 
 /** Physical delivery scope of one tool's skills inventory. */
 export type ToolSkillsScope =

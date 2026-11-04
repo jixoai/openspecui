@@ -20,11 +20,11 @@ OpenSpecUI 15 gives OpenSpec projects a reactive dashboard, an objective change 
 
 ## Requirements
 
-- **OpenSpec CLI**: `>=1.15.0 <1.16.0` — the stable 1.15 line is current and recommended (single-series window). Older lines (including the 1.14.x OpenSpecUI 14 window), prereleases, and `>=1.16.0` are blocked by default.
-- **Node.js**: `>= 20.19.0`
+- **OpenSpec CLI**: `>=1.16.0 <1.17.0` — the stable 1.16 line is current and recommended (single-series window). Older lines (including the 1.15.x OpenSpecUI 15 window), prereleases, and `>=1.17.0` are blocked by default.
+- **Node.js**: `>= 22.12.0` (the upstream npm package's floor; the standalone binary does not use Node)
 
 ```bash
-npm install -g @fission-ai/openspec@1.15
+npm install -g @fission-ai/openspec@1.16
 ```
 
 ## Quick start

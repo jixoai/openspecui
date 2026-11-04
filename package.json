@@ -61,7 +61,7 @@
   "license": "MIT",
   "packageManager": "pnpm@10.22.0",
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.12.0"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.5.2",

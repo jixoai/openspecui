@@ -5,8 +5,8 @@
  * 3. Prove explicit refresh and dispose own deterministic replacement and retirement boundaries.
  * 4. Prove version-selected inventories including unavailable-CLI sessions.
  * 5. Keep the initial real-registry reactive wait ahead of shared CI runners.
- * 6. Lock the admitted 1.15 series snapshot: every 1.14/1.13/1.12/1.11 physical fact
- *    carries forward (1.15.0 adds no upstream tools — a pure series rotation), Zed stays
+ * 6. Lock the admitted 1.16 series snapshot: every 1.14/1.13/1.12/1.11 physical fact
+ *    carries forward (1.16.0 adds no upstream tools — a pure series rotation), Zed stays
  *    skills-only, Antigravity keeps its `.agents` root plus `.agent` legacy-migration
  *    evidence, codeassistant joins with `.codeassistant`, the ten 1.14 entries join the
  *    admitted inventory, and retired sessions (1.10/1.11/1.12/1.13/1.14/1.9) select none.
@@ -21,7 +21,7 @@
  * Original request (2026-09-03): "Openspec 1.12.0 刚刚放出来了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
- * Original request (2026-10-25): "开工" — Slice 2 rotates the admitted session to 1.15.0
+ * Original request (2026-10-25): "开工" — Slice 2 rotates the admitted session to 1.16.0
  * and adds the retired 1.14 boundary beside the other retired windows.
  */
 
@@ -48,7 +48,7 @@ import type { ProjectionWorkSubscription } from './projection-work/index.js'
 
 const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
 const cliExecutor = {
-  checkAvailability: async () => ({ available: true, version: '1.15.0' }),
+  checkAvailability: async () => ({ available: true, version: '1.16.0' }),
 }
 const cliCommandAuthority = {
   getCliCommand: async () => ['not-an-importable-openspec-runner'],
@@ -163,7 +163,7 @@ async function writeGeneratedSkill(
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.15.0\n---\n`,
+    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.16.0\n---\n`,
     'utf8'
   )
   return path
@@ -255,10 +255,10 @@ describe('AgentDeliveryProjectionService', () => {
         aliases: ['windsurf'],
         migrations: [{ from: '.windsurf', to: '.devin', needsConsent: true }],
       })
-      // The admitted 1.15 line projects Zed beside the shared root and Antigravity's
+      // The admitted 1.16 line projects Zed beside the shared root and Antigravity's
       // migrated `.agents` root with its legacy `.agent` evidence; codeassistant joins
       // as the SourceCraft Code Assistant target introduced on the 1.12 line, and the
-      // shared-root readers amp and gsd join with the 1.14 entries (1.15.0 adds none).
+      // shared-root readers amp and gsd join with the 1.14 entries (1.16.0 adds none).
       expect(current.registry.find((tool) => tool.value === 'zed')).toMatchObject({
         skillsDir: '.agents',
         detectionPaths: ['.zed', '.agents/skills'],
@@ -273,7 +273,7 @@ describe('AgentDeliveryProjectionService', () => {
         command: { pathTemplate: '.agents/workflows/opsx-{workflow}.md' },
       })
       // codeassistant entered the inventory on the 1.12 line and carries forward on the
-      // admitted 1.15 line: SourceCraft roots, adapter-backed capability, and no
+      // admitted 1.16 line: SourceCraft roots, adapter-backed capability, and no
       // IDE-restart fact.
       expect(current.registry.find((tool) => tool.value === 'codeassistant')).toMatchObject({
         available: true,
@@ -308,7 +308,7 @@ describe('AgentDeliveryProjectionService', () => {
       })
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.15.0',
+        generatedByVersion: '1.16.0',
         installedSkillWorkflows: ['update'],
       })
 
@@ -382,7 +382,7 @@ describe('AgentDeliveryProjectionService', () => {
 
     try {
       const current = await service.getCurrent()
-      // No live CLI means no admitted inventory: the pinned 1.15.0 generator version must not
+      // No live CLI means no admitted inventory: the pinned 1.16.0 generator version must not
       // fabricate one.
       expect(current.registry).toEqual([])
       expect(current.states).toEqual([])
@@ -528,9 +528,9 @@ describe('AgentDeliveryProjectionService', () => {
     }
   })
 
-  it('selects the full inventory for an admitted 1.15 session and matches the Core selector', async () => {
+  it('selects the full inventory for an admitted 1.16 session and matches the Core selector', async () => {
     clearCache()
-    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-115-'))
+    const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-116-'))
     const environment = new EnvironmentAuthorityFixture(
       environmentProjection({ delivery: 'skills', workflows: ['update'] })
     )
@@ -541,7 +541,7 @@ describe('AgentDeliveryProjectionService', () => {
       observationEnvironment,
       cliExecutor: {
         ...cliExecutor,
-        checkAvailability: async () => ({ available: true, version: '1.15.0' }),
+        checkAvailability: async () => ({ available: true, version: '1.16.0' }),
       },
       cliCommandAuthority,
     })
@@ -554,12 +554,12 @@ describe('AgentDeliveryProjectionService', () => {
       // 1.15.0 adds no upstream tools), and the service projection agrees exactly with the
       // Core series selector over the same detected version (the service strips the
       // selector's internal provenance fields before publishing).
-      const admitted = selectAgentDeliveryRegistry('1.15.0')
+      const admitted = selectAgentDeliveryRegistry('1.16.0')
       expect(admitted.length).toBeGreaterThan(0)
       expect(current.registry.map((tool) => tool.value)).toEqual(admitted.map((tool) => tool.value))
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.15.0',
+        generatedByVersion: '1.16.0',
       })
     } finally {
       await service.dispose()

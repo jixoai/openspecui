@@ -309,12 +309,12 @@ importers:
       openspec-cli-112:
         specifier: npm:@fission-ai/openspec@1.12.0
         version: '@fission-ai/openspec@1.12.0(@types/node@22.19.1)'
-      openspec-cli-114:
-        specifier: npm:@fission-ai/openspec@1.14.3
-        version: '@fission-ai/openspec@1.14.3(@types/node@22.19.1)'
       openspec-cli-115:
         specifier: npm:@fission-ai/openspec@1.15.0
         version: '@fission-ai/openspec@1.15.0(@types/node@22.19.1)'
+      openspec-cli-116:
+        specifier: npm:@fission-ai/openspec@1.16.0
+        version: '@fission-ai/openspec@1.16.0(@types/node@22.19.1)'
       openspec-cli-14:
         specifier: npm:@fission-ai/openspec@1.4.0
         version: '@fission-ai/openspec@1.4.0(@types/node@22.19.1)'
@@ -1658,14 +1658,14 @@ packages:
     engines: {node: '>=20.19.0'}
     hasBin: true
 
-  '@fission-ai/openspec@1.14.3':
-    resolution: {integrity: sha512-ALFW1d5bSm6t27Kmcle93SDFuqUc8fLwy5ZdBfIiNffo0Yk9AEOJxw6xDqBv38eMM7l7TeOZBB/7C08luxYGfg==}
-    engines: {node: '>=20.19.0'}
-    hasBin: true
-
   '@fission-ai/openspec@1.15.0':
     resolution: {integrity: sha512-lG/EPEiL22bB70yKJhWWSPk1UQGLnwO7Dp+hNc/jUmBwb0qxPLzHCUkXEfkny4iYDOsgnsNQmc39/g9QcvnBnA==}
     engines: {node: '>=20.19.0'}
+    hasBin: true
+
+  '@fission-ai/openspec@1.16.0':
+    resolution: {integrity: sha512-WQVhZoIR5PoacH/H0qh84VKMcXFbKCIKuAI96arHS3KiKYhJStlRrjUKGxLqLYKLym0j+2hAAY5MZUrPE5qXIA==}
+    engines: {node: '>=22.12.0'}
     hasBin: true
 
   '@fission-ai/openspec@1.4.0':
@@ -8951,7 +8951,7 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
-  '@fission-ai/openspec@1.14.3(@types/node@22.19.1)':
+  '@fission-ai/openspec@1.15.0(@types/node@22.19.1)':
     dependencies:
       '@inquirer/core': 12.0.1(@types/node@22.19.1)
       '@inquirer/prompts': 8.7.0(@types/node@22.19.1)
@@ -8968,7 +8968,7 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
-  '@fission-ai/openspec@1.15.0(@types/node@22.19.1)':
+  '@fission-ai/openspec@1.16.0(@types/node@22.19.1)':
     dependencies:
       '@inquirer/core': 12.0.1(@types/node@22.19.1)
       '@inquirer/prompts': 8.7.0(@types/node@22.19.1)

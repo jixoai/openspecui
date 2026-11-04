@@ -20,6 +20,9 @@
  * 2026-10-25 (target-openspec-cli-15-line Slice 4): the transport-mirror fake session
  * version rotates to the admitted 1.15.0 line; the executed warning payload keeps its
  * 1.14.0 capture provenance (shapes unchanged upstream).
+ * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
+ *   — update-openspec-cli-16-line Slice 2 rotates the transport-mirror fake session version
+ *   to the admitted 1.16.0 line (the warning payload keeps its 1.14.0 capture provenance).
  */
 import {
   CliExecutor,
@@ -936,7 +939,7 @@ function statusFields(changeName, batch) {
 }
 
 if (args.includes('--version')) {
-  console.log('1.15.0')
+  console.log('1.16.0')
   process.exit(0)
 }
 

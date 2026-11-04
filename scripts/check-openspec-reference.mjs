@@ -9,7 +9,10 @@
  * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新"
  *   — repair this guard alongside the v1.15.0 pin rotation: it still asserted the v1.9
  *   describe pattern (a stale fake green gate since the v10 line) and now rejects any
- *   checkout outside v1.15.x.
+ *   checkout outside v1.16.x.
+ * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
+ *   — the describe pattern rotates with the v1.16.0 pin (this guard was fake-green on a
+ *   post-tag checkout because "v1.15.0-19-g27c05157" still matched the old prefix).
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -32,11 +35,11 @@ try {
     'describe',
     '--tags',
     '--match',
-    'v1.15.*',
+    'v1.16.*',
     '--always',
   ])
-  if (!describe.startsWith('v1.15.')) {
-    throw new Error(`references/openspec must point to OpenSpec v1.15.x, but got "${describe}".`)
+  if (!describe.startsWith('v1.16.')) {
+    throw new Error(`references/openspec must point to OpenSpec v1.16.x, but got "${describe}".`)
   }
   console.log(`[openspec-ref-check] OK: ${describe}`)
 } catch (error) {

@@ -30,6 +30,10 @@
  * 2026-10-25 (target-openspec-cli-15-line Slice 4): admitted-session/generator-version
  * samples rotate to the 1.15.0 line, and the pinned-install argv expectation derives
  * from OPENSPEC_CLI_TARGET_SERIES instead of a hardcoded `@1.14` literal.
+ * 2026-11-04 (update-openspec-cli-16-line Slice 2): the same admitted-session and
+ * generator-version samples rotate to 1.16.0. This file is a compat mirror the window flip
+ * reaches silently: an unadmitted sample version makes every subscription projection empty,
+ * which reads as a missing-tool regression rather than a stale fixture.
  */
 import {
   clearCache,
@@ -94,7 +98,7 @@ async function writeArtifact(filePath: string, content = '# external fixture\n')
 
 async function writeGeneratedSkill(filePath: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.15.0"\n---\n', 'utf8')
+  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.16.0"\n---\n', 'utf8')
 }
 
 async function prepareCachedRunnerReplacement(
@@ -183,7 +187,7 @@ async function createRouterFixture(
   const releaseLaunchObservation = await server.observationEnvironment.acquireRoot(launchRoot)
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.15.0',
+    version: '1.16.0',
   })
   const environment = {
     kind: 'environment-global',
@@ -468,7 +472,7 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
         expect(findToolState(initialized, 'claude')).toMatchObject({
           status: 'initialized',
           readiness: 'initialized',
-          generatedByVersion: '1.15.0',
+          generatedByVersion: '1.16.0',
           issues: [],
         })
 

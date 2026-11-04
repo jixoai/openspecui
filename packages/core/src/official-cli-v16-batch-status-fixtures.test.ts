@@ -9,9 +9,13 @@
  *    v14 single-series window; the retired 1.13.2 executable stays in the boundary suite.
  *
  * Original request (2026-10-25): "开工"
- *   — target-openspec-cli-15-line Slice 3 moves this suite to the v15 line: imports and
- *   identity literals rotate to the pinned 1.15.0 executable (openspec-cli-115 / v15
- *   helper); the historical v14-era intents above are retained verbatim.
+ *   — target-openspec-cli-15-line Slice 3 moved this suite to the v15 line (pinned
+ *   1.15.0 executable through the openspec-cli-115 alias); the v14-era intents above
+ *   are retained verbatim.
+ * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
+ *   — update-openspec-cli-16-line Slice 2 rotates this suite to the v16 line: imports and
+ *   identity literals move to the pinned 1.16.0 executable (openspec-cli-116 / v16
+ *   helper); the historical v14/v15-era intents above are retained verbatim.
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
@@ -20,7 +24,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V15_VERSIONS,
+  PINNED_OPENSPEC_V16_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -29,8 +33,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV15Version,
-} from './__tests__/official-cli-v15-fixtures.js'
+  type PinnedOpenspecV16Version,
+} from './__tests__/official-cli-v16-fixtures.js'
 import {
   CliBatchStatusSchema,
   isCliBatchStatusEntryFailure,
@@ -39,7 +43,7 @@ import {
 import { CliWorkflowStatusSuccessSchema } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV15Version,
+  version: PinnedOpenspecV16Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -52,7 +56,7 @@ async function initProject(
   expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
 }
 
-describe('pinned OpenSpec 1.15 batch status fixtures', () => {
+describe('pinned OpenSpec 1.16 batch status fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -60,7 +64,7 @@ describe('pinned OpenSpec 1.15 batch status fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V15_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
     it(`returns healthy entries with single-change Status fields and one envelope root on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-batch-healthy`)
       const project = join(fixtureRoot, 'project')
