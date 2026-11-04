@@ -1,6 +1,6 @@
 {
   "name": "@openspecui/server",
-  "version": "16.0.0",
+  "version": "16.1.0",
   "type": "module",
   "main": "dist/index.mjs",
   "exports": {
