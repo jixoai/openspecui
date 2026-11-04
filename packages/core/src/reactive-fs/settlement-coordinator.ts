@@ -6,10 +6,12 @@
  *    pass for a request that arrives during a read phase — never a join-and-discard, and never an
  *    unbounded `while (dirty)` chain.
  * 3. Resolve a request only after the pass that serves it has committed, including a trailing pass.
- * 4. Own no timer at all: the pooled cadence is a separate slice, and this module keeps the seam
- *    (`getSettlementDiagnostics`) it will publish through.
+ * 4. Own no timer at all: the pooled cadence lives in `watcher-pool` (S3) and publishes its
+ *    liveness through `registerSettlementTimerCountProvider`, which this module only reports.
  * 5. Expose a test-only gate at every pass's read-phase entry, so read-phase interleavings are
  *    constructed deterministically instead of being slept into.
+ * 6. Expose a read-only in-flight query so the pooled tick skips a root that already owes a pass
+ *    instead of deriving a redundant trailing one.
  *
  * Why a third module: `reactive-fs` owns the registrations and must not import a scheduler, and
  * `watcher-pool` must not import `reactive-fs` (that would close an import cycle). This module
@@ -92,18 +94,43 @@ export function setSettlementPassHookForTests(hook: SettlementPassHook | null): 
 
 export interface SettlementDiagnostics {
   /**
-   * Settlement timers owned by this coordinator. S1 owns none — the pooled periodic pass arrives
-   * with S3, and this accessor stays the single seam that slice (and its checkpoint) asserts
-   * through.
+   * Settlement intervals alive in this process. S3 owns the one pooled interval in `watcher-pool`;
+   * it publishes its liveness through `registerSettlementTimerCountProvider`, so a constant here is
+   * never a substitute for the creation path actually updating it.
    */
   activeTimers: number
   /** Roots currently owing work (an in-flight or derived pass). Observation only. */
   busyRootCount: number
 }
 
+/** Registered by `watcher-pool`; `null` until then, which reports zero timers. */
+let settlementTimerCountProvider: (() => number) | null = null
+
+/**
+ * Publish the pooled interval's liveness (S3 owns the timer in `watcher-pool`). This is a read-only
+ * accessor seam: the provider must not schedule, start, or stop anything.
+ */
+export function registerSettlementTimerCountProvider(provider: () => number): void {
+  settlementTimerCountProvider = provider
+}
+
 /** Read-only settlement scheduler state, for diagnostics and the pooled slice's assertions. */
 export function getSettlementDiagnostics(): SettlementDiagnostics {
-  return { activeTimers: 0, busyRootCount: rootSettlementStates.size }
+  return {
+    activeTimers: settlementTimerCountProvider?.() ?? 0,
+    busyRootCount: rootSettlementStates.size,
+  }
+}
+
+/**
+ * Read-only: does this normalized root already owe settlement work (an active or derived pass)?
+ *
+ * The pooled tick uses this to skip a root that is already being settled; calling
+ * `requestSettlement` there would only derive a redundant trailing pass for reads the in-flight
+ * pass is re-reading anyway.
+ */
+export function isSettlementInFlight(normalizedRootPath: string): boolean {
+  return rootSettlementStates.has(normalizedRootPath)
 }
 
 function createPassState(): SettlementPassState {

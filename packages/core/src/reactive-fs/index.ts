@@ -85,6 +85,8 @@ export {
 // 结算协调器（进程级单例；触发点与后续池化调度共用）
 export {
   getSettlementDiagnostics,
+  isSettlementInFlight,
+  registerSettlementTimerCountProvider,
   requestSettlement,
   setSettlementPassHookForTests,
   type SettlementDiagnostics,

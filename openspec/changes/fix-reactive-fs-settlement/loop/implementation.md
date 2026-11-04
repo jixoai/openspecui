@@ -191,3 +191,33 @@ server tests green, core typecheck green.
 
 `silent-event-loss.test.ts` is still red by design — it needs the pooled cadence from S3, and none of
 S1's triggers can fire in its timeline (no consumer, no further events, no timer).
+
+### 2026-11-05 — S3 landed: the pooled cadence and the version guard; the red is green
+
+`watcher-pool` now owns the single process-level settlement interval: it exists only while at least one
+root lease does (started at 0→1, stopped at 1→0 and explicitly by `closeAllWatchers()`, which bypasses
+release), both timers are `unref()`'d, the `setInterval` delay is exactly the cadence while the jitter
+lands in per-tick scheduling, and the cadence is read from `OPENSPECUI_SETTLEMENT_INTERVAL_MS` at start.
+A tick requests settlement per leased root in order and **skips roots with a pass in flight**, so a tick
+never derives a pointless trailing pass. `getSettlementDiagnostics().activeTimers` reports the real 0/1.
+
+The version guard landed as a per-registration `commitVersion` bumped by all four publisher classes
+(write-settlement core; `updateReactiveFileCache`; event/poll refresh commits for all four kinds; other
+passes). A pass records the version, reads, and commits in one synchronous block; a changed version
+re-reads once and only skips if the re-read window itself saw a new publication.
+
+**The committed red is now green**: `silent-event-loss.test.ts` converges in 318 ms (it previously timed
+out at 3 s), with no semantic change to the test — the directory listing whose events never arrive is
+re-read by the cadence. Mutation evidence: removing the timer-count update turns the pool assertions red
+(`expected +0 to be 1`); putting jitter into the `setInterval` delay breaks the delay multiset
+(`[3000, 3000, 7942]` vs `[…, 7777]`); removing the in-flight skip derives an extra pass (`expected 2 to
+be 1`); deleting the class-② bump reddens all four guard assertions at once, while deleting a kind's
+closure bump reddens only the write-settlement case.
+
+Two rulings recorded: (1) the retry reading is "skip only if a new publication lands during the re-read
+window" — the conservative alternative would make the retry unable to ever commit, which is why the test
+pins the chosen one; (2) the re-read path assumes every publisher writes the disk before publishing,
+which holds for all current call sites and is stated as the residual.
+
+One pre-existing environment failure remains outside this change: `upstream-contract-regression.test.ts`
+expects the `references/openspec` submodule checkout, which the worktree lacked at the time of the run.

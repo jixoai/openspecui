@@ -7,11 +7,15 @@
  * 5. Distinguish expected missing paths from integrity-relevant filesystem read failures.
  * 6. Record each registration's realpath-normalized path once, so the settlement net matches
  *    leased roots in one path space with no per-pass filesystem call.
+ * 7. Guard the settlement net pass-side against every publisher of a registration's value: a
+ *    per-registration commit version, checked and committed in one synchronous block, so a pass can
+ *    never publish a value older than a publication that landed after its read began.
  *
  * Original request (2026-07-16): "direct filesystem mutations update reactive state before returning."
  * Original request (2026-08-01): nested Spec discovery must not silently drop unreadable subtrees.
  * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
  *   — fix-reactive-fs-settlement S0: one matching space for the settlement net, and only for it.
+ *   — fix-reactive-fs-settlement S3: the pooled pass's read/commit window guard.
  */
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
@@ -33,6 +37,20 @@ interface CacheRefreshRegistration {
    * never a substitute for `path`, so write settlement semantics are unchanged.
    */
   normalizedPath: string
+  /**
+   * Per-registration commit version, bumped by **every** publisher of this registration's value:
+   *
+   * 1. `settleReactivePathMutationInternal` (the write-settlement core);
+   * 2. `updateReactiveFileCache` (direct cache publication);
+   * 3. event-driven and missing-path-poll `refresh` commits (all four kinds' commit closures);
+   * 4. other settlement passes' commits (`settleRegisteredReadsUnder`).
+   *
+   * Classes 1, 3 and 4 all commit through the closure returned by `prepareRefresh`, so a single bump
+   * there covers them; class 2 bypasses the closure and bumps explicitly. A pass records this
+   * before reading and re-checks it in the same synchronous block as its commit, so it can detect
+   * any publication that landed after its read began.
+   */
+  commitVersion: number
   prepareRefresh: () => Promise<() => void>
   refresh: () => Promise<void>
 }
@@ -104,6 +122,10 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
       const newValue = await getValue()
       return () => {
         state!.set(newValue)
+        // Publisher classes (1), (3) and (4): every commit through this closure — write settlement,
+        // event-driven and missing-path-poll refresh, and other passes — publishes this
+        // registration's value and therefore advances the version a concurrent pass checks.
+        registration.commitVersion += 1
         if (newValue === null) {
           ensureMissingPathPoll(key, refresh)
         } else {
@@ -115,13 +137,15 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
       const commit = await prepareRefresh()
       commit()
     }
-    refreshCache.set(key, {
+    const registration: CacheRefreshRegistration = {
       kind: 'file',
       path: normalizedPath,
       normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
+      commitVersion: 0,
       prepareRefresh,
       refresh,
-    })
+    }
+    refreshCache.set(key, registration)
     if (initialValue === null) {
       ensureMissingPathPoll(key, refresh)
     }
@@ -146,12 +170,19 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
  * 主动更新响应式文件缓存（用于写入后立即推送订阅）
  *
  * 仅当该文件已有缓存状态时生效；不会创建新的监听器。
+ *
+ * Publisher class (2) of `CacheRefreshRegistration.commitVersion`: this publication bypasses the
+ * registration's `prepareRefresh` closure (callers already wrote the file to disk first), so it
+ * bumps the version explicitly — otherwise a settlement pass that read before this publication
+ * could still commit its stale value.
  */
 export function updateReactiveFileCache(filepath: string, content: string | null): void {
   const normalizedPath = resolve(filepath)
   const key = `file:${normalizedPath}`
   const state = stateCache.get(key) as ReactiveState<string | null> | undefined
   state?.set(content)
+  const registration = refreshCache.get(key)
+  if (registration) registration.commitVersion += 1
 }
 
 function containsPath(rootPath: string, candidatePath: string): boolean {
@@ -205,14 +236,38 @@ export async function settleReactiveFileWrite(filepath: string, content: string)
 }
 
 /**
+ * Test-only gate awaited between a settlement pass's read phase and its synchronous commit block.
+ * A publisher interleaved here is how the commit-version guard's contract is asserted without
+ * sleeping: the pass has read, the publisher has committed, and the pass must not publish the value
+ * it read. Nothing in production installs one.
+ */
+let settlementCommitGateForTests: (() => void | Promise<void>) | null = null
+
+export function setSettlementCommitGateForTests(gate: (() => void | Promise<void>) | null): void {
+  settlementCommitGateForTests = gate
+}
+
+/**
  * Re-read every registered read whose normalized path lies under one normalized root.
  *
  * This is the settlement net's matching primitive. Both sides live in realpath-normalized space
  * (the root supplied by the caller, each registration's `normalizedPath` recorded once at
  * registration), so matching is a pure ancestor test with no per-pass filesystem call. Membership
  * is inclusive of the root itself and strictly ancestor-directed: a registration above the root is
- * never covered. Returns the number of registrations whose refresh actually ran, and an empty set
- * performs no read at all.
+ * never covered. An empty set performs no read at all.
+ *
+ * Ordering guard (S3, pass-side only): each registration's commit version is recorded before its
+ * read, and a publisher that committed while that read was in flight makes the pass re-read once.
+ * The final version check and the commit are one **synchronous** block, so no publication can
+ * interleave between them; a registration whose version moved again is skipped — safe by
+ * construction, because the publisher that moved it already wrote the newer value.
+ *
+ * Residual, stated: the guard is pass-side only. A publisher's own read→commit window can still be
+ * interleaved by a newer pass commit and briefly publish the older value; that self-heals on the
+ * next pass and is not part of this claim.
+ *
+ * Returns the number of registrations whose refresh actually committed (those skipped by the guard
+ * are excluded).
  */
 export async function settleRegisteredReadsUnder(normalizedRootPath: string): Promise<number> {
   const registrations = [...refreshCache.values()].filter((registration) =>
@@ -220,13 +275,33 @@ export async function settleRegisteredReadsUnder(normalizedRootPath: string): Pr
   )
   if (registrations.length === 0) return 0
 
-  const commits = await Promise.all(
-    registrations.map((registration) => registration.prepareRefresh())
+  const prepared = await Promise.all(
+    registrations.map(async (registration) => {
+      let observedVersion = registration.commitVersion
+      let commit = await registration.prepareRefresh()
+      if (registration.commitVersion !== observedVersion) {
+        // A publisher committed during this read, so the value read may predate it; re-read once and
+        // let the synchronous block below decide. Bounded to one retry per registration.
+        observedVersion = registration.commitVersion
+        commit = await registration.prepareRefresh()
+      }
+      return { registration, commit, observedVersion }
+    })
   )
 
-  // Promise continuations cannot observe a partial snapshot until this synchronous commit ends.
-  for (const commit of commits) commit()
-  return registrations.length
+  if (settlementCommitGateForTests) {
+    await settlementCommitGateForTests()
+  }
+
+  // Promise continuations cannot observe a partial snapshot until this synchronous commit ends, and
+  // the version check shares that block with its commit: no publisher can interleave between them.
+  let committed = 0
+  for (const { registration, commit, observedVersion } of prepared) {
+    if (registration.commitVersion !== observedVersion) continue
+    commit()
+    committed += 1
+  }
+  return committed
 }
 
 // The coordinator owns scheduling but imports nothing from this module; the pass body is injected
@@ -317,11 +392,21 @@ export async function reactiveReadDir(
       const newValue = await getValue()
       return () => {
         state!.set(newValue)
+        // Publisher classes (1), (3) and (4); see `CacheRefreshRegistration.commitVersion`.
+        registration.commitVersion += 1
       }
     }
     const refresh = async (): Promise<void> => {
       const commit = await prepareRefresh()
       commit()
+    }
+    const registration: CacheRefreshRegistration = {
+      kind: 'directory',
+      path: normalizedPath,
+      normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
+      commitVersion: 0,
+      prepareRefresh,
+      refresh,
     }
     const release = acquireWatcher(normalizedPath, refresh, {
       recursive: true,
@@ -331,13 +416,7 @@ export async function reactiveReadDir(
         releaseCache.delete(key)
       },
     })
-    refreshCache.set(key, {
-      kind: 'directory',
-      path: normalizedPath,
-      normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
-      prepareRefresh,
-      refresh,
-    })
+    refreshCache.set(key, registration)
     releaseCache.set(key, release)
   }
 
@@ -374,6 +453,8 @@ export async function reactiveExists(path: string): Promise<boolean> {
       const newValue = await getValue()
       return () => {
         state!.set(newValue)
+        // Publisher classes (1), (3) and (4); see `CacheRefreshRegistration.commitVersion`.
+        registration.commitVersion += 1
         if (newValue) {
           stopMissingPathPoll(key)
         } else {
@@ -385,13 +466,15 @@ export async function reactiveExists(path: string): Promise<boolean> {
       const commit = await prepareRefresh()
       commit()
     }
-    refreshCache.set(key, {
+    const registration: CacheRefreshRegistration = {
       kind: 'exists',
       path: normalizedPath,
       normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
+      commitVersion: 0,
       prepareRefresh,
       refresh,
-    })
+    }
+    refreshCache.set(key, registration)
     if (!initialValue) {
       ensureMissingPathPoll(key, refresh)
     }
@@ -467,6 +550,8 @@ export async function reactiveStat(
       const newValue = await getValue()
       return () => {
         state!.set(newValue)
+        // Publisher classes (1), (3) and (4); see `CacheRefreshRegistration.commitVersion`.
+        registration.commitVersion += 1
         if (newValue === null) {
           ensureMissingPathPoll(key, refresh)
         } else {
@@ -478,13 +563,15 @@ export async function reactiveStat(
       const commit = await prepareRefresh()
       commit()
     }
-    refreshCache.set(key, {
+    const registration: CacheRefreshRegistration = {
       kind: 'stat',
       path: normalizedPath,
       normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
+      commitVersion: 0,
       prepareRefresh,
       refresh,
-    })
+    }
+    refreshCache.set(key, registration)
     if (initialValue === null) {
       ensureMissingPathPoll(key, refresh)
     }
