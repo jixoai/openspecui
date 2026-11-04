@@ -91,7 +91,14 @@ const watcherRuntimeStatusListeners = new Set<(status: WatcherRuntimeStatus | nu
 
 /** Cadence seam: tests must never wait on the production period. Read when the interval starts. */
 const SETTLEMENT_INTERVAL_ENV = 'OPENSPECUI_SETTLEMENT_INTERVAL_MS'
-const DEFAULT_SETTLEMENT_INTERVAL_MS = 45_000
+/**
+ * Twenty seconds, not forty-five. The first version used 45 s and the full-suite CI run showed why
+ * that is the wrong number: `tool-subscription-router` waits 40 s for a silently-lost create to
+ * surface, and a 45 s cadence can never satisfy that budget — the net existed but could not reach a
+ * consumer-visible window. A pass costs one filesystem call per registered read under the leased
+ * roots, so the shorter period buys a real staleness bound without a cost problem.
+ */
+const DEFAULT_SETTLEMENT_INTERVAL_MS = 20_000
 
 /**
  * Upper bound for one tick's jitter. Jitter is applied to the scheduling of each tick's pass —

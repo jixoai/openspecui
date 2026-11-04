@@ -278,3 +278,16 @@ the coordinator governs trigger-driven passes while `settlePaths` is independent
 Recorded as follow-ups (not this change): an explicit `unref` assertion, protection around
 `emitWatcherRuntimeStatus` listeners, cadence read failures not committing a null, a measured cost figure,
 reclaim policy for one-shot registrations, and trimming the test-only exports from the public surface.
+
+### 2026-11-05 — The 45 s cadence was falsified by the full CI run
+
+The first PR run failed `tool-subscription-router`'s explore stage — the same silent-loss class this
+change removes — and the reason was arithmetically obvious once seen: that stage waits 40 s for a
+lost create to surface, while the settlement cadence was 45 s. The net existed but could not reach a
+consumer-visible window; rerunning would have hidden a wrong number behind a green run.
+
+Default cadence is now 20 s. A pass costs one filesystem call per registered read under the leased
+roots, so the shorter period buys a 20 s staleness bound without a cost problem, and 20 s + jitter +
+pass duration sits comfortably inside the 40 s budget that real consumers already wait. Full core
+suite at the new cadence: 94 files / 902 tests green in 82 s — no test is sensitive to a pass firing
+mid-run.

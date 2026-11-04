@@ -117,7 +117,9 @@ derives at most one pass and passes are serialized.
 
 One process-level interval, `unref()`'d, jittered, **inactive when no lease exists** (no lease → no
 timer), stopped at 1→0 and by `closeAllWatchers()`. Each pass settles the covered reads under leased
-roots and never overlaps its predecessor. Default cadence 45 s, read from
+roots and never overlaps its predecessor. Default cadence 20 s (reduced from 45 s after the full CI run
+showed a 45 s period can never satisfy a 40 s consumer-visible wait; a pass costs one filesystem call per
+registered read), read from
 `OPENSPECUI_SETTLEMENT_INTERVAL_MS` when the interval starts or is scheduled — never at module load.
 
 Ordering, pass-side against every publisher (round 3 B5, round 4 BLK-3, round 5 residual):

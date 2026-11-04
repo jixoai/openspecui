@@ -87,6 +87,6 @@ Two read-only investigations and one executed probe, all recorded here rather th
    narrowed sentence rather than a false broad one.
 2. **The one-shot freshness mechanism changes** from "delete cache entries by substring prefix" to
    "settle then read". Same freshness, no destruction of another consumer's registrations.
-3. A pooled settlement timer exists at all (cost: registered reads under leased roots × 45 s cadence,
+3. A pooled settlement timer exists at all (cost: registered reads under leased roots × 20 s cadence,
    `unref`'d, skipped when idle), and convergence is bounded by that cadence plus jitter and pass
    duration — there is no fast bound.

@@ -88,7 +88,7 @@ Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补�
       "after".)
 - [x] Consumer start at an unchanged generation converges with the cadence set far above the assertion
       window; the assertion boundary is the **assembly** (environment/service), not the pool.
-      (`agent-delivery-projection-service.settlement.test.ts` V1 runs at the default 45 s cadence, never
+      (`agent-delivery-projection-service.settlement.test.ts` V1 runs at the default 20 s cadence, never
       retuned, and converges at the service seam.)
 
 ## CP3 — Pooled periodic settlement (S3)
@@ -111,7 +111,7 @@ Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补�
       and retains no per-root state once a burst went idle" + its zero-read test.)
 - [x] Trigger-driven passes never overlap (the coordinator serializes them per root); the cadence is read
       at interval start/schedule, never at module load, and is overridable via
-      `OPENSPECUI_SETTLEMENT_INTERVAL_MS` so no test waits on 45 s. Ruling (S4): `settlePaths` is an
+      `OPENSPECUI_SETTLEMENT_INTERVAL_MS` so no test waits on the default. Ruling (S4): `settlePaths` is an
       independent pass by design and **may overlap** a coordinator pass — the per-registration version
       guard, not the coordinator, keeps concurrent passes from publishing an older value.
       (`settlement-pool.test.ts` cadence-seam test; `settlement-paths.test.ts`; implementation.md S4.)
