@@ -1,9 +1,8 @@
 <!--
 Orthogonal intents (created 2026-11-04 Asia/Shanghai):
-1. Turn the two investigations, the executed probe, and review round 1 into an implementable plan.
-2. Converge on the smallest mechanism that is ground truth: settle by re-reading, not by trusting the
-   library's loss-query (which the probe proved is blind exactly when the watcher is dead).
-3. State the fanout law's fate explicitly instead of relying on a test-ordering coincidence.
+1. Fold review round 2 (7/10): define the matching space, replace the delete-the-registry teardown,
+   make arm identity explicit, and narrow every claim that outran the evidence.
+2. Keep the mechanism minimal: settle by re-reading from disk; the library's loss-query is not used.
 
 Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
 Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补丁的方式肯定不如社区成熟度高的方案"
@@ -12,119 +11,152 @@ Owner decision (2026-11-04): "你自己决策吧，我觉得你掌握的信息�
 
 # Research plan — settle silent watcher event loss
 
-## Mechanism (what actually fails, and how it recovers)
+## Mechanism
 
-A lost event is not permanently fatal by construction: every cached directory read re-lists the whole
-directory, so _any_ later event in the same subtree silently repairs the earlier loss. The defect is
-the **stall**: a change lands, no event arrives, and nothing else in that subtree moves — the
-projection then shows stale truth indefinitely. `tool-init-state`'s discovery is directory-listing
-membership only (`existingPaths`), so it is exactly this shape.
+A lost event is not fatal by construction: every cached directory read re-lists the whole directory,
+so any later event in the subtree repairs the loss. The defect is the **stall** — a change lands, no
+event arrives, nothing else in that subtree moves, and the projection shows stale truth indefinitely.
+`tool-init-state`'s discovery is directory-listing membership only (`existingPaths`), so it is exactly
+this shape.
 
-The recovery primitive is a **direct disk re-read**: our `refresh()` reads through Node's own `fs`
-calls and never through the library's in-memory tree, so a re-read is ground truth. Re-arming the
-subscription restores _future_ event flow; it is not what makes a re-read correct, and on macOS it
-does not re-scan the tree at all (a new FSEvents stream starts from now). What the probe proved is
-narrower and was previously overstated: the library's `getEventsSince` is **blind while the watcher is
-dead** (`[]`), and only becomes useful again after a re-subscribe — i.e. it is a cross-process cache
-invalidation tool, not an in-process loss detector.
+The recovery primitive is a **direct disk re-read**: `refresh()` reads through Node's own `fs` calls,
+never through the library's in-memory tree. Re-arming restores future event flow; on macOS it does not
+re-scan the tree at all (a new FSEvents stream starts from _now_). The probe
+(`/tmp/watcher-probe/probe.mjs`, one macOS/FSEvents sequence, kept as evidence): a diff taken while the
+watcher was dead returned `[]`, and the same diff after re-subscribing reported the change. The precise
+cause is not established — the snapshot may simply have been written after the loss, and macOS replay
+throws rather than returning `[]` when it fails (`binding.cc:114-120`) — so this is recorded as **one
+observed sequence, not a general law**. The design does not depend on it: a re-read is ground truth
+regardless of what any query returns.
 
-## What was tried and rejected (with reasons, so they are not re-litigated)
+## What was tried and rejected (with reasons)
 
-| Candidate                                                                          | Rejected because                                                                                                                                                                                                                          |
-| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Per-directory fallback polling (first attempt, never shipped)                      | Violates the fanout law; observes only the paths we choose rather than the reads projections actually depend on                                                                                                                           |
-| Bind-time resync inside the watcher pool as the whole fix                          | Changes the pool's callback contract (two pool tests encode "acquire does not notify") and does not help a steady-state stall                                                                                                             |
-| `writeSnapshot` / `getEventsSince` diff tier + coarse re-arm (this plan's round 1) | Review round 1: blind in the two cases that matter (macOS dead-watcher replay; Linux kernel drop never enters the tree), and it drags in baseline lifecycle, ignore alignment, escalation storms and upstream query defects (B1/B2/B4/O4) |
-| Child-process query (report suggestion)                                            | Spawns a process per pass; strictly worse than re-reading a few hundred cached values                                                                                                                                                     |
-| Swap to chokidar polling, add Watchman                                             | Out of scope: distribution change, Watchman absent on CI and on this machine                                                                                                                                                              |
+| Candidate                                                              | Rejected because                                                                                                                                                                            |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Per-directory fallback polling (first attempt, never shipped)          | Violates the fanout contract; observes the paths we choose rather than the reads projections depend on                                                                                      |
+| Bind-time resync inside the watcher pool as the whole fix              | Changes the pool's callback contract, and does not help a steady-state stall                                                                                                                |
+| `writeSnapshot` / `getEventsSince` diff tier + coarse re-arm (plan v1) | Blind in the two cases that matter (macOS replay while dead; Linux kernel drop never enters the tree), plus baseline lifecycle, ignore alignment, escalation storms, upstream query defects |
+| Child-process query                                                    | A process per pass for a few hundred cached reads                                                                                                                                           |
+| Swap to chokidar polling / add Watchman                                | Distribution change; Watchman is absent on CI and on this machine                                                                                                                           |
 
 ## Design
 
-### S1 — Probe record (done, macOS; kept as evidence)
+### S0 — One matching space, chosen at registration
 
-`/tmp/watcher-probe/probe.mjs`: create-while-subscribed is delivered and diffed; create-while-dead is
-invisible to `getEventsSince` (`[]`); the same diff after re-subscribing reports it. Linux/Windows
-counterparts are covered by the CI tests in `S5`, since the local container runtime is unavailable
-(podman VM fails to start; the owner's Docker and remote contexts were left untouched).
+Roots are tracked by real path (`path-realpath.ts`, `getRealPath`), while cache keys are built from
+`resolve()`. On macOS `TMPDIR` lives under `/var`, a symlink to `/private/var`, so a matcher written
+against the wrong space silently matches **zero** reads — the exact shape that passes on a Linux CI
+runner and fails on a developer machine. Round 2 reproduced that divergence locally.
 
-### S2 — Settlement after every (re)arm
+Rule: every cache registration records its normalized path **once, at registration**, using
+`resolveRealPathThroughExistingAncestor` (the helper the watcher pool already uses). Matching is then a
+pure string `containsPath(root, entry)` — ancestor direction only, never `pathsOverlap` — and performs
+no filesystem call per pass. S1/S2/S3 share this one matcher.
 
-`settleRootReads(rootPath)` runs `prepareRefresh` + commit for every cached read whose path is under
-that root (the existing `refreshCache` is the registry). Invoked when a root's subscription is
-established or re-established. `ReactiveState`'s equality guard means a settled root emits nothing.
-Watermark rule: a root records the generation of its last settled arm and skips a settle it has
-already satisfied, so a subscription-start settle and an arm settle cannot double-work.
+### S1 — Settlement after every (re)arm
 
-### S3 — Settlement when a retained observation starts
+Arm identity is `(physical watcher generation, logical root)` **plus** the logical root's
+referenceCount 0→1 transition — a second logical root acquiring an already-initialized physical watcher
+produces no generation change and must still settle. Hook points are named in `watcher-pool`:
+`acquireWatcherRoot` (refcount 0→1, after `record.ready`) and the reinitialize-completion path (which
+settles every logical root bound to that physical watcher). `subscribeRuntimeStatus` emits are _not_ the
+hook: a reinitialize emits `initialized=false` mid-flight. Arm settlement is fire-and-forget and is not
+awaited by `acquireWatcherRoot`.
 
-A long-lived consumer that attaches to an already-armed root gets no arm event, so it settles its own
-observation roots once at start (same helper, same watermark). This is the case a server-boot root
-leaves open, and it is why S3 cannot be dropped in favour of S2.
+Concurrency is handled by **single-flight per root**, not by an at-most-once-per-generation watermark:
+concurrent triggers coalesce into one pass, but a later request at the same generation is allowed to run
+(it re-reads; equality keeps it free of emissions). Round 2 caught that the watermark version silently
+disabled S2 — the very case it existed for.
 
-### S4 — Pooled periodic settlement (the net for silent loss)
+### S2 — Settlement when a retained observation starts
 
-One process-level interval, `unref()`'d, jittered, active while at least one retained root lease
-exists and skipped entirely otherwise. Each pass walks the cached reads under the leased roots,
-re-reads them from disk (`prepareRefresh` + commit), and is serialized against itself (a pass never
-overlaps its predecessor). Default cadence 45 s, overridable for tests.
+A long-lived consumer attaching to an already-armed root gets no arm event, so it settles its own
+observation roots once at start. This is the server-boot case, and it stays correct under single-flight
+because it is not gated on generation.
 
-This is the ground-truth tier: it converges _every_ loss class, including the silent ones the library
-cannot see, and it is what makes the change's promise true on Linux rather than aspirationally true on
-macOS. Cost is bounded by the cached-read inventory under leased roots — the same inventory the
-one-shot path already reads — and a pass with no cached reads performs no filesystem access.
+### S3 — Pooled periodic settlement (the net)
 
-**Fanout law (stated, not dodged).** `tool-init-state.test.ts` asserts zero `setInterval` during a
-one-shot projection. That assertion currently holds because the test's root lease is acquired before
-the spy is installed (review N9) — a coincidence, not a contract. The amended contract this change
-delivers and documents: **one pooled interval per process, never per path, directory, or root**; the
-one-shot projection path creates none because it holds no retained lease at all. The test is updated
-to assert the contract directly (per-path poll counters stay zero; at most one pooled interval exists
-while a lease is held) instead of relying on ordering.
+One process-level interval, `unref()`'d, jittered, active while at least one observation root lease
+exists and skipped entirely otherwise. Each pass walks the registered reads under leased roots, re-reads
+them (`prepareRefresh` + commit), and never overlaps its predecessor. Default cadence 45 s, read from
+`OPENSPECUI_SETTLEMENT_INTERVAL_MS` **when the interval is started or scheduled**, never at module load.
+`closeAllWatchers()` must stop it — that path clears the registry without going through release.
+
+Ordering against our own writes: a pass's commit joins the same serialization as
+`settleReactivePathMutation`, so a pass whose read predates a write cannot publish the older value after
+the writer settled.
+
+### S4 — One-shot freshness without tearing down the registry
+
+`getToolInitStates` (one-shot) currently calls `invalidateToolInitCaches` → `clearCache(root)`, which
+deletes cache entries with a **substring** match (`key.includes(path)`) and — because
+`AgentDeliveryProjectionService` exposes the one-shot and retained paths in the same process — can strip
+a live retained projection of its refreshers, leaving it permanently frozen and invisible to any
+settlement (round 2's reachable counterexample to a process-wide promise).
+
+This change replaces that teardown with settle-then-read: the one-shot path settles the roots it is
+about to read and then reads, which is equally fresh, keeps every registration intact, and removes the
+substring hazard because nothing deletes by prefix any more.
 
 ### S5 — Proof
 
-1. **The stall, characterized first (runs today).** Retained projection → `closeAllWatchers()` → create
-   a file → wait past the missing-path poll and debounces → assert **no second emission**. This is a
-   real red today: it documents the defect rather than a missing symbol.
-2. **Convergence after the net.** Same setup, then drive one settlement pass → the projection emits
-   with the file present.
-3. **Settle after (re)arm.** Seed a deterministically stale cached read (read → close watchers →
-   mutate → attach), force the existing error-path reinitialize, and assert the read surfaces disk
-   truth with no new event, at most once per arm (watermark test).
-4. **Pooled lifecycle and cost.** With N roots and M cached reads, exactly one interval exists; a
-   disposal test proves it stops with the last lease and cannot hold the process open (`unref`);
-   a pass over a root with no cached reads performs zero `readdir`/`readFile`/`stat` (spy);
-   concurrent pass triggers never overlap.
-5. **Linux/Windows.** `S5.1`/`S5.2` run on the Linux gate; `S5.3` is platform-independent. Whether the
-   Windows gate executes them is stated explicitly in the checkpoints (it runs `test:ci` behind
-   `windows_required`).
+1. **The stall, already red** (`packages/core/src/reactive-fs/silent-event-loss.test.ts`, committed):
+   real root, stubbed `subscribe`, second file written, expect convergence. Fails today with
+   "the directory listing was never re-read".
+2. **Convergence after the net**: the same fixture, one driven settlement pass → emits with the file.
+   Must be run on macOS **and** the Linux gate; the macOS run is what catches path-space mistakes.
+3. **Path space**: a read registered under a symlinked prefix (macOS `TMPDIR` is exactly this) is
+   matched by a lease acquired on the same directory — asserted directly, so a `resolve()`/realpath
+   mismatch fails as itself rather than as a mysterious timeout.
+4. **Arm identity**: a second logical root sharing an initialized physical watcher still settles; a
+   reinitialize settles every logical root of that watcher; concurrent triggers coalesce (single-flight).
+5. **Consumer start at an unchanged generation** converges without waiting for the cadence.
+6. **Pooled lifecycle and cost**: spy installed _before_ the first lease → exactly one pooled interval
+   and zero per-path polls; a pass over a root with no registered reads does zero
+   `readdir`/`readFile`/`stat`; `closeAllWatchers()` stops the interval (its own assertion); disposal
+   cannot hold the process open.
+7. **One-shot does not orphan a retained projection**: retained subscription live → one-shot read of the
+   same root → retained projection still converges on the next pass.
+8. **Ordering**: a pass racing one of our own writes does not publish the pre-write value.
+
+## Bounds stated, not implied
+
+Convergence bound = cadence + jitter + pass duration, for reads that are **registered and under a leased
+root**. Reads with no lease (a consumer that never leased, e.g. a bare cached read in a process with no
+observation environment) are outside the guarantee and are listed as such. There is no fast bound: the
+net is the cadence; arm/start settlements only shorten the first exposure.
+
+## Fanout contract (narrowed to what is true)
+
+One pooled settlement interval per process — never per read, directory, or root. The pre-existing
+per-missing-path polls and per-watcher liveness probes are unaffected and stay as they are; the law is
+written to say exactly that, because the broad phrasing would have put a false sentence into `AGENTS.md`.
 
 ## Slices
 
-1. S1 recorded; no code.
-2. S2 + S3 with their red tests and the watermark rule.
-3. S4 with the stall/convergence pair, the pooled-lifecycle and cost tests, and the fanout-contract
-   test update.
-4. Docs (this change, AGENTS decision line) + changeset (`@openspecui/core`, `@openspecui/server`).
-5. Gates, review round 2, PR, archive, release per the repository workflow.
+1. S0 matcher + normalization, with the path-space test.
+2. S1 + S2 arm/start settlement with arm-identity and single-flight tests.
+3. S3 pooled pass with lifecycle, cost, `closeAllWatchers`, and ordering tests.
+4. S4 one-shot teardown replacement with the orphan test.
+5. Docs, changeset, review round 3, PR, archive, release.
 
 ## Risks
 
-- **Cost being invisible until it is not**: a pass re-reads cached inventory; measured by the cost
-  guard and stated as a number (cached reads × cadence) in the delivery record.
-- **A settle pass racing a projection rebuild**: passes are serialized and share `ReactiveState`, so a
-  concurrent projection simply sees the newer value.
-- **Interval lifecycle leaks**: owned by the lease registry, `unref()`'d, asserted by a disposal test.
-- **Timing-shaped tests**: the convergence test drives a pass explicitly rather than sleeping; no test
-  waits on the 45 s cadence.
+- **Cost**: proportional to registered reads under leased roots × cadence; measured and recorded, and a
+  pass does no work when nothing is registered.
+- **A pass publishing a stale read**: serialized against our own writes (S3) and covered by S5.8.
+- **Long-lived test files** (`reactive-fs.test.ts` leases in `beforeAll`): a real pass may fire mid-file
+  once cadence elapses; verify the full core suite after implementation for ordering sensitivity.
+- **Platform truth**: Linux/Windows behaviour is CI-verified; the local container runtime is unavailable
+  (podman VM fails; owner's Docker/remote contexts untouched).
 
 ## Review record
 
-- Round 1 (independent research subagent, 2026-11-04): **6/10**. Six blockers — baseline lifecycle
-  unclosed (escalation storm), snapshot/query ignore not aligned, "retained lease" undefined while the
-  spec promised process-wide settlement, re-arm had no entry point/serialization/awaitable signal,
-  S2/S3 + CP2 self-contradiction, and the red test being a compile failure rather than behavior.
-  Disposition: all six are folded here, and the round's sharpest observation (N11) was accepted — the
-  diff tier was removed rather than repaired, which also removes B1/B2/B4 at the root.
-  Three overclaims (O1 CI-class equivalence, O2 "only demonstrated recovery", O4 single convergence
-  bound) are corrected in this revision and in `intake.md`.
+- Round 1 (2026-11-04): **6/10**, six blockers. Disposition: the diff tier was removed rather than
+  repaired (N11), which deleted B1/B2/B4 at the root; B3/B5/B6 folded with the design change.
+- Round 2 (2026-11-04): **7/10** (+1). Five blockers, all folded in this revision — path space defined
+  (R2-B2, reproduced locally), watermark replaced by single-flight (R2-B1), fanout contract narrowed to
+  the truth (R2-B3), arm identity made explicit including the refcount transition (R2-B4), and the
+  one-shot teardown replaced so a retained projection cannot be orphaned (R2-B5). Overclaims O1–O5
+  corrected: the guarantee is scoped to registered reads under leases with a cadence-shaped bound, and
+  the probe is recorded as one observed sequence rather than a general law about the library.

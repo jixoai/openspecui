@@ -47,3 +47,35 @@ architectural one changed the design rather than the wording:
 - Overclaims O1/O2/O4 corrected in `intake.md` and the plan: the upstream race figures are cited
   separately, the re-read (not the re-arm) is named as the convergence primitive, and there is one
   stated convergence bound instead of an implied fast one.
+
+### 2026-11-04/05 — Review round 2 folded (7/10 → plan v3)
+
+Round 2 verified that three of round 1's blockers were genuinely eliminated (B1/B2 deleted with the
+diff tier, B6 materialized as an executable red) and that the rest needed work. Its five blockers are
+folded here:
+
+- **R2-B2 (the dangerous one): one matching space.** Roots are realpath-tracked, cache keys are
+  `resolve()`-built, and macOS `TMPDIR` sits under the `/var` → `/private/var` symlink — so a naive
+  matcher covers **zero** reads on a developer machine while passing on a Linux runner. Round 2
+  reproduced the divergence locally. Registration now records a normalized path once and matching is a
+  pure ancestor string test with no per-pass filesystem calls.
+- **R2-B1: single-flight replaces the watermark.** The watermark ("at most once per arm") silently
+  disabled the very consumer-start case S2 exists for, because silent loss does not change the
+  generation. Concurrent requests now coalesce; later requests at the same generation may run.
+- **R2-B3: the fanout sentence is narrowed to the truth.** "Never per path/directory/root" was false —
+  per-missing-path polls and per-watcher liveness probes exist. The recorded contract is one pooled
+  settlement interval per process, with those two unchanged.
+- **R2-B4: arm identity is explicit** — `(physical generation, logical root)` plus the refcount 0→1
+  transition, since a second logical root on an initialized physical watcher changes no generation.
+  Hook points named in `watcher-pool`; `subscribeRuntimeStatus` emits are explicitly not the hook.
+- **R2-B5: the one-shot path stops tearing down the registry.** `clearCache(root)`'s substring deletion
+  can orphan a live retained projection in the same process (reachable: one-shot and retained coexist in
+  `AgentDeliveryProjectionService`). Replaced by settle-then-read, which also removes the substring
+  hazard.
+
+Overclaims corrected: the guarantee is scoped to registered reads under leased roots with a
+cadence-shaped bound (O1/O2); the probe is one observed sequence, not a library law (O4); the fanout
+sentence is narrowed (O5); O3 disappeared with the single-flight change. Non-blocking items folded: pass
+commits serialize with our own writes, the matcher uses `containsPath` rather than `pathsOverlap`, the
+cadence env is read at interval start, `closeAllWatchers()` must stop the interval, and the round-1
+citation of "two pool tests" was dropped as imprecise.

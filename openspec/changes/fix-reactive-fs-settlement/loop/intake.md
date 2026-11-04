@@ -47,34 +47,44 @@ Two read-only investigations and one executed probe, all recorded here rather th
    | watcher dead, then create | **diff reports `[]`** — the query path is not independent ground truth |
    | re-subscribe, then diff   | `create:b.txt` — the diff becomes useful again                         |
 
-   Two corrections this table forced on the earlier reading: the **convergence primitive is the
-   direct disk re-read** (`refresh()` never reads the library's tree), not the re-arm; and re-arm
+   Recorded as one observed sequence on one platform, not as a general law: macOS replay throws on
+   failure rather than returning `[]`, so the more likely reading is that the baseline was simply
+   written after the loss. The conclusion the design takes from it is narrow and safe — **a direct
+   re-read is ground truth no matter what any query returns** — plus one platform fact: re-arm
    re-crawls the tree on Linux/Windows but on macOS merely starts a new FSEvents stream from now.
 
 ## Scope
 
-- Settle silent loss by re-reading from disk: after every (re)arm, at retained-observation start, and
-  on a pooled low-frequency cadence while any root lease is held.
-- Keep the missing-path fallback as-is; keep the native watcher and its event path as the fast path.
+- Settle silent loss by re-reading from disk: after every (re)arm, at retained-observation start, and on
+  a pooled low-frequency cadence while any root lease is held — for reads that are registered and under
+  a leased root (that scoping is the honest form of the promise; reads nobody leased are listed as
+  outside it).
+- Replace the one-shot path's registry-tearing `clearCache` invalidation with settle-then-read, so a
+  retained projection in the same process cannot be orphaned.
+- Keep the missing-path fallback and the native event path as they are.
 
 ## Non-goals (explicitly not this change)
 
 - Switching libraries (chokidar polling), adding Watchman, or changing the native backend.
 - Waiting for upstream #265/#266: Linux overflow is silent today and would stay silent even with that
   race fixed, so the net is needed regardless.
-- Relying on the library's `writeSnapshot`/`getEventsSince` as a loss detector. Review round 1 showed
-  it is blind in exactly the two cases that matter, and it drags in baseline lifecycle, ignore
-  alignment, escalation storms and upstream query defects. The rejected design is recorded in the
-  plan so it is not re-litigated.
+- Relying on the library's `writeSnapshot`/`getEventsSince` as a loss detector. Round 1 showed it does
+  not serve that purpose, and it drags in baseline lifecycle, ignore alignment, escalation storms and
+  upstream query defects. The rejected design is recorded in the plan so it is not re-litigated.
+- Turning the probe into a general law about the library. It is one observed sequence; the design stands
+  without it.
 - Changing what `tool-init-state` projects, or the UI.
 
 ## Owner-visible decisions this change carries
 
-1. **The fanout law's contract is amended explicitly.** `tool-init-state.test.ts` currently asserts
-   zero `setInterval` during a one-shot projection, and that holds today only because the test takes
-   its root lease before installing the spy (review N9). The contract this change delivers instead:
-   one pooled interval per process — never per path, directory, or root — and none at all when no
-   retained lease is held. The test is updated to assert that contract rather than the ordering
-   coincidence, and the amendment is recorded in `AGENTS.md` with the cost model.
-2. A pooled settlement timer exists at all (cost: cached reads under leased roots × 45 s cadence,
-   `unref`'d, skipped when idle).
+1. **The fanout contract is stated in the narrow form that is true.** One pooled settlement interval per
+   process — never per read, directory, or root — while the pre-existing per-missing-path polls and
+   per-watcher liveness probes stay as they are. `tool-init-state.test.ts`'s zero-timer assertion keeps
+   passing today only because its root lease precedes the spy; the test will assert the actual contract
+   instead (spy first: exactly one pooled interval, zero per-path polls), and `AGENTS.md` records the
+   narrowed sentence rather than a false broad one.
+2. **The one-shot freshness mechanism changes** from "delete cache entries by substring prefix" to
+   "settle then read". Same freshness, no destruction of another consumer's registrations.
+3. A pooled settlement timer exists at all (cost: registered reads under leased roots × 45 s cadence,
+   `unref`'d, skipped when idle), and convergence is bounded by that cadence plus jitter and pass
+   duration — there is no fast bound.
