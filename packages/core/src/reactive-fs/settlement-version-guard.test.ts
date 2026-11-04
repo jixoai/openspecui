@@ -11,12 +11,23 @@
  *    commit the re-read when no further publication interleaves.
  * 5. Construct every interleaving with the exported commit gate or a one-shot readFile
  *    implementation — never by sleeping and hoping.
+ * 6. Pin the two conflict modes of `settleRegisteredReadsUnder`: `'skip'` drops a registration
+ *    whose publisher committed at the commit gate (the trigger-pass semantics), while
+ *    `'force-commit'` answers the same conflicts with bounded re-reads and commits a read that
+ *    started after every observed publication — the freshness `settlePaths` exposes to one-shot
+ *    consumers. Existing assertions above stay default-mode (`'skip'`) pins and are not relaxed.
+ * 7. Pin the attempt bound: a publisher landing at every decision point still terminates in at
+ *    most three attempts plus exactly one forced read, whose value is the disk current value.
  *
  * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
  * Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补丁的方式肯定不如社区成熟度高的方案"
  *   — fix-reactive-fs-settlement S3 (CP3): the per-registration commit version guard.
+ * Review correction (2026-11-05, S4/BLK-1): the skip branch's "the publisher that moved it already
+ *   wrote the newer value" rationale does not hold for event/poll publishers, whose own read can
+ *   start before this pass; the one-shot path now spends bounded re-reads and forces a final read
+ *   instead of skipping, and `'skip'` is documented as a trigger-pass policy, not a freshness mode.
  */
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -31,6 +42,7 @@ import {
   reactiveReadDir,
   reactiveReadFile,
   setSettlementCommitGateForTests,
+  settlePaths,
   settleReactivePathMutation,
   settleRegisteredReadsUnder,
   updateReactiveFileCache,
@@ -195,5 +207,96 @@ describe('settlement commit version guard', () => {
     await expect(
       settleRegisteredReadsUnder(resolveRealPathThroughExistingAncestor(otherRoot))
     ).resolves.toBe(1)
+  })
+
+  it("drops a gate-conflicted registration in the default 'skip' mode and returns it uncommitted", async () => {
+    const dir = await createTempRoot()
+    const target = join(dir, 'skip-value.txt')
+    await writeFile(target, 'v1', 'utf8')
+    await expect(reactiveReadFile(target)).resolves.toBe('v1')
+
+    // Exactly one publication lands where the guard looks: after this pass's read, before its
+    // commit. The pass has read 'v1' and must not overwrite the publisher's newer value with it.
+    let gateCalls = 0
+    setSettlementCommitGateForTests(async () => {
+      gateCalls += 1
+      if (gateCalls !== 1) return
+      await writeFile(target, 'v2', 'utf8')
+      updateReactiveFileCache(target, 'v2')
+    })
+
+    await expect(
+      settleRegisteredReadsUnder(resolveRealPathThroughExistingAncestor(dir))
+    ).resolves.toBe(0)
+    // 'skip' drops the registration instead of re-reading: the returned count excludes it and the
+    // retained value is the publisher's, not this pass's older read.
+    expect(gateCalls).toBe(1)
+    await expect(reactiveReadFile(target)).resolves.toBe('v2')
+  })
+
+  it("answers gate conflicts with bounded re-reads in 'force-commit' mode", async () => {
+    const dir = await createTempRoot()
+    const target = join(dir, 'force-value.txt')
+    await writeFile(target, 'v1', 'utf8')
+    await expect(reactiveReadFile(target)).resolves.toBe('v1')
+
+    // Two conflicts land where the guard looks: the first at the commit gate (this pass's read is
+    // over, its commit pending), the second inside the re-read window it forces. The pass must end
+    // on a read that started after both publications and commit exactly that read — the disk
+    // current value, never v1 or v2.
+    let gateCalls = 0
+    setSettlementCommitGateForTests(async () => {
+      gateCalls += 1
+      if (gateCalls > 2) return
+      const next = `v${gateCalls + 1}`
+      await writeFile(target, next, 'utf8')
+      updateReactiveFileCache(target, next)
+    })
+
+    const fsPromises = await import('node:fs/promises')
+    const readFileSpy = vi.mocked(fsPromises.readFile)
+    readFileSpy.mockClear()
+
+    await expect(
+      settleRegisteredReadsUnder(resolveRealPathThroughExistingAncestor(dir), {
+        conflictMode: 'force-commit',
+      })
+    ).resolves.toBe(1)
+
+    // Attempts: v1 (conflicted), v2 (conflicted), v3 (clean) — bounded to three, no forced read.
+    expect(readFileSpy.mock.calls.length).toBe(3)
+    expect(gateCalls).toBe(3)
+    await expect(reactiveReadFile(target)).resolves.toBe('v3')
+    await expect(readFile(target, 'utf8')).resolves.toBe('v3')
+  })
+
+  it('forces exactly one final read after the bounded attempts are spent and commits disk truth', async () => {
+    const dir = await createTempRoot()
+    const target = join(dir, 'forced-value.txt')
+    await writeFile(target, 'v1', 'utf8')
+    await expect(reactiveReadFile(target)).resolves.toBe('v1')
+
+    // A publisher lands at every decision point, so every bounded attempt conflicts and only the
+    // forced read remains. That read starts after the last observed publication, so its value is
+    // the disk current value — the freshness `settlePaths` promises its one-shot consumers.
+    let gateCalls = 0
+    setSettlementCommitGateForTests(async () => {
+      gateCalls += 1
+      const next = `v${gateCalls + 1}`
+      await writeFile(target, next, 'utf8')
+      updateReactiveFileCache(target, next)
+    })
+
+    const fsPromises = await import('node:fs/promises')
+    const readFileSpy = vi.mocked(fsPromises.readFile)
+    readFileSpy.mockClear()
+
+    await expect(settlePaths([dir])).resolves.toBe(1)
+
+    // Bounded: three attempts (v1, v2, v3) plus exactly one forced read (v4) — never more.
+    expect(readFileSpy.mock.calls.length).toBe(4)
+    expect(gateCalls).toBe(3)
+    await expect(reactiveReadFile(target)).resolves.toBe('v4')
+    await expect(readFile(target, 'utf8')).resolves.toBe('v4')
   })
 })

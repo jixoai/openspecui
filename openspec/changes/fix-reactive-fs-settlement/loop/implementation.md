@@ -246,3 +246,35 @@ trigger-driven passes (arm/attach/cadence), while `settlePaths` is an independen
 
 Full core suite after the switch: 94 files / 899 tests green, one skipped, no ordering sensitivity; the
 `upstream-contract-regression` file passes now that the worktree has its reference checkout.
+
+### 2026-11-05 — Diff review round 6 (7.5/10) folded: two merge-blocking items
+
+Round 6 reviewed the diff (not the plan) and cleared the mechanisms: `silent-event-loss` is green because
+the pooled cadence re-reads it (alternative triggers were eliminated one by one), all four triggers are
+wired in the production assembly, the publisher enumeration is complete, the coordinator has no lost
+waiter or premature resolve, and the timer lifecycle is correct. Two items blocked merge:
+
+- **BLK-1 — the one-shot freshness claim was false on the skip branch.** The guard's comment said a
+  skipped registration was "safe by construction, because the publisher that moved it already wrote the
+  newer value", which only holds for publishers that write the disk before publishing; an event/poll
+  refresh can commit a read that _started_ earlier. Fix: `settleRegisteredReadsUnder` now takes a
+  `conflictMode`. Trigger-driven passes keep `'skip'`. `settlePaths` uses `'force-commit'`: bounded
+  attempts (three), and if conflicts persist, one final read is committed unconditionally — that read
+  started after every observed conflict, so it is the freshest value attainable without a lock. Tests
+  construct both the single-conflict and the second-conflict-in-the-re-read-window cases through the
+  commit gate and assert the exact read counts (3 attempts; 4 reads when the budget is spent).
+- **BLK-2 — the CP5 contract assertion was never delivered.** `tool-init-state.test.ts` still relied on
+  the root-before-spy ordering coincidence. The spy now precedes `acquireRoot`, the assertion requires
+  exactly one cadence delay (1234 in the test) with every other delay being the liveness 3000, and
+  `missingPathPolls` counts only delays that are neither. Mutation: adding a single per-path poll through
+  the production `ensureMissingPathPoll` path reddens it (`expected 1 to be +0`); reverting restores green.
+
+Also folded from the review: the coordinator no longer treats "no runner" as an error — `reactive-fs`
+registers the runner at module scope, so an absent runner means that module was never loaded and there are
+no registrations to settle; every root-observing test that does not read through `reactive-fs` was logging
+a spurious per-pass failure. And CP2/CP3's "shared by every producer" wording was corrected to the ruling:
+the coordinator governs trigger-driven passes while `settlePaths` is independent and may overlap it.
+
+Recorded as follow-ups (not this change): an explicit `unref` assertion, protection around
+`emitWatcherRuntimeStatus` listeners, cadence read failures not committing a null, a measured cost figure,
+reclaim policy for one-shot registrations, and trimming the test-only exports from the public surface.

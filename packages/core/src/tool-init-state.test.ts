@@ -28,6 +28,10 @@
  *    — Slice 3 rotates generated-by currency to the admitted 1.14.x line.
  * Original request (2026-10-25): "开工" — Slice 2 rotates the currency line and every
  * sample generator stamp to 1.16.x; 1.15.x joins the below-admitted stale set.
+ * Review correction (2026-11-05, fix-reactive-fs-settlement S4/CP5/BLK-2): the empty-installation
+ * fanout assertion installs the interval spy before the first lease and pins the delay multiset —
+ * exactly one pooled settlement cadence, everything else a per-watcher liveness probe, zero
+ * per-path polls — instead of depending on the root-before-spy ordering coincidence.
  * Note: openspec-cli-112 generator fixtures below are historical/boundary evidence for staleness and
  * legacy-compat classification; positive v15 acceptance lives in the official-cli-v15 suite.
  */
@@ -43,6 +47,7 @@ import { selectAgentDeliveryRegistry } from './agent-delivery-registry.js'
 import {
   clearCache,
   getCacheSize,
+  getSettlementDiagnostics,
   ReactiveContext,
   ReactiveObservationEnvironment,
   settleReactivePathMutation,
@@ -769,9 +774,16 @@ describe('getToolInitStates', () => {
 
   it('bounds empty-installation observation fanout by physical inventory across recomputes', async () => {
     process.env.CODEX_HOME = join(tempDir, 'codex-home')
+    // The pooled settlement cadence is read when the interval starts, so a recognizable value
+    // proves the single non-liveness interval below is that pooled interval rather than a
+    // per-path poll (which would be `MISSING_PATH_POLL_MS`, 1000).
+    process.env.OPENSPECUI_SETTLEMENT_INTERVAL_MS = '1234'
+    // The spy must exist before the first lease: `acquireWatcherRoot` starts the pooled interval
+    // synchronously on the 0 -> 1 reference transition, so the previous order asserted "no
+    // per-path polls" only for timers created after a spy installed *after* the interval owner.
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
     const environment = new ReactiveObservationEnvironment()
     const releaseRoot = await environment.acquireRoot(tempDir)
-    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
     const context = new ReactiveContext()
     const projection = context.stream(
       createToolInitStateProjection(tempDir, {
@@ -780,13 +792,31 @@ describe('getToolInitStates', () => {
       })
     )
 
+    const settlementCadenceMs = Number(process.env.OPENSPECUI_SETTLEMENT_INTERVAL_MS)
+    const PATH_LIVENESS_INTERVAL_MS = 3000
+    const pooledIntervals = (): number[] =>
+      setIntervalSpy.mock.calls
+        .map((call) => Number(call[1]))
+        .filter((delay) => delay === settlementCadenceMs)
+    // Delays that are neither the pooled settlement cadence nor ProjectWatcher's per-watcher
+    // liveness probe: a per-path/missing-path poll (1000 ms) or any other unexpected timer.
+    const unexpectedPolls = (): number[] =>
+      setIntervalSpy.mock.calls
+        .map((call) => Number(call[1]))
+        .filter((delay) => delay !== settlementCadenceMs && delay !== PATH_LIVENESS_INTERVAL_MS)
+
     try {
       const initial = await projection.next()
       expect(initial.done).toBe(false)
+      // Exactly one pooled settlement interval exists for the whole process, however many physical
+      // watchers the empty installation arms; every other timer must be a per-watcher liveness
+      // probe. A per-path poll would surface in `unexpectedPolls`.
+      expect(getSettlementDiagnostics().activeTimers).toBe(1)
+      expect(pooledIntervals()).toHaveLength(1)
       const beforeUnexpectedArtifact = {
         cacheStates: getCacheSize(),
         watcherSubscriptions: getActiveWatcherCount(),
-        missingPathPolls: setIntervalSpy.mock.calls.length,
+        missingPathPolls: unexpectedPolls().length,
       }
 
       const unexpectedArtifact = join(tempDir, '.claude', 'commands', 'opsx', 'explore.md')
@@ -798,10 +828,12 @@ describe('getToolInitStates', () => {
         replacement.value.find((entry: ToolInitState) => entry.toolId === 'claude')
           ?.unexpectedCommandWorkflows
       ).toEqual(['explore'])
+      expect(getSettlementDiagnostics().activeTimers).toBe(1)
+      expect(pooledIntervals()).toHaveLength(1)
       const afterUnexpectedArtifact = {
         cacheStates: getCacheSize(),
         watcherSubscriptions: getActiveWatcherCount(),
-        missingPathPolls: setIntervalSpy.mock.calls.length,
+        missingPathPolls: unexpectedPolls().length,
       }
       expect(beforeUnexpectedArtifact.cacheStates).toBeLessThanOrEqual(64)
       expect(beforeUnexpectedArtifact.watcherSubscriptions).toBeLessThanOrEqual(64)
@@ -812,6 +844,7 @@ describe('getToolInitStates', () => {
     } finally {
       await projection.return(undefined)
       setIntervalSpy.mockRestore()
+      delete process.env.OPENSPECUI_SETTLEMENT_INTERVAL_MS
       await releaseRoot()
       await environment.dispose()
     }

@@ -13,6 +13,9 @@
  * 8. Offer one-shot consumers an awaited settle of their input roots (`settlePaths`) that keeps
  *    every registration alive, so a fresh one-shot read no longer orphans a retained projection in
  *    the same process.
+ * 9. Give the one-shot settle a `force-commit` conflict mode — bounded re-reads, then a final read
+ *    committed without a version check — so a one-shot consumer can never be served a value older
+ *    than a read that started after its call, while trigger-driven passes keep the `skip` semantics.
  *
  * Original request (2026-07-16): "direct filesystem mutations update reactive state before returning."
  * Original request (2026-08-01): nested Spec discovery must not silently drop unreadable subtrees.
@@ -20,6 +23,8 @@
  *   — fix-reactive-fs-settlement S0: one matching space for the settlement net, and only for it.
  *   — fix-reactive-fs-settlement S3: the pooled pass's read/commit window guard.
  *   — fix-reactive-fs-settlement S4: settle-then-read for one-shot consumers, without clearCache.
+ *   — fix-reactive-fs-settlement S4/BLK-1 (2026-11-05): the one-shot freshness contract holds only
+ *     when conflicts are answered by later reads; `skip` is not a freshness mode.
  */
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
@@ -251,6 +256,24 @@ export function setSettlementCommitGateForTests(gate: (() => void | Promise<void
   settlementCommitGateForTests = gate
 }
 
+/** Conflict policy for one settlement pass; see `settleRegisteredReadsUnder`. */
+export interface SettleRegisteredReadsOptions {
+  /**
+   * `'skip'` (default, trigger-driven passes): drop a conflicting registration and let a later
+   * pass self-heal it. `'force-commit'` (one-shot consumers via `settlePaths`): answer every
+   * conflict with another read, and after a bounded number of attempts read once more and commit
+   * that read unconditionally.
+   */
+  conflictMode?: 'skip' | 'force-commit'
+}
+
+/**
+ * Total read attempts (the first read included) one registration may spend in `force-commit` mode
+ * before the pass falls back to the final forced read. The same number bounds the reader that
+ * detects an in-flight conflict, so no conflict loop is unbounded.
+ */
+const FORCE_COMMIT_MAX_ATTEMPTS = 3
+
 /**
  * Re-read every registered read whose normalized path lies under one normalized root.
  *
@@ -261,49 +284,113 @@ export function setSettlementCommitGateForTests(gate: (() => void | Promise<void
  * never covered. An empty set performs no read at all.
  *
  * Ordering guard (S3, pass-side only): each registration's commit version is recorded before its
- * read, and a publisher that committed while that read was in flight makes the pass re-read once.
- * The final version check and the commit are one **synchronous** block, so no publication can
- * interleave between them; a registration whose version moved again is skipped — safe by
- * construction, because the publisher that moved it already wrote the newer value.
+ * read, and a publisher that committed while that read was in flight makes the pass re-read once
+ * (up to `FORCE_COMMIT_MAX_ATTEMPTS` attempts in `force-commit` mode). The final version check and
+ * the commit are one **synchronous** block, so no publication can interleave between them.
  *
- * Residual, stated: the guard is pass-side only. A publisher's own read→commit window can still be
- * interleaved by a newer pass commit and briefly publish the older value; that self-heals on the
- * next pass and is not part of this claim.
+ * `options.conflictMode` decides what a conflict still present in that block means:
+ *
+ * - `'skip'` (default — arm, attach, and pooled-cadence passes): the registration is dropped from
+ *   this pass, and a later pass is expected to self-heal it. This is the original trigger-pass
+ *   semantics and it is **not** a freshness guarantee: an event/poll publisher's own read can have
+ *   started before this pass (only its commit lands later), so the value this pass declines to
+ *   overwrite can be older than the disk at this instant. One-shot consumers must not use it.
+ * - `'force-commit'` (one-shot consumers, wired by `settlePaths`): the conflict is answered by
+ *   another read. After the bounded attempts are spent, the pass reads once more and commits that
+ *   read **without** a version check. That forced read starts from disk no earlier than every
+ *   conflicting read observed so far, so it is the freshest value reachable at that moment. The
+ *   declared residual still applies: a publisher's own read→commit window can be interleaved by a
+ *   newer pass commit and briefly publish the older value; that self-heals on the next pass and is
+ *   not part of this claim, and neither is a publication landing inside the final read's own window.
  *
  * Returns the number of registrations whose refresh actually committed (those skipped by the guard
  * are excluded).
  */
-export async function settleRegisteredReadsUnder(normalizedRootPath: string): Promise<number> {
+export async function settleRegisteredReadsUnder(
+  normalizedRootPath: string,
+  options: SettleRegisteredReadsOptions = {}
+): Promise<number> {
+  const conflictMode = options.conflictMode ?? 'skip'
   const registrations = [...refreshCache.values()].filter((registration) =>
     containsPath(normalizedRootPath, registration.normalizedPath)
   )
   if (registrations.length === 0) return 0
 
-  const prepared = await Promise.all(
+  interface SettlementAttempt {
+    registration: CacheRefreshRegistration
+    commit: () => void
+    /** Commit version observed immediately before this attempt's read. */
+    observedVersion: number
+    /** Reads spent on this registration so far, this attempt included. */
+    attempts: number
+  }
+
+  const readOnce = async (
+    registration: CacheRefreshRegistration,
+    attempts: number
+  ): Promise<SettlementAttempt> => {
+    const observedVersion = registration.commitVersion
+    const commit = await registration.prepareRefresh()
+    return { registration, commit, observedVersion, attempts }
+  }
+
+  const maxInlineAttempts = conflictMode === 'force-commit' ? FORCE_COMMIT_MAX_ATTEMPTS : 2
+
+  // Read phase: one read per registration, retried inline while a publisher that committed during
+  // a read keeps making the value read possibly predate it (bounded, so a live publisher stream
+  // cannot pin the pass here).
+  let round = await Promise.all(
     registrations.map(async (registration) => {
-      let observedVersion = registration.commitVersion
-      let commit = await registration.prepareRefresh()
-      if (registration.commitVersion !== observedVersion) {
-        // A publisher committed during this read, so the value read may predate it; re-read once and
-        // let the synchronous block below decide. Bounded to one retry per registration.
-        observedVersion = registration.commitVersion
-        commit = await registration.prepareRefresh()
+      let attempt = await readOnce(registration, 1)
+      while (
+        attempt.registration.commitVersion !== attempt.observedVersion &&
+        attempt.attempts < maxInlineAttempts
+      ) {
+        attempt = await readOnce(registration, attempt.attempts + 1)
       }
-      return { registration, commit, observedVersion }
+      return attempt
     })
   )
 
-  if (settlementCommitGateForTests) {
-    await settlementCommitGateForTests()
-  }
-
-  // Promise continuations cannot observe a partial snapshot until this synchronous commit ends, and
-  // the version check shares that block with its commit: no publisher can interleave between them.
   let committed = 0
-  for (const { registration, commit, observedVersion } of prepared) {
-    if (registration.commitVersion !== observedVersion) continue
-    commit()
-    committed += 1
+  while (round.length > 0) {
+    if (settlementCommitGateForTests) {
+      await settlementCommitGateForTests()
+    }
+
+    const conflicted: SettlementAttempt[] = []
+    // Promise continuations cannot observe a partial snapshot until this synchronous commit ends,
+    // and the version check shares that block with its commit: no publisher can interleave.
+    for (const attempt of round) {
+      if (attempt.registration.commitVersion !== attempt.observedVersion) {
+        conflicted.push(attempt)
+        continue
+      }
+      attempt.commit()
+      committed += 1
+    }
+
+    if (conflictMode === 'skip' || conflicted.length === 0) {
+      // `'skip'`: a conflicting registration is deliberately dropped and retried by a later pass;
+      // the retained value is the publisher's, which this pass must not overwrite with an older
+      // read.
+      break
+    }
+
+    const retries: Array<Promise<SettlementAttempt>> = []
+    for (const attempt of conflicted) {
+      if (attempt.attempts >= FORCE_COMMIT_MAX_ATTEMPTS) {
+        // Attempt budget spent and still conflicted: read once more and commit it unconditionally.
+        // This read begins on disk after every conflicting read observed so far, so it is the
+        // freshest value reachable here; the residual above covers its own publication window.
+        const forcedCommit = await attempt.registration.prepareRefresh()
+        forcedCommit()
+        committed += 1
+        continue
+      }
+      retries.push(readOnce(attempt.registration, attempt.attempts + 1))
+    }
+    round = await Promise.all(retries)
   }
   return committed
 }
@@ -315,8 +402,16 @@ export async function settleRegisteredReadsUnder(normalizedRootPath: string): Pr
  *
  * - **Pool- and lease-independent.** It takes no watcher lease and consults no watcher-pool state,
  *   because a server's first one-shot read can run before any attach has ever acquired a lease.
- * - **Awaited.** Once the returned promise resolves, every registration under these roots holds the
- *   disk truth read by this pass; callers read after it settles and may treat the values as fresh.
+ * - **Awaited, with a start-time guarantee.** Once the returned promise resolves, every
+ *   registration under these roots holds a value read from disk at a moment **later than this
+ *   call** — not merely "not older than some publisher already wrote". This holds because the pass
+ *   runs in `force-commit` mode: a conflict is answered by another read, and if the bounded
+ *   attempts are exhausted the pass reads once more and commits that read unconditionally; every
+ *   one of those reads starts after the call (assuming no unbounded external publication stream;
+ *   a publication landing inside the final read's own window can still be newer than the value
+ *   committed). The trigger-driven `'skip'` mode makes no such promise — it drops the conflicting
+ *   registration, whose retained value a preceding event/poll publisher may have read before this
+ *   call — so one-shot consumers must not settle through a default-mode pass.
  * - **Non-destructive.** It never deletes or releases a registration — this is what lets it replace
  *   `clearCache` on the one-shot path, so a retained projection observing the same root in this
  *   process keeps its refreshers instead of being orphaned mid-flight.
@@ -328,14 +423,15 @@ export async function settleRegisteredReadsUnder(normalizedRootPath: string): Pr
  *   leaves the recorded normalization stale and that read uncovered.
  *
  * Reads under overlapping roots are covered once per deduplicated normalized root and committed
- * sequentially; the per-registration commit-version guard of `settleRegisteredReadsUnder` still
- * applies within each pass. Returns the total number of registrations whose refresh committed.
+ * sequentially; each pass runs in `conflictMode: 'force-commit'` (see its contract above), so the
+ * per-registration commit-version guard answers conflicts with later reads instead of dropping
+ * them. Returns the total number of registrations whose refresh committed.
  */
 export async function settlePaths(paths: readonly string[]): Promise<number> {
   const normalizedRoots = new Set(paths.map((path) => resolveRealPathThroughExistingAncestor(path)))
   let committed = 0
   for (const root of normalizedRoots) {
-    committed += await settleRegisteredReadsUnder(root)
+    committed += await settleRegisteredReadsUnder(root, { conflictMode: 'force-commit' })
   }
   return committed
 }

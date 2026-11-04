@@ -208,8 +208,11 @@ async function runSettlementPass(
       markCompleted = resolveCompleted
       await settlementPassHook({ rootPath, passIndex, completed })
     }
-    if (!settlementRunner) throw new Error('settlement runner is not registered')
-    await settlementRunner(rootPath)
+    // No runner is not a failure: `reactive-fs` registers it at module scope, so an absent runner
+    // means that module was never loaded — and then there are no registrations to settle. Treating
+    // this as an error would make every process that observes roots without reading through
+    // `reactive-fs` log a failure per pass for work that cannot exist.
+    if (settlementRunner) await settlementRunner(rootPath)
   } catch (error) {
     // Recovery work: a failing registration (or a throwing gate) must not reject a promise that a
     // fire-and-forget caller never observes, and must not strand this root's queue.
