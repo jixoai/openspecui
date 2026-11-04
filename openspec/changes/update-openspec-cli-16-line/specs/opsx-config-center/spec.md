@@ -1,14 +1,18 @@
 <!--
 Orthogonal intents (created 2026-11-04 Asia/Shanghai):
 1. Spec delta: Agent delivery inventory series rotation (1.15 -> 1.16; no new upstream tools).
+2. RENAMED/RENAMED-target use the full `### Requirement:` title form the parser requires
+   (a short title silently matches nothing and leaves the MODIFIED block unarchivable).
+3. Scenario titles stay inherited identity so the archive merge replaces them instead of
+   reporting a lost scenario.
 
 Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
 -->
 
 ## RENAMED Requirements
 
-- FROM: `OpenSpecUI 15 Agent Delivery Inventory`
-- TO: `OpenSpecUI 16 Agent Delivery Inventory`
+- FROM: `### Requirement: OpenSpecUI 15 Agent Delivery Inventory`
+- TO: `### Requirement: OpenSpecUI 16 Agent Delivery Inventory`
 
 ## MODIFIED Requirements
 
@@ -23,6 +27,8 @@ restart requirements where that CLI declares them. A tool absent from the admitt
 for that line, not falsely stale or present. A session running a retired CLI line SHALL project no inventory
 for the v16 registry rather than the retired line's snapshot.
 
+Scenario titles below are inherited scenario identity: a title that names an older line names the era that introduced the check, while every scenario body states the OpenSpecUI 16 classification.
+
 #### Scenario: Series rotation carries the physical inventory forward
 
 - **GIVEN** the admitted OpenSpec CLI is stable 1.16.x
@@ -31,7 +37,7 @@ for the v16 registry rather than the retired line's snapshot.
   upstream in 1.16.0)
 - **AND** generator-version evidence SHALL reflect the 1.16.0 pinned baseline
 
-#### Scenario: A retired-line session projects no v16 inventory
+#### Scenario: A retired-line session projects no v15 inventory
 
 - **GIVEN** the running OpenSpec CLI is stable 1.16.x after the v16 admission gate
 - **WHEN** the Agent inventory is evaluated

@@ -106,15 +106,25 @@ Owner: subagent, verified by the main agent's diff review.
    verified config-failure discriminator.
 4. Delete `packages/core/src/__tests__/official-cli-v14-fixtures.ts` (its only importer was the
    v14 boundary suite) and remove the `openspec-cli-114` alias.
-5. **Unclaimed-literal fallback** (folded after Round-A N2): the matrix itself is the authority.
-   Any test file that goes red on a stale version literal joins this slice. The three that will
-   genuinely fail are `packages/core/src/opsx-kernel-cli-projection.test.ts` (its fake CLI gates
-   capability by `version.startsWith('1.15')`), `openspec-compat.test.ts`, and
-   `scripts/diagnose-cli-runner.test.mjs`. Clean-up literals that only mock a version (server and
-   web router/component tests, `opsx-kernel-schemas-root.fixtures.test.ts`'s local `PINNED_BINS`
-   key, `opsx-kernel-status-warnings.test.ts`, `tool-init-state.test.ts`,
-   `agent-delivery-registry.test.ts`, `workflow.test.ts`) rotate for honesty only — they must not
-   be "fixed" by relaxing an assertion.
+5. **Behaviour-assertion tests the gate flip breaks** (folded from Codex Round-A B2 — these were
+   wrongly classified as honesty-only cleanup):
+   - `packages/web/src/components/cli-health-gate.test.tsx` — asserts `1.16.0` is **blocked** and
+     the required range is `>=1.15.0 <1.16.0`; rotate to 1.16 admitted / 1.17 blocked.
+   - `packages/server/src/agent-update-plan-preview-router.test.ts` and
+     `packages/server/src/cli-validate-findings-router.test.ts` — both build "an admitted 1.15
+     session" fixtures; rotate to 1.16.
+   - `packages/core/src/opsx-kernel-cli-projection.test.ts` — its fake CLI gates capability by
+     `version.startsWith('1.15')`, so a 1.16 fixture takes the wrong branch.
+6. **Remaining literal cleanup** (honesty only, never by relaxing an assertion): the other server
+   and web router/component tests, `opsx-kernel-schemas-root.fixtures.test.ts`'s local
+   `PINNED_BINS` key, `opsx-kernel-status-warnings.test.ts`, `cli-contracts/workflow.test.ts`
+   (only its `pinned v1.15.0` provenance comment; "OpenSpec 1.15 adds …" is history and stays),
+   and `agent-delivery-registry.test.ts`.
+
+**Unique file ownership** (Codex non-blocking): `openspec-compat.test.ts` and
+`scripts/diagnose-cli-runner.test.mjs` belong to Slice 1 (they assert the constants);
+`tool-init-state.test.ts` belongs to Slice 3 (it asserts the staleness baseline). Slice 2 owns the
+rest of the fixture matrix.
 
 **Gate:** full pinned matrix green against 1.16.0 with zero assertion relaxations; boundary
 suite green against the retained 1.15.0 executable;
@@ -173,11 +183,21 @@ pnpm --filter @openspecui/core exec vitest run src/official-cli-v16-version-repo
 pnpm --filter @openspecui/core exec vitest run src/official-cli-v15-boundary-fixtures.test.ts
 ```
 
-## Version-literal audit (corrected token set and scope, Round-A N1)
+## Version-literal audit (corrected token set and scope)
 
 The first draft's tokens missed the two forms the constants and guards actually use (`'1.15'`
 bare series and `v1.15.` describe patterns) and its scope excluded the documents the plan
-itself changes. Use these two, whole-repo, and treat a non-empty reverse audit as a failure:
+itself changes — and `.agents/skills/`, which turned out to hold a hardcoded alias.
+
+**A non-empty old-token result is not a failure** (folded from the Codex non-blocking note):
+`1.15` legitimately survives as the boundary fixture line, as inherited scenario identity, and
+as historical provenance ("OpenSpec 1.15 adds …, the 1.15-only surface"). Triage every hit into
+exactly one bucket:
+
+1. **Live pin / behaviour assertion** — must rotate (line narrowed to zero).
+2. **Boundary evidence** — 1.15.0 as the below-admitted negative; keep, and make the intent
+   explicit.
+3. **Historical provenance** — the line that introduced a fact; keep.
 
 ```bash
 rg -n "1\.15|v1\.15|8e0288df|openspec-cli-115|PINNED_OPENSPEC_V15" \
@@ -186,8 +206,10 @@ rg -n "1\.16|v1\.16|27c05157|openspec-cli-116|PINNED_OPENSPEC_V16" \
   --glob '!**/node_modules/**' --glob '!references/openspec/**' --glob '!**/CHANGELOG.md'
 ```
 
-Plus the one gate that must be empty after Slice 1:
+Hard-empty gates after Slice 1 (bucket 1 only — these must return nothing):
 
 ```bash
 rg -n "v1\.15\." scripts/check-openspec-reference.mjs
+rg -n "openspec-cli-114" packages scripts .agents/skills
+rg -n "OPENSPEC_CLI_TARGET_SERIES.*'1\.15'|OPENSPECUI_TARGET_MAJOR = 15" packages scripts
 ```

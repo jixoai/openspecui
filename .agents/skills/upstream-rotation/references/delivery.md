@@ -40,12 +40,17 @@ gh pr view <n> --json state,mergedAt   # 必须！mergedAt 非空才算合并成
 
 ```bash
 git fetch origin main && git checkout -b docs/archive-<name> origin/main
-# 前置：P1 的 install 已在当前检出完成；否则用 submodule 源 bin（W2 脚本同款）
-#   node references/openspec/bin/openspec.js archive <change> -y
-node packages/core/node_modules/openspec-cli-114/bin/openspec.js archive <change> -y
+# 用 pinned submodule 源码构建的 bin：它与 gitlink 恒一致，不会随 alias 轮换而失效。
+# 前置：P1 的 prepare 已构建 dist/cli/index.js（clean CI lane 同款）。
+node references/openspec/bin/openspec.js archive <change> -y
+# 备选：本条线当前准入的 npm alias（名字随线轮换，如 openspec-cli-115 -> -116）：
+#   node packages/core/node_modules/openspec-cli-<NNN>/bin/openspec.js archive <change> -y
 git add openspec/changes openspec/specs && git commit && git push && gh pr create ...
 # 归档时 "N incomplete tasks" 警告是预期（描述交付动作本身的条目在归档时才完成）
 ```
+
+> 铁律：本文档里的任何 CLI 路径都不许写死某条线的 alias 名——alias 会随线轮换并在退役时删除，
+> 写死会让后续会话拿到一个不存在的可执行文件。alias 消费者的审计范围因此包含 `.agents/skills/`。
 
 ## 发布（P6）
 

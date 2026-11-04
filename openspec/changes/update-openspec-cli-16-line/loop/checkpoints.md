@@ -35,13 +35,17 @@ Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新
 
 ## CP1 — Window + pin rotation
 
-- [ ] Red recorded: stale `['1.15.0']` identity assertion fails after the alias bump, before the
-      constant rotation.
-- [ ] `openspec-compat.ts` five constants rotated to the 1.16 window; header intent updated.
-- [ ] Alias `openspec-cli-116` added; lockfile regenerated; `--version` proves `1.16.0`.
-- [ ] Helper renamed to `official-cli-v16-fixtures.ts` with `PINNED_OPENSPEC_V16_VERSIONS`.
-- [ ] Every pin guard rotated (`EXPECTED_COMMIT`, regression assertion, cold-start commit +
-      observed version, web playwright commit + version).
+- [ ] Red recorded: `classifyOpenSpecCliVersion('1.15.0')` asserted `unsupported` before the
+      constant rotation (the alias bump cannot make the identity assertion fail).
+- [ ] `openspec-compat.ts` **ten** version-semantic constants rotated to the 1.16 window
+      (`OPENSPECUI_TARGET_MAJOR`, both series constants, the three minimums, the next-series
+      minimum, both ranges, `OPENSPEC_CLI_REFERENCE_TAG_PATTERN`); header intent updated.
+- [ ] Mirrors rotated: `openspec-compat.test.ts`, `scripts/diagnose-cli-runner.mjs`,
+      `scripts/setup-example.ts`, `scripts/diagnose-cli-runner.test.mjs`.
+- [ ] Alias `openspec-cli-116` present; lockfile regenerated; `--version` proves `1.16.0`.
+- [ ] Every pin guard rotated (`EXPECTED_COMMIT`, **`check-openspec-reference.mjs`'s
+      `v1.16.*` describe match**, regression assertion, cold-start commit + observed version,
+      web playwright commit + version).
 - [ ] gitlink staged at `v1.16.0`; `CLAUDE.md` pointer rotated.
 
 ## CP2 — Fixture suite rotation
@@ -51,7 +55,13 @@ Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新
 - [ ] Boundary suite rotated to `official-cli-v15-boundary-fixtures.test.ts` on
       `openspec-cli-115` (1.15.0), with the config-failure discriminator replacing the
       `update --dry-run`/`install` absence probes.
-- [ ] `openspec-cli-114` alias removed; no live consumer remains.
+- [ ] `openspec-cli-114` alias removed together with
+      `__tests__/official-cli-v14-fixtures.ts`; **no live consumer remains anywhere, including
+      `.agents/skills/**`\*\* (the rotation skill's delivery doc hardcoded it and was repaired in
+      this change).
+- [ ] Behaviour-assertion tests rotated with the gate flip: `cli-health-gate.test.tsx` (1.16
+      admitted / 1.17 blocked), the two server "admitted session" fixtures, and
+      `opsx-kernel-cli-projection.test.ts`'s series gate.
 - [ ] Full matrix green against 1.16.0 with zero assertion relaxations.
 
 ## CP3 — Registry + staleness
