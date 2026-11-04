@@ -19,9 +19,10 @@ owned by the reactive file system rather than by whichever consumer notices.
 
 The guarantee is scoped: a read is covered while it is registered and its containing root is leased.
 Convergence SHALL be bounded by the settlement cadence plus jitter and pass duration, excluding the
-consumer's own recompute and emit latency; there is no faster bound. Reads nobody leased, and reads whose
-recorded normalized path went stale because a formerly missing segment appeared as a symbolic link, are
-outside the guarantee.
+consumer's own recompute and emit latency; there is no faster bound. A subscription that is memoized past
+both the watcher pool and the observation environment may see a first frame up to one cadence stale.
+Reads nobody leased, and reads whose recorded normalized path went stale because the symlink structure of
+its prefix changed after registration, are outside the guarantee.
 
 #### Scenario: Watcher initialization failure
 
@@ -47,11 +48,12 @@ outside the guarantee.
 - **AND** convergence SHALL NOT require the consumer to re-subscribe, refresh, or restart
 - **AND** the same SHALL hold when the platform discards the notification without reporting an error
 
-#### Scenario: Every arm and every consumer start settles
+#### Scenario: Every arm and every attach settles
 
 - **GIVEN** a cached read under a physical root holds a value that predates the current watch
-- **WHEN** that root's subscription is established or re-established, or a long-lived consumer attaches
-  by acquiring that root
+- **WHEN** that root's subscription is established or re-established, or a logical root is acquired
+  again where the observation environment already holds it, or a long-lived agent-delivery subscriber
+  starts
 - **THEN** the cached read SHALL be re-read from disk
 - **AND** the re-read SHALL NOT emit when the on-disk value is unchanged
 - **AND** requests arriving before a pass begins reading SHALL join it, while a request arriving later

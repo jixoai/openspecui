@@ -107,3 +107,30 @@ changed the design.
 
 The CP5 assertion was also unsatisfiable as written (the per-watcher liveness interval exists by
 design), so it now asserts through an exported diagnostic with N ≥ 2 leases.
+
+### 2026-11-05 — Review round 4 folded (7.0/10 → plan v5)
+
+Round 4 verified five of round 3's folds as landed (including the one that mattered most — the write
+path is genuinely out of the new matching space) and found three blockers:
+
+- **BLK-1: the named attach trigger was dead code.** `ReactiveObservationEnvironment` is the only
+  production caller of `acquireWatcherRoot`, and it memoizes per normalized root, so the boot-armed
+  launch root plus a later retained subscription never reaches the pool. The dead trigger is deleted and
+  the real paths are named: the environment's memoized-acquire branch, plus **one** declared consumer
+  hook in `AgentDeliveryProjectionService.subscribe` (awaited). S5.5's assertion boundary moves to the
+  assembly — a pool-level test would have passed while production never triggered, which is precisely
+  how the dead trigger survived round 3's review.
+- **BLK-2: the trailing rule lacked its third timing.** Requests arriving during the trailing pass's own
+  read phase are now defined (they derive one more pass), both halves are asserted, and the cost wording
+  no longer promises a constant two-pass ceiling.
+- **BLK-3: the epoch guard under-enumerated publishers.** "Write-settlement entry points" missed
+  `updateReactiveFileCache` (used by config/global-settings/planning-config), event/poll refresh commits,
+  and other passes. It is now a per-registration commit version bumped by all four, verified and
+  committed in one synchronous block, re-read once, then skipped per registration.
+
+Also folded: the stale-normalization boundary is stated in its general form (any later prefix symlink
+change, not only a missing segment becoming one) with the pool's actual failure mode corrected;
+`settlePaths`' roots are named as the existing `cacheRoots` set and one-way containment is stated as
+deliberate next to the write path's bidirectional overlap; CP5's discrimination requires ≥ 2 **distinct
+physical watchers**; the `setInterval` assertion became a delay multiset; the forced-reinitialize seam is
+named; and the "cannot be orphaned" claim is scoped to the one-shot path.

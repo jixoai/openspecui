@@ -63,39 +63,53 @@ This is deliberately narrow:
   (`settleReactivePathMutation*`) keeps matching `resolve()` against `registration.path` with its
   existing **bidirectional** `pathsOverlap` semantics — a directory deletion must still reach reads under
   it — so this change introduces no second-space bug on the write path (round 3, B1).
-- Assumption stated: if a currently-missing path segment later appears **as a symlink**, the normalized
-  field goes stale and that read is silently uncovered by the net. Today that read is equally unreachable
-  for events (`findWatcherRoot` fails the same way), so the net is not a regression; it is recorded as a
-  boundary, not hidden. `resolveRealPathThroughExistingAncestor`'s no-ancestor fallback returns the
-  unresolved absolute path, which is likewise recorded.
+- Boundary, stated in its general form: the normalized field is resolved **once**; any later change to
+  the symlink structure of its prefix — a missing segment appearing as a symlink, an existing segment
+  being replaced by one, a dangling link being repointed — leaves it stale, and that read is then
+  uncovered by the net. Today such a read is equally unreachable for events (the pool binds a stale
+  string path and the library reports paths under the real one, so nothing matches), so the net is not a
+  regression; it is recorded as a boundary, not hidden.
+  `resolveRealPathThroughExistingAncestor`'s no-ancestor fallback returns the unresolved absolute path,
+  which is likewise recorded.
 
 The loss net does not own the write path, and the write path does not own the net.
 
-### S1 — Settlement after every (re)arm
+### S1 — Settlement after every (re)arm, and at the points a consumer actually attaches
 
-Triggers, named:
+Triggers, named — and chosen against the real assembly, not against the pool's API surface. Round 4
+showed the pool-level "acquiring an already-initialized record" signal is **unreachable in production**:
+`ReactiveObservationEnvironment` is the only production caller of `acquireWatcherRoot`, and it calls the
+pool once per normalized root and memoizes the rest, so the boot-armed launch root followed by a later
+retained subscription produces no pool call at all. A named-but-dead trigger is worse than an unnamed
+one, so it is removed rather than documented:
 
-1. `acquireWatcherRoot` when the record is new (0→1): settle after `record.ready` resolves.
-2. `acquireWatcherRoot` when the record already exists and is initialized (refcount ≥ 1): settle too —
-   this is the only observable "a consumer attached to an already-armed root" signal, and it is what S2
-   leans on.
-3. Reinitialize completion: `ProjectWatcher` gains an explicit reinitialized callback invoked on a
-   successful (re)init; the pool uses it to settle every logical root bound to that physical watcher. The
-   status emit is **not** the hook — it also emits `initialized=false` mid-flight.
+1. **New record (0→1)**: settle after `record.ready` resolves.
+2. **A root's record already exists in the environment**
+   (`ReactiveObservationEnvironment.acquireRoot` on its memoized branch): settle that root. This is the
+   real "first attach after boot" path.
+3. **Reinitialize completion**: `ProjectWatcher` gains an explicit reinitialized callback (not the status
+   emit, which also emits `initialized=false` mid-flight); the pool settles every logical root bound to
+   that physical watcher.
+4. **The one named consumer hook**: `AgentDeliveryProjectionService.subscribe` settles its own observation
+   roots once, awaited, before its first read. This is declared as the single exception to "consumers do
+   not patch themselves" — later subscriptions inside the process are memoized past both the pool and the
+   environment, so no generic signal exists, and inventing one per consumer is the pattern this change
+   exists to end.
 
-Arm settlement is fire-and-forget: `acquireWatcherRoot` does not await it.
+Arm/attach settlement is fire-and-forget except for (4), which its consumer awaits.
 
-Concurrency: **single-flight with a trailing obligation**. Concurrent requests that arrive _before the
-pass starts reading_ join it. A request that arrives while the pass is reading (or after it) marks the
-root dirty and is served by one trailing pass; a waiter may await that pass. Cost ceiling: a burst costs
-at most two passes. Round 3's B2: the previous wording allowed "join and discard", which would leave a
-consumer holding a value read before its request.
+Concurrency: **one coordinator per process, shared by every pass producer** (arm, attach, pooled,
+`settlePaths`). Invariants, written so a join-and-discard implementation cannot pass:
 
-### S2 — Settlement when a long-lived consumer attaches
+- at most one pass is in flight per root;
+- a request arriving **before the pass begins reading** joins it and is satisfied by it;
+- a request arriving **after the read phase has begun** marks the root dirty and is served by a trailing
+  pass; a request arriving during _that_ pass's read phase derives one more pass, and so on;
+- `settlePaths` awaits the pass that serves it, including when that is a trailing pass.
 
-Covered by S1.2 for attachments that go through a root acquisition; attachments that do not (a memoized
-second subscriber inside the process) are covered by the cadence net. Stated because the alternative —
-inventing an attach hook in every consumer — is how the "each consumer patches itself" pattern starts.
+Cost wording corrected accordingly: a burst confined to one read phase costs at most two passes; requests
+separated by read phases each cost one. There is no unbounded derivative chain, because each request
+derives at most one pass and passes are serialized.
 
 ### S3 — Pooled periodic settlement (the net)
 
@@ -104,12 +118,22 @@ timer), stopped at 1→0 and by `closeAllWatchers()`. Each pass settles the cove
 roots and never overlaps its predecessor. Default cadence 45 s, read from
 `OPENSPECUI_SETTLEMENT_INTERVAL_MS` when the interval starts or is scheduled — never at module load.
 
-Ordering against our own writes (round 3, B5): `reactive-fs` has no serialization primitive today, and
-"the projection will just see the newer value" is false for a pass whose _read_ predates a write and
-whose _commit_ lands after the writer settled. This change adds an **epoch guard**: a pass records an
-epoch before reading and verifies it before committing; a stale commit is re-read once, then skipped. The
-write-settlement entry points bump the epoch. S5.8 drives this with a gated `prepareRefresh` rather than a
-sleep.
+Ordering against every publisher (round 3 B5, round 4 BLK-3): `reactive-fs` has no serialization
+primitive, and a pass whose _read_ predates a publication and whose _commit_ lands after it would publish
+the older value. "Publishers" is enumerated, not implied — a single "write-settlement entry points bump
+it" rule would miss three of the four:
+
+1. `settleReactivePathMutationInternal` (the write-settlement core);
+2. `updateReactiveFileCache` (direct cache publication, used by `config.ts`, `global-settings.ts`,
+   `planning-config-service.ts`);
+3. event-driven and missing-path-poll `refresh` commits;
+4. other passes' commits.
+
+Guard: **a per-registration commit version**, bumped by every commit path above. A pass records each
+registration's version before reading it and, before committing that registration, re-checks the version
+in the same synchronous block: unchanged → commit; changed → re-read once and re-check; still changed →
+skip that registration. Per-registration (not one global flag) so an unrelated write cannot drag unrelated
+reads to the next cadence, and skipping is safe because the publisher already wrote the newer value.
 
 ### S4 — One-shot freshness without tearing down the registry
 
@@ -148,36 +172,51 @@ on the agent one-shot path.
 4. **Arm identity**: a second logical root on an initialized physical watcher settles; a reinitialize
    settles every logical root of that watcher.
 5. **Consumer start at an unchanged generation** converges with the cadence set far above the assertion
-   window, and the write happens after the arm settle has completed — so a watermark-style implementation
-   fails and a cadence accident cannot mask it.
+   window and the write made after the arm settle completed (watermark implementations fail here). The
+   assertion boundary is the **assembly**: the environment's memoized-acquire branch and the named
+   service hook — a pool-level test would pass while production never triggers, which is exactly how
+   round 4 found the previous trigger to be dead code.
 6. **Single-flight trailing**: with a gated `prepareRefresh` holding a pass inside its read phase, a
-   request arriving there converges on a trailing pass; a join-and-discard implementation times out.
-7. **Pooled lifecycle and cost**: with N ≥ 2 leases: exactly one pooled settlement timer (asserted through
-   an exported diagnostic count, not by counting every `setInterval`, since the per-watcher liveness
-   interval exists by design) and zero per-path polls; a pass over a root with no registered reads does
-   zero `readdir`/`readFile`/`stat`; `closeAllWatchers()` stops the timer.
+   request arriving there converges on a trailing pass; a join-and-discard implementation times out;
+   a request arriving during the **trailing** pass's read phase derives one more pass (both halves
+   asserted, so neither "clear dirty and stop" nor an unbounded `while (dirty)` loop can pass).
+7. **Pooled lifecycle and cost**: with **N ≥ 2 distinct physical watchers** (assert
+   `getWatcherRuntimeStatus().roots.length === 2` first, since two logical roots can share one physical
+   watcher and a per-physical-watcher fake would still read 1): exactly one active settlement timer via
+   the exported diagnostic; the `setInterval` delay multiset after the spy matches
+   `N × PATH_LIVENESS_INTERVAL_MS + 1 × cadence`; a pass over a root with no registered reads does zero
+   `readdir`/`readFile`/`stat`; `closeAllWatchers()` stops the timer. The mutation check targets the
+   net's own creation path, not the accessor.
 8. **One-shot and ordering**: a retained projection survives a one-shot read of the same root and still
-   converges; a pass racing our own write does not publish the pre-write value (gated interleaving).
+   converges; a pass racing a publisher does not publish the pre-write value — with the interleaving
+   driven through a gated `prepareRefresh` **and** one publisher from list item 2
+   (`updateReactiveFileCache`), not only the write-settlement core.
 
 ## Bounds stated, not implied
 
 Convergence bound = cadence + jitter + pass duration, for **covered reads**; consumer recompute/emit
-latency after a settle is not included. No fast bound exists — the net is the cadence; arm/start
-settlements only shorten the first exposure. Reads with no lease, and reads whose normalized path went
-stale through a later symlink, are outside the guarantee and listed as such.
+latency after a settle is not included. No fast bound exists — the net is the cadence; arm/attach
+settlements only shorten the first exposure, and a subscription that is memoized past both the pool and
+the environment may see a first frame up to one cadence stale. Reads with no lease, and reads whose
+normalized field went stale, are outside the guarantee and listed as such.
 
 ## Laws reconciled (not left to the implementer)
 
-`AGENTS.md` currently states three things this change touches, and CP6 names them explicitly:
+`AGENTS.md` states things this change touches, and CP6 names them explicitly — including the
+reactive-observation ownership law whose memoization is precisely why the pool cannot see a later attach:
 
 - "Explicit one-shot reads must retire the parent cache too" → becomes "settle their inputs before
-  reading" (retirement was the mechanism, freshness was the point).
+  reading" (retirement was the mechanism, freshness was the point), and its neighbouring sentence about
+  keeping empty-installation polls at zero is updated to the narrowed fanout contract.
 - "Periodic polling must not be the normal discovery or freshness mechanism… only as a bounded, explicit
-  degraded fallback" → the net is exactly a bounded, explicit loss fallback, and the decision line says
-  why it cannot be gated on watcher health: silent loss is _invisible_ in the health signal.
-- "must remain inert while observation is healthy" → refined to "no discovery or freshness work is added
-  while events flow; the settlement net runs on its cadence regardless of health, because health cannot
-  see silent loss".
+  degraded fallback" → the net adds exactly one thing: one pooled re-read pass per cadence. It adds no
+  per-path polls and no health-gated work, and it is deliberately **not** gated on health because silent
+  loss is invisible in the health signal.
+- "must remain inert while observation is healthy" → rewritten without self-contradiction: the net's work
+  never grows with health state; it runs its fixed cadence regardless, for the reason above.
+- The reactive observation ownership law (environment memoizes repeated logical acquisition) gains the
+  note that attach settlement therefore lives at the environment and the one named consumer hook, not in
+  the pool.
 
 The narrowed fanout sentence recorded: one pooled settlement interval per process; per-missing-path polls
 and per-watcher liveness probes unchanged.
@@ -185,10 +224,11 @@ and per-watcher liveness probes unchanged.
 ## Slices
 
 1. S0 normalized field + matcher, with S5.3.
-2. S1/S2 triggers + single-flight with trailing, with S5.4/S5.5/S5.6.
-3. S3 pooled pass + epoch guard, with S5.7/S5.8.
+2. S1 triggers (pool 0→1, environment memoized acquire, reinitialized callback, the named service hook) +
+   the per-process coordinator with trailing semantics, with S5.4/S5.5/S5.6.
+3. S3 pooled pass + per-registration version guard, with S5.7/S5.8.
 4. S4 `settlePaths` + one-shot switch, with S5.3(c) and the orphan test.
-5. Docs (AGENTS laws), changeset, review round 4, PR, archive, release.
+5. Docs (the four touched `AGENTS.md` laws), changeset, review round 5, PR, archive, release.
 
 ## Risks
 
@@ -212,3 +252,13 @@ and per-watcher liveness probes unchanged.
   class has three more call sites, now declared out of scope (B7); and `AGENTS.md`'s three conflicting
   laws are reconciled explicitly (B8). The CP5 "exactly one timer" assertion was also unsatisfiable by
   construction and now uses an exported diagnostic with N ≥ 2 leases.
+- Round 4: **7.0/10** (+0.5). Verified B1/B3/B6/B7/B8 as landed and found three blockers, all folded:
+  BLK-1 the named attach trigger was **unreachable in production** (the environment memoizes repeated
+  acquisition, so the pool never sees the later attach) — the dead trigger is deleted and the real paths
+  are named (environment's memoized branch plus one declared consumer hook), with S5.5 moved to the
+  assembly boundary; BLK-2 the trailing rule needed its third timing, so the coordinator's invariants are
+  now written and both halves of the trailing case are asserted; BLK-3 the epoch guard under-enumerated
+  publishers and had two readings of "re-read once" — it is now a per-registration commit version bumped
+  by all four publisher classes, verified and committed in one synchronous block. Overclaims corrected:
+  "cannot be orphaned" is scoped to the one-shot path, and the "inert while healthy" replacement text no
+  longer contradicts itself.

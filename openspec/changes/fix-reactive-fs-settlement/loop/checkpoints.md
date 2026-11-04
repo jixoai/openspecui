@@ -35,35 +35,46 @@ Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补�
 - [ ] Boundary recorded: a formerly missing segment appearing as a symlink leaves the normalized field
       stale (uncovered); the no-ancestor fallback is documented too.
 
-## CP2 — Arm and start settlement (S1/S2)
+## CP2 — Arm and attach settlement (S1)
 
 - [ ] Trigger 1: new record (0→1) settles after `record.ready`.
-- [ ] Trigger 2: acquiring an existing, initialized record (refcount ≥ 1) settles — the named attach
-      signal; attachments that skip root acquisition are covered only by the cadence net.
+- [ ] Trigger 2: `ReactiveObservationEnvironment.acquireRoot` on its **memoized** branch settles — the
+      real "first attach after boot" path. The pool-level "acquiring an already-initialized record"
+      trigger is **deleted**, because round 4 showed the environment memoizes every later acquisition and
+      the pool therefore never sees them (a named-but-dead trigger is worse than an unnamed one).
 - [ ] Trigger 3: an explicit `ProjectWatcher` reinitialized callback (not the status emit, which also
       emits `initialized=false` mid-flight) settles every logical root of that physical watcher.
-- [ ] Arm settlement is fire-and-forget (`acquireWatcherRoot` does not await it), stated in code.
-- [ ] Single-flight **with a trailing obligation**: requests before the read phase join; a request during
-      or after it marks the root dirty and is served by exactly one trailing pass. A join-and-discard
-      implementation fails the gated test.
+- [ ] Trigger 4: `AgentDeliveryProjectionService.subscribe` settles its observation roots once, awaited,
+      before its first read — declared as the **single** consumer hook, with the reason recorded.
+- [ ] One coordinator per process shared by every pass producer (arm, attach, pooled, `settlePaths`);
+      at most one pass in flight per root.
+- [ ] Trailing semantics asserted in **both** halves: a request arriving during a pass's read phase is
+      served by a trailing pass, and a request arriving during the _trailing_ pass's read phase derives
+      one more — so neither "clear dirty and stop" nor an unbounded `while (dirty)` loop passes.
+- [ ] `settlePaths` awaits the pass that serves it, including a trailing one.
 - [ ] Red test: a deterministically stale cached read surfaces disk truth after a forced reinitialize,
-      with no new event.
+      with no new event (the forced-reinitialize seam named: stubbed drop-events error + fake timers, or
+      an explicit entry).
 - [ ] Consumer start at an unchanged generation converges with the cadence set far above the assertion
-      window and the write made after the arm settle completed (watermark implementations fail here).
+      window; the assertion boundary is the **assembly** (environment/service), not the pool.
 
 ## CP3 — Pooled periodic settlement (S3)
 
 - [ ] One pooled interval per process; started with the first lease, stopped with the last, absent while
       no lease exists, and also stopped by `closeAllWatchers()` (that path bypasses release).
-- [ ] N ≥ 2 leases: exactly one pooled settlement timer, asserted through an exported diagnostic count
-      (never by counting all `setInterval` — the per-watcher liveness probe exists by design), and zero
-      per-path polls.
+- [ ] N ≥ 2 **distinct physical watchers** (assert `getWatcherRuntimeStatus().roots.length === 2` first,
+      since two logical roots can share one): exactly one active settlement timer via the exported
+      diagnostic; the `setInterval` delay multiset after the spy equals
+      `N × PATH_LIVENESS_INTERVAL_MS + 1 × cadence`; the mutation check breaks the net's own creation path
+      (a constant-returning accessor must not pass).
 - [ ] Skip-when-idle: no leases → no timer; pass over a root with no registered reads → zero
       `readdir`/`readFile`/`stat`.
 - [ ] Passes never overlap; cadence read at interval start/schedule, never at module load, and
       overridable via `OPENSPECUI_SETTLEMENT_INTERVAL_MS` so no test waits on 45 s.
-- [ ] Epoch guard: a pass whose read predates one of our own writes and whose commit would land after it
-      re-reads once, then skips; driven by a gated `prepareRefresh`, not a sleep.
+- [ ] Version guard: a **per-registration commit version** bumped by all four publisher classes
+      (write-settlement core, `updateReactiveFileCache`, event/poll refresh commits, other passes); a pass
+      verifies and commits in one synchronous block, re-reads once on change, then skips that
+      registration. Asserted with a gated `prepareRefresh` **and** a publisher from `updateReactiveFileCache`.
 - [ ] Convergence after the net, driven by one pass, asserted on macOS **and** the Linux gate.
 
 ## CP4 — One-shot freshness without orphaning (S4)
@@ -84,9 +95,12 @@ Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补�
 
 - [ ] The narrowed fanout sentence recorded in code comments, this change, and `AGENTS.md`: one pooled
       settlement interval per process; per-missing-path polls and per-watcher liveness probes unchanged.
-- [ ] The three touched `AGENTS.md` laws are reconciled explicitly (one-shot "retire" → "settle before
-      reading"; polling-as-fallback sentence applies to the net; "inert while healthy" refined with the
-      reason health cannot see silent loss).
+- [ ] The touched `AGENTS.md` laws are reconciled explicitly — **four**, not three: one-shot "retire" →
+      "settle before reading" (with its neighbouring empty-installation sentence updated to the narrowed
+      fanout contract); the polling-as-fallback sentence applies to the net; "inert while healthy" is
+      rewritten without self-contradiction (fixed cadence, never health-gated, because silent loss is
+      invisible in the health signal); and the reactive-observation ownership law gains the note that
+      attach settlement therefore lives at the environment and the one named hook, not in the pool.
 - [ ] `tool-init-state.test.ts` asserts the contract (spy first, via the exported diagnostic) instead of
       the root-before-spy ordering coincidence, and the assertion is shown to fail when a per-path timer
       is introduced (mutation check).

@@ -60,7 +60,9 @@ Two read-only investigations and one executed probe, all recorded here rather th
   a leased root (that scoping is the honest form of the promise; reads nobody leased are listed as
   outside it).
 - Replace the one-shot path's registry-tearing `clearCache` invalidation with settle-then-read, so a
-  retained projection in the same process cannot be orphaned.
+  retained projection in the same process cannot be orphaned **by the one-shot path** (three no-argument
+  `clearCache()` call sites in the local-model stores keep the same channel for their own subsystem and
+  are declared out of scope, not silently widened).
 - Keep the missing-path fallback and the native event path as they are.
 
 ## Non-goals (explicitly not this change)
