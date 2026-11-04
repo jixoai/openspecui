@@ -51,6 +51,16 @@ happens to notice.
 - **THEN** its result SHALL NOT be applied as data
 - **AND** the pass SHALL escalate to re-arming the subscription and re-reading from disk
 
+#### Scenario: Kernel-level loss is reached without a signal
+
+- **GIVEN** a platform discards change notifications without reporting an error, so the library's
+  query can neither observe them nor reject
+- **WHEN** the reconciliation cadence reaches its coarse tier
+- **THEN** the pass SHALL re-arm the subscription for that root and re-read from disk rather than
+  querying
+- **AND** the residual exposure SHALL be bounded by that tier's period, stated in the implementation
+  rather than implied by the mechanism
+
 #### Scenario: Reconciliation cost stays pooled and bounded
 
 - **GIVEN** the process holds retained observation leases

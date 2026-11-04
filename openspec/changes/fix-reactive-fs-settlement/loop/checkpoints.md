@@ -37,6 +37,8 @@ Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补�
       `unref()` proven (process exits with a live lease and no pending work).
 - [ ] Query events are injected into the existing dispatch path (no new downstream concept).
 - [ ] Rejection / oversize batch escalates to re-arm + settle instead of being applied.
+- [ ] Coarse tier re-arms and settles on schedule; driven by the pass counter in tests rather than by
+      waiting the real period; residual window documented with its value.
 - [ ] Snapshot files live outside watched roots and are removed on release.
 - [ ] Red test: retained projection + closed watchers + created file converges once a pass runs.
 

@@ -73,6 +73,24 @@ directory, or path, and it exists only for the lifetime of a retained subscripti
 existing fanout assertion (`tool-init-state`: zero `setInterval` during a one-shot projection) true
 **as written**, instead of relaxing it.
 
+### S4b — Coarse re-arm (the only layer that reaches Linux kernel-level loss)
+
+S4 has a hole the survey named and this plan will not paper over: on Linux the library discards
+`IN_Q_OVERFLOW` without a signal, and its query path reads the **same in-memory tree the event stream
+maintains**. A kernel-dropped change therefore never entered the tree, so the diff cannot see it and
+nothing rejects. Without this slice, Linux would keep the exact silent stall this change exists to
+remove.
+
+So the reconciliation cadence carries a second, coarser tier: every Nth pass (default every 10
+minutes, jittered, and only for roots holding retained leases), the pass does not diff at all — it
+**re-arms the root's subscription** (unsubscribe → subscribe, which re-crawls the tree from disk) and
+then runs the `S2` settle. Cost is a watch-tree rebuild for a handful of roots at a coarse cadence;
+the residual exposure is bounded by that cadence and is stated in the spec rather than implied.
+
+A cheaper alternative was considered and rejected: running the query in a child process so its tree
+is built fresh from disk. It is definitive but spawns a process per pass, which is a worse trade for
+roots of this size.
+
 ### S5 — Proof
 
 1. **Retained-projection recovery (the CI-shaped red test).** Retained projection → close the native
@@ -81,7 +99,8 @@ existing fanout assertion (`tool-init-state`: zero `setInterval` during a one-sh
 2. **Settle-after-rearm.** With a cached read holding a stale value, force `reinitialize` through the
    existing error path → the cached read SHALL surface disk truth without any new event.
 3. **Linux/Windows CI.** The S5.1 test runs on the Linux gate; an escalation test stubs a rejected
-   query and asserts the re-arm + settle path runs, which is platform-independent.
+   query and asserts the re-arm + settle path runs, which is platform-independent. The coarse tier
+   gets its own test by driving the pass counter rather than waiting ten minutes.
 4. **Fanout and cost guards.** The existing zero-timer assertion stays green; a pass with no cached
    reads performs no `readdir`/`readFile` (spy assertion).
 
