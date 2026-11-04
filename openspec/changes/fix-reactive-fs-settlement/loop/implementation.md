@@ -134,3 +134,28 @@ change, not only a missing segment becoming one) with the pool's actual failure 
 deliberate next to the write path's bidirectional overlap; CP5's discrimination requires ≥ 2 **distinct
 physical watchers**; the `setInterval` assertion became a delay multiset; the forced-reinitialize seam is
 named; and the "cannot be orphaned" claim is scoped to the one-shot path.
+
+### 2026-11-05 — Review round 5 folded (8.0/10 → plan v6, implementable) and S0 landed
+
+Round 5 declared the plan **implementable** and verified all four triggers reachable at the code level.
+One new blocker is folded: the spec's opening sentence promised convergence for any lost event while
+"registered" was undefined — a class of consumers whose private state is written only by native watcher
+callbacks (`tool-config`'s `tools:` state is the named instance) is outside the net by construction. The
+requirement now defines *registered read* and names that boundary, rather than implying coverage. Two
+wording fixes folded (the convergence scenario binds the *read* to the bound and excludes consumer
+latency; the memoized-staleness bound was underestimated and missed the service-level memo), and the
+non-blocking items became CP text: trailing tests must assert exact read-phase entries and the post-await
+committed value with the cadence above the window; the jitter and exact-delay-multiset assertions can no
+longer contradict each other; physical-watcher discrimination comes from the multiset; CP5 keeps the
+Store-fallback half of the "inert" sentence intact.
+
+Plan v6 also carries three named pre-implementation validations (V1 attach seam, V2 coordinator
+discrimination against two fakes, V3 `settlePaths` path space).
+
+**S0 landed** (`reactive-fs.ts` + `settlement-coverage.test.ts`): each cache registration records a
+`normalizedPath` once, resolved via `resolveRealPathThroughExistingAncestor`; `settleRegisteredReadsUnder`
+matches by pure ancestor containment and re-reads through the existing refresh closures, returning the
+count. Mutation checks: switching the matcher to `registration.path` turns the path-space tests red, and
+adding an `await stat(root)` turns the zero-filesystem-call test red. The committed red test still fails
+for its intended reason, and its subscribe stub now returns the library's handle shape so teardown stops
+erroring on our own fixture.

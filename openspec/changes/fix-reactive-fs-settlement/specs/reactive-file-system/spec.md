@@ -17,12 +17,17 @@ on-disk truth even when a native change event is lost. Settlement SHALL be perfo
 disk — never by trusting a watcher library's loss-query as the record of what changed — and SHALL be
 owned by the reactive file system rather than by whichever consumer notices.
 
-The guarantee is scoped: a read is covered while it is registered and its containing root is leased.
+The guarantee is scoped: a read is covered while it is **registered** — that is, while it holds a
+`reactive-fs` cache registration (`file | directory | exists | stat`) — and its containing root is
+leased. Consumers whose own state is driven by native events rather than by a registered read (a private
+event-state cache, an invalidation-triggered CLI re-pull) are outside the guarantee and are listed as
+such rather than implied by it.
+
 Convergence SHALL be bounded by the settlement cadence plus jitter and pass duration, excluding the
-consumer's own recompute and emit latency; there is no faster bound. A subscription that is memoized past
-both the watcher pool and the observation environment may see a first frame up to one cadence stale.
-Reads nobody leased, and reads whose recorded normalized path went stale because the symlink structure of
-its prefix changed after registration, are outside the guarantee.
+consumer's own recompute and emit latency; there is no faster bound. A subscription memoized past the
+watcher pool, the observation environment, or the owning service may see a first frame up to that same
+bound stale. Reads nobody leased, and reads whose recorded normalized path went stale because the symlink
+structure of its prefix changed after registration, are outside the guarantee.
 
 #### Scenario: Watcher initialization failure
 
@@ -43,8 +48,8 @@ its prefix changed after registration, are outside the guarantee.
 - **GIVEN** a registered read whose containing root holds a retained observation lease, and native
   events have stopped arriving for the observed directory
 - **WHEN** a file is created there and nothing else in the subtree changes
-- **THEN** the projection SHALL converge to the created file within the settlement cadence plus its
-  jitter and pass duration
+- **THEN** the registered read SHALL be re-read within the settlement cadence plus its jitter and pass
+  duration, and the projection that depends on it SHALL converge to the created file
 - **AND** convergence SHALL NOT require the consumer to re-subscribe, refresh, or restart
 - **AND** the same SHALL hold when the platform discards the notification without reporting an error
 

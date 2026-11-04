@@ -118,10 +118,10 @@ timer), stopped at 1→0 and by `closeAllWatchers()`. Each pass settles the cove
 roots and never overlaps its predecessor. Default cadence 45 s, read from
 `OPENSPECUI_SETTLEMENT_INTERVAL_MS` when the interval starts or is scheduled — never at module load.
 
-Ordering against every publisher (round 3 B5, round 4 BLK-3): `reactive-fs` has no serialization
-primitive, and a pass whose _read_ predates a publication and whose _commit_ lands after it would publish
-the older value. "Publishers" is enumerated, not implied — a single "write-settlement entry points bump
-it" rule would miss three of the four:
+Ordering, pass-side against every publisher (round 3 B5, round 4 BLK-3, round 5 residual):
+`reactive-fs` has no serialization primitive, and a pass whose _read_ predates a publication and whose
+_commit_ lands after it would publish the older value. "Publishers" is enumerated, not implied — a single
+"write-settlement entry points bump it" rule would miss three of the four:
 
 1. `settleReactivePathMutationInternal` (the write-settlement core);
 2. `updateReactiveFileCache` (direct cache publication, used by `config.ts`, `global-settings.ts`,
@@ -134,6 +134,23 @@ registration's version before reading it and, before committing that registratio
 in the same synchronous block: unchanged → commit; changed → re-read once and re-check; still changed →
 skip that registration. Per-registration (not one global flag) so an unrelated write cannot drag unrelated
 reads to the next cadence, and skipping is safe because the publisher already wrote the newer value.
+
+Residual, stated: the guard is **pass-side only**. A publisher's own read→commit window can still be
+interleaved by a newer pass commit and briefly publish the older value; it self-heals on the next pass and
+is not part of the claim.
+
+### S3b — Once-only attachment and the event-driven consumers
+
+Two existences are outside the net by construction, and the spec says so instead of implying otherwise:
+
+- a subscription memoized past the pool, the environment, **and** the owning service converges through
+  the cadence, not immediately (the service memoizes its physical observation, so a second subscriber
+  produces no trigger at all);
+- a consumer whose private state is written **only** by native watcher callbacks (`tool-config`'s
+  `tools:` state is the named instance) is not repaired by re-reading its underlying registered reads —
+  the pass refreshes those reads, but nothing re-runs that consumer's own event handler. Its one
+  consumer is currently unwired, so this is a documented boundary rather than a live defect; wiring it
+  later must not assume the net covers it.
 
 ### S4 — One-shot freshness without tearing down the registry
 
@@ -223,12 +240,33 @@ and per-watcher liveness probes unchanged.
 
 ## Slices
 
-1. S0 normalized field + matcher, with S5.3.
-2. S1 triggers (pool 0→1, environment memoized acquire, reinitialized callback, the named service hook) +
-   the per-process coordinator with trailing semantics, with S5.4/S5.5/S5.6.
-3. S3 pooled pass + per-registration version guard, with S5.7/S5.8.
-4. S4 `settlePaths` + one-shot switch, with S5.3(c) and the orphan test.
-5. Docs (the four touched `AGENTS.md` laws), changeset, review round 5, PR, archive, release.
+Pre-implementation validations (named after round 5's finding that a "planned" trigger had no real
+wiring; each is 10–30 minutes and each must be reported with its evidence):
+
+- **V1 — attach seam spike**: after the root loop in `ensurePhysicalObservation`, insert an awaited
+  settle and prove by ordering that the first projection read happens after it resolves; also prove the
+  second `subscribe` is memoized (the declared residual).
+- **V2 — coordinator discrimination**: implement the two fakes (join-and-discard; exactly-one-trailing)
+  once, show both fail the planned assertions, then show the correct implementation passes; confirm the
+  third half needs **two ordered gates** and that the cadence sits above the assertion window.
+- **V3 — `settlePaths(cacheRoots)` path space**: on macOS `TMPDIR`, show the un-normalized variant covers
+  **0** and the normalized variant covers ≥ 1, and that CP4's equivalence red catches the un-normalized
+  build.
+
+Slices:
+
+1. S0 normalized field + matcher (in flight), with S5.3.
+2. S1 triggers (pool 0→1, environment memoized acquire, reinitialized callback, the service hook at
+   `ensurePhysicalObservation`) + the per-process coordinator with trailing semantics, with S5.4/S5.5/
+   S5.6 and V1/V2. The settle/coordinator module lives outside both `reactive-fs` and `watcher-pool`
+   (importing reactive-fs from watcher-pool would close a cycle).
+3. S3 pooled pass + per-registration version guard, with S5.7/S5.8. Trigger 1's settle must not be folded
+   into `record.ready` (it would lengthen lease acquisition and risk an unhandled rejection); it is
+   fire-and-forget with a rejection guard, which is also what spec scenario 1 asserts.
+4. S4 `settlePaths` + one-shot switch (normalizing each root on the caller side, since S0's primitive
+   takes normalized input), with S5.3(c), V3 and the orphan test.
+5. Docs (the four touched `AGENTS.md` laws, preserving the Store-fallback half of the "inert" sentence),
+   changeset, review round 6, PR, archive, release.
 
 ## Risks
 
@@ -262,3 +300,17 @@ and per-watcher liveness probes unchanged.
   by all four publisher classes, verified and committed in one synchronous block. Overclaims corrected:
   "cannot be orphaned" is scoped to the one-shot path, and the "inert while healthy" replacement text no
   longer contradicts itself.
+- Round 5: **8.0/10** (+1.0), **"可实施 / implementable"**. The three previous blockers were verified
+  closed at the code level (all four triggers reachable, trailing invariants implementable with both
+  assertions able to kill the two fakes, publisher enumeration complete and coverable by one change).
+  One new blocker, folded: "registered" was undefined while the spec's opening sentence promised
+  convergence for *any* lost event — a class of event-driven consumers (private event-state caches,
+  invalidation-triggered CLI re-pulls) is outside the net by construction, and that is now stated with
+  the named instance instead of implied. Two wording fixes folded (the convergence scenario now binds the
+  *read* to the bound and excludes consumer latency; the memoized-staleness bound is corrected to the full
+  bound and extended to the service memo). Non-blocking items folded: CP2 gains the observable quantities
+  a trailing test must assert (exact read-phase entries, post-await committed value, cadence above the
+  window, two ordered gates); CP3's jitter and exact-delay-multiset assertions can no longer contradict
+  each other and physical-watcher discrimination comes from the multiset rather than logical roots; CP5
+  preserves the Store-fallback half of the "inert" sentence; and the plan now carries three named
+  pre-implementation validations (attach seam, coordinator discrimination, one-shot path space).
