@@ -1,16 +1,21 @@
 /**
- * Orthogonal intents (updated 2026-08-01 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
  * 1. Cache reactive file, directory, existence, and stat reads.
  * 2. Bind cached reads to shared watcher roots and missing-path fallback checks.
  * 3. Settle overlapping cached projections as one coherent post-mutation snapshot.
  * 4. Release watcher, polling, state, and refresh registrations together.
  * 5. Distinguish expected missing paths from integrity-relevant filesystem read failures.
+ * 6. Record each registration's realpath-normalized path once, so the settlement net matches
+ *    leased roots in one path space with no per-pass filesystem call.
  *
  * Original request (2026-07-16): "direct filesystem mutations update reactive state before returning."
  * Original request (2026-08-01): nested Spec discovery must not silently drop unreadable subtrees.
+ * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
+ *   — fix-reactive-fs-settlement S0: one matching space for the settlement net, and only for it.
  */
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { resolveRealPathThroughExistingAncestor } from './path-realpath.js'
 import { ReactiveState } from './reactive-state.js'
 import { acquireWatcher, isWatcherPoolInitialized } from './watcher-pool.js'
 
@@ -19,7 +24,14 @@ const stateCache = new Map<string, ReactiveState<unknown>>()
 
 interface CacheRefreshRegistration {
   kind: 'file' | 'directory' | 'exists' | 'stat'
+  /** Lexical `resolve()`-space path; write settlement keeps matching this field bidirectionally. */
   path: string
+  /**
+   * Realpath-normalized path, resolved once at registration by the same helper the watcher pool
+   * uses. The settlement net compares this field against realpath-tracked leased roots; it is
+   * never a substitute for `path`, so write settlement semantics are unchanged.
+   */
+  normalizedPath: string
   prepareRefresh: () => Promise<() => void>
   refresh: () => Promise<void>
 }
@@ -102,7 +114,13 @@ export async function reactiveReadFile(filepath: string): Promise<string | null>
       const commit = await prepareRefresh()
       commit()
     }
-    refreshCache.set(key, { kind: 'file', path: normalizedPath, prepareRefresh, refresh })
+    refreshCache.set(key, {
+      kind: 'file',
+      path: normalizedPath,
+      normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
+      prepareRefresh,
+      refresh,
+    })
     if (initialValue === null) {
       ensureMissingPathPoll(key, refresh)
     }
@@ -183,6 +201,31 @@ export async function settleReactivePathMutation(path: string): Promise<void> {
  */
 export async function settleReactiveFileWrite(filepath: string, content: string): Promise<void> {
   await settleReactivePathMutationInternal(filepath, content)
+}
+
+/**
+ * Re-read every registered read whose normalized path lies under one normalized root.
+ *
+ * This is the settlement net's matching primitive. Both sides live in realpath-normalized space
+ * (the root supplied by the caller, each registration's `normalizedPath` recorded once at
+ * registration), so matching is a pure ancestor test with no per-pass filesystem call. Membership
+ * is inclusive of the root itself and strictly ancestor-directed: a registration above the root is
+ * never covered. Returns the number of registrations whose refresh actually ran, and an empty set
+ * performs no read at all.
+ */
+export async function settleRegisteredReadsUnder(normalizedRootPath: string): Promise<number> {
+  const registrations = [...refreshCache.values()].filter((registration) =>
+    containsPath(normalizedRootPath, registration.normalizedPath)
+  )
+  if (registrations.length === 0) return 0
+
+  const commits = await Promise.all(
+    registrations.map((registration) => registration.prepareRefresh())
+  )
+
+  // Promise continuations cannot observe a partial snapshot until this synchronous commit ends.
+  for (const commit of commits) commit()
+  return registrations.length
 }
 
 /**
@@ -285,6 +328,7 @@ export async function reactiveReadDir(
     refreshCache.set(key, {
       kind: 'directory',
       path: normalizedPath,
+      normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
       prepareRefresh,
       refresh,
     })
@@ -335,7 +379,13 @@ export async function reactiveExists(path: string): Promise<boolean> {
       const commit = await prepareRefresh()
       commit()
     }
-    refreshCache.set(key, { kind: 'exists', path: normalizedPath, prepareRefresh, refresh })
+    refreshCache.set(key, {
+      kind: 'exists',
+      path: normalizedPath,
+      normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
+      prepareRefresh,
+      refresh,
+    })
     if (!initialValue) {
       ensureMissingPathPoll(key, refresh)
     }
@@ -422,7 +472,13 @@ export async function reactiveStat(
       const commit = await prepareRefresh()
       commit()
     }
-    refreshCache.set(key, { kind: 'stat', path: normalizedPath, prepareRefresh, refresh })
+    refreshCache.set(key, {
+      kind: 'stat',
+      path: normalizedPath,
+      normalizedPath: resolveRealPathThroughExistingAncestor(normalizedPath),
+      prepareRefresh,
+      refresh,
+    })
     if (initialValue === null) {
       ensureMissingPathPoll(key, refresh)
     }

@@ -15,12 +15,16 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 import { cleanupTempDir, createTempDir, createTempFile } from '../__tests__/test-utils.js'
 
 // The platform silently delivering nothing is the defect's shape. Stub only the subscription
-// transport: every other library surface (snapshot/query/realpath helpers) stays real.
+// transport: every other library surface (snapshot/query/realpath helpers) stays real. The handle
+// must keep the library's shape — a callable with `unsubscribe()` — or teardown fails on our own
+// consumer rather than on anything under test.
 vi.mock('@parcel/watcher', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@parcel/watcher')>()
   return {
     ...actual,
-    subscribe: vi.fn(async () => async () => undefined),
+    subscribe: vi.fn(async () =>
+      Object.assign(() => undefined, { unsubscribe: async () => undefined })
+    ),
   }
 })
 
