@@ -215,7 +215,7 @@ function applyBasePath(pathname: string, basePath: string): string {
   return `${basePath.slice(0, -1)}${normalizedPath}`
 }
 
-function normalizeNavigationHref(href: string): string {
+export function normalizeNavigationHref(href: string): string {
   if (typeof window === 'undefined') return href
   const url = new URL(href, window.location.origin)
   const basePath = normalizeBasePath(getBasePath())

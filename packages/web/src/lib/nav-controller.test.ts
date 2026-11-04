@@ -26,7 +26,13 @@ vi.mock('./trpc', () => ({
   },
 }))
 
-import { NavController, navController, type NavLayout, type TabId } from './nav-controller'
+import {
+  NavController,
+  navController,
+  normalizeNavigationHref,
+  type NavLayout,
+  type TabId,
+} from './nav-controller'
 import { createNavHistory } from './nav-history'
 
 const fetchMock = vi.fn<typeof fetch>()
@@ -550,5 +556,27 @@ describe('NavController kernel lifecycle', () => {
 
     expect(listener).toHaveBeenCalled()
     expect(nav.getSnapshot().mainTabs[0]).toBe('/specs')
+  })
+})
+
+describe('base-relative navigation href projection', () => {
+  // Red at this fixed point before the fix: `toRelativeHref` handed the router-rendered href
+  // (which already carries the base path) to `navigate()`, and the router applied the base
+  // path again — `/docs/` + `/docs/specs` became `/docs/docs/specs` (issue #319 #4).
+  it('strips the router base path exactly once', () => {
+    ;(globalThis as { __TEST_NAV_BASE_PATH__?: string }).__TEST_NAV_BASE_PATH__ = '/docs/'
+
+    expect(normalizeNavigationHref('/docs/specs')).toBe('/specs')
+    expect(normalizeNavigationHref('/docs/changes/abc?tab=evidence')).toBe(
+      '/changes/abc?tab=evidence'
+    )
+    expect(normalizeNavigationHref('/docs/')).toBe('/')
+    // A path that does not carry the base path is returned unchanged.
+    expect(normalizeNavigationHref('/other')).toBe('/other')
+  })
+
+  it('leaves the root base path untouched', () => {
+    ;(globalThis as { __TEST_NAV_BASE_PATH__?: string }).__TEST_NAV_BASE_PATH__ = '/'
+    expect(normalizeNavigationHref('/specs')).toBe('/specs')
   })
 })

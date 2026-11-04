@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 /**
- * Orthogonal intents (updated 2026-07-28 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
  * 1. Generate route-complete static HTML from a published OpenSpec snapshot.
  * 2. Resolve and copy the build-owned client/server artifacts for source and packaged execution.
  * 3. Delegate all dynamic document-value embedding to the static document boundary.
+ * 4. Insert rendered markup and bootstrap data without ever interpreting `$` replacement
+ *    patterns, and load the server entry through a URL so Windows paths work.
+ * 5. Apply `--base-path` to every emitted asset reference, not only to the router.
  *
  * Original request: SSG CLI - Pre-render OpenSpec UI to static HTML.
  * Owner-reported defect (2026-07-28): "导出的数据好像逃逸到 html 去了。"
+ * Original request (2026-11-04): "同时，处理一下#319" — issue #319 reports four static-export
+ * defects: `$'`/`$\``/`$&` in content corrupting the page, `--base-path` missing from
+ * assets, a Windows `import()` failure, and client navigation doubling the base path.
  *
  * This CLI uses prebuilt client/server assets to generate static HTML pages.
  * The client and server are built during `pnpm build` and bundled with the package.
@@ -25,9 +31,11 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { applyBasePathToOutputTree, rewriteMarkupReferences } from './base-path-rewrite'
 import { resolveSsgServerEntryPath } from './server-entry'
-import { createStaticDocumentTitle, createStaticHeadTags } from './static-document'
+import { createStaticHeadTags } from './static-document'
+import { insertDocumentValues } from './template-insertion'
 import { resolveSsgTemplatePath } from './template-path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -101,10 +109,14 @@ async function prerender(opts: {
   basePath: string
 }) {
   const snapshot = JSON.parse(readFileSync(opts.dataPath, 'utf-8'))
-  const template = readFileSync(resolveSsgTemplatePath(opts.clientDir), 'utf-8')
+  const rawTemplate = readFileSync(resolveSsgTemplatePath(opts.clientDir), 'utf-8')
+  // The prebuilt template carries root-absolute asset references (Vite built the client with
+  // base "/"), so the base path has to reach the document itself, not only the router.
+  const template = rewriteMarkupReferences(rawTemplate, opts.basePath)
 
   const serverPath = resolveSsgServerEntryPath(opts.serverDir)
-  const { render, getRoutes, getTitle } = await import(serverPath)
+  // A bare absolute path is not importable on Windows ("Received protocol 'c:'").
+  const { render, getRoutes, getTitle } = await import(pathToFileURL(serverPath).href)
 
   const routes = getRoutes(snapshot)
   console.log(`Routes: ${routes.length}`)
@@ -113,12 +125,10 @@ async function prerender(opts: {
   const headTags = createStaticHeadTags(snapshot, opts.basePath)
 
   for (const route of routes) {
-    const appHtml = await render(route, snapshot, opts.basePath)
+    const renderedHtml = await render(route, snapshot, opts.basePath)
+    const appHtml = rewriteMarkupReferences(renderedHtml, opts.basePath)
     const title = getTitle(route, snapshot)
-    const html = template
-      .replace('<!--app-html-->', appHtml)
-      .replace('<!--head-tags-->', headTags)
-      .replace('<title>OpenSpec UI</title>', `<title>${createStaticDocumentTitle(title)}</title>`)
+    const html = insertDocumentValues(template, { appHtml, headTags, title })
 
     if (route === '/') {
       hasRootRoute = true
@@ -192,6 +202,13 @@ async function main() {
     dataPath,
     basePath: options.basePath,
   })
+
+  // Vite emitted the client's chunks, fonts and CSS asset URLs against base "/". Rewrite those
+  // module-level references so a sub-path deployment serves them from the base path too.
+  const rewritten = applyBasePathToOutputTree(outputDir, options.basePath)
+  if (rewritten > 0) {
+    console.log(`Base path applied to ${rewritten} emitted module(s).`)
+  }
 
   console.log(`\nDone! Static site generated to ${outputDir}\n`)
 }

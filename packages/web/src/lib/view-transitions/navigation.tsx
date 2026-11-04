@@ -11,7 +11,7 @@
  * Owner request (2026-07-23): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
  * Derived requirement (2026-07-23): Cold detail prefetch must commit without waiting beyond its bounded budget.
  */
-import { navController } from '@/lib/nav-controller'
+import { navController, normalizeNavigationHref } from '@/lib/nav-controller'
 import {
   Link as RouterLink,
   useLocation,
@@ -69,13 +69,17 @@ function isPlainLeftClick(event: MouseEvent<HTMLAnchorElement>): boolean {
   )
 }
 
+/**
+ * A rendered `<a href>` already carries the router's base path, and `navigate()` applies the
+ * base path again — so the resolved href must be normalized to a base-relative path first
+ * (issue #319 #4: `/docs/` + `/docs/specs` used to become `/docs/docs/specs`).
+ */
 function toRelativeHref(href: string): string {
-  const url = new URL(href, window.location.origin)
-  return `${url.pathname}${url.search}${url.hash}`
+  return normalizeNavigationHref(href)
 }
 
 function toPathname(href: string): string {
-  return new URL(href, window.location.origin).pathname
+  return new URL(toRelativeHref(href), window.location.origin).pathname
 }
 
 function resolveSource(
