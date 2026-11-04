@@ -13,6 +13,8 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-10-25): "开工" — rotate the mirrored CLI target series to 1.15 (target-openspec-cli-15-line Slice 1).
+ * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
+ *   — rotate the mirrored CLI target series to 1.16 (update-openspec-cli-16-line Slice 1).
  */
 
 import { existsSync } from 'fs'
@@ -240,8 +242,8 @@ const SAMPLE_AGENTS_MD = `# AI Agent Instructions
 
 // Mirror of packages/core OPENSPEC_CLI_TARGET_SERIES: the example runner must resolve the
 // series this release line admits, never an unversioned @latest the gate can block.
-// Keep in sync with packages/core/src/openspec-compat.ts (OpenSpecUI 15 -> 1.15).
-const OPENSPEC_CLI_TARGET_SERIES = '1.15'
+// Keep in sync with packages/core/src/openspec-compat.ts (OpenSpecUI 16 -> 1.16).
+const OPENSPEC_CLI_TARGET_SERIES = '1.16'
 
 const CONFIG = {
   cli: {

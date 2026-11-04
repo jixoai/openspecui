@@ -6,7 +6,7 @@
  * 4. Compare `where.exe` evidence through canonical paths because hosted runners mix 8.3 short
  *    forms (RUNNER~1) with long forms in TEMP-derived fixture roots.
  * 5. Keep the diagnostic's fallback candidate set pinned to the Core-admitted CLI series.
- * 6. Prove the rotated mirror rejects the retired 1.13 series while the 1.15 fallback spec
+ * 6. Prove the rotated mirror rejects the retired 1.13 series while the 1.16 fallback spec
  *    resolves an admitted series, and keep the setup-example runner mirror on the same
  *    rotated constant.
  *
@@ -59,7 +59,7 @@ describe('CLI runner diagnostic candidate parity', () => {
     expect(source).not.toMatch(/'@fission-ai\/openspec'/)
   })
 
-  it('rejects a retired 1.13 probe resolution while the rotated 1.15 fallback spec stays admitted', async () => {
+  it('rejects a retired 1.13 probe resolution while the rotated 1.16 fallback spec stays admitted', async () => {
     const { readFile } = await import('node:fs/promises')
     const source = await readFile(DIAGNOSTIC_SCRIPT, 'utf8')
     const { classifyOpenSpecCliVersion, OPENSPEC_CLI_TARGET_SERIES } = await import(
@@ -68,7 +68,7 @@ describe('CLI runner diagnostic candidate parity', () => {
 
     // The rotated mirror builds its fallback spec from the admitted series only; a stale
     // 1.13 mirror spec must not survive the constants rotation.
-    expect(OPENSPEC_CLI_TARGET_SERIES).toBe('1.15')
+    expect(OPENSPEC_CLI_TARGET_SERIES).toBe('1.16')
     expect(source).toContain(
       'const OPENSPEC_CLI_FALLBACK_SPEC = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`'
     )
