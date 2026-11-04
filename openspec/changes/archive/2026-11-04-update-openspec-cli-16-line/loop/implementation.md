@@ -145,3 +145,34 @@ them are classes the plan predicted and then under-executed.
 Boundary that remains honest: the directory trigger proves the read-failure **branch**, not a
 permission-denied errno. Upstream's code selection is errno-independent, so what OpenSpecUI decodes
 is identical.
+
+## Batch 5 — Delivery: three CI rounds, two flakes, one characterized gap
+
+PR #321 merged as `166b44ab` (`mergedAt` 2026-11-04T13:26:38Z) after being rebased onto the `#319`
+merge (`9af2ead3`), which landed mid-flight and changed no manifest or lockfile.
+
+Round 3 (rebased head) failed `cli-executor`'s "cancels a real tsx.cmd stream and retires every
+recorded descendant" with 129 recorded PIDs still alive. The identical code path passed 25 minutes
+earlier on the pre-rebase head, this change touches no termination path, and the assertion compares
+the _recorded_ tree (a process-table read at cancel time) against liveness — so a single over-captured
+or mistimed table read fails it. The job's rerun passed every substantive step (`Run Windows test
+gate`, `Run Windows typecheck gate`, `Build and smoke installed Windows CLI`).
+
+Round 2 failed `tool-subscription-router`'s "unexpected Launch explore command creation" stage; the
+same head passed on rerun. Local reproduction never fired it: 30 executions, `CI=1`, four concurrent
+instances, and the whole 103-file server package all green.
+
+**Characterized, deliberately not fixed here:** `reactiveReadDir` depends on a native directory watch,
+while _missing_ paths get a 1s re-check (`MISSING_PATH_POLL_MS`). A create inside an already-watched
+directory therefore has no recovery if the event is dropped — the module comment already records that
+CI filesystems do drop them. Two candidate fixes were implemented and rejected on evidence:
+
+- Polling every cached directory closes the gap but violates the fanout law asserted by
+  `tool-init-state`'s "bounds empty-installation observation fanout by physical inventory" (41 timers
+  for an empty installation, expected `0`).
+- A bind-time resync in the watcher pool is plausible but unprovable from here: `subscribeSync`
+  throws unless the root is initialized (so binds are effectively synchronous) and the CI miss cannot
+  be reproduced locally, which means shipping it would be a guess dressed as a fix.
+
+The gap is pre-existing, independent of the CLI window, and belongs in its own change with its own
+red proof; this change records it instead of smuggling it in.

@@ -98,11 +98,15 @@ Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新
 
 ## CP6 — Gates, delivery, release
 
-- [ ] Broad gates green on the frozen tree. Round 1 failed on three fixture defects (one missing
-      compat mirror, two Windows-portability); all three are fixed and re-verified locally, and
-      the second round is the gate that counts.
+- [x] Broad gates green on the frozen tree. Round 1 failed on three fixture defects (one missing
+      compat mirror, two Windows-portability) — fixed in `d9bb7c16`. Round 2 and the rebased round 3
+      each failed once on a pre-existing shared-runner flake (`tool-subscription-router` explore
+      stage; `cli-executor` tsx.cmd tree retirement) and passed on rerun with no code change. All
+      seven checks green on the merged head.
 - [x] Round-A folded, Round-B/Round-C approved (scores recorded).
-- [ ] PR merged with `mergedAt` verified; archive PR merged.
+- [x] PR merged with `mergedAt` verified (`166b44ab`, 2026-11-04T13:26:38Z).
+- [ ] Archive PR merged; the four deltas synced into `openspec/specs/**` by hand (CLI `archive`
+      refuses `RENAMED` + `MODIFIED` together).
 - [ ] Release: `pnpm changeversion`, version PR merged, `release.yml` success, four independent
       facts (main head / remote tags / GitHub Release / every npm package), submodule gitlink
       verified not reverted.
