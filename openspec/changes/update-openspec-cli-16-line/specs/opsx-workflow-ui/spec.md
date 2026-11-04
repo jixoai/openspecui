@@ -48,7 +48,8 @@ retired line SHALL NOT be reused as positive evidence for the current line.
 The pinned fixture matrix SHALL prove the OpenSpec 1.16.0 project-config failure as an executable fact:
 when `openspec/config.yaml` cannot be read or is not valid YAML, `validate` SHALL exit non-zero and answer
 with a bare `{ status: [...] }` envelope rather than a report. The envelope SHALL carry the code
-`unreadable_config` or `unparseable_config`, the absolute config path, and a `fix` string.
+`unreadable_config` or `unparseable_config`; its `message` and `fix` SHALL name the absolute config path
+(neither is a separate field).
 
 #### Scenario: A broken project config fails validate with the diagnostic envelope
 
@@ -106,3 +107,10 @@ stays green and `--strict` fails.
 - **GIVEN** a requirement whose `#### Notes` child has no step markers
 - **WHEN** the pinned 1.16.0 executable validates it
 - **THEN** the step-coverage check SHALL NOT report that child as an incomplete scenario
+
+#### Scenario: Main-spec scope reports the same class
+
+- **GIVEN** an admitted main spec whose requirement carries a scenario with a body but no THEN step
+- **WHEN** `validate --specs` runs on the pinned 1.16.0 executable
+- **THEN** the requirement SHALL carry a WARNING naming the missing step
+- **AND** the spec SHALL stay valid without `--strict` and fail with it

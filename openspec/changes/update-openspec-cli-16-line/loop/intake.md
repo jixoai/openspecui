@@ -46,20 +46,34 @@ the two new executable proofs.
    separately verified decision") both point here. A `>=1.15.0 <1.17.0` widening would mix two
    series in one fixture matrix; it stays a fallback only. Recorded cost: the full v16 fixture
    file set and the boundary-suite rotation.
-2. **`openspec-cli-114` retires.** Its only real consumer is the v14 boundary suite, which
-   becomes the v15 boundary suite. Every other mention is a change-name comment. `openspec-cli-115`
-   (1.15.0) becomes the boundary line, version unchanged.
+2. **`openspec-cli-114` retires.** The alias is resolved by
+   `packages/core/src/__tests__/official-cli-v14-fixtures.ts:37`, and that helper's only
+   importer is the v14 boundary suite; every other mention across the tree is a change-name
+   comment. So the retirement deletes the alias **and** the helper, and the boundary suite
+   rotates onto `openspec-cli-115` (1.15.0, version unchanged) with its own local bin
+   constant, the way the v14 boundary suite did.
 3. **Boundary discriminator is the config-failure envelope**, not `update --dry-run`. Verified
    on the real binaries: 1.15.0 owns `update --dry-run` (exit 0), so it cannot discriminate this
    line; a broken `openspec/config.yaml` makes 1.16.0 answer the bare `{status}` envelope while
    1.15.0 still answers the ordinary report.
-4. **No Node `engines` change in this repository.** OpenSpecUI's packages declare no `engines`
-   and CI runs Node 24; the upstream floor is a consumer-facing fact for npm-installed CLI users,
-   carried in the README/release notes rather than in package manifests.
-5. **No changeset exception this time.** The rotation touches `packages/` (`openspec-compat.ts`,
-   the fixture helper and suite renames, the registry, `tool-init-state.ts`), so
-   `changeset-check.mjs` fires; a patch changeset for the four version-locked packages is
-   included.
+4. **Raise the root workspace `engines` to `>=22.12.0` (folded after Round-A B5).** The first
+   draft claimed OpenSpecUI declares no `engines`; that premise was false — the root
+   `package.json:63-65` declares `>=20.19.0`, `openspec/project.md:39,236` repeats it as
+   "strictly enforced", and `packages/cli/README.md:24` states `Node.js >= 20.19.0`. The
+   pinned executable `openspec-cli-116` is a required devDependency whose own `engines` is
+   `>=22.12.0`, so a Node 20 contributor satisfies the repository's stated floor and then
+   cannot run the pinned matrix. Chosen: raise the root floor to `>=22.12.0` and sync
+   `openspec/project.md` (both places) and `packages/cli/README.md`. Published packages still
+   declare no `engines`; Node 20 is past end-of-life. Rejected alternative: keep the root
+   floor and document a fixture-only requirement (leaves a stated floor that the test
+   suite contradicts).
+5. **New line ⇒ `major` changeset (folded after Round-A B1).** The four version-locked
+   packages sit at `15.1.0`, so a `patch` would publish `15.1.1` while
+   `OPENSPECUI_TARGET_MAJOR` becomes `16` and the mismatch copy says `16.x`. Precedent
+   `a0bef65f` (`.changeset/openspec-115-line-adaptation.md`) bumped `@openspecui/core`,
+   `@openspecui/server`, `@openspecui/web`, and `openspecui` as `major`. The major here comes
+   from the admission-window contraction, not from production code changes, so it does not
+   contradict decision 1's zero-production-change finding.
 6. **No agent E2E walkthrough beyond the existing browser suites.** No UI ships; the Owner's final
    browser walkthrough boundary (2026-07-20 law) is unchanged.
 

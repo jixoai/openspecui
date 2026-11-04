@@ -175,27 +175,30 @@ fixtures install from npm and any consumer on Node 20 hits the floor.
 - `openspec-cli-116` (1.16.0) proves every accepted contract; the 14 existing positive suites
   keep their assertions with only the version literal and bin alias rotated.
 - `openspec-cli-115` (1.15.0) becomes the boundary: identity is exactly `1.15.0`, the v16 gate
-  classifies it `unsupported`, and the 1.16-only surfaces are absent — `update --dry-run` is
-  unknown to 1.15 (it arrived in 1.15, so it is **present**; the correct 1.16-only probe must
-  be chosen from this line's own additions, and this report makes no claim until the boundary
-  suite is written against the real binaries).
-- `openspec-cli-114` retires: its only real consumer is the v14 boundary suite, which rotates
-  to the v15 boundary suite.
+  classifies it `unsupported`, and the 1.16-only surface is absent. The discriminator is the
+  project-config failure envelope (O1): with a broken `openspec/config.yaml` the 1.15.0
+  executable still answers the ordinary report while 1.16.0 answers the bare `{status}`
+  envelope — both verified on the real binaries. The previous line's `update --dry-run` /
+  `install` absence probes cannot carry over: both surfaces exist on 1.15.0 (verified,
+  `update --dry-run --json` exits 0).
+- `openspec-cli-114` retires: its alias is resolved by the v14 fixture helper, whose only
+  importer is the v14 boundary suite, so the retirement deletes both and the boundary suite
+  rotates onto `openspec-cli-115`.
 
 ## Current owner map
 
-| Surface             | Primary production owner                                                                                                                                            | v1.16.0 obligation                                                                                               |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| compat window       | `packages/core/src/openspec-compat.ts`                                                                                                                              | rotate all five constants to `1.16.0` / `>=1.16.0 <1.17.0` / next `1.17.0`                                       |
-| pinned fixture      | `packages/core/package.json` (`openspec-cli-116` npm alias), `packages/core/src/__tests__/official-cli-v16-fixtures.ts`                                             | add alias; rename helper with `PINNED_OPENSPEC_V16_VERSIONS = ['1.16.0']` + bins map key                         |
-| fixture suites      | `packages/core/src/official-cli-v16-*.test.ts` (14)                                                                                                                 | rotate file set from v15 with the version literal and header intents updated                                     |
-| boundary suite      | `packages/core/src/official-cli-v15-boundary-fixtures.test.ts`                                                                                                      | rotate from v14 boundary: `openspec-cli-115` = 1.15.0 identity, 1.15.0 classified unsupported under the v16 gate |
-| pin guards          | `scripts/prepare-openspec-reference.mjs`, `upstream-contract-regression.test.ts`, `root-context-cold-start.integration.test.ts`, `w2-project-binding-playwright.ts` | rotate commit `27c05157…` and version assertions                                                                 |
-| agent registry      | `packages/core/src/agent-delivery-registry.ts`                                                                                                                      | rotate series `'1.15'` → `'1.16'`; every physical fact carries forward (upstream AI_TOOLS unchanged)             |
-| generator staleness | `packages/core/src/tool-init-state.ts`                                                                                                                              | `PINNED_AGENT_GENERATOR_VERSION` → `1.16.0`                                                                      |
-| validate transports | `packages/core/src/cli-contracts/workflow.ts`                                                                                                                       | **none** — both unions already decode the O1 envelope; fixtures prove it                                         |
-| findings surface    | `packages/web/src/components/validation-findings-evidence.tsx`                                                                                                      | **none** — renders O2 messages verbatim                                                                          |
-| docs                | `references/openspec-1.16.0-report.md`, `CLAUDE.md`, `AGENTS.md`, `README.md`, `packages/cli/README.md`                                                             | record the new window and the Node floor                                                                         |
+| Surface             | Primary production owner                                                                                                                                                                                        | v1.16.0 obligation                                                                                                                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| compat window       | `packages/core/src/openspec-compat.ts`                                                                                                                                                                          | rotate all **ten** version-semantic constants (including `OPENSPECUI_TARGET_MAJOR`, the two series constants, and `OPENSPEC_CLI_REFERENCE_TAG_PATTERN`) plus their two script mirrors |
+| pinned fixture      | `packages/core/package.json` (`openspec-cli-116` npm alias), `packages/core/src/__tests__/official-cli-v16-fixtures.ts`                                                                                         | add alias; rename helper with `PINNED_OPENSPEC_V16_VERSIONS = ['1.16.0']` + bins map key                                                                                              |
+| fixture suites      | `packages/core/src/official-cli-v16-*.test.ts` (14)                                                                                                                                                             | rotate file set from v15 with the version literal and header intents updated                                                                                                          |
+| boundary suite      | `packages/core/src/official-cli-v15-boundary-fixtures.test.ts`                                                                                                                                                  | rotate from v14 boundary: `openspec-cli-115` = 1.15.0 identity, 1.15.0 classified unsupported under the v16 gate                                                                      |
+| pin guards          | `scripts/prepare-openspec-reference.mjs`, **`scripts/check-openspec-reference.mjs`**, `upstream-contract-regression.test.ts`, `root-context-cold-start.integration.test.ts`, `w2-project-binding-playwright.ts` | rotate commit `27c05157…` and version assertions; the second script is fake-green on a post-tag checkout (its `v1.15.*` describe match still accepts `v1.15.0-19-g27c05157`)          |
+| agent registry      | `packages/core/src/agent-delivery-registry.ts`                                                                                                                                                                  | rotate series `'1.15'` → `'1.16'`; every physical fact carries forward (upstream AI_TOOLS unchanged)                                                                                  |
+| generator staleness | `packages/core/src/tool-init-state.ts`                                                                                                                                                                          | `PINNED_AGENT_GENERATOR_VERSION` → `1.16.0`                                                                                                                                           |
+| validate transports | `packages/core/src/cli-contracts/workflow.ts`                                                                                                                                                                   | **none** — both unions already decode the O1 envelope; fixtures prove it                                                                                                              |
+| findings surface    | `packages/web/src/components/validation-findings-evidence.tsx`                                                                                                                                                  | **none** — renders O2 messages verbatim                                                                                                                                               |
+| docs                | `references/openspec-1.16.0-report.md`, `CLAUDE.md`, `AGENTS.md`, `README.md`, `README-zh.md`, `README-1.15.0.md`/`README-zh-1.15.0.md` snapshots, `packages/cli/README.md`, `openspec/project.md`              | record the new window, the Node floor, and the outgoing-line snapshot pair                                                                                                            |
 
 ## Release gate
 
@@ -203,7 +206,10 @@ fixtures install from npm and any consumer on Node 20 hits the floor.
   the boundary suite green against the retained 1.15.0 executable.
 - `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`, `pnpm test:ci`,
   `pnpm test:browser:ci`.
-- Changeset for the four version-locked packages (the rotation touches `packages/`).
-- README + package README carry the new window and the Node `>=22.12.0` floor.
+- **`major`** changeset for the four version-locked packages (a new series line): the packages
+  sit at `15.1.0`, so the `major` comes from the admission-window contraction, not from
+  production code changes.
+- README + `README-zh` + package README carry the new window; the root `engines.node` floor and
+  `openspec/project.md` move to `>=22.12.0` to match the pinned executable's requirement.
 - No UI change ships: no new visual surface, so the Owner browser-walkthrough boundary is
   unchanged and no fresh agent E2E walkthrough is required beyond the existing browser suites.

@@ -16,8 +16,22 @@ Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新
 - [x] `references/openspec` submodule checked out `v1.16.0`
       (`27c0515724decc633818c735ee596481eec78a8b`).
 - [x] `references/openspec-1.16.0-report.md` written with source-diff and executed-CLI evidence.
-- [x] Change artifacts written (intake, research plan, these checkpoints, spec deltas).
-- [ ] Round-A dual-channel review completed with findings folded; Round-B approved.
+- [x] Change artifacts written (intake, research plan, these checkpoints, four spec deltas).
+- [x] Round-A research channel (2026-11-04, **6.5/10**): five blockers, each independently
+      reproduced by the main agent —
+      B1 `major` not `patch` (packages sit at `15.1.0`; precedent `a0bef65f`);
+      B2 two missing spec deltas (`projection-contract-truth`, `opsx-config-center` both still
+      pin the 1.15.0 baseline);
+      B3 `scripts/check-openspec-reference.mjs` is a **silent fake green** (`OK: v1.15.0-19-g27c05157`);
+      B4 ten version-semantic constants, not five, plus two script mirrors and
+      `openspec-compat.test.ts`;
+      B5 the root workspace _does_ declare `engines >=20.19.0` while `openspec-cli-116` needs
+      `>=22.12.0`.
+- [x] Round-A findings folded into intake decisions 2/4/5 and research-plan slices 1/2/4/5 plus
+      the corrected audit token set; two new deltas generated; report's self-contradicting
+      boundary paragraph rewritten.
+- [ ] Round-A Codex channel completed; converged/divergent findings folded.
+- [ ] Round-B approved (score recorded).
 
 ## CP1 — Window + pin rotation
 
