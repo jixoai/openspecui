@@ -221,3 +221,28 @@ which holds for all current call sites and is stated as the residual.
 
 One pre-existing environment failure remains outside this change: `upstream-contract-regression.test.ts`
 expects the `references/openspec` submodule checkout, which the worktree lacked at the time of the run.
+
+### 2026-11-05 — S4 landed: `settlePaths` and the one-shot switch
+
+`settlePaths(paths)` normalizes each input root once (`resolveRealPathThroughExistingAncestor`), dedupes,
+and settles them through the S0 primitive, returning the committed count. It depends on neither the pool
+nor any lease, is awaited, and never removes a registration. `getToolInitStates` now settles its roots
+and then reads — `invalidateToolInitCaches` became `collectToolInitCacheRoots` (collection only), and its
+former `clearCache` scan is gone from the one-shot path. `clearCache` itself is untouched for the three
+local-model stores, as scoped.
+
+V3 evidence, run before the switch: with macOS `TMPDIR` under `/var`, the raw (un-normalized) root covers
+**0** registrations and the normalized one covers **2**. Making `settlePaths` skip normalization turns the
+existing two-read fixture red (`expected 'uninitialized' to be 'initialized'`), and restoring the old
+`clearCache` scan makes the orphan test time out at 10 s on `projection.next()` — the retained projection
+frozen, which is the defect that motivated the switch.
+
+**Deliberate deviation from the plan text, recorded:** `settlePaths` calls the primitive directly rather
+than routing through the coordinator. Joining an in-flight pass would let a one-shot call resolve on a read
+that predates it, which contradicts the freshness contract it exists to provide; a direct read is always
+fresh, the duplicate concurrent read is bounded, and the per-registration version guard already prevents
+either pass from publishing an older value. The invariant is therefore restated: the coordinator governs
+trigger-driven passes (arm/attach/cadence), while `settlePaths` is an independent awaited pass by design.
+
+Full core suite after the switch: 94 files / 899 tests green, one skipped, no ordering sensitivity; the
+`upstream-contract-regression` file passes now that the worktree has its reference checkout.

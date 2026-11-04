@@ -6,9 +6,11 @@
  * 4. Expose optional dependency-recompute lifecycle observation.
  * 5. Expose the process-level settlement coordinator so arm/attach/consumer call sites can request
  *    a pass, plus the normalization helper their raw roots must cross first.
+ * 6. Expose the awaited one-shot input settler that keeps every registration alive.
  *
  * Original request (2026-07-15): "操作成功底层是要推送变更的，然后让多端基于订阅拉取更新。"
  * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
+ *   — fix-reactive-fs-settlement S4: `settlePaths` for one-shot freshness without orphaning.
  */
 /**
  * @module reactive-fs
@@ -63,6 +65,7 @@ export {
   reactiveReadDir,
   reactiveReadFile,
   reactiveStat,
+  settlePaths,
   settleReactiveFileWrite,
   settleReactivePathMutation,
   updateReactiveFileCache,

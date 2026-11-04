@@ -10,12 +10,16 @@
  * 7. Guard the settlement net pass-side against every publisher of a registration's value: a
  *    per-registration commit version, checked and committed in one synchronous block, so a pass can
  *    never publish a value older than a publication that landed after its read began.
+ * 8. Offer one-shot consumers an awaited settle of their input roots (`settlePaths`) that keeps
+ *    every registration alive, so a fresh one-shot read no longer orphans a retained projection in
+ *    the same process.
  *
  * Original request (2026-07-16): "direct filesystem mutations update reactive state before returning."
  * Original request (2026-08-01): nested Spec discovery must not silently drop unreadable subtrees.
  * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
  *   — fix-reactive-fs-settlement S0: one matching space for the settlement net, and only for it.
  *   — fix-reactive-fs-settlement S3: the pooled pass's read/commit window guard.
+ *   — fix-reactive-fs-settlement S4: settle-then-read for one-shot consumers, without clearCache.
  */
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
@@ -300,6 +304,38 @@ export async function settleRegisteredReadsUnder(normalizedRootPath: string): Pr
     if (registration.commitVersion !== observedVersion) continue
     commit()
     committed += 1
+  }
+  return committed
+}
+
+/**
+ * Re-read every registered read under each given root before a one-shot consumer reads.
+ *
+ * Properties this primitive is defined by (fix-reactive-fs-settlement S4):
+ *
+ * - **Pool- and lease-independent.** It takes no watcher lease and consults no watcher-pool state,
+ *   because a server's first one-shot read can run before any attach has ever acquired a lease.
+ * - **Awaited.** Once the returned promise resolves, every registration under these roots holds the
+ *   disk truth read by this pass; callers read after it settles and may treat the values as fresh.
+ * - **Non-destructive.** It never deletes or releases a registration — this is what lets it replace
+ *   `clearCache` on the one-shot path, so a retained projection observing the same root in this
+ *   process keeps its refreshers instead of being orphaned mid-flight.
+ * - **Normalized once, on the caller side.** Each root crosses
+ *   `resolveRealPathThroughExistingAncestor` exactly once before matching, because S0's primitive
+ *   takes normalized input; `cacheRoots`-shaped `resolve()`-space roots otherwise cover zero reads
+ *   on platforms where `TMPDIR` is a symlinked prefix (macOS `/var` -> `/private/var`). The S0
+ *   boundary applies identically: a later change to the symlink structure of a root's prefix
+ *   leaves the recorded normalization stale and that read uncovered.
+ *
+ * Reads under overlapping roots are covered once per deduplicated normalized root and committed
+ * sequentially; the per-registration commit-version guard of `settleRegisteredReadsUnder` still
+ * applies within each pass. Returns the total number of registrations whose refresh committed.
+ */
+export async function settlePaths(paths: readonly string[]): Promise<number> {
+  const normalizedRoots = new Set(paths.map((path) => resolveRealPathThroughExistingAncestor(path)))
+  let committed = 0
+  for (const root of normalizedRoots) {
+    committed += await settleRegisteredReadsUnder(root)
   }
   return committed
 }
