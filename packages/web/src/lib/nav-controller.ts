@@ -16,6 +16,7 @@
 import type { HistoryLocation, RouterHistory } from '@tanstack/react-router'
 import { accessGateFetch } from './access-gate-credential'
 import { getHealthUrl } from './api-config'
+import { applyBasePath, normalizeBasePath, stripBasePath } from './base-path-href'
 import { getHostedScopedStorageKey } from './hosted-session'
 import { getBasePath, isStaticMode } from './static-mode'
 
@@ -192,30 +193,7 @@ function parseHref(href: string, state?: unknown): HistoryLocation {
   }
 }
 
-function normalizeBasePath(basePath: string): string {
-  const trimmed = basePath.trim()
-  if (!trimmed || trimmed === './' || trimmed === '.') return '/'
-  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
-  const normalized = withLeadingSlash.endsWith('/') ? withLeadingSlash : `${withLeadingSlash}/`
-  return normalized.replace(/\/+/g, '/')
-}
-
-function stripBasePath(pathname: string, basePath: string): string {
-  if (basePath === '/') return pathname || '/'
-  if (pathname === basePath.slice(0, -1)) return '/'
-  if (!pathname.startsWith(basePath)) return pathname || '/'
-  const stripped = pathname.slice(basePath.length - 1)
-  return stripped || '/'
-}
-
-function applyBasePath(pathname: string, basePath: string): string {
-  if (basePath === '/') return pathname || '/'
-  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`
-  if (normalizedPath === '/') return basePath.slice(0, -1) || '/'
-  return `${basePath.slice(0, -1)}${normalizedPath}`
-}
-
-function normalizeNavigationHref(href: string): string {
+export function normalizeNavigationHref(href: string): string {
   if (typeof window === 'undefined') return href
   const url = new URL(href, window.location.origin)
   const basePath = normalizeBasePath(getBasePath())
