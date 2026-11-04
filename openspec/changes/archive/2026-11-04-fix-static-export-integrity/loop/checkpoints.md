@@ -22,8 +22,10 @@ Original request (2026-11-04): "同时，处理一下#319"
 - [x] `base-path-rewrite.ts` rewrites markup attributes and Vite-emitted modules; base `/` is a
       no-op.
 - [x] `cli.ts` applies the base path to the template, the rendered markup, and the output tree.
-- [x] Navigation normalizes through `normalizeNavigationHref`, so `navigate()` applies the base
-      path once.
+- [x] Navigation normalizes before `navigate()`, so the base path is applied exactly once — via the
+      dependency-free `base-path-href.ts` (`toBaseRelativeHref`). The first attempt borrowed
+      `normalizeNavigationHref` from a module 10+ tests partially mock, which regressed six real
+      Router tests (`expected '/specs' to be '/specs/owned/auth'`); the shipped owner imports nothing.
 
 ## CP2 — Focused gates
 
@@ -39,9 +41,16 @@ Original request (2026-11-04): "同时，处理一下#319"
 
 ## CP4 — Delivery
 
-- [ ] Broad gates: `pnpm format:check`, `pnpm lint:ci`, `pnpm typecheck`,
-      `pnpm test:ci` (or a justified scoped subset), `pnpm test:browser:ci`.
-- [ ] Independent subagent review of the diff; findings folded.
-- [ ] PR from `fix/static-export-319`, CI green, merged with `mergedAt` verified.
-- [ ] Issue #319 replied with the four fixes and the deferred determinism item.
+- [x] Broad gates: PR #320 ran the full suite — Changeset Gate, CI Scope, Fast Gate, Windows
+      Portability Gate, CI Scope, and both browser shards all green (after a round that failed the
+      Changeset Gate for a missing changeset and one Fast-Gate retry on the known
+      `change-diff-evidence` timing flake, which cleared with zero code change).
+- [ ] Independent subagent review of the diff was **not** recorded for this change. What the
+      delivery does carry is CP0 reproduction and CP3 real-export evidence for each of the four
+      defects, plus the deciding cross-check that settled the `nav-controller` regression: the
+      unmodified branch passed 4/4 while the borrowing version failed, which located the fault in the
+      change rather than in the suite. Recorded here as an honest gap, not as a completed review.
+- [x] PR #320 merged with `mergedAt` verified (9af2ead3, 2026-11-04T11:47:31Z).
+- [x] Issue #319 replied with the four fixes and the deferred determinism item (a product decision,
+      with a `--generated-at` override plus `--no-timestamps` proposed as the default).
 - [x] Owner browser-walkthrough boundary unchanged; the export fix ships no new visual surface.

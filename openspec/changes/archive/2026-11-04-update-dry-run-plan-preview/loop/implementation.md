@@ -26,8 +26,8 @@ are both independently triaged as not-this-change:
    PR-context runs (3/3) while passing locally and in both dispatch runs on the same
    tree. Local full server suite: 675/675.
 2. Browser Gate: GitHub planned the shard job with an empty matrix (`Browser Gate
-   (${{ matrix.label }})` skipped) while ci-scope emitted `browser_required=true,
-   runWeb=true` — the aggregator then (correctly per its script) failed on
+(${{ matrix.label }})` skipped) while ci-scope emitted `browser_required=true,
+runWeb=true` — the aggregator then (correctly per its script) failed on
    `SHARD_RESULT: skipped`. `--failed` rerun and full rerun reuse the same empty plan;
    admin merge is refused by branch-protection enforcement ("2 of 3 required status
    checks are failing") even with --admin.
