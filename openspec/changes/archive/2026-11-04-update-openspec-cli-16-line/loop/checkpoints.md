@@ -105,10 +105,18 @@ Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新
       seven checks green on the merged head.
 - [x] Round-A folded, Round-B/Round-C approved (scores recorded).
 - [x] PR merged with `mergedAt` verified (`166b44ab`, 2026-11-04T13:26:38Z).
-- [ ] Archive PR merged; the four deltas synced into `openspec/specs/**` by hand (CLI `archive`
-      refuses `RENAMED` + `MODIFIED` together).
-- [ ] Release: `pnpm changeversion`, version PR merged, `release.yml` success, four independent
-      facts (main head / remote tags / GitHub Release / every npm package), submodule gitlink
-      verified not reverted.
-- [ ] Resource回收 + residue audit reported.
+- [x] Archive PR merged (`18d805e4`); the four deltas synced into `openspec/specs/**` by hand (CLI
+      `archive` refuses `RENAMED` + `MODIFIED` together), with requirement-title and count assertions
+      (31→31, 25→28, 6→6, 17→17) and `openspec validate --specs` at 20 passed / 0 failed.
+- [x] Release: `pnpm changeversion` (PR #323, version commit `20072738`) merged as `d3e345bc`;
+      `release.yml` succeeded. Four independent facts: main head `d3e345bc`; remote tags
+      `@openspecui/{core,server,web,search}@16.0.0` + `openspecui@16.0.0` all peeled to `d3e345bc`;
+      GitHub Release `openspecui 16.0.0` (Latest, 2026-11-04T13:44:53Z); npm `16.0.0` resolvable and
+      `latest` moved for all four packages. The version commit touched 26 files and **no**
+      `references/openspec` gitlink — the guard was exercised on a genuinely drifted working tree
+      (recorded `27c05157`, checkout `8e0288df`).
+- [x] Resource回收 + residue audit reported: worktrees and session branches removed, `/tmp` scratch
+      cleared, no orphan test processes or ports. Two pre-existing residues were left untouched and
+      reported instead of cleaned: a `bun src/cli.ts --host 0.0.0.0 --clear` listener running for six
+      days, and the `openspecui-cli-115-line` worktree.
 - [x] Owner browser-walkthrough boundary unchanged (2026-07-20 law); no UI change ships.
