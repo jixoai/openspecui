@@ -11,7 +11,8 @@
  * Owner request (2026-07-23): "整个过程中，几乎都在 Loading，切换个页面也等，做任何动作也在等，给我的感觉就是非常卡。"
  * Derived requirement (2026-07-23): Cold detail prefetch must commit without waiting beyond its bounded budget.
  */
-import { navController, normalizeNavigationHref } from '@/lib/nav-controller'
+import { toBaseRelativeHref } from '@/lib/base-path-href'
+import { navController } from '@/lib/nav-controller'
 import {
   Link as RouterLink,
   useLocation,
@@ -75,7 +76,7 @@ function isPlainLeftClick(event: MouseEvent<HTMLAnchorElement>): boolean {
  * (issue #319 #4: `/docs/` + `/docs/specs` used to become `/docs/docs/specs`).
  */
 function toRelativeHref(href: string): string {
-  return normalizeNavigationHref(href)
+  return toBaseRelativeHref(href)
 }
 
 function toPathname(href: string): string {

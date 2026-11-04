@@ -40,9 +40,26 @@ a fabricated snapshot.
 - `ssg/base-path-rewrite.ts` (new): `rewriteMarkupReferences()` (attribute positions only),
   `rewriteAssetModule()` (`/assets/` inside Vite-emitted `.js`/`.css`), `applyBasePathToOutputTree()`.
   Base `/` is a strict no-op in all three.
-- `lib/nav-controller.ts`: `normalizeNavigationHref` is now exported.
-- `lib/view-transitions/navigation.tsx`: `toRelativeHref`/`toPathname` normalize through it, so
-  `navigate()` applies the base path exactly once.
+- `lib/base-path-href.ts` (new): the one base-path algebra (`normalizeBasePath`,
+  `stripBasePath`, `applyBasePath`, `toBaseRelativeHref`) plus a local `currentBrowserBasePath()`.
+  It deliberately imports nothing, so unit tests that partially mock `nav-controller` or
+  `static-mode` cannot break it.
+- `lib/nav-controller.ts`: consumes the shared algebra instead of its own private copies;
+  `normalizeNavigationHref` stays exported.
+- `lib/view-transitions/navigation.tsx`: `toRelativeHref`/`toPathname` normalize through
+  `toBaseRelativeHref`, so `navigate()` applies the base path exactly once.
+
+### Self-inflicted regression caught by the full suite (kept as the reason for the layout above)
+
+The first attempt imported `normalizeNavigationHref` from `@/lib/nav-controller` into
+`navigation.tsx`. Ten-plus route tests mock that module as `{ navController: … }`, so the new
+named import resolved to `undefined` and six "real Router" navigation tests failed with
+`expected '/specs' to be '/specs/owned/auth'`. A control run of the same file on the untouched
+branch passed 4/4, which is what proved the cause was mine rather than pre-existing. `static-mode`
+is partially mocked in thirty-two files (only `isStaticMode`), so routing the base path through
+`getBasePath()` would have broken the same set. The fix is the dependency-free module above, and
+the lesson is recorded here: **navigation code reachable from partially-mocked modules must own
+its helpers, not borrow them through a boundary those tests replace.**
 
 ## Verification
 
