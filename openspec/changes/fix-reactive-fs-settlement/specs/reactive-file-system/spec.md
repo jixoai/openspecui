@@ -1,7 +1,8 @@
 <!--
 Orthogonal intents (created 2026-11-04 Asia/Shanghai):
-1. Spec delta: silent event loss is settled, not merely documented.
-2. Keep the existing missing-path fallback and its bounds intact.
+1. Spec delta: silent event loss is settled by re-reading from disk, and the promise is bounded by
+   one stated cadence rather than an aspirational fast path.
+2. Keep the existing missing-path fallback and the native event path intact.
 
 Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
 Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补丁的方式肯定不如社区成熟度高的方案"
@@ -12,9 +13,11 @@ Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补�
 ### Requirement: Watcher Reliability
 
 The reactive file system SHALL handle watcher availability without crashing, and SHALL converge to
-on-disk truth even when a native change event is lost. A lost event SHALL NOT leave a projection
-stale indefinitely: settlement is owned by the reactive file system, not by whichever consumer
-happens to notice.
+on-disk truth even when a native change event is lost. Settlement SHALL be performed by re-reading
+from disk — never by trusting a watcher library's loss-query as the record of what changed — and SHALL
+be owned by the reactive file system rather than by whichever consumer notices. Convergence SHALL
+therefore be bounded by one stated cadence for every loss class, including losses the underlying
+platform discards without reporting.
 
 #### Scenario: Watcher initialization failure
 
@@ -30,12 +33,14 @@ happens to notice.
 - **THEN** reactive dependencies SHALL invalidate
 - **AND** subscribed clients SHALL receive updates
 
-#### Scenario: Silent event loss converges without a second change
+#### Scenario: A silent loss converges without a second change
 
-- **GIVEN** a retained projection observes a directory and the native watchers stop delivering events
-- **WHEN** a file is created in that directory and no other change occurs
-- **THEN** the projection SHALL converge to the created file within the reconciliation cadence
+- **GIVEN** a long-lived projection observes a directory and native events stop arriving
+- **WHEN** a file is created in that directory and nothing else in the subtree changes
+- **THEN** the projection SHALL converge to the created file within the settlement cadence
 - **AND** convergence SHALL NOT require the consumer to re-subscribe, refresh, or restart
+- **AND** the same guarantee SHALL hold when the platform discards the notification without reporting
+  an error
 
 #### Scenario: Settlement follows every (re)arm
 
@@ -43,29 +48,15 @@ happens to notice.
 - **WHEN** that root's subscription is established or re-established
 - **THEN** the cached read SHALL be re-read from disk
 - **AND** the re-read SHALL NOT emit when the on-disk value is unchanged
+- **AND** a root SHALL settle at most once per arm even when a consumer also requests settlement at
+  its own start
 
-#### Scenario: The query API is a detector, never ground truth
+#### Scenario: Settlement cost stays pooled and bounded
 
-- **GIVEN** the reconciliation pass queries the watcher library for changes since its snapshot
-- **WHEN** the query fails or returns a batch beyond the configured ceiling
-- **THEN** its result SHALL NOT be applied as data
-- **AND** the pass SHALL escalate to re-arming the subscription and re-reading from disk
-
-#### Scenario: Kernel-level loss is reached without a signal
-
-- **GIVEN** a platform discards change notifications without reporting an error, so the library's
-  query can neither observe them nor reject
-- **WHEN** the reconciliation cadence reaches its coarse tier
-- **THEN** the pass SHALL re-arm the subscription for that root and re-read from disk rather than
-  querying
-- **AND** the residual exposure SHALL be bounded by that tier's period, stated in the implementation
-  rather than implied by the mechanism
-
-#### Scenario: Reconciliation cost stays pooled and bounded
-
-- **GIVEN** the process holds retained observation leases
-- **WHEN** reconciliation runs
+- **GIVEN** the process holds retained root leases
+- **WHEN** settlement runs
 - **THEN** it SHALL use one pooled interval for the whole process, unref'd so it cannot hold the
   process open
-- **AND** a pass over a root with no cached reads SHALL perform no filesystem reads
-- **AND** the existing one-shot projection path SHALL start no interval at all
+- **AND** its work SHALL be proportional to the cached reads under those leases, performing no
+  filesystem access when none exist
+- **AND** a projection that holds no retained lease SHALL create no interval at all

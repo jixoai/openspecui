@@ -14,43 +14,54 @@ Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补�
 - [ ] Two investigations recorded in the change (stack inventory; mature-pattern survey), each with
       file:line or URL evidence.
 - [ ] Probe result recorded, including the negative one (`getEventsSince` returns `[]` while the
-      watcher is dead on macOS).
-- [ ] Linux half explicitly deferred to CI with the reason (podman VM broken; owner's Docker and
-      remote contexts untouched).
+      watcher is dead on macOS) and the two reading corrections it forced.
+- [ ] Linux/Windows half explicitly deferred to CI with the reason (podman VM broken; owner's Docker
+      and remote contexts untouched); the Windows gate's `windows_required` gating stated.
 
 ## CP1 — Settle after (re)arm
 
-- [ ] `settleRootReads(rootPath)` re-reads every cached read under the root; asserted by spying on the
-      underlying `readdir`/`readFile`.
-- [ ] Red test: a stale cached read surfaces disk truth after a forced reinitialize, with no new event.
-- [ ] A settled root emits nothing when nothing changed (equality guard).
+- [ ] `settleRootReads(rootPath)` re-reads every cached read under the root, asserted by spying on the
+      underlying `readdir`/`readFile`/`stat`.
+- [ ] Red test: a deterministically stale cached read (read → close watchers → mutate → attach)
+      surfaces disk truth after a forced reinitialize, with no new event.
+- [ ] Watermark: a root skips a settle it already satisfied for the current arm generation
+      (at-most-once per arm), tested by counting refreshes across arm + subscription-start.
 
-## CP2 — Retained-projection start
+## CP2 — Retained-observation start
 
-- [ ] A retained projection created against an already-stale tree converges without waiting for a
-      reconciliation pass.
-- [ ] Cost: exactly one settle per subscribe (spy count).
+- [ ] A long-lived consumer attaching to an already-armed root converges without waiting for a cadence
+      pass (the server-boot root case).
+- [ ] Cost: the start settle runs once, not once per consumer (spy count).
 
-## CP3 — Pooled reconciliation
+## CP3 — Pooled periodic settlement
 
-- [ ] One process-level interval; started with the first retained lease, stopped with the last;
-      `unref()` proven (process exits with a live lease and no pending work).
-- [ ] Query events are injected into the existing dispatch path (no new downstream concept).
-- [ ] Rejection / oversize batch escalates to re-arm + settle instead of being applied.
-- [ ] Coarse tier re-arms and settles on schedule; driven by the pass counter in tests rather than by
-      waiting the real period; residual window documented with its value.
-- [ ] Snapshot files live outside watched roots and are removed on release.
-- [ ] Red test: retained projection + closed watchers + created file converges once a pass runs.
+- [ ] One process-level interval; started with the first root lease, stopped with the last;
+      `unref()` proven (a live lease does not hold the process open), asserted by a disposal test.
+- [ ] Exactly one interval with N roots and M cached reads (no per-root/per-path timers).
+- [ ] Passes are serialized; concurrent triggers never overlap.
+- [ ] Skip-when-idle: no leases → no timer; no cached reads under leased roots → no filesystem calls.
+- [ ] **Red first**: the stall is characterized today — retained projection → `closeAllWatchers()` →
+      create → wait past the missing-path poll and both debounces → **no second emission**; then the
+      same setup with one driven pass converges. Both halves recorded.
+- [ ] Cadence overridable for tests; no test waits on the 45 s default.
 
 ## CP4 — Laws and costs preserved
 
-- [ ] `tool-init-state`'s zero-timer fanout assertion still passes **unchanged**.
-- [ ] A pass with no cached reads does no filesystem reads (spy assertion).
-- [ ] Disposal test proves the timer and snapshot files are released.
+- [ ] The fanout contract is amended **explicitly** in code comments, this change, and `AGENTS.md`:
+      one pooled interval per process, never per path/directory/root; the one-shot projection path
+      holds no lease and therefore creates none.
+- [ ] `tool-init-state.test.ts` asserts the contract rather than the root-before-spy ordering
+      coincidence (review N9), and the assertion is shown to fail if a per-path timer is introduced
+      (mutation check).
+- [ ] A pass's filesystem work is proportional to the cached reads under leased roots, measured and
+      recorded as a number in the delivery record.
 
 ## CP5 — Delivery
 
-- [ ] Spec delta for `reactive-file-system` states the settlement requirement and its scenarios.
+- [ ] Spec delta for `reactive-file-system` states the settlement requirement, its scenarios, and the
+      single convergence bound (settlement cadence for every loss class); no claim of a fast bound the
+      design cannot honour.
 - [ ] AGENTS decision line; changeset for `@openspecui/core` and `@openspecui/server`.
-- [ ] Full local gates, independent review folded, PR green (Linux gate carries the S5.3 proof).
-- [ ] Archive, release, and residue audit per the repository workflow.
+- [ ] Review round 2 folded; all blockers closed with evidence, scores recorded.
+- [ ] Full local gates, PR green (Linux gate carries the S5.1/S5.2 halves), archive, release, residue
+      audit per the repository workflow.

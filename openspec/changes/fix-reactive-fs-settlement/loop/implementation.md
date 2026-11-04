@@ -23,3 +23,27 @@ Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补�
   daemon is a distribution decision).
 
 No production code yet.
+
+### 2026-11-04 — Review round 1 folded (6/10 → revised plan)
+
+Review round 1 returned six blockers and one architectural observation. All folded; the
+architectural one changed the design rather than the wording:
+
+- **Accepted (N11): the snapshot/diff tier and the coarse re-arm tier are removed.** The diff is blind
+  exactly where it was supposed to help (macOS dead-watcher replay returns `[]`; Linux kernel drops
+  never enter the library's tree), and it brought four extra surfaces — baseline lifecycle, ignore
+  alignment for the query APIs, escalation storms, upstream query defects. Settlement is now a direct
+  disk re-read at every layer, which is ground truth for _every_ loss class and deletes blockers
+  B1/B2/B4 outright.
+- **B3**: the trigger is now "any retained root lease", matching the spec's process-wide promise,
+  with the guarantee restated against the cadence.
+- **B5**: one `settleRootReads` plus a per-arm watermark replaces the S2/S3 double-work, and CP2's
+  contradictory "exactly one per subscribe" is gone.
+- **B6**: the red evidence is the behavioural stall (no second emission after `closeAllWatchers()`),
+  which runs today, not a compile failure.
+- **Fanout law**: the amendment is now explicit — one pooled interval per process, never per
+  path/directory/root — and the existing test is changed to assert that contract instead of the
+  root-before-spy ordering coincidence it currently depends on (N9).
+- Overclaims O1/O2/O4 corrected in `intake.md` and the plan: the upstream race figures are cited
+  separately, the re-read (not the re-arm) is named as the convergence primitive, and there is one
+  stated convergence bound instead of an implied fast one.
