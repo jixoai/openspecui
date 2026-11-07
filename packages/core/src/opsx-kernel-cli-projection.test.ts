@@ -544,7 +544,7 @@ const BATCH_STATUS_CHANGES = ['change-a', 'change-b', 'change-c']
  * Fake CLI fixture for the capability-gated batch status transport.
  *
  * Every invocation argv is appended to `cli-invocations.log` so tests assert real spawn
- * argv, not spy calls. `--version` selects the fixture line: 1.16.0 models the admitted
+ * argv, not spy calls. `--version` selects the fixture line: 1.16.1 models the admitted
  * OpenSpecUI 16 session (batch capability true), while the retired 1.15.0 models a
  * non-admitted session deriving all-false capabilities. The fake rejects `status --all`
  * and `--report findings` outside the 1.16 line so any gate leak fails loudly here
@@ -988,7 +988,7 @@ describe('OpsxKernel capability-gated validate findings transport', () => {
    * Fake CLI fixture for the OpenSpec 1.12+ `validate --report findings` transport.
    *
    * Every invocation argv is appended to `cli-invocations.log`. `--version` selects the
-   * fixture line: `1.16.0` models the admitted session (findings capability true) while
+   * fixture line: `1.16.1` models the admitted session (findings capability true) while
    * the retired `1.15.0` and an unparseable version string model non-admitted sessions
    * deriving all-false capabilities. The fake rejects `--report` outside the 1.16 line
    * so any capability-gate leak fails loudly here; upstream fidelity of the retired-line

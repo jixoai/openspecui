@@ -53,7 +53,7 @@ const CLEAN_CHANGE = 'clean-change'
 /**
  * Fake 1.16 CLI fixture for the Status warnings projection.
  *
- * `--version` reports the admitted 1.16.0 line so the session derives the batch
+ * `--version` reports the admitted 1.16.1 line so the session derives the batch
  * capability. `status --change warned-change` and its batch healthy entry both carry
  * the executed top-level `warnings` array; `clean-change` never does, proving the
  * absent-member law on the same envelope.

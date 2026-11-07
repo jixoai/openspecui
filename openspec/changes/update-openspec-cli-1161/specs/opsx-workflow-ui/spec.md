@@ -117,13 +117,11 @@ stays green and `--strict` fails.
 
 ### Requirement: Unrecognized Delta Section Severity Fixture Proof
 
-The pinned fixture matrix SHALL prove the 1.16.1 verdict for a requirement authored under a section header
-that reads as a delta operation but is not one (`## Add Requirements`, `## DEPRECATED Requirements`,
-`## Requirements`): validation reports it as an ERROR — so plain validation already fails, not only
-`--strict` — and archive refuses the change instead of silently dropping the block. The same block under a
-prose section SHALL remain a WARNING with the change still valid, and the retained 1.15.0 boundary SHALL
-report that same orphan as a WARNING without failing, so the escalation is attributable to this line and
-the boundary is shown to detect the shape rather than merely stay quiet.
+The pinned fixture matrix SHALL prove the 1.16.1 verdict for a requirement authored under a header that
+reads as a delta operation but is not one: validation reports it as an ERROR, so plain validation already
+fails, and archive refuses the change instead of silently dropping the block. A prose section SHALL stay a
+WARNING with the change valid, and the retained 1.15.0 boundary SHALL report the same orphan as a WARNING
+without failing.
 
 #### Scenario: A near-miss delta header is an error that already fails plain validation
 
@@ -133,6 +131,11 @@ the boundary is shown to detect the shape rather than merely stay quiet.
 - **AND** the item SHALL be invalid with a non-zero exit code
 - **WHEN** the same validation runs with `--strict`
 - **THEN** it SHALL fail as well
+- **WHEN** `validate --json` runs on the retained 1.15.0 boundary executable
+- **THEN** no `ERROR` of this class SHALL be reported
+- **AND** the orphan SHALL still be reported as a `WARNING`, so the boundary proves a severity change
+  rather than missing detection
+- **AND** the change SHALL remain valid
 
 #### Scenario: Prose sections keep the warning
 
@@ -150,32 +153,29 @@ the boundary is shown to detect the shape rather than merely stay quiet.
 - **AND** its `fix` SHALL point at `validate` for the requirement-level detail
 - **AND** the change SHALL remain unarchived
 
-#### Scenario: The retired line does not own this verdict
-
-- **GIVEN** the same authored shape on the retained 1.15.0 boundary executable
-- **WHEN** `validate --json` runs
-- **THEN** no `ERROR` of this class SHALL be reported
-- **AND** the orphan SHALL still be reported as a `WARNING`, so the boundary proves a severity change
-  rather than missing detection
-- **AND** the change SHALL remain valid
-
 ### Requirement: Section-Heading Closing-Run and Comment Masking Fixture Proof
 
-The pinned fixture matrix SHALL prove the 1.16.1 parser acceptance that the CLI contract OpenSpecUI decodes
-depends on: an ATX closing `#` run on a **section** heading (`## Requirements ##` in a main spec,
-`## ADDED Requirements ##` in a delta) is not part of the section title, so the section is recognized and a
-delta authored under it applies on archive; and the orphan scan masks HTML comments, so a requirement
-written inside a comment is not reported as dropped. Requirement-heading normalization
-(`### Requirement: Foo ###` to `Foo`) predates this line: it SHALL be asserted as carried-forward evidence,
-never credited to this line's parser change.
+The pinned fixture matrix SHALL prove the 1.16.1 parser acceptance the CLI contract OpenSpecUI decodes
+depends on: an ATX closing `#` run on a section heading is not part of the title, so the section is
+recognized and a delta authored under it applies on archive, and the orphan scan masks HTML comments so
+a commented-out requirement is not reported. Requirement-name normalization predates this line and SHALL
+stay carried-forward evidence.
 
 #### Scenario: Closing runs are not part of a section title
 
-- **GIVEN** a main spec whose sections are `## Requirements ##` and `### Requirement: Foo ###`
+- **GIVEN** a main spec whose requirements section header is `## Requirements ##`
 - **WHEN** validation and `show --type spec --json` run on the pinned 1.16.1 executable
 - **THEN** the spec SHALL be accepted and the requirement SHALL be projected
-- **AND** the requirement's name SHALL normalize to the title without the closing run
-- **AND** the retained 1.15.0 executable SHALL reject the same document for having no Requirements section
+- **WHEN** the same `show` runs on the retained 1.15.0 boundary executable
+- **THEN** it SHALL reject the document as having no Requirements section
+
+#### Scenario: Requirement-name normalization is carried forward
+
+- **GIVEN** a requirement heading `### Requirement: Foo ###`
+- **WHEN** `show --type spec --json` runs on the pinned 1.16.1 executable
+- **THEN** the projected name SHALL be `Foo`, with no closing run
+- **AND** the fixture SHALL report this as carried-forward evidence, because the patch only extracted the
+  existing normalization
 
 #### Scenario: A closing-run delta header applies
 
@@ -183,7 +183,8 @@ never credited to this line's parser change.
 - **WHEN** validation runs on the pinned 1.16.1 executable
 - **THEN** the change SHALL be valid with no issues
 - **AND** archiving it SHALL update the main spec with the requirement
-- **AND** the retained 1.15.0 executable SHALL report no delta sections for the same document
+- **WHEN** validation runs on the retained 1.15.0 boundary executable
+- **THEN** it SHALL report no delta sections for the same document
 
 #### Scenario: A commented-out draft is not an orphan
 
@@ -193,4 +194,5 @@ never credited to this line's parser change.
 - **THEN** the commented requirement SHALL NOT be reported
 - **AND** the uncommented twin SHALL still be reported as a `WARNING`, so silence cannot pass for the
   wrong reason
-- **AND** the retained 1.15.0 executable SHALL report the commented draft, so the masking is this line's fact
+- **WHEN** validation runs on the retained 1.15.0 boundary executable
+- **THEN** the commented draft SHALL be reported, so the masking is this line's fact

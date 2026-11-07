@@ -52,7 +52,7 @@ Two new executable fixtures:
   `totals.added: 1`, and the requirement present in the main spec after archive). The orphan scan also
   started masking HTML comments, so a commented-out draft is no longer reported. Both halves carry a
   1.15.0 negative control: the boundary rejects `## Requirements ##` for having no Requirements section
-  and reports no delta sections for `## ADDED Requirements ##`, and it *does* report the commented
+  and reports no delta sections for `## ADDED Requirements ##`, and it _does_ report the commented
   draft. Requirement-name normalization (`### Requirement: Foo ###` → `Foo`) is asserted as
   carried-forward evidence — upstream only extracted `stripClosingSequence` there; it did not change.
 
@@ -86,4 +86,3 @@ found was fixed in the change rather than deferred:
   (not 14); `check-openspec-reference.mjs` is a series-level guard that admits any `v1.16.*`, so it never
   rejected post-tag checkouts and needed no gate change; "OpenSpecUI re-implements none of the parsing"
   was too absolute — the local mirror exists and is documented below.
-

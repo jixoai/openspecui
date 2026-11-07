@@ -59,10 +59,13 @@ user-visible there).
 
 ## Risks
 
-- **Literal drift**: 16 pre-existing `official-cli-v16-*.test.ts` files carry `1.16.0` in names, describes and assertions. Mechanical
-  grep plus a hard-empty gate (`rg '1\.16\.0' packages/*/src --glob '!**/CHANGELOG.md'` → 0) is the
-  guard, because a missed assertion still passes against a rotated alias (`expectPinnedVersion` catches
-  identity, not prose).
+- **Literal drift**: 16 pre-existing `official-cli-v16-*.test.ts` files carry `1.16.0` in names, describes and assertions. A
+  hard-empty gate is the wrong guard here — the sweep legitimately keeps the admission floor, the
+  window range, in-window parse samples, captured decode payloads and historical provenance. The guard
+  is therefore a classified sweep: `rg -n '1\.16\.0' packages/*/src scripts packages/web/scripts`,
+  where every remaining hit must fall into one of the deliberate-keep kinds listed in CP1 and no hit may
+  state the current pin. A missed assertion still passes against a rotated alias, so the sweep matters
+  even though `expectPinnedVersion` catches identity.
 - **A proof that passes for the wrong reason**: both new fixtures assert the _presence_ of the new
   verdict and, on the boundary, its absence.
 - **The 1.15.0 alias is a boundary, not a subject**: it may only be used to prove absence.
