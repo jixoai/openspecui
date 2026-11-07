@@ -86,3 +86,33 @@ found was fixed in the change rather than deferred:
   (not 14); `check-openspec-reference.mjs` is a series-level guard that admits any `v1.16.*`, so it never
   rejected post-tag checkouts and needed no gate change; "OpenSpecUI re-implements none of the parsing"
   was too absolute — the local mirror exists and is documented below.
+
+### 2026-11-07 — Delivery and release evidence
+
+- **Rotation PR #330** merged 2026-11-07T04:45:37Z as `2f1b192b`; every required gate passed, including
+  Windows Portability Gate in 15m22s. Two adversarial review rounds ran before it, and everything they
+  found was fixed in the branch rather than deferred (S3 above).
+- **Archive PR #331** merged 2026-11-07T04:51:59Z as `e788cb50`. The CLI archive applied +2 requirements
+  and 6 modifications; post-archive `validate --specs` reports 20 items / 20 passed / 0 failed, and the
+  three living specs differ from the pre-archive tree only in the intended requirement blocks and the
+  rotated baseline literals.
+- **Release PR #332** merged 2026-11-07T04:57:04Z as `54a7993f`; release workflow `42340627643` published
+  every package and pushed every tag.
+
+Four independent release facts, all verified separately:
+
+| Fact | Value |
+| ---- | ----- |
+| Main head | `54a7993f` |
+| Remote tags | `openspecui@16.1.1`, `@openspecui/{core,server,web,search}@16.1.1`, all on `54a7993f` |
+| GitHub Release | `openspecui@16.1.1`, not draft, not prerelease, published 2026-11-07T05:01:36Z |
+| npm | `latest` = `16.1.1` for all five packages; each version manifest resolves |
+
+The submodule gitlink is unchanged at `0fa4a970` (v1.16.1) both in the version commit and on `main`, so
+the recorded 2026-10-06 gitlink-revert incident did not recur.
+
+One measurement caveat worth recording: about five minutes after publication the shared packument read
+still answered `16.1.0` for `openspecui` and `@openspecui/web` while the workflow log already showed
+`+ openspecui@16.1.1`. The per-version manifest and `dist-tags` endpoints answered `16.1.1` immediately,
+so publication was never in doubt — the packument cache is just slower. Do not read a stale packument as
+a failed publish.
