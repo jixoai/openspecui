@@ -350,7 +350,7 @@ mutation, or completion.
 `/config/agents` SHALL select the official Agent inventory and command capabilities from the admitted running
 OpenSpec CLI version, not from one fixed registry. For the v16 line it SHALL project the supported 1.16 physical
 delivery metadata — the complete 1.15 inventory carried forward unchanged (upstream `AI_TOOLS` is
-byte-identical in 1.16.0; no tool was added or removed): current/legacy project roots, user-global skill roots,
+byte-identical across the 1.16 line; no tool was added in 1.16.0 or 1.16.1): current/legacy project roots, user-global skill roots,
 detection paths, command paths, delivery capability, generated version, migration/cleanup evidence, and IDE
 restart requirements where that CLI declares them. A tool absent from the admitted CLI line SHALL be unavailable
 for that line, not falsely stale or present. A session running a retired CLI line SHALL project no inventory
@@ -363,8 +363,8 @@ Scenario titles below are inherited scenario identity: a title that names an old
 - **GIVEN** the admitted OpenSpec CLI is stable 1.16.x
 - **WHEN** the Agent inventory is listed
 - **THEN** the projected inventory SHALL equal the 1.15 physical inventory (no tool added or removed
-  upstream in 1.16.0)
-- **AND** generator-version evidence SHALL reflect the 1.16.0 pinned baseline
+  upstream across the 1.16 line)
+- **AND** generator-version evidence SHALL reflect the 1.16.1 pinned baseline
 
 #### Scenario: A retired-line session projects no v15 inventory
 
