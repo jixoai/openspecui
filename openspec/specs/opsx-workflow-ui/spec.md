@@ -492,7 +492,7 @@ CLI progress denominator or phase.
 
 ### Requirement: Pinned Workflow Fixtures Are Executable
 
-OpenSpecUI SHALL prove each accepted workflow contract against the pinned OpenSpec 1.16.0 executable, and
+OpenSpecUI SHALL prove each accepted workflow contract against the pinned OpenSpec 1.16.1 executable, and
 SHALL prove capability-boundary rejections with the retained pinned 1.15.0 executable (the line the v16 gate
 revoked). A hand-authored payload alone SHALL NOT establish support for the CLI line, and a fixture for a
 retired line SHALL NOT be reused as positive evidence for the current line.
@@ -500,9 +500,9 @@ retired line SHALL NOT be reused as positive evidence for the current line.
 #### Scenario: Both supported lines preserve planning/task separation
 
 - **GIVEN** the pinned workflow fixture matrix runs against the retained pair of pinned executables
-  (OpenSpec 1.16.0 as the positive line and 1.15.0 as the boundary line)
+  (OpenSpec 1.16.1 as the positive line and 1.15.0 as the boundary line)
 - **WHEN** it evaluates Status and Apply Instructions on the positive line
-- **THEN** the 1.16.0 executable SHALL satisfy the typed planning-completion and progress contracts
+- **THEN** the 1.16.1 executable SHALL satisfy the typed planning-completion and progress contracts
 - **AND** the boundary executable SHALL NOT be consulted for positive contract evidence
 
 #### Scenario: Capability boundaries are executable facts
@@ -513,11 +513,11 @@ retired line SHALL NOT be reused as positive evidence for the current line.
 - **AND** the 1.16-only project-config failure surface SHALL be absent on the boundary: with a broken
   `openspec/config.yaml`, 1.15.0 SHALL still answer with the ordinary validate report, never the bare
   `{ status: [...] }` failure envelope
-- **AND** the 1.16.0 executable SHALL prove the accepted payloads
+- **AND** the 1.16.1 executable SHALL prove the accepted payloads
 
 #### Scenario: Positive identity is proven, not assumed
 
-- **GIVEN** the pinned bins map names an installed npm alias for the 1.16.0 executable
+- **GIVEN** the pinned bins map names an installed npm alias for the 1.16.1 executable
 - **WHEN** the fixture matrix runs
 - **THEN** the executable's `--version` identity SHALL be asserted before contract assertions
 - **AND** a bins-map entry pointing at another alias SHALL fail that identity assertion
@@ -798,7 +798,7 @@ SHALL NOT gate any action.
 
 ### Requirement: Project Config Failure Validate Envelope Fixture Proof
 
-The pinned fixture matrix SHALL prove the OpenSpec 1.16.0 project-config failure as an executable fact:
+The pinned fixture matrix SHALL prove the OpenSpec 1.16.1 project-config failure as an executable fact:
 when `openspec/config.yaml` cannot be read or is not valid YAML, `validate` SHALL exit non-zero and answer
 with a bare `{ status: [...] }` envelope rather than a report. The envelope SHALL carry the code
 `unreadable_config` or `unparseable_config`; its `message` and `fix` SHALL name the absolute config path
@@ -807,7 +807,7 @@ with a bare `{ status: [...] }` envelope rather than a report. The envelope SHAL
 #### Scenario: A broken project config fails validate with the diagnostic envelope
 
 - **GIVEN** a project whose `openspec/config.yaml` is not valid YAML
-- **WHEN** `validate --all --json` runs on the pinned 1.16.0 executable
+- **WHEN** `validate --all --json` runs on the pinned 1.16.1 executable
 - **THEN** the exit code SHALL be non-zero
 - **AND** stdout SHALL be exactly the diagnostic envelope shape (a `status` array, no `items`/`summary`/
   `root`/`version`)
@@ -819,27 +819,27 @@ with a bare `{ status: [...] }` envelope rather than a report. The envelope SHAL
 #### Scenario: An unreadable project config is its own code
 
 - **GIVEN** a project whose `openspec/config.yaml` exists but cannot be read
-- **WHEN** `validate --json` runs on the pinned 1.16.0 executable
+- **WHEN** `validate --json` runs on the pinned 1.16.1 executable
 - **THEN** the diagnostic code SHALL be `unreadable_config`
 - **AND** the message SHALL name the absolute path and the underlying read failure
 
 ### Requirement: Healthy Validate Shapes Fixture Proof
 
-The pinned fixture matrix SHALL prove that a healthy project keeps the OpenSpec 1.16.0 validate report and
+The pinned fixture matrix SHALL prove that a healthy project keeps the OpenSpec 1.16.1 validate report and
 findings document shapes unchanged, so the failure envelope added by this line stays a distinct decode
 branch rather than a reshaped report.
 
 #### Scenario: A healthy project keeps the report shapes
 
 - **GIVEN** a project whose config is absent or valid
-- **WHEN** bulk validation and the findings transport run on the pinned 1.16.0 executable
+- **WHEN** bulk validation and the findings transport run on the pinned 1.16.1 executable
 - **THEN** the ordinary report SHALL carry `items`/`summary`/`root`/`version`
 - **AND** the findings transport SHALL carry `itemFindings`/`report`/`root`/`summary`
 - **AND** neither answer SHALL be mistaken for the diagnostic envelope
 
 ### Requirement: Scenario Step Coverage Warning Fixture Proof
 
-The pinned fixture matrix SHALL prove the OpenSpec 1.16.0 scenario step-coverage class as an executable fact:
+The pinned fixture matrix SHALL prove the OpenSpec 1.16.1 scenario step-coverage class as an executable fact:
 a counted scenario that has a body but carries no `WHEN`/`GIVEN` step, or no `THEN` step, SHALL be reported
 as a WARNING inside the existing finding shape — in change deltas and in main specs — while plain validation
 stays green and `--strict` fails.
@@ -858,12 +858,94 @@ stays green and `--strict` fails.
 #### Scenario: Non-scenario level-4 children stay prose
 
 - **GIVEN** a requirement whose `#### Notes` child has no step markers
-- **WHEN** the pinned 1.16.0 executable validates it
+- **WHEN** the pinned 1.16.1 executable validates it
 - **THEN** the step-coverage check SHALL NOT report that child as an incomplete scenario
 
 #### Scenario: Main-spec scope reports the same class
 
 - **GIVEN** an admitted main spec whose requirement carries a scenario with a body but no THEN step
-- **WHEN** `validate --specs` runs on the pinned 1.16.0 executable
+- **WHEN** `validate --specs` runs on the pinned 1.16.1 executable
 - **THEN** the requirement SHALL carry a WARNING naming the missing step
 - **AND** the spec SHALL stay valid without `--strict` and fail with it
+
+### Requirement: Unrecognized Delta Section Severity Fixture Proof
+
+The pinned fixture matrix SHALL prove the 1.16.1 verdict for a requirement authored under a header that
+reads as a delta operation but is not one: validation reports it as an ERROR, so plain validation already
+fails, and archive refuses the change instead of silently dropping the block. A prose section SHALL stay a
+WARNING with the change valid, and the retained 1.15.0 boundary SHALL report the same orphan as a WARNING
+without failing.
+
+#### Scenario: A near-miss delta header is an error that already fails plain validation
+
+- **GIVEN** a change delta whose requirement sits under `## Add Requirements`
+- **WHEN** `validate --json` runs on the pinned 1.16.1 executable without `--strict`
+- **THEN** the finding SHALL carry `level: 'ERROR'` and name the requirement and its section
+- **AND** the item SHALL be invalid with a non-zero exit code
+- **WHEN** the same validation runs with `--strict`
+- **THEN** it SHALL fail as well
+- **WHEN** `validate --json` runs on the retained 1.15.0 boundary executable
+- **THEN** no `ERROR` of this class SHALL be reported
+- **AND** the orphan SHALL still be reported as a `WARNING`, so the boundary proves a severity change
+  rather than missing detection
+- **AND** the change SHALL remain valid
+
+#### Scenario: Prose sections keep the warning
+
+- **GIVEN** the same requirement under `## Notes`
+- **WHEN** `validate --json` runs on the pinned 1.16.1 executable
+- **THEN** the finding SHALL carry `level: 'WARNING'`
+- **AND** the item SHALL remain valid with a zero exit code
+
+#### Scenario: Archive refuses rather than dropping the block
+
+- **GIVEN** a change carrying that unrecognized header
+- **WHEN** `archive --json --yes` runs on the pinned 1.16.1 executable
+- **THEN** the typed answer SHALL carry `archive: null` and an `error` status whose code is
+  `archive_validation_failed`
+- **AND** its `fix` SHALL point at `validate` for the requirement-level detail
+- **AND** the change SHALL remain unarchived
+
+### Requirement: Section-Heading Closing-Run and Comment Masking Fixture Proof
+
+The pinned fixture matrix SHALL prove the 1.16.1 parser acceptance the CLI contract OpenSpecUI decodes
+depends on: an ATX closing `#` run on a section heading is not part of the title, so the section is
+recognized and a delta authored under it applies on archive, and the orphan scan masks HTML comments so
+a commented-out requirement is not reported. Requirement-name normalization predates this line and SHALL
+stay carried-forward evidence.
+
+#### Scenario: Closing runs are not part of a section title
+
+- **GIVEN** a main spec whose requirements section header is `## Requirements ##`
+- **WHEN** validation and `show --type spec --json` run on the pinned 1.16.1 executable
+- **THEN** the spec SHALL be accepted and the requirement SHALL be projected
+- **WHEN** the same `show` runs on the retained 1.15.0 boundary executable
+- **THEN** it SHALL reject the document as having no Requirements section
+
+#### Scenario: Requirement-name normalization is carried forward
+
+- **GIVEN** a requirement heading `### Requirement: Foo ###`
+- **WHEN** `show --type spec --json` runs on the pinned 1.16.1 executable
+- **THEN** the projected name SHALL be `Foo`, with no closing run
+- **AND** the fixture SHALL report this as carried-forward evidence, because the patch only extracted the
+  existing normalization
+
+#### Scenario: A closing-run delta header applies
+
+- **GIVEN** a delta spec whose section header is `## ADDED Requirements ##`
+- **WHEN** validation runs on the pinned 1.16.1 executable
+- **THEN** the change SHALL be valid with no issues
+- **AND** archiving it SHALL update the main spec with the requirement
+- **WHEN** validation runs on the retained 1.15.0 boundary executable
+- **THEN** it SHALL report no delta sections for the same document
+
+#### Scenario: A commented-out draft is not an orphan
+
+- **GIVEN** a delta spec carrying a requirement inside an HTML comment, plus an uncommented twin outside
+  every delta section
+- **WHEN** validation runs on the pinned 1.16.1 executable
+- **THEN** the commented requirement SHALL NOT be reported
+- **AND** the uncommented twin SHALL still be reported as a `WARNING`, so silence cannot pass for the
+  wrong reason
+- **WHEN** validation runs on the retained 1.15.0 boundary executable
+- **THEN** the commented draft SHALL be reported, so the masking is this line's fact
