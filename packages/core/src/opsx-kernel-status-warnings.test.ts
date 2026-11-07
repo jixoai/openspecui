@@ -119,7 +119,7 @@ function join(base, rest) {
 }
 
 if (args.includes('--version')) {
-  console.log('1.16.0')
+  console.log('1.16.1')
   process.exit(0)
 }
 

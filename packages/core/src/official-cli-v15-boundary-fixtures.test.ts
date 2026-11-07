@@ -113,7 +113,7 @@ describe('pinned OpenSpec 1.15 boundary fixtures', () => {
     // `openspec/changes`) root resolution fails first and *both* lines answer the same
     // `invalid_store_pointer` envelope, which would erase the discriminator.
     const initialized = await runPinnedOpenspec(
-      '1.16.0',
+      '1.16.1',
       ['init', project, '--tools=none'],
       project,
       env
@@ -125,7 +125,7 @@ describe('pinned OpenSpec 1.15 boundary fixtures', () => {
 
     // 1.16.0: the CI-visible config gate answers one `status` document and exits 1.
     const admitted = await runPinnedOpenspec(
-      '1.16.0',
+      '1.16.1',
       ['validate', '--all', '--json'],
       project,
       env

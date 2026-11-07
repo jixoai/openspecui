@@ -102,7 +102,7 @@ function createPreviewCallerFixture(
 
 describe('agentIntegrations.updatePlanPreview transport', () => {
   it('previews the typed plan through the real contract executor on an admitted 1.16 session', async () => {
-    const fixture = createPreviewCallerFixture('1.16.0', () => ({
+    const fixture = createPreviewCallerFixture('1.16.1', () => ({
       stdout: JSON.stringify(planPayload()),
       exitCode: 0,
     }))
@@ -119,7 +119,7 @@ describe('agentIntegrations.updatePlanPreview transport', () => {
   })
 
   it('keeps non-empty failures plan data beside exit 0, never a route error', async () => {
-    const fixture = createPreviewCallerFixture('1.16.0', () => ({
+    const fixture = createPreviewCallerFixture('1.16.1', () => ({
       stdout: JSON.stringify(planPayload()),
       exitCode: 0,
     }))
@@ -129,7 +129,7 @@ describe('agentIntegrations.updatePlanPreview transport', () => {
   })
 
   it('surfaces the failed-command envelope as executed evidence with diagnostics and a null plan', async () => {
-    const fixture = createPreviewCallerFixture('1.16.0', () => ({
+    const fixture = createPreviewCallerFixture('1.16.1', () => ({
       stdout: JSON.stringify(updateErrorEnvelope()),
       exitCode: 1,
     }))

@@ -140,7 +140,7 @@ async function assertPinnedCli(env: NodeJS.ProcessEnv): Promise<void> {
     throw new Error(`Pinned OpenSpec SHA mismatch: ${stdout.trim()}`)
   }
   const version = await runPinnedCli(['--version'], REPO_ROOT, env)
-  if (version.exitCode !== 0 || version.stdout.trim() !== '1.16.0') {
+  if (version.exitCode !== 0 || version.stdout.trim() !== '1.16.1') {
     throw new Error(`Pinned OpenSpec version check failed: ${version.stdout}\n${version.stderr}`)
   }
 }

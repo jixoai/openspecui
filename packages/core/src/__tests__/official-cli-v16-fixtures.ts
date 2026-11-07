@@ -24,12 +24,12 @@ import { join, resolve } from 'node:path'
 import { expect } from 'vitest'
 
 /** OpenSpec CLI line admitted by the OpenSpecUI 16 compatibility law (single-series window). */
-export const PINNED_OPENSPEC_V16_VERSIONS = ['1.16.0'] as const
+export const PINNED_OPENSPEC_V16_VERSIONS = ['1.16.1'] as const
 
 export type PinnedOpenspecV16Version = (typeof PINNED_OPENSPEC_V16_VERSIONS)[number]
 
 const PINNED_V16_BINS = {
-  '1.16.0': resolve(import.meta.dirname, '../../node_modules/openspec-cli-116/bin/openspec.js'),
+  '1.16.1': resolve(import.meta.dirname, '../../node_modules/openspec-cli-116/bin/openspec.js'),
 } satisfies Record<PinnedOpenspecV16Version, string>
 
 export interface CliRunResult {

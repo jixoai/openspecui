@@ -108,7 +108,7 @@ async function createFixture() {
   })
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.16.0',
+    version: '1.16.1',
   })
   disposals.push(async () => {
     vi.restoreAllMocks()
@@ -267,7 +267,7 @@ describe('agentIntegrationsRouter', () => {
     vi.spyOn(fixture.server.agentDeliveryProjectionService, 'getCurrent').mockResolvedValue({
       // The admitted 1.16 fixture must offer the requested tool: explicit Init tools are
       // validated against the projection registry before any CLI spawn.
-      registry: selectAgentDeliveryRegistry('1.16.0'),
+      registry: selectAgentDeliveryRegistry('1.16.1'),
       policy: { profile: 'custom', delivery: 'commands', workflows: ['verify'] },
       states: [],
     })

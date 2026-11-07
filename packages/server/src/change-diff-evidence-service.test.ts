@@ -104,7 +104,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.0' }),
+      rootContextFixture({ version: '1.16.1' }),
       'add-search'
     )
 
@@ -212,7 +212,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.0', planningRoot: null }),
+      rootContextFixture({ version: '1.16.1', planningRoot: null }),
       'add-search'
     )
 
@@ -224,14 +224,14 @@ describe('readChangeDiffEvidence', () => {
     const deps = depsFixture({ kind: 'unavailable', capability: 'requirementDiff' })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.0' }),
+      rootContextFixture({ version: '1.16.1' }),
       'add-search'
     )
 
     expect(projection).toEqual({
       kind: 'unavailable',
       reason: 'capability',
-      detectedVersion: '1.16.0',
+      detectedVersion: '1.16.1',
     })
   })
 
@@ -245,7 +245,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.0' }),
+      rootContextFixture({ version: '1.16.1' }),
       'missing-change'
     )
 
@@ -270,7 +270,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       drift,
-      rootContextFixture({ version: '1.16.0' }),
+      rootContextFixture({ version: '1.16.1' }),
       'add-search'
     )
 
@@ -292,7 +292,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.0' }),
+      rootContextFixture({ version: '1.16.1' }),
       'add-search'
     )
 

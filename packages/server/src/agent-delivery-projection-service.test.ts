@@ -48,7 +48,7 @@ import type { ProjectionWorkSubscription } from './projection-work/index.js'
 
 const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
 const cliExecutor = {
-  checkAvailability: async () => ({ available: true, version: '1.16.0' }),
+  checkAvailability: async () => ({ available: true, version: '1.16.1' }),
 }
 const cliCommandAuthority = {
   getCliCommand: async () => ['not-an-importable-openspec-runner'],
@@ -163,7 +163,7 @@ async function writeGeneratedSkill(
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.16.0\n---\n`,
+    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.16.1\n---\n`,
     'utf8'
   )
   return path
@@ -308,7 +308,7 @@ describe('AgentDeliveryProjectionService', () => {
       })
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.16.0',
+        generatedByVersion: '1.16.1',
         installedSkillWorkflows: ['update'],
       })
 
@@ -541,7 +541,7 @@ describe('AgentDeliveryProjectionService', () => {
       observationEnvironment,
       cliExecutor: {
         ...cliExecutor,
-        checkAvailability: async () => ({ available: true, version: '1.16.0' }),
+        checkAvailability: async () => ({ available: true, version: '1.16.1' }),
       },
       cliCommandAuthority,
     })
@@ -554,12 +554,12 @@ describe('AgentDeliveryProjectionService', () => {
       // 1.15.0 adds no upstream tools), and the service projection agrees exactly with the
       // Core series selector over the same detected version (the service strips the
       // selector's internal provenance fields before publishing).
-      const admitted = selectAgentDeliveryRegistry('1.16.0')
+      const admitted = selectAgentDeliveryRegistry('1.16.1')
       expect(admitted.length).toBeGreaterThan(0)
       expect(current.registry.map((tool) => tool.value)).toEqual(admitted.map((tool) => tool.value))
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.16.0',
+        generatedByVersion: '1.16.1',
       })
     } finally {
       await service.dispose()

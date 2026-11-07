@@ -59,7 +59,7 @@ import { OpsxKernel } from './opsx-kernel.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
 const PINNED_BINS = {
-  '1.16.0': resolve(import.meta.dirname, '../node_modules/openspec-cli-116/bin/openspec.js'),
+  '1.16.1': resolve(import.meta.dirname, '../node_modules/openspec-cli-116/bin/openspec.js'),
 } satisfies Record<PinnedOpenspecV16Version, string>
 
 const tempDirs: string[] = []

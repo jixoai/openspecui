@@ -99,7 +99,7 @@ describe('settlePaths: one-shot freshness without orphaning', () => {
       await mkdir(join(tempDir, '.claude', 'skills', 'openspec-explore'), { recursive: true })
       await writeFile(
         join(tempDir, '.claude', 'skills', 'openspec-explore', 'SKILL.md'),
-        '---\nmetadata:\n  generatedBy: "1.16.0"\n---\n',
+        '---\nmetadata:\n  generatedBy: "1.16.1"\n---\n',
         'utf8'
       )
 

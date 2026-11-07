@@ -1,11 +1,11 @@
 /**
  * Orthogonal intents (created 2026-11-04 Asia/Shanghai):
- * 1. Prove the OpenSpec 1.16.0 project-config failure as an executable fact: a broken
+ * 1. Prove the OpenSpec 1.16.1 project-config failure as an executable fact: a broken
  *    `openspec/config.yaml` makes `validate` answer a bare `{ status: [...] }` envelope at a
  *    non-zero exit, for both codes and for the findings transport.
  * 2. Prove a healthy project keeps the ordinary report and findings document shapes, so the
  *    new envelope is a distinct decode branch rather than a reshaped report.
- * 3. Keep the fixture initialized first: without `openspec init` both 1.16.0 and 1.15.0 answer
+ * 3. Keep the fixture initialized first: without `openspec init` both 1.16.1 and 1.15.0 answer
  *    the identical `invalid_store_pointer`, which would make the discriminator look
  *    non-discriminating.
  * 4. Trigger `unreadable_config` with a directory where the config file belongs, not with

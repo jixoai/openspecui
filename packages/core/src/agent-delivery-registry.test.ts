@@ -748,7 +748,7 @@ function assertPinnedRegistry(registry: readonly ToolConfig[]): void {
 
 /** Assert the admitted per-series inventory against the selection boundary itself. */
 function assertAdmittedSeriesInventories(): void {
-  const series116 = selectAgentDeliveryRegistry('1.16.0')
+  const series116 = selectAgentDeliveryRegistry('1.16.1')
 
   // The admitted line ships the complete official tool set: every 1.14/1.13/1.12 tool keeps
   // its physical facts, codeassistant (minCliSeries '1.12') and zed ('1.10') carry forward,
@@ -949,7 +949,7 @@ describe('per-series inventory selection (1.16 single-series window)', () => {
   })
 
   it.each([
-    ['1.16.0', '1.16'],
+    ['1.16.1', '1.16'],
     ['1.16.2', '1.16'],
   ])('parses stable %s as the %s Agent inventory line', (cliVersion, expectedSeries) => {
     expect(parseOpenSpecCliSeries(cliVersion)).toBe(expectedSeries)
@@ -989,18 +989,12 @@ describe('per-series inventory selection (1.16 single-series window)', () => {
     // the official CLI and projected by the Server Agent delivery service. OpenSpec 1.14
     // adds two skills writers to the shared root — amp (`.amp` detection) and gsd (`.gsd`
     // detection, skills-invocable) — widening the candidate set to five.
-    expect(SHARED_AGENTS_SKILLS_OWNER_CANDIDATES).toEqual([
-      'codex',
-      'zed',
-      'agents',
-      'amp',
-      'gsd',
-    ])
+    expect(SHARED_AGENTS_SKILLS_OWNER_CANDIDATES).toEqual(['codex', 'zed', 'agents', 'amp', 'gsd'])
     // Antigravity joined the shared root in 1.11 (carried forward on 1.12/1.13/1.14) but is
     // adapter-backed and is excluded from skills-writer candidacy; its own
     // `.agents/workflows` commands root is unaffected by that exclusion.
     expect(SHARED_AGENTS_SKILLS_OWNER_CANDIDATES).not.toContain('antigravity')
-    expect(registryEntry(selectAgentDeliveryRegistry('1.16.0'), 'antigravity')?.capability).toBe(
+    expect(registryEntry(selectAgentDeliveryRegistry('1.16.1'), 'antigravity')?.capability).toBe(
       'adapter-backed'
     )
   })

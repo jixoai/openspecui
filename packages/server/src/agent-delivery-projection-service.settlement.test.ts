@@ -194,7 +194,7 @@ async function writeGeneratedSkill(projectDir: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    '---\nname: openspec-update-change\nmetadata:\n  generatedBy: 1.16.0\n---\n',
+    '---\nname: openspec-update-change\nmetadata:\n  generatedBy: 1.16.1\n---\n',
     'utf8'
   )
 }
@@ -243,7 +243,7 @@ describe('AgentDeliveryProjectionService settlement seam', () => {
     const cliExecutor = {
       async checkAvailability() {
         availabilityCalls += 1
-        return { available: true, version: '1.16.0' }
+        return { available: true, version: '1.16.1' }
       },
     }
     const service = new AgentDeliveryProjectionService({

@@ -332,7 +332,7 @@ describe('OpenSpec 1.8/1.9 workflow CLI contracts', () => {
 // rotation): stable 1.16.x derives the 1.11-introduced batch/diff, the 1.12 findings,
 // and the 1.15 update-dry-run transports; every retired line (1.15/1.14/1.13/1.12/1.11/
 // 1.10) derives none and proves capability-boundary rejections only.
-const capabilities116 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.16.0'))
+const capabilities116 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.16.1'))
 const capabilities115 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.15.0'))
 const capabilities112 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.12.0'))
 const capabilities111 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.11.0'))

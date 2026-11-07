@@ -63,7 +63,7 @@ export type ToolInitReadiness = 'unavailable' | 'uninitialized' | 'partial' | 'i
 export type ToolInitIssue = 'stale-version' | 'cleanup-needed' | 'migration-required'
 
 /** Pinned source version used when a runtime CLI version is not supplied by the Server owner. */
-export const PINNED_AGENT_GENERATOR_VERSION = '1.16.0'
+export const PINNED_AGENT_GENERATOR_VERSION = '1.16.1'
 
 /** Physical delivery scope of one tool's skills inventory. */
 export type ToolSkillsScope =

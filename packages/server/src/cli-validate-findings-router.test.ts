@@ -127,7 +127,7 @@ function createFindingsCallerFixture(
 
 describe('cli.validate findings transport', () => {
   it('runs the findings report through the real contract executor on an admitted 1.16 session', async () => {
-    const fixture = createFindingsCallerFixture('1.16.0', () => ({
+    const fixture = createFindingsCallerFixture('1.16.1', () => ({
       stdout: JSON.stringify(findingsPayload()),
       exitCode: 0,
     }))
@@ -162,7 +162,7 @@ describe('cli.validate findings transport', () => {
   })
 
   it('maps the archived findings scope onto the archived bulk flag', async () => {
-    const fixture = createFindingsCallerFixture('1.16.0', () => ({
+    const fixture = createFindingsCallerFixture('1.16.1', () => ({
       stdout: JSON.stringify(findingsPayload()),
       exitCode: 0,
     }))
@@ -175,7 +175,7 @@ describe('cli.validate findings transport', () => {
   })
 
   it('passes the typed request-error envelope through without rewriting it as a thrown error', async () => {
-    const fixture = createFindingsCallerFixture('1.16.0', () => ({
+    const fixture = createFindingsCallerFixture('1.16.1', () => ({
       stdout: JSON.stringify(requestErrorPayload()),
       exitCode: 1,
     }))

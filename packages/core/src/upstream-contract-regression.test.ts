@@ -34,7 +34,7 @@
  *   v1.14.3 (c794978f) to the released v1.15.0 tag (8e0288df) opening the OpenSpecUI 15 line.
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — rotate the reference pin assertion from v1.15.0 (8e0288df) to the released
- *   v1.16.0 tag (27c05157) opening the OpenSpecUI 16 line.
+ *   v1.16.1 tag (27c05157) opening the OpenSpecUI 16 line.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -114,7 +114,7 @@ describe('first-party OpenSpec 1.4-1.7 contracts', () => {
       windowsHide: true,
     }).trim()
 
-    expect(commit).toBe('27c0515724decc633818c735ee596481eec78a8b')
+    expect(commit).toBe('0fa4a9705c20ef1c571fe3ded74435733e4b73a1')
   })
 
   it('locks the 1.15 update dry-run UpdatePlan contract sources', () => {

@@ -558,7 +558,7 @@ const BATCH_STATUS_CHANGES = ['change-a', 'change-b', 'change-c']
 function writeBatchStatusCliFixture(
   cliPath: string,
   projectDir: string,
-  version: '1.15.0' | '1.16.0'
+  version: '1.15.0' | '1.16.1'
 ): Promise<void> {
   return writeFile(
     cliPath,
@@ -729,7 +729,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
   }
 
   async function prepareBatchKernel(
-    version: '1.15.0' | '1.16.0',
+    version: '1.15.0' | '1.16.1',
     markers: readonly string[] = []
   ): Promise<BatchFixture> {
     const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-opsx-batch-status-'))
@@ -786,7 +786,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
   }
 
   it('loads the status list with one status --all spawn and per-change projections identical to the serial transport', async () => {
-    const batch = await prepareBatchKernel('1.16.0')
+    const batch = await prepareBatchKernel('1.16.1')
     const serial = await prepareBatchKernel('1.15.0')
 
     try {
@@ -843,7 +843,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
   })
 
   it('keeps a batch per-change failure entry as that change evidence without failing the status-list Work', async () => {
-    const { kernel, readInvocations, dispose } = await prepareBatchKernel('1.16.0', [
+    const { kernel, readInvocations, dispose } = await prepareBatchKernel('1.16.1', [
       'fail-change-b',
     ])
 
@@ -929,7 +929,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
   })
 
   it('keeps single-change status reads on the per-change transport under admitted 1.16 sessions', async () => {
-    const { kernel, readInvocations, dispose } = await prepareBatchKernel('1.16.0')
+    const { kernel, readInvocations, dispose } = await prepareBatchKernel('1.16.1')
 
     try {
       await kernel.ensureStatus('change-a')
@@ -948,7 +948,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
   })
 
   it('routes batch transport and root-selection failures through the existing error paths', async () => {
-    const garbage = await prepareBatchKernel('1.16.0', ['batch-garbage'])
+    const garbage = await prepareBatchKernel('1.16.1', ['batch-garbage'])
     try {
       await expect(garbage.kernel.ensureStatusList()).rejects.toMatchObject({
         name: 'CliProjectionCommandError',
@@ -958,7 +958,7 @@ describe('OpsxKernel capability-gated batch status transport', () => {
       await garbage.dispose()
     }
 
-    const rootFailure = await prepareBatchKernel('1.16.0', ['batch-root-failure'])
+    const rootFailure = await prepareBatchKernel('1.16.1', ['batch-root-failure'])
     try {
       await expect(rootFailure.kernel.ensureStatusList()).rejects.toMatchObject({
         name: 'CliProjectionCommandError',
@@ -998,7 +998,7 @@ describe('OpsxKernel capability-gated validate findings transport', () => {
   function writeFindingsCliFixture(
     cliPath: string,
     projectDir: string,
-    version: '1.15.0' | '1.16.0' | 'unparseable'
+    version: '1.15.0' | '1.16.1' | 'unparseable'
   ): Promise<void> {
     return writeFile(
       cliPath,
@@ -1100,7 +1100,7 @@ process.exit(1)
   }
 
   async function prepareFindingsKernel(
-    version: '1.15.0' | '1.16.0' | 'unparseable',
+    version: '1.15.0' | '1.16.1' | 'unparseable',
     options: { markers?: readonly string[]; store?: string } = {}
   ): Promise<FindingsFixture> {
     const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-opsx-findings-'))
@@ -1136,7 +1136,7 @@ process.exit(1)
   }
 
   it('loads findings through one gated spawn on an admitted 1.16 session with the Store selector forwarded', async () => {
-    const { kernel, readInvocations, dispose } = await prepareFindingsKernel('1.16.0', {
+    const { kernel, readInvocations, dispose } = await prepareFindingsKernel('1.16.1', {
       store: 'shared',
     })
 
@@ -1172,7 +1172,7 @@ process.exit(1)
   })
 
   it('maps the archived bulk scope onto the archived validate target', async () => {
-    const { kernel, readInvocations, dispose } = await prepareFindingsKernel('1.16.0')
+    const { kernel, readInvocations, dispose } = await prepareFindingsKernel('1.16.1')
 
     try {
       const projection = await kernel.readValidationFindingsProjection('archived')
@@ -1220,7 +1220,7 @@ process.exit(1)
   })
 
   it('keeps the CLI request-failure envelope as decoded evidence instead of throwing', async () => {
-    const { kernel, dispose } = await prepareFindingsKernel('1.16.0', {
+    const { kernel, dispose } = await prepareFindingsKernel('1.16.1', {
       markers: ['findings-request-error'],
     })
 
@@ -1246,7 +1246,7 @@ process.exit(1)
   })
 
   it('routes an unparseable findings document through the existing command error path', async () => {
-    const { kernel, dispose } = await prepareFindingsKernel('1.16.0', {
+    const { kernel, dispose } = await prepareFindingsKernel('1.16.1', {
       markers: ['findings-garbage'],
     })
 

@@ -40,10 +40,10 @@ import {
 
 describe('openspec CLI compatibility law', () => {
   it('parses versions from raw CLI output', () => {
-    expect(parseOpenSpecCliVersion('1.16.0')).toEqual({
+    expect(parseOpenSpecCliVersion('1.16.1')).toEqual({
       major: 1,
       minor: 16,
-      patch: 0,
+      patch: 1,
       prerelease: null,
     })
     expect(parseOpenSpecCliVersion('openspec 1.13.0')).toEqual({
@@ -73,7 +73,7 @@ describe('openspec CLI compatibility law', () => {
   })
 
   it('classifies the 1.16 line as the current recommended OpenSpecUI 16 target line', () => {
-    for (const version of ['1.16.0', '1.16.1', 'openspec 1.16.2']) {
+    for (const version of ['1.16.1', '1.16.1', 'openspec 1.16.2']) {
       expect(classifyOpenSpecCliVersion(version)).toMatchObject({
         status: 'current',
         supported: true,
@@ -233,7 +233,7 @@ describe('openspec CLI compatibility law', () => {
 
 describe('deriveOpenSpecCliCapabilities admission boundary', () => {
   it('grants every capability, including the findings report and update dry run, to the admitted 1.16 series', () => {
-    expect(deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.16.0'))).toEqual({
+    expect(deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.16.1'))).toEqual({
       schemasRootSelector: true,
       archivedValidation: true,
       initLanguage: true,

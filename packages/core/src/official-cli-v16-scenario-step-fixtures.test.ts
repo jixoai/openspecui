@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-11-04 Asia/Shanghai):
- * 1. Prove the OpenSpec 1.16.0 scenario step-coverage class as an executable fact: a counted
+ * 1. Prove the OpenSpec 1.16.1 scenario step-coverage class as an executable fact: a counted
  *    scenario with a body but no WHEN/GIVEN or no THEN step is a WARNING inside the existing
  *    finding shape, plain validation stays green, and `--strict` fails.
  * 2. Prove the same class fires in main-spec scope, and that a `#### Notes` child (prose on
