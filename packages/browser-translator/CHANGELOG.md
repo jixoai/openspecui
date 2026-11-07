@@ -1,5 +1,12 @@
 # @openspecui/browser-translator
 
+## 16.1.1
+
+### Patch Changes
+
+- Updated dependencies [b63a48f]
+  - @openspecui/core@16.1.1
+
 ## 16.1.0
 
 ### Patch Changes
