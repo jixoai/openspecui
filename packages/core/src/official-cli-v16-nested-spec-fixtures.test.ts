@@ -12,12 +12,14 @@
  *   are retained verbatim.
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates this suite to the v16 line: imports and
- *   identity literals move to the pinned 1.16.0 executable (openspec-cli-116 / v16
+ *   identity literals move to the pinned 1.16.1 executable (openspec-cli-116 / v16
  *   helper); the historical v14/v15-era intents above are retained verbatim.
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-08-01): adapt OpenSpec 1.7 nested Spec ids such as `platform/auth`.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

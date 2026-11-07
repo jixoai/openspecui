@@ -23,6 +23,8 @@
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-10-25): "开工" — Slice 2 rotates the admitted session to 1.16.0
  * and adds the retired 1.14 boundary beside the other retired windows.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 
 import {
@@ -48,7 +50,7 @@ import type { ProjectionWorkSubscription } from './projection-work/index.js'
 
 const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
 const cliExecutor = {
-  checkAvailability: async () => ({ available: true, version: '1.16.0' }),
+  checkAvailability: async () => ({ available: true, version: '1.16.1' }),
 }
 const cliCommandAuthority = {
   getCliCommand: async () => ['not-an-importable-openspec-runner'],
@@ -163,7 +165,7 @@ async function writeGeneratedSkill(
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.16.0\n---\n`,
+    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.16.1\n---\n`,
     'utf8'
   )
   return path
@@ -308,7 +310,7 @@ describe('AgentDeliveryProjectionService', () => {
       })
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.16.0',
+        generatedByVersion: '1.16.1',
         installedSkillWorkflows: ['update'],
       })
 
@@ -382,7 +384,7 @@ describe('AgentDeliveryProjectionService', () => {
 
     try {
       const current = await service.getCurrent()
-      // No live CLI means no admitted inventory: the pinned 1.16.0 generator version must not
+      // No live CLI means no admitted inventory: the pinned 1.16.1 generator version must not
       // fabricate one.
       expect(current.registry).toEqual([])
       expect(current.states).toEqual([])
@@ -541,7 +543,7 @@ describe('AgentDeliveryProjectionService', () => {
       observationEnvironment,
       cliExecutor: {
         ...cliExecutor,
-        checkAvailability: async () => ({ available: true, version: '1.16.0' }),
+        checkAvailability: async () => ({ available: true, version: '1.16.1' }),
       },
       cliCommandAuthority,
     })
@@ -554,12 +556,12 @@ describe('AgentDeliveryProjectionService', () => {
       // 1.15.0 adds no upstream tools), and the service projection agrees exactly with the
       // Core series selector over the same detected version (the service strips the
       // selector's internal provenance fields before publishing).
-      const admitted = selectAgentDeliveryRegistry('1.16.0')
+      const admitted = selectAgentDeliveryRegistry('1.16.1')
       expect(admitted.length).toBeGreaterThan(0)
       expect(current.registry.map((tool) => tool.value)).toEqual(admitted.map((tool) => tool.value))
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.16.0',
+        generatedByVersion: '1.16.1',
       })
     } finally {
       await service.dispose()

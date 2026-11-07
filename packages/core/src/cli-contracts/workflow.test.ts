@@ -58,6 +58,8 @@
  *   1.16.0 as `capabilities116`; first below-window refusal 1.15.0); captured 1.14/1.15
  *   decode payloads keep their own version literals because they are executable evidence,
  *   not admission facts.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'
@@ -332,7 +334,7 @@ describe('OpenSpec 1.8/1.9 workflow CLI contracts', () => {
 // rotation): stable 1.16.x derives the 1.11-introduced batch/diff, the 1.12 findings,
 // and the 1.15 update-dry-run transports; every retired line (1.15/1.14/1.13/1.12/1.11/
 // 1.10) derives none and proves capability-boundary rejections only.
-const capabilities116 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.16.0'))
+const capabilities116 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.16.1'))
 const capabilities115 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.15.0'))
 const capabilities112 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.12.0'))
 const capabilities111 = deriveOpenSpecCliCapabilities(parseOpenSpecCliVersion('1.11.0'))

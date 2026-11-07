@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-11-04 Asia/Shanghai):
- * 1. Prove the OpenSpec 1.16.0 scenario step-coverage class as an executable fact: a counted
+ * 1. Prove the OpenSpec 1.16.1 scenario step-coverage class as an executable fact: a counted
  *    scenario with a body but no WHEN/GIVEN or no THEN step is a WARNING inside the existing
  *    finding shape, plain validation stays green, and `--strict` fails.
  * 2. Prove the same class fires in main-spec scope, and that a `#### Notes` child (prose on
@@ -8,6 +8,8 @@
  *
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 4.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

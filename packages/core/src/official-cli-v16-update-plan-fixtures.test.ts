@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
- * 1. Prove the pinned 1.16.0 executable emits a real non-empty `update --dry-run --json`
+ * 1. Prove the pinned 1.16.1 executable emits a real non-empty `update --dry-run --json`
  *    plan over a real Agent workspace: a corrupted managed skill plans `update` and a
  *    deleted command plans `add`, both under the configured tool id.
  * 2. Prove the plan is evidence, not a write: the corrupted disk bytes survive the
@@ -14,8 +14,10 @@
  *   — flagship-contract positive proof for the v15 line (adversarial-review P2-2).
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates this positive suite to the pinned
- *   1.16.0 executable (openspec-cli-116 / v16 helper); the v15-era intent above is
+ *   1.16.1 executable (openspec-cli-116 / v16 helper); the v15-era intent above is
  *   retained as history.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -46,7 +48,7 @@ describe('pinned OpenSpec 1.15 update dry-run plan fixtures', () => {
     // A real init with one configured tool generates the managed skill and command
     // files the update command later reconciles.
     const initialized = await runPinnedOpenspec(
-      '1.16.0',
+      '1.16.1',
       ['init', project, '--tools', 'claude'],
       project,
       env
@@ -60,7 +62,7 @@ describe('pinned OpenSpec 1.15 update dry-run plan fixtures', () => {
     await rm(managedCommand)
 
     const planned = await runPinnedOpenspec(
-      '1.16.0',
+      '1.16.1',
       ['update', '--dry-run', '--json'],
       project,
       env
@@ -91,9 +93,9 @@ describe('pinned OpenSpec 1.15 update dry-run plan fixtures', () => {
 
     // A settled real update makes the next plan empty again — plan and execution share
     // one upstream code path, so the preview converges with the mutation it describes.
-    const settled = await runPinnedOpenspec('1.16.0', ['update'], project, env)
+    const settled = await runPinnedOpenspec('1.16.1', ['update'], project, env)
     expect(settled.exitCode, settled.stdout + '\n' + settled.stderr).toBe(0)
-    const after = await runPinnedOpenspec('1.16.0', ['update', '--dry-run', '--json'], project, env)
+    const after = await runPinnedOpenspec('1.16.1', ['update', '--dry-run', '--json'], project, env)
     expect(after.exitCode, after.stdout + '\n' + after.stderr).toBe(0)
     const emptyPlan = CliUpdatePlanSchema.parse(JSON.parse(after.stdout))
     expect(emptyPlan.changes).toEqual([])

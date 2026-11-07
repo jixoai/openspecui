@@ -12,6 +12,8 @@
  * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
  * Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补丁的方式肯定不如社区成熟度高的方案"
  *   — fix-reactive-fs-settlement S1 (V1): the one named consumer hook.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -194,7 +196,7 @@ async function writeGeneratedSkill(projectDir: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    '---\nname: openspec-update-change\nmetadata:\n  generatedBy: 1.16.0\n---\n',
+    '---\nname: openspec-update-change\nmetadata:\n  generatedBy: 1.16.1\n---\n',
     'utf8'
   )
 }
@@ -243,7 +245,7 @@ describe('AgentDeliveryProjectionService settlement seam', () => {
     const cliExecutor = {
       async checkAvailability() {
         availabilityCalls += 1
-        return { available: true, version: '1.16.0' }
+        return { available: true, version: '1.16.1' }
       },
     }
     const service = new AgentDeliveryProjectionService({

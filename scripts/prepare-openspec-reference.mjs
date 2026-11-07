@@ -40,6 +40,9 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — rotate the reference pin from v1.15.0 (8e0288df) to the released v1.16.0 tag
  *   (27c05157) opening the OpenSpecUI 16 line.
+ * Original request (2026-11-07): "检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。"
+ *   — in-window patch rotation moves the pin from v1.16.0 (27c05157) to the released
+ *   v1.16.1 tag (0fa4a970) inside the unchanged v16 window.
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -49,7 +52,7 @@ import { resolvePnpmInvocation } from './lib/pnpm-invocation.mjs'
 
 const REPOSITORY_ROOT = process.cwd()
 const REFERENCE_PATH = resolve(REPOSITORY_ROOT, 'references/openspec')
-const EXPECTED_COMMIT = '27c0515724decc633818c735ee596481eec78a8b'
+const EXPECTED_COMMIT = '0fa4a9705c20ef1c571fe3ded74435733e4b73a1'
 const CLI_DIST_PATH = resolve(REFERENCE_PATH, 'dist/cli/index.js')
 
 function run(command, args, options = {}) {

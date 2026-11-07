@@ -14,6 +14,8 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates the samples to the v16 window
  *   (admitted 1.16.0, retired 1.15.0).
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import type { CliExecutor, RootContext } from '@openspecui/core'
 import { describe, expect, it, vi } from 'vitest'
@@ -104,7 +106,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.0' }),
+      rootContextFixture({ version: '1.16.1' }),
       'add-search'
     )
 
@@ -212,7 +214,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.0', planningRoot: null }),
+      rootContextFixture({ version: '1.16.1', planningRoot: null }),
       'add-search'
     )
 
@@ -224,14 +226,14 @@ describe('readChangeDiffEvidence', () => {
     const deps = depsFixture({ kind: 'unavailable', capability: 'requirementDiff' })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.0' }),
+      rootContextFixture({ version: '1.16.1' }),
       'add-search'
     )
 
     expect(projection).toEqual({
       kind: 'unavailable',
       reason: 'capability',
-      detectedVersion: '1.16.0',
+      detectedVersion: '1.16.1',
     })
   })
 
@@ -245,7 +247,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.0' }),
+      rootContextFixture({ version: '1.16.1' }),
       'missing-change'
     )
 
@@ -270,7 +272,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       drift,
-      rootContextFixture({ version: '1.16.0' }),
+      rootContextFixture({ version: '1.16.1' }),
       'add-search'
     )
 
@@ -292,7 +294,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.0' }),
+      rootContextFixture({ version: '1.16.1' }),
       'add-search'
     )
 

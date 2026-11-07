@@ -39,6 +39,8 @@
  *   imports, the local PINNED_BINS key and its version type move to the pinned 1.16.0
  *   executable (openspec-cli-116) through the v16 helper; the 1.15.0 bin stays with the
  *   boundary suite.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -59,7 +61,7 @@ import { OpsxKernel } from './opsx-kernel.js'
 import { RuntimeInvalidationIndex } from './runtime-invalidation.js'
 
 const PINNED_BINS = {
-  '1.16.0': resolve(import.meta.dirname, '../node_modules/openspec-cli-116/bin/openspec.js'),
+  '1.16.1': resolve(import.meta.dirname, '../node_modules/openspec-cli-116/bin/openspec.js'),
 } satisfies Record<PinnedOpenspecV16Version, string>
 
 const tempDirs: string[] = []

@@ -11,7 +11,7 @@
  *   describe pattern (a stale fake green gate since the v10 line) and now rejects any
  *   checkout outside v1.16.x.
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
- *   — the describe pattern rotates with the v1.16.0 pin (this guard was fake-green on a
+ *   — the describe pattern rotates with the v1.16.1 pin (this guard was fake-green on a
  *   post-tag checkout because "v1.15.0-19-g27c05157" still matched the old prefix).
  */
 import { execFileSync } from 'node:child_process'

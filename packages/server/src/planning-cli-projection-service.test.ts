@@ -23,6 +23,8 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates the transport-mirror fake session version
  *   to the admitted 1.16.0 line (the warning payload keeps its 1.14.0 capture provenance).
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import {
   CliExecutor,
@@ -939,7 +941,7 @@ function statusFields(changeName, batch) {
 }
 
 if (args.includes('--version')) {
-  console.log('1.16.0')
+  console.log('1.16.1')
   process.exit(0)
 }
 

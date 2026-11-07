@@ -18,6 +18,8 @@
  *   1.16.0 line. Leaving it at 1.15.0 would silently downgrade the batch test: the kernel
  *   would fall back to the serial transport and still pass, proving nothing about the
  *   capability-gated `status --all` path.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -51,7 +53,7 @@ const CLEAN_CHANGE = 'clean-change'
 /**
  * Fake 1.16 CLI fixture for the Status warnings projection.
  *
- * `--version` reports the admitted 1.16.0 line so the session derives the batch
+ * `--version` reports the admitted 1.16.1 line so the session derives the batch
  * capability. `status --change warned-change` and its batch healthy entry both carry
  * the executed top-level `warnings` array; `clean-change` never does, proving the
  * absent-member law on the same envelope.
@@ -119,7 +121,7 @@ function join(base, rest) {
 }
 
 if (args.includes('--version')) {
-  console.log('1.16.0')
+  console.log('1.16.1')
   process.exit(0)
 }
 
