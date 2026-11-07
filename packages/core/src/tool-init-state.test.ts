@@ -34,6 +34,8 @@
  * per-path polls — instead of depending on the root-before-spy ordering coincidence.
  * Note: openspec-cli-112 generator fixtures below are historical/boundary evidence for staleness and
  * legacy-compat classification; positive v15 acceptance lives in the official-cli-v15 suite.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { mkdir, writeFile } from 'fs/promises'
 import { dirname, join, resolve, sep } from 'path'

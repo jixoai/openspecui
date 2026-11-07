@@ -31,6 +31,8 @@
  *   — in-window patch rotation moves pin + version assertion to v1.14.3 (c794978f).
  * 2026-10-25 (target-openspec-cli-15-line Slice 4): pin + version assertion rotate to
  *   v1.15.0 (8e0288df) opening the OpenSpecUI 15 line.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'

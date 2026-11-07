@@ -15,6 +15,8 @@
  *   refused sample to the newly retired 1.15.0 (accepted range moves to
  *   `>=1.16.0 <1.17.0`); the contract assertions stay unchanged because 1.16 keeps the
  *   1.15 updateDryRun surface.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { OpenSpecCliContractExecutor, type RootContext } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'

@@ -25,6 +25,8 @@
  * Original request (2026-10-25): "开工"
  *   — target-openspec-cli-15-line Slice 3 rotated this suite to the 1.14.3 boundary
  *   (kept v14 helper) with 1.15-only surface absence checks. Retained as history.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { execFile } from 'node:child_process'
 import { mkdir, realpath, writeFile } from 'node:fs/promises'
@@ -123,7 +125,7 @@ describe('pinned OpenSpec 1.15 boundary fixtures', () => {
     // A structurally invalid project config (unclosed flow sequence).
     await writeFile(join(project, 'openspec', 'config.yaml'), 'schema: [unclosed\n')
 
-    // 1.16.0: the CI-visible config gate answers one `status` document and exits 1.
+    // 1.16.1: the CI-visible config gate answers one `status` document and exits 1.
     const admitted = await runPinnedOpenspec(
       '1.16.1',
       ['validate', '--all', '--json'],

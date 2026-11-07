@@ -31,6 +31,8 @@
  *   — Slice 3 rotates the admitted series to '1.16'; 1.16 selects the byte-identical inventory
  *   (upstream AI_TOOLS unchanged) and 1.15 becomes a rejected line.
  * with zero tool changes; the 1.14 classification cases move to the retired-lines history.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 
 import { describe, expect, it } from 'vitest'

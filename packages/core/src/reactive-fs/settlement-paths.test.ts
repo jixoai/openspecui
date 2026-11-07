@@ -11,6 +11,8 @@
  * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
  * Owner decision (2026-11-04): "修肯定是要修的，只不过你手工打补丁的方式肯定不如社区成熟度高的方案"
  *   — fix-reactive-fs-settlement S4 (S5.3c, CP4) and its V3 path-space validation.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

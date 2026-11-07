@@ -18,6 +18,8 @@
  *   1.16.0 line. Leaving it at 1.15.0 would silently downgrade the batch test: the kernel
  *   would fall back to the serial transport and still pass, proving nothing about the
  *   capability-gated `status --all` path.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

@@ -23,6 +23,8 @@
  * Original request (2026-10-24): "过了几天了，你看看 openspec 有没有更新。有的话我们就要继续跟进了" — in-window patch rotation moved the pin to v1.14.3.
  * 2026-10-25 (target-openspec-cli-15-line Slice 4): the pin rotates to v1.15.0 (8e0288df)
  * opening the OpenSpecUI 15 line; pinned cold-start evidence reports the 1.15.0 CLI.
+ * 2026-11-04 (update-openspec-cli-16-line): the pin rotates to v1.16.0 (27c05157) with the v16 window.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation to v1.16.1 (0fa4a970).
  */
 import {
   ConfigManager,
@@ -46,7 +48,7 @@ import type { AppRouter, RunningServer } from './server.js'
 import { startServer } from './server.js'
 
 const execFileAsync = promisify(execFile)
-const PINNED_OPENSPEC_COMMIT = '27c0515724decc633818c735ee596481eec78a8b'
+const PINNED_OPENSPEC_COMMIT = '0fa4a9705c20ef1c571fe3ded74435733e4b73a1'
 const PINNED_OPENSPEC_ROOT = resolve(import.meta.dirname, '../../../references/openspec')
 const CLI_BIN = resolve(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
 
@@ -175,7 +177,7 @@ function rootStateReady(state: RootContextResolvedState): RootContextResolvedSta
   return state
 }
 
-describe('pinned OpenSpec 1.15 Root Context cold start', () => {
+describe('pinned OpenSpec 1.16 Root Context cold start', () => {
   afterEach(async () => {
     for (const client of wsClients.splice(0)) client.close()
     await Promise.all(runningServers.splice(0).map((server) => server.close()))

@@ -16,6 +16,8 @@
  *   — update-openspec-cli-16-line Slice 2 rotates this positive suite to the pinned
  *   1.16.1 executable (openspec-cli-116 / v16 helper); the v15-era intent above is
  *   retained as history.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

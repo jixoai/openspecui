@@ -21,9 +21,13 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — Slice 3 rotates the generator stamp to 1.16.0
  * and the replacement label to the 1.15 line (no upstream tool changes).
+ * Original request (2026-11-07): "检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。"
+ *   — in-window patch rotation moves the generator stamp from 1.16.0 to 1.16.1
  * Original request (2026-11-04): "关于'已知缺口'和需要我决策的问题。请白话解释一下"
  *   — fix-reactive-fs-settlement S4: the one-shot inventory settles its input roots instead of
  *     deleting cache entries by substring prefix, so a retained projection stays observable.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 
 import { homedir } from 'node:os'

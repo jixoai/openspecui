@@ -49,6 +49,8 @@
  * Original request (2026-10-06): "官方发布了 v1.14.1，请按照规范更新跟进这个版本"
  *   — in-window patch rotation: the pinned executable moves to 1.14.1 and the new
  *   all_done guidance semantics join the matrix.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

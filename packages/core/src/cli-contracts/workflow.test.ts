@@ -58,6 +58,8 @@
  *   1.16.0 as `capabilities116`; first below-window refusal 1.15.0); captured 1.14/1.15
  *   decode payloads keep their own version literals because they are executable evidence,
  *   not admission facts.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { CliExecutor, type CliResult } from '../cli-executor.js'

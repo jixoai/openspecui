@@ -28,6 +28,8 @@
  * Original request (2026-08-14): "在Windows平台上，执行命令总是会弹出cmd窗口，这个可否统一隐藏，你先调查一下原因"
  * Original request (2026-08-01): adapt OpenSpec 1.7 machine `defaultStore` without fabricating effective Root truth.
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { mkdir, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

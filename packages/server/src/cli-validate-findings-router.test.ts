@@ -17,6 +17,8 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates the samples again: admitted 1.16.0,
  *   refused 1.15.0, message `>=1.16.0 <1.17.0`.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { OpenSpecCliContractExecutor, type RootContext } from '@openspecui/core'
 import { isCliValidateFindings } from '@openspecui/core/openspec-compat'

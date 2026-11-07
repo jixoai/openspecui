@@ -34,6 +34,8 @@
  * generator-version samples rotate to 1.16.0. This file is a compat mirror the window flip
  * reaches silently: an unadmitted sample version makes every subscription projection empty,
  * which reads as a missing-tool regression rather than a stale fixture.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import {
   clearCache,

@@ -33,6 +33,8 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates the admitted-line validate fixture
  *   session to 1.16.0 per the v16 window.
+* 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+*   1.16.1; identity literals rotate, no projection change.
 */
 import {
   acquireWatcherRoot,

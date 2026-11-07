@@ -34,7 +34,12 @@
  *   v1.14.3 (c794978f) to the released v1.15.0 tag (8e0288df) opening the OpenSpecUI 15 line.
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — rotate the reference pin assertion from v1.15.0 (8e0288df) to the released
- *   v1.16.1 tag (27c05157) opening the OpenSpecUI 16 line.
+ *   v1.16.0 tag (27c05157) opening the OpenSpecUI 16 line.
+ * Original request (2026-11-07): "检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。"
+ *   — in-window patch rotation moves the assertion from v1.16.0 (27c05157) to the released
+ *   v1.16.1 tag (0fa4a970) inside the unchanged v16 window.
+ * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
+ *   1.16.1; identity literals rotate, no projection change.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
