@@ -1,5 +1,17 @@
 # @openspecui/server
 
+## 16.1.1
+
+### Patch Changes
+
+- Updated dependencies [b63a48f]
+  - @openspecui/core@16.1.1
+  - @openspecui/local-ct2-translator@16.1.1
+  - @openspecui/local-llama-translator@16.1.1
+  - @openspecui/local-translator@16.1.1
+  - @openspecui/openai-completion-translator@16.1.1
+  - @openspecui/search@16.1.1
+
 ## 16.1.0
 
 ### Minor Changes
