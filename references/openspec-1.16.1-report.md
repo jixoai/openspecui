@@ -39,14 +39,24 @@ did land.
 | Release commit `Version Packages (#2212)` | `packages/core/package.json` alias `openspec-cli-116`                                                                    | rotate to `npm:@fission-ai/openspec@1.16.1`                                          |
 | same                                      | `packages/core/src/__tests__/official-cli-v16-fixtures.ts` (`PINNED_OPENSPEC_V16_VERSIONS`)                              | `['1.16.1']`                                                                         |
 | same                                      | `packages/core/src/tool-init-state.ts` (`PINNED_AGENT_GENERATOR_VERSION`)                                                | `'1.16.1'` (series-aware staleness baseline rotates per patch, as 1.13.2/1.14.2 did) |
-| same                                      | 14 `official-cli-v16-*.test.ts` files, `root-context-cold-start.integration.test.ts`, `w2-project-binding-playwright.ts` | rotate literal `1.16.0` → `1.16.1`                                                   |
+| same                                      | 16 `official-cli-v16-*.test.ts` files, `root-context-cold-start.integration.test.ts` (version literals **and** its own `PINNED_OPENSPEC_COMMIT`), `w2-project-binding-playwright.ts` | rotate literal `1.16.0` → `1.16.1` / commit `27c05157` → `0fa4a970` |
 | same                                      | `packages/core/src/upstream-contract-regression.test.ts`                                                                 | `EXPECTED_COMMIT` → `0fa4a970…`                                                      |
 | same                                      | `AGENTS.md` live-pin line + a new dated decision line; `openspec/specs/{opsx-workflow-ui,opsx-config-center}` pins       | rotate the stated baseline to 1.16.1                                                 |
 | same                                      | `references/openspec` gitlink                                                                                            | pin `v1.16.1`                                                                        |
 
-`scripts/check-openspec-reference.mjs` needs **no** change: its `v1.16.*` describe pattern already
-admits 1.16.1 (and still rejects `v1.16.0-19-g…` style post-tag checkouts). `README.md`/`README-zh.md`
+`scripts/check-openspec-reference.mjs` needs no **gate** change: it is a series-level guard
+(`git describe --tags --match v1.16.*` plus `describe.startsWith('v1.16.')`), so it admits every 1.16.x
+tag including 1.16.1 — and, for exactly the same reason, it also admits a post-tag checkout such as
+`v1.16.0-19-g…`. Exact-pin truth is owned by the two `EXPECTED_COMMIT` constants
+(`scripts/prepare-openspec-reference.mjs` and `packages/core/src/upstream-contract-regression.test.ts`),
+which this rotation moves to `0fa4a970`; only that script's prose comment changes. `README.md`/`README-zh.md`
 need no change: the supported window is unchanged.
+
+The admission **floor** stays `1.16.0`. `OPENSPEC_CLI_MIN_VERSION`, `OPENSPEC_CLI_TARGET_MIN_VERSION` and
+`OPENSPEC_CLI_RECOMMENDED_MIN_VERSION` are window facts (`>=1.16.0 <1.17.0`), not pin facts: raising them
+to the newest patch would reject 1.16.0 itself, which is a gate change. No past patch rotation
+(1.13.1/1.13.2/1.14.1/1.14.2/1.14.3) touched `openspec-compat.ts`, and this one must not either —
+an earlier edit of this branch did, and was reverted in `26528288`.
 
 ### P2 — must adapt (CLI verdict changed, so it must be proven)
 
@@ -57,18 +67,32 @@ the typed decode is unaffected — `CliValidateReportSchema` already types `leve
 UI renders it verbatim. The obligation is therefore _executable proof_, not projection work:
 
 - an orphaned requirement under an unrecognized `## … Requirements` header (`## Add Requirements`,
-  `## DEPRECATED Requirements`, `## Requirements`) is an **ERROR** in `validate` and makes `archive` fail;
-- the same orphan under prose (`## Notes`) stays a **WARNING**;
-- our own repository stays clean under 1.16.1 — measured, not assumed: `validate --specs` and
-  `validate --all` on this worktree both report **20 passed / 0 failed** with the v1.16.1 binary.
+  `## DEPRECATED Requirements`, `## Requirements`) is an **ERROR** in `validate` — so plain validation
+  already exits non-zero, not only `--strict` — and makes `archive` fail (measured: exit 1,
+  `archive: null`, status code `archive_validation_failed`, `fix` pointing at `validate`; the
+  requirement/section detail stays in `validate`, not in the archive envelope);
+- the same orphan under prose (`## Notes`) stays a **WARNING** and the change stays valid;
+- our own repository stays clean under 1.16.1 — measured, not assumed: `validate --specs` reports
+  **20 passed / 0 failed** and `validate --all` **21 passed / 0 failed** with the v1.16.1 binary.
 
-### P3 — parity (CLI-internal, delegated)
+### P3 — parity (CLI-owned, proven rather than adapted)
 
-`fix(parser): accept closing # runs on section headings (#2205)` normalizes ATX closing runs
-(`### Requirement: Foo ###` → `Foo`) and accepts `## Requirements ##`, and masks HTML comments so a
-commented-out draft is not reported as an orphan. OpenSpecUI delegates parsing, validation and archive
-merging to the CLI and re-implements none of it, so there is no local owner. A useful side effect: our
-delta specs all open with an HTML comment block, which is now masked rather than parsed as content.
+`fix(parser): accept closing # runs on section headings (#2205)` is scoped to **section** headings
+(`## Purpose ##`, `## Requirements ##`, `## ADDED Requirements ##`), which `validate`, `show`, `list`,
+`view` and `archive` now read like their unclosed forms. Requirement-name normalization
+(`### Requirement: Foo ###` → `Foo`) is **not** new: upstream only extracted the identical regex into
+`stripClosingSequence`. The same refactor routes the orphan scan through `maskHtmlComments`, so an
+HTML-commented requirement is no longer reported as dropped — that one is a real behavior change
+(1.16.0 and 1.15.0 both report the commented draft as an orphan).
+
+No production change is required, and the local mirror is why that sentence is checkable rather than
+assumed: `packages/core/src/parser.ts` is a line-based change parser, and its delta-header regex
+(`/^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements/i`) is unanchored, so it already admitted
+`## ADDED Requirements ##`; main-spec reads delegate to the remark/mdast projection
+(`parseOpenSpecMarkdownToSpec`), where CommonMark strips a closing run. The mirror's requirement-name
+capture is the one place that keeps a trailing run, it predates this line, and this rotation changes
+neither its regex nor the surface it feeds. A useful side effect of the masking: our delta specs open
+with an HTML comment block, so that block is now ignored rather than parsed as content.
 
 ### P5 — no surface here
 
@@ -90,7 +114,7 @@ inside the CLI package and the upstream website.
 | `validate` report shape               | `packages/core/src/cli-contracts/workflow.ts`                                    | no (shape unchanged)           |
 | `validate` finding severity           | `packages/web/src/components/validation-findings-evidence.tsx` (renders `level`) | no (renders verbatim)          |
 | `archive` merge algorithm             | delegated to CLI                                                                 | no                             |
-| spec/change parsers                   | delegated to CLI                                                                 | no                             |
+| spec/change parsers                   | delegated to CLI; local mirror `packages/core/src/parser.ts`                     | no (mirror regexes already admit the closing run) |
 | Agent registry (tools, command paths) | `packages/core/src/agent-delivery-registry.ts`                                   | no (`AI_TOOLS` byte-identical) |
 | generator staleness baseline          | `packages/core/src/tool-init-state.ts`                                           | **yes** (constant)             |
 
@@ -99,3 +123,11 @@ inside the CLI package and the upstream website.
 Patch release (`16.1.x` line). Four independent facts required: main head, remote tags, GitHub Release,
 per-package npm; plus the submodule gitlink unchanged by the version commit. No Owner visual acceptance
 is needed: this rotation ships no UI surface.
+
+## Diff note — the lockfile is mostly reformatting
+
+`pnpm-lock.yaml` moves 9,446 lines for a two-line semantic change: four keys flip from
+`@fission-ai/openspec@1.16.0` to `1.16.1` (the `importers` alias and the package entry), and the rest is
+pnpm 10.22.0 expanding main's inline `resolution: {integrity: …}` form into blocks. Semantically it is
+only the pin, it is reproduced by the pinned pnpm, and it is called out in the PR notes so the reviewer
+does not read it as dependency movement.

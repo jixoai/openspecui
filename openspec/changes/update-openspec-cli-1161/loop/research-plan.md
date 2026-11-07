@@ -59,7 +59,7 @@ user-visible there).
 
 ## Risks
 
-- **Literal drift**: 14 fixture files carry `1.16.0` in names, describes and assertions. Mechanical
+- **Literal drift**: 16 pre-existing `official-cli-v16-*.test.ts` files carry `1.16.0` in names, describes and assertions. Mechanical
   grep plus a hard-empty gate (`rg '1\.16\.0' packages/*/src --glob '!**/CHANGELOG.md'` → 0) is the
   guard, because a missed assertion still passes against a rotated alias (`expectPinnedVersion` catches
   identity, not prose).

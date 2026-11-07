@@ -117,31 +117,37 @@ stays green and `--strict` fails.
 
 ### Requirement: Unrecognized Delta Section Severity Fixture Proof
 
-The pinned fixture matrix SHALL prove the 1.16-line verdict for a requirement authored under a section
-header that reads as a delta operation but is not one (`## Add Requirements`, `## DEPRECATED Requirements`,
-`## Requirements`): validation reports it as an ERROR, and archive refuses the change instead of silently
-dropping the block. The same block under a prose section SHALL remain a WARNING, and the escalation SHALL
-NOT be attributed to the retired 1.15 line.
+The pinned fixture matrix SHALL prove the 1.16.1 verdict for a requirement authored under a section header
+that reads as a delta operation but is not one (`## Add Requirements`, `## DEPRECATED Requirements`,
+`## Requirements`): validation reports it as an ERROR — so plain validation already fails, not only
+`--strict` — and archive refuses the change instead of silently dropping the block. The same block under a
+prose section SHALL remain a WARNING with the change still valid, and the retained 1.15.0 boundary SHALL
+report that same orphan as a WARNING without failing, so the escalation is attributable to this line and
+the boundary is shown to detect the shape rather than merely stay quiet.
 
-#### Scenario: A near-miss delta header is an error, not a warning
+#### Scenario: A near-miss delta header is an error that already fails plain validation
 
 - **GIVEN** a change delta whose requirement sits under `## Add Requirements`
-- **WHEN** `validate --json` runs on the pinned 1.16.1 executable
-- **THEN** the finding SHALL carry `level: 'ERROR'` and name the section
-- **AND** plain validation SHALL stay valid while `--strict` fails
+- **WHEN** `validate --json` runs on the pinned 1.16.1 executable without `--strict`
+- **THEN** the finding SHALL carry `level: 'ERROR'` and name the requirement and its section
+- **AND** the item SHALL be invalid with a non-zero exit code
+- **WHEN** the same validation runs with `--strict`
+- **THEN** it SHALL fail as well
 
 #### Scenario: Prose sections keep the warning
 
 - **GIVEN** the same requirement under `## Notes`
 - **WHEN** `validate --json` runs on the pinned 1.16.1 executable
 - **THEN** the finding SHALL carry `level: 'WARNING'`
-- **AND** the item SHALL remain valid
+- **AND** the item SHALL remain valid with a zero exit code
 
 #### Scenario: Archive refuses rather than dropping the block
 
 - **GIVEN** a change carrying that unrecognized header
-- **WHEN** `archive` runs on the pinned 1.16.1 executable
-- **THEN** it SHALL fail with an error naming the requirement and its section
+- **WHEN** `archive --json --yes` runs on the pinned 1.16.1 executable
+- **THEN** the typed answer SHALL carry `archive: null` and an `error` status whose code is
+  `archive_validation_failed`
+- **AND** its `fix` SHALL point at `validate` for the requirement-level detail
 - **AND** the change SHALL remain unarchived
 
 #### Scenario: The retired line does not own this verdict
@@ -149,20 +155,35 @@ NOT be attributed to the retired 1.15 line.
 - **GIVEN** the same authored shape on the retained 1.15.0 boundary executable
 - **WHEN** `validate --json` runs
 - **THEN** no `ERROR` of this class SHALL be reported
+- **AND** the orphan SHALL still be reported as a `WARNING`, so the boundary proves a severity change
+  rather than missing detection
+- **AND** the change SHALL remain valid
 
-### Requirement: Heading Closing-Run and Comment Masking Fixture Proof
+### Requirement: Section-Heading Closing-Run and Comment Masking Fixture Proof
 
-The pinned fixture matrix SHALL prove the 1.16-line parser acceptance that our projections surface as
-authored truth: an ATX closing run on a section or requirement heading (`## Requirements ##`,
-`### Requirement: Foo ###`) is not part of the title, and a requirement written inside an HTML comment is
-not reported as an orphaned block.
+The pinned fixture matrix SHALL prove the 1.16.1 parser acceptance that the CLI contract OpenSpecUI decodes
+depends on: an ATX closing `#` run on a **section** heading (`## Requirements ##` in a main spec,
+`## ADDED Requirements ##` in a delta) is not part of the section title, so the section is recognized and a
+delta authored under it applies on archive; and the orphan scan masks HTML comments, so a requirement
+written inside a comment is not reported as dropped. Requirement-heading normalization
+(`### Requirement: Foo ###` to `Foo`) predates this line: it SHALL be asserted as carried-forward evidence,
+never credited to this line's parser change.
 
-#### Scenario: Closing runs are not part of the name
+#### Scenario: Closing runs are not part of a section title
 
-- **GIVEN** a main spec whose requirement heading ends in `###` and whose section header is `## Requirements ##`
-- **WHEN** validation runs on the pinned 1.16.1 executable
-- **THEN** the spec SHALL be accepted
+- **GIVEN** a main spec whose sections are `## Requirements ##` and `### Requirement: Foo ###`
+- **WHEN** validation and `show --type spec --json` run on the pinned 1.16.1 executable
+- **THEN** the spec SHALL be accepted and the requirement SHALL be projected
 - **AND** the requirement's name SHALL normalize to the title without the closing run
+- **AND** the retained 1.15.0 executable SHALL reject the same document for having no Requirements section
+
+#### Scenario: A closing-run delta header applies
+
+- **GIVEN** a delta spec whose section header is `## ADDED Requirements ##`
+- **WHEN** validation runs on the pinned 1.16.1 executable
+- **THEN** the change SHALL be valid with no issues
+- **AND** archiving it SHALL update the main spec with the requirement
+- **AND** the retained 1.15.0 executable SHALL report no delta sections for the same document
 
 #### Scenario: A commented-out draft is not an orphan
 
@@ -170,4 +191,6 @@ not reported as an orphaned block.
   every delta section
 - **WHEN** validation runs on the pinned 1.16.1 executable
 - **THEN** the commented requirement SHALL NOT be reported
-- **AND** the uncommented twin SHALL still be reported, so silence cannot pass for the wrong reason
+- **AND** the uncommented twin SHALL still be reported as a `WARNING`, so silence cannot pass for the
+  wrong reason
+- **AND** the retained 1.15.0 executable SHALL report the commented draft, so the masking is this line's fact
