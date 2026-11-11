@@ -31,15 +31,15 @@ Scenario titles below are inherited scenario identity: a title that names an old
 
 - **GIVEN** the admitted OpenSpec CLI is stable 1.17.x
 - **WHEN** the Agent inventory is listed
-- **THEN** the projected inventory SHALL equal the 1.15 physical inventory (no tool added or removed
-  upstream across the 1.17 line)
+- **THEN** the projected inventory SHALL equal the inherited 1.16 physical inventory (no tool added or
+  removed upstream in 1.17.0)
 - **AND** generator-version evidence SHALL reflect the 1.17.0 pinned baseline
 
 #### Scenario: A retired-line session projects no v15 inventory
 
-- **GIVEN** the running OpenSpec CLI is stable 1.15.x after the v16 admission gate
+- **GIVEN** the running OpenSpec CLI is stable 1.16.x after the v17 admission gate
 - **WHEN** the Agent inventory is evaluated
-- **THEN** the v16 registry selection SHALL be empty for that session
+- **THEN** the v17 registry selection SHALL be empty for that session
 - **AND** the UI SHALL NOT present the retired line's snapshot as the current inventory
 
 #### Scenario: Project and global roots remain distinct

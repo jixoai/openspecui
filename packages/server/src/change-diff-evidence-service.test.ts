@@ -1,7 +1,7 @@
 /**
  * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
  * 1. Prove the capability-gated `show --diff` projection retains per-delta diff/warning and CLI provenance.
- * 2. Prove retired (1.14/1.15), older, and unavailable-CLI sessions never construct the command (transport count 0).
+ * 2. Prove retired (1.14/1.15/1.16), older, and unavailable-CLI sessions never construct the command (transport count 0).
  * 3. Prove capability refusal, root loss, and command failure project as typed unavailability, not errors.
  * 4. Prove the root Store selector is preserved into the command invocation and display provenance.
  *
@@ -16,6 +16,8 @@
  *   (admitted 1.16.0, retired 1.15.0).
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): the samples rotate to the v17 window (admitted
+ *   1.17.0, retired 1.16.0).
  */
 import type { CliExecutor, RootContext } from '@openspecui/core'
 import { describe, expect, it, vi } from 'vitest'
@@ -99,14 +101,14 @@ function depsFixture(
 }
 
 describe('readChangeDiffEvidence', () => {
-  it('projects MODIFIED delta diff and warning with CLI provenance for an admitted 1.16 session', async () => {
+  it('projects MODIFIED delta diff and warning with CLI provenance for an admitted 1.17 session', async () => {
     const deps = depsFixture({
       kind: 'executed',
       result: commandResultFixture(successPayload()),
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.1' }),
+      rootContextFixture({ version: '1.17.0' }),
       'add-search'
     )
 
@@ -143,7 +145,7 @@ describe('readChangeDiffEvidence', () => {
     const projection = await readChangeDiffEvidence(
       deps,
       rootContextFixture({
-        version: '1.16.1',
+        version: '1.17.0',
         planningRoot: { path: '/store/repo', source: 'store' },
         storeId: 'team-store',
       }),
@@ -163,14 +165,14 @@ describe('readChangeDiffEvidence', () => {
     })
   })
 
-  it('never constructs the command on a retired 1.15 session and projects capability unavailability', async () => {
+  it('never constructs the command on a retired 1.16 session and projects capability unavailability', async () => {
     const deps = depsFixture({
       kind: 'executed',
       result: commandResultFixture(successPayload()),
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.15.0' }),
+      rootContextFixture({ version: '1.16.0' }),
       'add-search'
     )
 
@@ -178,7 +180,7 @@ describe('readChangeDiffEvidence', () => {
     expect(projection).toEqual({
       kind: 'unavailable',
       reason: 'capability',
-      detectedVersion: '1.15.0',
+      detectedVersion: '1.16.0',
     })
   })
 
@@ -214,7 +216,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.1', planningRoot: null }),
+      rootContextFixture({ version: '1.17.0', planningRoot: null }),
       'add-search'
     )
 
@@ -226,14 +228,14 @@ describe('readChangeDiffEvidence', () => {
     const deps = depsFixture({ kind: 'unavailable', capability: 'requirementDiff' })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.1' }),
+      rootContextFixture({ version: '1.17.0' }),
       'add-search'
     )
 
     expect(projection).toEqual({
       kind: 'unavailable',
       reason: 'capability',
-      detectedVersion: '1.16.1',
+      detectedVersion: '1.17.0',
     })
   })
 
@@ -247,7 +249,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.1' }),
+      rootContextFixture({ version: '1.17.0' }),
       'missing-change'
     )
 
@@ -272,7 +274,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       drift,
-      rootContextFixture({ version: '1.16.1' }),
+      rootContextFixture({ version: '1.17.0' }),
       'add-search'
     )
 
@@ -294,7 +296,7 @@ describe('readChangeDiffEvidence', () => {
     })
     const projection = await readChangeDiffEvidence(
       deps,
-      rootContextFixture({ version: '1.16.1' }),
+      rootContextFixture({ version: '1.17.0' }),
       'add-search'
     )
 

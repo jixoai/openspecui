@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
  * 1. Reproduce the production CLI-runner resolution path and report every candidate attempt (no short-circuit).
  * 2. Surface Windows npm-global extension-less shim defects that `spawn({shell:false})` cannot execute.
  * 3. Emit machine-readable JSON via --json so users can paste objective evidence into bug reports.
@@ -29,6 +29,8 @@
  * Original request (2026-10-25): "开工" — rotate the mirrored CLI target series to 1.15 (target-openspec-cli-15-line Slice 1).
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — rotate the mirrored CLI target series to 1.16 (update-openspec-cli-16-line Slice 1).
+ * 2026-11-11 (update-openspec-cli-17): rotate the mirrored CLI target series to 1.17
+ *   (update-openspec-cli-17 Slice 1); fallback probes keep resolving the admitted series.
  */
 import { execFile, spawn } from 'node:child_process'
 import { arch, homedir, platform } from 'node:os'
@@ -44,8 +46,8 @@ const SHELL_RESOLVE_TIMEOUT_MS = 5_000
 
 // Mirror of packages/core OPENSPEC_CLI_TARGET_SERIES: fallback probes must resolve the series
 // the release line admits, never an unversioned @latest the gate can block.
-// Keep in sync with packages/core/src/openspec-compat.ts (OpenSpecUI 16 -> 1.16).
-const OPENSPEC_CLI_TARGET_SERIES = '1.16'
+// Keep in sync with packages/core/src/openspec-compat.ts (OpenSpecUI 17 -> 1.17).
+const OPENSPEC_CLI_TARGET_SERIES = '1.17'
 const OPENSPEC_CLI_FALLBACK_SPEC = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
 
 const PACKAGE_MANAGER_RUNNERS = [

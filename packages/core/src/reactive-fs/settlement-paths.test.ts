@@ -13,6 +13,8 @@
  *   — fix-reactive-fs-settlement S4 (S5.3c, CP4) and its V3 path-space validation.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): the positive generatedBy sample rotates to the admitted
+ *   1.17.0 line; identity literals rotate, no projection change.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -101,7 +103,7 @@ describe('settlePaths: one-shot freshness without orphaning', () => {
       await mkdir(join(tempDir, '.claude', 'skills', 'openspec-explore'), { recursive: true })
       await writeFile(
         join(tempDir, '.claude', 'skills', 'openspec-explore', 'SKILL.md'),
-        '---\nmetadata:\n  generatedBy: "1.16.1"\n---\n',
+        '---\nmetadata:\n  generatedBy: "1.17.0"\n---\n',
         'utf8'
       )
 

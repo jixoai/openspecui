@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
  * 1. Scaffold the E2E example project (openspec/ structure, sample specs and changes,
  *    .openspecui.json) for `pnpm example:setup [--clean]`.
  * 2. Pin the example's npx runner to the admitted CLI series instead of an unversioned
@@ -15,6 +15,8 @@
  * Original request (2026-10-25): "开工" — rotate the mirrored CLI target series to 1.15 (target-openspec-cli-15-line Slice 1).
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — rotate the mirrored CLI target series to 1.16 (update-openspec-cli-16-line Slice 1).
+ * 2026-11-11 (update-openspec-cli-17): rotate the mirrored CLI target series to 1.17
+ *   (update-openspec-cli-17 Slice 1).
  */
 
 import { existsSync } from 'fs'
@@ -242,8 +244,8 @@ const SAMPLE_AGENTS_MD = `# AI Agent Instructions
 
 // Mirror of packages/core OPENSPEC_CLI_TARGET_SERIES: the example runner must resolve the
 // series this release line admits, never an unversioned @latest the gate can block.
-// Keep in sync with packages/core/src/openspec-compat.ts (OpenSpecUI 16 -> 1.16).
-const OPENSPEC_CLI_TARGET_SERIES = '1.16'
+// Keep in sync with packages/core/src/openspec-compat.ts (OpenSpecUI 17 -> 1.17).
+const OPENSPEC_CLI_TARGET_SERIES = '1.17'
 
 const CONFIG = {
   cli: {

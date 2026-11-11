@@ -17,6 +17,8 @@
  * (registry series rotation with no upstream tool changes).
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): the admitted fixture session and its registry selection
+ *   rotate to the 1.17.0 line.
  */
 
 import {
@@ -110,7 +112,7 @@ async function createFixture() {
   })
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.16.1',
+    version: '1.17.0',
   })
   disposals.push(async () => {
     vi.restoreAllMocks()
@@ -158,7 +160,7 @@ describe('agentIntegrationsRouter', () => {
       available: true,
       capability: 'skills-invocable',
     })
-    // The admitted 1.16 line projects the SourceCraft Code Assistant inventory entry
+    // The admitted 1.17 line projects the SourceCraft Code Assistant inventory entry
     // (introduced on the 1.12 line) and the ten 1.14 entries (amp, atomcode, codestudio,
     // dsh, easycode, gigacode, grok, gsd, veai, warp).
     expect(projection.registry.find((tool) => tool.value === 'codeassistant')).toMatchObject({
@@ -267,9 +269,9 @@ describe('agentIntegrationsRouter', () => {
     const handle = { settled: terminal.promise, cancel } satisfies CliStreamHandle
     const initStream = vi.spyOn(fixture.server.cliExecutor, 'initStream').mockReturnValue(handle)
     vi.spyOn(fixture.server.agentDeliveryProjectionService, 'getCurrent').mockResolvedValue({
-      // The admitted 1.16 fixture must offer the requested tool: explicit Init tools are
+      // The admitted 1.17 fixture must offer the requested tool: explicit Init tools are
       // validated against the projection registry before any CLI spawn.
-      registry: selectAgentDeliveryRegistry('1.16.1'),
+      registry: selectAgentDeliveryRegistry('1.17.0'),
       policy: { profile: 'custom', delivery: 'commands', workflows: ['verify'] },
       states: [],
     })

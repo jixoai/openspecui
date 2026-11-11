@@ -1,7 +1,7 @@
 /**
- * Orthogonal intents (updated 2026-10-24 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
  * 1. Execute one deterministic same-origin Project Binding A-to-B acceptance flow.
- * 2. Pin the OpenSpec 1.14 executable, Store registry scope, and disposable roots.
+ * 2. Pin the OpenSpec 1.17 executable, Store registry scope, and disposable roots.
  * 3. Assert desktop/mobile layout and browser error hygiene with bounded process-tree cleanup.
  * 4. Resolve repository, temporary, and isolated home paths through native Windows APIs.
  * 5. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
@@ -33,6 +33,8 @@
  *   v1.15.0 (8e0288df) opening the OpenSpecUI 15 line.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): pin + version assertion rotate to v1.17.0 (579fcac5)
+ *   opening the OpenSpecUI 17 line.
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -50,7 +52,7 @@ const TSX_CLI = join(REPO_ROOT, 'packages/web/node_modules/tsx/dist/cli.mjs')
 const VITE_CLI = join(REPO_ROOT, 'packages/web/node_modules/vite/bin/vite.js')
 const PINNED_OPENSPEC_ROOT = join(REPO_ROOT, 'references/openspec')
 const PINNED_OPENSPEC_BIN = join(PINNED_OPENSPEC_ROOT, 'bin/openspec.js')
-const PINNED_OPENSPEC_COMMIT = '27c0515724decc633818c735ee596481eec78a8b'
+const PINNED_OPENSPEC_COMMIT = '579fcac57ae00c2dff38f971b6d88b6f1f098b8a'
 const BACKEND_PORT = 14_236
 const WEB_PORT = 14_237
 const STARTUP_TIMEOUT_MS = 30_000
@@ -142,7 +144,7 @@ async function assertPinnedCli(env: NodeJS.ProcessEnv): Promise<void> {
     throw new Error(`Pinned OpenSpec SHA mismatch: ${stdout.trim()}`)
   }
   const version = await runPinnedCli(['--version'], REPO_ROOT, env)
-  if (version.exitCode !== 0 || version.stdout.trim() !== '1.16.1') {
+  if (version.exitCode !== 0 || version.stdout.trim() !== '1.17.0') {
     throw new Error(`Pinned OpenSpec version check failed: ${version.stdout}\n${version.stderr}`)
   }
 }

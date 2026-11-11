@@ -27,6 +27,8 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates the admitted-session fixture sample to
  *   1.16.0 per the v16 window.
+ * 2026-11-11 (update-openspec-cli-17): the admitted-session fixture sample rotates to 1.17.0
+ *   per the v17 window.
  */
 import type { RootActionState } from '@/lib/use-root-action-state'
 import type { ChangeStatus } from '@openspecui/core'
@@ -1042,10 +1044,10 @@ describe('ChangeView', () => {
         launchProject: { path: '/tmp/project' },
         planningRoot: { path: '/tmp/project', source: 'nearest', healthy: true, status: [] },
         storeId: null,
-        // Admitted-line CLI for the v16 window (>=1.16.0 <1.17.0): the diff-evidence
+        // Admitted-line CLI for the v17 window (>=1.17.0 <1.18.0): the diff-evidence
         // capability gate only fetches on the admitted series, so a retired 1.13 fixture
         // would leave the transport untouched and time out this test.
-        cli: { available: true, version: '1.16.0' },
+        cli: { available: true, version: '1.17.0' },
       },
     })
     statusMock.mockReturnValue({

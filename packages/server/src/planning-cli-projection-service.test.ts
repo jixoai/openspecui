@@ -25,6 +25,8 @@
  *   to the admitted 1.16.0 line (the warning payload keeps its 1.14.0 capture provenance).
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): the transport-mirror fake session version rotates to the
+ *   admitted 1.17.0 line (the warning payload keeps its 1.14.0 capture provenance).
  */
 import {
   CliExecutor,
@@ -941,7 +943,7 @@ function statusFields(changeName, batch) {
 }
 
 if (args.includes('--version')) {
-  console.log('1.16.1')
+  console.log('1.17.0')
   process.exit(0)
 }
 

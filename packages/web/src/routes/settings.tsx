@@ -25,6 +25,8 @@
  * 2026-10-25 (target-openspec-cli-15-line Slice 4): comment-only wording rotation to the v15
  * single-series window; the pinned-install spec and fallback semantics still derive from the
  * shared compat constants with zero logic change.
+ * 2026-11-11 (update-openspec-cli-17): comment-only wording rotation to the v17 single-series
+ * window; the pinned-install spec still derives from the shared compat constants.
  */
 import { Button } from '@/components/button'
 import { ButtonGroup, type ButtonGroupOption } from '@/components/button-group'
@@ -370,8 +372,8 @@ export function Settings() {
 
   // The install stream installs the admitted series; never present an out-of-range registry
   // latest as the update target (issue #258). Only a recommended (current-series) latest can be
-  // named literally — under the v15 single-series window any non-recommended latest (an older
-  // line or an unpublished 1.16) would mislabel the actually-installed 1.15.x, so it falls back
+  // named literally — under the v17 single-series window any non-recommended latest (an older
+  // line or an unpublished 1.18) would mislabel the actually-installed 1.17.x, so it falls back
   // to the series label.
   const pinnedInstallSpec = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`
   const updateTargetVersion =
