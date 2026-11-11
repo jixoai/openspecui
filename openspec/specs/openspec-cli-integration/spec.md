@@ -21,120 +21,127 @@ Define how OpenSpecUI integrates with the OpenSpec CLI to execute OPSX workflows
 
 ### Requirement: CLI Discovery and Version Enforcement
 
-OpenSpecUI 16 SHALL classify stable OpenSpec CLI `>=1.16.0 <1.17.0` as supported, current, and recommended.
-OpenSpec CLI `<1.16.0` (including the whole 1.15.x window that OpenSpecUI 15 admitted, and every older line),
-every prerelease, `>=1.17.0`, and an unparseable version SHALL be incompatible and blocked by default.
+OpenSpecUI 17 SHALL classify stable OpenSpec CLI `>=1.17.0 <1.18.0` as supported, current, and recommended.
+OpenSpec CLI `<1.17.0` (including the whole 1.16.x window that OpenSpecUI 16 admitted, and every older line),
+every prerelease, `>=1.18.0`, and an unparseable version SHALL be incompatible and blocked by default.
 When an incompatible executable is available, the mismatch Dialog MAY expose `Skip version check`; that
 action SHALL bypass only the current Web page runtime's admission gate and SHALL NOT change the detected
 version, compatibility evidence, CLI payloads, downstream errors, or product support claim.
 
 Scenario titles below are inherited scenario identity: an "Accept ..." title names that line's historical
-admission era, while every scenario body states the OpenSpecUI 16 classification (retired and blocked).
+admission era, while every scenario body states the OpenSpecUI 17 classification (retired and blocked).
 
 #### Scenario: Accept the current 1.14 line
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.14.x executable that OpenSpecUI 14 admitted
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.14.x executable that OpenSpecUI 14 admitted
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.14 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges `>=1.16.0 <1.17.0`
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges `>=1.17.0 <1.18.0`
 
 #### Scenario: Retire the v15 admission window
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.15.x executable that OpenSpecUI 15 admitted
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.15.x executable that OpenSpecUI 15 admitted
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.15 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges
+
+#### Scenario: Retire the v16 admission window
+
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.16.x executable that OpenSpecUI 16 admitted
+- **WHEN** admission is evaluated
+- **THEN** the retired 1.16 line SHALL be blocked by default
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges `>=1.17.0 <1.18.0`
 
 #### Scenario: Block unsupported version forms
 
-- **GIVEN** OpenSpecUI 16 detects CLI 1.16.0-beta.1, the stable upper bound 1.17.0, or an unparseable version
+- **GIVEN** OpenSpecUI 17 detects CLI 1.17.0-beta.1, the stable upper bound 1.18.0, or an unparseable version
 - **WHEN** admission is evaluated
 - **THEN** the mismatch Dialog SHALL block normal interactions
 - **AND** the mismatch evidence SHALL name the accepted and recommended ranges
 
 #### Scenario: Retire the v13 admission window
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.13.x executable that OpenSpecUI 13 admitted
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.13.x executable that OpenSpecUI 13 admitted
 - **WHEN** admission is evaluated
 - **THEN** the retired line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges
 
 #### Scenario: Accept the current 1.13 line
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.13.x executable that OpenSpecUI 13 admitted
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.13.x executable that OpenSpecUI 13 admitted
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.13 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges `>=1.16.0 <1.17.0`
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges `>=1.17.0 <1.18.0`
 
 #### Scenario: Retire the v12 admission window
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.12.x executable that OpenSpecUI 12 admitted
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.12.x executable that OpenSpecUI 12 admitted
 - **WHEN** admission is evaluated
 - **THEN** the retired line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges
 
 #### Scenario: Accept the current 1.12 line
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.12.x executable that OpenSpecUI 12 admitted as its
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.12.x executable that OpenSpecUI 12 admitted as its
   current and recommended line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.12 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges
 
 #### Scenario: Retire the v11 admission window
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.10.x or 1.11.x executable that OpenSpecUI 11
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.10.x or 1.11.x executable that OpenSpecUI 11
   admitted
 - **WHEN** admission is evaluated
 - **THEN** the retired line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges
 
 #### Scenario: Accept the supported non-current 1.10 line
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.10.x executable that OpenSpecUI 11 admitted as its
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.10.x executable that OpenSpecUI 11 admitted as its
   supported non-current line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.10 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges
 
 #### Scenario: Accept the current 1.11 line
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.11.x executable that OpenSpecUI 11 admitted as its
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.11.x executable that OpenSpecUI 11 admitted as its
   current and recommended line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.11 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges
 
 #### Scenario: Accept the supported non-current 1.8 line
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.8.x executable that OpenSpecUI 9 admitted as its
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.8.x executable that OpenSpecUI 9 admitted as its
   supported non-current line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.8 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges
 
 #### Scenario: Accept the current 1.9 line
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.9.x executable that OpenSpecUI 9 admitted as its
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.9.x executable that OpenSpecUI 9 admitted as its
   current and recommended line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.9 line SHALL be blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges
 
 #### Scenario: Accept the adapted 1.7 line
 
-- **GIVEN** OpenSpecUI 16 detects a stable OpenSpec CLI 1.7.x executable that OpenSpecUI 7 admitted as its
+- **GIVEN** OpenSpecUI 17 detects a stable OpenSpec CLI 1.7.x executable that OpenSpecUI 7 admitted as its
   adapted line
 - **WHEN** admission is evaluated
 - **THEN** the retired 1.7 line SHALL remain blocked by default
-- **AND** the mismatch evidence SHALL name the v16 accepted and recommended ranges
+- **AND** the mismatch evidence SHALL name the v17 accepted and recommended ranges
 
 #### Scenario: Block OpenSpec CLI 1.6
 
-- **GIVEN** OpenSpecUI 16 detects an available OpenSpec CLI 1.6.x executable
+- **GIVEN** OpenSpecUI 17 detects an available OpenSpec CLI 1.6.x executable
 - **WHEN** admission is evaluated
 - **THEN** the mismatch Dialog SHALL block normal interactions
-- **AND** SHALL identify the v16 accepted and recommended ranges
+- **AND** SHALL identify the v17 accepted and recommended ranges
 
 #### Scenario: Bypass only the current page runtime
 
