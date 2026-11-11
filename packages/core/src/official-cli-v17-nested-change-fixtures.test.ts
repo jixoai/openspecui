@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 change-list nested-directory contract on a real
+ * 1. Execute the pinned OpenSpec 1.17.0.0 change-list nested-directory contract on a real
  *    repository: a namespace-folder entry carries `nested` with 0/0 task fields, a
  *    coexisting flat change carries none, and the top-level `warnings` array reports
  *    code `nested_change_directory` with the upstream message preserved verbatim.
@@ -25,12 +25,13 @@
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — executable nested/warnings change-list and validate-finding evidence (update-openspec-cli-1131 Slice 4).
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -39,12 +40,12 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV16Version,
-} from './__tests__/official-cli-v16-fixtures.js'
+  type PinnedOpenspecV17Version,
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliChangeListSchema, CliValidateReportSchema } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -89,7 +90,7 @@ async function writeNestedFixtureProject(project: string): Promise<void> {
   )
 }
 
-describe('pinned OpenSpec 1.16 nested change directory fixtures', () => {
+describe('pinned OpenSpec 1.17 nested change directory fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -97,7 +98,7 @@ describe('pinned OpenSpec 1.16 nested change directory fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`projects namespace entries and hygiene warnings from list --json on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-nested-list`)
       const project = join(fixtureRoot, 'project')

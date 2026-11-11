@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-11-04 Asia/Shanghai):
- * 1. Prove the OpenSpec 1.16.1 scenario step-coverage class as an executable fact: a counted
+ * 1. Prove the OpenSpec 1.17.0 scenario step-coverage class as an executable fact: a counted
  *    scenario with a body but no WHEN/GIVEN or no THEN step is a WARNING inside the existing
  *    finding shape, plain validation stays green, and `--strict` fails.
  * 2. Prove the same class fires in main-spec scope, and that a `#### Notes` child (prose on
@@ -10,20 +10,21 @@
  *   — update-openspec-cli-16-line Slice 4.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedVersion,
   parsePinnedJson,
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV16Version,
-} from './__tests__/official-cli-v16-fixtures.js'
+  type PinnedOpenspecV17Version,
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliValidateReportSchema } from './cli-contracts/workflow.js'
 
 const INCOMPLETE_DELTA = [
@@ -65,7 +66,7 @@ const INCOMPLETE_MAIN_SPEC = [
 ].join('\n')
 
 async function initProject(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -78,7 +79,7 @@ async function initProject(
   expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
 }
 
-describe('pinned OpenSpec 1.16 scenario step-coverage fixtures', () => {
+describe('pinned OpenSpec 1.17 scenario step-coverage fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -86,7 +87,7 @@ describe('pinned OpenSpec 1.16 scenario step-coverage fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`warns about missing steps in change scope and only --strict fails on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(
         `cli-${version.replace(/\./g, '')}-step-coverage-change`

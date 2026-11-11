@@ -36,6 +36,8 @@
  * which reads as a missing-tool regression rather than a stale fixture.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): the admitted-session and generator-version samples
+ *   rotate to 1.17.0 per the v17 window.
  */
 import {
   clearCache,
@@ -100,7 +102,7 @@ async function writeArtifact(filePath: string, content = '# external fixture\n')
 
 async function writeGeneratedSkill(filePath: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.16.1"\n---\n', 'utf8')
+  await writeFile(filePath, '---\nmetadata:\n  generatedBy: "1.17.0"\n---\n', 'utf8')
 }
 
 async function prepareCachedRunnerReplacement(
@@ -189,7 +191,7 @@ async function createRouterFixture(
   const releaseLaunchObservation = await server.observationEnvironment.acquireRoot(launchRoot)
   vi.spyOn(server.cliExecutor, 'checkAvailability').mockResolvedValue({
     available: true,
-    version: '1.16.1',
+    version: '1.17.0',
   })
   const environment = {
     kind: 'environment-global',
@@ -474,7 +476,7 @@ describe('public tool subscriptions', { timeout: SERVER_FIXTURE_TEST_TIMEOUT_MS 
         expect(findToolState(initialized, 'claude')).toMatchObject({
           status: 'initialized',
           readiness: 'initialized',
-          generatedByVersion: '1.16.1',
+          generatedByVersion: '1.17.0',
           issues: [],
         })
 

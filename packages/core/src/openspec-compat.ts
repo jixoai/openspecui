@@ -20,8 +20,12 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — open the OpenSpecUI 16 admission window for update-openspec-cli-16-line
  *   (Round-C 8.8/10; >=1.16.0 <1.17.0; 1.15 retires).
+ * Original request (2026-11-11): "检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。"
+ *   — open the OpenSpecUI 17 admission window: single-series >=1.17.0 <1.18.0,
+ *   the command surface and Agent contract are byte-identical to 1.16, and the
+ *   1.16 line becomes below-admitted.
  */
-export const OPENSPECUI_TARGET_MAJOR = 16
+export const OPENSPECUI_TARGET_MAJOR = 17
 // Browser-safe contract schemas this surface re-exports for renderer evidence boundaries.
 // Both modules import only zod, so this subpath stays free of Node-only module graphs
 // (the Core barrel re-exports Node-bound values like reactive-fs and must not be imported
@@ -34,35 +38,35 @@ export {
   isCliValidateFindings,
 } from './cli-contracts/workflow.js'
 
-// OpenSpecUI 16 opens a single-series window: only stable CLI 1.16.x is published and
-// fixture-verified today. Unlike v9/v11 there is no admitted non-current series; 1.17 is
+// OpenSpecUI 17 opens a single-series window: only stable CLI 1.17.x is published and
+// fixture-verified today. Unlike v9/v11 there is no admitted non-current series; 1.18 is
 // not pre-claimed, and widening to it is a separately verified decision, so
-// OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION keeps >=1.17.0 blocked by default.
-export const OPENSPEC_CLI_TARGET_SERIES = '1.16'
-export const OPENSPEC_CLI_SUPPORTED_SERIES = ['1.16'] as const
-export const OPENSPEC_CLI_MIN_VERSION = '1.16.0'
-export const OPENSPEC_CLI_TARGET_MIN_VERSION = '1.16.0'
-export const OPENSPEC_CLI_RECOMMENDED_MIN_VERSION = '1.16.0'
-export const OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION = '1.17.0'
-export const OPENSPEC_CLI_ACCEPTED_RANGE = '>=1.16.0 <1.17.0'
-export const OPENSPEC_CLI_RECOMMENDED_RANGE = '>=1.16.0 <1.17.0'
-export const OPENSPEC_CLI_REFERENCE_TAG_PATTERN = 'v1.16.*'
+// OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION keeps >=1.18.0 blocked by default.
+export const OPENSPEC_CLI_TARGET_SERIES = '1.17'
+export const OPENSPEC_CLI_SUPPORTED_SERIES = ['1.17'] as const
+export const OPENSPEC_CLI_MIN_VERSION = '1.17.0'
+export const OPENSPEC_CLI_TARGET_MIN_VERSION = '1.17.0'
+export const OPENSPEC_CLI_RECOMMENDED_MIN_VERSION = '1.17.0'
+export const OPENSPEC_CLI_NEXT_SERIES_MIN_VERSION = '1.18.0'
+export const OPENSPEC_CLI_ACCEPTED_RANGE = '>=1.17.0 <1.18.0'
+export const OPENSPEC_CLI_RECOMMENDED_RANGE = '>=1.17.0 <1.18.0'
+export const OPENSPEC_CLI_REFERENCE_TAG_PATTERN = 'v1.17.*'
 
 /** Per-command capabilities derived from one admitted OpenSpec CLI version. */
 export interface OpenSpecCliCapabilities {
-  /** `openspec schemas --json --store <id>` accepts the selector (OpenSpec 1.9+; the admitted 1.16 line). */
+  /** `openspec schemas --json --store <id>` accepts the selector (OpenSpec 1.9+; the admitted 1.17 line). */
   schemasRootSelector: boolean
-  /** `openspec validate --archived --json` exists (OpenSpec 1.9+; the admitted 1.16 line). */
+  /** `openspec validate --archived --json` exists (OpenSpec 1.9+; the admitted 1.17 line). */
   archivedValidation: boolean
   /** `openspec init --language <language>` exists (OpenSpec 1.10+). */
   initLanguage: boolean
-  /** `openspec status --all --json` batch envelope exists (OpenSpec 1.11+; the admitted 1.16 line accepts the flag). */
+  /** `openspec status --all --json` batch envelope exists (OpenSpec 1.11+; the admitted 1.17 line accepts the flag). */
   batchStatus: boolean
-  /** `openspec show <change> --json --diff` requirement diffs exist (OpenSpec 1.11+; the admitted 1.16 line). */
+  /** `openspec show <change> --json --diff` requirement diffs exist (OpenSpec 1.11+; the admitted 1.17 line). */
   requirementDiff: boolean
-  /** `openspec validate --report findings --json` exists (OpenSpec 1.12+; the admitted 1.16 line; explicit bulk scope required). */
+  /** `openspec validate --report findings --json` exists (OpenSpec 1.12+; the admitted 1.17 line; explicit bulk scope required). */
   findingsReport: boolean
-  /** `openspec update --dry-run --json` plans artifacts without writing (OpenSpec 1.15+; the admitted 1.16 line). */
+  /** `openspec update --dry-run --json` plans artifacts without writing (OpenSpec 1.15+; the admitted 1.17 line). */
   updateDryRun: boolean
 }
 
@@ -70,9 +74,9 @@ export interface OpenSpecCliCapabilities {
  * Derive command capabilities from one parsed CLI version.
  *
  * Only an admitted version — stable inside the accepted range — can select version-specific
- * capabilities. Unsupported forms (prereleases, >=1.16, below-range) and unparseable output
+ * capabilities. Unsupported forms (prereleases, >=1.18, below-range) and unparseable output
  * keep their mismatch evidence and expose no capability, so a page-level version bypass can
- * never manufacture a 1.16 command surface for a CLI the release line does not admit.
+ * never manufacture a 1.17 command surface for a CLI the release line does not admit.
  */
 export function deriveOpenSpecCliCapabilities(
   version: OpenSpecCliVersion | null

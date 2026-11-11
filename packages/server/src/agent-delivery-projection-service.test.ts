@@ -1,15 +1,15 @@
 /**
- * Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
  * 1. Prove one-shot Agent delivery uses authoritative Environment policy and the complete Core registry.
  * 2. Prove retained Agent delivery re-emits from physical file changes and Environment policy replacement.
  * 3. Prove explicit refresh and dispose own deterministic replacement and retirement boundaries.
  * 4. Prove version-selected inventories including unavailable-CLI sessions.
  * 5. Keep the initial real-registry reactive wait ahead of shared CI runners.
- * 6. Lock the admitted 1.16 series snapshot: every 1.14/1.13/1.12/1.11 physical fact
- *    carries forward (1.16.0 adds no upstream tools — a pure series rotation), Zed stays
+ * 6. Lock the admitted 1.17 series snapshot: every 1.16/1.15/1.14/1.13/1.12/1.11 physical fact
+ *    carries forward (1.16.0 and 1.17.0 add no upstream tools — pure series rotations), Zed stays
  *    skills-only, Antigravity keeps its `.agents` root plus `.agent` legacy-migration
  *    evidence, codeassistant joins with `.codeassistant`, the ten 1.14 entries join the
- *    admitted inventory, and retired sessions (1.10/1.11/1.12/1.13/1.14/1.9) select none.
+ *    admitted inventory, and retired sessions (1.10–1.16/1.9) select none.
  *
  * Original request (2026-08-01): "新增 Agent delivery projection service 及 checked tests。"
 
@@ -25,6 +25,8 @@
  * and adds the retired 1.14 boundary beside the other retired windows.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): the admitted-session identity rotates to 1.17.0; every
+ *   positive stamp, version, and selection expectation follows the v17 line.
  */
 
 import {
@@ -50,7 +52,7 @@ import type { ProjectionWorkSubscription } from './projection-work/index.js'
 
 const REACTIVE_MISSING_PATH_FALLBACK_MS = 1_000
 const cliExecutor = {
-  checkAvailability: async () => ({ available: true, version: '1.16.1' }),
+  checkAvailability: async () => ({ available: true, version: '1.17.0' }),
 }
 const cliCommandAuthority = {
   getCliCommand: async () => ['not-an-importable-openspec-runner'],
@@ -165,7 +167,7 @@ async function writeGeneratedSkill(
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.16.1\n---\n`,
+    `---\nname: ${skillDirectory}\nmetadata:\n  generatedBy: 1.17.0\n---\n`,
     'utf8'
   )
   return path
@@ -257,10 +259,10 @@ describe('AgentDeliveryProjectionService', () => {
         aliases: ['windsurf'],
         migrations: [{ from: '.windsurf', to: '.devin', needsConsent: true }],
       })
-      // The admitted 1.16 line projects Zed beside the shared root and Antigravity's
+      // The admitted 1.17 line projects Zed beside the shared root and Antigravity's
       // migrated `.agents` root with its legacy `.agent` evidence; codeassistant joins
       // as the SourceCraft Code Assistant target introduced on the 1.12 line, and the
-      // shared-root readers amp and gsd join with the 1.14 entries (1.16.0 adds none).
+      // shared-root readers amp and gsd join with the 1.14 entries (1.16.0/1.17.0 add none).
       expect(current.registry.find((tool) => tool.value === 'zed')).toMatchObject({
         skillsDir: '.agents',
         detectionPaths: ['.zed', '.agents/skills'],
@@ -275,7 +277,7 @@ describe('AgentDeliveryProjectionService', () => {
         command: { pathTemplate: '.agents/workflows/opsx-{workflow}.md' },
       })
       // codeassistant entered the inventory on the 1.12 line and carries forward on the
-      // admitted 1.16 line: SourceCraft roots, adapter-backed capability, and no
+      // admitted 1.17 line: SourceCraft roots, adapter-backed capability, and no
       // IDE-restart fact.
       expect(current.registry.find((tool) => tool.value === 'codeassistant')).toMatchObject({
         available: true,
@@ -310,7 +312,7 @@ describe('AgentDeliveryProjectionService', () => {
       })
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.16.1',
+        generatedByVersion: '1.17.0',
         installedSkillWorkflows: ['update'],
       })
 
@@ -384,7 +386,7 @@ describe('AgentDeliveryProjectionService', () => {
 
     try {
       const current = await service.getCurrent()
-      // No live CLI means no admitted inventory: the pinned 1.16.1 generator version must not
+      // No live CLI means no admitted inventory: the pinned 1.17.0 generator version must not
       // fabricate one.
       expect(current.registry).toEqual([])
       expect(current.states).toEqual([])
@@ -530,7 +532,7 @@ describe('AgentDeliveryProjectionService', () => {
     }
   })
 
-  it('selects the full inventory for an admitted 1.16 session and matches the Core selector', async () => {
+  it('selects the full inventory for an admitted 1.17 session and matches the Core selector', async () => {
     clearCache()
     const projectDir = await mkdtemp(join(tmpdir(), 'openspecui-agent-delivery-116-'))
     const environment = new EnvironmentAuthorityFixture(
@@ -543,7 +545,7 @@ describe('AgentDeliveryProjectionService', () => {
       observationEnvironment,
       cliExecutor: {
         ...cliExecutor,
-        checkAvailability: async () => ({ available: true, version: '1.16.1' }),
+        checkAvailability: async () => ({ available: true, version: '1.17.0' }),
       },
       cliCommandAuthority,
     })
@@ -556,12 +558,12 @@ describe('AgentDeliveryProjectionService', () => {
       // 1.15.0 adds no upstream tools), and the service projection agrees exactly with the
       // Core series selector over the same detected version (the service strips the
       // selector's internal provenance fields before publishing).
-      const admitted = selectAgentDeliveryRegistry('1.16.1')
+      const admitted = selectAgentDeliveryRegistry('1.17.0')
       expect(admitted.length).toBeGreaterThan(0)
       expect(current.registry.map((tool) => tool.value)).toEqual(admitted.map((tool) => tool.value))
       expect(findToolState(current, 'claude')).toMatchObject({
         status: 'initialized',
-        generatedByVersion: '1.16.1',
+        generatedByVersion: '1.17.0',
       })
     } finally {
       await service.dispose()

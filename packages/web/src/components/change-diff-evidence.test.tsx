@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
- * 1. Lock the admitted 1.16-session rendering: MODIFIED diff body, line roles, exact upstream
+ * 1. Lock the admitted 1.17-session rendering: MODIFIED diff body, line roles, exact upstream
  *    warning, and CLI provenance are directly visible in the Evidence workspace detail pane.
  * 2. Lock the near-miss contract: a delta carrying both warning and diff renders both.
  * 3. Prove retired (1.10/1.11/1.12/1.13) and static sessions never issue the diff transport call and
@@ -19,6 +19,8 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates the admitted session sample to 1.16.0
  *   per the v16 window (the retired samples keep their own series literals).
+ * 2026-11-11 (update-openspec-cli-17): the admitted session sample rotates to 1.17.0 per the
+ *   v17 window.
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
@@ -49,7 +51,7 @@ const rootActionStateMock = vi.hoisted(() => ({
     message: null,
     evidence: [] as string[],
     context: {
-      cli: { available: true, version: '1.16.0' },
+      cli: { available: true, version: '1.17.0' },
     } as { cli: { available: boolean; version: string } } | null,
     observedAt: 1,
   },
@@ -115,13 +117,13 @@ describe('ChangeDiffEvidence', () => {
       message: null,
       evidence: [],
       context: {
-        cli: { available: true, version: '1.16.0' },
+        cli: { available: true, version: '1.17.0' },
       },
       observedAt: 1,
     }
   })
 
-  it('renders the MODIFIED delta diff with line roles, warning, and CLI provenance on an admitted 1.16 session', async () => {
+  it('renders the MODIFIED delta diff with line roles, warning, and CLI provenance on an admitted 1.17 session', async () => {
     diffEvidenceQuery.mockResolvedValue(executedEvidence())
     const { container } = render(<ChangeDiffEvidence changeId="add-search" />)
 
@@ -265,7 +267,7 @@ describe('ChangeDiffEvidence', () => {
     diffEvidenceQuery.mockRejectedValue(new Error('planning root unresolved'))
     rootActionStateMock.state = {
       ...rootActionStateMock.state,
-      context: { cli: { available: true, version: '1.16.0' } },
+      context: { cli: { available: true, version: '1.17.0' } },
     }
     rerender(<ChangeDiffEvidence changeId="add-search" onChip={onChip} />)
     await waitFor(() => expect(onChip).toHaveBeenLastCalledWith({ label: 'error', tone: 'error' }))

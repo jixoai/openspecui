@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 change-list archive inventory (`list --archived`
+ * 1. Execute the pinned OpenSpec 1.17.0.0 change-list archive inventory (`list --archived`
  *    and `list --all`, new in 1.14) against a real fixture project holding one active
  *    and one archived change.
  * 2. Prove the per-entry `archived` flag discipline: `--archived` returns only archive
@@ -23,12 +23,13 @@
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -36,10 +37,10 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v16-fixtures.js'
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliChangeListSchema } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.16 change list inventory fixtures', () => {
+describe('pinned OpenSpec 1.17 change list inventory fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -47,7 +48,7 @@ describe('pinned OpenSpec 1.16 change list inventory fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`marks archived inventory and keeps the default list flag-free on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(
         `cli-${version.replace(/\./g, '')}-list-inventory`

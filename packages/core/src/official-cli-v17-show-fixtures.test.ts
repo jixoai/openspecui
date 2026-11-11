@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 `show` family against a real fixture project:
+ * 1. Execute the pinned OpenSpec 1.17.0.0 `show` family against a real fixture project:
  *    `show <change> --json --diff` (MODIFIED deltas carry the unified diff body) and
  *    `show <spec> --type spec --json` (1.14 requirement/scenario name members).
  * 2. Prove the diff stays CLI-owned evidence (`@@` hunks, `-`/`+` lines, no warning on
@@ -16,7 +16,8 @@
  *
  * Original request (2026-10-25): "开工"
  *   — target-openspec-cli-15-line Slice 3 moved this suite to the v15 line (pinned
- *   1.15.0 executable through the openspec-cli-115 alias); the v14-era intents above
+ *   1.15.0 executable through the openspec-cli-115 alias, which the v17 line retires);
+ *   the v14-era intents above
  *   are retained verbatim.
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates this suite to the v16 line: imports and
@@ -27,12 +28,13 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -40,8 +42,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV16Version,
-} from './__tests__/official-cli-v16-fixtures.js'
+  type PinnedOpenspecV17Version,
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliShowChangeDiffSuccessSchema } from './cli-contracts/show-diff.js'
 import { CliShowSpecDocumentSchema } from './cli-contracts/workflow.js'
 
@@ -61,7 +63,7 @@ const MAIN_SPEC = [
 ].join('\n')
 
 async function initProject(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -75,7 +77,7 @@ async function initProject(
 }
 
 async function createChangeWithDelta(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string,
@@ -99,7 +101,7 @@ async function createChangeWithDelta(
   await writeFile(join(changeDir, 'specs', 'billing', 'spec.md'), delta)
 }
 
-describe('pinned OpenSpec 1.16 show fixtures', () => {
+describe('pinned OpenSpec 1.17 show fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -107,7 +109,7 @@ describe('pinned OpenSpec 1.16 show fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`attaches a unified diff with hunks to a clean MODIFIED delta on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-show-diff`)
       const project = join(fixtureRoot, 'project')

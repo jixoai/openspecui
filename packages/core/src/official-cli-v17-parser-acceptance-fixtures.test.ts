@@ -1,24 +1,27 @@
 /**
- * Orthogonal intents (created 2026-11-07 Asia/Shanghai):
- * 1. Prove 1.16.1 reads an ATX closing `#` run on section headings — `## Requirements ##` in a main
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
+ * 1. Prove 1.17.0 reads an ATX closing `#` run on section headings — `## Requirements ##` in a main
  *    spec and `## ADDED Requirements ##` in a delta — so the section is recognized and the delta
  *    actually applies to the main spec on archive.
- * 2. Prove the retired 1.15.0 boundary does not: the same documents lose their Requirements section
- *    and their delta, which is what makes this acceptance a 1.16-line fact.
+ * 2. Prove the retained 1.16.1 boundary carries the same acceptance, so the 1.17 line does not
+ *    regress a behavior the just-retired line already shipped. This is carry-forward evidence,
+ *    not a new-in-1.17 claim.
  * 3. Prove the orphan scan masks HTML comments, so a commented-out draft is not reported as dropped —
- *    and prove the twin on the boundary, so silence cannot pass for the wrong reason.
+ *    and prove the twin on the 1.16.1 boundary, so silence cannot pass for the wrong reason.
  *
  * Original request (2026-11-07): "检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。"
  *   — update-openspec-cli-1161 Slice 2 (upstream #2205).
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; the
+ *   1.15.0 negative controls are replaced by carry-forward proofs on the retained 1.16.1 boundary.
  */
 import { execFile } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -26,18 +29,18 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV16Version,
-} from './__tests__/official-cli-v16-fixtures.js'
+  type PinnedOpenspecV17Version,
+} from './__tests__/official-cli-v17-fixtures.js'
 import {
   CliArchiveSchema,
   CliShowSpecSchema,
   CliValidateReportSchema,
 } from './cli-contracts/workflow.js'
 
-/** The retired below-admitted boundary executable kept through the openspec-cli-115 alias. */
-const RETIRED_V15_BIN = resolve(
+/** The retained below-admitted boundary executable kept through the openspec-cli-116 alias. */
+const RETAINED_V16_BIN = resolve(
   import.meta.dirname,
-  '../node_modules/openspec-cli-115/bin/openspec.js'
+  '../node_modules/openspec-cli-116/bin/openspec.js'
 )
 
 async function runBoundary(
@@ -49,7 +52,7 @@ async function runBoundary(
     (done, fail) => {
       const child = execFile(
         process.execPath,
-        [RETIRED_V15_BIN, ...args],
+        [RETAINED_V16_BIN, ...args],
         { cwd, env, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, windowsHide: true },
         (error: { code?: number } | null, stdout: string, stderr: string) => {
           done({ code: error ? (error.code ?? 1) : 0, stdout, stderr })
@@ -119,7 +122,7 @@ const DELTA_WITH_COMMENTED_DRAFT = [
 ].join('\n')
 
 async function prepareProject(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   fixtureRoot: string
 ): Promise<{ project: string; env: NodeJS.ProcessEnv }> {
   const project = join(fixtureRoot, 'project')
@@ -132,7 +135,7 @@ async function prepareProject(
 }
 
 async function prepareDeltaChange(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string,
@@ -150,7 +153,7 @@ async function prepareDeltaChange(
   await writeFile(join(changeDir, 'specs', 'cap-closing', 'spec.md'), delta)
 }
 
-describe('pinned OpenSpec 1.16 parser acceptance fixtures', () => {
+describe('pinned OpenSpec 1.17 parser acceptance fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -158,7 +161,7 @@ describe('pinned OpenSpec 1.16 parser acceptance fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`reads ## Requirements ## as the requirements section on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-closing-run`)
       const { project, env } = await prepareProject(version, rootOrThrow(fixtureRoot))
@@ -194,21 +197,19 @@ describe('pinned OpenSpec 1.16 parser acceptance fixtures', () => {
       expect(names).toContain('Foo')
       expect(names.some((name) => name.includes('#'))).toBe(false)
 
-      // Negative control: without the section-header acceptance, the same document has no
-      // requirements section at all on the retired line.
+      // Carry-forward boundary: the just-retired 1.16.1 line reads the same closing-run header,
+      // so acceptance is proven present on both lines rather than treated as new in 1.17.
       const boundary = await runBoundary(
         ['show', 'cap-closing', '--type', 'spec', '--json'],
         project,
         env
       )
-      expect(boundary.exitCode).not.toBe(0)
+      expect(boundary.exitCode, boundary.stdout + '\n' + boundary.stderr).toBe(0)
       const boundaryAnswer = CliShowSpecSchema.parse(JSON.parse(boundary.stdout))
-      if (!('status' in boundaryAnswer)) {
-        expect.fail(`expected the 1.15 boundary to reject the section header: ${boundary.stdout}`)
+      if (!('requirements' in boundaryAnswer)) {
+        expect.fail(`expected the 1.16.1 boundary to read the section header: ${boundary.stdout}`)
       }
-      expect(boundaryAnswer.status).toMatchObject([
-        { severity: 'error', code: 'show_error', message: 'Spec must have a Requirements section' },
-      ])
+      expect(boundaryAnswer.requirements.map((entry) => entry.name)).toContain('Foo')
     }, 60_000)
 
     it(`applies a ## ADDED Requirements ## delta on archive on OpenSpec ${version}`, async () => {
@@ -216,16 +217,16 @@ describe('pinned OpenSpec 1.16 parser acceptance fixtures', () => {
       const { project, env } = await prepareProject(version, rootOrThrow(fixtureRoot))
       await prepareDeltaChange(version, project, env, 'closing', DELTA_WITH_CLOSING_RUN_HEADER)
 
-      // Negative control first: the retirement line does not read this header, so the change has
-      // no delta at all. That is the falsifier for "the header is what makes this apply".
+      // Carry-forward boundary first: the just-retired 1.16.1 line reads this header too, so the
+      // change already has a delta there and validates. This is equality evidence for the
+      // transferred behavior, not a new-in-1.17 claim.
       const boundary = await runBoundary(['validate', 'closing', '--json'], project, env)
-      expect(boundary.exitCode, boundary.stdout + '\n' + boundary.stderr).not.toBe(0)
+      expect(boundary.exitCode, boundary.stdout + '\n' + boundary.stderr).toBe(0)
       const boundaryReport = CliValidateReportSchema.parse(JSON.parse(boundary.stdout))
-      const boundaryIssues =
-        boundaryReport.items.find((entry) => entry.id === 'closing')?.issues ?? []
-      expect(boundaryIssues.map((issue) => issue.message)).toContain(
-        'No delta sections found. Add headers such as "## ADDED Requirements" or move non-delta notes outside specs/.'
-      )
+      expect(boundaryReport.items.find((entry) => entry.id === 'closing')).toMatchObject({
+        valid: true,
+        issues: [],
+      })
 
       const validated = await runPinnedOpenspec(
         version,
@@ -286,13 +287,16 @@ describe('pinned OpenSpec 1.16 parser acceptance fixtures', () => {
       const twin = issues.find((issue) => issue.message.includes('Uncommented twin'))
       expect(twin).toMatchObject({ level: 'WARNING' })
 
-      // And the retired line reports the commented draft, so the masking is a 1.16-line fact.
+      // Carry-forward boundary: the just-retired 1.16.1 line masks the same commented draft,
+      // so masking is proven present on both lines rather than treated as new in 1.17.
       const boundary = await runBoundary(['validate', 'masked', '--json'], project, env)
+      expect(boundary.exitCode, boundary.stdout + '\n' + boundary.stderr).toBe(0)
       const boundaryReport = CliValidateReportSchema.parse(JSON.parse(boundary.stdout))
       const boundaryIssues =
         boundaryReport.items.find((entry) => entry.id === 'masked')?.issues ?? []
+      expect(boundaryIssues.some((issue) => issue.message.includes('Commented draft'))).toBe(false)
       expect(
-        boundaryIssues.find((issue) => issue.message.includes('Commented draft'))
+        boundaryIssues.find((issue) => issue.message.includes('Uncommented twin'))
       ).toMatchObject({ level: 'WARNING' })
     }, 60_000)
   }

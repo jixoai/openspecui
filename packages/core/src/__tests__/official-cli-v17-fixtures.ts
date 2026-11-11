@@ -1,11 +1,11 @@
 /**
- * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
- * 1. Run the pinned OpenSpec 1.16.1 npm executable for the v16 fixture matrix (the
- *    just-retired 1.15.0 line stays available through the kept v15 alias
- *    `openspec-cli-115` and serves as this line's below-admitted boundary executable).
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
+ * 1. Run the pinned OpenSpec 1.17.0 npm executable for the v17 fixture matrix (the
+ *    just-retired 1.16.1 line stays available through the kept `openspec-cli-116`
+ *    alias and serves as this line's below-admitted boundary executable).
  * 2. Share one isolated fixture environment and hidden-console runner across fixture files.
  * 3. Keep fixture identity explicit so a passing matrix always names its executable line.
- * 4. Assert the 1.16 JSON stream discipline.
+ * 4. Assert the 1.17 JSON stream discipline.
  *
  * Original request (2026-10-25): "开工"
  *   — window rotation moves the pinned positive-line executable from 1.14.3 (c794978f)
@@ -18,6 +18,10 @@
  *   `openspec-cli-115` executable becomes the boundary service for the retired v15 line.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned positive-line executable
+ *   from 1.16.1 (0fa4a970) to the released v1.17.0 tag (579fcac5) inside the new
+ *   `>=1.17.0 <1.18.0` window; the v16 helper retires with its boundary role, and the
+ *   kept `openspec-cli-116` executable (1.16.1) becomes the below-admitted boundary.
  */
 import { execFile } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -25,14 +29,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect } from 'vitest'
 
-/** OpenSpec CLI line admitted by the OpenSpecUI 16 compatibility law (single-series window). */
-export const PINNED_OPENSPEC_V16_VERSIONS = ['1.16.1'] as const
+/** OpenSpec CLI line admitted by the OpenSpecUI 17 compatibility law (single-series window). */
+export const PINNED_OPENSPEC_V17_VERSIONS = ['1.17.0'] as const
 
-export type PinnedOpenspecV16Version = (typeof PINNED_OPENSPEC_V16_VERSIONS)[number]
+export type PinnedOpenspecV17Version = (typeof PINNED_OPENSPEC_V17_VERSIONS)[number]
 
-const PINNED_V16_BINS = {
-  '1.16.1': resolve(import.meta.dirname, '../../node_modules/openspec-cli-116/bin/openspec.js'),
-} satisfies Record<PinnedOpenspecV16Version, string>
+const PINNED_V17_BINS = {
+  '1.17.0': resolve(import.meta.dirname, '../../node_modules/openspec-cli-117/bin/openspec.js'),
+} satisfies Record<PinnedOpenspecV17Version, string>
 
 export interface CliRunResult {
   exitCode: number
@@ -64,7 +68,7 @@ export function pinnedFixtureEnv(root: string): NodeJS.ProcessEnv {
 
 /** Execute one pinned OpenSpec executable with hidden console windows. */
 export function runPinnedOpenspec(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   args: readonly string[],
   cwd: string,
   env: NodeJS.ProcessEnv
@@ -72,7 +76,7 @@ export function runPinnedOpenspec(
   return new Promise((complete) => {
     execFile(
       process.execPath,
-      [PINNED_V16_BINS[version], ...args],
+      [PINNED_V17_BINS[version], ...args],
       { cwd, env, maxBuffer: 4 * 1024 * 1024, timeout: 30_000, windowsHide: true },
       (error, stdout, stderr) => {
         complete({
@@ -89,11 +93,11 @@ export function runPinnedOpenspec(
  * Assert the executable line identity before any contract assertion uses it.
  *
  * This is the provenance guard: a bins-map entry accidentally pointing at another alias
- * (for example openspec-cli-115) prints a different `--version` string and fails here,
- * so a passing matrix always proves it ran the 1.16.1 line.
+ * (for example openspec-cli-116) prints a different `--version` string and fails here,
+ * so a passing matrix always proves it ran the 1.17.0 line.
  */
 export async function expectPinnedVersion(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   cwd: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -103,9 +107,9 @@ export async function expectPinnedVersion(
 }
 
 /**
- * Assert the 1.16 JSON stream discipline on one `--json` run.
+ * Assert the 1.17 JSON stream discipline on one `--json` run.
  *
- * The 1.16 line keeps the discipline proven for admitted lines since the eager-JSON fast
+ * The 1.17 line keeps the discipline proven for admitted lines since the eager-JSON fast
  * path: a JSON invocation must leave stdout as exactly one complete JSON document and
  * stderr free of telemetry/tip noise. This remains fixture evidence for the eager-JSON
  * fast path, which must keep refusing early exit while stderr carries real diagnostics;

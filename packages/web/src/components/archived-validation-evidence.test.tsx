@@ -18,6 +18,8 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates the admitted-session fixture sample to
  *   1.16.0 per the v16 window.
+ * 2026-11-11 (update-openspec-cli-17): the admitted-session fixture sample rotates to 1.17.0
+ *   per the v17 window.
  */
 import { isStaticMode } from '@/lib/static-mode'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -48,7 +50,7 @@ const rootActionStateMock = vi.hoisted(() => ({
     message: '',
     evidence: [],
     context: {
-      cli: { available: true, version: '1.16.0' },
+      cli: { available: true, version: '1.17.0' },
     },
     observedAt: 1,
   },
@@ -112,7 +114,7 @@ describe('ArchivedValidationEvidence', () => {
       message: '',
       evidence: [],
       context: {
-        cli: { available: true, version: '1.16.0' },
+        cli: { available: true, version: '1.17.0' },
       },
       observedAt: 1,
     }

@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14 Apply readiness contract (`instructions apply
+ * 1. Execute the pinned OpenSpec 1.17.0 Apply readiness contract (`instructions apply
  *    --json`) against a real fixture repo: the blocked-state build-order closure and
  *    the ready-state no-delta-specs advisory.
  * 2. Prove `missingPrerequisites` is additive readiness evidence, never a new gate:
@@ -39,7 +39,8 @@
  *
  * Original request (2026-10-25): "开工"
  *   — target-openspec-cli-15-line Slice 3 moved this suite to the v15 line (pinned
- *   1.15.0 executable through the openspec-cli-115 alias); the v14-era intents above
+ *   1.15.0 executable through the openspec-cli-115 alias, which the v17 line retires);
+ *   the v14-era intents above
  *   are retained verbatim.
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates this suite to the v16 line: imports and
@@ -51,12 +52,13 @@
  *   all_done guidance semantics join the matrix.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -64,12 +66,12 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV16Version,
-} from './__tests__/official-cli-v16-fixtures.js'
+  type PinnedOpenspecV17Version,
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliApplyInstructionsSuccessSchema } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -83,7 +85,7 @@ async function initProject(
 }
 
 async function newChange(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -161,7 +163,7 @@ const RUNS_UNREADABLE_TRACKING_FIXTURE =
   typeof process.getuid === 'function' &&
   process.getuid() !== 0
 
-describe('pinned OpenSpec 1.16 apply readiness fixtures', () => {
+describe('pinned OpenSpec 1.17 apply readiness fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -169,7 +171,7 @@ describe('pinned OpenSpec 1.16 apply readiness fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`names the whole prerequisite chain on the blocked state and stays warning-free on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-apply-blocked`)
       const project = join(fixtureRoot, 'project')

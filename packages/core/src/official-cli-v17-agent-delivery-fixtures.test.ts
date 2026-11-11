@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14 SourceCraft Code Assistant delivery contract
+ * 1. Execute the pinned OpenSpec 1.17.0 SourceCraft Code Assistant delivery contract
  *    against an isolated machine environment: 6 skills + 6 commands under the default
  *    core profile with the physical `.codeassistant` layout.
  * 2. Prove init anchors empty directories with `.gitkeep`, restores missing anchors on
@@ -29,6 +29,7 @@
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { access, lstat, mkdir, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -36,11 +37,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   createPinnedFixtureRoot,
   expectPinnedVersion,
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v16-fixtures.js'
+} from './__tests__/official-cli-v17-fixtures.js'
 
 /** The default core profile selects exactly these six workflows. */
 const CORE_PROFILE_SKILLS = [
@@ -70,7 +71,7 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-describe('pinned OpenSpec 1.16 Agent delivery fixtures', () => {
+describe('pinned OpenSpec 1.17 Agent delivery fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -78,7 +79,7 @@ describe('pinned OpenSpec 1.16 Agent delivery fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`delivers six skills and six commands to .codeassistant under the default core profile on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-codeassistant`)
       const project = join(fixtureRoot, 'project')

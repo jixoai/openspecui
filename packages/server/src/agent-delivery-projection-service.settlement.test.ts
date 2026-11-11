@@ -14,6 +14,8 @@
  *   — fix-reactive-fs-settlement S1 (V1): the one named consumer hook.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): admitted-session identity literals rotate to the
+ *   1.17.0 line; no projection change.
  */
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -196,7 +198,7 @@ async function writeGeneratedSkill(projectDir: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    '---\nname: openspec-update-change\nmetadata:\n  generatedBy: 1.16.1\n---\n',
+    '---\nname: openspec-update-change\nmetadata:\n  generatedBy: 1.17.0\n---\n',
     'utf8'
   )
 }
@@ -245,7 +247,7 @@ describe('AgentDeliveryProjectionService settlement seam', () => {
     const cliExecutor = {
       async checkAvailability() {
         availabilityCalls += 1
-        return { available: true, version: '1.16.1' }
+        return { available: true, version: '1.17.0' }
       },
     }
     const service = new AgentDeliveryProjectionService({

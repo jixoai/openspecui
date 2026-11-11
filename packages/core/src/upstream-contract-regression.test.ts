@@ -40,6 +40,9 @@
  *   v1.16.1 tag (0fa4a970) inside the unchanged v16 window.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * Original request (2026-11-11): "检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。"
+ *   — the v17 admission line moves the pin from v1.16.1 (0fa4a970) to the released v1.17.0 tag
+ *   (579fcac5) and opens the `>=1.17.0 <1.18.0` window.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -113,13 +116,13 @@ describe('first-party OpenSpec 1.4-1.7 contracts', () => {
     expect(rootInspection).toContain('inspectOptionalPlanningDirectory')
   })
 
-  it('pins the reference checkout to the official v1.16.1 commit', () => {
+  it('pins the reference checkout to the official v1.17.0 commit', () => {
     const commit = execFileSync('git', ['-C', upstreamRoot, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
       windowsHide: true,
     }).trim()
 
-    expect(commit).toBe('0fa4a9705c20ef1c571fe3ded74435733e4b73a1')
+    expect(commit).toBe('579fcac57ae00c2dff38f971b6d88b6f1f098b8a')
   })
 
   it('locks the 1.15 update dry-run UpdatePlan contract sources', () => {

@@ -1,8 +1,8 @@
 /**
- * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
  * 1. Prove the public `agentIntegrations.updatePlanPreview` read runs the OpenSpec 1.15+
  *    `update --dry-run --json` transport through the real Core contract executor on the
- *    admitted 1.16 line that still ships the capability.
+ *    admitted 1.17 line that still ships the capability.
  * 2. Prove the typed plan, the exit-0-with-failures data semantics, and the failed-command
  *    status envelope (`update_error`, exit 1) all cross the route boundary without
  *    rewriting; the preview never gates the real mutation streams.
@@ -17,6 +17,9 @@
  *   1.15 updateDryRun surface.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): the admitted sample rotates to 1.17.0 and the refused
+ *   sample to the newly retired 1.16.0 (accepted range moves to `>=1.17.0 <1.18.0`); the
+ *   contract assertions stay unchanged because 1.17 keeps the 1.15 updateDryRun surface.
  */
 import { OpenSpecCliContractExecutor, type RootContext } from '@openspecui/core'
 import { describe, expect, it } from 'vitest'
@@ -103,8 +106,8 @@ function createPreviewCallerFixture(
 }
 
 describe('agentIntegrations.updatePlanPreview transport', () => {
-  it('previews the typed plan through the real contract executor on an admitted 1.16 session', async () => {
-    const fixture = createPreviewCallerFixture('1.16.1', () => ({
+  it('previews the typed plan through the real contract executor on an admitted 1.17 session', async () => {
+    const fixture = createPreviewCallerFixture('1.17.0', () => ({
       stdout: JSON.stringify(planPayload()),
       exitCode: 0,
     }))
@@ -121,7 +124,7 @@ describe('agentIntegrations.updatePlanPreview transport', () => {
   })
 
   it('keeps non-empty failures plan data beside exit 0, never a route error', async () => {
-    const fixture = createPreviewCallerFixture('1.16.1', () => ({
+    const fixture = createPreviewCallerFixture('1.17.0', () => ({
       stdout: JSON.stringify(planPayload()),
       exitCode: 0,
     }))
@@ -131,7 +134,7 @@ describe('agentIntegrations.updatePlanPreview transport', () => {
   })
 
   it('surfaces the failed-command envelope as executed evidence with diagnostics and a null plan', async () => {
-    const fixture = createPreviewCallerFixture('1.16.1', () => ({
+    const fixture = createPreviewCallerFixture('1.17.0', () => ({
       stdout: JSON.stringify(updateErrorEnvelope()),
       exitCode: 1,
     }))
@@ -152,7 +155,7 @@ describe('agentIntegrations.updatePlanPreview transport', () => {
   })
 
   it('refuses the preview on a non-admitted session before any argv is constructed', async () => {
-    const fixture = createPreviewCallerFixture('1.15.0', () => ({
+    const fixture = createPreviewCallerFixture('1.16.0', () => ({
       stdout: JSON.stringify(planPayload()),
       exitCode: 0,
     }))
@@ -160,7 +163,7 @@ describe('agentIntegrations.updatePlanPreview transport', () => {
     const result = await fixture.caller.agentIntegrations.updatePlanPreview(undefined)
     expect(result).toMatchObject({
       kind: 'unavailable',
-      reason: expect.stringContaining('>=1.16.0 <1.17.0'),
+      reason: expect.stringContaining('>=1.17.0 <1.18.0'),
     })
     expect(fixture.executedArgv).toEqual([])
   })

@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
  * 1. Prove public Router owner boundaries and dedicated Planning-root stream settlement.
  * 2. Prove strict Archive identity, generation, validation, diagnostics, and Store selection publicly.
  * 3. Prove reactive configuration, Dashboard Summary v2, Git, notification, and runtime procedures retain scoped behavior.
@@ -35,6 +35,8 @@
  *   session to 1.16.0 per the v16 window.
 * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
 *   1.16.1; identity literals rotate, no projection change.
+* 2026-11-11 (update-openspec-cli-17): the admitted-line validate fixture session rotates to
+*   1.17.0 per the v17 window.
 */
 import {
   acquireWatcherRoot,
@@ -3219,7 +3221,7 @@ apply:
           status: [],
         },
         storeId: 'shared',
-        cli: { available: true, version: '1.16.1' },
+        cli: { available: true, version: '1.17.0' },
       }
       const caller = appRouter.createCaller(context)
 

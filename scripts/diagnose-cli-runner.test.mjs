@@ -1,12 +1,12 @@
 /**
- * Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
  * 1. Prove the plain-Node Windows diagnostic resolves an npm-style CLI shim and retires its timed-out tree.
  * 2. Distinguish a complete diagnostic report from an early child-process failure before JSON parsing.
  * 3. Hide fixture subprocess console windows (`windowsHide`) for uniform hidden-console execution on Windows.
  * 4. Compare `where.exe` evidence through canonical paths because hosted runners mix 8.3 short
  *    forms (RUNNER~1) with long forms in TEMP-derived fixture roots.
  * 5. Keep the diagnostic's fallback candidate set pinned to the Core-admitted CLI series.
- * 6. Prove the rotated mirror rejects the retired 1.13 series while the 1.16 fallback spec
+ * 6. Prove the rotated mirror rejects a retired series while the 1.17 fallback spec
  *    resolves an admitted series, and keep the setup-example runner mirror on the same
  *    rotated constant.
  *
@@ -18,6 +18,8 @@
  * Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * Original request (2026-10-25): "开工" — rotate the mirrored CLI target series to 1.15 (target-openspec-cli-15-line Slice 1).
+ * 2026-11-11 (update-openspec-cli-17): rotate the mirrored CLI target series to 1.17 and keep
+ *   this parity test on the same constant.
  */
 import { spawnSync } from 'node:child_process'
 import {
@@ -59,7 +61,7 @@ describe('CLI runner diagnostic candidate parity', () => {
     expect(source).not.toMatch(/'@fission-ai\/openspec'/)
   })
 
-  it('rejects a retired 1.13 probe resolution while the rotated 1.16 fallback spec stays admitted', async () => {
+  it('rejects a retired 1.13 probe resolution while the rotated 1.17 fallback spec stays admitted', async () => {
     const { readFile } = await import('node:fs/promises')
     const source = await readFile(DIAGNOSTIC_SCRIPT, 'utf8')
     const { classifyOpenSpecCliVersion, OPENSPEC_CLI_TARGET_SERIES } = await import(
@@ -68,7 +70,7 @@ describe('CLI runner diagnostic candidate parity', () => {
 
     // The rotated mirror builds its fallback spec from the admitted series only; a stale
     // 1.13 mirror spec must not survive the constants rotation.
-    expect(OPENSPEC_CLI_TARGET_SERIES).toBe('1.16')
+    expect(OPENSPEC_CLI_TARGET_SERIES).toBe('1.17')
     expect(source).toContain(
       'const OPENSPEC_CLI_FALLBACK_SPEC = `@fission-ai/openspec@${OPENSPEC_CLI_TARGET_SERIES}`'
     )

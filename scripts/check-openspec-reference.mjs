@@ -1,6 +1,6 @@
 /**
- * Orthogonal intents (updated 2026-10-29 Asia/Shanghai):
- * 1. Fail CI unless the OpenSpec reference checkout resolves to the 1.15 line.
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
+ * 1. Fail CI unless the OpenSpec reference checkout resolves to the 1.17 line.
  * 2. Invoke Git through a shell-independent argument vector.
  *
  * Original request (2026-07-14): "Update references/openspec."
@@ -13,6 +13,8 @@
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — the describe pattern rotates with the v1.16.1 pin (this guard was fake-green on a
  *   post-tag checkout because "v1.15.0-19-g27c05157" still matched the old prefix).
+ * 2026-11-11 (update-openspec-cli-17): the series-level `--match` pattern and describe guard
+ *   rotate to v1.17.*; exact-pin ownership stays with the EXPECTED_COMMIT guards.
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -35,11 +37,11 @@ try {
     'describe',
     '--tags',
     '--match',
-    'v1.16.*',
+    'v1.17.*',
     '--always',
   ])
-  if (!describe.startsWith('v1.16.')) {
-    throw new Error(`references/openspec must point to OpenSpec v1.16.x, but got "${describe}".`)
+  if (!describe.startsWith('v1.17.')) {
+    throw new Error(`references/openspec must point to OpenSpec v1.17.x, but got "${describe}".`)
   }
   console.log(`[openspec-ref-check] OK: ${describe}`)
 } catch (error) {

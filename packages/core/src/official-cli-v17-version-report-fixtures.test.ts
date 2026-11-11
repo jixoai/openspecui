@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 `openspec version --json` command (new in
+ * 1. Execute the pinned OpenSpec 1.17.0.0 `openspec version --json` command (new in
  *    1.14) against the isolated fixture environment: the typed envelope decodes with
  *    `schemaVersion: 1`, the running `version`, and the resolved `install` facts.
  * 2. Prove the no-probe default: without `--check` the `update` member stays absent
@@ -19,12 +19,13 @@
  * Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -32,10 +33,10 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v16-fixtures.js'
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliVersionSchema } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.16 version report fixtures', () => {
+describe('pinned OpenSpec 1.17 version report fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -43,7 +44,7 @@ describe('pinned OpenSpec 1.16 version report fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`reports the install envelope without the check-gated update member on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(
         `cli-${version.replace(/\./g, '')}-version-report`

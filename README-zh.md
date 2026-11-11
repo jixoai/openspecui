@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
+Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
 1. 说明当前 OpenSpec 兼容线与项目工作流。
 2. 说明 serve、App daemon、Direct Web 与静态导出命令。
 3. 说明项目 Hooks，同时保持 OpenSpec CLI 的事实权威。
@@ -11,6 +11,7 @@ Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
 原始需求（2026-10-02）："Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
 原始需求（2026-10-25）："开工" —— OpenSpecUI 15 线，适配 OpenSpec CLI 1.15.x（standalone 发行线）。
 原始需求（2026-11-04）："后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。" —— OpenSpecUI 16 线，适配 OpenSpec CLI 1.16.x。
+原始需求（2026-11-11）："检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。" —— OpenSpecUI 17 线，适配 OpenSpec CLI 1.17.x。
 -->
 
 # OpenSpec UI
@@ -23,7 +24,8 @@ OpenSpecUI 是 OpenSpec 工作流的 Web 界面（动态模式 + 静态导出）
 
 | OpenSpecUI         | OpenSpec CLI 线                                      |
 | ------------------ | ---------------------------------------------------- |
-| `@latest` / `@^16` | 当前 + 已支持：`>=1.16.0 <1.17.0`                    |
+| `@latest` / `@^17` | 当前 + 已支持：`>=1.17.0 <1.18.0`                    |
+| `@^16`（历史）     | 当前 + 已支持：`>=1.16.0 <1.17.0`                    |
 | `@^15`（历史）     | 当前 + 已支持：`>=1.15.0 <1.16.0`                    |
 | `@^14`（历史）     | 当前 + 已支持：`>=1.14.0 <1.15.0`                    |
 | `@^13`（历史）     | 当前 + 已支持：`>=1.13.0 <1.14.0`                    |
@@ -38,9 +40,9 @@ OpenSpecUI 是 OpenSpec 工作流的 Web 界面（动态模式 + 静态导出）
 | `@^2`              | `>=1.2.0 <1.3.0`                                     |
 | `@^1`              | `>=1.0.0 <1.2.0`                                     |
 
-OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 16 以单系列线适配 OpenSpec
-CLI 1.16.x：稳定版 1.16.x 是当前推荐线；`1.17` 不做预先承诺——发布后另行验证决定（16.x 扩窗或新
-major）。OpenSpecUI 15 保留为历史 1.15.x 产品线，OpenSpecUI 14 保留为历史 1.14.x 产品线，OpenSpecUI 13 保留为历史 1.13.x 产品线。
+OpenSpecUI 的 major 版本通常跟随 OpenSpec CLI 的 minor 线。OpenSpecUI 17 以单系列线适配 OpenSpec
+CLI 1.17.x：稳定版 1.17.x 是当前推荐线；`1.18` 不做预先承诺——发布后另行验证决定（17.x 扩窗或新
+major）。OpenSpecUI 16 保留为历史 1.16.x 产品线，OpenSpecUI 15 保留为历史 1.15.x 产品线，OpenSpecUI 14 保留为历史 1.14.x 产品线，OpenSpecUI 13 保留为历史 1.13.x 产品线。
 
 历史文档：
 
@@ -73,9 +75,9 @@ openspecui
 
 ## OpenSpec CLI 兼容性
 
-- OpenSpecUI 16 接受稳定版 OpenSpec CLI `>=1.16.0 <1.17.0`，并推荐 1.16 线。
-- 稳定版 1.16.x 会被识别为当前线；这是单系列窗口。
-- OpenSpec CLI 1.15.x（OpenSpecUI 15 窗口）、更旧的 CLI 线、CLI `>=1.17.0` 以及所有预发布版均不受 OpenSpecUI 16 支持，并会被默认阻断。
+- OpenSpecUI 17 接受稳定版 OpenSpec CLI `>=1.17.0 <1.18.0`，并推荐 1.17 线。
+- 稳定版 1.17.x 会被识别为当前线；这是单系列窗口。
+- OpenSpec CLI 1.16.x（OpenSpecUI 16 窗口）、更旧的 CLI 线、CLI `>=1.18.0` 以及所有预发布版均不受 OpenSpecUI 17 支持，并会被默认阻断。
 - 上游 npm 包现在要求 Node.js `>=22.12.0`；standalone 二进制不依赖 Node。仓库根为贡献者与 fixture 声明同一下限。
 - 若不兼容的 CLI 可执行文件仍然存在，版本不匹配对话框会提供 **Skip version check**。该绕过只在当前页面运行期有效，刷新或重新打开后清除，也不构成兼容性承诺。
 

@@ -308,12 +308,12 @@ importers:
       openspec-cli-112:
         specifier: npm:@fission-ai/openspec@1.12.0
         version: '@fission-ai/openspec@1.12.0(@types/node@22.19.1)'
-      openspec-cli-115:
-        specifier: npm:@fission-ai/openspec@1.15.0
-        version: '@fission-ai/openspec@1.15.0(@types/node@22.19.1)'
       openspec-cli-116:
         specifier: npm:@fission-ai/openspec@1.16.1
         version: '@fission-ai/openspec@1.16.1(@types/node@22.19.1)'
+      openspec-cli-117:
+        specifier: npm:@fission-ai/openspec@1.17.0
+        version: '@fission-ai/openspec@1.17.0(@types/node@22.19.1)'
       openspec-cli-14:
         specifier: npm:@fission-ai/openspec@1.4.0
         version: '@fission-ai/openspec@1.4.0(@types/node@22.19.1)'
@@ -2154,18 +2154,18 @@ packages:
     engines: { node: '>=20.19.0' }
     hasBin: true
 
-  '@fission-ai/openspec@1.15.0':
-    resolution:
-      {
-        integrity: sha512-lG/EPEiL22bB70yKJhWWSPk1UQGLnwO7Dp+hNc/jUmBwb0qxPLzHCUkXEfkny4iYDOsgnsNQmc39/g9QcvnBnA==,
-      }
-    engines: { node: '>=20.19.0' }
-    hasBin: true
-
   '@fission-ai/openspec@1.16.1':
     resolution:
       {
         integrity: sha512-Qu2kdUP3oiXK6WzOA1OcEYiTlG3GmLJE37whoGjTEy4vbzuW4o3OwAwYwxSQpJnKHJ/XGySvo+icRiulBCxyzw==,
+      }
+    engines: { node: '>=22.12.0' }
+    hasBin: true
+
+  '@fission-ai/openspec@1.17.0':
+    resolution:
+      {
+        integrity: sha512-D9MCbh1WMuJAoSYmtbkR5csHZdhiweuX5RC6+ZxMo9I2F/wq0x2wpFvlyCdo7yV0zenEqVxqmfRmLPd5wuJC7g==,
       }
     engines: { node: '>=22.12.0' }
     hasBin: true
@@ -13577,7 +13577,7 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
-  '@fission-ai/openspec@1.15.0(@types/node@22.19.1)':
+  '@fission-ai/openspec@1.16.1(@types/node@22.19.1)':
     dependencies:
       '@inquirer/core': 12.0.1(@types/node@22.19.1)
       '@inquirer/prompts': 8.7.0(@types/node@22.19.1)
@@ -13594,7 +13594,7 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
-  '@fission-ai/openspec@1.16.1(@types/node@22.19.1)':
+  '@fission-ai/openspec@1.17.0(@types/node@22.19.1)':
     dependencies:
       '@inquirer/core': 12.0.1(@types/node@22.19.1)
       '@inquirer/prompts': 8.7.0(@types/node@22.19.1)

@@ -1,14 +1,15 @@
 /**
  * Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
- * 1. Preserve the complete pinned OpenSpec 1.15 Agent delivery registry in one typed physical owner.
+ * 1. Preserve the complete pinned OpenSpec 1.17 Agent delivery registry in one typed physical owner.
  * 2. Co-locate capability, command artifact, invocation, alias, setup, cleanup, and migration metadata.
  * 3. Model current/legacy project roots, user-global skill roots, detection paths, and IDE restart facts.
  * 4. Keep the per-series override mechanism available for future widened windows while the
- *    admitted window is the single '1.16' line (every 1.15/1.14/1.13/1.12 physical fact carries forward).
+ *    admitted window is the single '1.17' line (every 1.16/1.15/1.14/1.13/1.12 physical fact carries forward).
  * 5. Declare the shared `.agents` skills-root owner candidate set and its arbitration order as
  *    metadata only; physical arbitration stays owned by the official CLI and the Server projection.
- * 6. Select the official inventory for the admitted CLI line ('1.16') only; retired minors
- *    ('1.10'/'1.11'/'1.12'/'1.13'/'1.14') stay typed as provenance history and select no inventory.
+ * 6. Select the official inventory for the admitted CLI line ('1.17') only; retired minors
+ *    ('1.10'/'1.11'/'1.12'/'1.13'/'1.14'/'1.15'/'1.16') stay typed as provenance history and
+ *    select no inventory.
  * 7. Carry Kilo Code's 1.13.2 command-path rotation as a physical fact: `.kilo/command/` is the
  *    live delivery target, the former `.kilocode/workflows/opsx-{workflow}.md` path is legacy
  *    evidence, and cleanup covers exactly the old folder's two generations — never `.kilo/command/`.
@@ -24,6 +25,10 @@
  *    — Slice 3 rotates the series to '1.14' and lands the ten 1.14 entries (amp, atomcode,
  *    codestudio, dsh, easycode, gigacode, grok, gsd, veai, warp); the Kilo directory rotation
  *    already landed with the 1132 change and is not repeated here.
+ * Original request (2026-11-11): "检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。"
+ *   — the v17 admission line rotates the series to '1.17' (AI_TOOLS and the command-generation
+ *   adapters are byte-identical to 1.16; every physical fact carries forward and '1.16' joins the
+ *   provenance union).
  * Original request (2026-10-25): "开工" — Slice 2 rotates the registry series to '1.15':
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — Slice 3 rotates the registry series to '1.16' (upstream AI_TOOLS is byte-identical, so
@@ -120,7 +125,7 @@ export interface AIToolOption {
 }
 
 /** Official OpenSpec CLI lines with distinct Agent inventories admitted by this release line. */
-export type AgentCliSeries = '1.16'
+export type AgentCliSeries = '1.17'
 
 /**
  * Historical provenance lines for registry facts that predate or retire out of the
@@ -138,12 +143,13 @@ export type AgentProvenanceCliSeries =
   | '1.13'
   | '1.14'
   | '1.15'
+  | '1.16'
   | AgentCliSeries
 
 /**
  * Per-series divergence applied when one admitted CLI line pins a different physical
  * reality than the newest line. The base registry always mirrors the newest admitted
- * line (1.16); an override replaces the listed fields for an older admitted line
+ * line (1.17); an override replaces the listed fields for an older admitted line
  * when a future release widens the window again. A field explicitly set to
  * `undefined` clears the newest-line value.
  */
@@ -174,6 +180,8 @@ function agentCliSeriesOrder(series: AgentProvenanceCliSeries): number {
       return 15
     case '1.16':
       return 16
+    case '1.17':
+      return 17
   }
 }
 
@@ -211,13 +219,13 @@ export const SHARED_AGENTS_SKILLS_OWNER_CANDIDATES: readonly [
 /**
  * Select the official Agent delivery inventory for one CLI version string.
  *
- * Only a stable, admitted version — stable 1.15.x on this single-series line —
- * selects an inventory. Unsupported forms (prereleases, >=1.16, below-range lines
- * including the retired 1.10/1.11/1.12/1.13/1.14 v11–v14 windows and 1.8/1.9) and
+ * Only a stable, admitted version — stable 1.17.x on this single-series line —
+ * selects an inventory. Unsupported forms (prereleases, >=1.18, below-range lines
+ * including the retired 1.10/1.11/1.12/1.13/1.14/1.15/1.16 windows and 1.8/1.9) and
  * unparseable output select none: a page-level version bypass must not manufacture
  * an admitted inventory for a CLI the release line refuses to admit. The returned
- * snapshot carries the 1.15 physical reality — no new tools upstream in 1.15.0, a pure
- * series rotation: the ten 1.14 Agent tools (amp, atomcode, codestudio, dsh, easycode,
+ * snapshot carries the 1.17 physical reality — upstream added no tools in 1.16.0 or
+ * 1.17.0, a pure series rotation: the ten 1.14 Agent tools (amp, atomcode, codestudio, dsh, easycode,
  * gigacode, grok, gsd, veai, warp) and every 1.13/1.12 root fact carry forward.
  */
 export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConfig[] {
@@ -251,8 +259,8 @@ export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConf
  *
  * Delegates to the single compat version parser so the same stdout that classifies a session
  * also selects its inventory — two parsers must never disagree at this boundary. Returns
- * '1.16' only for stable 1.16.x, and null for every non-admitted form: prereleases,
- * >=1.17, retired below-range lines (including the 1.15 v15 window, the 1.14 v14 window, the 1.13 v13
+ * '1.17' only for stable 1.17.x, and null for every non-admitted form: prereleases,
+ * >=1.18, retired below-range lines (including the 1.16 v16 window, the 1.15 v15 window, the 1.14 v14 window, the 1.13 v13
  * window, the 1.12 v12 window, the 1.10/1.11 v11 window, and 1.9.x), or unparseable
  * output. Retired minors
  * stay typed as `AgentProvenanceCliSeries` history for registry facts and on-disk
@@ -261,7 +269,7 @@ export function selectAgentDeliveryRegistry(cliVersion: string | null): ToolConf
 export function parseOpenSpecCliSeries(cliVersion: string | null): AgentCliSeries | null {
   const version = parseOpenSpecCliVersion(cliVersion ?? undefined)
   if (!version || version.prerelease !== null) return null
-  if (version.major === 1 && version.minor === 16) return '1.16'
+  if (version.major === 1 && version.minor === 17) return '1.17'
   return null
 }
 

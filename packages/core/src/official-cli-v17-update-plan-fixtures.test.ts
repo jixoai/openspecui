@@ -1,13 +1,13 @@
 /**
- * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
- * 1. Prove the pinned 1.16.1 executable emits a real non-empty `update --dry-run --json`
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
+ * 1. Prove the pinned 1.17.0 executable emits a real non-empty `update --dry-run --json`
  *    plan over a real Agent workspace: a corrupted managed skill plans `update` and a
  *    deleted command plans `add`, both under the configured tool id.
  * 2. Prove the plan is evidence, not a write: the corrupted disk bytes survive the
  *    dry run unchanged, `changes` stays sorted by `path.localeCompare`, and the
  *    `notes`/`failures` keys stay present arrays beside non-empty `changes`.
  * 3. Keep the positive matrix honest about the 1.15-carried `updateDryRun` contract the
- *    1.16 line still ships: synthetic payloads and the boundary contrast prove shapes,
+ *    1.17 line still ships: synthetic payloads and the boundary contrast prove shapes,
  *    but only the real binary proves the actual emission a preview renders.
  *
  * Original request (2026-10-29): "检查一下上游openspec是否发布新版本，如果我们按照规范跟进更新"
@@ -18,6 +18,7 @@
  *   retained as history.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -28,10 +29,10 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v16-fixtures.js'
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliUpdatePlanSchema } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.15 update dry-run plan fixtures', () => {
+describe('pinned OpenSpec 1.17 update dry-run plan fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -40,7 +41,7 @@ describe('pinned OpenSpec 1.15 update dry-run plan fixtures', () => {
   })
 
   it('plans real add/update changes for a managed Agent workspace without writing', async () => {
-    fixtureRoot = await createPinnedFixtureRoot('cli-116-update-plan')
+    fixtureRoot = await createPinnedFixtureRoot('cli-117-update-plan')
     const project = join(fixtureRoot, 'project')
     const env = pinnedFixtureEnv(fixtureRoot)
     await mkdir(project, { recursive: true })
@@ -48,7 +49,7 @@ describe('pinned OpenSpec 1.15 update dry-run plan fixtures', () => {
     // A real init with one configured tool generates the managed skill and command
     // files the update command later reconciles.
     const initialized = await runPinnedOpenspec(
-      '1.16.1',
+      '1.17.0',
       ['init', project, '--tools', 'claude'],
       project,
       env
@@ -62,7 +63,7 @@ describe('pinned OpenSpec 1.15 update dry-run plan fixtures', () => {
     await rm(managedCommand)
 
     const planned = await runPinnedOpenspec(
-      '1.16.1',
+      '1.17.0',
       ['update', '--dry-run', '--json'],
       project,
       env
@@ -93,9 +94,9 @@ describe('pinned OpenSpec 1.15 update dry-run plan fixtures', () => {
 
     // A settled real update makes the next plan empty again — plan and execution share
     // one upstream code path, so the preview converges with the mutation it describes.
-    const settled = await runPinnedOpenspec('1.16.1', ['update'], project, env)
+    const settled = await runPinnedOpenspec('1.17.0', ['update'], project, env)
     expect(settled.exitCode, settled.stdout + '\n' + settled.stderr).toBe(0)
-    const after = await runPinnedOpenspec('1.16.1', ['update', '--dry-run', '--json'], project, env)
+    const after = await runPinnedOpenspec('1.17.0', ['update', '--dry-run', '--json'], project, env)
     expect(after.exitCode, after.stdout + '\n' + after.stderr).toBe(0)
     const emptyPlan = CliUpdatePlanSchema.parse(JSON.parse(after.stdout))
     expect(emptyPlan.changes).toEqual([])
