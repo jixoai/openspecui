@@ -76,3 +76,31 @@ path string `.claude/commands/opsx/apply.md` in `update` stdout, while the CLI p
 lesson did not stick. The assertion now normalizes backslashes before matching, and the other new
 assertions were checked to be separator-free. Not a timing flake, so a zero-change rerun would have been
 the wrong response.
+
+### 2026-11-11 — Delivery and release evidence
+
+- **Rotation PR #334** merged 2026-11-11T12:43:33Z as `9c48a838`. First CI run failed the Windows
+  Portability Gate on a POSIX-only stdout assertion in the new reconcile fixture; the assertion was
+  normalized (host separator) and the rerun passed Fast Gate in 12m54s and Windows Portability in
+  17m26s. Two review rounds ran before the PR; everything they found is folded above.
+- **Archive PR #335** merged 2026-11-11T12:50:08Z as `4dfef8a1`. The CLI archive applied 0 additions,
+  9 modifications and 1 requirement rename; post-archive `validate --specs` is 20/20 and the living
+  specs state the 1.17 window, inventory and generator baseline.
+- **Release PR #336** merged 2026-11-11T12:51:49Z as `0ab1977f`; release workflow `43024019277`
+  published every package and pushed every tag.
+
+Four independent release facts, each verified separately:
+
+| Fact | Value |
+| ---- | ----- |
+| Main head | `0ab1977f` |
+| Remote tags | `openspecui@17.0.0`, `@openspecui/{core,server,web,search}@17.0.0`, all on `0ab1977f` |
+| GitHub Release | `openspecui@17.0.0`, not draft, not prerelease, published 2026-11-11T12:56:11Z |
+| npm | `latest` = `17.0.0` for all five packages; each version manifest resolves |
+
+The submodule gitlink is unchanged at `579fcac5` (v1.17.0) in the version commit and on `main`.
+
+Measurement caveat carried over from the 1.16.1 rotation: the shared packument and even the per-version
+manifest can lag several minutes behind the workflow log. `@openspecui/web@17.0.0` answered 404 right
+after the release while the publish log already showed `+ @openspecui/web@17.0.0`; it resolved on the
+next poll. Do not read a stale registry read as a failed publish.
