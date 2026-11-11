@@ -43,6 +43,9 @@
  * Original request (2026-11-07): "检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。"
  *   — in-window patch rotation moves the pin from v1.16.0 (27c05157) to the released
  *   v1.16.1 tag (0fa4a970) inside the unchanged v16 window.
+ * Original request (2026-11-11): "检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。"
+ *   — the v17 admission line moves the pin from v1.16.1 (0fa4a970) to the released v1.17.0 tag
+ *   (579fcac5) and opens the `>=1.17.0 <1.18.0` window.
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -52,7 +55,7 @@ import { resolvePnpmInvocation } from './lib/pnpm-invocation.mjs'
 
 const REPOSITORY_ROOT = process.cwd()
 const REFERENCE_PATH = resolve(REPOSITORY_ROOT, 'references/openspec')
-const EXPECTED_COMMIT = '0fa4a9705c20ef1c571fe3ded74435733e4b73a1'
+const EXPECTED_COMMIT = '579fcac57ae00c2dff38f971b6d88b6f1f098b8a'
 const CLI_DIST_PATH = resolve(REFERENCE_PATH, 'dist/cli/index.js')
 
 function run(command, args, options = {}) {
