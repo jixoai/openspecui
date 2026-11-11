@@ -20,12 +20,13 @@
  * Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然后发布 v11"
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -33,10 +34,10 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-} from './__tests__/official-cli-v16-fixtures.js'
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliShowSpecSchema, CliSpecListSchema } from './cli-contracts/workflow.js'
 
-describe('pinned OpenSpec 1.16 nested Spec fixtures', () => {
+describe('pinned OpenSpec 1.17 nested Spec fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -44,7 +45,7 @@ describe('pinned OpenSpec 1.16 nested Spec fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`lists and shows platform/auth as one complete Spec identity on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-nested-spec`)
       const project = join(fixtureRoot, 'project')

@@ -21,12 +21,13 @@
  * Original request (2026-09-17): "Openspec 1.13.1 释放了…" — task-count parity fixture evidence (update-openspec-cli-1131 Slice 4).
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -34,8 +35,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV16Version,
-} from './__tests__/official-cli-v16-fixtures.js'
+  type PinnedOpenspecV17Version,
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliChangeListSchema } from './cli-contracts/workflow.js'
 import { parseMarkdownTasks } from './task-progress.js'
 
@@ -69,7 +70,7 @@ const WIDENED_TASKS_MARKDOWN = [
 ].join('\n')
 
 async function initProject(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -82,7 +83,7 @@ async function initProject(
   expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
 }
 
-describe('pinned OpenSpec 1.16 task-line reading fixtures', () => {
+describe('pinned OpenSpec 1.17 task-line reading fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -90,7 +91,7 @@ describe('pinned OpenSpec 1.16 task-line reading fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`counts widened task lines exactly like the local parser on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-task-reading`)
       const project = join(fixtureRoot, 'project')

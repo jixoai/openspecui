@@ -1,11 +1,11 @@
 /**
  * Orthogonal intents (created 2026-11-04 Asia/Shanghai):
- * 1. Prove the OpenSpec 1.16.1 project-config failure as an executable fact: a broken
+ * 1. Prove the OpenSpec 1.17.0 project-config failure as an executable fact: a broken
  *    `openspec/config.yaml` makes `validate` answer a bare `{ status: [...] }` envelope at a
  *    non-zero exit, for both codes and for the findings transport.
  * 2. Prove a healthy project keeps the ordinary report and findings document shapes, so the
  *    new envelope is a distinct decode branch rather than a reshaped report.
- * 3. Keep the fixture initialized first: without `openspec init` both 1.16.1 and 1.15.0 answer
+ * 3. Keep the fixture initialized first: without `openspec init` both 1.17.0 and 1.16.1 answer
  *    the identical `invalid_store_pointer`, which would make the discriminator look
  *    non-discriminating.
  * 4. Trigger `unreadable_config` with a directory where the config file belongs, not with
@@ -18,12 +18,13 @@
  *   — update-openspec-cli-16-line Slice 4.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -31,15 +32,15 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV16Version,
-} from './__tests__/official-cli-v16-fixtures.js'
+  type PinnedOpenspecV17Version,
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliDiagnosticFailureSchema } from './cli-contracts/common.js'
 import { CliValidateFindingsSchema, CliValidateReportSchema } from './cli-contracts/workflow.js'
 
 const BROKEN_YAML = 'schema: [unclosed\n  bad: : :\n'
 
 async function initProject(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -52,7 +53,7 @@ async function initProject(
   expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
 }
 
-describe('pinned OpenSpec 1.16 project-config failure fixtures', () => {
+describe('pinned OpenSpec 1.17 project-config failure fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -60,7 +61,7 @@ describe('pinned OpenSpec 1.16 project-config failure fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`fails bulk validation with the diagnostic envelope on a broken config on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-config-broken`)
       const project = join(fixtureRoot, 'project')

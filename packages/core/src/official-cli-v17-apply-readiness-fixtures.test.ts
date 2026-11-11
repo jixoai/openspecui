@@ -51,12 +51,13 @@
  *   all_done guidance semantics join the matrix.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -64,12 +65,12 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV16Version,
-} from './__tests__/official-cli-v16-fixtures.js'
+  type PinnedOpenspecV17Version,
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliApplyInstructionsSuccessSchema } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -83,7 +84,7 @@ async function initProject(
 }
 
 async function newChange(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv,
   changeId: string
@@ -161,7 +162,7 @@ const RUNS_UNREADABLE_TRACKING_FIXTURE =
   typeof process.getuid === 'function' &&
   process.getuid() !== 0
 
-describe('pinned OpenSpec 1.16 apply readiness fixtures', () => {
+describe('pinned OpenSpec 1.17 apply readiness fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -169,7 +170,7 @@ describe('pinned OpenSpec 1.16 apply readiness fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`names the whole prerequisite chain on the blocked state and stays warning-free on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-apply-blocked`)
       const project = join(fixtureRoot, 'project')

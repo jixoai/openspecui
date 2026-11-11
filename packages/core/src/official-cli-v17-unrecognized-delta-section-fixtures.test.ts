@@ -1,23 +1,26 @@
 /**
- * Orthogonal intents (created 2026-11-07 Asia/Shanghai):
- * 1. Prove the 1.16.1 verdict for a requirement authored under a header that reads as a delta
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
+ * 1. Prove the 1.17.0 verdict for a requirement authored under a header that reads as a delta
  *    operation but is not one: an ERROR that already fails plain validation, and an archive refusal
  *    through the typed `archive_validation_failed` status envelope our transport decodes.
  * 2. Prove the escalation is scoped: the same block under prose stays a WARNING and the change stays valid.
- * 3. Prove the retired 1.15.0 boundary keeps the pre-escalation verdict — the same orphan is reported as a
- *    WARNING and the change validates — so the ERROR is a 1.16-line fact and the boundary is not silent.
+ * 3. Prove the retained 1.16.1 boundary carries the same ERROR and prose WARNING, so the 1.17 line does
+ *    not regress a verdict the just-retired line already shipped. This is carry-forward evidence,
+ *    not a new-in-1.17 claim.
  *
  * Original request (2026-11-07): "检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。"
  *   — update-openspec-cli-1161 Slice 2 (upstream #2207 / #2195).
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; the
+ *   1.15.0 negative controls are replaced by carry-forward proofs on the retained 1.16.1 boundary.
  */
 import { execFile } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -25,14 +28,14 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV16Version,
-} from './__tests__/official-cli-v16-fixtures.js'
+  type PinnedOpenspecV17Version,
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliArchiveSchema, CliValidateReportSchema } from './cli-contracts/workflow.js'
 
-/** The retired below-admitted boundary executable kept through the openspec-cli-115 alias. */
-const RETIRED_V15_BIN = resolve(
+/** The retained below-admitted boundary executable kept through the openspec-cli-116 alias. */
+const RETAINED_V16_BIN = resolve(
   import.meta.dirname,
-  '../node_modules/openspec-cli-115/bin/openspec.js'
+  '../node_modules/openspec-cli-116/bin/openspec.js'
 )
 
 async function runBoundary(
@@ -44,7 +47,7 @@ async function runBoundary(
     (done, fail) => {
       const child = execFile(
         process.execPath,
-        [RETIRED_V15_BIN, ...args],
+        [RETAINED_V16_BIN, ...args],
         { cwd, env, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, windowsHide: true },
         (error: { code?: number } | null, stdout: string, stderr: string) => {
           done({ code: error ? (error.code ?? 1) : 0, stdout, stderr })
@@ -85,7 +88,7 @@ function deltaWithSection(section: string): string {
 }
 
 async function prepareChange(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   root: string,
   section: string
 ): Promise<{ project: string; env: NodeJS.ProcessEnv }> {
@@ -112,7 +115,7 @@ function nearMissIssues(
   return report.items.find((entry) => entry.id === changeId)?.issues ?? []
 }
 
-describe('pinned OpenSpec 1.16 unrecognized delta-section fixtures', () => {
+describe('pinned OpenSpec 1.17 unrecognized delta-section fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -120,7 +123,7 @@ describe('pinned OpenSpec 1.16 unrecognized delta-section fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`fails plain validation with an error under "## Add Requirements" on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(
         `cli-${version.replace(/\./g, '')}-near-miss-error`
@@ -211,9 +214,11 @@ describe('pinned OpenSpec 1.16 unrecognized delta-section fixtures', () => {
     }, 60_000)
   }
 
-  it('reports the same orphan as a warning on the retired 1.15.0 boundary', async () => {
-    fixtureRoot = await createPinnedFixtureRoot('cli-115-near-miss-absence')
-    const version = PINNED_OPENSPEC_V16_VERSIONS[0]
+  // Carry-forward boundary: the just-retired 1.16.1 line fails the same near-miss header in plain
+  // mode, so the ERROR is proven present on both lines rather than treated as new in 1.17.
+  it('fails plain validation with an error under "## Add Requirements" on the retained 1.16.1 boundary', async () => {
+    fixtureRoot = await createPinnedFixtureRoot('cli-116-near-miss-error-carry-forward')
+    const version = PINNED_OPENSPEC_V17_VERSIONS[0]
     const { project, env } = await prepareChange(
       version,
       rootOrThrow(fixtureRoot),
@@ -221,13 +226,28 @@ describe('pinned OpenSpec 1.16 unrecognized delta-section fixtures', () => {
     )
 
     const boundary = await runBoundary(['validate', 'near-miss', '--json'], project, env)
+    expect(boundary.exitCode, boundary.stdout + '\n' + boundary.stderr).toBe(1)
+    const report = CliValidateReportSchema.parse(JSON.parse(boundary.stdout))
+    expect(report.items.find((entry) => entry.id === 'near-miss')?.valid).toBe(false)
+    const nearMiss = nearMissIssues(report, 'near-miss').find((issue) =>
+      issue.message.includes('Add Requirements')
+    )
+    expect(nearMiss).toMatchObject({ level: 'ERROR' })
+    expect(nearMiss?.message).toContain('Near-miss header')
+  }, 60_000)
+
+  // Carry-forward boundary: the same block under prose stays a WARNING on 1.16.1, so the scope
+  // split is proven on both lines rather than treated as new in 1.17.
+  it('keeps a prose section at warning level on the retained 1.16.1 boundary', async () => {
+    fixtureRoot = await createPinnedFixtureRoot('cli-116-near-miss-warning-carry-forward')
+    const version = PINNED_OPENSPEC_V17_VERSIONS[0]
+    const { project, env } = await prepareChange(version, rootOrThrow(fixtureRoot), '## Notes')
+
+    const boundary = await runBoundary(['validate', 'near-miss', '--json'], project, env)
     expect(boundary.exitCode, boundary.stdout + '\n' + boundary.stderr).toBe(0)
     const report = CliValidateReportSchema.parse(JSON.parse(boundary.stdout))
     const issues = nearMissIssues(report, 'near-miss')
-    // Both halves matter: no ERROR (the escalation is new) AND the orphan is still reported (the
-    // boundary detects the shape, it just does not fail on it). `[]` would prove neither.
-    expect(issues.filter((issue) => issue.level === 'ERROR')).toEqual([])
-    expect(issues.find((issue) => issue.message.includes('Add Requirements'))).toMatchObject({
+    expect(issues.find((issue) => issue.message.includes('Notes'))).toMatchObject({
       level: 'WARNING',
     })
     expect(report.items.find((entry) => entry.id === 'near-miss')?.valid).toBe(true)

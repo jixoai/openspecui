@@ -37,12 +37,13 @@
  * Original request (2026-08-01): adapt the complete observable OpenSpec 1.7 workflow protocol.
  * 2026-11-07 (update-openspec-cli-1161): in-window patch rotation of the pinned OpenSpec CLI to
  *   1.16.1; identity literals rotate, no projection change.
+ * 2026-11-11 (update-openspec-cli-17): window rotation of the pinned OpenSpec CLI to 1.17.0; identity literals rotate, no projection change.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PINNED_OPENSPEC_V16_VERSIONS,
+  PINNED_OPENSPEC_V17_VERSIONS,
   createPinnedFixtureRoot,
   expectPinnedJsonDiscipline,
   expectPinnedVersion,
@@ -51,8 +52,8 @@ import {
   pinnedFixtureEnv,
   removePinnedFixtureRoot,
   runPinnedOpenspec,
-  type PinnedOpenspecV16Version,
-} from './__tests__/official-cli-v16-fixtures.js'
+  type PinnedOpenspecV17Version,
+} from './__tests__/official-cli-v17-fixtures.js'
 import { CliDiagnosticFailureSchema } from './cli-contracts/common.js'
 import {
   CliApplyInstructionsSuccessSchema,
@@ -62,7 +63,7 @@ import {
 } from './cli-contracts/workflow.js'
 
 async function initProject(
-  version: PinnedOpenspecV16Version,
+  version: PinnedOpenspecV17Version,
   project: string,
   env: NodeJS.ProcessEnv
 ): Promise<void> {
@@ -75,7 +76,7 @@ async function initProject(
   expect(initialized.exitCode, initialized.stdout + '\n' + initialized.stderr).toBe(0)
 }
 
-describe('pinned OpenSpec 1.16 workflow fixtures', () => {
+describe('pinned OpenSpec 1.17 workflow fixtures', () => {
   let fixtureRoot: string | null = null
 
   afterEach(async () => {
@@ -83,7 +84,7 @@ describe('pinned OpenSpec 1.16 workflow fixtures', () => {
     fixtureRoot = null
   })
 
-  for (const version of PINNED_OPENSPEC_V16_VERSIONS) {
+  for (const version of PINNED_OPENSPEC_V17_VERSIONS) {
     it(`executes skipped Status plus Apply and Archive Instructions on OpenSpec ${version}`, async () => {
       fixtureRoot = await createPinnedFixtureRoot(`cli-${version.replace(/\./g, '')}-workflow`)
       const project = join(fixtureRoot, 'project')
