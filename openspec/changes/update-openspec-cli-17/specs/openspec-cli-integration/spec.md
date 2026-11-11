@@ -13,7 +13,7 @@ Original request (2026-11-11): "检查 OpenSpec CLI 上游是否有新版本，�
 
 OpenSpecUI 17 SHALL classify stable OpenSpec CLI `>=1.17.0 <1.18.0` as supported, current, and recommended.
 OpenSpec CLI `<1.17.0` (including the whole 1.16.x window that OpenSpecUI 16 admitted, and every older line),
-every prerelease, `>=1.17.0`, and an unparseable version SHALL be incompatible and blocked by default.
+every prerelease, `>=1.18.0`, and an unparseable version SHALL be incompatible and blocked by default.
 When an incompatible executable is available, the mismatch Dialog MAY expose `Skip version check`; that
 action SHALL bypass only the current Web page runtime's admission gate and SHALL NOT change the detected
 version, compatibility evidence, CLI payloads, downstream errors, or product support claim.

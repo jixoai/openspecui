@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 widened task-line reading through `list --json`
+ * 1. Execute the pinned OpenSpec 1.17.0.0 widened task-line reading through `list --json`
  *    on a real repository: plus/ordered markers, an indented `~` wave, and a padded
  *    `[ x]` box all count, multi-token `[WIP]` labels and link bullets never count, and
  *    only an `x`/`X` marker reads as done.

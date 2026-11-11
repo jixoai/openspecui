@@ -7,9 +7,9 @@
  *    root this projection depends on before reading, and never delete or release the registrations
  *    (a retained projection of the same project keeps its refreshers).
  * 5. Expose Codex managed-global-prompt observation without treating those prompts as current commands.
- * 6. Judge generated-by staleness series-aware: only the admitted line (stable 1.15.x) is
- *    current; below-admitted generators (1.14.x, 1.13.x, 1.12.x, 1.11.x, 1.10.x, and
- *    older) and unparseable stamps are stale.
+ * 6. Judge generated-by staleness series-aware: only the admitted line (stable 1.17.x) is
+ *    current; below-admitted generators (1.16.x, 1.15.x, 1.14.x, 1.13.x, 1.12.x, 1.11.x,
+ *    1.10.x, and older) and unparseable stamps are stale.
  *
  * Original request (2026-08-01): adapt the complete OpenSpec 1.7 Agent delivery protocol for OpenSpecUI 7.
  * Original request (2026-08-15): "v9的适配需要同时适配 1.8和1.9。"
@@ -443,9 +443,9 @@ async function areExpectedCommandContentsCurrent(
 /**
  * Series-aware generator currency.
  *
- * Artifacts whose `generatedBy` stamp names the admitted line (stable 1.15.x) are
- * current; every below-admitted generator (the retired 1.10.x/1.11.x/1.12.x/1.13.x
- * windows and older) plus unparseable or future stamps is stale. The pinned constant never
+ * Artifacts whose `generatedBy` stamp names the admitted line (stable 1.17.x) are
+ * current; every below-admitted generator (the retired 1.10.x through 1.16.x windows)
+ * plus unparseable or future stamps is stale. The pinned constant never
  * feeds this comparison — it is fallback display only and never fabricates a
  * live version.
  */

@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
+Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
 1. Document the current OpenSpec compatibility and project workflow.
 2. Document serve, App-daemon, Direct Web, and static-export commands.
 3. Document project hooks without hiding OpenSpec CLI authority.
@@ -12,6 +12,7 @@ Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，�
 Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
 Original request (2026-10-25): "开工" — the OpenSpecUI 15 line for OpenSpec CLI 1.15.x (standalone distribution line).
 Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。" — the OpenSpecUI 16 line for OpenSpec CLI 1.16.x.
+Original request (2026-11-11): "检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。" — the OpenSpecUI 17 line for OpenSpec CLI 1.17.x.
 -->
 
 # OpenSpec UI

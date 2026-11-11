@@ -30,9 +30,11 @@ retired line SHALL NOT be reused as positive evidence for the current line.
 - **GIVEN** the retained pinned 1.16.1 executable is evaluated against the OpenSpecUI 17 admission gate
 - **WHEN** the fixture matrix asserts the capability boundary
 - **THEN** 1.16.1 SHALL be recorded as below-admitted for the v17 window
-- **AND** the 1.17-only update reconcile behavior SHALL be absent on the boundary: after
-  `config set delivery skills` + `update`, 1.16.1 SHALL delete every command file including edited ones,
-  while 1.17.0 SHALL keep and list the edited one
+- **AND** the 1.17-only artifact reconcile SHALL be absent on the boundary: after
+  `config set delivery skills`, both `update` and `init` SHALL delete every command file including edited
+  ones on 1.16.1, while 1.17.0 SHALL remove the untouched files and keep and list the edited one
+- **AND** a legacy `.agent/workflows` root SHALL be detected as a configured tool on 1.17.0 (planning its
+  migration in `update --dry-run --json`) and SHALL NOT be detected on 1.16.1
 - **AND** the 1.17.0 executable SHALL prove the accepted payloads
 
 #### Scenario: Positive identity is proven, not assumed

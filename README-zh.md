@@ -1,5 +1,5 @@
 <!--
-Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
+Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
 1. 说明当前 OpenSpec 兼容线与项目工作流。
 2. 说明 serve、App daemon、Direct Web 与静态导出命令。
 3. 说明项目 Hooks，同时保持 OpenSpec CLI 的事实权威。
@@ -11,6 +11,7 @@ Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
 原始需求（2026-10-02）："Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
 原始需求（2026-10-25）："开工" —— OpenSpecUI 15 线，适配 OpenSpec CLI 1.15.x（standalone 发行线）。
 原始需求（2026-11-04）："后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。" —— OpenSpecUI 16 线，适配 OpenSpec CLI 1.16.x。
+原始需求（2026-11-11）："检查 OpenSpec CLI 上游是否有新版本，并按仓库标准工作流跟进上线。" —— OpenSpecUI 17 线，适配 OpenSpec CLI 1.17.x。
 -->
 
 # OpenSpec UI

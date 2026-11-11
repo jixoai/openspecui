@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 `show` family against a real fixture project:
+ * 1. Execute the pinned OpenSpec 1.17.0.0 `show` family against a real fixture project:
  *    `show <change> --json --diff` (MODIFIED deltas carry the unified diff body) and
  *    `show <spec> --type spec --json` (1.14 requirement/scenario name members).
  * 2. Prove the diff stays CLI-owned evidence (`@@` hunks, `-`/`+` lines, no warning on
@@ -16,7 +16,8 @@
  *
  * Original request (2026-10-25): "开工"
  *   — target-openspec-cli-15-line Slice 3 moved this suite to the v15 line (pinned
- *   1.15.0 executable through the openspec-cli-115 alias); the v14-era intents above
+ *   1.15.0 executable through the openspec-cli-115 alias, which the v17 line retires);
+ *   the v14-era intents above
  *   are retained verbatim.
  * Original request (2026-11-04): "后每隔 3 天检查一下有没有需要更新的，然后更近更新。按照标准工作流推进上线。"
  *   — update-openspec-cli-16-line Slice 2 rotates this suite to the v16 line: imports and

@@ -13,9 +13,12 @@ it rotates the admission window, the pinned identity, the Agent registry series 
 executable proofs for the one behavior that did change. `openspec update` now reconciles generated
 Agent artifacts by release fingerprint: it upgrades from any release since 0.12 in one run, removes only
 unedited generated files, keeps and lists edited ones, never writes outside the project, and prints a
-command-file deprecation notice (commands go away in OpenSpec 2.0). Because 1.17 adds no command, flag
+command-file deprecation notice (commands go away in OpenSpec 2.0). The same reconcile runs on
+`openspec init`, legacy command roots such as `.agent/workflows` now count as configured tools (so
+`update --dry-run --json` plans their migration), and an earlier release's untouched leftovers are swept
+without `--force`. Because 1.17 adds no command, flag
 or JSON member, the below-admitted 1.16.1 boundary is proven behaviorally: with an edited
 `.claude/commands/opsx/apply.md`, switching delivery to skills deletes all six command files on 1.16.1,
 while 1.17.0 keeps and lists the edited one. The pinned fixture matrix moves to
 `@fission-ai/openspec@1.17.0` (`openspec-cli-117`), the retained 1.16.1 executable becomes the
-below-admitted boundary (`openspec-cli-116`), and the 1.15.0 alias stays for its historical consumers.
+below-admitted boundary (`openspec-cli-116`), and the 1.15.0 alias retires with its only consumer.

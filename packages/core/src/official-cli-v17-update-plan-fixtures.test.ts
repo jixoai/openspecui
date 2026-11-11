@@ -1,5 +1,5 @@
 /**
- * Orthogonal intents (updated 2026-11-04 Asia/Shanghai):
+ * Orthogonal intents (updated 2026-11-11 Asia/Shanghai):
  * 1. Prove the pinned 1.17.0 executable emits a real non-empty `update --dry-run --json`
  *    plan over a real Agent workspace: a corrupted managed skill plans `update` and a
  *    deleted command plans `add`, both under the configured tool id.

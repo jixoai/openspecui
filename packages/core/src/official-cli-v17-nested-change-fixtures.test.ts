@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 change-list nested-directory contract on a real
+ * 1. Execute the pinned OpenSpec 1.17.0.0 change-list nested-directory contract on a real
  *    repository: a namespace-folder entry carries `nested` with 0/0 task fields, a
  *    coexisting flat change carries none, and the top-level `warnings` array reports
  *    code `nested_change_directory` with the upstream message preserved verbatim.

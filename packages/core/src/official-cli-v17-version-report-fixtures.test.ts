@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 `openspec version --json` command (new in
+ * 1. Execute the pinned OpenSpec 1.17.0.0 `openspec version --json` command (new in
  *    1.14) against the isolated fixture environment: the typed envelope decodes with
  *    `schemaVersion: 1`, the running `version`, and the resolved `install` facts.
  * 2. Prove the no-probe default: without `--check` the `update` member stays absent

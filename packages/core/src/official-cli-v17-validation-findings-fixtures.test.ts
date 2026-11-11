@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-10-24 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14 `validate --report findings --json` contract
+ * 1. Execute the pinned OpenSpec 1.17.0 `validate --report findings --json` contract
  *    against real fixture projects: the populated findings document, empty-scope
  *    documents, and the typed request-error envelope.
  * 2. Prove the merge-conflict INFO class stays verdict-neutral (`valid: true`, exit 0)

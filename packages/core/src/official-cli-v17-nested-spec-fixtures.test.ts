@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (updated 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 CLI against a recursive owned Spec identity.
+ * 1. Execute the pinned OpenSpec 1.17.0.0 CLI against a recursive owned Spec identity.
  * 2. Prove list and show preserve every identity segment and requirement content on
  *    the v14 single-series window, now including the 1.14 requirement/scenario name
  *    members on the nested show payload.

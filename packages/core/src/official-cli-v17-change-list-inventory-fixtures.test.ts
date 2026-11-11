@@ -1,6 +1,6 @@
 /**
  * Orthogonal intents (created 2026-10-02 Asia/Shanghai):
- * 1. Execute the pinned OpenSpec 1.14.0 change-list archive inventory (`list --archived`
+ * 1. Execute the pinned OpenSpec 1.17.0.0 change-list archive inventory (`list --archived`
  *    and `list --all`, new in 1.14) against a real fixture project holding one active
  *    and one archived change.
  * 2. Prove the per-entry `archived` flag discipline: `--archived` returns only archive
