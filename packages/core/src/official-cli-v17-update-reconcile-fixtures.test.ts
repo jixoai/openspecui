@@ -119,7 +119,9 @@ describe('pinned OpenSpec 1.17 update reconcile fixtures', () => {
     // Stdout proof: the reconcile reports what it kept and names the exact path.
     expect(updated.stdout).toContain('Removed: 5 command files (delivery: skills)')
     expect(updated.stdout).toContain('Kept 1 command file')
-    expect(updated.stdout).toContain(EDITED_COMMAND_PATH)
+    // The CLI prints the path with the host separator, so normalize before matching: a
+    // POSIX-only assertion passes here and fails the Windows gate (repo lesson, twice now).
+    expect(updated.stdout.replace(/\\/g, '/')).toContain(EDITED_COMMAND_PATH)
   }, 120_000)
 
   it('reconciles the same way on init as on update', async () => {

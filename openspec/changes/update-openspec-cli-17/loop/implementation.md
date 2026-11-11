@@ -67,3 +67,12 @@ diff. Everything it found was fixed in the change:
 Not actioned (recorded): two long-standing suites still do not call `expectPinnedVersion`; both predate
 this rotation and prove identity through their own fixture setup, so the gap is carried forward rather
 than repaired inside a pin rotation.
+
+### 2026-11-11 — Windows gate failure (test defect, not a flake)
+
+The first CI run failed the Windows Portability Gate in 4m24s: the reconcile fixture asserted a POSIX
+path string `.claude/commands/opsx/apply.md` in `update` stdout, while the CLI prints the host separator
+(`.claude\commands\opsx\apply.md`). The same defect class was caught by review in the v16 line; the
+lesson did not stick. The assertion now normalizes backslashes before matching, and the other new
+assertions were checked to be separator-free. Not a timing flake, so a zero-change rerun would have been
+the wrong response.
