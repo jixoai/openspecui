@@ -27,30 +27,30 @@ unchanged (evidence below).
 
 ## Evidence baseline
 
-| Fact                   | Value                                                                                          |
-| ---------------------- | ---------------------------------------------------------------------------------------------- |
-| Tag                    | `v1.17.0`                                                                                      |
-| Commit                 | `579fcac57ae00c2dff38f971b6d88b6f1f098b8a`                                                     |
-| Previous pin           | `v1.16.1` (`0fa4a970`)                                                                         |
-| Commits in range       | **5** (`git rev-list --count v1.16.1..v1.17.0`)                                                |
-| Whole diff             | 46 files, +7518/−672                                                                           |
-| `src/` diff            | **14 files, +4980/−145**                                                                       |
-| Zero-diff surfaces     | `src/index.ts`, `docs/agent-contract.md`, `src/core/profiles.ts`, `src/core/command-generation/`, `src/cli/index.ts`, `src/core/config.ts` |
-| New internal modules   | `released-output-sweep.ts`, `shared/command-reconcile.ts`, `shared/generated-fingerprint.ts`, `shared/released-generated-fingerprints.ts` (4,010 lines of release fingerprints) |
+| Fact                 | Value                                                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tag                  | `v1.17.0`                                                                                                                                                                       |
+| Commit               | `579fcac57ae00c2dff38f971b6d88b6f1f098b8a`                                                                                                                                      |
+| Previous pin         | `v1.16.1` (`0fa4a970`)                                                                                                                                                          |
+| Commits in range     | **5** (`git rev-list --count v1.16.1..v1.17.0`)                                                                                                                                 |
+| Whole diff           | 46 files, +7518/−672                                                                                                                                                            |
+| `src/` diff          | **14 files, +4980/−145**                                                                                                                                                        |
+| Zero-diff surfaces   | `src/index.ts`, `docs/agent-contract.md`, `src/core/profiles.ts`, `src/core/command-generation/`, `src/cli/index.ts`, `src/core/config.ts`                                      |
+| New internal modules | `released-output-sweep.ts`, `shared/command-reconcile.ts`, `shared/generated-fingerprint.ts`, `shared/released-generated-fingerprints.ts` (4,010 lines of release fingerprints) |
 
 ## Classification
 
 ### P1 — must adapt (window, identity, fixtures)
 
-| Upstream                          | Local owner                                                                 | Action                                          |
-| --------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------- |
-| Release commit `Version Packages` | `packages/core/package.json` alias `openspec-cli-117`                        | add `npm:@fission-ai/openspec@1.17.0`            |
-| same                              | `packages/core/src/openspec-compat.ts`                                       | window `>=1.17.0 <1.18.0`, series `'1.17'`       |
-| same                              | `packages/core/src/__tests__/official-cli-v1*-fixtures.ts`                    | new v17 positive helpers; v16 becomes boundary   |
-| same                              | `packages/core/src/tool-init-state.ts` (`PINNED_AGENT_GENERATOR_VERSION`)     | `'1.17.0'`                                      |
-| same                              | `upstream-contract-regression.test.ts`, `scripts/prepare-openspec-reference.mjs` | `EXPECTED_COMMIT` → `579fcac5…`              |
-| same                              | `references/openspec` gitlink                                                 | pin `v1.17.0`                                  |
-| same                              | `AGENTS.md`, READMEs, living specs                                            | rotate the stated baseline to 1.17              |
+| Upstream                          | Local owner                                                                      | Action                                         |
+| --------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Release commit `Version Packages` | `packages/core/package.json` alias `openspec-cli-117`                            | add `npm:@fission-ai/openspec@1.17.0`          |
+| same                              | `packages/core/src/openspec-compat.ts`                                           | window `>=1.17.0 <1.18.0`, series `'1.17'`     |
+| same                              | `packages/core/src/__tests__/official-cli-v1*-fixtures.ts`                       | new v17 positive helpers; v16 becomes boundary |
+| same                              | `packages/core/src/tool-init-state.ts` (`PINNED_AGENT_GENERATOR_VERSION`)        | `'1.17.0'`                                     |
+| same                              | `upstream-contract-regression.test.ts`, `scripts/prepare-openspec-reference.mjs` | `EXPECTED_COMMIT` → `579fcac5…`                |
+| same                              | `references/openspec` gitlink                                                    | pin `v1.17.0`                                  |
+| same                              | `AGENTS.md`, READMEs, living specs                                               | rotate the stated baseline to 1.17             |
 
 ### P2 — must adapt (Agent registry series)
 
@@ -68,7 +68,7 @@ upstream tool inventory did not: the change is detection robustness, not a new t
    `openspec config set delivery skills` + `openspec update`:
    - 1.16.1 → `Removed: 6 command files`; the edited file is **deleted** (`commands left: []`);
    - 1.17.0 → `Removed: 5 command files`, then `Kept 1 command file that does not match what OpenSpec
-     generated (likely edited): .claude/commands/opsx/apply.md`; the file **remains**.
+generated (likely edited): .claude/commands/opsx/apply.md`; the file **remains**.
 2. **Command files are deprecated** (console only, every `update` while delivery includes commands):
    `Command files are deprecated and go away in OpenSpec 2.0…` — absent on 1.16.1.
 3. **Cross-release upgrade sweep**: `update` removes unedited generated files left by any release since
@@ -105,15 +105,15 @@ no local consumer.
 
 ## Owner map (for review)
 
-| Upstream surface                    | Local production owner                                        | Touched this rotation?              |
-| ----------------------------------- | ------------------------------------------------------------- | ----------------------------------- |
-| command surface (`src/index.ts`)    | —                                                             | no (zero-diff)                      |
-| Agent contract (`docs/agent-contract.md`) | —                                                       | no (zero-diff)                      |
-| tool inventory (`AI_TOOLS`, `command-generation/`) | `packages/core/src/agent-delivery-registry.ts` | no (upstream zero-diff; series only) |
-| `update --dry-run` JSON plan        | `packages/core/src/cli-contracts/workflow.ts` (`UpdatePlan`)  | no (shape proven identical)         |
-| validate/list/doctor/context JSON   | `packages/core/src/cli-contracts/*`                           | no (shape proven identical)         |
-| generated artifact layout           | `packages/core/src/tool-init-state.ts` (observation only)      | **yes** (generator baseline)        |
-| compat window                       | `packages/core/src/openspec-compat.ts`                        | **yes** (window + series)           |
+| Upstream surface                                   | Local production owner                                       | Touched this rotation?               |
+| -------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------ |
+| command surface (`src/index.ts`)                   | —                                                            | no (zero-diff)                       |
+| Agent contract (`docs/agent-contract.md`)          | —                                                            | no (zero-diff)                       |
+| tool inventory (`AI_TOOLS`, `command-generation/`) | `packages/core/src/agent-delivery-registry.ts`               | no (upstream zero-diff; series only) |
+| `update --dry-run` JSON plan                       | `packages/core/src/cli-contracts/workflow.ts` (`UpdatePlan`) | no (shape proven identical)          |
+| validate/list/doctor/context JSON                  | `packages/core/src/cli-contracts/*`                          | no (shape proven identical)          |
+| generated artifact layout                          | `packages/core/src/tool-init-state.ts` (observation only)    | **yes** (generator baseline)         |
+| compat window                                      | `packages/core/src/openspec-compat.ts`                       | **yes** (window + series)            |
 
 ## Release gate
 

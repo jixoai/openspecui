@@ -24,7 +24,8 @@ OpenSpecUI is a web interface for OpenSpec workflows (live mode + static export)
 
 | OpenSpecUI         | OpenSpec CLI line                                          |
 | ------------------ | ---------------------------------------------------------- |
-| `@latest` / `@^16` | current + supported: `>=1.16.0 <1.17.0`                    |
+| `@latest` / `@^17` | current + supported: `>=1.17.0 <1.18.0`                    |
+| `@^16` (legacy)    | current + supported: `>=1.16.0 <1.17.0`                    |
 | `@^15` (legacy)    | current + supported: `>=1.15.0 <1.16.0`                    |
 | `@^14` (legacy)    | current + supported: `>=1.14.0 <1.15.0`                    |
 | `@^13` (legacy)    | current + supported: `>=1.13.0 <1.14.0`                    |
@@ -39,11 +40,11 @@ OpenSpecUI is a web interface for OpenSpec workflows (live mode + static export)
 | `@^2`              | `>=1.2.0 <1.3.0`                                           |
 | `@^1`              | `>=1.0.0 <1.2.0`                                           |
 
-OpenSpecUI major versions ordinarily track OpenSpec CLI minor lines. OpenSpecUI 16 adapts OpenSpec
-CLI 1.16.x as a single-series line: stable 1.16.x is current and recommended, and `1.17` is not
-pre-claimed — when it ships, admission is a separately verified decision (a 16.x window widening or
-a new major). OpenSpecUI 15 remains the historical 1.15.x product line, OpenSpecUI 14 the historical
-1.14.x line, OpenSpecUI 13 the historical 1.13.x line.
+OpenSpecUI major versions ordinarily track OpenSpec CLI minor lines. OpenSpecUI 17 adapts OpenSpec
+CLI 1.17.x as a single-series line: stable 1.17.x is current and recommended, and `1.18` is not
+pre-claimed — when it ships, admission is a separately verified decision (a 17.x window widening or
+a new major). OpenSpecUI 16 remains the historical 1.16.x product line, OpenSpecUI 15 the historical
+1.15.x line, OpenSpecUI 14 the historical 1.14.x line, OpenSpecUI 13 the historical 1.13.x line.
 
 Legacy docs:
 
@@ -76,10 +77,10 @@ Direct Project Web defaults to `http://localhost:3100` when that presentation is
 
 ## OpenSpec CLI Compatibility
 
-- OpenSpecUI 16 accepts stable OpenSpec CLI `>=1.16.0 <1.17.0` and recommends the 1.16 line.
-- Stable 1.16.x is identified as the current line; this is a single-series window.
-- OpenSpec CLI 1.15.x (the OpenSpecUI 15 window), older lines, CLI `>=1.17.0`, and every
-  prerelease are unsupported by OpenSpecUI 16 and blocked by default.
+- OpenSpecUI 17 accepts stable OpenSpec CLI `>=1.17.0 <1.18.0` and recommends the 1.17 line.
+- Stable 1.17.x is identified as the current line; this is a single-series window.
+- OpenSpec CLI 1.16.x (the OpenSpecUI 16 window), older lines, CLI `>=1.18.0`, and every
+  prerelease are unsupported by OpenSpecUI 17 and blocked by default.
 - The upstream npm package now requires Node.js `>=22.12.0`; the standalone binary does not use
   Node. The repository root declares the same floor for contributors and fixtures.
 - If an incompatible CLI executable is available, the mismatch Dialog offers **Skip version check**.

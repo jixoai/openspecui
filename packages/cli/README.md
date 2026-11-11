@@ -1,6 +1,6 @@
 <!--
 Orthogonal intents (updated 2026-10-25 Asia/Shanghai):
-1. Document the npm-facing surface of the current openspecui release line (v15) only.
+1. Document the npm-facing surface of the current openspecui release line (v17) only.
 2. Keep commands, compatibility, and hooks aligned with the repository README facts.
 3. Leave full version history and legacy archives to the repository README.
 
@@ -10,21 +10,22 @@ Original request (2026-08-28): "直接将 0.10.0 和 0.11.0 一起适配，然�
 Original request (2026-09-12): "Openspec 1.13.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。"
 Original request (2026-10-02): "Openspec v1.14.0 释放了，你更新一下，调查变更内容，然后开始规划适配工作，我们将用标准工作流worktree来推进。让 codex 参与。完成后关于 github 上的相关 issue"
 2026-10-25 (target-openspec-cli-15-line Slice 4): package README re-scoped to the v15 release line per the release README law.
+2026-11-11 (update-openspec-cli-17): package README re-scoped to the v17 release line per the release README law.
 -->
 
 # OpenSpecUI
 
 A visual interface for [OpenSpec](https://openspec.dev) — the visual projection and operator for spec-driven development with AI agents.
 
-OpenSpecUI 15 gives OpenSpec projects a reactive dashboard, an objective change workflow, a config workbench, real terminals, and static export — while the OpenSpec CLI stays the source of truth for every workflow fact.
+OpenSpecUI 17 gives OpenSpec projects a reactive dashboard, an objective change workflow, a config workbench, real terminals, and static export — while the OpenSpec CLI stays the source of truth for every workflow fact.
 
 ## Requirements
 
-- **OpenSpec CLI**: `>=1.16.0 <1.17.0` — the stable 1.16 line is current and recommended (single-series window). Older lines (including the 1.15.x OpenSpecUI 15 window), prereleases, and `>=1.17.0` are blocked by default.
+- **OpenSpec CLI**: `>=1.17.0 <1.18.0` — the stable 1.17 line is current and recommended (single-series window). Older lines (including the 1.16.x OpenSpecUI 16 window), prereleases, and `>=1.18.0` are blocked by default.
 - **Node.js**: `>= 22.12.0` (the upstream npm package's floor; the standalone binary does not use Node)
 
 ```bash
-npm install -g @fission-ai/openspec@1.16
+npm install -g @fission-ai/openspec@1.17
 ```
 
 ## Quick start
